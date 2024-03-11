@@ -1,9 +1,14 @@
 ## ftml
 
 <p>
-  <a href="https://github.com/scpwiki/wikijump/actions?query=workflow%3A%22%5Bftml%5D+Rust%22">
-    <img src="https://github.com/scpwiki/wikijump/workflows/%5Bftml%5D%20Rust/badge.svg"
+  <a href="https://github.com/scpwiki/ftml/actions/workflows/build.yaml">
+    <img src="https://github.com/scpwiki/ftml/actions/workflows/build.yaml/badge.svg"
          alt="Build status">
+  </a>
+
+  <a href="https://github.com/scpwiki/ftml/actions/workflows/config.yaml">
+    <img src="https://github.com/scpwiki/ftml/actions/workflows/config.yaml/badge.svg"
+         alt="Configuration">
   </a>
 
   <a href="https://docs.rs/ftml">
