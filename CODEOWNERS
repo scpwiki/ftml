@@ -2,7 +2,6 @@
 # maintenance of, or has experience with various parts of this
 # repository.
 
-
 .github/workflows/*.yaml    @emmiegit
 src                         @emmiegit
 scripts                     @emmiegit
