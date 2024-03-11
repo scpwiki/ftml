@@ -26,7 +26,7 @@ for more advanced analysis and transformation.
 
 The lint `#![forbid(unsafe_code)]` is set, and therefore this crate has only safe code. However dependencies may have `unsafe` internals.
 
-Available under the terms of the GNU Affero General Public License. See [LICENSE.md](LICENSE.md). This library was originally part of [Wikijump](https://github.com/scpwiki/wikijump/) before being moved to an independent repository, per [WJ-1219](https://scuttle.atlassian.net/browse/WJ-1219). Issues for this project will remain in the `WJ` Jira project.
+Available under the terms of the GNU Affero General Public License. See [LICENSE.md](LICENSE.md). This library was originally part of [Wikijump](https://github.com/scpwiki/wikijump/) at `/ftml`, before being moved to an independent repository, per [WJ-1219](https://scuttle.atlassian.net/browse/WJ-1219). Issues for this project will remain in the `WJ` Jira project.
 
 ### Compilation
 
