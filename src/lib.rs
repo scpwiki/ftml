@@ -53,50 +53,6 @@
 //! which renders LaTeX blocks using MathML. It is enabled
 //! by default.
 //!
-//! # Examples
-// TODO do something with the links in these comments
-//! ```
-//!// Get an `Includer`.
-//!//
-//!// See trait documentation for what this requires, but
-//!// essentially it is some abstract handle that gets the
-//!// contents of a page to be included.
-//!//
-//!// Two sample includers you could try are `NullIncluder`
-//!// and `DebugIncluder`.
-//!let includer = MyIncluderImpl::new();
-//!
-//!// Get our source text
-//!let mut input = "**some** test <<string?>>";
-//!
-//!// Substitute page inclusions
-//!let (mut text, included_pages) = ftml::include(input, includer, &settings);
-//!
-//!// Perform preprocess substitutions
-//!ftml::preprocess(&log, &mut text);
-//!
-//!// Generate token from input text
-//!let tokens = ftml::tokenize(&text);
-//!
-//!// Parse the token list to produce an AST.
-//!//
-//!// Note that this produces a `ParseResult<SyntaxTree>`, which records the
-//!// parsing warnings in addition to the final result.
-//!let result = ftml::parse(&tokens, &page_info, &settings);
-//!
-//!// Here we extract the tree separately from the warning list.
-//!//
-//!// Now we have the final AST, as well as all the issues that
-//!// occurred during the parsing process.
-//!let (tree, warnings) = result.into();
-//!// Finally, we render with our renderer. Generally this is `HtmlRender`,
-//!// but you could have a custom implementation here too.
-//!//
-//!// You must provide a `PageInfo` struct, which describes the page being rendered.
-//!// You must also provide a handle to provide various remote sources, such as
-//!// module content, but this is not stabilized yet.
-//!let html_output = HtmlRender.render(&tree, &page_info, &settings);
-//! ````
 //! # Targets
 //! The library supports being compiled into WebAssembly.
 //! (target `wasm32-unknown-unknown`, see [`wasm-pack`] for more information)
