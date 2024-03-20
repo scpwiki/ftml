@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// TODO do something with the links in the example comments
 //! A library to parse Wikidot text and produce an abstract syntax tree (AST).
 //!
 //! This library aims to be a replacement of Wikidot's Text_Wiki
