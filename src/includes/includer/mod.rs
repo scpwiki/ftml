@@ -18,6 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//! This module contains tools which format pages after they have been referenced in an include
+//! block.
+
 mod debug;
 mod null;
 
@@ -25,7 +28,6 @@ mod prelude {
     pub use crate::data::PageRef;
     pub use crate::includes::{FetchedPage, IncludeRef, Includer};
     pub use std::borrow::Cow;
-    pub use std::collections::HashMap;
 }
 
 use crate::includes::{IncludeRef, PageRef};
@@ -34,6 +36,7 @@ use std::borrow::Cow;
 pub use self::debug::DebugIncluder;
 pub use self::null::NullIncluder;
 
+/// A type used by [`Includer`] which represents a page that is ready to be included.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct FetchedPage<'t> {
@@ -41,14 +44,17 @@ pub struct FetchedPage<'t> {
     pub content: Option<Cow<'t, str>>,
 }
 
+/// A trait that handles the formatting of included pages.
 pub trait Includer<'t> {
     type Error;
 
+    /// Returns a list of the pages included.
     fn include_pages(
         &mut self,
         includes: &[IncludeRef<'t>],
     ) -> Result<Vec<FetchedPage<'t>>, Self::Error>;
 
+    /// Handles the inclusion of a page not found.
     fn no_such_include(
         &mut self,
         page_ref: &PageRef<'t>,

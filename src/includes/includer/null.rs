@@ -21,6 +21,7 @@
 use super::prelude::*;
 use std::convert::Infallible;
 
+/// An [`Includer`] that replaces include blocks with nothing.
 #[derive(Debug)]
 pub struct NullIncluder;
 

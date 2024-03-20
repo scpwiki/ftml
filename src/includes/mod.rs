@@ -20,10 +20,11 @@
 
 //! This module implements "messy includes", or Wikidot native includes.
 //!
-//! It is an annoying but necessary hack that parses the psueodblock
+//! It is an annoying but necessary hack that parses the psuedoblock
 //! `[[include-messy]]` and directly replaces that part with the
 //! foreign page's wikitext.
 
+#[warn(missing_docs)]
 #[cfg(test)]
 mod test;
 
@@ -52,6 +53,8 @@ static INCLUDE_REGEX: Lazy<Regex> = Lazy::new(|| {
 static VARIABLE_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\{\$(?P<name>[a-zA-Z0-9_\-]+)\}").unwrap());
 
+/// Replaces the include blocks in a string with the content of the pages referenced by those
+/// blocks.
 pub fn include<'t, I, E, F>(
     input: &'t str,
     settings: &WikitextSettings,
@@ -157,6 +160,9 @@ where
     Ok((output, pages))
 }
 
+/// Replaces all specified variables in the content to be included.
+///
+/// Read <https://www.wikidot.com/doc-wiki-syntax:include> for more details.
 fn replace_variables(content: &mut String, variables: &VariableMap) {
     let mut matches = Vec::new();
 

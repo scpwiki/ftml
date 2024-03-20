@@ -21,10 +21,10 @@
 use crate::data::PageRef;
 use crate::tree::VariableMap;
 
-/// Represents an include block.
+/// Represents an include block before it has been replaced with the fetched page.
 ///
-/// It contains the page being included, as well as the arguments
-/// to be passed to it when doing the substitution.
+/// It contains the page being included, as well as the variables passed to it in the include
+/// block.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct IncludeRef<'t> {

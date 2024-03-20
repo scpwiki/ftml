@@ -18,6 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//! This module has build and meta information about the library.
+
 #[allow(unused)]
 mod build {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -40,7 +42,9 @@ static VERSION_INFO: Lazy<String> = Lazy::new(|| {
 
     version
 });
+/// The package name and version info.
 pub static VERSION: Lazy<String> = Lazy::new(|| format!("{PKG_NAME} {}", *VERSION_INFO));
+/// The full version info, including build information.
 pub static FULL_VERSION: Lazy<String> = Lazy::new(|| {
     let mut version = format!("{}\n\nCompiled:\n", *VERSION_INFO);
 
@@ -51,10 +55,10 @@ pub static FULL_VERSION: Lazy<String> = Lazy::new(|| {
 
     version
 });
-pub static VERSION_WITH_NAME: Lazy<String> =
-    Lazy::new(|| format!("{PKG_NAME} {}", *VERSION));
+/// The package name and full version info, including build information.
 pub static FULL_VERSION_WITH_NAME: Lazy<String> =
     Lazy::new(|| format!("{PKG_NAME} {}", *FULL_VERSION));
+// The last 8 characters of the commit hash for this version.
 pub static GIT_COMMIT_HASH_SHORT: Lazy<Option<&'static str>> =
     Lazy::new(|| GIT_COMMIT_HASH.map(|s| &s[..8]));
 

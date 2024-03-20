@@ -18,6 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//! This module provides functions to parse strings into [`IncludeRef`]s
+
 use super::IncludeRef;
 use crate::data::{PageRef, PageRefParseError};
 use crate::settings::WikitextSettings;
@@ -30,6 +32,19 @@ use std::collections::HashMap;
 #[grammar = "includes/grammar.pest"]
 struct IncludeParser;
 
+/// Parses a single include block in the text
+///
+/// # Arguments
+/// The "start" argument is the index at which the include block starts.
+///
+/// It does not necessarily relate to the index of the include within the text str.
+///
+/// # Return values
+/// Returns a tuple of an [`IncludeRef`] that represents the included text and a usize that
+/// represents the end index of the include block.
+///
+/// This usize is not necessarily the end index within the text string passed in, and is
+/// solely based on the length of the include block and the start value.
 pub fn parse_include_block<'t>(
     text: &'t str,
     start: usize,
@@ -63,6 +78,7 @@ pub fn parse_include_block<'t>(
     }
 }
 
+/// Creates an [`IncludeRef`] out of pest [`Pairs`].
 fn process_pairs(mut pairs: Pairs<Rule>) -> Result<IncludeRef, IncludeParseError> {
     let page_raw = pairs.next().ok_or(IncludeParseError)?.as_str();
     let page_ref = PageRef::parse(page_raw)?;
