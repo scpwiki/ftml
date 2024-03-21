@@ -20,8 +20,7 @@
 
 use super::prelude::*;
 use crate::tree::VariableMap;
-// Imported so that tests work, otherwise not used
-#[allow(unused_imports)]
+#[cfg(test)]
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::{self, Display};
