@@ -32,7 +32,7 @@ use std::collections::HashMap;
 #[grammar = "includes/grammar.pest"]
 struct IncludeParser;
 
-/// Parses a single include block in the text
+/// Parses a single include block in the text.
 ///
 /// # Arguments
 /// The "start" argument is the index at which the include block starts.
