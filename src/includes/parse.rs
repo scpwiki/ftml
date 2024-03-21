@@ -36,7 +36,6 @@ struct IncludeParser;
 ///
 /// # Arguments
 /// The "start" argument is the index at which the include block starts.
-///
 /// It does not necessarily relate to the index of the include within the text str.
 ///
 /// # Return values
