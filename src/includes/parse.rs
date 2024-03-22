@@ -40,10 +40,8 @@ struct IncludeParser;
 ///
 /// # Return values
 /// Returns a tuple of an [`IncludeRef`] that represents the included text and a usize that
-/// represents the end index of the include block.
-///
-/// This usize is not necessarily the end index within the text string passed in, and is
-/// solely based on the length of the include block and the start value.
+/// represents the end index of the include block, such that start..end covers the full include
+/// block (before the include goes through).
 pub fn parse_include_block<'t>(
     text: &'t str,
     start: usize,
@@ -55,7 +53,7 @@ pub fn parse_include_block<'t>(
         Rule::include_normal
     };
 
-    match IncludeParser::parse(rule, text) {
+    match IncludeParser::parse(rule, &text[start..]) {
         Ok(mut pairs) => {
             // Extract inner pairs
             // These actually make up the include block's tokens
