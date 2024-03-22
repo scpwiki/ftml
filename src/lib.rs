@@ -133,6 +133,7 @@ pub use self::preproc::preprocess;
 pub use self::tokenizer::{tokenize, Tokenization};
 pub use self::utf16::Utf16IndexMap;
 
+/// This module collects commonly used traits from this crate.
 pub mod prelude {
     pub use super::data::{PageInfo, ScoreValue};
     pub use super::includes::{include, Includer};

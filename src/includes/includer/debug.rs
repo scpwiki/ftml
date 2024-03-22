@@ -20,9 +20,15 @@
 
 use super::prelude::*;
 use crate::tree::VariableMap;
+#[cfg(test)]
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::{self, Display};
 
+/// An [`Includer`] that replaces included references with the page content followed by the
+/// include variables and their values.
+///
+/// Useful for testing includes.
 #[derive(Debug)]
 pub struct DebugIncluder;
 
