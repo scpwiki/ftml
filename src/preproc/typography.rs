@@ -94,6 +94,8 @@ pub enum Replacer {
 }
 
 impl Replacer {
+    /// Replaces the text in the manner defined by its enum, using the buffer as a temporary space
+    /// to copy to.
     fn replace(&self, text: &mut String, buffer: &mut String) {
         use self::Replacer::*;
 
@@ -161,6 +163,7 @@ impl Replacer {
     }
 }
 
+/// Performs all typographic substitutions in place in the given text
 pub fn substitute(text: &mut String) {
     let mut buffer = String::new();
     info!("Performing typography substitutions");

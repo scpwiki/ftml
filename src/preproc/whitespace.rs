@@ -45,6 +45,7 @@ static WHITESPACE_ONLY_LINE: Lazy<Regex> = Lazy::new(|| {
 static LEADING_NEWLINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\n+").unwrap());
 static TRAILING_NEWLINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n+$").unwrap());
 
+/// Performs all whitespace substitutions in place in the given text.
 pub fn substitute(text: &mut String) {
     // Replace DOS and Mac newlines
     str_replace(text, "\r\n", "\n");
@@ -67,12 +68,13 @@ pub fn substitute(text: &mut String) {
     // Null characters to spaces
     str_replace(text, "\0", " ");
 
-    // Remove leading and trailing newlines,
-    // save one at the end
+    // Remove leading and trailing newlines
     regex_replace(text, &LEADING_NEWLINES, "");
     regex_replace(text, &TRAILING_NEWLINES, "");
 }
 
+/// Helper function that in-place replaces all text matched by the pattern with the replacement
+/// string
 fn str_replace(text: &mut String, pattern: &str, replacement: &str) {
     debug!(
         "Replacing miscellaneous static string (pattern {}, replacement {})",
@@ -85,6 +87,7 @@ fn str_replace(text: &mut String, pattern: &str, replacement: &str) {
     }
 }
 
+/// Helper function that in-place replaces all text matched by the regex with the replacement string
 fn regex_replace(text: &mut String, regex: &Regex, replacement: &str) {
     debug!(
         "Replacing miscellaneous regular expression (pattern {}, replacement {})",
@@ -92,20 +95,21 @@ fn regex_replace(text: &mut String, regex: &Regex, replacement: &str) {
         replacement,
     );
 
+    // This rescans the full string each time, which could be optimized by checking from some
+    // offset
     while let Some(mtch) = regex.find(text) {
-        let range = mtch.start()..mtch.end();
-        text.replace_range(range, replacement);
+        text.replace_range(mtch.range(), replacement);
     }
 }
 
+/// In-place replaces the leading non-standard spaces (such as nbsp) on each line with standard spaces
 fn replace_leading_spaces(text: &mut String) {
     debug!("Replacing leading non-standard spaces with regular spaces");
 
     if let Some(mtch) = LEADING_NONSTANDARD_WHITESPACE.find(text) {
-        let range = mtch.start()..mtch.end();
         let count = mtch.as_str().chars().count();
         let spaces = " ".repeat(count);
-        text.replace_range(range, &spaces);
+        text.replace_range(mtch.range(), &spaces);
     }
 }
 

@@ -18,6 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//! This module mimics the Wikidot preprocessor, which replaces certian character sequences to make
+//! them look better, or be easier to parse.
+
 mod typography;
 mod whitespace;
 
