@@ -33,7 +33,7 @@ use regex::Regex;
 #[derive(Debug)]
 pub enum Replacer {
     /// Replaces any text matching the "repl" group,
-    /// (or the entire regular expression if "repl" is happening)
+    /// (or the entire regular expression if "repl" does not exist)
     /// with the static string.
     RegexReplace {
         regex: Regex,
@@ -79,10 +79,9 @@ impl Replacer {
 
                 while let Some(capture) = regex.captures_at(text, offset) {
                     let range = {
-                        let full_match = capture
-                            .get(0)
-                            .expect("Regular expression lacks a full match");
-                        let mtch = capture.name("repl").unwrap_or_else(|| capture.get(0).unwrap()); // alternative is full match
+                        let mtch = capture
+                            .name("repl")
+                            .unwrap_or_else(|| capture.get(0).unwrap()); // alternative is full match
 
                         offset = mtch.start() + replacement.len();
                         mtch.range()
