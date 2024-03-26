@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Module for POD (plain old data) structs.
+//! This module defines POD (plain old data) structs.
 
 mod backlinks;
 mod karma;

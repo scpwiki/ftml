@@ -27,6 +27,7 @@
 //! * Convert null characters to regular spaces
 //! * Compress groups of 3+ newlines into 2 newlines
 
+use super::Replacer;
 use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
 
@@ -36,19 +37,50 @@ static LEADING_NONSTANDARD_WHITESPACE: Lazy<Regex> = Lazy::new(|| {
         .build()
         .unwrap()
 });
-static WHITESPACE_ONLY_LINE: Lazy<Regex> = Lazy::new(|| {
-    RegexBuilder::new(r"^\s+$")
+static WHITESPACE_ONLY_LINE: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+    regex: RegexBuilder::new(r"^\s+$")
         .multi_line(true)
         .build()
-        .unwrap()
+        .unwrap(),
+    replacement: "",
 });
-static LEADING_NEWLINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\n+").unwrap());
-static TRAILING_NEWLINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n+$").unwrap());
+static LEADING_NEWLINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+    regex: Regex::new(r"^\n+").unwrap(),
+    replacement: "",
+});
+static TRAILING_NEWLINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+    regex: Regex::new(r"\n+$").unwrap(),
+    replacement: "",
+});
+static DOS_MAC_NEWLINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+    regex: Regex::new(r"\r\n?").unwrap(),
+    replacement: "\n",
+});
+static CONCAT_LINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+    regex: Regex::new(r"\\\n").unwrap(),
+    replacement: "",
+});
+static TABS: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+    regex: Regex::new("\t").unwrap(),
+    replacement: "    ",
+});
+static NULL_SPACE: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+    regex: Regex::new("\0").unwrap(),
+    replacement: " ",
+});
 
+/// Performs all whitespace substitutions in-place in the given text.
 pub fn substitute(text: &mut String) {
+    let mut buffer = String::new();
+
+    macro_rules! replace {
+        ($replacer:expr) => {
+            $replacer.replace(text, &mut buffer)
+        };
+    }
+
     // Replace DOS and Mac newlines
-    str_replace(text, "\r\n", "\n");
-    str_replace(text, "\r", "\n");
+    replace!(DOS_MAC_NEWLINES);
 
     // Replace leading non-standard spaces with regular spaces
     // Leave other non-standard spaces as-is (such as nbsp in
@@ -56,56 +88,39 @@ pub fn substitute(text: &mut String) {
     replace_leading_spaces(text);
 
     // Strip lines with only whitespace
-    regex_replace(text, &WHITESPACE_ONLY_LINE, "");
+    replace!(WHITESPACE_ONLY_LINE);
 
     // Join concatenated lines (ending with '\')
-    str_replace(text, "\\\n", "");
+    replace!(CONCAT_LINES);
 
     // Tabs to spaces
-    str_replace(text, "\t", "    ");
+    replace!(TABS);
 
     // Null characters to spaces
-    str_replace(text, "\0", " ");
+    replace!(NULL_SPACE);
 
-    // Remove leading and trailing newlines,
-    // save one at the end
-    regex_replace(text, &LEADING_NEWLINES, "");
-    regex_replace(text, &TRAILING_NEWLINES, "");
+    // Remove leading and trailing newlines
+    replace!(LEADING_NEWLINES);
+    replace!(TRAILING_NEWLINES);
 }
 
-fn str_replace(text: &mut String, pattern: &str, replacement: &str) {
-    debug!(
-        "Replacing miscellaneous static string (pattern {}, replacement {})",
-        pattern, replacement,
-    );
-
-    while let Some(idx) = text.find(pattern) {
-        let range = idx..idx + pattern.len();
-        text.replace_range(range, replacement);
-    }
-}
-
-fn regex_replace(text: &mut String, regex: &Regex, replacement: &str) {
-    debug!(
-        "Replacing miscellaneous regular expression (pattern {}, replacement {})",
-        regex.as_str(),
-        replacement,
-    );
-
-    while let Some(mtch) = regex.find(text) {
-        let range = mtch.start()..mtch.end();
-        text.replace_range(range, replacement);
-    }
-}
-
+/// In-place replaces the leading non-standard spaces (such as nbsp) on each line with standard spaces
 fn replace_leading_spaces(text: &mut String) {
     debug!("Replacing leading non-standard spaces with regular spaces");
 
-    if let Some(mtch) = LEADING_NONSTANDARD_WHITESPACE.find(text) {
-        let range = mtch.start()..mtch.end();
+    let mut offset = 0;
+
+    while let Some(capture) = LEADING_NONSTANDARD_WHITESPACE.captures_at(text, offset) {
+        let mtch = capture
+            .get(0)
+            .expect("Regular expression lacks a full match");
+
         let count = mtch.as_str().chars().count();
         let spaces = " ".repeat(count);
-        text.replace_range(range, &spaces);
+
+        offset = mtch.start() + count;
+
+        text.replace_range(mtch.range(), &spaces);
     }
 }
 
@@ -143,6 +158,10 @@ fn regexes() {
     let _ = &*WHITESPACE_ONLY_LINE;
     let _ = &*LEADING_NEWLINES;
     let _ = &*TRAILING_NEWLINES;
+    let _ = &*DOS_MAC_NEWLINES;
+    let _ = &*CONCAT_LINES;
+    let _ = &*TABS;
+    let _ = &*NULL_SPACE;
 }
 
 #[test]
