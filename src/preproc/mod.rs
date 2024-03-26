@@ -82,7 +82,7 @@ impl Replacer {
                         let full_match = capture
                             .get(0)
                             .expect("Regular expression lacks a full match");
-                        let mtch = capture.name("repl").unwrap_or(full_match);
+                        let mtch = capture.name("repl").unwrap_or_else(|| capture.get(0).unwrap()); // alternative is full match
 
                         offset = mtch.start() + replacement.len();
                         mtch.range()
