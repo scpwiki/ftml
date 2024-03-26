@@ -27,6 +27,107 @@ mod whitespace;
 #[cfg(test)]
 mod test;
 
+use regex::Regex;
+
+/// Helper struct to easily perform string replacements.
+#[derive(Debug)]
+pub enum Replacer {
+    /// Replaces any text matching the "repl" group,
+    /// (or the entire regular expression if "repl" is happening)
+    /// with the static string.
+    RegexReplace {
+        regex: Regex,
+        replacement: &'static str,
+    },
+
+    /// Takes text matching the regular expression, and replaces the exterior.
+    ///
+    /// The regular expression must return the content to be preserved in
+    /// capture group 1, and surrounds it with the `begin` and `end` strings.
+    ///
+    /// For instance, say:
+    /// * `regex` matched `[% (.+) %]`
+    /// * `begin` was `<(`
+    /// * `end` was `)>`
+    ///
+    /// Then input string `[% wikidork %]` would become `<(wikidork)>`.
+    RegexSurround {
+        regex: Regex,
+        begin: &'static str,
+        end: &'static str,
+    },
+}
+
+impl Replacer {
+    /// Replaces the text in the manner defined by its enum, using the buffer as a temporary space
+    /// to copy to.
+    fn replace(&self, text: &mut String, buffer: &mut String) {
+        use self::Replacer::*;
+
+        match *self {
+            RegexReplace {
+                ref regex,
+                replacement,
+            } => {
+                debug!(
+                    "Running regex regular expression replacement (pattern {}, replacement {})",
+                    regex.as_str(),
+                    replacement,
+                );
+
+                let mut offset = 0;
+
+                while let Some(capture) = regex.captures_at(text, offset) {
+                    let range = {
+                        let full_match = capture
+                            .get(0)
+                            .expect("Regular expression lacks a full match");
+                        let mtch = capture.name("repl").unwrap_or(full_match);
+
+                        offset = mtch.start() + replacement.len();
+                        mtch.range()
+                    };
+
+                    text.replace_range(range, replacement);
+                }
+            }
+            RegexSurround {
+                ref regex,
+                begin,
+                end,
+            } => {
+                debug!(
+                    "Running surround regular expression capture replacement (pattern {}, begin {}, end {})",
+                    regex.as_str(),
+                    begin,
+                    end,
+                );
+
+                while let Some(capture) = regex.captures(text) {
+                    let mtch = capture
+                        .get(1)
+                        .expect("Regular expression lacks a content group");
+
+                    let range = {
+                        let mtch = capture
+                            .get(0)
+                            .expect("Regular expression lacks a full match");
+
+                        mtch.range()
+                    };
+
+                    buffer.clear();
+                    buffer.push_str(begin);
+                    buffer.push_str(mtch.as_str());
+                    buffer.push_str(end);
+
+                    text.replace_range(range, buffer);
+                }
+            }
+        }
+    }
+}
+
 /// Run the preprocessor on the given wikitext, which is modified in-place.
 ///
 /// The following modifications are performed:
