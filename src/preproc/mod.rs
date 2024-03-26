@@ -102,17 +102,20 @@ impl Replacer {
                     end,
                 );
 
-                while let Some(capture) = regex.captures(text) {
+                let mut offset = 0;
+
+                while let Some(capture) = regex.captures_at(text, offset) {
                     let mtch = capture
                         .get(1)
                         .expect("Regular expression lacks a content group");
 
                     let range = {
-                        let mtch = capture
+                        let full_mtch = capture
                             .get(0)
                             .expect("Regular expression lacks a full match");
 
-                        mtch.range()
+                        offset = full_mtch.start() + mtch.len() + begin.len() + end.len();
+                        full_mtch.range()
                     };
 
                     buffer.clear();
