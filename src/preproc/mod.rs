@@ -21,8 +21,8 @@
 //! This module mimics the Wikidot preprocessor, which replaces certian character sequences to make
 //! them look better, or be easier to parse.
 
-mod typography;
-mod whitespace;
+pub mod typography;
+pub mod whitespace;
 
 #[cfg(test)]
 mod test;
