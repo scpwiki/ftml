@@ -27,6 +27,7 @@ pub struct Tokenization<'t> {
     full_text: FullText<'t>,
 }
 
+/// Struct that represents both a list of tokens and the text the tokens were generated from
 impl<'t> Tokenization<'t> {
     #[inline]
     pub fn tokens<'r>(&'r self) -> &'r [ExtractedToken<'t>] {
