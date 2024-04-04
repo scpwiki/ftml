@@ -32,6 +32,7 @@ use std::{mem, ptr};
 
 const MAX_RECURSION_DEPTH: usize = 100;
 
+/// Parser for a set of tokens.
 #[derive(Debug, Clone)]
 pub struct Parser<'r, 't> {
     // Page and parse information
@@ -204,7 +205,7 @@ impl<'r, 't> Parser<'r, 't> {
         }
     }
 
-    // Table of Contents
+    /// Add heading element to table of contents
     pub fn push_table_of_contents_entry(
         &mut self,
         heading: HeadingLevel,

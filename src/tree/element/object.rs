@@ -29,6 +29,7 @@ use ref_map::*;
 use std::borrow::Cow;
 use std::num::NonZeroU32;
 
+/// Represents an element to be rendered.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "element", content = "data")]
 pub enum Element<'t> {
@@ -367,7 +368,7 @@ impl Element<'_> {
     /// This is to avoid making the call very expensive, but for a complete
     /// understanding of the paragraph requirements, see the `Elements` return.
     ///
-    /// See https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Content_categories#phrasing_content
+    /// See <https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Content_categories#phrasing_content>
     pub fn paragraph_safe(&self) -> bool {
         match self {
             Element::Container(container) => container.ctype().paragraph_safe(),

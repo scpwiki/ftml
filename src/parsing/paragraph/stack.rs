@@ -91,6 +91,7 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
+    /// Creates a paragraph element out of this struct
     pub fn build_paragraph(&mut self) -> Option<Element<'t>> {
         debug!(
             "Building paragraph from current stack state (length {})",
@@ -111,6 +112,7 @@ impl<'t> ParagraphStack<'t> {
         Some(element)
     }
 
+    /// Set the finished field in this struct to the paragraph element
     pub fn end_paragraph(&mut self) {
         debug!("Ending the current paragraph to push as a completed element");
 

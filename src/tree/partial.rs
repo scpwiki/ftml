@@ -42,7 +42,7 @@ pub enum PartialElement<'t> {
 
     /// Text associated with a Ruby annotation.
     ///
-    /// Outputs HTML `<rt>`. See also https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ruby.
+    /// Outputs HTML `<rt>`. See also <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ruby>.
     RubyText(RubyText<'t>),
 }
 

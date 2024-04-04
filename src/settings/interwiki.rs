@@ -22,9 +22,23 @@ use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+/// An [`InterwikiSettings`] instance that has no prefixes.
 pub static EMPTY_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSettings {
     prefixes: hashmap! {},
 });
+
+/// An [`InterwikiSettings`] instance that has the default prefixes.
+///
+/// These prefixes are:
+/// - wikipedia:path => https://wikipedia.org/wiki/path
+/// - wp:path => https://wikipedia.org/wiki/path
+/// - commons:path => https://commons.wikimedia.org/wiki/path
+/// - google:path => https://google.com/search?q=path
+/// - duckduckgo:path => https://duckduckgo.com/?q=path
+/// - ddg:path => https://duckduckgo.com/?q=path
+/// - dictionary:path => https://dictionary.com/browse/path
+/// - thesaurus:path => https://thesaurus.com/browse/path
+#[allow(rustdoc::bare_urls)]
 pub static DEFAULT_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSettings {
     prefixes: hashmap! {
         cow!("wikipedia") => cow!("https://wikipedia.org/wiki/$$"),
@@ -38,18 +52,35 @@ pub static DEFAULT_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSe
     },
 });
 
+/// Settings that determine how to turn [`interwiki links`](http://org.wikidot.com/doc:wiki-syntax#toc21)
+/// into full URLs.
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct InterwikiSettings {
     #[serde(flatten)]
+    /// A map from each interwiki prefix to the interwiki URL. A '$$' in the URL indicates where the path specified in
+    /// the Wikijump interwiki block should go.
     pub prefixes: HashMap<Cow<'static, str>, Cow<'static, str>>,
 }
 
 impl InterwikiSettings {
+    /// Creates a new instance with no prefixes.
     #[inline]
     pub fn new() -> Self {
         InterwikiSettings::default()
     }
 
+    /// Creates a full URL from an interwiki link.
+    /// # Example
+    /// ```
+    /// # use ftml::settings::*;
+    /// assert_eq!(DEFAULT_INTERWIKI.build("wikipedia:Mallard").unwrap(), "https://wikipedia.org/wiki/Mallard");
+    /// ```
+    /// # Errors
+    /// Returns None if:
+    /// - The link starts with a colon
+    /// - There is no colon in the link
+    /// - There is nothing after the colon
+    /// - The interwiki prefix is not found
     pub fn build(&self, link: &str) -> Option<String> {
         match link.find(':') {
             // Starting with a colon is not interwiki, skip.
@@ -145,4 +176,5 @@ fn interwiki_prefixes() {
     check!("thesaurus:oak", Some("https://thesaurus.com/browse/oak"));
     check!("banana:fruit-salad", None);
     check!(":empty", None);
+    check!("no-link:", None);
 }
