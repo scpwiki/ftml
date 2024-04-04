@@ -205,7 +205,7 @@ impl<'r, 't> Parser<'r, 't> {
         }
     }
 
-    /// Add heading element to table of contents
+    /// Add heading element to table of contents.
     pub fn push_table_of_contents_entry(
         &mut self,
         heading: HeadingLevel,

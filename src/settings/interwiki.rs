@@ -27,6 +27,7 @@ pub static EMPTY_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSett
     prefixes: hashmap! {},
 });
 
+#[allow(rustdoc::bare_urls)]
 /// An [`InterwikiSettings`] instance that has the default prefixes.
 ///
 /// These prefixes are:
@@ -38,7 +39,6 @@ pub static EMPTY_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSett
 /// - ddg:path => https://duckduckgo.com/?q=path
 /// - dictionary:path => https://dictionary.com/browse/path
 /// - thesaurus:path => https://thesaurus.com/browse/path
-#[allow(rustdoc::bare_urls)]
 pub static DEFAULT_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSettings {
     prefixes: hashmap! {
         cow!("wikipedia") => cow!("https://wikipedia.org/wiki/$$"),
