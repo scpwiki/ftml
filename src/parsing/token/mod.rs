@@ -38,6 +38,7 @@ use pest::Parser;
 use std::ops::Range;
 use strum_macros::IntoStaticStr;
 
+/// Struct that represents a token in a specific text.
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ExtractedToken<'a> {
     pub token: Token,
@@ -46,6 +47,8 @@ pub struct ExtractedToken<'a> {
 }
 
 impl<'a> ExtractedToken<'a> {
+    /// Returns a new object with the same values, except with span refering to the byte indicies
+    /// of the text if it were in UTF-16 rather than in UTF-8.
     #[must_use]
     pub fn to_utf16_indices(&self, map: &Utf16IndexMap) -> Self {
         // Copy fields
@@ -61,6 +64,8 @@ impl<'a> ExtractedToken<'a> {
     }
 }
 
+/// Enum that represents the type of a parsed token. For a struct with additional context
+/// surrounding the positioning and content of the token, see [`ExtractedToken`].
 #[derive(
     Serialize, Deserialize, Enum, IntoStaticStr, Debug, Copy, Clone, PartialEq, Eq,
 )]
@@ -163,6 +168,10 @@ pub enum Token {
 }
 
 impl Token {
+    /// Extracts all tokens from the given text.
+    /// # Errors
+    /// Returns an error if something goes wrong with the parsing process. This will result in the
+    /// only Token being a raw text containing all of the input.
     pub(crate) fn extract_all(text: &str) -> Vec<ExtractedToken> {
         info!("Running lexer on input");
 
@@ -196,7 +205,7 @@ impl Token {
         }
     }
 
-    /// Converts a single `Pair` from pest into its corresponding `ExtractedToken`.
+    /// Converts a single [`Pair`] from pest into its corresponding [`ExtractedToken`].
     fn convert_pair(pair: Pair<Rule>) -> ExtractedToken {
         // Extract values from the Pair
         let rule = pair.as_rule();
@@ -212,7 +221,7 @@ impl Token {
         ExtractedToken { token, slice, span }
     }
 
-    /// Mapping of a pest `Rule` to its corresponding `Token` enum.
+    /// Maps each pest [`Rule`] to its corresponding [`Token`].
     fn get_from_rule(rule: Rule) -> Token {
         match rule {
             // Symbols
