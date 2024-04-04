@@ -45,7 +45,7 @@ mod prelude {
     };
     pub use crate::settings::WikitextSettings;
     pub use crate::text::FullText;
-    pub use crate::tree::{Element, Elements, OwnedElementsIterator};
+    pub use crate::tree::{Element, Elements};
 }
 
 use self::depth::{process_depths, DepthItem, DepthList};
@@ -74,7 +74,7 @@ pub use self::token::{ExtractedToken, Token};
 
 /// Parse through the given tokens and produce an AST.
 ///
-/// This takes a list of `ExtractedToken` items produced by `tokenize()`.
+/// This takes a list of [`ExtractedToken`] items produced by [tokenize](crate::tokenizer::tokenize()).
 pub fn parse<'r, 't>(
     tokenization: &'r Tokenization<'t>,
     page_info: &'r PageInfo<'t>,
@@ -243,8 +243,7 @@ impl NextIndex<TableOfContentsIndex> for Incrementer {
     }
 }
 
-// Parse internal result
-
+/// Represents the result of an internal parse.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UnstructuredParseResult<'r, 't> {
     /// The returned result from parsing.
