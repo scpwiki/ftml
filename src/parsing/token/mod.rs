@@ -171,7 +171,7 @@ impl Token {
     /// Extracts all tokens from the given text.
     /// # Errors
     /// Returns an error if something goes wrong with the parsing process. This will result in the
-    /// only Token being a raw text containing all of the input.
+    /// only [`Token`] being a raw text containing all of the input.
     pub(crate) fn extract_all(text: &str) -> Vec<ExtractedToken> {
         info!("Running lexer on input");
 
