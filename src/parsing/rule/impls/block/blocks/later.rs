@@ -25,7 +25,7 @@
 //! (not to be confused with `MiniRecentThreads`) which only
 //! outputted "later." and no other functionality.
 //!
-//! See https://twitter.com/wikidotbugs/status/1328588862218702850
+//! See <https://twitter.com/wikidotbugs/status/1328588862218702850>
 
 use super::prelude::*;
 

@@ -41,7 +41,7 @@ pub struct Utf16IndexMap<'t> {
 impl<'t> Utf16IndexMap<'t> {
     /// Produces a mapping of UTF-8 byte index to UTF-16 index.
     ///
-    /// This enables objects to be converted into using character indices
+    /// This enables objects to be converted from UTF-8 into UTF-16 using character indices
     /// for strings rather than byte indices. This is useful for environments
     /// which do use UTF-16 strings, such as Javascript (via WebASM).
     pub fn new(text: &'t str) -> Self {

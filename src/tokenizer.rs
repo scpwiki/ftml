@@ -21,6 +21,7 @@
 use crate::parsing::{ExtractedToken, Token};
 use crate::text::FullText;
 
+/// Struct that represents both a list of tokens and the text the tokens were generated from.
 #[derive(Debug, Clone)]
 pub struct Tokenization<'t> {
     tokens: Vec<ExtractedToken<'t>>,

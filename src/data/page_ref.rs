@@ -40,6 +40,7 @@ pub struct PageRef<'t> {
 }
 
 impl<'t> PageRef<'t> {
+    /// Creates a [`PageRef`] with the given page and site.
     #[inline]
     pub fn page_and_site<S1, S2>(site: S1, page: S2) -> Self
     where
@@ -52,6 +53,7 @@ impl<'t> PageRef<'t> {
         }
     }
 
+    /// Creates a [`PageRef`] with the given page and no site.
     #[inline]
     pub fn page_only<S>(page: S) -> Self
     where
