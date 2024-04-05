@@ -75,7 +75,7 @@ impl InterwikiSettings {
     /// # use ftml::settings::*;
     /// assert_eq!(DEFAULT_INTERWIKI.build("wikipedia:Mallard").unwrap(), "https://wikipedia.org/wiki/Mallard");
     /// ```
-    /// # Errors
+    ///
     /// Returns None if:
     /// - The link starts with a colon
     /// - There is no colon in the link
