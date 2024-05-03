@@ -42,7 +42,8 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_CODE, name);
 
     let mut arguments = parser.get_head_map(&BLOCK_CODE, in_head)?;
-    let language = arguments.get("type");
+    let mut language = arguments.get("type");
+    language.to_mut().make_ascii_lowercase();
 
     let code = parser.get_body_text(&BLOCK_CODE)?;
     let element = Element::Code {
