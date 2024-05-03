@@ -58,6 +58,12 @@ pub struct Parser<'r, 't> {
     //       here preserved across parser child instances.
     table_of_contents: Rc<RefCell<Vec<(usize, String)>>>,
 
+    // HTML blocks with data to expose
+    html_blocks: Rc<RefCell<Vec<Cow<'t, str>>>>,
+
+    // Code blocks with data to expose
+    code_blocks: Rc<RefCell<Vec<CodeBlock<'t>>>>,
+
     // Footnotes
     //
     // Schema: Vec<List of elements in a footnote>
@@ -102,6 +108,8 @@ impl<'r, 't> Parser<'r, 't> {
             rule: RULE_PAGE,
             depth: 0,
             table_of_contents: make_shared_vec(),
+            html_blocks: make_shared_vec(),
+            code_blocks: make_shared_vec(),
             footnotes: make_shared_vec(),
             bibliographies: Rc::new(RefCell::new(BibliographyList::new())),
             accepts_partial: AcceptsPartial::None,
@@ -234,6 +242,33 @@ impl<'r, 't> Parser<'r, 't> {
     #[cold]
     pub fn remove_footnotes(&mut self) -> Vec<Vec<Element<'t>>> {
         mem::take(&mut self.footnotes.borrow_mut())
+    }
+
+    // Blocks
+    pub fn push_html_block(&mut self, new_block: Cow<'t, str>) -> usize {
+        let mut guard = self.html_blocks.borrow_mut();
+        let index = guard.next_index();
+        guard.push(new_block);
+        index
+    }
+
+    pub fn push_code_block(&mut self, new_block: CodeBlock<'t>) -> Result<usize, NonUniqueNameError> {
+        // Check name (if specified) is unique
+        if let Some(new_name) = new_block.name {
+            for block in &self.code_blocks {
+                if let Some(name) = block.name {
+                    if name == new_name {
+                        return Err(NonUniqueNameError);
+                    }
+                }
+            }
+        }
+
+        // Add block
+        let mut guard = self.code_blocks.borrow_mut();
+        let index = guard.next_index();
+        guard.push(new_block);
+        Ok(index)
     }
 
     // Bibliography
