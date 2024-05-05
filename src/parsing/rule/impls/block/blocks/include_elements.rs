@@ -22,6 +22,8 @@ use super::prelude::*;
 use crate::data::PageRef;
 use crate::parsing::UnstructuredParseResult;
 
+// TODO: maybe scrap this? we want to move to components anyways
+
 /// Block rule for include (elements).
 ///
 /// This takes the resultant `SyntaxTree` from another page and
