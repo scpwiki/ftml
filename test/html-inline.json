@@ -17,6 +17,7 @@
             }
         ],
         "html-blocks": [
+            "My <bold>text</bold>!"
         ],
         "code-blocks": [
         ],
