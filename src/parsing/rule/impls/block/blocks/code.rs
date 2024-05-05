@@ -43,7 +43,9 @@ fn parse_fn<'r, 't>(
 
     let mut arguments = parser.get_head_map(&BLOCK_CODE, in_head)?;
     let mut language = arguments.get("type");
-    language.to_mut().make_ascii_lowercase();
+    if let Some(ref mut language) = language {
+        language.to_mut().make_ascii_lowercase();
+    }
 
     let code = parser.get_body_text(&BLOCK_CODE)?;
     let element = Element::Code {

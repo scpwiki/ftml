@@ -25,7 +25,10 @@ use super::RULE_PAGE;
 use crate::data::PageInfo;
 use crate::render::text::TextRender;
 use crate::tokenizer::Tokenization;
-use crate::tree::{AcceptsPartial, Bibliography, BibliographyList, HeadingLevel};
+use crate::tree::{
+    AcceptsPartial, Bibliography, BibliographyList, CodeBlock, HeadingLevel,
+};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{mem, ptr};
@@ -230,6 +233,16 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     #[cold]
+    pub fn remove_html_blocks(&mut self) -> Vec<Cow<'t, str>> {
+        mem::take(&mut self.html_blocks.borrow_mut())
+    }
+
+    #[cold]
+    pub fn remove_code_blocks(&mut self) -> Vec<CodeBlock<'t>> {
+        mem::take(&mut self.code_blocks.borrow_mut())
+    }
+
+    #[cold]
     pub fn remove_table_of_contents(&mut self) -> Vec<(usize, String)> {
         mem::take(&mut self.table_of_contents.borrow_mut())
     }
@@ -245,30 +258,31 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     // Blocks
-    pub fn push_html_block(&mut self, new_block: Cow<'t, str>) -> usize {
-        let mut guard = self.html_blocks.borrow_mut();
-        let index = guard.next_index();
-        guard.push(new_block);
-        index
+    pub fn push_html_block(&mut self, new_block: Cow<'t, str>) {
+        self.html_blocks.borrow_mut().push(new_block);
     }
 
-    pub fn push_code_block(&mut self, new_block: CodeBlock<'t>) -> Result<usize, NonUniqueNameError> {
+    pub fn push_code_block(
+        &mut self,
+        new_block: CodeBlock<'t>,
+    ) -> Result<(), NonUniqueNameError> {
         // Check name (if specified) is unique
-        if let Some(new_name) = new_block.name {
-            for block in &self.code_blocks {
-                if let Some(name) = block.name {
-                    if name == new_name {
-                        return Err(NonUniqueNameError);
+        {
+            let guard = self.code_blocks.borrow();
+            if let Some(ref new_name) = new_block.name {
+                for block in &*guard {
+                    if let Some(ref name) = block.name {
+                        if name == new_name {
+                            return Err(NonUniqueNameError);
+                        }
                     }
                 }
             }
         }
 
         // Add block
-        let mut guard = self.code_blocks.borrow_mut();
-        let index = guard.next_index();
-        guard.push(new_block);
-        Ok(index)
+        self.code_blocks.borrow_mut().push(new_block);
+        Ok(())
     }
 
     // Bibliography
@@ -287,10 +301,16 @@ impl<'r, 't> Parser<'r, 't> {
     // Special for [[include]], appending a SyntaxTree
     pub fn append_shared_items(
         &mut self,
+        html_blocks: &mut Vec<Cow<'t, str>>,
+        code_blocks: &mut Vec<CodeBlock<'t>>,
         table_of_contents: &mut Vec<(usize, String)>,
         footnotes: &mut Vec<Vec<Element<'t>>>,
         bibliographies: &mut BibliographyList<'t>,
     ) {
+        self.html_blocks.borrow_mut().append(html_blocks);
+
+        self.code_blocks.borrow_mut().append(code_blocks);
+
         self.table_of_contents
             .borrow_mut()
             .append(table_of_contents);
@@ -550,6 +570,9 @@ impl<'r, 't> Parser<'r, 't> {
         ParseError::new(kind, self.rule, self.current)
     }
 }
+
+#[derive(Debug)]
+pub struct NonUniqueNameError;
 
 #[inline]
 fn make_shared_vec<T>() -> Rc<RefCell<Vec<T>>> {

@@ -25,6 +25,7 @@ mod anchor;
 mod bibliography;
 mod clear_float;
 mod clone;
+mod code;
 mod container;
 mod date;
 mod definition_list;
@@ -47,6 +48,7 @@ pub use self::anchor::*;
 pub use self::attribute::AttributeMap;
 pub use self::bibliography::*;
 pub use self::clear_float::*;
+pub use self::code::CodeBlock;
 pub use self::container::*;
 pub use self::date::DateItem;
 pub use self::definition_list::*;
@@ -64,8 +66,9 @@ pub use self::table::*;
 pub use self::tag::*;
 pub use self::variables::*;
 
-use self::clone::{elements_lists_to_owned, elements_to_owned};
+use self::clone::{elements_lists_to_owned, elements_to_owned, string_to_owned};
 use crate::parsing::{ParseError, ParseOutcome};
+use std::borrow::Cow;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -82,6 +85,12 @@ pub struct SyntaxTree<'t> {
     /// Depth list conversion happens here, so that depths on the table
     /// match the heading level.
     pub table_of_contents: Vec<Element<'t>>,
+
+    /// The full list of HTML blocks for this page.
+    pub html_blocks: Vec<Cow<'t, str>>,
+
+    /// The full list of code blocks for this page.
+    pub code_blocks: Vec<CodeBlock<'t>>,
 
     /// The full footnote list for this page.
     pub footnotes: Vec<Vec<Element<'t>>>,
@@ -100,6 +109,8 @@ impl<'t> SyntaxTree<'t> {
     pub(crate) fn from_element_result(
         elements: Vec<Element<'t>>,
         errors: Vec<ParseError>,
+        html_blocks: Vec<Cow<'t, str>>,
+        code_blocks: Vec<CodeBlock<'t>>,
         table_of_contents: Vec<Element<'t>>,
         footnotes: Vec<Vec<Element<'t>>>,
         bibliographies: BibliographyList<'t>,
@@ -108,6 +119,8 @@ impl<'t> SyntaxTree<'t> {
         let tree = SyntaxTree {
             elements,
             table_of_contents,
+            html_blocks,
+            code_blocks,
             footnotes,
             bibliographies,
             wikitext_len,
@@ -119,6 +132,16 @@ impl<'t> SyntaxTree<'t> {
         SyntaxTree {
             elements: elements_to_owned(&self.elements),
             table_of_contents: elements_to_owned(&self.table_of_contents),
+            html_blocks: self
+                .html_blocks
+                .iter()
+                .map(|html| string_to_owned(&html))
+                .collect(),
+            code_blocks: self
+                .code_blocks
+                .iter()
+                .map(|code| code.to_owned())
+                .collect(),
             footnotes: elements_lists_to_owned(&self.footnotes),
             bibliographies: self.bibliographies.to_owned(),
             wikitext_len: self.wikitext_len,
