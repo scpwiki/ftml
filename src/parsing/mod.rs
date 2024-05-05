@@ -134,8 +134,7 @@ where
             SyntaxTree::from_element_result(
                 elements,
                 errors,
-                html_blocks,
-                code_blocks,
+                (html_blocks, code_blocks),
                 table_of_contents,
                 footnotes,
                 bibliographies,
@@ -159,8 +158,7 @@ where
             SyntaxTree::from_element_result(
                 elements,
                 errors,
-                html_blocks,
-                code_blocks,
+                (html_blocks, code_blocks),
                 table_of_contents,
                 footnotes,
                 bibliographies,

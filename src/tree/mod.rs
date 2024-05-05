@@ -109,8 +109,7 @@ impl<'t> SyntaxTree<'t> {
     pub(crate) fn from_element_result(
         elements: Vec<Element<'t>>,
         errors: Vec<ParseError>,
-        html_blocks: Vec<Cow<'t, str>>,
-        code_blocks: Vec<CodeBlock<'t>>,
+        (html_blocks, code_blocks): (Vec<Cow<'t, str>>, Vec<CodeBlock<'t>>),
         table_of_contents: Vec<Element<'t>>,
         footnotes: Vec<Vec<Element<'t>>>,
         bibliographies: BibliographyList<'t>,
@@ -135,7 +134,7 @@ impl<'t> SyntaxTree<'t> {
             html_blocks: self
                 .html_blocks
                 .iter()
-                .map(|html| string_to_owned(&html))
+                .map(|html| string_to_owned(html))
                 .collect(),
             code_blocks: self
                 .code_blocks
