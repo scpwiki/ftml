@@ -19,8 +19,8 @@
  */
 
 use super::prelude::*;
-use wikidot_normalize::normalize;
 use crate::tree::CodeBlock;
+use wikidot_normalize::normalize;
 
 pub const BLOCK_CODE: BlockRule = BlockRule {
     name: "block-code",
@@ -56,8 +56,14 @@ fn parse_fn<'r, 't>(
     }
 
     let code = parser.get_body_text(&BLOCK_CODE)?;
-    let element = Element::Code { contents: cow!(code), language };
-    let added_result = parser.push_code_block(CodeBlock { contents: cow!(code), name });
+    let element = Element::Code {
+        contents: cow!(code),
+        language,
+    };
+    let added_result = parser.push_code_block(CodeBlock {
+        contents: cow!(code),
+        name,
+    });
     if added_result.is_err() {
         return Err(parser.make_err(ParseErrorKind::CodeNonUniqueName));
     }
