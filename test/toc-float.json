@@ -51,6 +51,10 @@
         ],
         "styles": [
         ],
+        "html-blocks": [
+        ],
+        "code-blocks": [
+        ],
         "table-of-contents": [
             {
                 "element": "list",

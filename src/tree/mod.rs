@@ -87,11 +87,9 @@ pub struct SyntaxTree<'t> {
     pub table_of_contents: Vec<Element<'t>>,
 
     /// The full list of HTML blocks for this page.
-    #[serde(skip)]
     pub html_blocks: Vec<Cow<'t, str>>,
 
     /// The full list of code blocks for this page.
-    #[serde(skip)]
     pub code_blocks: Vec<CodeBlock<'t>>,
 
     /// The full footnote list for this page.
