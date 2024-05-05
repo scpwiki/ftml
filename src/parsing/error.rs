@@ -169,6 +169,9 @@ pub enum ParseErrorKind {
     /// Bibliography contains an element other than a definition list.
     BibliographyContainsNonDefinitionList,
 
+    /// Code block has a name which is not unique.
+    CodeNonUniqueName,
+
     /// There is no rule for the block name specified.
     NoSuchBlock,
 
