@@ -43,9 +43,8 @@ fn parse_fn<'r, 't>(
 
     parser.get_head_none(&BLOCK_HTML, in_head)?;
     let html = parser.get_body_text(&BLOCK_HTML)?;
-    let element = Element::Html {
-        contents: cow!(html),
-    };
+    let element = Element::Html { contents: cow!(html) };
+    parser.push_html_block(cow!(html));
 
     ok!(element)
 }
