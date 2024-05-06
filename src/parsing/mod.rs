@@ -61,8 +61,8 @@ use crate::next_index::{NextIndex, TableOfContentsIndex};
 use crate::settings::WikitextSettings;
 use crate::tokenizer::Tokenization;
 use crate::tree::{
-    AttributeMap, BibliographyList, Element, LinkLabel, LinkLocation, LinkType, ListItem,
-    ListType, SyntaxTree,
+    AttributeMap, BibliographyList, CodeBlock, Element, LinkLabel, LinkLocation,
+    LinkType, ListItem, ListType, SyntaxTree,
 };
 use std::borrow::Cow;
 
@@ -86,6 +86,8 @@ where
     // Run parsing, get raw results
     let UnstructuredParseResult {
         result,
+        html_blocks,
+        code_blocks,
         table_of_contents_depths,
         footnotes,
         has_footnote_block,
@@ -132,6 +134,7 @@ where
             SyntaxTree::from_element_result(
                 elements,
                 errors,
+                (html_blocks, code_blocks),
                 table_of_contents,
                 footnotes,
                 bibliographies,
@@ -155,6 +158,7 @@ where
             SyntaxTree::from_element_result(
                 elements,
                 errors,
+                (html_blocks, code_blocks),
                 table_of_contents,
                 footnotes,
                 bibliographies,
@@ -180,6 +184,8 @@ where
     let result = gather_paragraphs(&mut parser, RULE_PAGE, NO_CLOSE_CONDITION);
 
     // Build and return
+    let html_blocks = parser.remove_html_blocks();
+    let code_blocks = parser.remove_code_blocks();
     let table_of_contents_depths = parser.remove_table_of_contents();
     let footnotes = parser.remove_footnotes();
     let has_footnote_block = parser.has_footnote_block();
@@ -187,6 +193,8 @@ where
 
     UnstructuredParseResult {
         result,
+        html_blocks,
+        code_blocks,
         table_of_contents_depths,
         footnotes,
         has_footnote_block,
@@ -248,6 +256,12 @@ impl NextIndex<TableOfContentsIndex> for Incrementer {
 pub struct UnstructuredParseResult<'r, 't> {
     /// The returned result from parsing.
     pub result: ParseResult<'r, 't, Vec<Element<'t>>>,
+
+    /// The list of HTML blocks to emit from this page.
+    pub html_blocks: Vec<Cow<'t, str>>,
+
+    /// The list of code blocks to emit from this page.
+    pub code_blocks: Vec<CodeBlock<'t>>,
 
     /// The "depths" list for table of content entries.
     ///

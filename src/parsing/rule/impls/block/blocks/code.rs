@@ -19,6 +19,8 @@
  */
 
 use super::prelude::*;
+use crate::tree::CodeBlock;
+use wikidot_normalize::normalize;
 
 pub const BLOCK_CODE: BlockRule = BlockRule {
     name: "block-code",
@@ -42,13 +44,29 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_CODE, name);
 
     let mut arguments = parser.get_head_map(&BLOCK_CODE, in_head)?;
-    let language = arguments.get("type");
+
+    let mut language = arguments.get("type");
+    if let Some(ref mut language) = language {
+        language.to_mut().make_ascii_lowercase();
+    }
+
+    let mut name = arguments.get("name");
+    if let Some(ref mut name) = name {
+        normalize(name.to_mut());
+    }
 
     let code = parser.get_body_text(&BLOCK_CODE)?;
     let element = Element::Code {
         contents: cow!(code),
         language,
     };
+    let added_result = parser.push_code_block(CodeBlock {
+        contents: cow!(code),
+        name,
+    });
+    if added_result.is_err() {
+        return Err(parser.make_err(ParseErrorKind::CodeNonUniqueName));
+    }
 
     ok!(element)
 }

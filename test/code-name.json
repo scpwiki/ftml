@@ -1,0 +1,59 @@
+{
+    "input": "[[code name=\"a\"]]\nFOO\n[[/code]]\n\n[[code]]\nBAR\n[[/code]]\n\n[[code name=\"b\" type=\"java\"]]\nBAZ\n[[/code]]",
+    "tree": {
+        "elements": [
+            {
+                "element": "code",
+                "data": {
+                    "contents": "FOO",
+                    "language": null
+                }
+            },
+            {
+                "element": "code",
+                "data": {
+                    "contents": "BAR",
+                    "language": null
+                }
+            },
+            {
+                "element": "code",
+                "data": {
+                    "contents": "BAZ",
+                    "language": "java"
+                }
+            },
+            {
+                "element": "footnote-block",
+                "data": {
+                    "title": null,
+                    "hide": false
+                }
+            }
+        ],
+        "html-blocks": [
+        ],
+        "code-blocks": [
+            {
+                "contents": "FOO",
+                "name": "a"
+            },
+            {
+                "contents": "BAR",
+                "name": null
+            },
+            {
+                "contents": "BAZ",
+                "name": "b"
+            }
+        ],
+        "table-of-contents": [
+        ],
+        "footnotes": [
+        ],
+        "bibliographies": [
+        ]
+    },
+    "errors": [
+    ]
+}

@@ -22,8 +22,8 @@
 mod test;
 
 mod lexer {
-    // Since pest makes enums automatically that clippy doesn't like
-    #![allow(clippy::upper_case_acronyms)]
+    // Since pest generates some code that clippy doesn't like
+    #![allow(clippy::upper_case_acronyms, clippy::empty_docs)]
 
     // The actual parser definition, which we will re-export
     #[derive(Parser, Debug)]

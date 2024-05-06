@@ -22,6 +22,12 @@
                 }
             }
         ],
+        "html-blocks": [
+            "<p>Paragraph 1</p>",
+            "<p>Paragraph 2</p>"
+        ],
+        "code-blocks": [
+        ],
         "table-of-contents": [
         ],
         "footnotes": [

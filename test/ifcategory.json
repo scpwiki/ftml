@@ -27,6 +27,10 @@
                 }
             }
         ],
+        "html-blocks": [
+        ],
+        "code-blocks": [
+        ],
         "table-of-contents": [
         ],
         "footnotes": [

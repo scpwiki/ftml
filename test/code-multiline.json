@@ -17,6 +17,14 @@
                 }
             }
         ],
+        "html-blocks": [
+        ],
+        "code-blocks": [
+            {
+                "contents": "multiple\n**lines**\nof\ncode",
+                "name": null
+            }
+        ],
         "table-of-contents": [
         ],
         "footnotes": [

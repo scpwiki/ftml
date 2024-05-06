@@ -403,6 +403,8 @@ fn arb_tree() -> impl Strategy<Value = SyntaxTree<'static>> {
         .prop_map(|(elements, table_of_contents, footnotes, wikitext_len)| {
             SyntaxTree {
                 elements,
+                html_blocks: Vec::new(),
+                code_blocks: Vec::new(), // these two are derived fields
                 table_of_contents,
                 footnotes,
                 bibliographies: BibliographyList::new(), // not bothering right now

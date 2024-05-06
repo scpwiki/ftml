@@ -29,6 +29,7 @@ fn html() {
     let result = SyntaxTree::from_element_result(
         vec![],
         vec![],
+        (vec![], vec![]),
         vec![],
         vec![],
         BibliographyList::new(),

@@ -46,6 +46,7 @@ fn parse_fn<'r, 't>(
     let element = Element::Html {
         contents: cow!(html),
     };
+    parser.push_html_block(cow!(html));
 
     ok!(element)
 }

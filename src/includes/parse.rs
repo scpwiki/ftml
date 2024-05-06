@@ -20,6 +20,16 @@
 
 //! This module provides functions to parse strings into [`IncludeRef`]s
 
+mod parser {
+    // Since pest generates some code that clippy doesn't like
+    #![allow(clippy::empty_docs)]
+
+    #[derive(Parser, Debug)]
+    #[grammar = "includes/grammar.pest"]
+    pub struct IncludeParser;
+}
+
+use self::parser::*;
 use super::IncludeRef;
 use crate::data::{PageRef, PageRefParseError};
 use crate::settings::WikitextSettings;
@@ -27,10 +37,6 @@ use pest::iterators::Pairs;
 use pest::Parser;
 use std::borrow::Cow;
 use std::collections::HashMap;
-
-#[derive(Parser, Debug)]
-#[grammar = "includes/grammar.pest"]
-struct IncludeParser;
 
 /// Parses a single include block in the text.
 ///

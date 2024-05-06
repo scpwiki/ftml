@@ -16,6 +16,11 @@
                 }
             }
         ],
+        "html-blocks": [
+            "[[div]]\ntest\n[[/div]]"
+        ],
+        "code-blocks": [
+        ],
         "table-of-contents": [
         ],
         "footnotes": [

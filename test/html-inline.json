@@ -16,6 +16,11 @@
                 }
             }
         ],
+        "html-blocks": [
+            "My <bold>text</bold>!"
+        ],
+        "code-blocks": [
+        ],
         "table-of-contents": [
         ],
         "footnotes": [

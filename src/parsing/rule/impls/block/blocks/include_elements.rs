@@ -22,6 +22,8 @@ use super::prelude::*;
 use crate::data::PageRef;
 use crate::parsing::UnstructuredParseResult;
 
+// TODO: maybe scrap this? we want to move to components anyways
+
 /// Block rule for include (elements).
 ///
 /// This takes the resultant `SyntaxTree` from another page and
@@ -60,6 +62,8 @@ fn parse_fn<'r, 't>(
     // Get page to be included
     let UnstructuredParseResult {
         result,
+        mut html_blocks,
+        mut code_blocks,
         mut table_of_contents_depths,
         mut footnotes,
         has_footnote_block,
@@ -80,6 +84,8 @@ fn parse_fn<'r, 't>(
 
     // Update parser state, build, and return
     parser.append_shared_items(
+        &mut html_blocks,
+        &mut code_blocks,
         &mut table_of_contents_depths,
         &mut footnotes,
         &mut bibliographies,
@@ -112,6 +118,8 @@ fn include_page<'r, 't>(
             vec![],
             false,
         )),
+        html_blocks: vec![],
+        code_blocks: vec![],
         table_of_contents_depths: vec![],
         footnotes: vec![],
         has_footnote_block: false,
