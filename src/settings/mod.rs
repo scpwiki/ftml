@@ -101,7 +101,7 @@ pub struct WikitextSettings {
 
 impl WikitextSettings {
     /// Returns the default settings for the given [`WikitextMode`].
-    pub fn from_mode(mode: WikitextMode, layout: Layout,) -> Self {
+    pub fn from_mode(mode: WikitextMode, layout: Layout) -> Self {
         let interwiki = DEFAULT_INTERWIKI.clone();
 
         match mode {
