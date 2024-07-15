@@ -23,7 +23,8 @@
 /// This is used as a transition mechanism between our dependencies on the pecularities
 /// of old, legacy Wikidot HTML generation and a newer better system we are calling the
 /// "Wikijump" layout.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum Layout {
     Wikidot,
     Wikijump,
