@@ -26,6 +26,7 @@ use super::random::Random;
 use crate::data::PageRef;
 use crate::data::{Backlinks, PageInfo};
 use crate::info;
+use crate::layout::Layout;
 use crate::next_index::{NextIndex, TableOfContentsIndex};
 use crate::render::Handle;
 use crate::settings::WikitextSettings;
@@ -109,7 +110,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         // Build and return
         HtmlContext {
             body: String::with_capacity(capacity),
-            meta: Self::initial_metadata(info),
+            meta: Self::initial_metadata(info, settings.layout),
             backlinks: Backlinks::new(),
             info,
             handle,
@@ -127,7 +128,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         }
     }
 
-    fn initial_metadata(info: &PageInfo<'i>) -> Vec<HtmlMeta> {
+    fn initial_metadata(info: &PageInfo<'i>, layout: Layout) -> Vec<HtmlMeta> {
         // Initial version, we can tune how the metadata is generated later.
 
         vec![
@@ -139,7 +140,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             HtmlMeta {
                 tag_type: HtmlMetaType::Name,
                 name: str!("generator"),
-                value: info::VERSION.clone(),
+                value: format!("{} {}", *info::VERSION, layout.description()),
             },
             HtmlMeta {
                 tag_type: HtmlMetaType::Name,
