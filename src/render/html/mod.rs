@@ -41,22 +41,12 @@ use super::prelude;
 use self::attributes::AddedAttributes;
 use self::context::HtmlContext;
 use crate::data::PageInfo;
-use crate::layout::Layout;
 use crate::render::{Handle, Render};
 use crate::settings::WikitextSettings;
 use crate::tree::SyntaxTree;
 
 #[derive(Debug)]
-pub struct HtmlRender {
-    layout: Layout,
-}
-
-impl HtmlRender {
-    #[inline]
-    pub fn new(layout: Layout) -> Self {
-        HtmlRender { layout }
-    }
-}
+pub struct HtmlRender;
 
 impl Render for HtmlRender {
     type Output = HtmlOutput;
