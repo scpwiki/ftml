@@ -19,7 +19,6 @@
  */
 
 use super::{ExtractedToken, ParseError, Parser, Token};
-use crate::layout::Layout;
 
 /// Helper function to assert that the current token matches, then step.
 ///
@@ -47,6 +46,7 @@ pub fn check_step<'r, 't>(
 #[should_panic]
 fn check_step_fail() {
     use crate::data::PageInfo;
+    use crate::layout::Layout;
     use crate::settings::{WikitextMode, WikitextSettings};
 
     let page_info = PageInfo::dummy();

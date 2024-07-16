@@ -23,7 +23,6 @@ use super::prelude::*;
 use super::rule::Rule;
 use super::RULE_PAGE;
 use crate::data::PageInfo;
-use crate::layout::Layout;
 use crate::render::text::TextRender;
 use crate::tokenizer::Tokenization;
 use crate::tree::{
@@ -584,6 +583,7 @@ fn make_shared_vec<T>() -> Rc<RefCell<Vec<T>>> {
 
 #[test]
 fn parser_newline_flag() {
+    use crate::layout::Layout;
     use crate::settings::WikitextMode;
 
     let page_info = PageInfo::dummy();

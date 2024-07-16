@@ -19,7 +19,6 @@
  */
 
 use super::Parser;
-use crate::layout::Layout;
 use crate::tree::AcceptsPartial;
 use std::ops::{Deref, DerefMut};
 
@@ -66,6 +65,7 @@ impl Drop for ParserWrap<'_, '_, '_> {
 #[test]
 fn wrap() {
     use crate::data::PageInfo;
+    use crate::layout::Layout;
     use crate::settings::{WikitextMode, WikitextSettings};
 
     let page_info = PageInfo::dummy();

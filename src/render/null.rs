@@ -24,7 +24,6 @@
 //! and produce a unit value as output.
 
 use super::prelude::*;
-use crate::layout::Layout;
 
 #[derive(Debug)]
 pub struct NullRender;
@@ -44,6 +43,7 @@ impl Render for NullRender {
 
 #[test]
 fn null() {
+    use crate::layout::Layout;
     use crate::tree::BibliographyList;
 
     let page_info = PageInfo::dummy();
