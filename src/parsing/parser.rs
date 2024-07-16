@@ -23,6 +23,7 @@ use super::prelude::*;
 use super::rule::Rule;
 use super::RULE_PAGE;
 use crate::data::PageInfo;
+use crate::layout::Layout;
 use crate::render::text::TextRender;
 use crate::tokenizer::Tokenization;
 use crate::tree::{
@@ -586,7 +587,7 @@ fn parser_newline_flag() {
     use crate::settings::WikitextMode;
 
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
     macro_rules! check {
         ($input:expr, $expected_steps:expr $(,)?) => {{

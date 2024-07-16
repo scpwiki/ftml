@@ -19,6 +19,7 @@
  */
 
 use crate::data::PageInfo;
+use crate::layout::Layout;
 use crate::parsing::{ParseErrorKind, Token};
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::tree::{Element, SyntaxTree};
@@ -32,7 +33,7 @@ use std::borrow::Cow;
 #[test]
 fn recursion_depth() {
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
     // Build wikitext input
     let mut input = String::new();
@@ -76,7 +77,7 @@ fn large_payload() {
     const ITERATIONS: usize = 500;
 
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
     // Build wikitext input
     let mut input = String::new();

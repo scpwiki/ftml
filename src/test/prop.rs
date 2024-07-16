@@ -19,6 +19,7 @@
  */
 
 use crate::data::{PageInfo, PageRef};
+use crate::layout::Layout;
 use crate::render::{html::HtmlRender, text::TextRender, Render};
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::tree::attribute::SAFE_ATTRIBUTES;
@@ -447,7 +448,7 @@ fn render<R: Render>(
     tree: SyntaxTree<'static>,
     page_info: PageInfo<'static>,
 ) -> R::Output {
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     render.render(&tree, &page_info, &settings)
 }
 

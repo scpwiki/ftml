@@ -19,6 +19,7 @@
  */
 
 use crate::data::PageInfo;
+use crate::layout::Layout;
 use crate::render::{html::HtmlRender, Render};
 use crate::settings::{WikitextMode, WikitextSettings};
 
@@ -36,7 +37,7 @@ fn settings() {
 
     macro_rules! check_individual {
         ($mode:expr, $input:expr, $substring:expr, $contains:expr) => {{
-            let settings = WikitextSettings::from_mode($mode);
+            let settings = WikitextSettings::from_mode($mode, Layout::Wikidot);
             let mut text = str!($input);
             crate::preprocess(&mut text);
 

@@ -25,6 +25,7 @@
 
 use super::includer::TestIncluder;
 use crate::data::{PageInfo, ScoreValue};
+use crate::layout::Layout;
 use crate::parsing::ParseError;
 use crate::render::html::HtmlRender;
 use crate::render::Render;
@@ -209,7 +210,7 @@ impl Test<'_> {
             language: cow!("default"),
         };
 
-        let settings = WikitextSettings::from_mode(WikitextMode::Page);
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
         let (mut text, _pages) =
             crate::include(&self.input, &settings, TestIncluder, || unreachable!())

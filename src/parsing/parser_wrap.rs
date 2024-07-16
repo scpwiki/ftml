@@ -19,6 +19,7 @@
  */
 
 use super::Parser;
+use crate::layout::Layout;
 use crate::tree::AcceptsPartial;
 use std::ops::{Deref, DerefMut};
 
@@ -68,7 +69,7 @@ fn wrap() {
     use crate::settings::{WikitextMode, WikitextSettings};
 
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let tokens = crate::tokenize("Test input");
     let mut parser = Parser::new(&tokens, &page_info, &settings);
 

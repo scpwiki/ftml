@@ -24,6 +24,7 @@
 //! and produce a unit value as output.
 
 use super::prelude::*;
+use crate::layout::Layout;
 
 #[derive(Debug)]
 pub struct NullRender;
@@ -46,7 +47,7 @@ fn null() {
     use crate::tree::BibliographyList;
 
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let result = SyntaxTree::from_element_result(
         vec![],
         vec![],
