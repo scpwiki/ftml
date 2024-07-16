@@ -69,8 +69,7 @@ impl WikitextSettings {
             _ => return Err(JsValue::from_str("Unknown layout")),
         };
 
-        Ok(WikitextSettings {
-            inner: Arc::new(RustWikitextSettings::from_mode(rust_mode, rust_layout)),
-        })
+        let settings = RustWikitextSettings::from_mode(rust_mode, rust_layout);
+        Ok(WikitextSettings { inner: Arc::new(settings) })
     }
 }
