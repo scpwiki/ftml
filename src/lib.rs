@@ -120,6 +120,7 @@ pub mod wasm;
 pub mod data;
 pub mod includes;
 pub mod info;
+pub mod layout;
 pub mod parsing;
 pub mod preproc;
 pub mod render;

@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use crate::layout::Layout as RustLayout;
 use crate::settings::{
     WikitextMode as RustWikitextMode, WikitextSettings as RustWikitextSettings,
 };
@@ -52,7 +53,7 @@ impl WikitextSettings {
     }
 
     #[wasm_bindgen]
-    pub fn from_mode(mode: String) -> Result<WikitextSettings, JsValue> {
+    pub fn from_mode(mode: String, layout: String) -> Result<WikitextSettings, JsValue> {
         let rust_mode = match mode.as_str() {
             "page" => RustWikitextMode::Page,
             "draft" => RustWikitextMode::Draft,
@@ -62,8 +63,14 @@ impl WikitextSettings {
             _ => return Err(JsValue::from_str("Unknown mode")),
         };
 
+        let rust_layout = match layout.as_str() {
+            "wikidot" => RustLayout::Wikidot,
+            "wikijump" => RustLayout::Wikijump,
+            _ => return Err(JsValue::from_str("Unknown layout")),
+        };
+
         Ok(WikitextSettings {
-            inner: Arc::new(RustWikitextSettings::from_mode(rust_mode)),
+            inner: Arc::new(RustWikitextSettings::from_mode(rust_mode, rust_layout)),
         })
     }
 }

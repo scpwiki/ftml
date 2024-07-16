@@ -19,6 +19,7 @@
  */
 
 use crate::data::{PageInfo, ScoreValue};
+use crate::layout::Layout;
 use crate::settings::{WikitextMode, WikitextSettings, EMPTY_INTERWIKI};
 use crate::tree::{
     AttributeMap, Container, ContainerType, Element, ImageSource, ListItem, ListType,
@@ -52,6 +53,7 @@ fn isolate_user_ids() {
 
     let settings = WikitextSettings {
         mode: WikitextMode::Page,
+        layout: Layout::Wikidot,
         enable_page_syntax: true,
         use_true_ids: true,
         use_include_compatibility: false,

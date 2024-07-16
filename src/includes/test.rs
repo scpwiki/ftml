@@ -19,11 +19,12 @@
  */
 
 use super::{include, DebugIncluder, PageRef};
+use crate::layout::Layout;
 use crate::settings::{WikitextMode, WikitextSettings};
 
 #[test]
 fn includes() {
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
     macro_rules! test {
         ($text:expr, $expected:expr $(,)?) => {{

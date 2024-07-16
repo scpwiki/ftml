@@ -46,10 +46,11 @@ pub fn check_step<'r, 't>(
 #[should_panic]
 fn check_step_fail() {
     use crate::data::PageInfo;
+    use crate::layout::Layout;
     use crate::settings::{WikitextMode, WikitextSettings};
 
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let tokenization = crate::tokenize("**Apple** banana");
     let mut parser = Parser::new(&tokenization, &page_info, &settings);
 

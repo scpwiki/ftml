@@ -20,12 +20,13 @@
 
 use super::prelude::*;
 use super::HtmlRender;
+use crate::layout::Layout;
 use crate::tree::BibliographyList;
 
 #[test]
 fn html() {
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let result = SyntaxTree::from_element_result(
         vec![],
         vec![],

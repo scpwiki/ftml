@@ -43,10 +43,11 @@ impl Render for NullRender {
 
 #[test]
 fn null() {
+    use crate::layout::Layout;
     use crate::tree::BibliographyList;
 
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let result = SyntaxTree::from_element_result(
         vec![],
         vec![],

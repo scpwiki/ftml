@@ -20,6 +20,8 @@
 
 mod interwiki;
 
+use crate::layout::Layout;
+
 pub use self::interwiki::{InterwikiSettings, DEFAULT_INTERWIKI, EMPTY_INTERWIKI};
 
 const DEFAULT_MINIFY_CSS: bool = true;
@@ -30,6 +32,11 @@ const DEFAULT_MINIFY_CSS: bool = true;
 pub struct WikitextSettings {
     /// What mode we're running in.
     pub mode: WikitextMode,
+
+    /// What layout we're targeting.
+    ///
+    /// For instance, generating Wikidot's legacy HTML structure.
+    pub layout: Layout,
 
     /// Whether page-contextual syntax is permitted.
     ///
@@ -94,12 +101,13 @@ pub struct WikitextSettings {
 
 impl WikitextSettings {
     /// Returns the default settings for the given [`WikitextMode`].
-    pub fn from_mode(mode: WikitextMode) -> Self {
+    pub fn from_mode(mode: WikitextMode, layout: Layout) -> Self {
         let interwiki = DEFAULT_INTERWIKI.clone();
 
         match mode {
             WikitextMode::Page => WikitextSettings {
                 mode,
+                layout,
                 enable_page_syntax: true,
                 use_include_compatibility: false,
                 use_true_ids: true,
@@ -110,6 +118,7 @@ impl WikitextSettings {
             },
             WikitextMode::Draft => WikitextSettings {
                 mode,
+                layout,
                 enable_page_syntax: true,
                 use_include_compatibility: false,
                 use_true_ids: false,
@@ -120,6 +129,7 @@ impl WikitextSettings {
             },
             WikitextMode::ForumPost | WikitextMode::DirectMessage => WikitextSettings {
                 mode,
+                layout,
                 enable_page_syntax: false,
                 use_include_compatibility: false,
                 use_true_ids: false,
@@ -130,6 +140,7 @@ impl WikitextSettings {
             },
             WikitextMode::List => WikitextSettings {
                 mode,
+                layout,
                 enable_page_syntax: true,
                 use_include_compatibility: false,
                 use_true_ids: false,

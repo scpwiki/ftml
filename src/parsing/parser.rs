@@ -583,10 +583,11 @@ fn make_shared_vec<T>() -> Rc<RefCell<Vec<T>>> {
 
 #[test]
 fn parser_newline_flag() {
+    use crate::layout::Layout;
     use crate::settings::WikitextMode;
 
     let page_info = PageInfo::dummy();
-    let settings = WikitextSettings::from_mode(WikitextMode::Page);
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
     macro_rules! check {
         ($input:expr, $expected_steps:expr $(,)?) => {{
