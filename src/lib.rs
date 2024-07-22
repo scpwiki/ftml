@@ -138,6 +138,7 @@ pub use self::utf16::Utf16IndexMap;
 pub mod prelude {
     pub use super::data::{PageInfo, ScoreValue};
     pub use super::includes::{include, Includer};
+    pub use super::layout::Layout;
     pub use super::parsing::{parse, ParseError, ParseResult};
     pub use super::preprocess;
     pub use super::render::Render;
