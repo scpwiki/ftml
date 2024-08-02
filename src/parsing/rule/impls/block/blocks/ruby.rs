@@ -97,8 +97,8 @@ fn parse_block<'r, 't>(
 
     // Ensure it contains no partials
     cfg_if! {
-        if #[cfg(debug)] {
-            for element in elements {
+        if #[cfg(debug_assertions)] {
+            for element in &elements {
                 if let Element::Partial(_) = element {
                     panic!("Found partial after conversion");
                 }
