@@ -18,6 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use std::str::FromStr;
+
 /// Describes the desired (HTML) DOM layout to be emitted.
 ///
 /// This is used as a transition mechanism between our dependencies on the pecularities
@@ -47,3 +49,20 @@ impl Layout {
         }
     }
 }
+
+impl FromStr for Layout {
+    type Err = LayoutError;
+
+    fn from_str(s: &str) -> Result<Self, LayoutError> {
+        if s.eq_ignore_ascii_case("wikidot") {
+            Ok(Layout::Wikidot)
+        } else if s.eq_ignore_ascii_case("wikijump") {
+            Ok(Layout::Wikijump)
+        } else {
+            Err(LayoutError)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LayoutError;
