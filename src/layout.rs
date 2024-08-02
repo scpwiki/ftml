@@ -51,18 +51,52 @@ impl Layout {
 }
 
 impl FromStr for Layout {
-    type Err = LayoutError;
+    type Err = LayoutParseError;
 
-    fn from_str(s: &str) -> Result<Self, LayoutError> {
+    fn from_str(s: &str) -> Result<Self, LayoutParseError> {
         if s.eq_ignore_ascii_case("wikidot") {
             Ok(Layout::Wikidot)
         } else if s.eq_ignore_ascii_case("wikijump") {
             Ok(Layout::Wikijump)
         } else {
-            Err(LayoutError)
+            Err(LayoutParseError)
         }
     }
 }
 
 #[derive(Debug)]
-pub struct LayoutError;
+pub struct LayoutParseError;
+
+#[test]
+fn test_layout() {
+    macro_rules! check {
+        ($input:expr, $expected:ident $(,)?) => {{
+            let actual: Layout = $input.parse().expect("Invalid layout string");
+            let expected = Layout::$expected;
+
+            assert_eq!(
+                actual, expected,
+                "Actual layout enum doesn't match expected",
+            );
+        }};
+    }
+
+    macro_rules! check_err {
+        ($input:expr $(,)?) => {{
+            let result: Result<Layout, LayoutParseError> = $input.parse();
+            result.expect_err("Unexpected valid layout string");
+        }};
+    }
+
+    check!("wikidot", Wikidot);
+    check!("Wikidot", Wikidot);
+    check!("WIKIDOT", Wikidot);
+
+    check!("wikijump", Wikijump);
+    check!("Wikijump", Wikijump);
+    check!("WIKIJUMP", Wikijump);
+
+    check_err!("invalid");
+    check_err!("XXX");
+    check_err!("foobar");
+}
