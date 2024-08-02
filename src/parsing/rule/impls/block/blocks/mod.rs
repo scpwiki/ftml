@@ -25,7 +25,7 @@ mod prelude {
     pub use crate::parsing::ParseError;
     pub use crate::tree::{Container, ContainerType, Element};
 
-    #[cfg(debug)]
+    #[cfg(debug_assertions)]
     pub fn assert_generic_name(
         expected_names: &[&str],
         actual_name: &str,
@@ -42,7 +42,7 @@ mod prelude {
         );
     }
 
-    #[cfg(not(debug))]
+    #[cfg(not(debug_assertions))]
     #[inline]
     pub fn assert_generic_name(_: &[&str], _: &str, _: &str) {}
 
