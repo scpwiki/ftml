@@ -34,6 +34,14 @@ pub enum Layout {
 
 impl Layout {
     #[inline]
+    pub fn value(self) -> &'static str {
+        match self {
+            Layout::Wikidot => "wikidot",
+            Layout::Wikijump => "wikijump",
+        }
+    }
+
+    #[inline]
     pub fn legacy(self) -> bool {
         match self {
             Layout::Wikidot => true,
