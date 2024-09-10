@@ -67,9 +67,37 @@ impl<'a> LinkLocation<'a> {
             return LinkLocation::Url(link);
         }
 
+        // Take only the first segment for page
+        link_str = link_str.split('#').collect::<Vec<&str>>()[0]
+            .split('/')
+            .collect::<Vec<&str>>()[0];
+
         match PageRef::parse(link_str) {
-            Err(_) => LinkLocation::Url(link),
+            Err(_) => LinkLocation::Url(Cow::Owned(link_str.to_owned())),
             Ok(page_ref) => LinkLocation::Page(page_ref.to_owned()),
+        }
+    }
+
+    pub fn parse_extra(link: Cow<'a, str>) -> Option<Cow<'a, str>> {
+        let link_str = link.as_ref();
+
+        // Check for direct URLs or anchor links
+        // Does not parse local links for now
+        if is_url(link_str) || link_str.starts_with('#') || link_str.starts_with('/') {
+            return None;
+        }
+
+        let mut split_anchor: Vec<&str> = link_str.splitn(2, "#").collect();
+        let mut split_path: Vec<&str> = split_anchor[0].splitn(2, "/").collect();
+        split_path[0] = "";
+        let mut path = split_path.join("/");
+        split_anchor[0] = &path;
+        path = split_anchor.join("#");
+
+        if path.is_empty() {
+            None
+        } else {
+            Some(Cow::Owned(path))
         }
     }
 
@@ -122,7 +150,13 @@ fn test_link_location() {
     check!("#anchor" => "#anchor");
 
     check!("page" => None, "page");
-    check!("/page" => None, "page");
+    check!("page/edit" => None, "page");
+    check!("page#toc0" => None, "page");
+
+    check!("/page" => "/page");
+    check!("/page/edit" => "/page/edit");
+    check!("/page#toc0" => "/page#toc0");
+
     check!("component:theme" => None, "component:theme");
     check!(":scp-wiki:scp-1000" => Some("scp-wiki"), "scp-1000");
     check!(":scp-wiki:component:theme" => Some("scp-wiki"), "component:theme");
