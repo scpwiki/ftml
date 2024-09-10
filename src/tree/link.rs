@@ -67,6 +67,11 @@ impl<'a> LinkLocation<'a> {
             return LinkLocation::Url(link);
         }
 
+        // // Check for local links starting with '/'
+        // if link_str.starts_with('/') {
+        //     link_str = &link_str[1..];
+        // }
+
         // Take only the first segment for page
         link_str = link_str.split('#').collect::<Vec<&str>>()[0]
             .split('/')
