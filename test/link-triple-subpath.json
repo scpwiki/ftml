@@ -14,8 +14,9 @@
                                 "type": "page",
                                 "link": {
                                     "site": null,
-                                    "page": "example/edit"
+                                    "page": "example"
                                 },
+                                "extra": "/edit",
                                 "label": {
                                     "text": "Edit page"
                                 },

@@ -1,5 +1,5 @@
 {
-    "input": "[[[scp-series#001|SCP-001 to SCP-099]]]",
+    "input": "[[[MAIN/##/page#toc1|Hash routing]]]",
     "tree": {
         "elements": [
             {
@@ -14,11 +14,11 @@
                                 "type": "page",
                                 "link": {
                                     "site": null,
-                                    "page": "scp-series"
+                                    "page": "MAIN"
                                 },
-                                "extra": "#001",
+                                "extra": "/##/page#toc1",
                                 "label": {
-                                    "text": "SCP-001 to SCP-099"
+                                    "text": "Hash routing"
                                 },
                                 "target": null
                             }

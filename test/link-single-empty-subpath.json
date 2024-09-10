@@ -1,5 +1,5 @@
 {
-    "input": "[[[scp-series#001|SCP-001 to SCP-099]]]",
+    "input": "[//page/edit Edit]",
     "tree": {
         "elements": [
             {
@@ -11,14 +11,10 @@
                         {
                             "element": "link",
                             "data": {
-                                "type": "page",
-                                "link": {
-                                    "site": null,
-                                    "page": "scp-series"
-                                },
-                                "extra": "#001",
+                                "type": "direct",
+                                "link": "//page/edit",
                                 "label": {
-                                    "text": "SCP-001 to SCP-099"
+                                    "text": "Edit"
                                 },
                                 "target": null
                             }
