@@ -61,13 +61,10 @@ impl<'a> LinkLocation<'a> {
         let mut link_str = link.as_ref();
 
         // Check for direct URLs or anchor links
-        if is_url(link_str) || link_str.starts_with('#') {
+        // TODO: parse local links into LinkLocation::Page
+        // Known bug: single "/" parsed into Url instead of Page
+        if is_url(link_str) || link_str.starts_with('#') || link_str.starts_with("/") {
             return LinkLocation::Url(link);
-        }
-
-        // Check for local links starting with '/'
-        if link_str.starts_with('/') {
-            link_str = &link_str[1..];
         }
 
         match PageRef::parse(link_str) {

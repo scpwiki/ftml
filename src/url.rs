@@ -96,7 +96,7 @@ pub fn normalize_href(url: &str) -> Cow<str> {
     } else {
         let split_anchor: Vec<&str> = url.splitn(2, "#").collect();
         let mut split_url: Vec<&str> = split_anchor[0].split("/").collect();
-        if !split_url[0].is_empty() {
+        if !split_url[0].is_empty() || (split_url[0].is_empty() && split_url.len() == 1) {
             split_url.insert(0, "");
         }
         let mut url = str!(split_url[1]);
