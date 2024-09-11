@@ -13,6 +13,7 @@
                             "data": {
                                 "type": "direct",
                                 "link": "/relative/link#toc0",
+                                "extra": null,
                                 "label": {
                                     "text": "text"
                                 },

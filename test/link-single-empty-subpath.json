@@ -13,6 +13,7 @@
                             "data": {
                                 "type": "direct",
                                 "link": "//page/edit",
+                                "extra": null,
                                 "label": {
                                     "text": "Edit"
                                 },
