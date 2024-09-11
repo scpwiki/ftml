@@ -94,9 +94,18 @@ pub fn normalize_href(url: &str) -> Cow<str> {
         warn!("Attempt to pass in dangerous URL: {url}");
         Cow::Borrowed("#invalid-url")
     } else {
-        let mut url = str!(url);
+        let split_anchor: Vec<&str> = url.splitn(2, "#").collect();
+        let mut split_url: Vec<&str> = split_anchor[0].split("/").collect();
+        if !split_url[0].is_empty() || (split_url[0].is_empty() && split_url.len() == 1) {
+            split_url.insert(0, "");
+        }
+        let mut url = str!(split_url[1]);
         normalize(&mut url);
-        url.insert(0, '/');
+        split_url[1] = &url;
+        url = split_url.join("/");
+        if split_anchor.len() == 2 {
+            url = format!("{}#{}", url, split_anchor[1]);
+        }
         Cow::Owned(url)
     }
 }
