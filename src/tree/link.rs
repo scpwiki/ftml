@@ -73,9 +73,13 @@ impl<'a> LinkLocation<'a> {
         // }
 
         // Take only the first segment for page
-        link_str = link_str.split('#').collect::<Vec<&str>>()[0]
-            .split('/')
-            .collect::<Vec<&str>>()[0];
+        link_str = link_str
+            .split('#') // get item before the first #
+            .next()
+            .expect("Splits always produce at least one item")
+            .split('/') // get item before the first /
+            .next()
+            .expect("Splits always produce at least one item");
 
         match PageRef::parse(link_str) {
             Err(_) => LinkLocation::Url(Cow::Owned(link_str.to_owned())),
@@ -92,6 +96,7 @@ impl<'a> LinkLocation<'a> {
             return None;
         }
 
+        // Remove first path segment and reconstruct the remaining parts
         let mut split_anchor: Vec<&str> = link_str.splitn(2, "#").collect();
         let mut split_path: Vec<&str> = split_anchor[0].splitn(2, "/").collect();
         split_path[0] = "";
