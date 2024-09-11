@@ -185,10 +185,7 @@ fn test_link_extra() {
     macro_rules! check {
         ($input:expr => $expected:expr) => {{
             let actual = LinkLocation::parse_extra(cow!($input));
-            let expected = match $expected {
-                None => None,
-                Some(extra) => Some(cow!(extra)),
-            };
+            let expected = $expected.map(|s| cow!(s));
 
             assert_eq!(
                 actual, expected,
