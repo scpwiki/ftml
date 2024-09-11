@@ -180,6 +180,36 @@ fn test_link_location() {
     check!("page:multiple:category" => None, "page:multiple:category");
 }
 
+#[test]
+fn test_link_extra() {
+    macro_rules! check {
+        ($input:expr => $expected:expr) => {{
+            let actual = LinkLocation::parse_extra(cow!($input));
+            let expected = match $expected {
+                None => None,
+                Some(extra) => Some(cow!(extra)),
+            };
+
+            assert_eq!(
+                actual, expected,
+                "Actual link extra segment doesn't match expected",
+            );
+        }};
+    }
+
+    check!("" => None);
+    check!("page" => None);
+    check!("page/edit" => Some("/edit"));
+    check!("page#toc0" => Some("#toc0"));
+    check!("page/edit#toc0" => Some("/edit#toc0"));
+
+    check!("/" => None);
+    check!("/page" => None);
+    check!("/#/page" => None);
+    check!("#" => None);
+    check!("#anchor" => None);
+}
+
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum LinkLabel<'a> {
