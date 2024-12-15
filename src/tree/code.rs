@@ -29,7 +29,7 @@ pub struct CodeBlock<'t> {
     pub name: Option<Cow<'t, str>>,
 }
 
-impl<'t> CodeBlock<'t> {
+impl CodeBlock<'_> {
     pub fn to_owned(&self) -> CodeBlock<'static> {
         CodeBlock {
             contents: string_to_owned(&self.contents),

@@ -29,7 +29,7 @@ pub struct Backlinks<'a> {
     pub external_links: Vec<Cow<'a, str>>,
 }
 
-impl<'a> Backlinks<'a> {
+impl Backlinks<'_> {
     #[inline]
     pub fn new() -> Self {
         Backlinks::default()

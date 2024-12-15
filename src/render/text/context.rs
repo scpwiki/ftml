@@ -260,7 +260,7 @@ impl<'i, 'h, 'e, 't> From<TextContext<'i, 'h, 'e, 't>> for String {
     }
 }
 
-impl<'i, 'h, 'e, 't> Write for TextContext<'i, 'h, 'e, 't>
+impl<'e, 't> Write for TextContext<'_, '_, 'e, 't>
 where
     'e: 't,
 {

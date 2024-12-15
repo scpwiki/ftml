@@ -46,7 +46,7 @@ pub struct ExtractedToken<'a> {
     pub span: Range<usize>,
 }
 
-impl<'a> ExtractedToken<'a> {
+impl ExtractedToken<'_> {
     /// Returns a new object with the same values, except with span refering to the byte indicies
     /// of the text if it were in UTF-16 rather than in UTF-8.
     #[must_use]
