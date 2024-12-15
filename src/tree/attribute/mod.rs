@@ -125,7 +125,7 @@ impl<'t> AttributeMap<'t> {
     }
 }
 
-impl<'t> Debug for AttributeMap<'t> {
+impl Debug for AttributeMap<'_> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.inner.fmt(f)

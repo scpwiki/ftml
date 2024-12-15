@@ -352,14 +352,14 @@ impl<'i, 'h, 'e, 't> From<HtmlContext<'i, 'h, 'e, 't>> for HtmlOutput {
     }
 }
 
-impl<'i, 'h, 'e, 't> Write for HtmlContext<'i, 'h, 'e, 't> {
+impl Write for HtmlContext<'_, '_, '_, '_> {
     #[inline]
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.buffer().write_str(s)
     }
 }
 
-impl<'i, 'h, 'e, 't> NextIndex<TableOfContentsIndex> for HtmlContext<'i, 'h, 'e, 't> {
+impl NextIndex<TableOfContentsIndex> for HtmlContext<'_, '_, '_, '_> {
     #[inline]
     fn next(&mut self) -> usize {
         self.next_table_of_contents_index()

@@ -44,7 +44,7 @@ where
     _text_marker: PhantomData<&'t str>,
 }
 
-impl<'r, 't, T> ParseSuccess<'r, 't, T> {
+impl<T> ParseSuccess<'_, '_, T> {
     #[inline]
     pub fn new(item: T, errors: Vec<ParseError>, paragraph_safe: bool) -> Self {
         ParseSuccess {
@@ -111,7 +111,7 @@ impl<'r, 't, T> ParseSuccess<'r, 't, T> {
     }
 }
 
-impl<'r, 't> ParseSuccess<'r, 't, Elements<'t>> {
+impl<'t> ParseSuccess<'_, 't, Elements<'t>> {
     pub fn check_partials(&self, parser: &Parser) -> Result<(), ParseError> {
         for element in &self.item {
             // This check only applies if the element is a partial.
@@ -128,7 +128,7 @@ impl<'r, 't> ParseSuccess<'r, 't, Elements<'t>> {
     }
 }
 
-impl<'r, 't> ParseSuccess<'r, 't, ()> {
+impl ParseSuccess<'_, '_, ()> {
     #[inline]
     pub fn into_errors(self) -> Vec<ParseError> {
         self.errors

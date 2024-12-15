@@ -42,7 +42,7 @@ impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
     }
 }
 
-impl<'p, 'r, 't> Deref for ParserWrap<'p, 'r, 't> {
+impl<'r, 't> Deref for ParserWrap<'_, 'r, 't> {
     type Target = Parser<'r, 't>;
 
     fn deref(&self) -> &Parser<'r, 't> {
@@ -50,7 +50,7 @@ impl<'p, 'r, 't> Deref for ParserWrap<'p, 'r, 't> {
     }
 }
 
-impl<'p, 'r, 't> DerefMut for ParserWrap<'p, 'r, 't> {
+impl<'r, 't> DerefMut for ParserWrap<'_, 'r, 't> {
     fn deref_mut(&mut self) -> &mut Parser<'r, 't> {
         self.parser
     }
