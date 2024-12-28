@@ -18,6 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::borrow::Cow;
 use wikidot_normalize::normalize;
 
@@ -58,11 +60,23 @@ pub fn is_url(url: &str) -> bool {
 }
 
 /// Returns true if the scheme for this URL is `javascript:` or `data:`.
+/// This function works case-insensitively (for ASCII).
 ///
-/// Works case-insensitively (for ASCII).
+/// Additionally, there is a check to make sure that there isn't any
+/// funny business going on with the scheme, such as insertion of
+/// whitespace. In such cases, the URL is rejected.
 pub fn dangerous_scheme(url: &str) -> bool {
+    static SCHEME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\w\-]+$").unwrap());
+
     url.split_once(':')
         .map(|(scheme, _)| {
+            if !SCHEME_REGEX.is_match(scheme) {
+                // Weird scheme like "java\nscript", reject.
+                return true;
+            }
+
+            // Now that we've confirmed it's normal,
+            // check for these specific dangerous schemes.
             scheme.eq_ignore_ascii_case("javascript")
                 || scheme.eq_ignore_ascii_case("data")
         })
