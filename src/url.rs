@@ -146,6 +146,10 @@ fn detect_dangerous_schemes() {
     check!("irc://irc.scpwiki.com", false);
     check!("javascript:alert(1)", true);
     check!("JAVASCRIPT:alert(1)", true);
+    check!(" javascript:alert(1)", true);
+    check!("java\nscript:alert(1)", true);
+    check!("javascript\t:alert(1)", true);
+    check!("wtf$1:foo", true);
     check!("JaVaScRiPt:alert(document.cookie)", true);
     check!("data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==", true);
     check!("data:text/javascript,alert(1)", true);
