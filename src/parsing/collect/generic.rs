@@ -84,7 +84,7 @@ where
 
         // See if the container has ended
         if parser.evaluate_any(close_conditions) {
-            debug!(
+            trace!(
                 "Found ending condition, returning collected elements (token {})",
                 parser.current().token.name(),
             );
@@ -99,7 +99,7 @@ where
 
         // See if the container should be aborted
         if parser.evaluate_any(invalid_conditions) {
-            debug!(
+            trace!(
                 "Found invalid token, aborting container attempt (token {})",
                 parser.current().token.name(),
             );
@@ -109,7 +109,7 @@ where
 
         // See if we've hit the end
         if parser.current().token == Token::InputEnd {
-            debug!("Found end of input, aborting");
+            trace!("Found end of input, aborting");
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
         }
 

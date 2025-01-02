@@ -64,7 +64,7 @@ fn try_consume_link<'r, 't>(
     rule: Rule,
     target: Option<AnchorTarget>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    debug!("Trying to create a triple-bracket link");
+    trace!("Trying to create a triple-bracket link");
 
     // Gather path for link
     let (url, last) = collect_text_keep(
@@ -81,7 +81,7 @@ fn try_consume_link<'r, 't>(
         None,
     )?;
 
-    debug!("Retrieved url for link, now build element (url: '{url}')");
+    trace!("Retrieved url for link, now build element (url: '{url}')");
 
     // Trim text
     let url = url.trim();
@@ -157,7 +157,7 @@ fn build_separate<'r, 't>(
         None,
     )?;
 
-    debug!("Retrieved label for link, now building element (label '{label}')");
+    trace!("Retrieved label for link, now building element (label '{label}')");
 
     // Trim label
     let label = label.trim();

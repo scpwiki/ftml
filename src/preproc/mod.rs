@@ -69,7 +69,7 @@ impl Replacer {
                 ref regex,
                 replacement,
             } => {
-                debug!(
+                trace!(
                     "Running regex regular expression replacement (pattern {}, replacement {})",
                     regex.as_str(),
                     replacement,
@@ -95,7 +95,7 @@ impl Replacer {
                 begin,
                 end,
             } => {
-                debug!(
+                trace!(
                     "Running surround regular expression capture replacement (pattern {}, begin {}, end {})",
                     regex.as_str(),
                     begin,

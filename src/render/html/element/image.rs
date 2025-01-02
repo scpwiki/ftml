@@ -66,7 +66,7 @@ fn render_image_element(
     alignment: Option<FloatAlignment>,
     attributes: &AttributeMap,
 ) {
-    debug!("Found URL, rendering image (value '{url}')");
+    trace!("Found URL, rendering image (value '{url}')");
 
     let (space, align_class) = match alignment {
         Some(align) => (" ", align.html_class()),
@@ -102,7 +102,7 @@ fn render_image_element(
 }
 
 fn render_image_missing(ctx: &mut HtmlContext) {
-    debug!("Image URL unresolved, missing or error");
+    trace!("Image URL unresolved, missing or error");
 
     let message = ctx
         .handle()

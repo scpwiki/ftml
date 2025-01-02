@@ -77,7 +77,7 @@ fn try_consume_fn<'r, 't>(
         None,
     )?;
 
-    debug!("Retrieved label ('{label}') for link, building element");
+    trace!("Retrieved label ('{label}') for link, building element");
 
     // Trim label
     let label = label.trim();

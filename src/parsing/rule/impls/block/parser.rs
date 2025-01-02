@@ -151,7 +151,7 @@ where
     where
         F: FnMut(&mut Parser<'r, 't>) -> Result<(), ParseError>,
     {
-        debug!("Running generic in block body parser");
+        trace!("Running generic in block body parser");
 
         debug_assert!(
             !block_rule.accepts_names.is_empty(),
@@ -269,7 +269,7 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<Arguments<'t>, ParseError> {
-        debug!("Looking for key value arguments, then ']]'");
+        trace!("Looking for key value arguments, then ']]'");
 
         let mut map = Arguments::new();
         if in_head {
@@ -355,7 +355,7 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<(&'t str, Arguments<'t>), ParseError> {
-        debug!("Looking for a name, then key value arguments, then ']]'");
+        trace!("Looking for a name, then key value arguments, then ']]'");
 
         if !in_head {
             warn!("Block is already over, there is no name or arguments");
@@ -426,7 +426,7 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<(), ParseError> {
-        debug!("Getting end of the head block");
+        trace!("Getting end of the head block");
 
         // If we're still in the head, finish
         if in_head {

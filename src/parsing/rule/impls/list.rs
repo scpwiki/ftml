@@ -86,13 +86,13 @@ fn try_consume_fn<'r, 't>(
         let list_type = match get_list_type(current.token) {
             Some(ltype) => ltype,
             None => {
-                debug!("Didn't find bullet token, couldn't determine list type, ending list iteration");
+                trace!("Didn't find bullet token, couldn't determine list type, ending list iteration");
                 break;
             }
         };
         parser.step()?;
 
-        debug!("Parsing list item '{}'", list_type.name());
+        trace!("Parsing list item '{}'", list_type.name());
 
         // For now, always expect whitespace after the bullet
         let current = parser.current();

@@ -53,7 +53,7 @@ fn try_consume_fn<'r, 't>(
         None,
     )?;
 
-    debug!("Retrieved color descriptor, now building container ('{color}')");
+    trace!("Retrieved color descriptor, now building container ('{color}')");
 
     // Build color container
     let (elements, errors, paragraph_safe) = collect_consume(

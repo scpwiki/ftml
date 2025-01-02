@@ -82,7 +82,7 @@ where
     for mtch in INCLUDE_REGEX.find_iter(input) {
         let start = mtch.start();
 
-        debug!(
+        trace!(
             "Found include regex match (start {}, slice '{}')",
             start,
             mtch.as_str(),

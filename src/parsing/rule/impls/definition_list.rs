@@ -71,7 +71,7 @@ fn parse_definition_list<'r, 't>(
 
             match parse_item(sub_parser) {
                 Ok(success) => {
-                    debug!("Retrieved definition list item");
+                    trace!("Retrieved definition list item");
 
                     let (item, at_end) = success.chain(&mut errors, &mut _paragraph_safe);
 
@@ -97,7 +97,7 @@ fn parse_definition_list<'r, 't>(
 fn parse_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, (DefinitionListItem<'t>, bool)> {
-    debug!("Trying to parse a definition list item pair");
+    trace!("Trying to parse a definition list item pair");
 
     let mut errors = Vec::new();
     let mut _paragraph_safe = false;

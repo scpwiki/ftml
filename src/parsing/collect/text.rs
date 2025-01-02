@@ -77,7 +77,7 @@ where
         invalid_conditions,
         error_kind,
         |parser| {
-            debug!("Ingesting token in string span");
+            trace!("Ingesting token in string span");
 
             end = Some(parser.current());
             ok!(true; ())

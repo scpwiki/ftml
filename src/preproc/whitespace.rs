@@ -106,7 +106,7 @@ pub fn substitute(text: &mut String) {
 
 /// In-place replaces the leading non-standard spaces (such as nbsp) on each line with standard spaces
 fn replace_leading_spaces(text: &mut String) {
-    debug!("Replacing leading non-standard spaces with regular spaces");
+    trace!("Replacing leading non-standard spaces with regular spaces");
 
     let mut offset = 0;
 

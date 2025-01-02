@@ -54,7 +54,7 @@ fn parse_fn<'r, 't>(
     let (elements, errors, paragraph_safe) =
         parser.get_body_elements(&BLOCK_IFTAGS, false)?.into();
 
-    debug!(
+    trace!(
         "IfTags conditions parsed (conditions length {}, elements length {})",
         conditions.len(),
         elements.len(),
@@ -62,11 +62,11 @@ fn parse_fn<'r, 't>(
 
     // Return elements based on condition
     let elements = if check_iftags(parser.page_info(), &conditions) {
-        debug!("Conditions passed, including elements");
+        trace!("Conditions passed, including elements");
 
         Elements::Multiple(elements)
     } else {
-        debug!("Conditions failed, excluding elements");
+        trace!("Conditions failed, excluding elements");
 
         Elements::None
     };
@@ -75,6 +75,6 @@ fn parse_fn<'r, 't>(
 }
 
 pub fn check_iftags(info: &PageInfo, conditions: &[ElementCondition]) -> bool {
-    debug!("Checking iftags");
+    trace!("Checking iftags");
     ElementCondition::check(conditions, &info.tags)
 }

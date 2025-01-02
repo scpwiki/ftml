@@ -109,13 +109,13 @@ where
                 }
 
                 // Otherwise, produce consumption from this token pointer
-                debug!("Trying to consume tokens to produce element");
+                trace!("Trying to consume tokens to produce element");
                 consume(parser)
             }
         }?
         .into();
 
-        debug!("Tokens consumed to produce element");
+        trace!("Tokens consumed to produce element");
 
         // Add new elements to the list
         push_elements(&mut stack, elements, paragraph_safe);

@@ -40,25 +40,25 @@ fn try_consume_fn<'r, 't>(
             slice: _slice,
         } = parser.current();
 
-        debug!("Received token '{}' inside comment", token.name());
+        trace!("Received token '{}' inside comment", token.name());
 
         match token {
             // Hit the end of the comment, return
             Token::RightComment => {
-                debug!("Reached end of comment, returning");
+                trace!("Reached end of comment, returning");
                 parser.step()?;
                 return ok!(Elements::None);
             }
 
             // Hit the end of the input, abort
             Token::InputEnd => {
-                debug!("Reached end of input, aborting");
+                trace!("Reached end of input, aborting");
                 return Err(parser.make_err(ParseErrorKind::EndOfInput));
             }
 
             // Consume any other token
             _ => {
-                debug!("Token inside comment received. Discarding.");
+                trace!("Token inside comment received. Discarding.");
                 parser.step()?;
             }
         }

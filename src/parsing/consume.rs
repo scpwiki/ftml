@@ -46,12 +46,12 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     // Will fail if we're too many layers in
     parser.depth_increment()?;
 
-    debug!("Looking for valid rules");
+    trace!("Looking for valid rules");
     let mut all_errors = Vec::new();
     let current = parser.current();
 
     for &rule in get_rules_for_token(current) {
-        debug!("Trying rule consumption for tokens (rule {})", rule.name());
+        trace!("Trying rule consumption for tokens (rule {})", rule.name());
 
         let old_remaining = parser.remaining();
         match rule.try_consume(parser) {

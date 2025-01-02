@@ -101,13 +101,13 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
 
     // Special case, current time
     if value.eq_ignore_ascii_case("now") || value == "." {
-        debug!("Was now");
+        trace!("Was now");
         return Ok(now().into());
     }
 
     // Try UNIX timestamp (e.g. 1398763929)
     if let Ok(timestamp) = value.parse::<i64>() {
-        debug!("Was UNIX timestamp '{timestamp}'");
+        trace!("Was UNIX timestamp '{timestamp}'");
         let date =
             OffsetDateTime::from_unix_timestamp(timestamp).map_err(|_| DateParseError)?;
 
@@ -116,28 +116,28 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
 
     // Try datetime strings
     if let Ok(datetime_tz) = OffsetDateTime::parse(value, &Rfc3339) {
-        debug!("Was RFC 3339 datetime string, result '{datetime_tz}'");
+        trace!("Was RFC 3339 datetime string, result '{datetime_tz}'");
         return Ok(datetime_tz.into());
     }
 
     if let Ok(datetime) = PrimitiveDateTime::parse(value, &Iso8601::PARSING) {
-        debug!("Was ISO 8601 datetime string (no timezone), result '{datetime}'");
+        trace!("Was ISO 8601 datetime string (no timezone), result '{datetime}'");
         return Ok(datetime.into());
     }
 
     if let Ok(datetime_tz) = OffsetDateTime::parse(value, &Iso8601::PARSING) {
-        debug!("Was ISO 8601 datetime string, result '{datetime_tz}'");
+        trace!("Was ISO 8601 datetime string, result '{datetime_tz}'");
         return Ok(datetime_tz.into());
     }
 
     if let Ok(datetime_tz) = OffsetDateTime::parse(value, &Rfc2822) {
-        debug!("Was RFC 2822 datetime string, result '{datetime_tz}'");
+        trace!("Was RFC 2822 datetime string, result '{datetime_tz}'");
         return Ok(datetime_tz.into());
     }
 
     // Try date strings
     if let Ok(date) = Date::parse(value, &Iso8601::PARSING) {
-        debug!("Was ISO 8601 date string, result '{date}'");
+        trace!("Was ISO 8601 date string, result '{date}'");
         return Ok(date.into());
     }
 
@@ -184,7 +184,7 @@ fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
         // Get offset in seconds
         let seconds = sign * (hour * 3600 + minute * 60);
 
-        debug!("Was offset via +HH:MM (sign {sign}, hour {hour}, minute {minute})");
+        trace!("Was offset via +HH:MM (sign {sign}, hour {hour}, minute {minute})");
         return get_offset(seconds);
     }
 
@@ -193,7 +193,7 @@ fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
     // This is lower-priority than the regex to permit "integer" cases,
     // such as "0800".
     if let Ok(seconds) = value.parse::<i32>() {
-        debug!("Was offset in seconds ({seconds})");
+        trace!("Was offset in seconds ({seconds})");
         return get_offset(seconds);
     }
 

@@ -84,7 +84,7 @@ impl<'t> ParagraphStack<'t> {
     /// This should only be between lines in the blockquote.
     #[inline]
     pub fn pop_line_break(&mut self) {
-        debug!("Popping last element if Element::LineBreak");
+        trace!("Popping last element if Element::LineBreak");
 
         if let Some(Element::LineBreak) = self.current.last() {
             self.current.pop();
@@ -93,14 +93,14 @@ impl<'t> ParagraphStack<'t> {
 
     /// Creates a paragraph element out of this instance's current elements.
     pub fn build_paragraph(&mut self) -> Option<Element<'t>> {
-        debug!(
+        trace!(
             "Building paragraph from current stack state (length {})",
             self.current.len(),
         );
 
         // Don't create empty paragraphs
         if self.current.is_empty() {
-            debug!("No paragraph created, no pending elements in stack");
+            trace!("No paragraph created, no pending elements in stack");
             return None;
         }
 
@@ -114,7 +114,7 @@ impl<'t> ParagraphStack<'t> {
 
     /// Set the finished field in this struct to the paragraph element.
     pub fn end_paragraph(&mut self) {
-        debug!("Ending the current paragraph to push as a completed element");
+        trace!("Ending the current paragraph to push as a completed element");
 
         if let Some(paragraph) = self.build_paragraph() {
             self.finished.push(paragraph);
