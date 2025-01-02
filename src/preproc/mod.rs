@@ -142,9 +142,10 @@ impl Replacer {
 /// This call always succeeds. The return value designates where issues occurred
 /// to allow programmatic determination of where things were not as expected.
 pub fn preprocess(text: &mut String) {
+    info!("Beginning preprocessing of text ({} bytes)", text.len());
     whitespace::substitute(text);
     typography::substitute(text);
-    debug!("Finished preprocessing of text");
+    debug!("Finished preprocessing of text ({} bytes)", text.len());
 }
 
 #[test]

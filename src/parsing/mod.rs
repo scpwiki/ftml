@@ -180,7 +180,7 @@ where
     let mut parser = Parser::new(tokenization, page_info, settings);
 
     // At the top level, we gather elements into paragraphs
-    debug!("Running parser on tokens");
+    info!("Running parser on {} tokens", tokenization.tokens().len());
     let result = gather_paragraphs(&mut parser, RULE_PAGE, NO_CLOSE_CONDITION);
 
     // Build and return

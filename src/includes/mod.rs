@@ -73,7 +73,10 @@ where
         return Ok((output, pages));
     }
 
-    debug!("Finding and replacing all instances of include blocks in text");
+    info!(
+        "Inserting text for all include blocks in text ({} bytes)",
+        input.len(),
+    );
 
     let mut ranges = Vec::new();
     let mut includes = Vec::new();
