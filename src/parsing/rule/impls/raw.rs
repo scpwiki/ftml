@@ -35,7 +35,7 @@ pub const RULE_RAW: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming tokens until end of raw");
+    debug!("Consuming tokens until end of raw");
 
     // Are we in a @@..@@ type raw, or a @<..>@ type?
     let ending_token = match parser.current().token {
@@ -50,7 +50,7 @@ fn try_consume_fn<'r, 't>(
     // * Raw Raw  Raw -> Element::Raw("@@")
     // * Raw ??   Raw -> Element::Raw(slice)
     if ending_token == Token::Raw {
-        debug!("First token is '@@', checking for special cases");
+        trace!("First token is '@@', checking for special cases");
 
         // Get next two tokens. If they don't exist, exit early
         let next_1 = parser.look_ahead_err(0)?;
@@ -60,7 +60,7 @@ fn try_consume_fn<'r, 't>(
         match (next_1.token, next_2.token) {
             // "@@@@@@" -> Element::Raw("@@")
             (Token::Raw, Token::Raw) => {
-                debug!("Found meta-raw (\"@@@@@@\"), returning");
+                trace!("Found meta-raw (\"@@@@@@\"), returning");
                 parser.step_n(3)?;
                 return ok!(raw!("@@"));
             }
@@ -70,11 +70,11 @@ fn try_consume_fn<'r, 't>(
             // So we capture this and return the intended output
             (Token::Raw, Token::Other) => {
                 if next_2.slice == "@" {
-                    debug!("Found single-raw (\"@@@@@\"), returning");
+                    trace!("Found single-raw (\"@@@@@\"), returning");
                     parser.step_n(3)?;
                     return ok!(raw!("@"));
                 } else {
-                    debug!("Found empty raw (\"@@@@\"), followed by other text");
+                    trace!("Found empty raw (\"@@@@\"), followed by other text");
                     parser.step_n(2)?;
                     return ok!(raw!(""));
                 }
@@ -83,20 +83,20 @@ fn try_consume_fn<'r, 't>(
             // "@@@@" -> Element::Raw("")
             // Only consumes two tokens.
             (Token::Raw, _) => {
-                debug!("Found empty raw (\"@@@@\"), returning");
+                trace!("Found empty raw (\"@@@@\"), returning");
                 parser.step_n(2)?;
                 return ok!(raw!(""));
             }
 
             // "@@ \n @@" -> Abort
             (Token::LineBreak, Token::Raw) | (Token::ParagraphBreak, Token::Raw) => {
-                debug!("Found interrupted raw, aborting");
+                trace!("Found interrupted raw, aborting");
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
 
             // "@@ [something] @@" -> Element::Raw(token)
             (_, Token::Raw) => {
-                debug!("Found single-element raw, returning");
+                trace!("Found single-element raw, returning");
                 parser.step_n(3)?;
                 return ok!(raw!(next_1.slice));
             }
@@ -126,7 +126,7 @@ fn try_consume_fn<'r, 't>(
             span: _span,
         } = parser.current();
 
-        debug!("Received token '{}' inside raw", token.name());
+        trace!("Received token '{}' inside raw", token.name());
 
         // Check token
         match token {

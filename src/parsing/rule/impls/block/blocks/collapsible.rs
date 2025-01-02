@@ -37,7 +37,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing collapsible block (in-head {in_head})");
+    debug!("Parsing collapsible block (in-head {in_head})");
     assert!(!flag_star, "Collapsible doesn't allow star flag");
     assert!(!flag_score, "Collapsible doesn't allow score flag");
     assert_block_name(&BLOCK_COLLAPSIBLE, name);

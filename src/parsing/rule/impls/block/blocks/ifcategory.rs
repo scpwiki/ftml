@@ -38,7 +38,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing ifcategory block (name '{name}', in-head {in_head})");
+    debug!("Parsing ifcategory block (name '{name}', in-head {in_head})");
     assert!(!flag_star, "IfCategory doesn't allow star flag");
     assert!(!flag_score, "IfCategory doesn't allow score flag");
     assert_block_name(&BLOCK_IFCATEGORY, name);
@@ -70,7 +70,7 @@ fn parse_fn<'r, 't>(
     let (elements, errors, paragraph_safe) =
         parser.get_body_elements(&BLOCK_IFCATEGORY, false)?.into();
 
-    debug!(
+    trace!(
         "IfCategory conditions parsed (conditions length {}, elements length {})",
         conditions.len(),
         elements.len(),
@@ -78,11 +78,11 @@ fn parse_fn<'r, 't>(
 
     // Return elements based on condition
     let elements = if check_ifcategory(parser.page_info(), &conditions) {
-        debug!("Conditions passed, including elements");
+        trace!("Conditions passed, including elements");
 
         Elements::Multiple(elements)
     } else {
-        debug!("Conditions failed, excluding elements");
+        trace!("Conditions failed, excluding elements");
 
         Elements::None
     };
@@ -96,6 +96,6 @@ pub fn check_ifcategory(info: &PageInfo, conditions: &[ElementCondition]) -> boo
         None => "_default",
     };
 
-    debug!("Checking ifcategory (category '{category}')");
+    trace!("Checking ifcategory (category '{category}')");
     ElementCondition::check(conditions, &[cow!(category)])
 }

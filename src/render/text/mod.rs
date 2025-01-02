@@ -63,7 +63,7 @@ impl TextRender {
             wikitext_len,
         }: RenderPartial,
     ) -> String {
-        info!(
+        debug!(
             "Rendering text (site {}, page {}, category {})",
             page_info.site.as_ref(),
             page_info.page.as_ref(),
@@ -107,6 +107,16 @@ impl Render for TextRender {
         page_info: &PageInfo,
         settings: &WikitextSettings,
     ) -> String {
+        info!(
+            "Rendering text (site {}, page {}, category {})",
+            page_info.site.as_ref(),
+            page_info.page.as_ref(),
+            match &page_info.category {
+                Some(category) => category.as_ref(),
+                None => "_default",
+            },
+        );
+
         self.render_partial_direct(RenderPartial {
             elements: &tree.elements,
             page_info,

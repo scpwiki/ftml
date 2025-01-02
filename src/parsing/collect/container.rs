@@ -46,7 +46,7 @@ pub fn collect_container<'r, 't>(
     invalid_conditions: &[ParseCondition],
     error_kind: Option<ParseErrorKind>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!(
+    debug!(
         "Trying to consume tokens to produce container {} for {}",
         container_type.name(),
         rule.name(),

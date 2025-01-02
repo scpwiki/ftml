@@ -39,13 +39,13 @@ pub const RULE_TABLE: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to parse simple table");
+    debug!("Trying to parse simple table");
     let mut rows = Vec::new();
     let mut errors = Vec::new();
     let mut _paragraph_break = false;
 
     'table: loop {
-        info!("Parsing next table row");
+        debug!("Parsing next table row");
 
         let mut cells = Vec::new();
 
@@ -72,7 +72,7 @@ fn try_consume_fn<'r, 't>(
 
         // Loop for each cell in the row
         'row: loop {
-            info!("Parsing next table cell");
+            debug!("Parsing next table cell");
             let mut elements = Vec::new();
             let TableCellStart {
                 align,
@@ -97,7 +97,7 @@ fn try_consume_fn<'r, 't>(
 
             // Loop for each element in the cell
             'cell: loop {
-                debug!("Parsing next element (length {})", elements.len());
+                trace!("Parsing next element (length {})", elements.len());
                 match parser.next_two_tokens() {
                     // End the cell or row
                     (
@@ -108,7 +108,7 @@ fn try_consume_fn<'r, 't>(
                         | Token::TableColumnRight,
                         Some(next),
                     ) => {
-                        debug!(
+                        trace!(
                             "Ending cell, row, or table (next token '{}')",
                             next.name(),
                         );
@@ -139,7 +139,7 @@ fn try_consume_fn<'r, 't>(
 
                     // Ignore leading whitespace
                     (Token::Whitespace, _) if elements.is_empty() => {
-                        debug!("Ignoring leading whitespace");
+                        trace!("Ignoring leading whitespace");
                         parser.step()?;
                         continue 'cell;
                     }
@@ -155,20 +155,20 @@ fn try_consume_fn<'r, 't>(
                             | Token::TableColumnRight,
                         ),
                     ) => {
-                        debug!("Ignoring trailing whitespace");
+                        trace!("Ignoring trailing whitespace");
                         parser.step()?;
                         continue 'cell;
                     }
 
                     // Invalid tokens
                     (Token::LineBreak | Token::ParagraphBreak | Token::InputEnd, _) => {
-                        debug!("Invalid termination tokens in table, ending");
+                        trace!("Invalid termination tokens in table, ending");
                         finish_table!();
                     }
 
                     // Consume tokens like normal
                     _ => {
-                        debug!("Consuming cell contents as elements");
+                        trace!("Consuming cell contents as elements");
 
                         let new_elements =
                             consume(parser)?.chain(&mut errors, &mut _paragraph_break);

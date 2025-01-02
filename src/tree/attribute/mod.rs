@@ -105,7 +105,7 @@ impl<'t> AttributeMap<'t> {
     pub fn isolate_id(&mut self, settings: &WikitextSettings) {
         if settings.isolate_user_ids {
             if let Some(value) = self.inner.get_mut("id") {
-                debug!("Found 'id' attribute, isolating value");
+                trace!("Found 'id' attribute, isolating value");
                 *value = Cow::Owned(isolate_ids(value));
             }
         }

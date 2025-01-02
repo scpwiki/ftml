@@ -177,7 +177,7 @@ impl<'r, 't> Parser<'r, 't> {
 
     pub fn depth_increment(&mut self) -> Result<(), ParseError> {
         self.depth += 1;
-        debug!("Incrementing recursion depth to {}", self.depth);
+        trace!("Incrementing recursion depth to {}", self.depth);
 
         if self.depth > MAX_RECURSION_DEPTH {
             return Err(self.make_err(ParseErrorKind::RecursionDepthExceeded));
@@ -189,7 +189,7 @@ impl<'r, 't> Parser<'r, 't> {
     #[inline]
     pub fn depth_decrement(&mut self) {
         self.depth -= 1;
-        debug!("Decrementing recursion depth to {}", self.depth);
+        trace!("Decrementing recursion depth to {}", self.depth);
     }
 
     #[inline]
@@ -322,7 +322,7 @@ impl<'r, 't> Parser<'r, 't> {
 
     // State evaluation
     pub fn evaluate(&self, condition: ParseCondition) -> bool {
-        info!(
+        debug!(
             "Evaluating parser condition (token {}, slice '{}', span {}..{})",
             self.current.token.name(),
             self.current.slice,
@@ -334,7 +334,7 @@ impl<'r, 't> Parser<'r, 't> {
             ParseCondition::CurrentToken(token) => self.current.token == token,
             ParseCondition::TokenPair(current, next) => {
                 if self.current().token != current {
-                    debug!(
+                    trace!(
                         "Current token in pair doesn't match, failing (expected '{}', actual '{}')",
                         current.name(),
                         self.current().token.name(),
@@ -345,7 +345,7 @@ impl<'r, 't> Parser<'r, 't> {
                 match self.look_ahead(0) {
                     Some(actual) => {
                         if actual.token != next {
-                            debug!(
+                            trace!(
                                 "Second token in pair doesn't match, failing (expected {}, actual {})",
                                 next.name(),
                                 actual.token.name(),
@@ -354,7 +354,7 @@ impl<'r, 't> Parser<'r, 't> {
                         }
                     }
                     None => {
-                        debug!(
+                        trace!(
                             "Second token in pair doesn't exist (token {})",
                             next.name(),
                         );
@@ -369,7 +369,7 @@ impl<'r, 't> Parser<'r, 't> {
 
     #[inline]
     pub fn evaluate_any(&self, conditions: &[ParseCondition]) -> bool {
-        info!(
+        debug!(
             "Evaluating to see if any parser condition is true (conditions length {})",
             conditions.len(),
         );
@@ -382,7 +382,7 @@ impl<'r, 't> Parser<'r, 't> {
     where
         F: FnOnce(&mut Parser<'r, 't>) -> Result<bool, ParseError>,
     {
-        info!("Evaluating closure for parser condition");
+        debug!("Evaluating closure for parser condition");
         f(&mut self.clone()).unwrap_or(false)
     }
 
@@ -390,7 +390,7 @@ impl<'r, 't> Parser<'r, 't> {
     where
         F: FnOnce(&mut Parser<'r, 't>) -> Result<bool, ParseError>,
     {
-        info!("Evaluating closure for parser condition, saving progress on success");
+        debug!("Evaluating closure for parser condition, saving progress on success");
 
         let mut parser = self.clone();
         if f(&mut parser).unwrap_or(false) {
@@ -434,7 +434,7 @@ impl<'r, 't> Parser<'r, 't> {
     /// Move the token pointer forward one step.
     #[inline]
     pub fn step(&mut self) -> Result<&'r ExtractedToken<'t>, ParseError> {
-        debug!("Stepping to the next token");
+        trace!("Stepping to the next token");
 
         // Set the start-of-line flag.
         self.start_of_line = matches!(
@@ -473,7 +473,7 @@ impl<'r, 't> Parser<'r, 't> {
     /// For instance, submitting `0` will yield the first item of `parser.remaining()`.
     #[inline]
     pub fn look_ahead(&self, offset: usize) -> Option<&'r ExtractedToken<'t>> {
-        debug!("Looking ahead to a token (offset {offset})");
+        trace!("Looking ahead to a token (offset {offset})");
         self.remaining.get(offset)
     }
 
@@ -510,7 +510,7 @@ impl<'r, 't> Parser<'r, 't> {
         token: Token,
         kind: ParseErrorKind,
     ) -> Result<&'t str, ParseError> {
-        debug!("Looking for token {} (error {})", token.name(), kind.name());
+        trace!("Looking for token {} (error {})", token.name(), kind.name());
 
         let current = self.current();
         if current.token == token {
@@ -523,7 +523,7 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub fn get_optional_token(&mut self, token: Token) -> Result<(), ParseError> {
-        debug!("Looking for optional token {}", token.name());
+        trace!("Looking for optional token {}", token.name());
 
         if self.current().token == token {
             self.step()?;
@@ -533,18 +533,18 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub fn get_optional_line_break(&mut self) -> Result<(), ParseError> {
-        info!("Looking for optional line break");
+        debug!("Looking for optional line break");
         self.get_optional_token(Token::LineBreak)
     }
 
     #[inline]
     pub fn get_optional_space(&mut self) -> Result<(), ParseError> {
-        info!("Looking for optional space");
+        debug!("Looking for optional space");
         self.get_optional_token(Token::Whitespace)
     }
 
     pub fn get_optional_spaces_any(&mut self) -> Result<(), ParseError> {
-        info!("Looking for optional spaces (any)");
+        debug!("Looking for optional spaces (any)");
 
         let tokens = &[
             Token::Whitespace,

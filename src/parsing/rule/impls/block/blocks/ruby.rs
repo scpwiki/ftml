@@ -59,7 +59,7 @@ fn parse_block<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing ruby block (name '{name}', in-head {in_head})");
+    debug!("Parsing ruby block (name '{name}', in-head {in_head})");
     assert!(!flag_star, "Ruby doesn't allow star flag");
     assert!(!flag_score, "Ruby doesn't allow score flag");
     assert_block_name(&BLOCK_RUBY, name);
@@ -128,7 +128,7 @@ fn parse_text<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing ruby text block (name '{name}', in-head {in_head})");
+    debug!("Parsing ruby text block (name '{name}', in-head {in_head})");
     assert!(!flag_star, "Ruby text doesn't allow star flag");
     assert!(!flag_score, "Ruby text doesn't allow score flag");
     assert_block_name(&BLOCK_RT, name);
@@ -158,7 +158,7 @@ fn parse_shortcut<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing ruby shortcut block (name '{name}', in-head {in_head})");
+    debug!("Parsing ruby shortcut block (name '{name}', in-head {in_head})");
     assert!(!flag_star, "Ruby shortcut doesn't allow star flag");
     assert!(!flag_score, "Ruby shortcut doesn't allow score flag");
     assert_block_name(&BLOCK_RB, name);

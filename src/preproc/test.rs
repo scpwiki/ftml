@@ -31,7 +31,7 @@ where
         string.clear();
         string.push_str(input);
 
-        info!("Testing {filter_name} substitution");
+        debug!("Testing {filter_name} substitution");
 
         substitute(&mut string);
 

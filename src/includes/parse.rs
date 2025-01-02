@@ -66,7 +66,7 @@ pub fn parse_include_block<'t>(
             let first = pairs.next().expect("No pairs returned on successful parse");
             let span = first.as_span();
 
-            info!("Parsed include block");
+            debug!("Parsed include block");
 
             // Convert into an IncludeRef
             let include = process_pairs(first.into_inner())?;
@@ -86,7 +86,7 @@ fn process_pairs(mut pairs: Pairs<Rule>) -> Result<IncludeRef, IncludeParseError
     let page_raw = pairs.next().ok_or(IncludeParseError)?.as_str();
     let page_ref = PageRef::parse(page_raw)?;
 
-    debug!("Got page for include {page_ref:?}");
+    trace!("Got page for include {page_ref:?}");
     let mut arguments = HashMap::new();
     let mut var_reference = String::new();
 

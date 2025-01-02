@@ -28,7 +28,7 @@ pub fn render_include(
     variables: &VariableMap,
     elements: &[Element],
 ) {
-    info!("Rendering include (location {location:?})");
+    debug!("Rendering include (location {location:?})");
     ctx.variables_mut().push_scope(variables);
     render_elements(ctx, elements);
     ctx.variables_mut().pop_scope();
@@ -36,7 +36,7 @@ pub fn render_include(
 
 pub fn render_variable(ctx: &mut HtmlContext, name: &str) {
     let value = ctx.variables().get(name);
-    info!(
+    debug!(
         "Rendering variable (name '{}', value '{}'",
         name,
         value.unwrap_or("<none>"),

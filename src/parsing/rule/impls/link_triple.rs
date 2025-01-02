@@ -45,7 +45,7 @@ pub const RULE_LINK_TRIPLE_NEW_TAB: Rule = Rule {
 };
 
 fn link<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to create a triple-bracket link (regular)");
+    debug!("Trying to create a triple-bracket link (regular)");
     check_step(parser, Token::LeftLink)?;
     try_consume_link(parser, RULE_LINK_TRIPLE, None)
 }
@@ -53,7 +53,7 @@ fn link<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>
 fn link_new_tab<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to create a triple-bracket link (new tab)");
+    debug!("Trying to create a triple-bracket link (new tab)");
     check_step(parser, Token::LeftLinkStar)?;
     try_consume_link(parser, RULE_LINK_TRIPLE_NEW_TAB, Some(AnchorTarget::NewTab))
 }
@@ -64,7 +64,7 @@ fn try_consume_link<'r, 't>(
     rule: Rule,
     target: Option<AnchorTarget>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    debug!("Trying to create a triple-bracket link");
+    trace!("Trying to create a triple-bracket link");
 
     // Gather path for link
     let (url, last) = collect_text_keep(
@@ -81,7 +81,7 @@ fn try_consume_link<'r, 't>(
         None,
     )?;
 
-    debug!("Retrieved url for link, now build element (url: '{url}')");
+    trace!("Retrieved url for link, now build element (url: '{url}')");
 
     // Trim text
     let url = url.trim();
@@ -111,7 +111,7 @@ fn build_same<'r, 't>(
     url: &'t str,
     target: Option<AnchorTarget>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Building link with same URL and label (url '{url}')");
+    debug!("Building link with same URL and label (url '{url}')");
 
     // Remove category, if present
     let label = strip_category(url).map(Cow::Borrowed);
@@ -143,7 +143,7 @@ fn build_separate<'r, 't>(
     url: &'t str,
     target: Option<AnchorTarget>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Building link with separate URL and label (url '{url}')");
+    debug!("Building link with separate URL and label (url '{url}')");
 
     // Gather label for link
     let label = collect_text(
@@ -157,7 +157,7 @@ fn build_separate<'r, 't>(
         None,
     )?;
 
-    debug!("Retrieved label for link, now building element (label '{label}')");
+    trace!("Retrieved label for link, now building element (label '{label}')");
 
     // Trim label
     let label = label.trim();

@@ -41,7 +41,7 @@ where
         &mut self,
         flag_star: bool,
     ) -> Result<(&'t str, bool), ParseError> {
-        info!("Looking for identifier");
+        debug!("Looking for identifier");
 
         if flag_star {
             self.get_optional_token(Token::LeftBlockStar)?;
@@ -87,7 +87,7 @@ where
 
     /// Matches an ending block, returning the name present.
     pub fn get_end_block(&mut self) -> Result<&'t str, ParseError> {
-        info!("Looking for end block");
+        debug!("Looking for end block");
 
         self.get_token(Token::LeftBlockEnd, ParseErrorKind::BlockExpectedEnd)?;
         self.get_optional_space()?;
@@ -151,7 +151,7 @@ where
     where
         F: FnMut(&mut Parser<'r, 't>) -> Result<(), ParseError>,
     {
-        debug!("Running generic in block body parser");
+        trace!("Running generic in block body parser");
 
         debug_assert!(
             !block_rule.accepts_names.is_empty(),
@@ -192,7 +192,7 @@ where
         &mut self,
         block_rule: &BlockRule,
     ) -> Result<&'t str, ParseError> {
-        info!("Getting block body as text (rule {})", block_rule.name);
+        debug!("Getting block body as text (rule {})", block_rule.name);
 
         // State variables for collecting span
         let (start, end) = self.get_body_generic(block_rule, |_| Ok(()))?;
@@ -206,7 +206,7 @@ where
         block_rule: &BlockRule,
         as_paragraphs: bool,
     ) -> ParseResult<'r, 't, Vec<Element<'t>>> {
-        info!(
+        debug!(
             "Getting block body as elements (block rule {}, as-paragraphs {})",
             block_rule.name, as_paragraphs,
         );
@@ -269,7 +269,7 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<Arguments<'t>, ParseError> {
-        debug!("Looking for key value arguments, then ']]'");
+        trace!("Looking for key value arguments, then ']]'");
 
         let mut map = Arguments::new();
         if in_head {
@@ -355,7 +355,7 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<(&'t str, Arguments<'t>), ParseError> {
-        debug!("Looking for a name, then key value arguments, then ']]'");
+        trace!("Looking for a name, then key value arguments, then ']]'");
 
         if !in_head {
             warn!("Block is already over, there is no name or arguments");
@@ -381,7 +381,7 @@ where
     where
         F: FnOnce(&Self, Option<&'t str>) -> Result<T, ParseError>,
     {
-        info!("Looking for a value argument, then ']]' (in-head {in_head})");
+        debug!("Looking for a value argument, then ']]' (in-head {in_head})");
 
         let argument = if in_head {
             // Gather slice of tokens in value
@@ -414,7 +414,7 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<(), ParseError> {
-        info!("No arguments, looking for end of head block");
+        debug!("No arguments, looking for end of head block");
         self.get_optional_space()?;
         self.get_head_block(block_rule, in_head)?;
         Ok(())
@@ -426,7 +426,7 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<(), ParseError> {
-        debug!("Getting end of the head block");
+        trace!("Getting end of the head block");
 
         // If we're still in the head, finish
         if in_head {
@@ -447,7 +447,7 @@ where
     // Utilities
     #[inline]
     pub fn set_block(&mut self, block_rule: &BlockRule) {
-        info!("Running block rule {} for these tokens", block_rule.name);
+        debug!("Running block rule {} for these tokens", block_rule.name);
         self.set_rule(block_rule.rule());
     }
 }

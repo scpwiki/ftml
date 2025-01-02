@@ -38,6 +38,7 @@ impl Render for NullRender {
         _page_info: &PageInfo,
         _settings: &WikitextSettings,
     ) {
+        info!("Running null renderer");
     }
 }
 

@@ -29,6 +29,6 @@ pub const RULE_EMAIL: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming token as an email");
+    debug!("Consuming token as an email");
     ok!(Element::Email(cow!(parser.current().slice)))
 }

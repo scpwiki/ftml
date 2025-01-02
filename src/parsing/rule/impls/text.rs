@@ -29,7 +29,7 @@ pub const RULE_TEXT: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming token as plain text element");
+    debug!("Consuming token as plain text element");
     let ExtractedToken { slice, .. } = parser.current();
     ok!(text!(slice))
 }

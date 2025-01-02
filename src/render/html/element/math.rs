@@ -36,7 +36,7 @@ cfg_if! {
 }
 
 pub fn render_math_block(ctx: &mut HtmlContext, name: Option<&str>, latex_source: &str) {
-    info!(
+    debug!(
         "Rendering math block (name '{}', source '{}')",
         name.unwrap_or("<none>"),
         latex_source,
@@ -48,7 +48,7 @@ pub fn render_math_block(ctx: &mut HtmlContext, name: Option<&str>, latex_source
 }
 
 pub fn render_math_inline(ctx: &mut HtmlContext, latex_source: &str) {
-    info!("Rendering math inline (source '{latex_source}'");
+    debug!("Rendering math inline (source '{latex_source}'");
     render_latex(ctx, None, None, latex_source, DisplayStyle::Inline);
 }
 
@@ -114,7 +114,7 @@ fn render_latex(
                 if #[cfg(feature = "mathml")] {
                     match latex_to_mathml(latex_source, display) {
                         Ok(mathml) => {
-                            info!("Processed LaTeX -> MathML");
+                            debug!("Processed LaTeX -> MathML");
 
                             // Inject MathML elements
                             ctx.html()
@@ -138,7 +138,7 @@ fn render_latex(
 }
 
 pub fn render_equation_reference(ctx: &mut HtmlContext, name: &str) {
-    info!("Rendering equation reference (name '{name}')");
+    debug!("Rendering equation reference (name '{name}')");
 
     ctx.html()
         .span()

@@ -34,17 +34,17 @@ pub fn render_style(ctx: &mut HtmlContext, input_css: &str) {
         ..Default::default()
     };
 
-    info!("Parsing input CSS ({} bytes)", input_css.len());
+    debug!("Parsing input CSS ({} bytes)", input_css.len());
     let stylesheet = StyleSheet::parse(input_css, parser_options)
         .expect("Produced error with recovery enabled");
 
-    debug!("Rendering CSS into HTML (minify: {minify})");
+    trace!("Rendering CSS into HTML (minify: {minify})");
     let output_css = match stylesheet.to_css(print_options) {
         Ok(output) => output.code,
         Err(error) => {
             error!("Problem outputting CSS from stylesheet: {error}");
-            debug!("Input CSS:\n{input_css}");
-            debug!("Parsed stylesheet:\n{stylesheet:#?}");
+            trace!("Input CSS:\n{input_css}");
+            trace!("Parsed stylesheet:\n{stylesheet:#?}");
             return;
         }
     };

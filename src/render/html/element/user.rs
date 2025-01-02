@@ -21,14 +21,14 @@
 use super::prelude::*;
 
 pub fn render_user(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
-    info!("Rendering user block (name '{name}', show-avatar {show_avatar})");
+    debug!("Rendering user block (name '{name}', show-avatar {show_avatar})");
 
     ctx.html()
         .span()
         .attr(attr!("class" => "wj-user-info"))
         .inner(|ctx| match ctx.handle().get_user_info(name) {
             Some(info) => {
-                debug!(
+                trace!(
                     "Got user information (user id {}, name {})",
                     info.user_id,
                     info.user_name.as_ref(),
@@ -65,7 +65,7 @@ pub fn render_user(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                     });
             }
             None => {
-                debug!("No such user found");
+                trace!("No such user found");
 
                 ctx.html()
                     .span()

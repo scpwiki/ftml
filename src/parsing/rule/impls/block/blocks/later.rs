@@ -45,7 +45,7 @@ fn parse_fn<'r, 't>(
     _flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing later block (easter egg, in-head {in_head})");
+    debug!("Parsing later block (easter egg, in-head {in_head})");
     assert_block_name(&BLOCK_LATER, name);
     parser.get_head_none(&BLOCK_LATER, in_head)?;
     ok!(text!("later."))

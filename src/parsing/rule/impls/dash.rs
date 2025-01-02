@@ -29,7 +29,7 @@ pub const RULE_DASH: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     _parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming token to create an em dash");
+    debug!("Consuming token to create an em dash");
 
     // — - EM DASH
     ok!(text!("\u{2014}"))

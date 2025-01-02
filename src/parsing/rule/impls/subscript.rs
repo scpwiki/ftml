@@ -29,7 +29,7 @@ pub const RULE_SUBSCRIPT: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to create subscript container");
+    debug!("Trying to create subscript container");
     check_step(parser, Token::Subscript)?;
     collect_container(
         parser,

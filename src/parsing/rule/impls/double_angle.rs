@@ -30,7 +30,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let current = parser.current();
-    info!(
+    debug!(
         "Consuming token '{}', to create a left/right double angle quote",
         current.token.name(),
     );

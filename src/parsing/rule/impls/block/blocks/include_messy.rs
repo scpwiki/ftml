@@ -45,7 +45,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     _in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Found invalid include-messy block");
+    debug!("Found invalid include-messy block");
     parser.check_page_syntax()?;
     assert!(!flag_star, "Include (messy) doesn't allow star flag");
     assert!(!flag_score, "Include (messy) doesn't allow score flag");

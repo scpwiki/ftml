@@ -36,7 +36,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing bold block (name '{name}', in-head {in_head})");
+    debug!("Parsing bold block (name '{name}', in-head {in_head})");
     assert!(!flag_star, "Bold doesn't allow star flag");
     assert!(!flag_score, "Bold doesn't allow score flag");
     assert_block_name(&BLOCK_BOLD, name);

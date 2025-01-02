@@ -38,7 +38,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing iftags block (name '{name}', in-head {in_head})");
+    debug!("Parsing iftags block (name '{name}', in-head {in_head})");
     assert!(!flag_star, "IfTags doesn't allow star flag");
     assert!(!flag_score, "IfTags doesn't allow score flag");
     assert_block_name(&BLOCK_IFTAGS, name);
@@ -54,7 +54,7 @@ fn parse_fn<'r, 't>(
     let (elements, errors, paragraph_safe) =
         parser.get_body_elements(&BLOCK_IFTAGS, false)?.into();
 
-    debug!(
+    trace!(
         "IfTags conditions parsed (conditions length {}, elements length {})",
         conditions.len(),
         elements.len(),
@@ -62,11 +62,11 @@ fn parse_fn<'r, 't>(
 
     // Return elements based on condition
     let elements = if check_iftags(parser.page_info(), &conditions) {
-        debug!("Conditions passed, including elements");
+        trace!("Conditions passed, including elements");
 
         Elements::Multiple(elements)
     } else {
-        debug!("Conditions failed, excluding elements");
+        trace!("Conditions failed, excluding elements");
 
         Elements::None
     };
@@ -75,6 +75,6 @@ fn parse_fn<'r, 't>(
 }
 
 pub fn check_iftags(info: &PageInfo, conditions: &[ElementCondition]) -> bool {
-    debug!("Checking iftags");
+    trace!("Checking iftags");
     ElementCondition::check(conditions, &info.tags)
 }

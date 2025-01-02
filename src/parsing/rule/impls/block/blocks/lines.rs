@@ -37,7 +37,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing newlines block (in-head {in_head})");
+    debug!("Parsing newlines block (in-head {in_head})");
     assert!(!flag_star, "Lines doesn't allow star flag");
     assert!(!flag_score, "Lines doesn't allow score flag");
     assert_block_name(&BLOCK_LINES, name);

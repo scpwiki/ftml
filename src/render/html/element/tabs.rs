@@ -23,7 +23,7 @@ use crate::tree::Tab;
 use std::iter;
 
 pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
-    info!("Rendering tabview (tabs {})", tabs.len());
+    debug!("Rendering tabview (tabs {})", tabs.len());
 
     // Generate IDs for each tab
     let button_ids = generate_ids(ctx.random(), tabs.len());
