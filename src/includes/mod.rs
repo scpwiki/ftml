@@ -66,14 +66,14 @@ where
     F: FnOnce() -> E,
 {
     if !settings.enable_page_syntax {
-        info!("Includes are disabled for this input, skipping");
+        debug!("Includes are disabled for this input, skipping");
 
         let output = str!(input);
         let pages = vec![];
         return Ok((output, pages));
     }
 
-    info!("Finding and replacing all instances of include blocks in text");
+    debug!("Finding and replacing all instances of include blocks in text");
 
     let mut ranges = Vec::new();
     let mut includes = Vec::new();
@@ -124,7 +124,7 @@ where
     for ((range, include), fetched) in joined_iter {
         let (page_ref, variables) = include.into();
 
-        info!(
+        debug!(
             "Replacing range for included page ({}..{})",
             range.start, range.end,
         );

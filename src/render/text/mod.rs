@@ -63,7 +63,7 @@ impl TextRender {
             wikitext_len,
         }: RenderPartial,
     ) -> String {
-        info!(
+        debug!(
             "Rendering text (site {}, page {}, category {})",
             page_info.site.as_ref(),
             page_info.page.as_ref(),

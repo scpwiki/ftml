@@ -29,7 +29,7 @@ pub const RULE_COMMENT: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming tokens until end of comment");
+    debug!("Consuming tokens until end of comment");
 
     check_step(parser, Token::LeftComment)?;
 

@@ -33,7 +33,7 @@ pub const RULE_LINE_BREAK_PARAGRAPH: Rule = Rule {
 };
 
 fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming newline token as line break");
+    debug!("Consuming newline token as line break");
 
     // Skip this newline if we're coming up on a rule that starts
     // on its own line.
@@ -64,7 +64,7 @@ fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
     });
 
     if upcoming_skip {
-        info!("Skipping line break element because of upcoming token");
+        debug!("Skipping line break element because of upcoming token");
         return ok!(Elements::None);
     }
 

@@ -82,7 +82,7 @@ where
     'r: 't,
     ParsedBlock<'t>: 't,
 {
-    info!("Parsing {description} block (name '{name}', in-head {in_head})");
+    debug!("Parsing {description} block (name '{name}', in-head {in_head})");
     assert!(
         !flag_star,
         "Block for {description} doesn't allow star flag",

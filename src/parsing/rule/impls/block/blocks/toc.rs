@@ -37,7 +37,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing table-of-contents block (name '{name}', in-head {in_head})");
+    debug!("Parsing table-of-contents block (name '{name}', in-head {in_head})");
     parser.check_page_syntax()?;
     assert!(!flag_star, "Table of Contents doesn't allow star flag");
     assert!(!flag_score, "Table of Contents doesn't allow score flag");

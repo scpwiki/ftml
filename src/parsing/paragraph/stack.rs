@@ -52,7 +52,7 @@ impl<'t> ParagraphStack<'t> {
 
     #[inline]
     pub fn push_element(&mut self, element: Element<'t>, paragraph_safe: bool) {
-        info!(
+        debug!(
             "Pushing element {} to stack (paragraph safe: {}",
             element.name(),
             paragraph_safe,
@@ -71,7 +71,7 @@ impl<'t> ParagraphStack<'t> {
 
     #[inline]
     pub fn push_errors(&mut self, errors: &mut Vec<ParseError>) {
-        info!("Pushing errors to stack (length {})", errors.len());
+        debug!("Pushing errors to stack (length {})", errors.len());
         self.errors.append(errors);
     }
 
@@ -126,7 +126,7 @@ impl<'t> ParagraphStack<'t> {
     /// This returns all collected elements, errors, and returns the final
     /// paragraph safety value.
     pub fn into_result<'r>(mut self) -> ParseResult<'r, 't, Vec<Element<'t>>> {
-        info!("Converting paragraph parse stack into ParseResult");
+        debug!("Converting paragraph parse stack into ParseResult");
 
         // Finish current paragraph, if any
         self.end_paragraph();
@@ -156,7 +156,7 @@ impl<'t> ParagraphStack<'t> {
     /// and either have an alternate means of determining paragraph safety, or
     /// statically know what that value would be.
     pub fn into_elements(mut self) -> Vec<Element<'t>> {
-        info!("Converting paragraph parse stack into a Vec<Element>");
+        debug!("Converting paragraph parse stack into a Vec<Element>");
 
         // Finish current paragraph, if any
         self.end_paragraph();

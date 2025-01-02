@@ -192,7 +192,7 @@ impl Test<'_> {
             return TestResult::Skip;
         }
 
-        info!(
+        debug!(
             "Running syntax tree test case {} on {}",
             &self.name, &self.input,
         );

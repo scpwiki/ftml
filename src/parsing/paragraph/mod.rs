@@ -57,7 +57,7 @@ where
     'r: 't,
     F: FnMut(&mut Parser<'r, 't>) -> Result<bool, ParseError>,
 {
-    info!("Gathering paragraphs until ending");
+    debug!("Gathering paragraphs until ending");
 
     // Update parser rule
     parser.set_rule(rule);
@@ -87,7 +87,7 @@ where
 
             // If we've hit a paragraph break, then finish the current paragraph
             Token::ParagraphBreak => {
-                info!("Hit a paragraph break, creating a new paragraph container");
+                debug!("Hit a paragraph break, creating a new paragraph container");
 
                 // Paragraph break -- end the paragraph and start a new one!
                 stack.end_paragraph();
@@ -103,7 +103,7 @@ where
             _ => {
                 if let Some(ref mut close_condition_fn) = close_condition_fn {
                     if close_condition_fn(parser).unwrap_or(false) {
-                        info!("Hit closing condition for paragraphs, terminating token iteration");
+                        debug!("Hit closing condition for paragraphs, terminating token iteration");
                         break;
                     }
                 }

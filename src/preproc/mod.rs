@@ -144,7 +144,7 @@ impl Replacer {
 pub fn preprocess(text: &mut String) {
     whitespace::substitute(text);
     typography::substitute(text);
-    info!("Finished preprocessing of text");
+    debug!("Finished preprocessing of text");
 }
 
 #[test]

@@ -63,7 +63,7 @@ pub fn parse_alignment_block<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!(
+    debug!(
         "Parsing alignment block (name '{}', block-rule '{}', alignment '{}', in-head {})",
         name,
         block_rule.name,

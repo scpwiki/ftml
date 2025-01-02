@@ -22,7 +22,7 @@ use super::prelude::*;
 use crate::tree::{Container, ContainerType, HtmlTag};
 
 pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
-    info!("Rendering container '{}'", container.ctype().name());
+    debug!("Rendering container '{}'", container.ctype().name());
 
     match container.ctype() {
         // We wrap with <rp> around the <rt> contents
@@ -70,7 +70,7 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
 }
 
 pub fn render_color(ctx: &mut HtmlContext, color: &str, elements: &[Element]) {
-    info!("Rendering color container (color '{color}')");
+    debug!("Rendering color container (color '{color}')");
 
     ctx.html()
         .span()

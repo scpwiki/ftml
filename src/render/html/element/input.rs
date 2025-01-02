@@ -27,7 +27,7 @@ pub fn render_radio_button(
     checked: bool,
     attributes: &AttributeMap,
 ) {
-    info!("Creating radio button (name '{name}', checked {checked})");
+    debug!("Creating radio button (name '{name}', checked {checked})");
 
     ctx.html().input().attr(attr!(
         "name" => name,
@@ -38,7 +38,7 @@ pub fn render_radio_button(
 }
 
 pub fn render_checkbox(ctx: &mut HtmlContext, checked: bool, attributes: &AttributeMap) {
-    info!("Creating checkbox (checked {checked})");
+    debug!("Creating checkbox (checked {checked})");
 
     ctx.html().input().attr(attr!(
         "type" => "checkbox",

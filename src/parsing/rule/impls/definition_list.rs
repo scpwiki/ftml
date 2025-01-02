@@ -37,7 +37,7 @@ pub const RULE_DEFINITION_LIST_SKIP_NEWLINE: Rule = Rule {
 fn skip_newline<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Seeing if we skip due to an upcoming definition list");
+    debug!("Seeing if we skip due to an upcoming definition list");
 
     match parser.next_three_tokens() {
         // It looks like a definition list is upcoming
@@ -53,7 +53,7 @@ fn skip_newline<'r, 't>(
 fn parse_definition_list<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to create a definition list");
+    debug!("Trying to create a definition list");
 
     let mut items = Vec::new();
     let mut errors = Vec::new();

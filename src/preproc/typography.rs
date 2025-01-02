@@ -68,7 +68,7 @@ static HORIZONTAL_ELLIPSIS: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace
 /// Performs all typographic substitutions in-place in the given text
 pub fn substitute(text: &mut String) {
     let mut buffer = String::new();
-    info!("Performing typography substitutions");
+    debug!("Performing typography substitutions");
 
     macro_rules! replace {
         ($replacer:expr) => {

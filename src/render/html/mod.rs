@@ -57,7 +57,7 @@ impl Render for HtmlRender {
         page_info: &PageInfo,
         settings: &WikitextSettings,
     ) -> HtmlOutput {
-        info!(
+        debug!(
             "Rendering HTML (site {}, page {}, category {})",
             page_info.site.as_ref(),
             page_info.page.as_ref(),

@@ -29,7 +29,7 @@ pub const RULE_BOLD: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to create bold (strong) container");
+    debug!("Trying to create bold (strong) container");
     check_step(parser, Token::Bold)?;
     collect_container(
         parser,

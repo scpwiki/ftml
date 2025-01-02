@@ -30,7 +30,7 @@ pub const RULE_URL: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming token as a URL");
+    debug!("Consuming token as a URL");
     let token = parser.current();
     let url = cow!(token.slice);
 

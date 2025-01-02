@@ -31,7 +31,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let current = parser.current();
-    info!("Consuming token to create a clear float");
+    debug!("Consuming token to create a clear float");
 
     let clear_float = match current.token {
         Token::ClearFloatBoth => ClearFloat::Both,

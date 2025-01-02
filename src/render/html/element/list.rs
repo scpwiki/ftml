@@ -27,7 +27,7 @@ pub fn render_list(
     list_items: &[ListItem],
     attributes: &AttributeMap,
 ) {
-    info!(
+    debug!(
         "Rendering list '{}' (items {})",
         ltype.name(),
         list_items.len(),

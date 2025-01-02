@@ -66,7 +66,7 @@ pub fn parse_include_block<'t>(
             let first = pairs.next().expect("No pairs returned on successful parse");
             let span = first.as_span();
 
-            info!("Parsed include block");
+            debug!("Parsed include block");
 
             // Convert into an IncludeRef
             let include = process_pairs(first.into_inner())?;

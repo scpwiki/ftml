@@ -22,7 +22,7 @@ use super::prelude::*;
 use crate::tree::DefinitionListItem;
 
 pub fn render_definition_list(ctx: &mut HtmlContext, items: &[DefinitionListItem]) {
-    info!("Rendering definition list (length {})", items.len());
+    debug!("Rendering definition list (length {})", items.len());
 
     ctx.html().dl().inner(|ctx| {
         for DefinitionListItem {

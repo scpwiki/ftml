@@ -46,7 +46,7 @@ fn parse_footnote_ref<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing footnote ref block (in-head {in_head})");
+    debug!("Parsing footnote ref block (in-head {in_head})");
 
     // Check footnote flag
     //
@@ -101,7 +101,7 @@ fn parse_footnote_block<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing footnote list block (in-head {in_head})");
+    debug!("Parsing footnote list block (in-head {in_head})");
     assert!(!flag_star, "Footnote block doesn't allow star flag");
     assert!(!flag_score, "Footnote block doesn't allow score flag");
     assert_block_name(&BLOCK_FOOTNOTE_BLOCK, name);

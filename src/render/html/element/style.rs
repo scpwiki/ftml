@@ -34,7 +34,7 @@ pub fn render_style(ctx: &mut HtmlContext, input_css: &str) {
         ..Default::default()
     };
 
-    info!("Parsing input CSS ({} bytes)", input_css.len());
+    debug!("Parsing input CSS ({} bytes)", input_css.len());
     let stylesheet = StyleSheet::parse(input_css, parser_options)
         .expect("Produced error with recovery enabled");
 

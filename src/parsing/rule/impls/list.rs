@@ -42,7 +42,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     // We don't know the list type(s) yet, so just log that we're starting
-    info!("Parsing a list");
+    debug!("Parsing a list");
 
     // Context variables
     let mut depths = Vec::new();

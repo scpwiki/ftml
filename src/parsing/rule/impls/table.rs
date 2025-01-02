@@ -39,13 +39,13 @@ pub const RULE_TABLE: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to parse simple table");
+    debug!("Trying to parse simple table");
     let mut rows = Vec::new();
     let mut errors = Vec::new();
     let mut _paragraph_break = false;
 
     'table: loop {
-        info!("Parsing next table row");
+        debug!("Parsing next table row");
 
         let mut cells = Vec::new();
 
@@ -72,7 +72,7 @@ fn try_consume_fn<'r, 't>(
 
         // Loop for each cell in the row
         'row: loop {
-            info!("Parsing next table cell");
+            debug!("Parsing next table cell");
             let mut elements = Vec::new();
             let TableCellStart {
                 align,

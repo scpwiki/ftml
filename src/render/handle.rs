@@ -32,19 +32,19 @@ pub struct Handle;
 impl Handle {
     pub fn render_module(&self, buffer: &mut String, module: &Module) {
         // Modules only render to HTML
-        info!("Rendering module '{}'", module.name());
+        debug!("Rendering module '{}'", module.name());
         str_write!(buffer, "<p>TODO: module {}</p>", module.name());
     }
 
     pub fn get_page_title(&self, _site: &str, _page: &str) -> Option<String> {
-        info!("Fetching page title");
+        debug!("Fetching page title");
 
         // TODO
         Some(format!("TODO: actual title ({_site} {_page})"))
     }
 
     pub fn get_page_exists(&self, _site: &str, _page: &str) -> bool {
-        info!("Checking page existence");
+        debug!("Checking page existence");
 
         // For testing
         #[cfg(test)]
@@ -57,7 +57,7 @@ impl Handle {
     }
 
     pub fn get_user_info<'a>(&self, name: &'a str) -> Option<UserInfo<'a>> {
-        info!("Fetching user info (name '{name}')");
+        debug!("Fetching user info (name '{name}')");
         let mut info = UserInfo::dummy();
         info.user_name = cow!(name);
         info.user_profile_url = Cow::Owned(format!("/user:info/{name}"));
@@ -70,7 +70,7 @@ impl Handle {
         info: &PageInfo,
         settings: &WikitextSettings,
     ) -> Option<Cow<'a, str>> {
-        info!("Getting file link for image");
+        debug!("Getting file link for image");
 
         let (site, page, file): (&str, &str, &str) = match source {
             ImageSource::Url(url) => return Some(Cow::clone(url)),
@@ -130,7 +130,7 @@ impl Handle {
     }
 
     pub fn get_message(&self, language: &str, message: &str) -> &'static str {
-        info!("Fetching message (language {language}, key {message})");
+        debug!("Fetching message (language {language}, key {message})");
 
         let _ = language;
 
@@ -154,7 +154,7 @@ impl Handle {
     }
 
     pub fn post_html(&self, info: &PageInfo, html: &str) -> String {
-        info!("Submitting HTML to create iframe-able snippet");
+        debug!("Submitting HTML to create iframe-able snippet");
 
         let _ = info;
         let _ = html;
@@ -164,7 +164,7 @@ impl Handle {
     }
 
     pub fn post_code(&self, index: NonZeroUsize, code: &str) {
-        info!("Submitting code snippet (index {})", index.get());
+        debug!("Submitting code snippet (index {})", index.get());
 
         let _ = index;
         let _ = code;

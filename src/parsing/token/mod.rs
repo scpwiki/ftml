@@ -173,11 +173,11 @@ impl Token {
     /// Returns an error if something goes wrong with the parsing process. This will result in the
     /// only [`Token`] being a raw text containing all of the input.
     pub(crate) fn extract_all(text: &str) -> Vec<ExtractedToken> {
-        info!("Running lexer on input");
+        debug!("Running lexer on input");
 
         match TokenLexer::parse(Rule::document, text) {
             Ok(pairs) => {
-                info!("Lexer produced pairs for processing");
+                debug!("Lexer produced pairs for processing");
 
                 // Map pairs to tokens, and add a Token::InputStart at the beginning
                 // Pest already adds a Token::InputEnd at the end

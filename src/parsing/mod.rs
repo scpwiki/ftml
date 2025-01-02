@@ -97,14 +97,14 @@ where
     // For producing table of contents indexes
     let mut incrementer = Incrementer(0);
 
-    info!("Finished paragraph gathering, matching on consumption");
+    debug!("Finished paragraph gathering, matching on consumption");
     match result {
         Ok(ParseSuccess {
             item: mut elements,
             errors,
             ..
         }) => {
-            info!(
+            debug!(
                 "Finished parsing, producing final syntax tree ({} errors)",
                 errors.len(),
             );
@@ -123,7 +123,7 @@ where
             // Add a footnote block at the end,
             // if the user doesn't have one already
             if !has_footnote_block {
-                info!("No footnote block in elements, appending one");
+                debug!("No footnote block in elements, appending one");
 
                 elements.push(Element::FootnoteBlock {
                     title: None,
@@ -180,7 +180,7 @@ where
     let mut parser = Parser::new(tokenization, page_info, settings);
 
     // At the top level, we gather elements into paragraphs
-    info!("Running parser on tokens");
+    debug!("Running parser on tokens");
     let result = gather_paragraphs(&mut parser, RULE_PAGE, NO_CLOSE_CONDITION);
 
     // Build and return

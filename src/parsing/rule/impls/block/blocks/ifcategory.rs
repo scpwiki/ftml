@@ -38,7 +38,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing ifcategory block (name '{name}', in-head {in_head})");
+    debug!("Parsing ifcategory block (name '{name}', in-head {in_head})");
     assert!(!flag_star, "IfCategory doesn't allow star flag");
     assert!(!flag_score, "IfCategory doesn't allow score flag");
     assert_block_name(&BLOCK_IFCATEGORY, name);

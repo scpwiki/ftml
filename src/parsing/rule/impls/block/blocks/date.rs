@@ -44,7 +44,7 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Parsing date block (name '{name}', in-head {in_head}, score {flag_score})");
+    debug!("Parsing date block (name '{name}', in-head {in_head}, score {flag_score})");
     assert!(!flag_star, "Date doesn't allow star flag");
     assert!(!flag_score, "Date doesn't allow score flag");
     assert_block_name(&BLOCK_DATE, name);
@@ -97,7 +97,7 @@ fn parse_fn<'r, 't>(
 
 /// Parse a datetime string and produce its time value, as well as possible timezone info.
 fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
-    info!("Parsing possible date value '{value}'");
+    debug!("Parsing possible date value '{value}'");
 
     // Special case, current time
     if value.eq_ignore_ascii_case("now") || value == "." {
@@ -150,7 +150,7 @@ fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
     static TIMEZONE_REGEX: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"^(\+|-)?([0-9]{1,2}):?([0-9]{2})?$").unwrap());
 
-    info!("Parsing possible timezone value '{value}'");
+    debug!("Parsing possible timezone value '{value}'");
 
     // Try hours / minutes (via regex)
     if let Some(captures) = TIMEZONE_REGEX.captures(value) {

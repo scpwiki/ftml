@@ -63,7 +63,7 @@ where
     'r: 't,
 {
     // Log collect_text() call
-    info!("Trying to consume tokens to merge into a single string");
+    debug!("Trying to consume tokens to merge into a single string");
 
     let (start, mut end) = (parser.current(), None);
 

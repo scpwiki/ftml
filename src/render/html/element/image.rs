@@ -29,7 +29,7 @@ pub fn render_image(
     alignment: Option<FloatAlignment>,
     attributes: &AttributeMap,
 ) {
-    info!(
+    debug!(
         "Rendering image element (source '{}', link {}, alignment {}, float {})",
         source.name(),
         match link {

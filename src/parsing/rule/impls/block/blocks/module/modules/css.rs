@@ -31,7 +31,7 @@ fn parse_fn<'r, 't>(
     name: &'t str,
     _arguments: Arguments<'t>,
 ) -> ParseResult<'r, 't, ModuleParseOutput<'t>> {
-    info!("Parsing categories module");
+    debug!("Parsing categories module");
     assert_module_name(&MODULE_CSS, name);
 
     let css = parser.get_body_text(&BLOCK_MODULE)?;

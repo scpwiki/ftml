@@ -90,7 +90,7 @@ impl<'t> FullText<'t> {
     }
 
     fn slice_impl(&self, slice_kind: &'static str, start: usize, end: usize) -> &'t str {
-        info!("Extracting {slice_kind} slice ({start}-{end}) from full text");
+        debug!("Extracting {slice_kind} slice ({start}-{end}) from full text");
 
         assert!(
             start <= end,

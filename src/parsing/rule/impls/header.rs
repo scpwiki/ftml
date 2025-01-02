@@ -30,7 +30,7 @@ pub const RULE_HEADER: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to create header container");
+    debug!("Trying to create header container");
 
     macro_rules! step {
         ($token:expr) => {{

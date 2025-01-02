@@ -66,7 +66,7 @@ pub fn render_collapsible(ctx: &mut HtmlContext, collapsible: Collapsible) {
         show_bottom,
     } = collapsible;
 
-    info!(
+    debug!(
         "Rendering collapsible (elements length {}, start-open {}, show-text {}, hide-text {}, show-top {}, show-bottom {})",
         elements.len(),
         start_open,

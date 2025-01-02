@@ -36,7 +36,7 @@ use std::mem;
 /// It will use the fallback if all rules, fail, so the only failure case is if
 /// the end of the input is reached.
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
-    info!(
+    debug!(
         "Running consume attempt (token {}, slice {:?})",
         parser.current().token.name(),
         parser.current().slice,
@@ -56,7 +56,7 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         let old_remaining = parser.remaining();
         match rule.try_consume(parser) {
             Ok(output) => {
-                info!("Rule {} matched, returning generated result", rule.name());
+                debug!("Rule {} matched, returning generated result", rule.name());
 
                 // If the pointer hasn't moved, we step one token.
                 if parser.same_pointer(old_remaining) {

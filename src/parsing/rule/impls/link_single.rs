@@ -60,7 +60,7 @@ fn try_consume_link<'r, 't>(
     rule: Rule,
     target: Option<AnchorTarget>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!(
+    debug!(
         "Trying to create a single-bracket link (target {})",
         match target {
             Some(target) => target.name(),

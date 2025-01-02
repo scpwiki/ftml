@@ -22,7 +22,7 @@ use super::prelude::*;
 use crate::tree::Embed;
 
 pub fn render_embed(ctx: &mut HtmlContext, embed: &Embed) {
-    info!(
+    debug!(
         "Rendering embed (variant '{}', url '{}')",
         embed.name(),
         embed.direct_url(),

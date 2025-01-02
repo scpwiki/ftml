@@ -29,7 +29,7 @@ pub const RULE_BIBCITE: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Trying to create bibcite element");
+    debug!("Trying to create bibcite element");
     check_step(parser, Token::LeftParentheses)?;
 
     // This is like a poor man's block, it's "((bibcite <label>))"

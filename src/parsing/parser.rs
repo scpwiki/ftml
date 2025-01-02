@@ -322,7 +322,7 @@ impl<'r, 't> Parser<'r, 't> {
 
     // State evaluation
     pub fn evaluate(&self, condition: ParseCondition) -> bool {
-        info!(
+        debug!(
             "Evaluating parser condition (token {}, slice '{}', span {}..{})",
             self.current.token.name(),
             self.current.slice,
@@ -369,7 +369,7 @@ impl<'r, 't> Parser<'r, 't> {
 
     #[inline]
     pub fn evaluate_any(&self, conditions: &[ParseCondition]) -> bool {
-        info!(
+        debug!(
             "Evaluating to see if any parser condition is true (conditions length {})",
             conditions.len(),
         );
@@ -382,7 +382,7 @@ impl<'r, 't> Parser<'r, 't> {
     where
         F: FnOnce(&mut Parser<'r, 't>) -> Result<bool, ParseError>,
     {
-        info!("Evaluating closure for parser condition");
+        debug!("Evaluating closure for parser condition");
         f(&mut self.clone()).unwrap_or(false)
     }
 
@@ -390,7 +390,7 @@ impl<'r, 't> Parser<'r, 't> {
     where
         F: FnOnce(&mut Parser<'r, 't>) -> Result<bool, ParseError>,
     {
-        info!("Evaluating closure for parser condition, saving progress on success");
+        debug!("Evaluating closure for parser condition, saving progress on success");
 
         let mut parser = self.clone();
         if f(&mut parser).unwrap_or(false) {
@@ -533,18 +533,18 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub fn get_optional_line_break(&mut self) -> Result<(), ParseError> {
-        info!("Looking for optional line break");
+        debug!("Looking for optional line break");
         self.get_optional_token(Token::LineBreak)
     }
 
     #[inline]
     pub fn get_optional_space(&mut self) -> Result<(), ParseError> {
-        info!("Looking for optional space");
+        debug!("Looking for optional space");
         self.get_optional_token(Token::Whitespace)
     }
 
     pub fn get_optional_spaces_any(&mut self) -> Result<(), ParseError> {
-        info!("Looking for optional spaces (any)");
+        debug!("Looking for optional spaces (any)");
 
         let tokens = &[
             Token::Whitespace,

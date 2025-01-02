@@ -35,7 +35,7 @@ pub const RULE_RAW: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    info!("Consuming tokens until end of raw");
+    debug!("Consuming tokens until end of raw");
 
     // Are we in a @@..@@ type raw, or a @<..>@ type?
     let ending_token = match parser.current().token {

@@ -70,7 +70,7 @@ pub fn collect<'p, 'r, 't, F>(
 where
     F: FnMut(&mut Parser<'r, 't>) -> ParseResult<'r, 't, ()>,
 {
-    info!("Trying to collect tokens for rule {}", rule.name());
+    debug!("Trying to collect tokens for rule {}", rule.name());
 
     let mut errors = Vec::new();
     let mut paragraph_safe = true;
