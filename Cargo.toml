@@ -1,14 +1,14 @@
 [package]
 name = "ftml"
 description = "Foundation Text Markup Language - a library to render Wikidot text as HTML"
-repository = "https://github.com/scpwiki/wikijump/tree/develop/ftml"
+repository = "https://github.com/scpwiki/ftml"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 keywords = ["wikidot", "wikijump", "ftml", "parsing", "html"]
 categories = ["parser-implementations"]
 exclude = [".gitignore", ".editorconfig"]
 
-version = "1.28.1"
+version = "1.28.2"
 authors = ["Emmie Smith <emmie.maeda@gmail.com>"]
 edition = "2021"
 
