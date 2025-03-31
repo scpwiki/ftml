@@ -1,5 +1,5 @@
 {
-    "input": "[[include-messy :scp-wiki:theme:black-highlighter-theme]]",
+    "input": "[[include fragment:page]]",
     "tree": {
         "elements": [
             {
@@ -10,22 +10,6 @@
                     "elements": [
                         {
                             "element": "text",
-                            "data": "OFF"
-                        },
-                        {
-                            "element": "text",
-                            "data": "-"
-                        },
-                        {
-                            "element": "text",
-                            "data": "SITE"
-                        },
-                        {
-                            "element": "text",
-                            "data": " "
-                        },
-                        {
-                            "element": "text",
                             "data": "INCLUDED"
                         },
                         {
@@ -34,7 +18,7 @@
                         },
                         {
                             "element": "text",
-                            "data": "PAGE"
+                            "data": "FRAGMENT"
                         }
                     ]
                 }

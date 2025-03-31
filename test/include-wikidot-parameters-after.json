@@ -1,5 +1,5 @@
 {
-    "input": "[[include-messy component:fruit   class   =box|   apple =  1 |  banana=2|]]",
+    "input": "[[include component:fruit class=box| apple=1 | banana = 2 |]]",
     "tree": {
         "elements": [
             {
@@ -54,7 +54,7 @@
                                             },
                                             {
                                                 "element": "text",
-                                                "data": " "
+                                                "data": "  "
                                             }
                                         ]
                                     }

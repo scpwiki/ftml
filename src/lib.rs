@@ -28,7 +28,7 @@
 //!
 //! The overall flow is the following:
 //!
-//! * Run messy includer
+//! * Run "messy" includer (legacy Wikidot)
 //! * Run preprocessor
 //! * Run tokenizer
 //! * Run parser

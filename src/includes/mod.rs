@@ -18,10 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! This module implements "messy includes", or Wikidot native includes.
+//! This module implements "messy includes", or legacy Wikidot includes.
 //!
 //! It is an annoying but necessary hack that parses the psuedoblock
-//! `[[include-messy]]` and directly replaces that part with the
+//! `[[include]]` and directly replaces that part with the
 //! foreign page's wikitext.
 
 #[warn(missing_docs)]
@@ -43,7 +43,7 @@ use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
 
 static INCLUDE_REGEX: Lazy<Regex> = Lazy::new(|| {
-    RegexBuilder::new(r"^\[\[\s*include-messy\s+")
+    RegexBuilder::new(r"^\[\[\s*include\s+")
         .case_insensitive(true)
         .multi_line(true)
         .dot_matches_new_line(true)

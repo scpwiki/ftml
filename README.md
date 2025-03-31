@@ -107,7 +107,7 @@ As ftml develops into its own branch of wikitext, pages here will document the s
 
 There are some lesser-used or troublesome features which are implemented in a different, backwards-incompatible way with Wikidot. For instance:
 
-* `[[include]]` is split into `[[include-messy]]` (legacy behavior), and `[[include-elements]]` (self-contained element insertion).
+* `[[include]]` is split into `[[include]]` (legacy Wikidot behavior), and `[[include-elements]]` (experimental self-contained element insertion).
 * Interwiki links are implemented by prefixing `!` in triple-bracket links. So `[[[!wp:Amazon.com | Amazon]]]` instead of `[wp:Amazon.com Amazon]`.
 
 ### Usage

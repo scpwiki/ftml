@@ -50,7 +50,7 @@ pub struct WikitextSettings {
     /// Whether a literal `[[include]]` is permitted.
     ///
     /// If this is true, then `[[include]]` is treated as an alias
-    /// for `[[include-messy]]`, which is necessary for Wikidot compatibility.
+    /// for `[[include]]`, which is necessary for Wikidot compatibility.
     ///
     /// It is off by default.
     pub use_include_compatibility: bool,
