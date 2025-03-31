@@ -117,11 +117,7 @@ fn get_char(value: &str, radix: u32) -> Option<Cow<str>> {
         Err(_) => return None,
     };
 
-    let ch = match char::from_u32(codepoint) {
-        Some(ch) => ch,
-        None => return None,
-    };
-
+    let ch = char::from_u32(codepoint)?;
     Some(Cow::Owned(ch.to_string()))
 }
 
