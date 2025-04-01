@@ -161,12 +161,12 @@ body = "none"
 html-output = "other"
 special = "include-elements"
 
-[include-messy]
+[include]
 accepts-newlines = true
 head = "value"            # it's not a normal map
 body = "none"
 html-output = "other"
-special = "include-messy"
+special = "include"
 
 [ins]
 aliases = ["insertion"]

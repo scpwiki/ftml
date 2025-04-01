@@ -1,5 +1,5 @@
 /*
- * parsing/rule/impls/block/blocks/include_messy.rs
+ * parsing/rule/impls/block/blocks/include_wikidot.rs
  *
  * ftml - Library to parse Wikidot text
  * Copyright (C) 2019-2025 Wikijump Team
@@ -20,18 +20,18 @@
 
 use super::prelude::*;
 
-/// Psuedo block rule for include (messy).
+/// Psuedo block rule for legacy Wikidot include ("messy include").
 ///
 /// Because includes are performed first, before preprocessing,
-/// tokenizing, or any other steps, no `[[include-messy]]` blocks
+/// tokenizing, or any other steps, no `[[include]]` blocks
 /// should actually be present in the wikitext.
 ///
 /// If they are, this indicates that an error occurred parsing
 /// them. As such, we return a particular error instead of
 /// interpreting the block.
-pub const BLOCK_INCLUDE_MESSY: BlockRule = BlockRule {
-    name: "block-include-messy",
-    accepts_names: &["include-messy"],
+pub const BLOCK_INCLUDE_WIKIDOT: BlockRule = BlockRule {
+    name: "block-include",
+    accepts_names: &["include"],
     accepts_star: false,
     accepts_score: false,
     accepts_newlines: true,
@@ -45,11 +45,11 @@ fn parse_fn<'r, 't>(
     flag_score: bool,
     _in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    debug!("Found invalid include-messy block");
+    debug!("Found invalid include block");
     parser.check_page_syntax()?;
-    assert!(!flag_star, "Include (messy) doesn't allow star flag");
-    assert!(!flag_score, "Include (messy) doesn't allow score flag");
-    assert_block_name(&BLOCK_INCLUDE_MESSY, name);
+    assert!(!flag_star, "Include (Wikidot) doesn't allow star flag");
+    assert!(!flag_score, "Include (Wikidot) doesn't allow score flag");
+    assert_block_name(&BLOCK_INCLUDE_WIKIDOT, name);
 
     // Includes are handled specially, so we should never actually be
     // parsing a block here. So, we return an error.

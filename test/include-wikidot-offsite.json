@@ -1,5 +1,5 @@
 {
-    "input": "[[*include-messy my-page]]",
+    "input": "[[include :scp-wiki:theme:black-highlighter-theme]]",
     "tree": {
         "elements": [
             {
@@ -10,11 +10,7 @@
                     "elements": [
                         {
                             "element": "text",
-                            "data": "[[*"
-                        },
-                        {
-                            "element": "text",
-                            "data": "include"
+                            "data": "OFF"
                         },
                         {
                             "element": "text",
@@ -22,7 +18,7 @@
                         },
                         {
                             "element": "text",
-                            "data": "messy"
+                            "data": "SITE"
                         },
                         {
                             "element": "text",
@@ -30,19 +26,15 @@
                         },
                         {
                             "element": "text",
-                            "data": "my"
+                            "data": "INCLUDED"
                         },
                         {
                             "element": "text",
-                            "data": "-"
+                            "data": " "
                         },
                         {
                             "element": "text",
-                            "data": "page"
-                        },
-                        {
-                            "element": "text",
-                            "data": "]]"
+                            "data": "PAGE"
                         }
                     ]
                 }
@@ -67,23 +59,5 @@
         ]
     },
     "errors": [
-        {
-            "token": "identifier",
-            "rule": "block-include-messy",
-            "span": [17, 19],
-            "kind": "block-disallows-star"
-        },
-        {
-            "token": "left-block-star",
-            "rule": "fallback",
-            "span": [0, 3],
-            "kind": "no-rules-match"
-        },
-        {
-            "token": "right-block",
-            "rule": "fallback",
-            "span": [24, 26],
-            "kind": "no-rules-match"
-        }
     ]
 }

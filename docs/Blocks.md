@@ -103,7 +103,7 @@ Alternatively you may look here for a formatted list: (though it may not be upda
 | [Iframe](#iframe)                       | `iframe`                         | No    | No     | Yes       | Value + Map   | None      |
 | [Image](#image)                         | `image`                          | No    | No     | No        | Value + Map   | None      |
 | [Include (Elements)](#include-elements) | `include-elements`               | No    | No     | Yes       | Value + Map   | None      |
-| [Include (Messy)](#include-messy)       | `include-messy`                  | No    | No     | Yes       | Value + Map   | None      |
+| [Include (Wikidot)](#include-wikidot)   | `include`                        | No    | No     | Yes       | Value + Map   | None      |
 | [Insertion](#insertion)                 | `ins`, `insertion`               | No    | No     | No        | Map           | Elements  |
 | [Invisible](#invisible)                 | `invisible`                      | No    | No     | Yes       | Map           | Elements  |
 | [Italics](#italics)                     | `i`, `italics`, `em`, `emphasis` | No    | No     | No        | Map           | Elements  |
@@ -569,7 +569,7 @@ Example:
 ]]
 ```
 
-### Include (Messy)
+### Include (Wikidot)
 
 This is not a typical block, as it is handled in the preprocessor.
 Parsing here is handled differently, but this block is still documented for completion sake.
@@ -589,9 +589,9 @@ Arguments:
 Example:
 
 ```
-[[include-messy theme:black-highlighter-theme]]
+[[include theme:black-highlighter-theme]]
 
-[[include-messy component:fancy-object-class
+[[include component:fancy-object-class
     class=Keter |
     classification=4 |
     taskforce=MTF-Eta-10 ("See No Evil")

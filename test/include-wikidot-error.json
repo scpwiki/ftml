@@ -1,5 +1,5 @@
 {
-    "input": "[[INCLUde-MEssY FRuit]]",
+    "input": "[[include my-page]",
     "tree": {
         "elements": [
             {
@@ -10,7 +10,11 @@
                     "elements": [
                         {
                             "element": "text",
-                            "data": "INCLUDED"
+                            "data": "[["
+                        },
+                        {
+                            "element": "text",
+                            "data": "include"
                         },
                         {
                             "element": "text",
@@ -18,7 +22,19 @@
                         },
                         {
                             "element": "text",
-                            "data": "PAGE"
+                            "data": "my"
+                        },
+                        {
+                            "element": "text",
+                            "data": "-"
+                        },
+                        {
+                            "element": "text",
+                            "data": "page"
+                        },
+                        {
+                            "element": "text",
+                            "data": "]"
                         }
                     ]
                 }
@@ -43,5 +59,17 @@
         ]
     },
     "errors": [
+        {
+            "token": "identifier",
+            "rule": "block-include",
+            "span": [10, 12],
+            "kind": "invalid-include"
+        },
+        {
+            "token": "left-block",
+            "rule": "fallback",
+            "span": [0, 2],
+            "kind": "no-rules-match"
+        }
     ]
 }
