@@ -25,28 +25,26 @@
 
 use super::prelude::*;
 
-pub const RULE_DASH_STRIKETHROUGH: Rule = Rule {
-    name: "dash-strikethrough",
+pub const RULE_STRIKETHROUGH_DASH: Rule = Rule {
+    name: "strikethrough-dash",
     position: LineRequirement::Any,
     try_consume_fn: dash,
 };
 
-pub const RULE_TILDE_STRIKETHROUGH: Rule = Rule {
-    name: "tilde-strikethrough",
+pub const RULE_STRIKETHROUGH_TILDE: Rule = Rule {
+    name: "strikethrough-tilde",
     position: LineRequirement::Any,
     try_consume_fn: tilde,
 };
 
 fn dash<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     trace!("Trying to create a double dash strikethrough");
-    check_step(parser, Token::DoubleDash)?;
-    try_consume_strikethrough(parser, RULE_DASH_STRIKETHROUGH, Token::DoubleDash)
+    try_consume_strikethrough(parser, RULE_STRIKETHROUGH_DASH, Token::DoubleDash)
 }
 
 fn tilde<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     trace!("Trying to create a double tilde strikethrough");
-    check_step(parser, Token::DoubleTilde)?;
-    try_consume_strikethrough(parser, RULE_TILDE_STRIKETHROUGH, Token::DoubleTilde)
+    try_consume_strikethrough(parser, RULE_STRIKETHROUGH_TILDE, Token::DoubleTilde)
 }
 
 /// Build a strikethrough with the given rule and token.
@@ -60,6 +58,7 @@ fn try_consume_strikethrough<'r, 't>(
         token.name(),
     );
 
+    check_step(parser, token)?;
     collect_container(
         parser,
         rule,
