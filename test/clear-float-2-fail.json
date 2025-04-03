@@ -10,11 +10,7 @@
                     "elements": [
                         {
                             "element": "text",
-                            "data": "~"
-                        },
-                        {
-                            "element": "text",
-                            "data": "~"
+                            "data": "~~"
                         },
                         {
                             "element": "line-break"
@@ -62,5 +58,17 @@
         ]
     },
     "errors": [
+        {
+            "token": "input-end",
+            "rule": "strikethrough-tilde",
+            "span": [19, 19],
+            "kind": "end-of-input"
+        },
+        {
+            "token": "double-tilde",
+            "rule": "fallback",
+            "span": [0, 2],
+            "kind": "no-rules-match"
+        }
     ]
 }

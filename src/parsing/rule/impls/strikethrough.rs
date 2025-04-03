@@ -18,28 +18,52 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//! Rules for strikethrough.
+//!
+//! Wikidot had implemented strikethrough using --text--
+//! however we also added the more conventional way ~~text~~
+
 use super::prelude::*;
 
-pub const RULE_STRIKETHROUGH: Rule = Rule {
-    name: "strikethrough",
+pub const RULE_STRIKETHROUGH_DASH: Rule = Rule {
+    name: "strikethrough-dash",
     position: LineRequirement::Any,
-    try_consume_fn,
+    try_consume_fn: dash,
 };
 
-fn try_consume_fn<'r, 't>(
+pub const RULE_STRIKETHROUGH_TILDE: Rule = Rule {
+    name: "strikethrough-tilde",
+    position: LineRequirement::Any,
+    try_consume_fn: tilde,
+};
+
+fn dash<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
+    trace!("Trying to create a double dash strikethrough");
+    try_consume_strikethrough(parser, RULE_STRIKETHROUGH_DASH, Token::DoubleDash)
+}
+
+fn tilde<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
+    trace!("Trying to create a double tilde strikethrough");
+    try_consume_strikethrough(parser, RULE_STRIKETHROUGH_TILDE, Token::DoubleTilde)
+}
+
+/// Build a strikethrough with the given rule and token.
+fn try_consume_strikethrough<'r, 't>(
     parser: &mut Parser<'r, 't>,
+    rule: Rule,
+    token: Token,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    debug!("Trying to create strikethrough container");
-    check_step(parser, Token::DoubleDash)?;
+    debug!("Trying to create a strikethrough (token {})", token.name());
+    check_step(parser, token)?;
     collect_container(
         parser,
-        RULE_STRIKETHROUGH,
+        rule,
         ContainerType::Strikethrough,
-        &[ParseCondition::current(Token::DoubleDash)],
+        &[ParseCondition::current(token)],
         &[
             ParseCondition::current(Token::ParagraphBreak),
-            ParseCondition::token_pair(Token::DoubleDash, Token::Whitespace),
-            ParseCondition::token_pair(Token::Whitespace, Token::DoubleDash),
+            ParseCondition::token_pair(token, Token::Whitespace),
+            ParseCondition::token_pair(Token::Whitespace, token),
         ],
         None,
     )

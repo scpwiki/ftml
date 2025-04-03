@@ -97,7 +97,7 @@ pub use self::monospace::RULE_MONOSPACE;
 pub use self::null::RULE_NULL;
 pub use self::page::RULE_PAGE;
 pub use self::raw::RULE_RAW;
-pub use self::strikethrough::RULE_STRIKETHROUGH;
+pub use self::strikethrough::{RULE_STRIKETHROUGH_DASH, RULE_STRIKETHROUGH_TILDE};
 pub use self::subscript::RULE_SUBSCRIPT;
 pub use self::superscript::RULE_SUPERSCRIPT;
 pub use self::table::RULE_TABLE;
