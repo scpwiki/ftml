@@ -53,11 +53,7 @@ fn try_consume_strikethrough<'r, 't>(
     rule: Rule,
     token: Token,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    debug!(
-        "Trying to create a strikethrough (token {})",
-        token.name(),
-    );
-
+    debug!("Trying to create a strikethrough (token {})", token.name());
     check_step(parser, token)?;
     collect_container(
         parser,
