@@ -93,8 +93,7 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
 }
 
 fn generate_ids(random: &mut Random, len: usize) -> Vec<String> {
-    iter::repeat(())
-        .take(len)
+    iter::repeat_n((), len)
         .map(|_| random.generate_html_id())
         .collect()
 }

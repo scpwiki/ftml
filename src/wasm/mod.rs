@@ -33,7 +33,6 @@ mod utf16;
 
 mod prelude {
     pub use wasm_bindgen::prelude::*;
-    pub use wasm_bindgen::JsCast;
 }
 
 pub use self::misc::version;
