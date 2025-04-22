@@ -6,7 +6,8 @@
                 "element": "code",
                 "data": {
                     "contents": "apple banana",
-                    "language": "css"
+                    "language": "css",
+                    "name": null
                 }
             },
             {
@@ -22,6 +23,7 @@
         "code-blocks": [
             {
                 "contents": "apple banana",
+                "language": "css",
                 "name": null
             }
         ],

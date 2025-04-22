@@ -6,21 +6,24 @@
                 "element": "code",
                 "data": {
                     "contents": "FOO",
-                    "language": null
+                    "language": null,
+                    "name": "a"
                 }
             },
             {
                 "element": "code",
                 "data": {
                     "contents": "BAR",
-                    "language": null
+                    "language": null,
+                    "name": null
                 }
             },
             {
                 "element": "code",
                 "data": {
                     "contents": "BAZ",
-                    "language": "java"
+                    "language": "java",
+                    "name": "b"
                 }
             },
             {
@@ -36,14 +39,17 @@
         "code-blocks": [
             {
                 "contents": "FOO",
+                "language": null,
                 "name": "a"
             },
             {
                 "contents": "BAR",
+                "language": null,
                 "name": null
             },
             {
                 "contents": "BAZ",
+                "language": "java",
                 "name": "b"
             }
         ],

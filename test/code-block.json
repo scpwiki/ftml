@@ -6,7 +6,8 @@
                 "element": "code",
                 "data": {
                     "contents": "[[div]]\ntest\n[[/div]]",
-                    "language": null
+                    "language": null,
+                    "name": null
                 }
             },
             {
@@ -22,6 +23,7 @@
         "code-blocks": [
             {
                 "contents": "[[div]]\ntest\n[[/div]]",
+                "language": null,
                 "name": null
             }
         ],

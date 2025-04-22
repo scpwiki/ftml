@@ -6,7 +6,8 @@
                 "element": "code",
                 "data": {
                     "contents": "text here",
-                    "language": null
+                    "language": null,
+                    "name": null
                 }
             },
             {
@@ -22,7 +23,8 @@
         "code-blocks": [
             {
                 "contents": "text here",
-                "name": null
+                "name": null,
+                "language": null
             }
         ],
         "table-of-contents": [
