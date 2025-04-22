@@ -56,14 +56,17 @@ fn parse_fn<'r, 't>(
     }
 
     let code = parser.get_body_text(&BLOCK_CODE)?;
-    let element = Element::Code {
+    let code_block = CodeBlock {
         contents: cow!(code),
         language,
-    };
-    let added_result = parser.push_code_block(CodeBlock {
-        contents: cow!(code),
         name,
-    });
+    };
+
+    // We need to clone here since the same code block is
+    // conveyed in two places, and some of the fields may
+    // be Cow::Owned.
+    let element = Element::Code(code_block.clone());
+    let added_result = parser.push_code_block(code_block);
     if added_result.is_err() {
         return Err(parser.make_err(ParseErrorKind::CodeNonUniqueName));
     }

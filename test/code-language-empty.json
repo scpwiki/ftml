@@ -6,7 +6,8 @@
                 "element": "code",
                 "data": {
                     "contents": "",
-                    "language": "css"
+                    "language": "css",
+                    "name": null
                 }
             },
             {
@@ -22,6 +23,7 @@
         "code-blocks": [
             {
                 "contents": "",
+                "language": "css",
                 "name": null
             }
         ],

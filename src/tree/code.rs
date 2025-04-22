@@ -26,6 +26,7 @@ use std::borrow::Cow;
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 pub struct CodeBlock<'t> {
     pub contents: Cow<'t, str>,
+    pub language: Option<Cow<'t, str>>,
     pub name: Option<Cow<'t, str>>,
 }
 
@@ -33,6 +34,7 @@ impl CodeBlock<'_> {
     pub fn to_owned(&self) -> CodeBlock<'static> {
         CodeBlock {
             contents: string_to_owned(&self.contents),
+            language: option_string_to_owned(&self.language),
             name: option_string_to_owned(&self.name),
         }
     }

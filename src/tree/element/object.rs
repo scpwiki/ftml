@@ -21,7 +21,7 @@
 use crate::data::PageRef;
 use crate::tree::clone::*;
 use crate::tree::{
-    Alignment, AnchorTarget, AttributeMap, ClearFloat, Container, DateItem,
+    Alignment, AnchorTarget, AttributeMap, ClearFloat, CodeBlock, Container, DateItem,
     DefinitionListItem, Embed, FloatAlignment, ImageSource, LinkLabel, LinkLocation,
     LinkType, ListItem, ListType, Module, PartialElement, Tab, Table, VariableMap,
 };
@@ -229,10 +229,7 @@ pub enum Element<'t> {
     },
 
     /// Element containing a code block.
-    Code {
-        contents: Cow<'t, str>,
-        language: Option<Cow<'t, str>>,
-    },
+    Code(CodeBlock<'t>),
 
     /// Element containing a named math equation.
     #[serde(rename_all = "kebab-case")]
@@ -546,10 +543,7 @@ impl Element<'_> {
                 color: string_to_owned(color),
                 elements: elements_to_owned(elements),
             },
-            Element::Code { contents, language } => Element::Code {
-                contents: string_to_owned(contents),
-                language: option_string_to_owned(language),
-            },
+            Element::Code(code_block) => Element::Code(code_block.to_owned()),
             Element::Math { name, latex_source } => Element::Math {
                 name: option_string_to_owned(name),
                 latex_source: string_to_owned(latex_source),
