@@ -28,7 +28,7 @@
 //! Any formatting present must be directly justifiable.
 
 use super::TextContext;
-use crate::tree::{ContainerType, DefinitionListItem, Element, ListItem, Tab};
+use crate::tree::{CodeBlock, ContainerType, DefinitionListItem, Element, ListItem, Tab};
 
 pub fn render_elements(ctx: &mut TextContext, elements: &[Element]) {
     debug!("Rendering elements (length {})", elements.len());
@@ -227,7 +227,7 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
             };
         }
         Element::Color { elements, .. } => render_elements(ctx, elements),
-        Element::Code { contents, .. } => {
+        Element::Code(CodeBlock { contents, .. }) => {
             ctx.add_newline();
             ctx.push_str(contents);
             ctx.add_newline();

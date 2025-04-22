@@ -22,11 +22,11 @@ use crate::data::{PageInfo, PageRef};
 use crate::layout::Layout;
 use crate::render::{html::HtmlRender, text::TextRender, Render};
 use crate::settings::{WikitextMode, WikitextSettings};
-use crate::tree::attribute::SAFE_ATTRIBUTES;
 use crate::tree::{
-    Alignment, AnchorTarget, AttributeMap, BibliographyList, ClearFloat, Container,
-    ContainerType, Element, FloatAlignment, Heading, HeadingLevel, ImageSource,
-    LinkLabel, LinkLocation, LinkType, ListItem, ListType, Module, SyntaxTree,
+    attribute::SAFE_ATTRIBUTES, Alignment, AnchorTarget, AttributeMap, BibliographyList,
+    ClearFloat, CodeBlock, Container, ContainerType, Element, FloatAlignment, Heading,
+    HeadingLevel, ImageSource, LinkLabel, LinkLocation, LinkType, ListItem, ListType,
+    Module, SyntaxTree,
 };
 use once_cell::sync::Lazy;
 use proptest::option;
@@ -243,8 +243,15 @@ where
 }
 
 fn arb_code() -> impl Strategy<Value = Element<'static>> {
-    (cow!(".*"), arb_optional_str())
-        .prop_map(|(contents, language)| Element::Code { contents, language })
+    (cow!(".*"), arb_optional_str(), arb_optional_str()).prop_map(
+        |(contents, language, name)| {
+            Element::Code(CodeBlock {
+                contents,
+                language,
+                name,
+            })
+        },
+    )
 }
 
 fn arb_checkbox() -> impl Strategy<Value = Element<'static>> {

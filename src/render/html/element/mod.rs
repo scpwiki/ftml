@@ -71,7 +71,7 @@ use self::toc::render_table_of_contents;
 use self::user::render_user;
 use super::attributes::AddedAttributes;
 use super::HtmlContext;
-use crate::tree::Element;
+use crate::tree::{CodeBlock, Element};
 use ref_map::*;
 
 pub fn render_elements(ctx: &mut HtmlContext, elements: &[Element]) {
@@ -182,9 +182,11 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             hover,
         } => render_date(ctx, *value, ref_cow!(format), *hover),
         Element::Color { color, elements } => render_color(ctx, color, elements),
-        Element::Code { contents, language } => {
-            render_code(ctx, ref_cow!(language), contents)
-        }
+        Element::Code(CodeBlock {
+            contents,
+            language,
+            name: _,
+        }) => render_code(ctx, ref_cow!(language), contents),
         Element::Math { name, latex_source } => {
             render_math_block(ctx, ref_cow!(name), latex_source)
         }
