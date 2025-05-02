@@ -53,7 +53,7 @@ unicase = "2"
 wikidot-normalize = "0.12"
 
 [build-dependencies]
-built = { version = "0.7", features = ["chrono", "git2"] }
+built = { version = "0.8", features = ["chrono", "git2"] }
 
 [dev-dependencies]
 proptest = "1"
