@@ -262,27 +262,12 @@ impl<'r, 't> Parser<'r, 't> {
         self.html_blocks.borrow_mut().push(new_block);
     }
 
-    pub fn push_code_block(
-        &mut self,
-        new_block: CodeBlock<'t>,
-    ) -> Result<(), NonUniqueNameError> {
-        // Check name (if specified) is unique
-        {
-            let guard = self.code_blocks.borrow();
-            if let Some(ref new_name) = new_block.name {
-                for block in &*guard {
-                    if let Some(ref name) = block.name {
-                        if name == new_name {
-                            return Err(NonUniqueNameError);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Add block
+    pub fn push_code_block(&mut self, new_block: CodeBlock<'t>) {
+        // NOTE: We do not check if code block names are unique.
+        //       It is the responsibility of downstream callers
+        //       (such as deepwell) to handle these when doing
+        //       hosted text block processing.
         self.code_blocks.borrow_mut().push(new_block);
-        Ok(())
     }
 
     // Bibliography
@@ -570,9 +555,6 @@ impl<'r, 't> Parser<'r, 't> {
         ParseError::new(kind, self.rule, self.current)
     }
 }
-
-#[derive(Debug)]
-pub struct NonUniqueNameError;
 
 #[inline]
 fn make_shared_vec<T>() -> Rc<RefCell<Vec<T>>> {
