@@ -66,10 +66,6 @@ fn parse_fn<'r, 't>(
     // conveyed in two places, and some of the fields may
     // be Cow::Owned.
     let element = Element::Code(code_block.clone());
-    let added_result = parser.push_code_block(code_block);
-    if added_result.is_err() {
-        return Err(parser.make_err(ParseErrorKind::CodeNonUniqueName));
-    }
-
+    parser.push_code_block(code_block);
     ok!(element)
 }
