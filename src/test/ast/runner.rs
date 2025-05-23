@@ -20,7 +20,13 @@
 
 //! Submodule responsible for defining the AST test runner.
 
-use super::{Test, TestResult};
+use super::{Test, TestResult, TestUniverse};
+
+impl TestUniverse {
+    pub fn run(&self) {
+        todo!()
+    }
+}
 
 impl Test {
     pub fn run(&self) -> TestResult {

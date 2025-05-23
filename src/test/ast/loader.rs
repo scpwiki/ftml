@@ -20,7 +20,7 @@
 
 //! Submodule responsible for defining the AST test loader system.
 
-use super::Test;
+use super::{Test, TestUniverse};
 use serde::de::DeserializeOwned;
 use std::fs::{self, File};
 use std::io::Read;
@@ -79,6 +79,13 @@ fn process_newlines(text: &mut String) {
 }
 
 // Main loader functionality
+
+impl TestUniverse {
+    /// Loads all tests from the filesystem.
+    pub fn load(test_dir: &Path) -> Self {
+        todo!()
+    }
+}
 
 impl Test {
     /// Constructs a particular test case.
