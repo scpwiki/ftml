@@ -18,8 +18,11 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Runs AST tests, stored in `/test/diff`, where a given input wikitext file
+//! Runs AST tests, stored in `/test`, where a given input wikitext file
 //! is processed and a variety of assertions can be done on its output.
+
+mod loader;
+mod runner;
 
 use super::includer::TestIncluder;
 use crate::data::{PageInfo, ScoreValue};
@@ -61,17 +64,24 @@ macro_rules! cow {
     };
 }
 
-macro_rules! file_name {
-    ($entry:expr) => {
-        $entry.file_name().to_string_lossy()
-    };
-}
+// Structs
 
 #[derive(Debug, Copy, Clone)]
 pub enum TestResult {
     Pass,
     Fail,
     Skip,
+}
+
+#[derive(Debug)]
+pub struct Test {
+    pub name: String,
+    pub input: String,
+    pub tree: Option<SyntaxTree<'static>>,
+    pub errors: Option<Vec<ParseError>>,
+    pub wikidot_output: Option<String>,
+    pub html_output: Option<String>,
+    pub text_output: Option<String>,
 }
 
 // Debugging execution
@@ -96,89 +106,11 @@ fn only_test_should_skip(name: &str) -> bool {
     true
 }
 
-// Newline normalization
-
-#[cfg(not(target_os = "windows"))]
-fn process_newlines(_: &mut String) {}
-
-#[cfg(target_os = "windows")]
-fn process_newlines(text: &mut String) {
-    while let Some(idx) = text.find("\r\n") {
-        let range = idx..idx + 2;
-        text.replace_range(range, "\n");
-    }
-}
-
 // Test runner
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Test<'a> {
-    #[serde(skip)]
-    name: String,
-    input: String,
-    tree: SyntaxTree<'a>,
-    errors: Vec<ParseError>,
-
-    #[serde(skip)]
-    html: String,
-}
-
-impl Test<'_> {
-    pub fn load(path: &Path, name: &str) -> Self {
-        assert!(path.is_absolute());
-
-        macro_rules! open_file {
-            ($path:expr) => {
-                match File::open(&$path) {
-                    Ok(file) => file,
-                    Err(error) => {
-                        panic!("Unable to open file '{}': {}", $path.display(), error)
-                    }
-                }
-            };
-        }
-
-        macro_rules! load_output {
-            ($name:expr, $extension:expr) => {{
-                let mut path = PathBuf::from(path);
-                path.set_extension($extension);
-
-                let mut file = open_file!(path);
-                let mut contents = String::new();
-
-                if let Err(error) = file.read_to_string(&mut contents) {
-                    panic!(
-                        "Unable to read {} file '{}': {}",
-                        $name,
-                        path.display(),
-                        error,
-                    );
-                }
-
-                process_newlines(&mut contents);
-
-                if contents.ends_with('\n') {
-                    contents.pop();
-                }
-
-                contents
-            }};
-        }
-
-        // Load JSON file
-        let mut file = open_file!(path);
-        let mut test: Self = match serde_json::from_reader(&mut file) {
-            Ok(test) => test,
-            Err(error) => {
-                panic!("Unable to parse JSON file '{}': {}", path.display(), error)
-            }
-        };
-
-        test.name = str!(name);
-        test.html = load_output!("HTML", "html");
-        test
-    }
-
+/*
+     XXX
+impl Test {
     pub fn run(&self) -> TestResult {
         if SKIP_TESTS.contains(&&*self.name) {
             println!("+ {} [SKIPPED]", self.name);
@@ -370,3 +302,4 @@ fn ast_and_html() {
 
     process::exit(failed + skipped);
 }
+*/
