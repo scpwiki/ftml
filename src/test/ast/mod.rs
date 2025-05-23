@@ -75,12 +75,33 @@ pub enum TestResult {
 
 #[derive(Debug)]
 pub struct Test {
+    /// The name of this test.
+    /// Unique among all AST tests in the system.
     pub name: String,
+
+    /// The wikitext input for this test.
+    /// Read from `input.ftml`. This file is required.
     pub input: String,
+
+    /// The abstract syntax tree to check the output against.
+    /// Read from `ast.json`.
     pub tree: Option<SyntaxTree<'static>>,
+
+    /// The list of expected errors to be produced from this input.
+    /// Read from `errors.json`.
     pub errors: Option<Vec<ParseError>>,
+
+    /// The Wikidot-layout HTML expected to be generated from this input.
+    /// Read from `wikidot.html`.
     pub wikidot_output: Option<String>,
+
+    /// The Wikijump-layout HTML expected to be generated from this input.
+    /// Read from `output.html`.
     pub html_output: Option<String>,
+
+    /// The Wikijump-layout text expected to be generated from this input.
+    /// This refers to the "text renderer" present in ftml.
+    /// Read from `output.txt`.
     pub text_output: Option<String>,
 }
 
