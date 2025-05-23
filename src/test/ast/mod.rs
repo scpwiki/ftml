@@ -66,6 +66,7 @@ macro_rules! cow {
 
 // Structs
 
+/// Represents a particular result from a test execution.
 #[derive(Debug, Copy, Clone)]
 pub enum TestResult {
     Pass,
@@ -73,6 +74,7 @@ pub enum TestResult {
     Skip,
 }
 
+/// Represents one AST unit test case.
 #[derive(Debug)]
 pub struct Test {
     /// The name of this test.
