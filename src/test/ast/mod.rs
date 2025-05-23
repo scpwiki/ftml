@@ -18,10 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Retrieves tests from JSON in the root `/test` directory, and runs them.
-//!
-//! Additionally performs some other tests from the parser which are better
-//! in a dedicated test file.
+//! Runs AST tests, stored in `/test/diff`, where a given input wikitext file
+//! is processed and a variety of assertions can be done on its output.
 
 use super::includer::TestIncluder;
 use crate::data::{PageInfo, ScoreValue};
