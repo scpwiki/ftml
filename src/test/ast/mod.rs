@@ -34,6 +34,7 @@ use crate::settings::{WikitextMode, WikitextSettings};
 use crate::tree::SyntaxTree;
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -105,6 +106,12 @@ pub struct Test {
     /// This refers to the "text renderer" present in ftml.
     /// Read from `output.txt`.
     pub text_output: Option<String>,
+}
+
+/// Represents the universe of all AST unit tests read from the filesystem.
+#[derive(Debug)]
+pub struct TestUniverse {
+    pub tests: BTreeMap<String, Test>,
 }
 
 // Debugging execution
