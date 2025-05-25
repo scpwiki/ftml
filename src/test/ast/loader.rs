@@ -135,27 +135,7 @@ impl TestUniverse {
 
             if metadata.is_dir() {
                 // Read all individual tests
-                for entry in fs::read_dir(&path).expect("Unable to read dir") {
-                    let entry = entry.expect("Unable to read dir entry");
-                    let metadata =
-                        entry.metadata().expect("Unable to get dir entry metadata");
-                    let path = entry.path();
-                    let name = {
-                        // Write out the test name as 'group/name'
-                        let mut test_name = convert_os_string(entry.file_name());
-                        test_name.insert(0, '/');
-                        test_name.insert_str(0, &test_group);
-                        test_name
-                    };
-
-                    if !metadata.is_dir() {
-                        panic!("Found a non-directory test path: {}", path.display());
-                    }
-
-                    // Read test object
-                    let test = Test::load(name.clone(), &path);
-                    tests.insert(name, test);
-                }
+                Self::load_group(&mut tests, &test_group, &path);
             } else {
                 // TODO: Remove this branch and panic.
                 //       But for now, let's ignore any of these files until they're all moved over.
@@ -164,6 +144,29 @@ impl TestUniverse {
         }
 
         TestUniverse { tests }
+    }
+
+    fn load_group(tests: &mut BTreeMap<String, Test>, test_group: &str, test_dir: &Path) {
+        for entry in fs::read_dir(test_dir).expect("Unable to read dir") {
+            let entry = entry.expect("Unable to read dir entry");
+            let metadata = entry.metadata().expect("Unable to get dir entry metadata");
+            let path = entry.path();
+            let name = {
+                // Write out the test name as 'group/name'
+                let mut test_name = convert_os_string(entry.file_name());
+                test_name.insert(0, '/');
+                test_name.insert_str(0, test_group);
+                test_name
+            };
+
+            if !metadata.is_dir() {
+                panic!("Found a non-directory test path: {}", path.display());
+            }
+
+            // Read test object
+            let test = Test::load(name.clone(), &path);
+            tests.insert(name, test);
+        }
     }
 }
 
