@@ -40,6 +40,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process;
 
+// Constants
+
 /// Temporary measure to not run certain tests.
 ///
 /// This is meant to help with development, or in specific circumstances
@@ -53,17 +55,13 @@ const SKIP_TESTS: &[&str] = &[];
 /// tests to check if certain functionality is working as expected.
 const ONLY_TESTS: &[&str] = &[];
 
+/// The directory where all test files are located.
+/// This is the directory `test` under the repository root.
 static TEST_DIRECTORY: Lazy<PathBuf> = Lazy::new(|| {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("test");
     path
 });
-
-macro_rules! cow {
-    ($text:expr) => {
-        Cow::Borrowed(&$text)
-    };
-}
 
 // Structs
 
@@ -73,6 +71,61 @@ pub enum TestResult {
     Pass,
     Fail,
     Skip,
+}
+
+/// Represents the cumulative stats from a test execution.
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+pub struct TestStats {
+    pub passed: u32,
+    pub failed: u32,
+    pub skipped: u32,
+}
+
+impl TestStats {
+    #[inline]
+    pub fn new() -> TestStats {
+        TestStats::default()
+    }
+
+    pub fn add(&mut self, result: TestResult) {
+        match result {
+            TestResult::Pass => self.passed += 1,
+            TestResult::Fail => self.failed += 1,
+            TestResult::Skip => self.skipped += 1,
+        }
+    }
+
+    pub fn print(self) {
+        let total = self.passed + self.failed + self.skipped;
+
+        if self.failed + self.skipped == 0 {
+            println!("Ran a total of {total} tests, all of which passed.");
+        } else {
+            let percent = |value| (value as f32) / (total as f32) * 100.0;
+            println!("Ran a total of {total} tests. Of these:");
+            println!("* {} passed ({:.2}%)", self.passed, percent(self.passed));
+
+            if self.failed != 0 {
+                println!("* {} failed ({:.2}%)", self.failed, percent(self.failed));
+            }
+
+            if self.skipped != 0 {
+                println!("* {} skipped ({:.2}%)", self.skipped, percent(self.skipped));
+            }
+        }
+    }
+
+    /// Get an exit code for the test.
+    ///
+    /// This way, if we skip any tests, or if tests fail, then the overall
+    /// Rust test does not pass.
+    pub fn exit_code(self) -> i32 {
+        (self.failed + self.skipped).try_into().ok().unwrap_or(-1)
+    }
+
+    pub fn exit(self) -> ! {
+        process::exit(self.exit_code());
+    }
 }
 
 /// Represents one AST unit test case.
@@ -115,48 +168,20 @@ pub struct TestUniverse {
     pub tests: BTreeMap<String, Test>,
 }
 
-// Debugging execution
-
-fn only_test_should_skip(name: &str) -> bool {
-    assert!(!ONLY_TESTS.is_empty());
-
-    for pattern in ONLY_TESTS.iter() {
-        // Literal test name
-        if pattern == &name {
-            return false;
-        }
-
-        // Test name prefix
-        if pattern.ends_with('-') {
-            if name.starts_with(pattern) {
-                return false;
-            }
-        }
-    }
-
-    true
-}
-
 // Test runner
 
 #[test]
 fn ast() {
     // Load all tests
     let tests = TestUniverse::load(&TEST_DIRECTORY);
-    println!("{tests:#?}");
-}
 
-/*
- XXX
-#[test]
-fn ast_and_html() {
-    // Warn if any test are being skipped
+    // Warn if any tests are being skipped
     if !SKIP_TESTS.is_empty() {
         println!("=========");
         println!(" WARNING ");
         println!("=========");
         println!();
-        println!("The following tests are being SKIPPED:");
+        println!("Tests matching the following are being SKIPPED:");
 
         for test in SKIP_TESTS {
             println!("- {}", test);
@@ -165,86 +190,24 @@ fn ast_and_html() {
         println!();
     }
 
-    // Warn if we're only checking certain tests
+    // Warn if we're only running certain tests
     if !ONLY_TESTS.is_empty() {
         println!("=========");
         println!(" WARNING ");
         println!("=========");
         println!();
-        println!("Only the following tests are being run.");
+        println!("Only tests matching the following will being run.");
         println!("All others are being SKIPPED!");
 
         for test in ONLY_TESTS {
-            println!("- {}", test);
+            println!("> {}", test);
         }
 
         println!();
     }
 
-    // Load tests from JSON files
-    let entries = fs::read_dir(&*TEST_DIRECTORY) //
-        .expect("Unable to read directory");
-
-    let tests_iter = entries.filter_map(|entry| {
-        let entry = entry.expect("Unable to read directory entry");
-        let ftype = entry.file_type().expect("Unable to get file type");
-        if !ftype.is_file() {
-            println!("Skipping non-file {}", file_name!(entry));
-            return None;
-        }
-
-        let path = entry.path();
-        let stem = path
-            .file_stem()
-            .expect("Unable to get file stem")
-            .to_string_lossy();
-
-        let extension = path.extension().map(|s| s.to_str()).flatten();
-        match extension {
-            // Load JSON test data
-            Some("json") => Some(Test::load(&path, &stem)),
-
-            // We expect these, don't print anything
-            Some("html") => None,
-
-            // Print for other, unexpected files
-            _ => {
-                println!("Skipping non-JSON file {}", file_name!(entry));
-                None
-            }
-        }
-    });
-
-    // Sort tests by name
-    let mut tests: Vec<Test> = tests_iter.collect();
-    tests.sort_by(|a, b| (a.name).cmp(&b.name));
-
-    // Run tests
-    let mut failed = 0;
-    let mut skipped = 0;
-
-    println!("Running {} syntax tree tests:", tests.len());
-    for test in &tests {
-        match test.run() {
-            TestResult::Pass => (),
-            TestResult::Fail => failed += 1,
-            TestResult::Skip => skipped += 1,
-        }
-    }
-
-    println!();
-    println!("Ran a total of {} tests", tests.len());
-
-    if failed > 0 {
-        println!("Of these, {} failed", failed);
-    }
-
-    if skipped > 0 {
-        // Don't allow accidentally committing skipped tests
-        println!("Additionally, {} tests are being skipped", skipped);
-        println!("Remember to re-enable all tests before committing!");
-    }
-
-    process::exit(failed + skipped);
+    // Test execution
+    let stats = tests.run(SKIP_TESTS, ONLY_TESTS);
+    stats.print();
+    stats.exit();
 }
-*/

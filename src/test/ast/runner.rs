@@ -20,18 +20,60 @@
 
 //! Submodule responsible for defining the AST test runner.
 
-use super::{Test, TestResult, TestUniverse};
+use super::{Test, TestResult, TestStats, TestUniverse};
 
 impl TestUniverse {
-    pub fn run(&self) {
-        todo!()
+    pub fn run(&self, skip_tests: &[&str], only_tests: &[&str]) -> TestStats {
+        let mut stats = TestStats::new();
+        for (test_name, test) in &self.tests {
+            // Either we are running all tests (is empty),
+            // or it's one of the only tests we're actually running.
+            if only_tests.is_empty() || test_applies(test_name, only_tests) {
+                // But not a skipped test
+                let result = if test_applies(test_name, skip_tests) {
+                    TestResult::Skip
+                } else {
+                    test.run()
+                };
+
+                stats.add(result);
+            }
+        }
+        stats
     }
 }
 
 impl Test {
     pub fn run(&self) -> TestResult {
+        println!("+ {}", self.name);
+        // TODO
         todo!()
     }
+}
+
+// Helper functions
+
+/// Determine if any of the given patterns apply to this test.
+/// What "apply" means depends on the function:
+/// * `SKIP_TESTS` &mdash; This test should be skipped.
+/// * `ONLY_TESTS` &mdash; This is one of the only tests to be run.
+fn test_applies(test_name: &str, patterns: &[&str]) -> bool {
+    for &pattern in patterns {
+        // Literal test name
+        if pattern == test_name {
+            return true;
+        }
+
+        // Test group, match as a prefix
+        // e.g. 'underline/' to match all underline tests
+        if pattern.ends_with('/') {
+            if test_name.starts_with(pattern) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /*
