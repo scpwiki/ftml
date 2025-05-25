@@ -79,7 +79,8 @@ pub enum TestResult {
 #[derive(Debug)]
 pub struct Test {
     /// The name of this test.
-    /// Unique among all AST tests in the system.
+    /// This is composed of two parts joined with a `/`.
+    /// This is unique among all AST tests in the universe.
     pub name: String,
 
     /// The wikitext input for this test.

@@ -22,6 +22,8 @@
 
 use super::{Test, TestUniverse};
 use serde::de::DeserializeOwned;
+use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
@@ -65,6 +67,15 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> T {
     }
 }
 
+// String helper functions
+
+fn convert_os_string(s: OsString) -> String {
+    match s.into_string() {
+        Ok(s) => s,
+        Err(s) => panic!("Unable to convert OsString: {}", s.display()),
+    }
+}
+
 // Windows compatibility
 
 #[cfg(not(target_os = "windows"))]
@@ -82,20 +93,83 @@ fn process_newlines(text: &mut String) {
 
 impl TestUniverse {
     /// Loads all tests from the filesystem.
+    ///
+    /// There is a particular directory structure to AST tests.
+    /// Within `/test` in the repo, there is a set of directories,
+    /// which correspond to the main "test groups", a set of tests
+    /// which are related in some way (generally to a specific piece
+    /// of syntax or functionality).
+    ///
+    /// Then within each group, is another set of directories, which
+    /// are each actual test case.
+    ///
+    /// For instance, consider this structure:
+    /// ```text
+    /// test/
+    /// ├── diff
+    /// │   ├── alias
+    /// │   ├── basic
+    /// │   └── newlines
+    /// └── underline
+    ///     ├── basic
+    ///     ├── empty
+    ///     └── fail
+    /// ```
+    ///
+    /// This will create six test cases:
+    /// * `diff/alias`
+    /// * `diff/basic`
+    /// * `diff/newlines`
+    /// * `underline/basic`
+    /// * `underline/empty`
+    /// * `underline/fail`
     pub fn load(test_dir: &Path) -> Self {
-        todo!()
+        let mut tests = BTreeMap::new();
+
+        // Read all test groups
+        for entry in fs::read_dir(test_dir).expect("Unable to read dir") {
+            let entry = entry.expect("Unable to read dir entry");
+            let metadata = entry.metadata().expect("Unable to get dir entry metadata");
+            let path = entry.path();
+            let test_group = convert_os_string(entry.file_name());
+
+            if metadata.is_dir() {
+                // Read all individual tests
+                for entry in fs::read_dir(&path).expect("Unable to read dir") {
+                    let entry = entry.expect("Unable to read dir entry");
+                    let metadata =
+                        entry.metadata().expect("Unable to get dir entry metadata");
+                    let path = entry.path();
+                    let name = {
+                        // Write out the test name as 'group/name'
+                        let mut test_name = convert_os_string(entry.file_name());
+                        test_name.insert(0, '/');
+                        test_name.insert_str(0, &test_group);
+                        test_name
+                    };
+
+                    if !metadata.is_dir() {
+                        panic!("Found a non-directory test path: {}", path.display());
+                    }
+
+                    // Read test object
+                    let test = Test::load(name.clone(), &path);
+                    tests.insert(name, test);
+                }
+            } else {
+                // TODO: Remove this branch and panic.
+                //       But for now, let's ignore any of these files until they're all moved over.
+                println!("+ Ignoring file: {}", path.display());
+            }
+        }
+
+        TestUniverse { tests }
     }
 }
 
 impl Test {
     /// Constructs a particular test case.
-    pub fn load(test_dir: &Path) -> Self {
-        let name = test_dir
-            .file_name()
-            .expect("No basename for test directory")
-            .to_str()
-            .expect("Basename is not valid UTF-8");
-
+    pub fn load(name: String, test_dir: &Path) -> Self {
         let mut input = None;
         let mut tree = None;
         let mut errors = None;
@@ -130,7 +204,7 @@ impl Test {
         };
 
         let test = Test {
-            name: str!(name),
+            name,
             input,
             tree,
             errors,
@@ -142,7 +216,7 @@ impl Test {
         assert!(
             test.has_something_to_do(),
             "Test '{}' has nothing to do! Add at least one expected output file",
-            name,
+            test.name,
         );
 
         test
