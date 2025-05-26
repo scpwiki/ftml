@@ -185,12 +185,12 @@ fn ast() {
         println!("This will run tests and save whatever results as the new \"expected\" value.");
         println!("Carefully inspect the diff and only save changes that are correct.");
         println!();
-        println!("Remember to set UPDATE_TESTS = false when you're done!");
-        println!();
 
         tests.update(&TEST_DIRECTORY);
 
         // Never allow tests to pass with this option
+        println!();
+        println!("Failing test, you must set UPDATE_TESTS = false to let CI pass");
         process::exit(-1);
     }
 
