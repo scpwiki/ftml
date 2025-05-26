@@ -248,7 +248,7 @@ impl Test {
 
                 match filename {
                     "input.ftml" => panic!("Empty wikitext inputs are not allowed!\nThe whole point of an AST test is to test it against some input, so please fill this out before attempting to update test outputs!"),
-                    "ast.json" => tree = Some(empty_syntax_tree()),
+                    "tree.json" => tree = Some(empty_syntax_tree()),
                     "errors.json" => errors = Some(Vec::new()),
                     "wikidot.html" => wikidot_output = Some(String::new()),
                     "output.html" => html_output = Some(String::new()),
@@ -261,7 +261,7 @@ impl Test {
 
             match filename {
                 "input.ftml" => input = Some(read_text_file(&path)),
-                "ast.json" => tree = Some(read_json(&path)),
+                "tree.json" => tree = Some(read_json(&path)),
                 "errors.json" => errors = Some(read_json(&path)),
                 "wikidot.html" => wikidot_output = Some(read_text_file(&path)),
                 "output.html" => html_output = Some(read_text_file(&path)),
@@ -280,7 +280,7 @@ impl Test {
         if errors.is_some() {
             assert!(
                 tree.is_some(),
-                "No syntax tree file (ast.json) found for test '{name}' with errors.json",
+                "No syntax tree file (tree.json) found for test '{name}' with errors.json",
             );
         }
 

@@ -197,7 +197,7 @@ impl Test {
 
         // Update abstract syntax tree
         if self.tree.is_some() {
-            path.push("ast.json");
+            path.push("tree.json");
             write_json(&path, &tree);
             path.pop();
         }

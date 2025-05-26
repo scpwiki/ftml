@@ -140,7 +140,7 @@ pub struct Test {
     pub input: String,
 
     /// The abstract syntax tree to check the output against.
-    /// Read from `ast.json`.
+    /// Read from `tree.json`.
     pub tree: Option<SyntaxTree<'static>>,
 
     /// The list of expected errors to be produced from this input.
