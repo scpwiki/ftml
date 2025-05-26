@@ -7,14 +7,6 @@
                 "attributes": {},
                 "elements": [
                     {
-                        "element": "text",
-                        "data": "An"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
                         "element": "container",
                         "data": {
                             "type": "underline",
@@ -22,7 +14,7 @@
                             "elements": [
                                 {
                                     "element": "text",
-                                    "data": "underline"
+                                    "data": "Underline"
                                 }
                             ]
                         }
@@ -46,7 +38,15 @@
                 "elements": [
                     {
                         "element": "text",
-                        "data": "This"
+                        "data": "Empty"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "underline"
                     },
                     {
                         "element": "text",
@@ -57,7 +57,31 @@
                         "data": {
                             "type": "underline",
                             "attributes": {},
+                            "elements": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "underline",
+                            "attributes": {},
                             "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Underline"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
                                 {
                                     "element": "text",
                                     "data": "one"
@@ -68,39 +92,52 @@
                                 },
                                 {
                                     "element": "text",
-                                    "data": "is"
-                                },
-                                {
-                                    "element": "text",
-                                    "data": " "
-                                },
-                                {
-                                    "element": "text",
-                                    "data": "also"
-                                },
-                                {
-                                    "element": "text",
-                                    "data": " "
-                                },
-                                {
-                                    "element": "container",
-                                    "data": {
-                                        "type": "bold",
-                                        "attributes": {},
-                                        "elements": [
-                                            {
-                                                "element": "text",
-                                                "data": "nested"
-                                            }
-                                        ]
-                                    }
-                                },
-                                {
-                                    "element": "text",
-                                    "data": "!"
+                                    "data": "line"
                                 }
                             ]
                         }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "__"
+                    },
+                    {
+                        "element": "text",
+                        "data": "Fail"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "underline"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "paragraph"
+                    },
+                    {
+                        "element": "text",
+                        "data": "__"
                     }
                 ]
             }
