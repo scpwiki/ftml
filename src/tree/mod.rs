@@ -106,7 +106,7 @@ pub struct SyntaxTree<'t> {
     /// Hint for the size of the wikitext input.
     ///
     /// This is an optimization to make rendering large parges slightly faster.
-    #[serde(default)]
+    #[serde(skip)]
     pub wikitext_len: usize,
 }
 
