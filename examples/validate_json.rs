@@ -18,6 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//! Helper script to validate / pretty-print JSON files containing syntax trees.
+//!
+//! Run via `scripts/validate_json.sh`
+
 extern crate ftml;
 extern crate serde_json;
 
