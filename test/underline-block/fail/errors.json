@@ -2,7 +2,7 @@
     {
         "token": "input-end",
         "rule": "block-underline",
-        "span": [19, 19],
+        "span": [21, 21],
         "kind": "end-of-input"
     },
     {

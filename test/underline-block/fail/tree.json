@@ -20,7 +20,7 @@
                     },
                     {
                         "element": "text",
-                        "data": "Fail"
+                        "data": "A"
                     },
                     {
                         "element": "text",
@@ -28,7 +28,15 @@
                     },
                     {
                         "element": "text",
-                        "data": "Underline"
+                        "data": "fail"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "underline"
                     }
                 ]
             }
