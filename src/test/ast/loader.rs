@@ -44,7 +44,7 @@ fn read_text_file(path: &Path) -> String {
     let mut contents = String::new();
 
     if let Err(error) = file.read_to_string(&mut contents) {
-        panic!("Unable to read file '{}': {}", path.display(), error,);
+        panic!("Unable to read file '{}': {}", path.display(), error);
     }
 
     process_newlines(&mut contents);
@@ -62,7 +62,7 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> T {
     match serde_json::from_reader(&mut file) {
         Ok(object) => object,
         Err(error) => {
-            panic!("Unable to parse JSON file '{}': {}", path.display(), error,);
+            panic!("Unable to parse JSON file '{}': {}", path.display(), error);
         }
     }
 }
