@@ -29,6 +29,9 @@ use crate::render::Render;
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::test::includer::TestIncluder;
 use std::borrow::Cow;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 macro_rules! cow {
     ($value:expr $(,)?) => {
@@ -168,7 +171,64 @@ impl Test {
     }
 
     pub fn update(&self) {
-        todo!()
+        println!("+ {}", self.name);
+
+        let page_info = self.page_info();
+        let parse_settings = settings!(Wikijump);
+
+        let (mut text, _pages) = crate::include(
+            &self.input,
+            &parse_settings,
+            TestIncluder,
+            || unreachable!(),
+        )
+        .unwrap_or_else(|x| match x {});
+
+        crate::preprocess(&mut text);
+        let tokens = crate::tokenize(&text);
+        let result = crate::parse(&tokens, &page_info, &parse_settings);
+        let (tree, errors) = result.into();
+
+        // Update abstract syntax tree
+        if self.tree.is_some() {
+            todo!();
+            // XXX tree
+        }
+
+        // Update errors
+        //
+        // If there are errors but no errors.json file, then
+        // we complain. This may indicate the test wasn't
+        // *intended* to poduce parse errors and should be fixed.
+
+        if self.errors.is_some() {
+            todo!();
+            // XXX errors
+        }
+
+        // Run and check wikidot render
+        if self.wikidot_output.is_some() {
+            let settings = settings!(Wikidot);
+            let html_output = HtmlRender.render(&tree, &page_info, &settings);
+            todo!();
+            // XXX errors
+        }
+
+        // Run and check wikijump render
+        if self.html_output.is_some() {
+            let settings = settings!(Wikijump);
+            let html_output = HtmlRender.render(&tree, &page_info, &settings);
+            todo!();
+            // XXX html
+        }
+
+        // Run and check text render
+        if self.text_output.is_some() {
+            let settings = settings!(Wikijump);
+            let actual_text = TextRender.render(&tree, &page_info, &settings);
+            todo!();
+            // XXX html
+        }
     }
 }
 
@@ -197,18 +257,33 @@ fn test_applies(test_name: &str, patterns: &[&str]) -> bool {
     false
 }
 
+fn json_writer<T, W>(object: &T, writer: W)
+where
+    T: serde::Serialize,
+    W: Write,
+{
+    use serde_json::ser::{PrettyFormatter, Serializer};
+
+    let fmt = PrettyFormatter::with_indent(b"    ");
+    let mut ser = Serializer::with_formatter(writer, fmt);
+    object
+        .serialize(&mut ser)
+        .expect("JSON serialization failed");
+}
+
+fn json_file<T>(object: &T, path: &Path)
+where
+    T: serde::Serialize,
+{
+    let mut file = File::create(path).expect("Unable to create");
+    json_writer(object, &mut file);
+}
+
 fn json<T>(object: &T) -> String
 where
     T: serde::Serialize,
 {
-    use serde_json::ser::{PrettyFormatter, Serializer};
-
     let mut buffer = Vec::with_capacity(256);
-    let fmt = PrettyFormatter::with_indent(b"    ");
-    let mut ser = Serializer::with_formatter(&mut buffer, fmt);
-    object
-        .serialize(&mut ser)
-        .expect("JSON serialization failed");
-
+    json_writer(object, &mut buffer);
     String::from_utf8(buffer).expect("JSON was not valid UTF-8")
 }
