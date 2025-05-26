@@ -212,7 +212,10 @@ impl Test {
             path.push("errors.json");
             let errors_file_exists = fs::exists(&path).ok().unwrap_or(false);
             if !errors_file_exists {
-                panic!("Parser errors produced, but no errors.json file");
+                panic!(
+                    "Parser errors produced, but no errors.json file: {}",
+                    json(&errors),
+                );
             }
             write_json(&path, &errors);
             path.pop();
