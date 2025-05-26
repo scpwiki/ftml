@@ -181,6 +181,7 @@ fn ast() {
         println!("=========");
         println!();
         println!("You are running in UPDATE MODE!");
+        println!();
         println!("This will run tests and save whatever results as the new \"expected\" value.");
         println!("Carefully inspect the diff and only save changes that are correct.");
         println!();
