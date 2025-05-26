@@ -220,6 +220,7 @@ impl Test {
         // *intended* to poduce parse errors and should be fixed.
 
         if !errors.is_empty() {
+            path.push("errors.json");
             let errors_file_exists = fs::exists(&path).ok().unwrap_or(false);
             if !errors_file_exists {
                 panic!(
@@ -228,6 +229,7 @@ impl Test {
                     json(&errors),
                 );
             }
+            path.pop();
         }
 
         let expected_errors = match self.errors {
