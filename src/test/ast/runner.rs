@@ -103,15 +103,13 @@ impl Test {
         let (mut tree, actual_errors) = result.into();
         tree.wikitext_len = 0; // not stored in the JSON, need for correct eq
 
+        #[inline]
         fn json<T>(object: &T) -> String
         where
             T: serde::Serialize,
         {
-            let mut output = serde_json::to_string_pretty(object)
-                .expect("Unable to serialize JSON to stdout");
-
-            output.insert_str(0, "Generated JSON: ");
-            output
+            serde_json::to_string_pretty(object)
+                .expect("Unable to serialize JSON to stdout")
         }
 
         let mut result = TestResult::Pass;
