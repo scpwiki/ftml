@@ -20,6 +20,9 @@
                                     "element": "line-break"
                                 },
                                 {
+                                    "element": "line-break"
+                                },
+                                {
                                     "element": "text",
                                     "data": "Banana"
                                 },
@@ -153,6 +156,9 @@
                                 {
                                     "element": "text",
                                     "data": "spaces"
+                                },
+                                {
+                                    "element": "line-break"
                                 },
                                 {
                                     "element": "line-break"
