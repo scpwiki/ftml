@@ -255,6 +255,8 @@ impl Test {
                     "output.txt" => text_output = Some(String::new()),
                     _ => panic!("Unexpected file in AST test: {}", entry.path().display()),
                 }
+
+                continue;
             }
 
             match filename {
