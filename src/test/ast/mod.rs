@@ -24,7 +24,6 @@
 mod loader;
 mod runner;
 
-use super::includer::TestIncluder;
 use crate::data::{PageInfo, ScoreValue};
 use crate::layout::Layout;
 use crate::parsing::ParseError;
