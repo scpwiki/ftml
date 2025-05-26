@@ -176,7 +176,7 @@ impl Test {
     }
 
     pub fn update(&self, directory: &Path) {
-        println!("= {}", self.name);
+        println!("+ {}", self.name);
 
         let page_info = self.page_info();
         let parse_settings = settings!(Wikijump);
