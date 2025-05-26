@@ -21,6 +21,7 @@
 //! Submodule responsible for defining the AST test loader system.
 
 use super::{Test, TestUniverse};
+use crate::tree::{BibliographyList, SyntaxTree};
 use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -123,7 +124,22 @@ impl TestUniverse {
     /// * `underline/basic`
     /// * `underline/empty`
     /// * `underline/fail`
+    #[inline]
     pub fn load(test_dir: &Path) -> Self {
+        Self::load_inner(test_dir, false)
+    }
+
+    /// Like `TestUniverse::load()`, except that empty files are permitted.
+    ///
+    /// This is to make adding new tests more convenient, to be used with
+    /// `UPDATE_TESTS = true`.
+    #[inline]
+    #[cold]
+    pub fn load_permissive(test_dir: &Path) -> Self {
+        Self::load_inner(test_dir, true)
+    }
+
+    fn load_inner(test_dir: &Path, permissive: bool) -> Self {
         let mut tests = BTreeMap::new();
 
         // Read all test groups
@@ -135,7 +151,7 @@ impl TestUniverse {
 
             if metadata.is_dir() {
                 // Read all individual tests
-                Self::load_group(&mut tests, &test_group, &path);
+                Self::load_group(&mut tests, &test_group, &path, permissive);
             } else {
                 // TODO: Remove this branch and panic.
                 //       But for now, let's ignore any of these files until they're all moved over.
@@ -146,7 +162,12 @@ impl TestUniverse {
         TestUniverse { tests }
     }
 
-    fn load_group(tests: &mut BTreeMap<String, Test>, test_group: &str, test_dir: &Path) {
+    fn load_group(
+        tests: &mut BTreeMap<String, Test>,
+        test_group: &str,
+        test_dir: &Path,
+        permissive: bool,
+    ) {
         for entry in fs::read_dir(test_dir).expect("Unable to read dir") {
             let entry = entry.expect("Unable to read dir entry");
             let metadata = entry.metadata().expect("Unable to get dir entry metadata");
@@ -164,15 +185,35 @@ impl TestUniverse {
             }
 
             // Read test object
-            let test = Test::load(name.clone(), &path);
+            let test_name = name.clone();
+            let test = if permissive {
+                Test::load_permissive(test_name, &path)
+            } else {
+                Test::load(test_name, &path)
+            };
+
             tests.insert(name, test);
         }
     }
 }
 
 impl Test {
-    /// Constructs a particular test case.
+    /// Loads a particular test case from the filesystem.
+    #[inline]
     pub fn load(name: String, test_dir: &Path) -> Self {
+        Self::load_inner(name, test_dir, false)
+    }
+
+    /// Like `Test::load()`, except empty files are treated as default values.
+    ///
+    /// See `TestUniverse::load_permissive()` for more information.
+    #[inline]
+    #[cold]
+    pub fn load_permissive(name: String, test_dir: &Path) -> Self {
+        Self::load_inner(name, test_dir, true)
+    }
+
+    fn load_inner(name: String, test_dir: &Path, permissive: bool) -> Self {
         let mut input = None;
         let mut tree = None;
         let mut errors = None;
@@ -182,12 +223,39 @@ impl Test {
 
         for entry in fs::read_dir(test_dir).expect("Unable to read dir") {
             let entry = entry.expect("Unable to read dir entry");
+            let metadata = entry.metadata().expect("Unable to get dir entry metadata");
             let path = entry.path();
             let filename = path
                 .file_name()
                 .expect("No basename from read_dir path")
                 .to_str()
                 .expect("Encountered non-UTF-8 path");
+
+            // Special handling for empty files in permissive mode
+            // See TestUniverse::load_permissive().
+            if metadata.len() == 0 && permissive {
+                fn empty_syntax_tree() -> SyntaxTree<'static> {
+                    SyntaxTree {
+                        elements: Vec::new(),
+                        table_of_contents: Vec::new(),
+                        html_blocks: Vec::new(),
+                        code_blocks: Vec::new(),
+                        footnotes: Vec::new(),
+                        bibliographies: BibliographyList::new(),
+                        wikitext_len: 0,
+                    }
+                }
+
+                match filename {
+                    "input.ftml" => panic!("Empty wikitext inputs are not allowed!\nThe whole point of an AST test is to test it against some input, so please fill this out before attempting to update test outputs!"),
+                    "ast.json" => tree = Some(empty_syntax_tree()),
+                    "errors.json" => errors = Some(Vec::new()),
+                    "wikidot.html" => wikidot_output = Some(String::new()),
+                    "output.html" => html_output = Some(String::new()),
+                    "output.txt" => text_output = Some(String::new()),
+                    _ => panic!("Unexpected file in AST test: {}", entry.path().display()),
+                }
+            }
 
             match filename {
                 "input.ftml" => input = Some(read_text_file(&path)),

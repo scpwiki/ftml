@@ -171,11 +171,10 @@ pub struct TestUniverse {
 
 #[test]
 fn ast() {
-    // Load all tests
-    let tests = TestUniverse::load(&TEST_DIRECTORY);
-
     // If running in update mode, then run that and don't do anything else
     if UPDATE_TESTS {
+        let tests = TestUniverse::load_permissive(&TEST_DIRECTORY);
+
         println!("=========");
         println!(" WARNING ");
         println!("=========");
@@ -193,6 +192,9 @@ fn ast() {
         println!("Failing test, you must set UPDATE_TESTS = false to let CI pass");
         process::exit(-1);
     }
+
+    // Load all tests
+    let tests = TestUniverse::load(&TEST_DIRECTORY);
 
     // Warn if any tests are being skipped
     if !SKIP_TESTS.is_empty() {
