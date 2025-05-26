@@ -197,7 +197,7 @@ impl Test {
 
         macro_rules! update {
             ($write_func:ident, $object:expr, $filename:expr $(,)?) => {{
-                println!("= Updating {}/{}", self.name, $filename);
+                println!("= {}/{}", self.name, $filename);
                 path.push($filename);
                 $write_func(&path, &$object);
                 path.pop();
