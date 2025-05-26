@@ -1,0 +1,47 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-math",
+        "span": [
+            180,
+            180
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            162,
+            164
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            168,
+            170
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            171,
+            174
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            178,
+            180
+        ],
+        "kind": "no-rules-match"
+    }
+]

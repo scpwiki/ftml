@@ -1,0 +1,15 @@
+[[math]] A = \pi \cdot r^2 [[/math]]
+
+[[math]]
+C = 2\pi r
+[[/math]]
+
+[[math quadratic-formula]]
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+[[/math]]
+
+**FAIL**
+
+EMPTY
+[[math]]
+[[/math]]
