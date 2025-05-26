@@ -208,7 +208,7 @@ impl Test {
         if let Some(expected_tree) = &self.tree {
             let actual_tree = &tree;
             if actual_tree != expected_tree {
-                update!(write_json, tree, "tree.json");
+                update!(write_json, actual_tree, "tree.json");
             }
         }
 
