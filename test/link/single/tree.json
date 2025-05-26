@@ -1,0 +1,157 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://example.com/",
+                            "extra": null,
+                            "label": {
+                                "text": "External link"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "!"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://scp-sandbox-3.wikidot.com/system:recent-changes",
+                            "extra": null,
+                            "label": {
+                                "text": "Sandbox: Recent Changes"
+                            },
+                            "target": "new-tab"
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "("
+                    },
+                    {
+                        "element": "text",
+                        "data": "new"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "tab"
+                    },
+                    {
+                        "element": "text",
+                        "data": ")"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "bold",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Subpath"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/page",
+                            "extra": null,
+                            "label": {
+                                "text": "Some page"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/relative/link",
+                            "extra": null,
+                            "label": {
+                                "text": "text"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/relative/link#toc0",
+                            "extra": null,
+                            "label": {
+                                "text": "text"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "//page/edit",
+                            "extra": null,
+                            "label": {
+                                "text": "Edit"
+                            },
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ]
+}
