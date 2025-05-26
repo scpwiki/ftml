@@ -15,12 +15,23 @@
                         "data": " "
                     },
                     {
+                        "element": "text",
+                        "data": "underline"
+                    },
+                    {
+                        "element": "text",
+                        "data": ":"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
                         "element": "container",
                         "data": {
                             "type": "underline",
                             "attributes": {},
-                            "elements": [
-                            ]
+                            "elements": []
                         }
                     }
                 ]

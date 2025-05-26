@@ -1,0 +1,26 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "underline",
+        "span": [40, 42],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [24, 26],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "underline",
+        "span": [53, 53],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [51, 53],
+        "kind": "no-rules-match"
+    }
+]
