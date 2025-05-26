@@ -213,7 +213,8 @@ impl Test {
             let errors_file_exists = fs::exists(&path).ok().unwrap_or(false);
             if !errors_file_exists {
                 panic!(
-                    "Parser errors produced, but no errors.json file: {}",
+                    "Parser errors produced for test '{}', but no errors.json file: {}",
+                    self.name,
                     json(&errors),
                 );
             }
