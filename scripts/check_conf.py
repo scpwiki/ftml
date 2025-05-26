@@ -89,6 +89,7 @@ def format_check_value(value):
 def convert_block_name(value):
     return value.casefold()
 
+
 def convert_module_name(value):
     value = inflection.underscore(value)
     value = inflection.camelize(value)
