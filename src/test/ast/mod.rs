@@ -94,14 +94,14 @@ impl TestStats {
         } else {
             let percent = |value| (value as f32) / (total as f32) * 100.0;
             println!("Ran a total of {total} tests. Of these:");
-            println!("* {} passed ({:.2}%)", self.passed, percent(self.passed));
+            println!("* {} passed ({:.1}%)", self.passed, percent(self.passed));
 
             if self.failed != 0 {
-                println!("* {} failed ({:.2}%)", self.failed, percent(self.failed));
+                println!("* {} failed ({:.1}%)", self.failed, percent(self.failed));
             }
 
             if self.skipped != 0 {
-                println!("* {} skipped ({:.2}%)", self.skipped, percent(self.skipped));
+                println!("* {} skipped ({:.1}%)", self.skipped, percent(self.skipped));
             }
         }
     }
