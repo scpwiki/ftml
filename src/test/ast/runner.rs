@@ -195,15 +195,20 @@ impl Test {
         let result = crate::parse(&tokens, &page_info, &parse_settings);
         let (tree, errors) = result.into();
 
+        macro_rules! update {
+            ($write_func:ident, $object:expr, $filename:expr $(,)?) => {{
+                println!("= Updating {}/{}", self.name, $filename);
+                path.push($filename);
+                $write_func(&path, &$object);
+                path.pop();
+            }};
+        }
+
         // Update abstract syntax tree
         if let Some(expected_tree) = &self.tree {
             let actual_tree = &tree;
             if actual_tree != expected_tree {
-                const FILENAME: &str = "tree.json";
-                println!("= Updating {}/{}", self.name, FILENAME);
-                path.push(FILENAME);
-                write_json(&path, &tree);
-                path.pop();
+                update!(write_json, tree, "tree.json");
             }
         }
 
@@ -229,11 +234,7 @@ impl Test {
             None => &[],
         };
         if &errors != expected_errors {
-            const FILENAME: &str = "errors.json";
-            println!("= Updating {}/{}", self.name, FILENAME);
-            path.push(FILENAME);
-            write_json(&path, &errors);
-            path.pop();
+            update!(write_json, errors, "errors.json");
         }
 
         // Run and check wikidot render
@@ -241,11 +242,7 @@ impl Test {
             let settings = settings!(Wikidot);
             let html_output = HtmlRender.render(&tree, &page_info, &settings);
             if &html_output.body != expected_html {
-                const FILENAME: &str = "wikidot.html";
-                println!("= Updating {}/{}", self.name, FILENAME);
-                path.push(FILENAME);
-                write_text(&path, &html_output.body);
-                path.pop();
+                update!(write_text, html_output.body, "wikidot.html");
             }
         }
 
@@ -254,11 +251,7 @@ impl Test {
             let settings = settings!(Wikijump);
             let html_output = HtmlRender.render(&tree, &page_info, &settings);
             if &html_output.body != expected_html {
-                const FILENAME: &str = "output.html";
-                println!("= Updating {}/{}", self.name, FILENAME);
-                path.push(FILENAME);
-                write_text(&path, &html_output.body);
-                path.pop();
+                update!(write_text, html_output.body, "output.html");
             }
         }
 
@@ -267,11 +260,7 @@ impl Test {
             let settings = settings!(Wikijump);
             let actual_text = TextRender.render(&tree, &page_info, &settings);
             if &actual_text != expected_text {
-                const FILENAME: &str = "output.txt";
-                println!("= Updating {}/{}", self.name, FILENAME);
-                path.push("output.txt");
-                write_text(&path, &text);
-                path.pop();
+                update!(write_text, actual_text, "output.txt");
             }
         }
     }
