@@ -301,16 +301,25 @@ where
     String::from_utf8(buffer).expect("JSON was not valid UTF-8")
 }
 
+// Helper functions for updating test files
+
 fn write_json<T>(path: &Path, object: &T)
 where
     T: serde::Serialize,
 {
     let mut file = File::create(path).expect("Unable to create file");
     json_writer(object, &mut file);
+
+    file.write_all(b"\n")
+        .expect("Unable to write final newline to file");
 }
 
 fn write_text(path: &Path, contents: &str) {
     let mut file = File::create(path).expect("Unable to create file");
+
     file.write_all(contents.as_bytes())
         .expect("Unable to write bytes");
+
+    file.write_all(b"\n")
+        .expect("Unable to write final newline to file");
 }
