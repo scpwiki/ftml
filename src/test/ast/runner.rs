@@ -108,8 +108,13 @@ impl Test {
         where
             T: serde::Serialize,
         {
-            serde_json::to_string_pretty(object)
-                .expect("Unable to serialize JSON to stdout")
+            use serde_json::ser::{PrettyFormatter, Serializer};
+
+            let mut buffer = Vec::with_capacity(256);
+            let fmt = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut buffer, fmt);
+            object.serialize(&mut ser).expect("JSON serialization failed");
+            String::from_utf8(buffer).expect("JSON was not valid UTF-8")
         }
 
         let mut result = TestResult::Pass;
