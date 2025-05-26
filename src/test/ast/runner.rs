@@ -193,7 +193,8 @@ impl Test {
         crate::preprocess(&mut text);
         let tokens = crate::tokenize(&text);
         let result = crate::parse(&tokens, &page_info, &parse_settings);
-        let (tree, errors) = result.into();
+        let (mut tree, errors) = result.into();
+        tree.wikitext_len = 0; // see run()
 
         macro_rules! update {
             ($write_func:ident, $object:expr, $filename:expr $(,)?) => {{
