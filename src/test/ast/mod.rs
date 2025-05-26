@@ -31,7 +31,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process;
 
-// Constants
+// Debug settings
 
 /// Temporary measure to not run certain tests.
 ///
@@ -45,6 +45,14 @@ const SKIP_TESTS: &[&str] = &[];
 /// This can assist with development, when you only care about specific
 /// tests to check if certain functionality is working as expected.
 const ONLY_TESTS: &[&str] = &[];
+
+/// Temporary measure to update tests instead of checking them.
+///
+/// This should be used when adding or changing functionality,
+/// provided you also carefully check the output is as expected.
+const UPDATE_TESTS: bool = false;
+
+// Constants
 
 /// The directory where all test files are located.
 /// This is the directory `test` under the repository root.
@@ -165,6 +173,25 @@ pub struct TestUniverse {
 fn ast() {
     // Load all tests
     let tests = TestUniverse::load(&TEST_DIRECTORY);
+
+    // If running in update mode, then run that and don't do anything else
+    if UPDATE_TESTS {
+        println!("=========");
+        println!(" WARNING ");
+        println!("=========");
+        println!();
+        println!("You are running in UPDATE MODE!");
+        println!("This will run tests and save whatever results as the new \"expected\" value.");
+        println!("Carefully inspect the diff and only save changes that are correct.");
+        println!();
+        println!("Remember to set UPDATE_TESTS = false when you're done!");
+        println!();
+
+        tests.update();
+
+        // Never allow tests to pass with this option
+        process::exit(-1);
+    }
 
     // Warn if any tests are being skipped
     if !SKIP_TESTS.is_empty() {

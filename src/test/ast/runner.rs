@@ -61,6 +61,12 @@ impl TestUniverse {
         }
         stats
     }
+
+    pub fn update(&self) {
+        for (test_name, test) in &self.tests {
+            test.update();
+        }
+    }
 }
 
 impl Test {
@@ -160,6 +166,10 @@ impl Test {
 
         result
     }
+
+    pub fn update(&self) {
+        todo!()
+    }
 }
 
 // Helper functions
@@ -196,6 +206,9 @@ where
     let mut buffer = Vec::with_capacity(256);
     let fmt = PrettyFormatter::with_indent(b"    ");
     let mut ser = Serializer::with_formatter(&mut buffer, fmt);
-    object.serialize(&mut ser).expect("JSON serialization failed");
+    object
+        .serialize(&mut ser)
+        .expect("JSON serialization failed");
+
     String::from_utf8(buffer).expect("JSON was not valid UTF-8")
 }
