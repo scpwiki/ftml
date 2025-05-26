@@ -206,6 +206,14 @@ impl Test {
             None => panic!("No wikitext file (input.ftml) found for test '{name}'!"),
         };
 
+        // Ensure syntax tree is present for fail tests
+        if errors.is_some() {
+            assert!(
+                tree.is_some(),
+                "No syntax tree file (ast.json) found for test '{name}' with errors.json",
+            );
+        }
+
         let test = Test {
             name,
             input,
