@@ -1,0 +1,5 @@
+EMPTY: [[target ]]
+
+SPACE: [[target apple banana]]
+
+NO END: [[target apple
