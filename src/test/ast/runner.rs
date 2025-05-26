@@ -23,13 +23,11 @@
 use super::{Test, TestResult, TestStats, TestUniverse};
 use crate::data::{PageInfo, ScoreValue};
 use crate::layout::Layout;
-use crate::parsing::ParseError;
 use crate::render::html::HtmlRender;
 use crate::render::text::TextRender;
 use crate::render::Render;
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::test::includer::TestIncluder;
-use crate::tree::SyntaxTree;
 use std::borrow::Cow;
 
 macro_rules! cow {

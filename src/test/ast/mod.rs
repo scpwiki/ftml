@@ -24,19 +24,11 @@
 mod loader;
 mod runner;
 
-use crate::data::{PageInfo, ScoreValue};
-use crate::layout::Layout;
 use crate::parsing::ParseError;
-use crate::render::html::HtmlRender;
-use crate::render::Render;
-use crate::settings::{WikitextMode, WikitextSettings};
 use crate::tree::SyntaxTree;
 use once_cell::sync::Lazy;
-use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process;
 
 // Constants
