@@ -187,7 +187,7 @@ fn ast() {
         println!("Remember to set UPDATE_TESTS = false when you're done!");
         println!();
 
-        tests.update();
+        tests.update(&TEST_DIRECTORY);
 
         // Never allow tests to pass with this option
         process::exit(-1);

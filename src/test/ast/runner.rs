@@ -29,9 +29,9 @@ use crate::render::Render;
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::test::includer::TestIncluder;
 use std::borrow::Cow;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 macro_rules! cow {
     ($value:expr $(,)?) => {
@@ -65,9 +65,14 @@ impl TestUniverse {
         stats
     }
 
-    pub fn update(&self) {
+    pub fn update(&self, test_dir: &Path) {
+        let mut path = PathBuf::from(test_dir);
         for (test_name, test) in &self.tests {
-            test.update();
+            // Reuse path buffer for each test directory
+            path.push(test_name);
+            test.update(&path);
+            path.pop();
+            path.pop();
         }
     }
 }
@@ -170,11 +175,12 @@ impl Test {
         result
     }
 
-    pub fn update(&self) {
-        println!("+ {}", self.name);
+    pub fn update(&self, directory: &Path) {
+        println!("= {}", self.name);
 
         let page_info = self.page_info();
         let parse_settings = settings!(Wikijump);
+        let mut path = PathBuf::from(directory); // reuse buffer for each written file
 
         let (mut text, _pages) = crate::include(
             &self.input,
@@ -191,8 +197,9 @@ impl Test {
 
         // Update abstract syntax tree
         if self.tree.is_some() {
-            todo!();
-            // XXX tree
+            path.push("ast.json");
+            write_json(&path, &tree);
+            path.pop();
         }
 
         // Update errors
@@ -201,33 +208,44 @@ impl Test {
         // we complain. This may indicate the test wasn't
         // *intended* to poduce parse errors and should be fixed.
 
-        if self.errors.is_some() {
-            todo!();
-            // XXX errors
+        if !errors.is_empty() || self.errors.is_some() {
+            path.push("errors.json");
+            let errors_file_exists = fs::exists(&path).ok().unwrap_or(false);
+            if !errors_file_exists {
+                panic!("Parser errors produced, but no errors.json file");
+            }
+            write_json(&path, &errors);
+            path.pop();
         }
 
         // Run and check wikidot render
         if self.wikidot_output.is_some() {
             let settings = settings!(Wikidot);
             let html_output = HtmlRender.render(&tree, &page_info, &settings);
-            todo!();
-            // XXX errors
+
+            path.push("wikidot.html");
+            write_text(&path, &html_output.body);
+            path.pop();
         }
 
         // Run and check wikijump render
         if self.html_output.is_some() {
             let settings = settings!(Wikijump);
             let html_output = HtmlRender.render(&tree, &page_info, &settings);
-            todo!();
-            // XXX html
+
+            path.push("output.html");
+            write_text(&path, &html_output.body);
+            path.pop();
         }
 
         // Run and check text render
         if self.text_output.is_some() {
             let settings = settings!(Wikijump);
-            let actual_text = TextRender.render(&tree, &page_info, &settings);
-            todo!();
-            // XXX html
+            let text = TextRender.render(&tree, &page_info, &settings);
+
+            path.push("output.txt");
+            write_text(&path, &text);
+            path.pop();
         }
     }
 }
@@ -271,14 +289,6 @@ where
         .expect("JSON serialization failed");
 }
 
-fn json_file<T>(object: &T, path: &Path)
-where
-    T: serde::Serialize,
-{
-    let mut file = File::create(path).expect("Unable to create");
-    json_writer(object, &mut file);
-}
-
 fn json<T>(object: &T) -> String
 where
     T: serde::Serialize,
@@ -286,4 +296,18 @@ where
     let mut buffer = Vec::with_capacity(256);
     json_writer(object, &mut buffer);
     String::from_utf8(buffer).expect("JSON was not valid UTF-8")
+}
+
+fn write_json<T>(path: &Path, object: &T)
+where
+    T: serde::Serialize,
+{
+    let mut file = File::create(path).expect("Unable to create file");
+    json_writer(object, &mut file);
+}
+
+fn write_text(path: &Path, contents: &str) {
+    let mut file = File::create(path).expect("Unable to create file");
+    file.write_all(contents.as_bytes())
+        .expect("Unable to write bytes");
 }
