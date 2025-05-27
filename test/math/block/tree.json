@@ -22,6 +22,84 @@
             }
         },
         {
+            "element": "math",
+            "data": {
+                "name": "navier-stokes",
+                "latex-source": "\\frac{\\mathrm{D} \\mathbf{u}}{\\mathrm{D} t} =\n\\frac 1 \\rho \\nabla \\cdot \\boldsymbol{\\sigma} + \\mathbf{f}."
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Apple"
+                    },
+                    {
+                        "element": "equation-reference",
+                        "data": "quadratic-formula"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Banana"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "cherry"
+                    },
+                    {
+                        "element": "equation-reference",
+                        "data": "quadratic-formula"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "Gooseberry"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Pineapple"
+                    },
+                    {
+                        "element": "equation-reference",
+                        "data": "navier-stokes"
+                    },
+                    {
+                        "element": "text",
+                        "data": "Blueberry"
+                    }
+                ]
+            }
+        },
+        {
             "element": "container",
             "data": {
                 "type": "paragraph",
@@ -75,6 +153,31 @@
                     {
                         "element": "text",
                         "data": "math"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Durian"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "eref"
                     },
                     {
                         "element": "text",
