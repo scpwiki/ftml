@@ -1,0 +1,5 @@
+A "string" here!
+
+"This one\x01 has\t escapes \n\b"
+
+treated as text
