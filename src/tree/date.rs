@@ -72,7 +72,7 @@ impl DateItem {
 
         result.map_err(|error| match error {
             Format::StdIo(io_error) => io_error,
-            _ => io::Error::new(io::ErrorKind::Other, error),
+            _ => io::Error::other(error),
         })
     }
 }
