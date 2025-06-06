@@ -156,9 +156,11 @@ impl TestUniverse {
                 // One of the files we always ignore when loading
                 continue;
             } else {
-                // TODO: Remove this branch and panic.
-                //       But for now, let's ignore any of these files until they're all moved over.
-                println!("+ Ignoring file: {}", path.display());
+                // Anything else is unexpected and should result in a failed build
+                //
+                // If it's a known ignored file, add it to ignore_test_file(),
+                // and if it's not supposed to be there, remove it!
+                panic!("Unexpected file! {}", path.display());
             }
         }
 
