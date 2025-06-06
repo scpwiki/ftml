@@ -24,7 +24,7 @@ use super::{Test, TestUniverse};
 use crate::tree::{BibliographyList, SyntaxTree};
 use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
@@ -152,6 +152,9 @@ impl TestUniverse {
             if metadata.is_dir() {
                 // Read all individual tests
                 Self::load_group(&mut tests, &test_group, &path, permissive);
+            } else if Self::ignore_test_file(&path) {
+                // One of the files we always ignore when loading
+                continue;
             } else {
                 // TODO: Remove this branch and panic.
                 //       But for now, let's ignore any of these files until they're all moved over.
@@ -194,6 +197,19 @@ impl TestUniverse {
 
             tests.insert(name, test);
         }
+    }
+
+    fn ignore_test_file(path: &Path) -> bool {
+        const IGNORE_FILENAMES: [&str; 2] = [".gitignore", ".gitattributes"];
+
+        let filename = path.file_name();
+        for ignore_filename in &IGNORE_FILENAMES {
+            if filename == Some(OsStr::new(ignore_filename)) {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
