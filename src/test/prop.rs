@@ -72,7 +72,7 @@ fn arb_attribute_map() -> impl Strategy<Value = AttributeMap<'static>> {
         // Length
         0..12,
     )
-    .prop_map(|map| AttributeMap::from(map))
+    .prop_map(AttributeMap::from)
 }
 
 #[inline]
@@ -308,8 +308,8 @@ where
         Just(ContainerType::Invisible),
         Just(ContainerType::Size),
         Just(ContainerType::Paragraph),
-        alignment.prop_map(|align| ContainerType::Align(align)),
-        heading.prop_map(|heading| ContainerType::Header(heading)),
+        alignment.prop_map(ContainerType::Align),
+        heading.prop_map(ContainerType::Header),
     ];
 
     (container_type, elements, arb_attribute_map()).prop_map(

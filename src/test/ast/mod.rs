@@ -197,6 +197,7 @@ fn ast() {
     let tests = TestUniverse::load(&TEST_DIRECTORY);
 
     // Warn if any tests are being skipped
+    #[allow(clippy::const_is_empty)]
     if !SKIP_TESTS.is_empty() {
         println!("=========");
         println!(" WARNING ");
@@ -212,6 +213,7 @@ fn ast() {
     }
 
     // Warn if we're only running certain tests
+    #[allow(clippy::const_is_empty)]
     if !ONLY_TESTS.is_empty() {
         println!("=========");
         println!(" WARNING ");

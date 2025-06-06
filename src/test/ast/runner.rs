@@ -138,7 +138,7 @@ impl Test {
             Some(ref errors) => errors.as_slice(),
             None => &[],
         };
-        if &actual_errors != expected_errors {
+        if actual_errors != expected_errors {
             result = TestResult::Fail;
             eprintln!("Parse errors did not match:");
             eprintln!("Expected: {}", json(&expected_errors));
@@ -245,7 +245,7 @@ impl Test {
             Some(ref errors) => errors.as_slice(),
             None => &[],
         };
-        if &errors != expected_errors {
+        if errors != expected_errors {
             update!(write_json, errors, "errors.json");
         }
 
@@ -293,10 +293,8 @@ fn test_applies(test_name: &str, patterns: &[&str]) -> bool {
 
         // Test group, match as a prefix
         // e.g. 'underline/' to match all underline tests
-        if pattern.ends_with('/') {
-            if test_name.starts_with(pattern) {
-                return true;
-            }
+        if pattern.ends_with('/') && test_name.starts_with(pattern) {
+            return true;
         }
     }
 
