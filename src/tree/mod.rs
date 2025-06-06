@@ -84,24 +84,29 @@ pub struct SyntaxTree<'t> {
     ///
     /// Depth list conversion happens here, so that depths on the table
     /// match the heading level.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub table_of_contents: Vec<Element<'t>>,
 
     /// The full list of HTML blocks for this page.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub html_blocks: Vec<Cow<'t, str>>,
 
     /// The full list of code blocks for this page.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub code_blocks: Vec<CodeBlock<'t>>,
 
     /// The full footnote list for this page.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub footnotes: Vec<Vec<Element<'t>>>,
 
     /// The full list of bibliographies for this page.
+    #[serde(default, skip_serializing_if = "BibliographyList::is_empty")]
     pub bibliographies: BibliographyList<'t>,
 
     /// Hint for the size of the wikitext input.
     ///
     /// This is an optimization to make rendering large parges slightly faster.
-    #[serde(default)]
+    #[serde(skip)]
     pub wikitext_len: usize,
 }
 
@@ -149,10 +154,10 @@ impl<'t> SyntaxTree<'t> {
 }
 
 #[test]
-fn borrowed_to_owned<'a>() {
+fn borrowed_to_owned() {
     use std::mem;
 
-    let tree_1: SyntaxTree<'a> = SyntaxTree::default();
+    let tree_1: SyntaxTree<'_> = SyntaxTree::default();
     let tree_2: SyntaxTree<'static> = tree_1.to_owned();
 
     mem::drop(tree_1);

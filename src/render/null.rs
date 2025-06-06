@@ -39,6 +39,7 @@ impl Render for NullRender {
         _settings: &WikitextSettings,
     ) {
         info!("Running null renderer");
+        // do nothing
     }
 }
 
@@ -59,7 +60,5 @@ fn null() {
         0,
     );
     let (tree, _) = result.into();
-    let output = NullRender.render(&tree, &page_info, &settings);
-
-    assert_eq!(output, (), "Null render didn't produce the unit value");
+    NullRender.render(&tree, &page_info, &settings);
 }

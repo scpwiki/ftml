@@ -1,0 +1,36 @@
+{
+    "elements": [
+        {
+            "element": "iframe",
+            "data": {
+                "attributes": {},
+                "url": "https://example.com/some-page"
+            }
+        },
+        {
+            "element": "iframe",
+            "data": {
+                "attributes": {},
+                "url": "http://example.org/http"
+            }
+        },
+        {
+            "element": "iframe",
+            "data": {
+                "attributes": {
+                    "class": "iframe",
+                    "id": "my-example",
+                    "width": "90%"
+                },
+                "url": "https://example.com/"
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ]
+}

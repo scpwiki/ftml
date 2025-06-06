@@ -52,7 +52,7 @@ fn recursion_depth() {
     let (tree, errors) = crate::parse(&tokens, &page_info, &settings).into();
 
     // Check outputted errors
-    let error = errors.get(0).expect("No errors produced");
+    let error = errors.first().expect("No errors produced");
     assert_eq!(error.token(), Token::LeftBlock);
     assert_eq!(error.rule(), "block-div");
     assert_eq!(error.span(), 800..802);
@@ -65,7 +65,7 @@ fn recursion_depth() {
     let SyntaxTree { elements, .. } = tree;
     assert_eq!(elements.len(), 1);
 
-    let element = elements.get(0).expect("No elements produced");
+    let element = elements.first().expect("No elements produced");
     let input_cow = Cow::Borrowed(input.as_ref());
     assert_eq!(element, &Element::Text(input_cow));
 }

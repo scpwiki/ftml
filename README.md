@@ -79,6 +79,8 @@ $ cargo test
 
 Add `-- --nocapture` to the end if you want to see test output. You can additionally inspect logging by exposing a `log`-compatible logger.
 
+One test function of note is the "AST test" suite, which reads test descriptions in `/test` and ensures that parsing/rendering produces the structures in those files. For more information, see [`TreeTests.md`](docs/TreeTests.md).
+
 ### Philosophy
 
 See [`Philosophy.md`](docs/Philosophy.md).

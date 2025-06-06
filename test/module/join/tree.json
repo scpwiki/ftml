@@ -1,0 +1,55 @@
+{
+    "elements": [
+        {
+            "element": "module",
+            "data": {
+                "module": "join",
+                "data": {
+                    "button-text": null,
+                    "attributes": {}
+                }
+            }
+        },
+        {
+            "element": "module",
+            "data": {
+                "module": "join",
+                "data": {
+                    "button-text": null,
+                    "attributes": {}
+                }
+            }
+        },
+        {
+            "element": "module",
+            "data": {
+                "module": "join",
+                "data": {
+                    "button-text": "Join our site!! ;-)",
+                    "attributes": {}
+                }
+            }
+        },
+        {
+            "element": "module",
+            "data": {
+                "module": "join",
+                "data": {
+                    "button-text": null,
+                    "attributes": {
+                        "class": "join-module",
+                        "id": "join-btn",
+                        "style": "display: flex"
+                    }
+                }
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ]
+}
