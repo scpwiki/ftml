@@ -149,27 +149,36 @@ impl Test {
         if let Some(expected_html) = &self.wikidot_output {
             let settings = settings!(Wikidot);
             let actual_output = HtmlRender.render(&tree, &page_info, &settings);
-            eprintln!("Wikidot HTML did not match:");
-            eprintln!("Expected: {}", expected_html);
-            eprintln!("Actual:   {}", actual_output.body);
+            if &actual_output.body != expected_html {
+                result = TestResult::Fail;
+                eprintln!("Wikidot HTML did not match:");
+                eprintln!("Expected: {:?}", expected_html);
+                eprintln!("Actual:   {:?}", actual_output.body);
+            }
         }
 
         // Run and check wikijump render
         if let Some(expected_html) = &self.html_output {
             let settings = settings!(Wikijump);
             let actual_output = HtmlRender.render(&tree, &page_info, &settings);
-            eprintln!("Wikijump HTML did not match:");
-            eprintln!("Expected: {}", expected_html);
-            eprintln!("Actual:   {}", actual_output.body);
+            if &actual_output.body != expected_html {
+                result = TestResult::Fail;
+                eprintln!("Wikijump HTML did not match:");
+                eprintln!("Expected: {:?}", expected_html);
+                eprintln!("Actual:   {:?}", actual_output.body);
+            }
         }
 
         // Run and check text render
         if let Some(expected_text) = &self.text_output {
             let settings = settings!(Wikijump);
             let actual_text = TextRender.render(&tree, &page_info, &settings);
-            eprintln!("Text output did not match:");
-            eprintln!("Expected: {}", expected_text);
-            eprintln!("Actual:   {}", actual_text);
+            if &actual_text != expected_text {
+                result = TestResult::Fail;
+                eprintln!("Text output did not match:");
+                eprintln!("Expected: {}", expected_text);
+                eprintln!("Actual:   {}", actual_text);
+            }
         }
 
         result
