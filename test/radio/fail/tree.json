@@ -1,0 +1,71 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "radio"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "Nameless"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[*"
+                    },
+                    {
+                        "element": "text",
+                        "data": "radio"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "Another"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "nameless"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ]
+}

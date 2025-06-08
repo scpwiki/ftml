@@ -103,6 +103,11 @@ impl<'t> BibliographyList<'t> {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[inline]
     pub fn next_index(&self) -> usize {
         self.0.len()
     }

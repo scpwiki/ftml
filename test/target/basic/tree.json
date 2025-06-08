@@ -1,0 +1,74 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor-name",
+                        "data": "apple"
+                    },
+                    {
+                        "element": "anchor-name",
+                        "data": "banana-cherry"
+                    },
+                    {
+                        "element": "anchor-name",
+                        "data": "pineapple"
+                    },
+                    {
+                        "element": "text",
+                        "data": "ALPHA"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor-name",
+                        "data": "blueberry"
+                    },
+                    {
+                        "element": "anchor-name",
+                        "data": "mango"
+                    },
+                    {
+                        "element": "text",
+                        "data": "BETA"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor-name",
+                        "data": "symbol-%Weird_?#"
+                    },
+                    {
+                        "element": "text",
+                        "data": "GAMMA"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ]
+}
