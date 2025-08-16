@@ -173,7 +173,7 @@ impl Token {
     /// # Errors
     /// Returns an error if something goes wrong with the parsing process. This will result in the
     /// only [`Token`] being a raw text containing all of the input.
-    pub(crate) fn extract_all(text: &str) -> Vec<ExtractedToken> {
+    pub(crate) fn extract_all(text: &str) -> Vec<ExtractedToken<'_>> {
         debug!("Running lexer on input");
 
         match TokenLexer::parse(Rule::document, text) {

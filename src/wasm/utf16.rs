@@ -45,7 +45,7 @@ pub struct Utf16IndexMap {
 #[wasm_bindgen]
 impl Utf16IndexMap {
     #[inline]
-    pub(crate) fn get(&self) -> &RustUtf16IndexMap {
+    pub(crate) fn get(&self) -> &RustUtf16IndexMap<'_> {
         self.inner.borrow_dependent()
     }
 

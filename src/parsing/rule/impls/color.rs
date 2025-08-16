@@ -79,7 +79,7 @@ fn try_consume_fn<'r, 't>(
 /// Normally we pass the color as-is, such as `blue` or `rgb(10, 12, 14)`,
 /// but if a hex specification is passed, and it doesn't already begin with
 /// `#`, then one should be prepended.
-fn hexify_color(color: &str) -> Cow<str> {
+fn hexify_color(color: &str) -> Cow<'_, str> {
     if HEX_COLOR.is_match(color) {
         Cow::Owned(format!("#{color}"))
     } else {
