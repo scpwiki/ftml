@@ -101,7 +101,7 @@ pub fn normalize_link<'a>(
     }
 }
 
-pub fn normalize_href(url: &str) -> Cow<str> {
+pub fn normalize_href(url: &str) -> Cow<'_, str> {
     if is_url(url) || url.starts_with('#') || url == "javascript:;" {
         Cow::Borrowed(url)
     } else if dangerous_scheme(url) {

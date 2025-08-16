@@ -35,7 +35,7 @@ use std::borrow::Cow;
 /// If in invalid escape is found, the input
 /// is returned. So for `\$`, it will emit a
 /// `\` followed by a `$`.
-pub fn parse_string(input: &str) -> Cow<str> {
+pub fn parse_string(input: &str) -> Cow<'_, str> {
     // We could do an iteration thing, but tracking
     // the index across replacements is complicated.
     //

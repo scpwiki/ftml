@@ -45,7 +45,7 @@ pub struct Tokenization {
 #[wasm_bindgen]
 impl Tokenization {
     #[inline]
-    pub(crate) fn get(&self) -> &RustTokenization {
+    pub(crate) fn get(&self) -> &RustTokenization<'_> {
         self.inner.borrow_dependent()
     }
 

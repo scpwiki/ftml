@@ -81,7 +81,7 @@ fn parse_entity<'t>(
 }
 
 /// Find the string corresponding to the passed entity, if any.
-fn find_entity(entity: &str) -> Option<Cow<str>> {
+fn find_entity(entity: &str) -> Option<Cow<'_, str>> {
     // Named entity
     if let Some(result) = ENTITY_MAPPING.get(entity) {
         return Some(cow!(result));
@@ -111,7 +111,7 @@ fn find_entity(entity: &str) -> Option<Cow<str>> {
 /// character, if one exists.
 ///
 /// Then converts the character into a string with only that value.
-fn get_char(value: &str, radix: u32) -> Option<Cow<str>> {
+fn get_char(value: &str, radix: u32) -> Option<Cow<'_, str>> {
     let codepoint = match u32::from_str_radix(value, radix) {
         Ok(codepoint) => codepoint,
         Err(_) => return None,
