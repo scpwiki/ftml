@@ -54,6 +54,7 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         trace!("Trying rule consumption for tokens (rule {})", rule.name());
 
         let old_remaining = parser.remaining();
+        let footnote_count = parser.footnote_count();
         match rule.try_consume(parser) {
             Ok(output) => {
                 debug!("Rule {} matched, returning generated result", rule.name());
@@ -77,6 +78,8 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
             }
             Err(error) => {
                 warn!("Rule failed, returning error: '{}'", error.kind().name());
+                // Rollback footnotes added during failed rule attempt
+                parser.truncate_footnotes(footnote_count);
                 all_errors.push(error);
             }
         }

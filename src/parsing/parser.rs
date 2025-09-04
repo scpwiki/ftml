@@ -252,6 +252,14 @@ impl<'r, 't> Parser<'r, 't> {
         self.footnotes.borrow_mut().push(contents);
     }
 
+    pub fn footnote_count(&self) -> usize {
+        self.footnotes.borrow().len()
+    }
+
+    pub fn truncate_footnotes(&mut self, count: usize) {
+        self.footnotes.borrow_mut().truncate(count);
+    }
+
     #[cold]
     pub fn remove_footnotes(&mut self) -> Vec<Vec<Element<'t>>> {
         mem::take(&mut self.footnotes.borrow_mut())
