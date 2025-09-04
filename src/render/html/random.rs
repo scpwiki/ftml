@@ -19,8 +19,7 @@
  */
 
 use cfg_if::cfg_if;
-use rand::distributions::Alphanumeric;
-use rand::prelude::*;
+use rand::{distr::Alphanumeric, rngs::SmallRng, Rng, SeedableRng};
 use std::iter;
 
 #[cfg(test)]
@@ -42,7 +41,7 @@ impl Default for Random {
             if #[cfg(test)] {
                 let rng = SmallRng::from_seed(TEST_RANDOM_SEED);
             } else {
-                let rng = SmallRng::from_entropy();
+                let rng = SmallRng::from_rng(&mut rand::rng());
             }
         }
 
