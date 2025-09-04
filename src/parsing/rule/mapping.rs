@@ -21,7 +21,7 @@
 use super::{impls::*, Rule};
 use crate::parsing::token::{ExtractedToken, Token};
 use enum_map::EnumMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 /// Mapping of all tokens to the rules they possibly correspond with.
 ///
@@ -31,7 +31,7 @@ use once_cell::sync::Lazy;
 /// An empty list means that this is a special token that shouldn't be used
 /// in this manner. It will of course fall back to interpreting this token
 /// as text, but will also produce an error for the user.
-pub static RULE_MAP: Lazy<EnumMap<Token, Vec<Rule>>> = Lazy::new(|| {
+pub static RULE_MAP: LazyLock<EnumMap<Token, Vec<Rule>>> = LazyLock::new(|| {
     enum_map! {
         // Symbols
         Token::LeftBracket => vec![RULE_LINK_SINGLE, RULE_TEXT],

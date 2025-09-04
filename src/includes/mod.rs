@@ -39,10 +39,10 @@ use self::parse::parse_include_block;
 use crate::data::PageRef;
 use crate::settings::WikitextSettings;
 use crate::tree::VariableMap;
-use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
+use std::sync::LazyLock;
 
-static INCLUDE_REGEX: Lazy<Regex> = Lazy::new(|| {
+static INCLUDE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     RegexBuilder::new(r"^\[\[\s*include\s+")
         .case_insensitive(true)
         .multi_line(true)
@@ -50,8 +50,8 @@ static INCLUDE_REGEX: Lazy<Regex> = Lazy::new(|| {
         .build()
         .unwrap()
 });
-static VARIABLE_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\{\$(?P<name>[a-zA-Z0-9_\-]+)\}").unwrap());
+static VARIABLE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\$(?P<name>[a-zA-Z0-9_\-]+)\}").unwrap());
 
 /// Replaces the include blocks in a string with the content of the pages referenced by those
 /// blocks.

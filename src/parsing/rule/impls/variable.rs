@@ -19,10 +19,11 @@
  */
 
 use super::prelude::*;
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
-static VARIABLE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{\$(.+)\}").unwrap());
+static VARIABLE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\$(.+)\}").unwrap());
 
 pub const RULE_VARIABLE: Rule = Rule {
     name: "variable",

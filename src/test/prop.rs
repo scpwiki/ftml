@@ -28,16 +28,16 @@ use crate::tree::{
     HeadingLevel, ImageSource, LinkLabel, LinkLocation, LinkType, ListItem, ListType,
     Module, SyntaxTree,
 };
-use once_cell::sync::Lazy;
 use proptest::option;
 use proptest::prelude::*;
 use std::borrow::Cow;
 use std::num::NonZeroU32;
+use std::sync::LazyLock;
 
 // Constants
 
-static SAFE_ATTRIBUTES_VEC: Lazy<Vec<&'static str>> =
-    Lazy::new(|| SAFE_ATTRIBUTES.iter().map(|s| s.as_ref()).collect());
+static SAFE_ATTRIBUTES_VEC: LazyLock<Vec<&'static str>> =
+    LazyLock::new(|| SAFE_ATTRIBUTES.iter().map(|s| s.as_ref()).collect());
 
 const SIMPLE_EMAIL_REGEX: &str = r"\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*";
 const SIMPLE_URL_REGEX: &str = r"https?://([-.]\w)+";

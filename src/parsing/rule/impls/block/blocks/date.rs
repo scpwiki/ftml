@@ -20,8 +20,8 @@
 
 use super::prelude::*;
 use crate::tree::DateItem;
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 use time::format_description::well_known::{Iso8601, Rfc2822, Rfc3339};
 use time::{Date, OffsetDateTime, PrimitiveDateTime, UtcOffset};
 
@@ -147,8 +147,8 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
 
 /// Parse the timezone based on the specifier string.
 fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
-    static TIMEZONE_REGEX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"^(\+|-)?([0-9]{1,2}):?([0-9]{2})?$").unwrap());
+    static TIMEZONE_REGEX: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^(\+|-)?([0-9]{1,2}):?([0-9]{2})?$").unwrap());
 
     debug!("Parsing possible timezone value '{value}'");
 
