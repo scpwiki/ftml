@@ -19,12 +19,12 @@
  */
 
 use super::prelude::*;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::borrow::Cow;
+use std::sync::LazyLock;
 
-static HEX_COLOR: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$").unwrap());
+static HEX_COLOR: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$").unwrap());
 
 pub const RULE_COLOR: Rule = Rule {
     name: "color",

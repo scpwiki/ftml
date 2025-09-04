@@ -19,8 +19,8 @@
  */
 
 use super::{modules::*, ModuleRule};
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use unicase::UniCase;
 
 pub const MODULE_RULES: [ModuleRule; 6] = [
@@ -34,8 +34,8 @@ pub const MODULE_RULES: [ModuleRule; 6] = [
 
 pub type ModuleRuleMap = HashMap<UniCase<&'static str>, &'static ModuleRule>;
 
-pub static MODULE_RULE_MAP: Lazy<ModuleRuleMap> =
-    Lazy::new(|| build_module_rule_map(&MODULE_RULES));
+pub static MODULE_RULE_MAP: LazyLock<ModuleRuleMap> =
+    LazyLock::new(|| build_module_rule_map(&MODULE_RULES));
 
 #[inline]
 pub fn get_module_rule_with_name(name: &str) -> Option<&'static ModuleRule> {

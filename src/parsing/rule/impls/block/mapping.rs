@@ -19,8 +19,8 @@
  */
 
 use super::{blocks::*, BlockRule};
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use unicase::UniCase;
 
 pub const BLOCK_RULES: [BlockRule; 60] = [
@@ -88,8 +88,8 @@ pub const BLOCK_RULES: [BlockRule; 60] = [
 
 pub type BlockRuleMap = HashMap<UniCase<&'static str>, &'static BlockRule>;
 
-pub static BLOCK_RULE_MAP: Lazy<BlockRuleMap> =
-    Lazy::new(|| build_block_rule_map(&BLOCK_RULES));
+pub static BLOCK_RULE_MAP: LazyLock<BlockRuleMap> =
+    LazyLock::new(|| build_block_rule_map(&BLOCK_RULES));
 
 #[inline]
 pub fn get_block_rule_with_name(name: &str) -> Option<&'static BlockRule> {

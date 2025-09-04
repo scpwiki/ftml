@@ -20,23 +20,24 @@
 
 use super::prelude::*;
 use entities::ENTITIES;
-use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::char;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
-static ENTITY_MAPPING: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
-    let mut mapping = HashMap::new();
+static ENTITY_MAPPING: LazyLock<HashMap<&'static str, &'static str>> =
+    LazyLock::new(|| {
+        let mut mapping = HashMap::new();
 
-    for entity in &ENTITIES {
-        let key = strip_entity(entity.entity);
-        let value = entity.characters;
+        for entity in &ENTITIES {
+            let key = strip_entity(entity.entity);
+            let value = entity.characters;
 
-        mapping.insert(key, value);
-    }
+            mapping.insert(key, value);
+        }
 
-    mapping
-});
+        mapping
+    });
 
 pub const BLOCK_CHAR: BlockRule = BlockRule {
     name: "block-char",

@@ -31,9 +31,9 @@ pub use self::build::{
     RUSTC_VERSION, TARGET,
 };
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static VERSION_INFO: Lazy<String> = Lazy::new(|| {
+static VERSION_INFO: LazyLock<String> = LazyLock::new(|| {
     let mut version = format!("v{PKG_VERSION}");
 
     if let Some(commit_hash) = *GIT_COMMIT_HASH_SHORT {
@@ -42,10 +42,13 @@ static VERSION_INFO: Lazy<String> = Lazy::new(|| {
 
     version
 });
+
 /// The package name and version info.
-pub static VERSION: Lazy<String> = Lazy::new(|| format!("{PKG_NAME} {}", *VERSION_INFO));
+pub static VERSION: LazyLock<String> =
+    LazyLock::new(|| format!("{PKG_NAME} {}", *VERSION_INFO));
+
 /// The full version info, including build information.
-pub static FULL_VERSION: Lazy<String> = Lazy::new(|| {
+pub static FULL_VERSION: LazyLock<String> = LazyLock::new(|| {
     let mut version = format!("{}\n\nCompiled:\n", *VERSION_INFO);
 
     str_writeln!(&mut version, "* across {NUM_JOBS} threads");
@@ -56,11 +59,12 @@ pub static FULL_VERSION: Lazy<String> = Lazy::new(|| {
     version
 });
 /// The package name and full version info, including build information.
-pub static FULL_VERSION_WITH_NAME: Lazy<String> =
-    Lazy::new(|| format!("{PKG_NAME} {}", *FULL_VERSION));
+pub static FULL_VERSION_WITH_NAME: LazyLock<String> =
+    LazyLock::new(|| format!("{PKG_NAME} {}", *FULL_VERSION));
+
 // The last 8 characters of the commit hash for this version.
-pub static GIT_COMMIT_HASH_SHORT: Lazy<Option<&'static str>> =
-    Lazy::new(|| GIT_COMMIT_HASH.map(|s| &s[..8]));
+pub static GIT_COMMIT_HASH_SHORT: LazyLock<Option<&'static str>> =
+    LazyLock::new(|| GIT_COMMIT_HASH.map(|s| &s[..8]));
 
 #[test]
 fn info() {

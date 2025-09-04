@@ -28,43 +28,44 @@
 //! * Compress groups of 3+ newlines into 2 newlines
 
 use super::Replacer;
-use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
+use std::sync::LazyLock;
 
-static LEADING_NONSTANDARD_WHITESPACE: Lazy<Regex> = Lazy::new(|| {
+static LEADING_NONSTANDARD_WHITESPACE: LazyLock<Regex> = LazyLock::new(|| {
     RegexBuilder::new("^[\u{00a0}\u{2007}]+")
         .multi_line(true)
         .build()
         .unwrap()
 });
-static WHITESPACE_ONLY_LINE: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
-    regex: RegexBuilder::new(r"^\s+$")
-        .multi_line(true)
-        .build()
-        .unwrap(),
-    replacement: "",
-});
-static LEADING_NEWLINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+static WHITESPACE_ONLY_LINE: LazyLock<Replacer> =
+    LazyLock::new(|| Replacer::RegexReplace {
+        regex: RegexBuilder::new(r"^\s+$")
+            .multi_line(true)
+            .build()
+            .unwrap(),
+        replacement: "",
+    });
+static LEADING_NEWLINES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexReplace {
     regex: Regex::new(r"^\n+").unwrap(),
     replacement: "",
 });
-static TRAILING_NEWLINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+static TRAILING_NEWLINES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexReplace {
     regex: Regex::new(r"\n+$").unwrap(),
     replacement: "",
 });
-static DOS_MAC_NEWLINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+static DOS_MAC_NEWLINES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexReplace {
     regex: Regex::new(r"\r\n?").unwrap(),
     replacement: "\n",
 });
-static CONCAT_LINES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+static CONCAT_LINES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexReplace {
     regex: Regex::new(r"\\\n").unwrap(),
     replacement: "",
 });
-static TABS: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+static TABS: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexReplace {
     regex: Regex::new("\t").unwrap(),
     replacement: "    ",
 });
-static NULL_SPACE: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
+static NULL_SPACE: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexReplace {
     regex: Regex::new("\0").unwrap(),
     replacement: " ",
 });

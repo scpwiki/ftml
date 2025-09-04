@@ -18,9 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::borrow::Cow;
+use std::sync::LazyLock;
 use wikidot_normalize::normalize;
 
 #[cfg(feature = "html")]
@@ -66,7 +66,8 @@ pub fn is_url(url: &str) -> bool {
 /// funny business going on with the scheme, such as insertion of
 /// whitespace. In such cases, the URL is rejected.
 pub fn dangerous_scheme(url: &str) -> bool {
-    static SCHEME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\w\-]+$").unwrap());
+    static SCHEME_REGEX: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^[\w\-]+$").unwrap());
 
     url.split_once(':')
         .map(|(scheme, _)| {

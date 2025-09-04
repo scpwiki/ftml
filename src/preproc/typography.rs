@@ -33,12 +33,12 @@
 //! the `--` in `[!--` and `--]` into em dashes.
 
 use super::Replacer;
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
 // ‘ - LEFT SINGLE QUOTATION MARK
 // ’ - RIGHT SINGLE QUOTATION MARK
-static SINGLE_QUOTES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexSurround {
+static SINGLE_QUOTES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexSurround {
     regex: Regex::new(r"`(.*?)'").unwrap(),
     begin: "\u{2018}",
     end: "\u{2019}",
@@ -46,24 +46,26 @@ static SINGLE_QUOTES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexSurround {
 
 // “ - LEFT DOUBLE QUOTATION MARK
 // ” - RIGHT DOUBLE QUOTATION MARK
-static DOUBLE_QUOTES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexSurround {
+static DOUBLE_QUOTES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexSurround {
     regex: Regex::new(r"``(.*?)''").unwrap(),
     begin: "\u{201c}",
     end: "\u{201d}",
 });
 
 // „ - DOUBLE LOW-9 QUOTATION MARK
-static LOW_DOUBLE_QUOTES: Lazy<Replacer> = Lazy::new(|| Replacer::RegexSurround {
-    regex: Regex::new(r",,(.*?)''").unwrap(),
-    begin: "\u{201e}",
-    end: "\u{201d}",
-});
+static LOW_DOUBLE_QUOTES: LazyLock<Replacer> =
+    LazyLock::new(|| Replacer::RegexSurround {
+        regex: Regex::new(r",,(.*?)''").unwrap(),
+        begin: "\u{201e}",
+        end: "\u{201d}",
+    });
 
 // … - HORIZONTAL ELLIPSIS
-static HORIZONTAL_ELLIPSIS: Lazy<Replacer> = Lazy::new(|| Replacer::RegexReplace {
-    regex: Regex::new(r"(?:^|[^\.])(?<repl>(\.\.|\. \. )\.)(?:[^\.]|$)").unwrap(),
-    replacement: "\u{2026}",
-});
+static HORIZONTAL_ELLIPSIS: LazyLock<Replacer> =
+    LazyLock::new(|| Replacer::RegexReplace {
+        regex: Regex::new(r"(?:^|[^\.])(?<repl>(\.\.|\. \. )\.)(?:[^\.]|$)").unwrap(),
+        replacement: "\u{2026}",
+    });
 
 /// Performs all typographic substitutions in-place in the given text
 pub fn substitute(text: &mut String) {

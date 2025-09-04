@@ -28,10 +28,11 @@ use crate::parsing::{
     ParseResult, Parser, Token,
 };
 use crate::tree::Element;
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
-static ARGUMENT_KEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"[A-Za-z0-9_\-]+").unwrap());
+static ARGUMENT_KEY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[A-Za-z0-9_\-]+").unwrap());
 
 impl<'r, 't> Parser<'r, 't>
 where

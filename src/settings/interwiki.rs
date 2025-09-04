@@ -18,14 +18,15 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 /// An [`InterwikiSettings`] instance that has no prefixes.
-pub static EMPTY_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSettings {
-    prefixes: hashmap! {},
-});
+pub static EMPTY_INTERWIKI: LazyLock<InterwikiSettings> =
+    LazyLock::new(|| InterwikiSettings {
+        prefixes: hashmap! {},
+    });
 
 #[allow(rustdoc::bare_urls)]
 /// An [`InterwikiSettings`] instance that has the default prefixes.
@@ -39,18 +40,19 @@ pub static EMPTY_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSett
 /// - `ddg:path` => `https://duckduckgo.com/?q=path`
 /// - `dictionary:path` => `https://dictionary.com/browse/path`
 /// - `thesaurus:path` => `https://thesaurus.com/browse/path`
-pub static DEFAULT_INTERWIKI: Lazy<InterwikiSettings> = Lazy::new(|| InterwikiSettings {
-    prefixes: hashmap! {
-        cow!("wikipedia") => cow!("https://wikipedia.org/wiki/$$"),
-        cow!("wp") => cow!("https://wikipedia.org/wiki/$$"),
-        cow!("commons") => cow!("https://commons.wikimedia.org/wiki/$$"),
-        cow!("google") => cow!("https://google.com/search?q=$$"),
-        cow!("duckduckgo") => cow!("https://duckduckgo.com/?q=$$"),
-        cow!("ddg") => cow!("https://duckduckgo.com/?q=$$"),
-        cow!("dictionary") => cow!("https://dictionary.com/browse/$$"),
-        cow!("thesaurus") => cow!("https://thesaurus.com/browse/$$"),
-    },
-});
+pub static DEFAULT_INTERWIKI: LazyLock<InterwikiSettings> =
+    LazyLock::new(|| InterwikiSettings {
+        prefixes: hashmap! {
+            cow!("wikipedia") => cow!("https://wikipedia.org/wiki/$$"),
+            cow!("wp") => cow!("https://wikipedia.org/wiki/$$"),
+            cow!("commons") => cow!("https://commons.wikimedia.org/wiki/$$"),
+            cow!("google") => cow!("https://google.com/search?q=$$"),
+            cow!("duckduckgo") => cow!("https://duckduckgo.com/?q=$$"),
+            cow!("ddg") => cow!("https://duckduckgo.com/?q=$$"),
+            cow!("dictionary") => cow!("https://dictionary.com/browse/$$"),
+            cow!("thesaurus") => cow!("https://thesaurus.com/browse/$$"),
+        },
+    });
 
 /// Settings that determine how to turn [`interwiki links`](http://org.wikidot.com/doc:wiki-syntax#toc21)
 /// into full URLs.

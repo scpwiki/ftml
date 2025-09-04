@@ -26,10 +26,10 @@ mod runner;
 
 use crate::parsing::ParseError;
 use crate::tree::SyntaxTree;
-use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process;
+use std::sync::LazyLock;
 
 // Debug settings
 
@@ -56,7 +56,7 @@ const UPDATE_TESTS: bool = false;
 
 /// The directory where all test files are located.
 /// This is the directory `test` under the repository root.
-static TEST_DIRECTORY: Lazy<PathBuf> = Lazy::new(|| {
+static TEST_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("test");
     path
