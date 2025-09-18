@@ -106,6 +106,7 @@ mod target;
 mod toc;
 mod underline;
 mod user;
+mod raw;
 
 pub use self::align_center::BLOCK_ALIGN_CENTER;
 pub use self::align_justify::BLOCK_ALIGN_JUSTIFY;
@@ -146,6 +147,7 @@ pub use self::module::BLOCK_MODULE;
 pub use self::monospace::BLOCK_MONOSPACE;
 pub use self::paragraph::BLOCK_PARAGRAPH;
 pub use self::radio::BLOCK_RADIO;
+pub use self::raw::BLOCK_RAW;
 pub use self::ruby::{BLOCK_RB, BLOCK_RT, BLOCK_RUBY};
 pub use self::size::BLOCK_SIZE;
 pub use self::span::BLOCK_SPAN;
