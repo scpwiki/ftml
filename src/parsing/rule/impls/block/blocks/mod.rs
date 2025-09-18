@@ -94,6 +94,7 @@ mod module;
 mod monospace;
 mod paragraph;
 mod radio;
+mod raw;
 mod ruby;
 mod size;
 mod span;
@@ -106,7 +107,6 @@ mod target;
 mod toc;
 mod underline;
 mod user;
-mod raw;
 
 pub use self::align_center::BLOCK_ALIGN_CENTER;
 pub use self::align_justify::BLOCK_ALIGN_JUSTIFY;
