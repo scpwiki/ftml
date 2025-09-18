@@ -47,19 +47,17 @@ fn parse_fn<'r, 't>(
         (current, current)
     };
     loop {
-        match parser.get_end_block() {
-            Ok(n) => {
-                if n == name {
-                    trace!("Parsing block start: {start:?}, end: {end:?}, name: {name})");
-                    let slice = parser.full_text().slice_partial(start, end);
-                    let element = Element::Raw(cow!(slice));
-                    return ok!(element);
-                }
-            },
-            Err(_e) => {
+        // Check if we reach an end block token
+        if let Ok(found_name) = parser.get_end_block() {
+            // If so, check if it's a raw end block token
+            if found_name == name {
+                trace!("Parsing block start: {start:?}, end: {end:?}, name: {name})");
+                let slice = parser.full_text().slice_partial(start, end);
+                let element = Element::Raw(cow!(slice));
+                return ok!(element);
             }
-        };
-        trace!("Appending present token to raw");
+        }
+        // Update last token and step.
         end = parser.step()?;
     }
 }
