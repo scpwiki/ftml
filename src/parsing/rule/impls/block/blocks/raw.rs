@@ -24,7 +24,8 @@ pub const BLOCK_RAW: BlockRule = BlockRule {
     accepts_names: &["raw"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    // accepts_newlines needs to be false here to avoid end trimming from get_body_text
+    accepts_newlines: false,
     parse_fn,
 };
 
@@ -41,23 +42,17 @@ fn parse_fn<'r, 't>(
 
     assert_block_name(&BLOCK_RAW, name);
 
-    let (start, mut end) = {
-        let current = parser.current();
+    let mut content = parser.get_body_text(&BLOCK_RAW)?;
 
-        (current, current)
-    };
-    loop {
-        // Check if we reach an end block token
-        if let Ok(found_name) = parser.get_end_block() {
-            // If so, check if it's a raw end block token
-            if found_name == name {
-                trace!("Parsing block start: {start:?}, end: {end:?}, name: {name})");
-                let slice = parser.full_text().slice_partial(start, end);
-                let element = Element::Raw(cow!(slice));
-                return ok!(element);
-            }
-        }
-        // Update last token and step.
-        end = parser.step()?;
+    // Empty block
+    if content.eq("\n") {
+        content = ""
     }
+    // Trim the first and last \n if it's a multi-line block
+    else if content.starts_with('\n') && content.ends_with('\n') && content.len() >= 2 {
+        content = content.trim_start_matches('\n').trim_end_matches('\n');
+    }
+
+    let element = Element::Raw(cow!(content));
+    ok!(element)
 }
