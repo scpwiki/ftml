@@ -19,12 +19,12 @@
  */
 use super::prelude::*;
 
+// accepts_newlines needs to be false here to avoid end trimming from get_body_text
 pub const BLOCK_RAW: BlockRule = BlockRule {
     name: "block-raw",
     accepts_names: &["raw"],
     accepts_star: false,
     accepts_score: false,
-    // accepts_newlines needs to be false here to avoid end trimming from get_body_text
     accepts_newlines: false,
     parse_fn,
 };

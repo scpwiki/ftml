@@ -270,7 +270,7 @@ html-attributes = true
 html-output = "html,input"
 
 [raw]
-accepts-newlines = true
+accepts-newlines = false
 head = "map"
 body = "raw"
 html-output = "html,span,wj-raw"
