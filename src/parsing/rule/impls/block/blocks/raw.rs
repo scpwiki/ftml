@@ -48,7 +48,8 @@ fn parse_fn<'r, 't>(
     if content.eq("\n") {
         content = "";
     }
-    // Trim the first and last \n if it's a multi-line block
+    // Trim the first and last \n if it's a multi-line block.
+    // We already checked for the single newline case above.
     else if content.starts_with('\n') && content.ends_with('\n') {
         content = content.trim_start_matches('\n').trim_end_matches('\n');
     }
