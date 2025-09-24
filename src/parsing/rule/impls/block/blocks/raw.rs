@@ -46,7 +46,7 @@ fn parse_fn<'r, 't>(
 
     // Empty block
     if content.eq("\n") {
-        content = ""
+        content = "";
     }
     // Trim the first and last \n if it's a multi-line block
     else if content.starts_with('\n') && content.ends_with('\n') && content.len() >= 2 {
