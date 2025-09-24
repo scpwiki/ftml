@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use unicase::UniCase;
 
-pub const BLOCK_RULES: [BlockRule; 60] = [
+pub const BLOCK_RULES: [BlockRule; 61] = [
     BLOCK_ALIGN_CENTER,
     BLOCK_ALIGN_JUSTIFY,
     BLOCK_ALIGN_LEFT,
@@ -65,6 +65,7 @@ pub const BLOCK_RULES: [BlockRule; 60] = [
     BLOCK_OL,
     BLOCK_PARAGRAPH,
     BLOCK_RADIO,
+    BLOCK_RAW,
     BLOCK_RB,
     BLOCK_RT,
     BLOCK_RUBY,
