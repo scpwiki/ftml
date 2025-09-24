@@ -49,7 +49,7 @@ fn parse_fn<'r, 't>(
         content = "";
     }
     // Trim the first and last \n if it's a multi-line block
-    else if content.starts_with('\n') && content.ends_with('\n') && content.len() >= 2 {
+    else if content.starts_with('\n') && content.ends_with('\n') {
         content = content.trim_start_matches('\n').trim_end_matches('\n');
     }
 
