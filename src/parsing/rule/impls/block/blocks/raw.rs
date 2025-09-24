@@ -19,7 +19,7 @@
  */
 use super::prelude::*;
 
-// accepts_newlines needs to be false here to avoid end trimming from get_body_text
+// NOTE: "accepts_newlines" needs to be false here to avoid end trimming from get_body_text
 pub const BLOCK_RAW: BlockRule = BlockRule {
     name: "block-raw",
     accepts_names: &["raw"],
