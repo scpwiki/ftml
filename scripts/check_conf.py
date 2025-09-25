@@ -6,7 +6,7 @@ import sys
 from collections import defaultdict
 
 import inflection
-import toml
+import tomllib
 
 EXCLUDE_BLOCKS = ["later"]
 EXCLUDE_MODULES = []
@@ -112,8 +112,8 @@ def load_block_data(root_dir):
     block_rules_path = os.path.join(root_dir, BLOCK_DIRECTORY)
 
     # Load config
-    with open(blocks_path) as file:
-        blocks = toml.load(file)
+    with open(blocks_path, "rb") as file:
+        blocks = tomllib.load(file)
 
         # Normalize module keys for case-insensitive access
         blocks = {convert_block_name(name): value for name, value in blocks.items()}
@@ -167,8 +167,8 @@ def load_module_data(root_dir):
     module_rules_path = os.path.join(root_dir, MODULE_DIRECTORY)
 
     # Load blocks
-    with open(modules_path) as file:
-        modules = toml.load(file)
+    with open(modules_path, "rb") as file:
+        modules = tomllib.load(file)
 
         # Normalize module keys for case-insensitive access
         modules = {convert_module_name(name): value for name, value in modules.items()}
