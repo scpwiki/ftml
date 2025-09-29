@@ -12,8 +12,7 @@ on:
       - '.github/codecov.yml'
   push:
     branches:
-      - develop
-      - prod
+      - main
 
 jobs:
   library_build_and_test:
@@ -50,7 +49,7 @@ jobs:
 
       - name: Test (exhaustive)
         run: cd deepwell && cargo test --all-features -- --nocapture --ignored
-        if: github.ref == 'refs/head/develop' || github.ref == 'refs/head/prod'
+        if: github.ref == 'refs/head/main'
 
   wasm:
     name: WebASM
