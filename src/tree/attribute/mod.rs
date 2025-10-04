@@ -50,7 +50,7 @@ impl<'t> AttributeMap<'t> {
     pub fn from_arguments(arguments: &HashMap<UniCase<&'t str>, Cow<'t, str>>) -> Self {
         let inner = arguments
             .iter()
-            .filter(|(&key, _)| is_safe_attribute(key))
+            .filter(|&(key, _)| is_safe_attribute(*key))
             .filter_map(|(key, value)| {
                 let mut value = Cow::clone(value);
 

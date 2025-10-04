@@ -74,7 +74,7 @@ fn parse_block<'r, 't>(
     for element in &mut elements {
         let (attributes, elements) = match element {
             // Swap out so we can extract fields
-            Element::Partial(PartialElement::RubyText(ref mut ruby_text)) => {
+            Element::Partial(PartialElement::RubyText(ruby_text)) => {
                 let RubyText {
                     attributes,
                     elements,
