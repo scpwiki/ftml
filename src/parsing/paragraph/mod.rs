@@ -101,11 +101,10 @@ where
             // Determine if we're ending the paragraph here,
             // or continuing with another element
             _ => {
-                if let Some(ref mut close_condition_fn) = close_condition_fn {
-                    if close_condition_fn(parser).unwrap_or(false) {
+                if let Some(ref mut close_condition_fn) = close_condition_fn &&
+                    close_condition_fn(parser).unwrap_or(false) {
                         debug!("Hit closing condition for paragraphs, terminating token iteration");
                         break;
-                    }
                 }
 
                 // Otherwise, produce consumption from this token pointer

@@ -26,9 +26,9 @@
 //! The parser is not disambiguous because any string of tokens can be interpreted
 //! as raw text as a fallback, which is how Wikidot does it.
 
+use super::Parser;
 use super::prelude::*;
 use super::rule::{get_rules_for_token, impls::RULE_FALLBACK};
-use super::Parser;
 use std::mem;
 
 /// Main function that consumes tokens to produce a single element, then returns.
@@ -90,11 +90,11 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     parser.step()?;
 
     // If we've hit the recursion limit, just bail
-    if let Some(error) = all_errors.last() {
-        if error.kind() == ParseErrorKind::RecursionDepthExceeded {
-            error!("Found recursion depth error, failing");
-            return Err(error.clone());
-        }
+    if let Some(error) = all_errors.last()
+        && error.kind() == ParseErrorKind::RecursionDepthExceeded
+    {
+        error!("Found recursion depth error, failing");
+        return Err(error.clone());
     }
 
     // Add fallback error to errors list

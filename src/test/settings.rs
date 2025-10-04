@@ -20,7 +20,7 @@
 
 use crate::data::PageInfo;
 use crate::layout::Layout;
-use crate::render::{html::HtmlRender, Render};
+use crate::render::{Render, html::HtmlRender};
 use crate::settings::{WikitextMode, WikitextSettings};
 
 #[test]

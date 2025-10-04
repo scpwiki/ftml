@@ -18,10 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::RULE_PAGE;
 use super::condition::ParseCondition;
 use super::prelude::*;
 use super::rule::Rule;
-use super::RULE_PAGE;
 use crate::data::PageInfo;
 use crate::render::text::TextRender;
 use crate::tokenizer::Tokenization;

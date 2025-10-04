@@ -131,21 +131,21 @@ pub mod tree;
 pub use self::includes::include;
 pub use self::parsing::parse;
 pub use self::preproc::preprocess;
-pub use self::tokenizer::{tokenize, Tokenization};
+pub use self::tokenizer::{Tokenization, tokenize};
 pub use self::utf16::Utf16IndexMap;
 
 /// This module collects commonly used traits from this crate.
 pub mod prelude {
     pub use super::data::{PageInfo, ScoreValue};
-    pub use super::includes::{include, Includer};
+    pub use super::includes::{Includer, include};
     pub use super::layout::Layout;
-    pub use super::parsing::{parse, ParseError, ParseResult};
+    pub use super::parsing::{ParseError, ParseResult, parse};
     pub use super::preprocess;
     pub use super::render::Render;
     pub use super::settings::{
-        InterwikiSettings, WikitextMode, WikitextSettings, DEFAULT_INTERWIKI,
-        EMPTY_INTERWIKI,
+        DEFAULT_INTERWIKI, EMPTY_INTERWIKI, InterwikiSettings, WikitextMode,
+        WikitextSettings,
     };
-    pub use super::tokenizer::{tokenize, Tokenization};
+    pub use super::tokenizer::{Tokenization, tokenize};
     pub use super::tree::{Element, SyntaxTree};
 }

@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{include, DebugIncluder, PageRef};
+use super::{DebugIncluder, PageRef, include};
 use crate::layout::Layout;
 use crate::settings::{WikitextMode, WikitextSettings};
 

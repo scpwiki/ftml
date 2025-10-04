@@ -18,8 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::prelude::*;
 use super::HtmlRender;
+use super::prelude::*;
 use crate::layout::Layout;
 use crate::tree::BibliographyList;
 

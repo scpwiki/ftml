@@ -18,14 +18,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::arguments::Arguments;
 use super::BlockRule;
+use super::arguments::Arguments;
 use crate::parsing::collect::{collect_text, collect_text_keep};
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
 use crate::parsing::{
-    gather_paragraphs, parse_string, ExtractedToken, ParseError, ParseErrorKind,
-    ParseResult, Parser, Token,
+    ExtractedToken, ParseError, ParseErrorKind, ParseResult, Parser, Token,
+    gather_paragraphs, parse_string,
 };
 use crate::tree::Element;
 use regex::Regex;
@@ -315,7 +315,7 @@ where
                             // Invalid token
                             _ => {
                                 return Err(self
-                                    .make_err(ParseErrorKind::BlockMalformedArguments))
+                                    .make_err(ParseErrorKind::BlockMalformedArguments));
                             }
                         }
                     }

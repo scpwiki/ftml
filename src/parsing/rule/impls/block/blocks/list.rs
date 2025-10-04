@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::parsing::{strip_newlines, ParserWrap};
+use crate::parsing::{ParserWrap, strip_newlines};
 use crate::tree::{AcceptsPartial, ListItem, ListType, PartialElement};
 
 // Definitions

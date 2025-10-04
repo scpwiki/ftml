@@ -20,7 +20,7 @@
 
 use super::prelude::*;
 use crate::parsing::paragraph::ParagraphStack;
-use crate::parsing::{process_depths, DepthItem, DepthList};
+use crate::parsing::{DepthItem, DepthList, process_depths};
 use crate::tree::{AttributeMap, Container, ContainerType};
 
 const MAX_BLOCKQUOTE_DEPTH: usize = 30;
@@ -58,7 +58,9 @@ fn try_consume_fn<'r, 't>(
 
         // Check that the depth isn't obscenely deep, to avoid DOS attacks via stack overflow.
         if depth > MAX_BLOCKQUOTE_DEPTH {
-            debug!("Native blockquote has a depth ({depth}) greater than the maximum ({MAX_BLOCKQUOTE_DEPTH})! Failing");
+            debug!(
+                "Native blockquote has a depth ({depth}) greater than the maximum ({MAX_BLOCKQUOTE_DEPTH})! Failing"
+            );
             return Err(parser.make_err(ParseErrorKind::BlockquoteDepthExceeded));
         }
 

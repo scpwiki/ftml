@@ -27,8 +27,8 @@ use super::super::page_info::PageInfo;
 use super::super::parsing::SyntaxTree;
 use super::super::prelude::*;
 use super::super::settings::WikitextSettings;
-use crate::render::html::{HtmlOutput as RustHtmlOutput, HtmlRender};
 use crate::render::Render;
+use crate::render::html::{HtmlOutput as RustHtmlOutput, HtmlRender};
 use std::sync::Arc;
 
 #[wasm_bindgen]

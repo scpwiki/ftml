@@ -31,8 +31,8 @@ use std::fmt::{self, Debug};
 use unicase::UniCase;
 
 pub use self::safe::{
-    is_safe_attribute, BOOLEAN_ATTRIBUTES, SAFE_ATTRIBUTES, SAFE_ATTRIBUTE_PREFIXES,
-    URL_ATTRIBUTES,
+    BOOLEAN_ATTRIBUTES, SAFE_ATTRIBUTE_PREFIXES, SAFE_ATTRIBUTES, URL_ATTRIBUTES,
+    is_safe_attribute,
 };
 
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
@@ -50,21 +50,21 @@ impl<'t> AttributeMap<'t> {
     pub fn from_arguments(arguments: &HashMap<UniCase<&'t str>, Cow<'t, str>>) -> Self {
         let inner = arguments
             .iter()
-            .filter(|(&key, _)| is_safe_attribute(key))
+            .filter(|&(key, _)| is_safe_attribute(*key))
             .filter_map(|(key, value)| {
                 let mut value = Cow::clone(value);
 
                 // Check for special boolean behavior
-                if BOOLEAN_ATTRIBUTES.contains(key) {
-                    if let Ok(boolean_value) = parse_boolean(&value) {
-                        // It's a boolean HTML attribute, like "checked".
-                        if boolean_value {
-                            // true: Have a key-only attribute
-                            value = cow!("");
-                        } else {
-                            // false: Exclude the key entirely
-                            return None;
-                        }
+                if BOOLEAN_ATTRIBUTES.contains(key)
+                    && let Ok(boolean_value) = parse_boolean(&value)
+                {
+                    // It's a boolean HTML attribute, like "checked".
+                    if boolean_value {
+                        // true: Have a key-only attribute
+                        value = cow!("");
+                    } else {
+                        // false: Exclude the key entirely
+                        return None;
                     }
                 }
 
@@ -103,11 +103,11 @@ impl<'t> AttributeMap<'t> {
     }
 
     pub fn isolate_id(&mut self, settings: &WikitextSettings) {
-        if settings.isolate_user_ids {
-            if let Some(value) = self.inner.get_mut("id") {
-                trace!("Found 'id' attribute, isolating value");
-                *value = Cow::Owned(isolate_ids(value));
-            }
+        if settings.isolate_user_ids
+            && let Some(value) = self.inner.get_mut("id")
+        {
+            trace!("Found 'id' attribute, isolating value");
+            *value = Cow::Owned(isolate_ids(value));
         }
     }
 

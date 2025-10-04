@@ -18,9 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::Element;
 use super::attribute::AttributeMap;
 use super::clone::elements_to_owned;
-use super::Element;
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
 pub struct RubyText<'t> {

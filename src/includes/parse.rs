@@ -33,8 +33,8 @@ use self::parser::*;
 use super::IncludeRef;
 use crate::data::{PageRef, PageRefParseError};
 use crate::settings::WikitextSettings;
-use pest::iterators::Pairs;
 use pest::Parser;
+use pest::iterators::Pairs;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
