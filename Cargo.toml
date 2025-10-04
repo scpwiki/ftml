@@ -56,7 +56,7 @@ proptest = "1"
 termcolor = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
 self_cell = "1.0"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
 web-sys = { version = "0.3", features = ["console"] }
