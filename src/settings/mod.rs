@@ -22,7 +22,7 @@ mod interwiki;
 
 use crate::layout::Layout;
 
-pub use self::interwiki::{InterwikiSettings, DEFAULT_INTERWIKI, EMPTY_INTERWIKI};
+pub use self::interwiki::{DEFAULT_INTERWIKI, EMPTY_INTERWIKI, InterwikiSettings};
 
 const DEFAULT_MINIFY_CSS: bool = true;
 

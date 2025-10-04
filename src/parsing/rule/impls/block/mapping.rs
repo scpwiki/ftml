@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{blocks::*, BlockRule};
+use super::{BlockRule, blocks::*};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use unicase::UniCase;

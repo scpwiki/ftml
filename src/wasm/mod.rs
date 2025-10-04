@@ -36,11 +36,11 @@ mod prelude {
 }
 
 pub use self::misc::version;
-pub use self::parsing::{parse, ParseOutcome, SyntaxTree};
+pub use self::parsing::{ParseOutcome, SyntaxTree, parse};
 pub use self::preproc::preprocess;
 pub use self::render::render_text;
 pub use self::settings::WikitextSettings;
-pub use self::tokenizer::{tokenize, Tokenization};
+pub use self::tokenizer::{Tokenization, tokenize};
 
 #[cfg(feature = "html")]
 pub use self::render::render_html;

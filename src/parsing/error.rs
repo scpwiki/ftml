@@ -18,9 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{rule::Rule, ExtractedToken, Token};
+use super::{ExtractedToken, Token, rule::Rule};
 use crate::utf16::Utf16IndexMap;
-use serde::{ser::SerializeTuple, Serializer};
+use serde::{Serializer, ser::SerializeTuple};
 use std::borrow::Cow;
 use std::ops::Range;
 use strum_macros::IntoStaticStr;

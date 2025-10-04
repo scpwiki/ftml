@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::parsing::{process_depths, DepthItem, DepthList};
+use crate::parsing::{DepthItem, DepthList, process_depths};
 use crate::tree::{AttributeMap, ListItem, ListType};
 
 const MAX_LIST_DEPTH: usize = 20;
@@ -70,14 +70,18 @@ fn try_consume_fn<'r, 't>(
 
             // Invalid token, bail
             _ => {
-                warn!("Didn't find correct bullet token or couldn't determine list depth, ending list iteration");
+                warn!(
+                    "Didn't find correct bullet token or couldn't determine list depth, ending list iteration"
+                );
                 break;
             }
         };
 
         // Check that the depth isn't obscenely deep, to avoid DOS attacks via stack overflow.
         if depth > MAX_LIST_DEPTH {
-            warn!("List item has a depth {depth} greater than the maximum ({MAX_LIST_DEPTH})! Failing");
+            warn!(
+                "List item has a depth {depth} greater than the maximum ({MAX_LIST_DEPTH})! Failing"
+            );
             return Err(parser.make_err(ParseErrorKind::ListDepthExceeded));
         }
 
@@ -86,7 +90,9 @@ fn try_consume_fn<'r, 't>(
         let list_type = match get_list_type(current.token) {
             Some(ltype) => ltype,
             None => {
-                trace!("Didn't find bullet token, couldn't determine list type, ending list iteration");
+                trace!(
+                    "Didn't find bullet token, couldn't determine list type, ending list iteration"
+                );
                 break;
             }
         };

@@ -20,13 +20,13 @@
 
 use crate::data::{PageInfo, PageRef};
 use crate::layout::Layout;
-use crate::render::{html::HtmlRender, text::TextRender, Render};
+use crate::render::{Render, html::HtmlRender, text::TextRender};
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::tree::{
-    attribute::SAFE_ATTRIBUTES, Alignment, AnchorTarget, AttributeMap, BibliographyList,
-    ClearFloat, CodeBlock, Container, ContainerType, Element, FloatAlignment, Heading,
-    HeadingLevel, ImageSource, LinkLabel, LinkLocation, LinkType, ListItem, ListType,
-    Module, SyntaxTree,
+    Alignment, AnchorTarget, AttributeMap, BibliographyList, ClearFloat, CodeBlock,
+    Container, ContainerType, Element, FloatAlignment, Heading, HeadingLevel,
+    ImageSource, LinkLabel, LinkLocation, LinkType, ListItem, ListType, Module,
+    SyntaxTree, attribute::SAFE_ATTRIBUTES,
 };
 use proptest::option;
 use proptest::prelude::*;

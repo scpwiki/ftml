@@ -357,10 +357,8 @@ mod test {
                     .sum()
             }
 
-            let actual_length: usize = depth_list
-                .iter() //
-                .map(|(_, list)| count(list))
-                .sum();
+            let actual_length: usize =
+                depth_list.iter().map(|(_, list)| count(list)).sum();
 
             // Verify that it's the same as the number of elements in the original
             assert_eq!(

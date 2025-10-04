@@ -20,8 +20,8 @@
 
 //! Representation of Wikidot modules, along with their context.
 
-use super::clone::option_string_to_owned;
 use super::AttributeMap;
+use super::clone::option_string_to_owned;
 use std::borrow::Cow;
 use std::num::NonZeroU32;
 use strum_macros::IntoStaticStr;

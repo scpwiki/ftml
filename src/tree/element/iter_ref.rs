@@ -50,8 +50,8 @@ impl<'e, 't> Iterator for BorrowedElementsIterator<'e, 't> {
     fn next(&mut self) -> Option<&'e Element<'t>> {
         match self {
             BorrowedElementsIterator::None => None,
-            BorrowedElementsIterator::Single(ref mut element) => element.take(),
-            BorrowedElementsIterator::Multiple(ref mut elements, ref mut index) => {
+            BorrowedElementsIterator::Single(element) => element.take(),
+            BorrowedElementsIterator::Multiple(elements, index) => {
                 let next = elements.get(*index);
                 *index += 1;
                 next

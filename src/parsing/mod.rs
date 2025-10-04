@@ -48,9 +48,9 @@ mod prelude {
     pub use crate::tree::{Element, Elements};
 }
 
-use self::depth::{process_depths, DepthItem, DepthList};
+use self::depth::{DepthItem, DepthList, process_depths};
 use self::element_condition::{ElementCondition, ElementConditionType};
-use self::paragraph::{gather_paragraphs, NO_CLOSE_CONDITION};
+use self::paragraph::{NO_CLOSE_CONDITION, gather_paragraphs};
 use self::parser::Parser;
 use self::parser_wrap::ParserWrap;
 use self::rule::impls::RULE_PAGE;
@@ -66,7 +66,7 @@ use crate::tree::{
 };
 use std::borrow::Cow;
 
-pub use self::boolean::{parse_boolean, NonBooleanValue};
+pub use self::boolean::{NonBooleanValue, parse_boolean};
 pub use self::error::{ParseError, ParseErrorKind};
 pub use self::outcome::ParseOutcome;
 pub use self::result::{ParseResult, ParseSuccess};

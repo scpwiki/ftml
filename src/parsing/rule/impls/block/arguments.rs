@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::parsing::{parse_boolean, ParseError, ParseErrorKind, Parser};
+use crate::parsing::{ParseError, ParseErrorKind, Parser, parse_boolean};
 use crate::settings::WikitextSettings;
 use crate::tree::AttributeMap;
 use std::borrow::Cow;

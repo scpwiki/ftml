@@ -36,7 +36,7 @@ pub fn render_table(ctx: &mut HtmlContext, table: &Table) {
             ctx.html().tbody().inner(|ctx| {
                 // Each row
                 for row in &table.rows {
-                    ctx.html() //
+                    ctx.html()
                         .tr()
                         .attr(attr!(;; &row.attributes))
                         .inner(|ctx| {

@@ -33,8 +33,8 @@ mod lexer {
 
 use self::lexer::*;
 use crate::utf16::Utf16IndexMap;
-use pest::iterators::Pair;
 use pest::Parser;
+use pest::iterators::Pair;
 use std::ops::Range;
 use strum_macros::IntoStaticStr;
 

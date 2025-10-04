@@ -19,9 +19,9 @@
  */
 
 use super::prelude::*;
+use crate::Tokenization as RustTokenization;
 use crate::parsing::ExtractedToken as RustExtractedToken;
 use crate::utf16::Utf16IndexMap;
-use crate::Tokenization as RustTokenization;
 use self_cell::self_cell;
 use std::sync::Arc;
 

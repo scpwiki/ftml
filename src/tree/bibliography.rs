@@ -26,8 +26,8 @@
 //!
 //! The first reference found is the one used.
 
-use super::clone::{elements_to_owned, string_to_owned};
 use super::Element;
+use super::clone::{elements_to_owned, string_to_owned};
 use std::borrow::Cow;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]

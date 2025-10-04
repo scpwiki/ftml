@@ -148,9 +148,7 @@ const TEST_CASES: [(&str, &str); 7] = [
         "concat:\napple banana CherryPineapple \\ grape\nblueberry",
     ),
     ("<\n        \n      \n  \n      \n>", "<\n\n>"),
-    (
-        "\u{00a0}\u{00a0}\u{2007} apple", "    apple",
-    ),
+    ("\u{00a0}\u{00a0}\u{2007} apple", "    apple"),
 ];
 
 #[test]

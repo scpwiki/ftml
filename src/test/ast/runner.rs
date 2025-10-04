@@ -23,9 +23,9 @@
 use super::{Test, TestResult, TestStats, TestUniverse};
 use crate::data::{PageInfo, ScoreValue};
 use crate::layout::Layout;
+use crate::render::Render;
 use crate::render::html::HtmlRender;
 use crate::render::text::TextRender;
-use crate::render::Render;
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::test::includer::TestIncluder;
 use std::borrow::Cow;

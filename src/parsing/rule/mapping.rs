@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{impls::*, Rule};
+use super::{Rule, impls::*};
 use crate::parsing::token::{ExtractedToken, Token};
 use enum_map::EnumMap;
 use std::sync::LazyLock;

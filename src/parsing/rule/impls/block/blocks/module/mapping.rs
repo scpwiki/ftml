@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{modules::*, ModuleRule};
+use super::{ModuleRule, modules::*};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use unicase::UniCase;

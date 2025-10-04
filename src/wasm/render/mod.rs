@@ -28,8 +28,8 @@ use super::page_info::PageInfo;
 use super::parsing::SyntaxTree;
 use super::prelude::*;
 use super::settings::WikitextSettings;
-use crate::render::text::TextRender;
 use crate::render::Render;
+use crate::render::text::TextRender;
 
 // Function exports
 

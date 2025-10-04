@@ -61,7 +61,6 @@ const PREFILTER_TEST_CASES: [(&str, &str); 10] = [
     ("[\n  \n    \n       \n  \n      \n \n   \n]", "[\n\n]"),
     (
         "SCP-4455-Ω said, ``It was a dark and stormy night. I looked down on my arch-nemesis, the Streamliner.''",
-
         "SCP-4455-Ω said, “It was a dark and stormy night. I looked down on my arch-nemesis, the Streamliner.”",
     ),
     (
