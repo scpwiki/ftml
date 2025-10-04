@@ -1,5 +1,5 @@
 # Rust edition
-edition = "2021"
+edition = "2024"
 
 # Formatting options
 max_width = 90
