@@ -55,16 +55,16 @@ impl<'t> AttributeMap<'t> {
                 let mut value = Cow::clone(value);
 
                 // Check for special boolean behavior
-                if BOOLEAN_ATTRIBUTES.contains(key) {
-                    if let Ok(boolean_value) = parse_boolean(&value) {
-                        // It's a boolean HTML attribute, like "checked".
-                        if boolean_value {
-                            // true: Have a key-only attribute
-                            value = cow!("");
-                        } else {
-                            // false: Exclude the key entirely
-                            return None;
-                        }
+                if BOOLEAN_ATTRIBUTES.contains(key)
+                    && let Ok(boolean_value) = parse_boolean(&value)
+                {
+                    // It's a boolean HTML attribute, like "checked".
+                    if boolean_value {
+                        // true: Have a key-only attribute
+                        value = cow!("");
+                    } else {
+                        // false: Exclude the key entirely
+                        return None;
                     }
                 }
 
@@ -103,11 +103,11 @@ impl<'t> AttributeMap<'t> {
     }
 
     pub fn isolate_id(&mut self, settings: &WikitextSettings) {
-        if settings.isolate_user_ids {
-            if let Some(value) = self.inner.get_mut("id") {
-                trace!("Found 'id' attribute, isolating value");
-                *value = Cow::Owned(isolate_ids(value));
-            }
+        if settings.isolate_user_ids
+            && let Some(value) = self.inner.get_mut("id")
+        {
+            trace!("Found 'id' attribute, isolating value");
+            *value = Cow::Owned(isolate_ids(value));
         }
     }
 

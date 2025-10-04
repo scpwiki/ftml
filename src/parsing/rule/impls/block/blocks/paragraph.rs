@@ -50,10 +50,10 @@ fn parse_fn<'r, 't>(
 
     // Apply attributes to each paragraph
     for element in &mut elements {
-        if let Element::Container(container) = element {
-            if container.ctype() == ContainerType::Paragraph {
-                container.attributes_mut().clone_from(&attributes);
-            }
+        if let Element::Container(container) = element
+            && container.ctype() == ContainerType::Paragraph
+        {
+            container.attributes_mut().clone_from(&attributes);
         }
     }
 

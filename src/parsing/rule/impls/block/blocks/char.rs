@@ -89,17 +89,17 @@ fn find_entity(entity: &str) -> Option<Cow<'_, str>> {
     }
 
     // Hexadecimal entity
-    if let Some(value) = entity.strip_prefix("#x") {
-        if let Some(result) = get_char(value, 16) {
-            return Some(result);
-        }
+    if let Some(value) = entity.strip_prefix("#x")
+        && let Some(result) = get_char(value, 16)
+    {
+        return Some(result);
     }
 
     // Decimal entity
-    if let Some(value) = entity.strip_prefix('#') {
-        if let Some(result) = get_char(value, 10) {
-            return Some(result);
-        }
+    if let Some(value) = entity.strip_prefix('#')
+        && let Some(result) = get_char(value, 10)
+    {
+        return Some(result);
     }
 
     // Not found
