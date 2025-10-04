@@ -50,7 +50,7 @@ mod prelude {
 }
 
 use self::bibliography::{render_bibcite, render_bibliography};
-use self::collapsible::{render_collapsible, Collapsible};
+use self::collapsible::{Collapsible, render_collapsible};
 use self::container::{render_color, render_container};
 use self::date::render_date;
 use self::definition_list::render_definition_list;
@@ -69,8 +69,8 @@ use self::tabs::render_tabview;
 use self::text::{render_code, render_email, render_wikitext_raw};
 use self::toc::render_table_of_contents;
 use self::user::render_user;
-use super::attributes::AddedAttributes;
 use super::HtmlContext;
+use super::attributes::AddedAttributes;
 use crate::tree::{CodeBlock, Element};
 use ref_map::*;
 

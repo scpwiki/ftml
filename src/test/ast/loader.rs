@@ -265,7 +265,9 @@ impl Test {
                 }
 
                 match filename {
-                    "input.ftml" => panic!("Empty wikitext inputs are not allowed!\nThe whole point of an AST test is to test it against some input, so please fill this out before attempting to update test outputs!"),
+                    "input.ftml" => panic!(
+                        "Empty wikitext inputs are not allowed!\nThe whole point of an AST test is to test it against some input, so please fill this out before attempting to update test outputs!"
+                    ),
                     "tree.json" => tree = Some(empty_syntax_tree()),
                     "errors.json" => errors = Some(Vec::new()),
                     "wikidot.html" => wikidot_output = Some(String::new()),

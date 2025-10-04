@@ -20,9 +20,9 @@
 
 mod prelude {
     pub use super::super::{Arguments, BlockRule};
+    pub use crate::parsing::ParseError;
     pub use crate::parsing::parser::Parser;
     pub use crate::parsing::prelude::*;
-    pub use crate::parsing::ParseError;
     pub use crate::tree::{Container, ContainerType, Element};
 
     #[cfg(debug_assertions)]

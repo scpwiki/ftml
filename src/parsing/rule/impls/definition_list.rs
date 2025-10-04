@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::parsing::{strip_whitespace, Token};
+use crate::parsing::{Token, strip_whitespace};
 use crate::tree::DefinitionListItem;
 
 pub const RULE_DEFINITION_LIST: Rule = Rule {
@@ -83,7 +83,9 @@ fn parse_definition_list<'r, 't>(
                     }
                 }
                 Err(error) => {
-                    warn!("Failed to get the next definition list item, ending iteration: {error:?}");
+                    warn!(
+                        "Failed to get the next definition list item, ending iteration: {error:?}"
+                    );
                     break;
                 }
             }

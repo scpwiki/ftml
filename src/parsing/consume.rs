@@ -26,9 +26,9 @@
 //! The parser is not disambiguous because any string of tokens can be interpreted
 //! as raw text as a fallback, which is how Wikidot does it.
 
+use super::Parser;
 use super::prelude::*;
 use super::rule::{get_rules_for_token, impls::RULE_FALLBACK};
-use super::Parser;
 use std::mem;
 
 /// Main function that consumes tokens to produce a single element, then returns.

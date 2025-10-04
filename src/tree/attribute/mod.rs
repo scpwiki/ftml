@@ -31,8 +31,8 @@ use std::fmt::{self, Debug};
 use unicase::UniCase;
 
 pub use self::safe::{
-    is_safe_attribute, BOOLEAN_ATTRIBUTES, SAFE_ATTRIBUTES, SAFE_ATTRIBUTE_PREFIXES,
-    URL_ATTRIBUTES,
+    BOOLEAN_ATTRIBUTES, SAFE_ATTRIBUTE_PREFIXES, SAFE_ATTRIBUTES, URL_ATTRIBUTES,
+    is_safe_attribute,
 };
 
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq)]

@@ -20,7 +20,7 @@
 
 use crate::data::{PageInfo, ScoreValue};
 use crate::layout::Layout;
-use crate::settings::{WikitextMode, WikitextSettings, EMPTY_INTERWIKI};
+use crate::settings::{EMPTY_INTERWIKI, WikitextMode, WikitextSettings};
 use crate::tree::{
     AttributeMap, Container, ContainerType, Element, ImageSource, ListItem, ListType,
 };

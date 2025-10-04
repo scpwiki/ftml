@@ -18,8 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::clone::{elements_to_owned, string_to_owned};
 use super::Element;
+use super::clone::{elements_to_owned, string_to_owned};
 use std::borrow::Cow;
 
 pub type DefinitionList<'t> = Vec<DefinitionListItem<'t>>;

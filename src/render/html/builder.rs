@@ -212,11 +212,7 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         ) -> impl Iterator<Item = (&'a str, &'a [&'a str])> {
             attributes.entries.iter().filter_map(
                 |(item, accept)| {
-                    if *accept {
-                        Some(*item)
-                    } else {
-                        None
-                    }
+                    if *accept { Some(*item) } else { None }
                 },
             )
         }

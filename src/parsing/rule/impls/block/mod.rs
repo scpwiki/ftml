@@ -24,9 +24,9 @@
 //! against the upcoming tokens in accordance to how the
 //! various blocks define themselves.
 
+use crate::parsing::Parser;
 use crate::parsing::result::ParseResult;
 use crate::parsing::rule::{LineRequirement, Rule};
-use crate::parsing::Parser;
 use crate::tree::Elements;
 use std::fmt::{self, Debug};
 

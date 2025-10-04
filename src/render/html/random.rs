@@ -19,7 +19,7 @@
  */
 
 use cfg_if::cfg_if;
-use rand::{distr::Alphanumeric, rngs::SmallRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, distr::Alphanumeric, rngs::SmallRng};
 use std::iter;
 
 #[cfg(test)]
