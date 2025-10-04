@@ -60,16 +60,14 @@ $ cargo check --no-default-features
 If you wish to build the WebAssembly target for ftml, use `wasm-pack`:
 
 ```
-$ wasm-pack build -- --no-default-features
+$ RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build -- --no-default-features
 ```
 
 This optimizes the final WASM, which can take some time. If you are developing and are only interested in the build passing, you should instead use:
 
 ```
-$ wasm-pack build --dev
+$ RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --dev
 ```
-
-If for some reason you want to invoke `cargo check` instead, call `cargo check --target wasm32-unknown-unkown`.
 
 ### Testing
 
