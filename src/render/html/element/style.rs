@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use parcel_css::stylesheet::{ParserOptions, PrinterOptions, StyleSheet};
+use lightningcss::stylesheet::{ParserOptions, PrinterOptions, StyleSheet};
 
 pub fn render_style(ctx: &mut HtmlContext, input_css: &str) {
     let minify = ctx.settings().minify_css;
