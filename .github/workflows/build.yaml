@@ -55,7 +55,7 @@ jobs:
     name: WebASM
     runs-on: ubuntu-latest
     env:
-      RUSTFLAGS: -A unused -D warnings
+      RUSTFLAGS: -A unused -D warnings --cfg getrandom_backend="wasm_js"
     steps:
       - name: Checkout
         uses: actions/checkout@v2
