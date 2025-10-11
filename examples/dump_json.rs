@@ -30,7 +30,9 @@ use clap::{Arg, ArgAction, Command, value_parser};
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
 use ftml::settings::{WikitextMode, WikitextSettings};
+use serde::Serialize;
 use std::borrow::Cow;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -49,9 +51,16 @@ enum OutputType {
     Rust,
 }
 
+#[derive(Debug, Copy, Clone)]
+enum OutputField {
+    SyntaxTree,
+    Errors,
+}
+
 #[derive(Debug)]
 struct Config {
     output_type: OutputType,
+    output_field: OutputField,
     pretty: bool,
     layout: Layout,
     input_path: Option<PathBuf>,
@@ -62,6 +71,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             output_type: OutputType::Json,
+            output_field: OutputField::SyntaxTree,
             pretty: true,
             layout: Layout::Wikidot,
             input_path: None,
@@ -106,6 +116,13 @@ fn parse_args() -> Config {
                 .help("Specify a custom page info object for use."),
         )
         .arg(
+            Arg::new("error-output")
+                .short('e')
+                .long("emit-errors")
+                .action(ArgAction::SetTrue)
+                .help("Emit the list of errors instead of the syntax tree."),
+        )
+        .arg(
             Arg::new("input-file")
                 .short('i')
                 .long("input")
@@ -117,6 +134,10 @@ fn parse_args() -> Config {
 
     if matches.remove_one::<bool>("rust-output") == Some(true) {
         config.output_type = OutputType::Rust;
+    }
+
+    if matches.remove_one::<bool>("error-output") == Some(true) {
+        config.output_field = OutputField::Errors;
     }
 
     if matches.remove_one::<bool>("compact-output") == Some(true) {
@@ -179,12 +200,33 @@ fn get_settings(mut config: Config) -> (PageInfo<'static>, WikitextSettings) {
     (page_info, settings)
 }
 
-// Main
+// Main functions
+
+fn output_data<T: Serialize + Debug>(
+    output_type: OutputType,
+    pretty_print: bool,
+    data: &T,
+) {
+    macro_rules! print_json {
+        ($method:ident) => {{
+            let mut stream = io::stdout().lock();
+            serde_json::$method(&mut stream, data).expect("Unable to emit JSON");
+        }};
+    }
+
+    match (output_type, pretty_print) {
+        (OutputType::Json, true) => print_json!(to_writer_pretty),
+        (OutputType::Json, false) => print_json!(to_writer),
+        (OutputType::Rust, true) => println!("{data:#?}"),
+        (OutputType::Rust, false) => println!("{data:?}"),
+    }
+}
 
 fn main() {
     let config = parse_args();
     let input = get_wikitext(config.input_path.as_deref());
-    let (output_type, pretty_print) = (config.output_type, config.pretty);
+    let (output_type, output_field, pretty_print) =
+        (config.output_type, config.output_field, config.pretty);
     let (page_info, parse_settings) = get_settings(config);
 
     let (mut wikitext, _pages) = ftml::include(
@@ -200,17 +242,8 @@ fn main() {
     let result = ftml::parse(&tokens, &page_info, &parse_settings);
     let (tree, errors) = result.into();
 
-    macro_rules! print_json {
-        ($method:ident) => {{
-            let mut stream = io::stdout().lock();
-            serde_json::$method(&mut stream, &tree).expect("Unable to emit JSON");
-        }};
-    }
-
-    match (output_type, pretty_print) {
-        (OutputType::Json, true) => print_json!(to_writer_pretty),
-        (OutputType::Json, false) => print_json!(to_writer),
-        (OutputType::Rust, true) => println!("{tree:#?}"),
-        (OutputType::Rust, false) => println!("{tree:?}"),
+    match output_field {
+        OutputField::SyntaxTree => output_data(output_type, pretty_print, &tree),
+        OutputField::Errors => output_data(output_type, pretty_print, &errors),
     }
 }
