@@ -942,6 +942,80 @@
                                 "data": "]"
                             }
                         ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "page",
+                                    "link": {
+                                        "site": null,
+                                        "page": "page-slug"
+                                    },
+                                    "extra": null,
+                                    "label": {
+                                        "text": "A|B|C"
+                                    },
+                                    "target": null
+                                }
+                            },
+                            {
+                                "element": "text",
+                                "data": " "
+                            },
+                            {
+                                "element": "text",
+                                "data": "("
+                            },
+                            {
+                                "element": "text",
+                                "data": "label"
+                            },
+                            {
+                                "element": "text",
+                                "data": " "
+                            },
+                            {
+                                "element": "text",
+                                "data": "with"
+                            },
+                            {
+                                "element": "text",
+                                "data": " "
+                            },
+                            {
+                                "element": "text",
+                                "data": "pipes"
+                            },
+                            {
+                                "element": "text",
+                                "data": ")"
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "page",
+                                    "link": {
+                                        "site": null,
+                                        "page": "page-slug"
+                                    },
+                                    "extra": null,
+                                    "label": {
+                                        "text": "A | B | C"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
                     }
                 ]
             }
