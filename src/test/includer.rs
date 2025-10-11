@@ -62,7 +62,6 @@ impl<'t> Includer<'t> for TestIncluder {
         for include in includes {
             let page_ref = include.page_ref().clone();
             let content = get_page_source(&page_ref);
-
             pages.push(FetchedPage { page_ref, content });
         }
 
