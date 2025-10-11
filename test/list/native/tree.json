@@ -1255,6 +1255,102 @@
             }
         },
         {
+            "element": "container",
+            "data": {
+                "type": {
+                    "header": {
+                        "level": 2,
+                        "has-toc": true
+                    }
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Empty"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "a"
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "b"
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "c"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "a"
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "b"
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "c"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
             "element": "footnote-block",
             "data": {
                 "title": null,
@@ -1360,6 +1456,24 @@
                                                 "extra": null,
                                                 "label": {
                                                     "text": "Mixed"
+                                                },
+                                                "target": null
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "link",
+                                            "data": {
+                                                "type": "table-of-contents",
+                                                "link": "#toc5",
+                                                "extra": null,
+                                                "label": {
+                                                    "text": "Empty"
                                                 },
                                                 "target": null
                                             }

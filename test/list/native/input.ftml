@@ -102,3 +102,17 @@ pineapple
   # 2
   # 3
  * B
+
+++ Empty
+
+* a
+* 
+* b
+*  	 
+* c
+
+[!-- should be the same as --]
+
+* a
+* b
+* c
