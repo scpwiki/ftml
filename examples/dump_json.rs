@@ -124,8 +124,6 @@ fn parse_args() -> Config {
         )
         .arg(
             Arg::new("input-file")
-                .short('i')
-                .long("input")
                 .value_parser(value_parser!(PathBuf))
                 .value_name("PATH")
                 .help("Read wikitext from this file instead of stdin."),
