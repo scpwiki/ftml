@@ -122,6 +122,12 @@ fn try_consume_fn<'r, 't>(
         )?
         .chain(&mut errors, &mut paragraph_safe);
 
+        // Empty list lines are ignored
+        if elements.is_empty() {
+            trace!("Skipping empty list line");
+            continue;
+        }
+
         // Append list line
         depths.push((depth, list_type, elements));
     }
