@@ -36,7 +36,8 @@ pub enum LinkLocation<'a> {
 }
 
 impl<'a> LinkLocation<'a> {
-    pub fn parse_interwiki(
+    /// Like `parse()`, but also handles interwiki links.
+    pub fn parse_with_interwiki(
         link: Cow<'a, str>,
         settings: &WikitextSettings,
     ) -> Option<(Self, LinkType)> {
