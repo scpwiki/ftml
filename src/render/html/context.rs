@@ -67,7 +67,7 @@ where
     //
     // Cached data
     //
-    pages_exists: HashMap<PageRef<'static>, bool>,
+    pages_exists: HashMap<PageRef, bool>,
 
     //
     // Other fields to track

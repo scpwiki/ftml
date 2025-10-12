@@ -64,7 +64,6 @@ impl<'t> Includer<'t> for DebugIncluder {
             };
 
             let page_ref = include.page_ref().clone();
-
             pages.push(FetchedPage { page_ref, content });
         }
 
@@ -74,7 +73,7 @@ impl<'t> Includer<'t> for DebugIncluder {
     #[inline]
     fn no_such_include(
         &mut self,
-        page_ref: &PageRef<'t>,
+        page_ref: &PageRef,
     ) -> Result<Cow<'t, str>, Infallible> {
         Ok(Cow::Owned(format!("<MISSING-PAGE {page_ref}>")))
     }

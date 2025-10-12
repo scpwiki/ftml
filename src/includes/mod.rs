@@ -60,7 +60,7 @@ pub fn include<'t, I, E, F>(
     settings: &WikitextSettings,
     mut includer: I,
     invalid_return: F,
-) -> Result<(String, Vec<PageRef<'t>>), E>
+) -> Result<(String, Vec<PageRef>), E>
 where
     I: Includer<'t, Error = E>,
     F: FnOnce() -> E,

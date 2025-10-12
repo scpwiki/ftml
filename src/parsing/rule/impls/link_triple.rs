@@ -117,11 +117,11 @@ fn build_same<'r, 't>(
     let label = strip_category(url).map(Cow::Borrowed);
 
     // Parse out link location
-    let (link, ltype) = match LinkLocation::parse_with_interwiki(cow!(url), parser.settings())
-    {
-        Some(result) => result,
-        None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
-    };
+    let (link, ltype) =
+        match LinkLocation::parse_with_interwiki(cow!(url), parser.settings()) {
+            Some(result) => result,
+            None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
+        };
 
     // Build and return element
     let element = Element::Link {
@@ -171,11 +171,11 @@ fn build_separate<'r, 't>(
     };
 
     // Parse out link location
-    let (link, ltype) = match LinkLocation::parse_with_interwiki(cow!(url), parser.settings())
-    {
-        Some(result) => result,
-        None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
-    };
+    let (link, ltype) =
+        match LinkLocation::parse_with_interwiki(cow!(url), parser.settings()) {
+            Some(result) => result,
+            None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
+        };
 
     // Build link element
     let element = Element::Link {

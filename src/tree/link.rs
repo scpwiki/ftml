@@ -29,7 +29,7 @@ use strum_macros::EnumIter;
 #[serde(untagged)]
 pub enum LinkLocation<'a> {
     /// This link points to a particular page on a wiki.
-    Page(PageRef<'a>),
+    Page(PageRef),
 
     /// This link is to a specific URL.
     Url(Cow<'a, str>),
@@ -79,7 +79,7 @@ impl<'a> LinkLocation<'a> {
 
         match PageRef::parse(link_str) {
             Err(_) => LinkLocation::Url(Cow::Owned(link_str.to_owned())),
-            Ok(page_ref) => LinkLocation::Page(page_ref.to_owned()),
+            Ok(page_ref) => LinkLocation::Page(page_ref),
         }
     }
 
@@ -126,23 +126,21 @@ impl<'a> LinkLocation<'a> {
 fn test_link_location() {
     macro_rules! check {
         ($input:expr => $site:expr, $page:expr) => {{
-            let site = $site.map(|site| cow!(site));
-            let page = cow!($page);
+            let site_opt: Option<&str> = $site;
+            let site = site_opt.map(|s| str!(s));
+            let page = str!($page);
             let expected = LinkLocation::Page(PageRef { site, page });
-
             check!($input; expected);
         }};
 
         ($input:expr => $url:expr) => {
             let url = cow!($url);
             let expected = LinkLocation::Url(url);
-
             check!($input; expected);
         };
 
         ($input:expr; $expected:expr) => {{
             let actual = LinkLocation::parse(cow!($input));
-
             assert_eq!(
                 actual,
                 $expected,

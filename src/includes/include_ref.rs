@@ -28,13 +28,13 @@ use crate::tree::VariableMap;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct IncludeRef<'t> {
-    page_ref: PageRef<'t>,
+    page_ref: PageRef,
     variables: VariableMap<'t>,
 }
 
 impl<'t> IncludeRef<'t> {
     #[inline]
-    pub fn new(page_ref: PageRef<'t>, variables: VariableMap<'t>) -> Self {
+    pub fn new(page_ref: PageRef, variables: VariableMap<'t>) -> Self {
         IncludeRef {
             page_ref,
             variables,
@@ -42,12 +42,12 @@ impl<'t> IncludeRef<'t> {
     }
 
     #[inline]
-    pub fn page_only(page_ref: PageRef<'t>) -> Self {
+    pub fn page_only(page_ref: PageRef) -> Self {
         IncludeRef::new(page_ref, VariableMap::new())
     }
 
     #[inline]
-    pub fn page_ref(&self) -> &PageRef<'t> {
+    pub fn page_ref(&self) -> &PageRef {
         &self.page_ref
     }
 
@@ -57,9 +57,9 @@ impl<'t> IncludeRef<'t> {
     }
 }
 
-impl<'t> From<IncludeRef<'t>> for (PageRef<'t>, VariableMap<'t>) {
+impl<'t> From<IncludeRef<'t>> for (PageRef, VariableMap<'t>) {
     #[inline]
-    fn from(include: IncludeRef<'t>) -> (PageRef<'t>, VariableMap<'t>) {
+    fn from(include: IncludeRef<'t>) -> (PageRef, VariableMap<'t>) {
         let IncludeRef {
             page_ref,
             variables,
@@ -75,7 +75,7 @@ impl<'t> From<IncludeRef<'t>> for (PageRef<'t>, VariableMap<'t>) {
 fn to_owned() {
     // Clone PageRef
     let page_ref_1 = PageRef::page_only("scp-001");
-    let page_ref_2: PageRef<'static> = page_ref_1.to_owned();
+    let page_ref_2 = page_ref_1.clone();
     assert_eq!(page_ref_1, page_ref_2);
 
     // Clone IncludeRef

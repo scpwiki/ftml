@@ -39,7 +39,7 @@ impl<'t> Includer<'t> for NullIncluder {
     #[inline]
     fn no_such_include(
         &mut self,
-        _page_ref: &PageRef<'t>,
+        _page_ref: &PageRef,
     ) -> Result<Cow<'t, str>, Infallible> {
         Ok(Cow::Borrowed(""))
     }

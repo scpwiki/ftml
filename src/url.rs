@@ -93,7 +93,6 @@ pub fn normalize_link<'a>(
         LinkLocation::Url(url) => normalize_href(url),
         LinkLocation::Page(page_ref) => {
             let (site, page) = page_ref.fields();
-
             match site {
                 Some(site) => Cow::Owned(helper.build_url(site, page)),
                 None => normalize_href(page),
