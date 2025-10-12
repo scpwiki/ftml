@@ -28,6 +28,8 @@ use super::{ExtractedToken, ParseError, Parser, Token};
 /// # Panics
 /// Since an assert is used, this function will panic
 /// if the extracted token does not match the one specified.
+///
+/// If you want an error to be returned instead, then use `check_step()`.
 pub fn assert_step<'r, 't>(
     parser: &mut Parser<'r, 't>,
     token: Token,
@@ -38,6 +40,32 @@ pub fn assert_step<'r, 't>(
     Ok(current)
 }
 
+/// Helper function to check that the current token matches, then step.
+///
+/// # Returns
+/// The `ExtractedToken` which was checked and stepped over.
+/// However, if the current token does *not* match, the given error
+/// specified by `kind` is returned instead.
+///
+/// If you want the function to panic instead, then use `assert_step()`.
+pub fn check_step<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    token: Token,
+    kind: ParseErrorKind,
+) -> Result<&'r ExtractedToken<'t>, ParseError> {
+    let current = parser.current();
+    if current.token != token {
+        error!(
+            "check_step() failed, expected {}, but got {} (error: {})",
+            token.name(),
+            current.token.name(),
+            kind.name(),
+        );
+        return Err(parser.make_err(kind));
+    }
+    parser.step()?;
+    Ok(current)
+}
 
 
 #[test]
