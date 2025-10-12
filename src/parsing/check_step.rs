@@ -69,7 +69,6 @@ pub fn check_step<'r, 't>(
 
 
 #[test]
-#[should_panic]
 fn test_assert_step() {
     use crate::data::PageInfo;
     use crate::layout::Layout;
@@ -77,8 +76,9 @@ fn test_assert_step() {
 
     let page_info = PageInfo::dummy();
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-    let tokenization = crate::tokenize("**Apple** banana");
+    let tokenization = crate::tokenize("//Apple// banana");
     let mut parser = Parser::new(&tokenization, &page_info, &settings);
+    parser.step().expect("cannot step"); // get over the Token::InputStart
 
     let _ = assert_step(&mut parser, Token::Italics);
 }
