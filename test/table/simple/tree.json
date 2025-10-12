@@ -161,7 +161,7 @@
                             {
                                 "header": false,
                                 "column-span": 1,
-                                "align": "left",
+                                "align": null,
                                 "attributes": {},
                                 "elements": [
                                     {
@@ -491,7 +491,7 @@
                             {
                                 "header": false,
                                 "column-span": 1,
-                                "align": "left",
+                                "align": null,
                                 "attributes": {},
                                 "elements": [
                                     {
@@ -514,6 +514,69 @@
                                                 }
                                             ]
                                         }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "element": "table",
+            "data": {
+                "attributes": {
+                    "class": "wj-table"
+                },
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "«"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "french"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": " "
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "quotes"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "»"
+                                    }
+                                ]
+                            },
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "<"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "div"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": ">"
                                     }
                                 ]
                             }

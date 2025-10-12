@@ -8,7 +8,7 @@ Banana || Cherry_ || _Pineapple _
  _
 Melon ||
 
-||< Left  ||= Center ||
+||  Left  ||= Center ||
 || Normal ||> Right  ||
 ||        ||  Empty  ||
 
@@ -21,4 +21,7 @@ Melon ||
 |||| Durian ||
 
 ||~ **Bold** stuff, //and// also ##blue|color## ||
-||<[[span]]inline block[[/span]] ||
+||[[span]]inline block[[/span]] ||
+
+[!-- WJ-1095 --]
+||<<french quotes>>||<div>||
