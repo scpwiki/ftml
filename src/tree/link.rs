@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::clone::{option_string_to_owned, string_to_owned};
+use super::clone::string_to_owned;
 use crate::data::PageRef;
 use crate::settings::WikitextSettings;
 use crate::url::is_url;
@@ -209,11 +209,21 @@ pub enum LinkLabel<'a> {
     /// Can be set to any arbitrary value of the input text's choosing.
     Text(Cow<'a, str>),
 
+    /// Page slug-based link label.
+    ///
+    /// This is set when the link is also the label.
+    /// The link is pre-normalization but post-category stripping.
+    ///
+    /// For instance:
+    /// * `[[[SCP-001]]]`
+    /// * `[[[Ethics Committee Orientation]]]`
+    /// * `[[[system: Recent Pages]]]`
+    Slug(Cow<'a, str>),
+
     /// URL-mirroring link label.
     ///
-    /// If `None`, then the label for this link is the same as the URL.
-    /// If `Some(_)`, then the label is a subslice of the URL it targets.
-    Url(Option<Cow<'a, str>>),
+    /// This is where the label is just the same as the URL.
+    Url,
 
     /// Article title-based link label.
     ///
@@ -225,7 +235,8 @@ impl LinkLabel<'_> {
     pub fn to_owned(&self) -> LinkLabel<'static> {
         match self {
             LinkLabel::Text(text) => LinkLabel::Text(string_to_owned(text)),
-            LinkLabel::Url(url) => LinkLabel::Url(option_string_to_owned(url)),
+            LinkLabel::Slug(text) => LinkLabel::Slug(string_to_owned(text)),
+            LinkLabel::Url => LinkLabel::Url,
             LinkLabel::Page => LinkLabel::Page,
         }
     }

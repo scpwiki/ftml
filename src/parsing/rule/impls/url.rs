@@ -38,7 +38,7 @@ fn try_consume_fn<'r, 't>(
         ltype: LinkType::Direct,
         link: LinkLocation::Url(url),
         extra: None,
-        label: LinkLabel::Url(None),
+        label: LinkLabel::Url,
         target: None,
     };
 
