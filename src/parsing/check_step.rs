@@ -28,7 +28,6 @@ use super::{ExtractedToken, ParseError, Parser, Token};
 /// # Panics
 /// Since an assert is used, this function will panic
 /// if the extracted token does not match the one specified.
-#[inline]
 pub fn assert_step<'r, 't>(
     parser: &mut Parser<'r, 't>,
     token: Token,
