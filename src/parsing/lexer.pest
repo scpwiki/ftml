@@ -83,7 +83,6 @@ token = _{
 
     // Tables
     table_column_title |
-    table_column_left |
     table_column_right |
     table_column_center |
     table_column |
@@ -200,8 +199,10 @@ numbered_item = @{ "#" ~ !"#" }
 
 // Tables {{{
 
+// NOTE: "table_column_left" ("||<") is not a real token,
+//       it's not supported in Wikidot and adding it can
+//       cause parsing issues. See WJ-1095.
 table_column = @{ "||" }
-table_column_left = @{ "||<" }
 table_column_right = @{ "||>" }
 table_column_center = @{ "||=" }
 table_column_title = @{ "||~" }

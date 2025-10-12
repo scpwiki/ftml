@@ -56,7 +56,6 @@ fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
                 | Token::ClearFloatRight
                 | Token::ClearFloatBoth
                 | Token::TableColumn
-                | Token::TableColumnLeft
                 | Token::TableColumnRight
                 | Token::TableColumnCenter
                 | Token::TableColumnTitle
