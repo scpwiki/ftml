@@ -34,11 +34,8 @@ pub fn check_step<'r, 't>(
     token: Token,
 ) -> Result<&'r ExtractedToken<'t>, ParseError> {
     let current = parser.current();
-
     assert_eq!(current.token, token, "Opening token isn't {}", token.name());
-
     parser.step()?;
-
     Ok(current)
 }
 
