@@ -16,3 +16,8 @@ ESCAPE
 [[html]]
 This [[span]]tag[[/span]] won't be treated as wikitext
 [[/html]]
+
+ATTRS
+[[html class="iframe" id="special-thing" data-block="html"]]
+<div>my html here</div>
+[[/html]]

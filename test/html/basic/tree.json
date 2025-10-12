@@ -16,7 +16,8 @@
         {
             "element": "html",
             "data": {
-                "contents": "<div class=\"stuff\">\n<span>Thingy</span>\n</div>"
+                "contents": "<div class=\"stuff\">\n<span>Thingy</span>\n</div>",
+                "attributes": {}
             }
         },
         {
@@ -35,7 +36,8 @@
         {
             "element": "html",
             "data": {
-                "contents": "<article><h1>Thing happens in country</h1><p>Lots of rain.</p></article>"
+                "contents": "<article><h1>Thing happens in country</h1><p>Lots of rain.</p></article>",
+                "attributes": {}
             }
         },
         {
@@ -54,7 +56,8 @@
         {
             "element": "html",
             "data": {
-                "contents": ""
+                "contents": "",
+                "attributes": {}
             }
         },
         {
@@ -73,7 +76,32 @@
         {
             "element": "html",
             "data": {
-                "contents": "This [[span]]tag[[/span]] won't be treated as wikitext"
+                "contents": "This [[span]]tag[[/span]] won't be treated as wikitext",
+                "attributes": {}
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "ATTRS"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "<div>my html here</div>",
+                "attributes": {
+                    "class": "iframe",
+                    "data-block": "html",
+                    "id": "special-thing"
+                }
             }
         },
         {
@@ -88,6 +116,7 @@
         "<div class=\"stuff\">\n<span>Thingy</span>\n</div>",
         "<article><h1>Thing happens in country</h1><p>Lots of rain.</p></article>",
         "",
-        "This [[span]]tag[[/span]] won't be treated as wikitext"
+        "This [[span]]tag[[/span]] won't be treated as wikitext",
+        "<div>my html here</div>"
     ]
 }
