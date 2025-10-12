@@ -30,7 +30,6 @@
 
 use super::prelude::*;
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation};
-use std::borrow::Cow;
 
 pub const RULE_LINK_TRIPLE: Rule = Rule {
     name: "link-triple",
@@ -113,22 +112,26 @@ fn build_same<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Building link with same URL and label (url '{url}')");
 
-    // Remove category, if present
-    let label = strip_category(url).map(Cow::Borrowed);
+    // Remove category, if present.
+    // If None, then the label is the original URL.
+    let label = match strip_category(url) {
+        Some(stripped) => cow!(stripped),
+        None => cow!(url),
+    };
 
     // Parse out link location
-    let (link, ltype) = match LinkLocation::parse_interwiki(cow!(url), parser.settings())
-    {
-        Some(result) => result,
-        None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
-    };
+    let (link, ltype) =
+        match LinkLocation::parse_with_interwiki(cow!(url), parser.settings()) {
+            Some(result) => result,
+            None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
+        };
 
     // Build and return element
     let element = Element::Link {
         ltype,
         link,
         extra: LinkLocation::parse_extra(cow!(url)),
-        label: LinkLabel::Url(label),
+        label: LinkLabel::Slug(label),
         target,
     };
 
@@ -171,11 +174,11 @@ fn build_separate<'r, 't>(
     };
 
     // Parse out link location
-    let (link, ltype) = match LinkLocation::parse_interwiki(cow!(url), parser.settings())
-    {
-        Some(result) => result,
-        None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
-    };
+    let (link, ltype) =
+        match LinkLocation::parse_with_interwiki(cow!(url), parser.settings()) {
+            Some(result) => result,
+            None => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
+        };
 
     // Build link element
     let element = Element::Link {

@@ -264,7 +264,7 @@ pub enum Element<'t> {
     Include {
         paragraph_safe: bool,
         variables: VariableMap<'t>,
-        location: PageRef<'t>,
+        location: PageRef,
         elements: Vec<Element<'t>>,
     },
 

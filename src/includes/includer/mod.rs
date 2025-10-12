@@ -40,7 +40,7 @@ pub use self::null::NullIncluder;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct FetchedPage<'t> {
-    pub page_ref: PageRef<'t>,
+    pub page_ref: PageRef,
     pub content: Option<Cow<'t, str>>,
 }
 
@@ -57,6 +57,6 @@ pub trait Includer<'t> {
     /// Handles the inclusion of a page not found.
     fn no_such_include(
         &mut self,
-        page_ref: &PageRef<'t>,
+        page_ref: &PageRef,
     ) -> Result<Cow<'t, str>, Self::Error>;
 }

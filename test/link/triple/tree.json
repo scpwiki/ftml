@@ -38,11 +38,11 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "SCP-001"
+                                        "page": "scp-001"
                                     },
                                     "extra": null,
                                     "label": {
-                                        "url": null
+                                        "slug": "SCP-001"
                                     },
                                     "target": null
                                 }
@@ -59,11 +59,11 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "SCP-001"
+                                        "page": "scp-001"
                                     },
                                     "extra": null,
                                     "label": {
-                                        "url": null
+                                        "slug": "SCP-001"
                                     },
                                     "target": "new-tab"
                                 }
@@ -151,11 +151,11 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "system:Recent Changes"
+                                        "page": "system:recent-changes"
                                     },
                                     "extra": null,
                                     "label": {
-                                        "url": "Recent Changes"
+                                        "slug": "Recent Changes"
                                     },
                                     "target": null
                                 }
@@ -196,11 +196,11 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "system: Recent Changes"
+                                        "page": "system:recent-changes"
                                     },
                                     "extra": null,
                                     "label": {
-                                        "url": "Recent Changes"
+                                        "slug": "Recent Changes"
                                     },
                                     "target": null
                                 }
@@ -217,11 +217,11 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "system:Recent Changes"
+                                        "page": "system:recent-changes"
                                     },
                                     "extra": null,
                                     "label": {
-                                        "url": "Recent Changes"
+                                        "slug": "Recent Changes"
                                     },
                                     "target": "new-tab"
                                 }
@@ -621,11 +621,11 @@
                                     "type": "page",
                                     "link": {
                                         "site": "scp-wiki",
-                                        "page": "system : Recent Changes"
+                                        "page": "system:recent-changes"
                                     },
                                     "extra": null,
                                     "label": {
-                                        "url": "Recent Changes"
+                                        "slug": "Recent Changes"
                                     },
                                     "target": null
                                 }
@@ -710,7 +710,7 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "MAIN"
+                                        "page": "main"
                                     },
                                     "extra": "/#/page",
                                     "label": {
@@ -752,7 +752,7 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "MAIN"
+                                        "page": "main"
                                     },
                                     "extra": "/##/page#toc1",
                                     "label": {
@@ -875,11 +875,11 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "SCP-001-EX"
+                                        "page": "scp-001-ex"
                                     },
                                     "extra": null,
                                     "label": {
-                                        "url": null
+                                        "slug": "SCP-001-EX"
                                     },
                                     "target": null
                                 }

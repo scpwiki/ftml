@@ -18,9 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use ref_map::*;
-use std::borrow::Cow;
 use std::fmt::{self, Display};
+use wikidot_normalize::normalize;
 
 /// Represents a reference to a page on the wiki, as used by include notation.
 ///
@@ -34,22 +33,28 @@ use std::fmt::{self, Display};
 /// Additionally "`page`" here may also contain colons, such as `component:some-thing`.
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub struct PageRef<'t> {
-    pub site: Option<Cow<'t, str>>,
-    pub page: Cow<'t, str>,
+pub struct PageRef {
+    pub site: Option<String>,
+    pub page: String,
 }
 
-impl<'t> PageRef<'t> {
+impl PageRef {
     /// Creates a [`PageRef`] with the given page and site.
     #[inline]
     pub fn page_and_site<S1, S2>(site: S1, page: S2) -> Self
     where
-        S1: Into<Cow<'t, str>>,
-        S2: Into<Cow<'t, str>>,
+        S1: Into<String>,
+        S2: Into<String>,
     {
+        let mut site = site.into();
+        let mut page = page.into();
+
+        normalize(&mut site);
+        normalize(&mut page);
+
         PageRef {
-            site: Some(site.into()),
-            page: page.into(),
+            site: Some(site),
+            page,
         }
     }
 
@@ -57,22 +62,21 @@ impl<'t> PageRef<'t> {
     #[inline]
     pub fn page_only<S>(page: S) -> Self
     where
-        S: Into<Cow<'t, str>>,
+        S: Into<String>,
     {
-        PageRef {
-            site: None,
-            page: page.into(),
-        }
+        let mut page = page.into();
+        normalize(&mut page);
+        PageRef { site: None, page }
     }
 
     #[inline]
     pub fn site(&self) -> Option<&str> {
-        self.site.ref_map(|s| s.as_ref())
+        self.site.as_deref()
     }
 
     #[inline]
     pub fn page(&self) -> &str {
-        self.page.as_ref()
+        &self.page
     }
 
     #[inline]
@@ -85,7 +89,7 @@ impl<'t> PageRef<'t> {
         (self.site().unwrap_or(current_site), self.page())
     }
 
-    pub fn parse(s: &'t str) -> Result<PageRef<'t>, PageRefParseError> {
+    pub fn parse(s: &str) -> Result<PageRef, PageRefParseError> {
         let s = s.trim();
         if s.is_empty() {
             return Err(PageRefParseError);
@@ -107,7 +111,6 @@ impl<'t> PageRef<'t> {
                 // Get site and page slices
                 let site = s[1..idx].trim();
                 let page = s[idx + 1..].trim();
-
                 PageRef::page_and_site(site, page)
             }
 
@@ -120,22 +123,9 @@ impl<'t> PageRef<'t> {
 
         Ok(result)
     }
-
-    pub fn to_owned(&self) -> PageRef<'static> {
-        macro_rules! owned {
-            ($value:expr) => {
-                Cow::Owned($value.as_ref().to_owned())
-            };
-        }
-
-        let site = self.site.ref_map(|value| owned!(value));
-        let page = owned!(self.page);
-
-        PageRef { site, page }
-    }
 }
 
-impl Display for PageRef<'_> {
+impl Display for PageRef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(site) = self.site() {
             write!(f, ":{}:", &site)?;

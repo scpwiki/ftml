@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::clone::{option_string_to_owned, string_to_owned};
+use super::clone::string_to_owned;
 use crate::data::PageRef;
 use crate::settings::WikitextSettings;
 use crate::url::is_url;
@@ -29,14 +29,15 @@ use strum_macros::EnumIter;
 #[serde(untagged)]
 pub enum LinkLocation<'a> {
     /// This link points to a particular page on a wiki.
-    Page(PageRef<'a>),
+    Page(PageRef),
 
     /// This link is to a specific URL.
     Url(Cow<'a, str>),
 }
 
 impl<'a> LinkLocation<'a> {
-    pub fn parse_interwiki(
+    /// Like `parse()`, but also handles interwiki links.
+    pub fn parse_with_interwiki(
         link: Cow<'a, str>,
         settings: &WikitextSettings,
     ) -> Option<(Self, LinkType)> {
@@ -67,11 +68,6 @@ impl<'a> LinkLocation<'a> {
             return LinkLocation::Url(link);
         }
 
-        // // Check for local links starting with '/'
-        // if link_str.starts_with('/') {
-        //     link_str = &link_str[1..];
-        // }
-
         // Take only the first segment for page
         link_str = link_str
             .split('#') // get item before the first #
@@ -83,7 +79,7 @@ impl<'a> LinkLocation<'a> {
 
         match PageRef::parse(link_str) {
             Err(_) => LinkLocation::Url(Cow::Owned(link_str.to_owned())),
-            Ok(page_ref) => LinkLocation::Page(page_ref.to_owned()),
+            Ok(page_ref) => LinkLocation::Page(page_ref),
         }
     }
 
@@ -130,23 +126,21 @@ impl<'a> LinkLocation<'a> {
 fn test_link_location() {
     macro_rules! check {
         ($input:expr => $site:expr, $page:expr) => {{
-            let site = $site.map(|site| cow!(site));
-            let page = cow!($page);
+            let site_opt: Option<&str> = $site;
+            let site = site_opt.map(|s| str!(s));
+            let page = str!($page);
             let expected = LinkLocation::Page(PageRef { site, page });
-
             check!($input; expected);
         }};
 
         ($input:expr => $url:expr) => {
             let url = cow!($url);
             let expected = LinkLocation::Url(url);
-
             check!($input; expected);
         };
 
         ($input:expr; $expected:expr) => {{
             let actual = LinkLocation::parse(cow!($input));
-
             assert_eq!(
                 actual,
                 $expected,
@@ -215,11 +209,21 @@ pub enum LinkLabel<'a> {
     /// Can be set to any arbitrary value of the input text's choosing.
     Text(Cow<'a, str>),
 
+    /// Page slug-based link label.
+    ///
+    /// This is set when the link is also the label.
+    /// The link is pre-normalization but post-category stripping.
+    ///
+    /// For instance:
+    /// * `[[[SCP-001]]]`
+    /// * `[[[Ethics Committee Orientation]]]`
+    /// * `[[[system: Recent Pages]]]`
+    Slug(Cow<'a, str>),
+
     /// URL-mirroring link label.
     ///
-    /// If `None`, then the label for this link is the same as the URL.
-    /// If `Some(_)`, then the label is a subslice of the URL it targets.
-    Url(Option<Cow<'a, str>>),
+    /// This is where the label is just the same as the URL.
+    Url,
 
     /// Article title-based link label.
     ///
@@ -231,7 +235,8 @@ impl LinkLabel<'_> {
     pub fn to_owned(&self) -> LinkLabel<'static> {
         match self {
             LinkLabel::Text(text) => LinkLabel::Text(string_to_owned(text)),
-            LinkLabel::Url(url) => LinkLabel::Url(option_string_to_owned(url)),
+            LinkLabel::Slug(text) => LinkLabel::Slug(string_to_owned(text)),
+            LinkLabel::Url => LinkLabel::Url,
             LinkLabel::Page => LinkLabel::Page,
         }
     }

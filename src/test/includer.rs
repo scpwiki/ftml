@@ -71,7 +71,7 @@ impl<'t> Includer<'t> for TestIncluder {
     #[inline]
     fn no_such_include(
         &mut self,
-        page_ref: &PageRef<'t>,
+        page_ref: &PageRef,
     ) -> Result<Cow<'t, str>, Infallible> {
         Ok(Cow::Owned(format!(
             "[[div class=\"wj-error\"]]\nNo such page '{page_ref}'\n[[/div]]",

@@ -729,20 +729,61 @@
         {
             "element": "container",
             "data": {
-                "type": "paragraph",
-                "attributes": {},
+                "type": "div",
+                "attributes": {
+                    "class": "{$class}",
+                    "id": "fruit"
+                },
                 "elements": [
                     {
-                        "element": "text",
-                        "data": "INCLUDED"
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "  "
+                                }
+                            ]
+                        }
                     },
                     {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "PAGE"
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "variable",
+                                            "data": "apple"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": " "
+                                        }
+                                    ]
+                                },
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "variable",
+                                            "data": "banana"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": " "
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
                     }
                 ]
             }

@@ -104,16 +104,14 @@ impl Handle {
     {
         let page_title;
         let label_text = match *label {
-            LinkLabel::Text(ref text) => text,
-            LinkLabel::Url(Some(ref text)) => text,
-            LinkLabel::Url(None) => match link {
-                LinkLocation::Url(url) => url,
-                LinkLocation::Page(page_ref) => page_ref.page(),
+            LinkLabel::Text(ref text) | LinkLabel::Slug(ref text) => text,
+            LinkLabel::Url => match link {
+                LinkLocation::Url(url) => url.as_ref(),
+                LinkLocation::Page(_) => {
+                    panic!("Requested a URL link label for a page");
+                }
             },
             LinkLabel::Page => match link {
-                LinkLocation::Url(_) => {
-                    panic!("Requested link label of page for a URL");
-                }
                 LinkLocation::Page(page_ref) => {
                     let (site, page) = page_ref.fields_or(site);
                     page_title = match self.get_page_title(site, page) {
@@ -122,6 +120,9 @@ impl Handle {
                     };
 
                     &page_title
+                }
+                LinkLocation::Url(_) => {
+                    panic!("Requested a page title link label for a URL");
                 }
             },
         };
