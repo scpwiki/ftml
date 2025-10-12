@@ -3,3 +3,6 @@ A "string" here!
 "This one\x01 has\t escapes \n\b"
 
 treated as text
+
+[!-- WJ-1066 should be a link --]
+I don't remember this "[[[scp-055|object]]]", nor the "**doomsday machine**"

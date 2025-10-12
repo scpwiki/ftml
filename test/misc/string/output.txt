@@ -3,3 +3,5 @@ A "string" here!
 "This one\x01 has\t escapes \n\b"
 
 treated as text
+
+I don't remember this "object", nor the "doomsday machine"
