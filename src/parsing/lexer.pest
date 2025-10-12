@@ -46,7 +46,9 @@ token = _{
     identifier |
     email |
     variable |
-    string |
+    double_quote |
+    escaped_double_quote |
+    escaped_backslash |
 
     // Special case to handle those pesky "[[[[" and "]]]]"s
     // These are [[[ triple links surrounded by constant [ brackets.
@@ -217,12 +219,9 @@ variable = @{ "{$" ~ identifier ~ "}" }
 
 // String {{{
 
-char = _{
-    (!(NEWLINE | "\"" | "\\") ~ ANY) |
-    "\\" ~ !NEWLINE ~ ANY
-}
-
-string = @{ "\"" ~ char* ~ "\"" }
+double_quote = @{ "\"" }
+escaped_double_quote = @{ "\\" ~ double_quote }
+escaped_backslash = @{ "\\\\" }
 
 // }}}
 
