@@ -41,10 +41,11 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "HTML doesn't allow score flag");
     assert_block_name(&BLOCK_HTML, name);
 
-    parser.get_head_none(&BLOCK_HTML, in_head)?;
+    let arguments = parser.get_head_map(&BLOCK_HTML, in_head)?;
     let html = parser.get_body_text(&BLOCK_HTML)?;
     let element = Element::Html {
         contents: cow!(html),
+        attributes: arguments.to_attribute_map(parser.settings()),
     };
     parser.push_html_block(cow!(html));
     ok!(element)

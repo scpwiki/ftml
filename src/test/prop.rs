@@ -367,7 +367,12 @@ fn arb_element_leaf() -> impl Strategy<Value = Element<'static>> {
         arb_checkbox(),
         // TODO: Element::User
         arb_code(),
-        cow!(".*").prop_map(|contents| Element::Html { contents }),
+        (cow!(".*"), arb_attribute_map()).prop_map(|(contents, attributes)| {
+            Element::Html {
+                contents,
+                attributes,
+            }
+        }),
         // TODO: Element::Iframe
         Just(Element::LineBreak),
         (1..50_u32)

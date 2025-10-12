@@ -249,12 +249,15 @@ pub enum Element<'t> {
     Embed(Embed<'t>),
 
     /// Element containing a sandboxed HTML block.
-    Html { contents: Cow<'t, str> },
+    Html {
+        contents: Cow<'t, str>,
+        attributes: AttributeMap<'t>,
+    },
 
     /// Element containing an iframe component.
     Iframe {
-        attributes: AttributeMap<'t>,
         url: Cow<'t, str>,
+        attributes: AttributeMap<'t>,
     },
 
     /// Element containing the contents of a page included elsewhere.
@@ -555,8 +558,12 @@ impl Element<'_> {
                 Element::EquationReference(string_to_owned(name))
             }
             Element::Embed(embed) => Element::Embed(embed.to_owned()),
-            Element::Html { contents } => Element::Html {
+            Element::Html {
+                contents,
+                attributes,
+            } => Element::Html {
                 contents: string_to_owned(contents),
+                attributes: attributes.to_owned(),
             },
             Element::Iframe { url, attributes } => Element::Iframe {
                 url: string_to_owned(url),
