@@ -30,7 +30,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create monospace container");
-    check_step(parser, Token::LeftMonospace)?;
+    assert_step(parser, Token::LeftMonospace)?;
     collect_container(
         parser,
         RULE_MONOSPACE,

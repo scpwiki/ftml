@@ -30,7 +30,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create underline container");
-    check_step(parser, Token::Underline)?;
+    assert_step(parser, Token::Underline)?;
     collect_container(
         parser,
         RULE_UNDERLINE,

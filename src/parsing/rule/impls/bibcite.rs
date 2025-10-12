@@ -30,7 +30,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create bibcite element");
-    check_step(parser, Token::LeftParentheses)?;
+    assert_step(parser, Token::LeftParentheses)?;
 
     // This is like a poor man's block, it's "((bibcite <label>))"
     let current = parser.current();

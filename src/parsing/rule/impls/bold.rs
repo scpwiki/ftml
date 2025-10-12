@@ -30,7 +30,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create bold (strong) container");
-    check_step(parser, Token::Bold)?;
+    assert_step(parser, Token::Bold)?;
     collect_container(
         parser,
         RULE_BOLD,

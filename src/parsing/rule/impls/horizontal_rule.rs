@@ -30,7 +30,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming token to create a horizontal rule");
-    check_step(parser, Token::TripleDash)?;
+    assert_step(parser, Token::TripleDash)?;
     parser.get_optional_line_break()?;
     ok!(Element::HorizontalRule)
 }

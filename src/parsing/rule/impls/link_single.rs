@@ -42,7 +42,7 @@ pub const RULE_LINK_SINGLE_NEW_TAB: Rule = Rule {
 
 fn link<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     trace!("Trying to create a single-bracket link (regular)");
-    check_step(parser, Token::LeftBracket)?;
+    assert_step(parser, Token::LeftBracket)?;
     try_consume_link(parser, RULE_LINK_SINGLE, None)
 }
 
@@ -50,7 +50,7 @@ fn link_new_tab<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     trace!("Trying to create a single-bracket link (new tab)");
-    check_step(parser, Token::LeftBracketStar)?;
+    assert_step(parser, Token::LeftBracketStar)?;
     try_consume_link(parser, RULE_LINK_SINGLE_NEW_TAB, Some(AnchorTarget::NewTab))
 }
 

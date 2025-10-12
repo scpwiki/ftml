@@ -29,7 +29,7 @@ use super::{ExtractedToken, ParseError, Parser, Token};
 /// Since an assert is used, this function will panic
 /// if the extracted token does not match the one specified.
 #[inline]
-pub fn check_step<'r, 't>(
+pub fn assert_step<'r, 't>(
     parser: &mut Parser<'r, 't>,
     token: Token,
 ) -> Result<&'r ExtractedToken<'t>, ParseError> {
@@ -39,9 +39,11 @@ pub fn check_step<'r, 't>(
     Ok(current)
 }
 
+
+
 #[test]
 #[should_panic]
-fn check_step_fail() {
+fn test_assert_step() {
     use crate::data::PageInfo;
     use crate::layout::Layout;
     use crate::settings::{WikitextMode, WikitextSettings};
@@ -51,5 +53,5 @@ fn check_step_fail() {
     let tokenization = crate::tokenize("**Apple** banana");
     let mut parser = Parser::new(&tokenization, &page_info, &settings);
 
-    let _ = check_step(&mut parser, Token::Italics);
+    let _ = assert_step(&mut parser, Token::Italics);
 }
