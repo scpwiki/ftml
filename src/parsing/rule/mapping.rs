@@ -86,7 +86,6 @@ pub static RULE_MAP: LazyLock<EnumMap<Token, Vec<Rule>>> = LazyLock::new(|| {
 
         // Tables
         Token::TableColumn => vec![RULE_TABLE],
-        Token::TableColumnLeft => vec![RULE_TABLE],
         Token::TableColumnRight => vec![RULE_TABLE],
         Token::TableColumnCenter => vec![RULE_TABLE],
         Token::TableColumnTitle => vec![RULE_TABLE],

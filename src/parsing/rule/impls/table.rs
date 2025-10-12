@@ -103,7 +103,6 @@ fn try_consume_fn<'r, 't>(
                     (
                         Token::TableColumn
                         | Token::TableColumnTitle
-                        | Token::TableColumnLeft
                         | Token::TableColumnCenter
                         | Token::TableColumnRight,
                         Some(next),
@@ -150,7 +149,6 @@ fn try_consume_fn<'r, 't>(
                         Some(
                             Token::TableColumn
                             | Token::TableColumnTitle
-                            | Token::TableColumnLeft
                             | Token::TableColumnCenter
                             | Token::TableColumnRight,
                         ),
@@ -216,13 +214,10 @@ fn parse_cell_start(parser: &mut Parser) -> Result<Option<TableCellStart>, Parse
     let (align, header) = loop {
         match parser.current().token {
             // Style cases, terminal
+            // NOTE: There is no TableColumnLeft
             Token::TableColumnTitle => {
                 increase_span!();
                 break (None, true);
-            }
-            Token::TableColumnLeft => {
-                increase_span!();
-                break (Some(Alignment::Left), false);
             }
             Token::TableColumnCenter => {
                 increase_span!();

@@ -140,7 +140,6 @@ pub enum Token {
     // Tables
     //
     TableColumn,
-    TableColumnLeft,
     TableColumnRight,
     TableColumnCenter,
     TableColumnTitle,
@@ -284,7 +283,6 @@ impl Token {
 
             // Tables
             Rule::table_column => Token::TableColumn,
-            Rule::table_column_left => Token::TableColumnLeft,
             Rule::table_column_right => Token::TableColumnRight,
             Rule::table_column_center => Token::TableColumnCenter,
             Rule::table_column_title => Token::TableColumnTitle,
