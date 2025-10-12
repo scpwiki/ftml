@@ -28,8 +28,8 @@ use crate::parsing::ParseError;
 use crate::tree::SyntaxTree;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::process;
 use std::sync::LazyLock;
+use std::{env, process};
 
 // Debug settings
 
@@ -167,12 +167,21 @@ pub struct TestUniverse {
     pub tests: BTreeMap<String, Test>,
 }
 
+// Environment flags
+
+fn env_update_tests() -> bool {
+    match env::var("FTML_UPDATE_TESTS").ok() {
+        Some(value) => matches!(value.as_str(), "true" | "1"),
+        _ => false,
+    }
+}
+
 // Test runner
 
 #[test]
 fn ast() {
     // If running in update mode, then run that and don't do anything else
-    if UPDATE_TESTS {
+    if UPDATE_TESTS || env_update_tests() {
         let tests = TestUniverse::load_permissive(&TEST_DIRECTORY);
 
         println!("=========");
@@ -191,7 +200,10 @@ fn ast() {
 
         // Never allow tests to pass with this option
         println!();
-        println!("Failing test, you must set UPDATE_TESTS = false to let CI pass");
+        println!("Failing test, you must unset update mode to let CI pass");
+        println!("This is either:");
+        println!("* The constant UPDATE_TESTS");
+        println!("* The environment variable FTML_UPDATE_TESTS");
         process::exit(-1);
     }
 
