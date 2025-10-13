@@ -94,11 +94,14 @@ where
 /// is returned. So for `\$`, it will emit a
 /// `\` followed by a `$`.
 pub fn parse_string(input: &str) -> Cow<'_, str> {
-    // We could do an iteration thing, but tracking
-    // the index across replacements is complicated.
+    // The only case where this is Cow::Borrowed(_)
+    // is if there are no escapes. So instead of trying
+    // to iterate through and borrow from the original,
+    // we go for something simpler.
     //
-    // So we check if there are any possible escapes,
-    // and if so, build a new string.
+    // If there are no backslashes, then return as-is.
+    // Otherwise, build a new string, since it's going
+    // to be Cow::Owned(_) anyways.
 
     if !input.contains('\\') {
         trace!("No escapes, returning as-is: {:?}", input);
