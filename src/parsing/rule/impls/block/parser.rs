@@ -471,6 +471,9 @@ where
                     let slice = self.full_text().slice(start, end);
                     return Ok(slice);
                 }
+                // Because we have tokens for '\"' and '\\', we know
+                // that just processing tokens until '"' will get a
+                // valid string.
                 Token::InputEnd => {
                     warn!("Hit end of input when trying to get a quoted string");
                     return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
