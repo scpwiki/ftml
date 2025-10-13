@@ -56,6 +56,9 @@ where
 
         loop {
             match end.token {
+                // NOTE: We have tokens for '\"' and '\\', we know that
+                //       just processing tokens until '"' will get a
+                //       valid string.
                 Token::DoubleQuote => {
                     trace!("Hit end of quoted string, stepping after then returning");
                     self.step()?;
@@ -65,9 +68,6 @@ where
                         .expect("Gathered string does not end with a double quote");
                     return Ok(slice);
                 }
-                // Because we have tokens for '\"' and '\\', we know
-                // that just processing tokens until '"' will get a
-                // valid string.
                 Token::InputEnd => {
                     warn!("Hit end of input when trying to get a quoted string");
                     return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
