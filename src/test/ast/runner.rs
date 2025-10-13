@@ -69,14 +69,14 @@ impl TestUniverse {
         let mut path = PathBuf::from(test_dir);
         for (test_name, test) in &self.tests {
             // Same logic as above
-            if only_tests.is_empty() || test_applies(test_name, only_tests) {
-                if !test_applies(test_name, skip_tests) {
-                    // Reuse path buffer for each test directory
-                    path.push(test_name);
-                    test.update(&path);
-                    path.pop();
-                    path.pop();
-                }
+            if (only_tests.is_empty() || test_applies(test_name, only_tests))
+                && !test_applies(test_name, skip_tests)
+            {
+                // Reuse path buffer for each test directory
+                path.push(test_name);
+                test.update(&path);
+                path.pop();
+                path.pop();
             }
         }
     }
