@@ -99,19 +99,6 @@ pub fn parse_string(input: &str) -> Cow<'_, str> {
     //
     // So we check if there are any possible escapes,
     // and if so, build a new string.
-    //
-    // This removes the double quotes on either end
-    // and lets us only deal with the center.
-    // If it's not a string (i.e. doesn't start/end with ")
-    // then it just quits.
-
-    let input = match slice_middle(input) {
-        Some(input) => input,
-        None => {
-            warn!("Not a 'string', returning as-is: {:?}", input);
-            return Cow::Borrowed(input);
-        }
-    };
 
     if !input.contains('\\') {
         trace!("No escapes, returning as-is: {:?}", input);
@@ -144,28 +131,6 @@ pub fn parse_string(input: &str) -> Cow<'_, str> {
     }
 
     Cow::Owned(output)
-}
-
-/// Remove the contents of a string if it is one.
-///
-/// Checks if the first and last characters are ASCII `"`,
-/// and if so, slices the first and last characters off of them.
-/// Does not make any assumptions about codepoints.
-fn slice_middle(input: &str) -> Option<&str> {
-    // Starts and ends with "
-    //
-    // Regarding the length check:
-    // We can use byte length here, since ASCII " x2 is 2 bytes,
-    // so any other irregular pattern must be *at least* that.
-    //
-    // If shorter, it cannot be valid.
-    if input.len() < 2 || !input.starts_with('"') || !input.ends_with('"') {
-        return None;
-    }
-
-    // Okay, we know the first and last chars are ASCII, it's safe to slice
-    let last = input.len() - 1;
-    Some(&input[1..last])
 }
 
 /// Helper function to convert escapes to the actual character.
@@ -255,36 +220,4 @@ fn test_parse_string() {
     test!("'abc'", "'abc'", Borrowed);
     test!("\"abc", "\"abc", Borrowed);
     test!("foo", "foo", Borrowed);
-}
-
-#[test]
-fn test_slice_middle() {
-    macro_rules! test {
-        ($input:expr, $expected:expr $(,)?) => {{
-            let actual = slice_middle($input).expect("Invalid string input");
-
-            assert_eq!(
-                actual, $expected,
-                "Actual (left) doesn't match expected (right)",
-            );
-        }};
-
-        ($input:expr $(,)?) => {{
-            assert!(
-                slice_middle($input).is_none(),
-                "Invalid string was accepted",
-            );
-        }};
-    }
-
-    test!(r#""""#, "");
-    test!(r#""!""#, "!");
-    test!(r#""abc""#, "abc");
-    test!(r#""apple banana cherry""#, "apple banana cherry");
-
-    test!("");
-    test!("\"");
-    test!("\"'");
-    test!("''");
-    test!("[]");
 }
