@@ -196,7 +196,7 @@ fn ast() {
         println!("Carefully inspect the diff and only save changes that are correct.");
         println!();
 
-        tests.update(&TEST_DIRECTORY);
+        tests.update(&TEST_DIRECTORY, SKIP_TESTS, ONLY_TESTS);
 
         // Never allow tests to pass with this option
         println!();

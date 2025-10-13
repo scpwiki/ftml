@@ -65,14 +65,19 @@ impl TestUniverse {
         stats
     }
 
-    pub fn update(&self, test_dir: &Path) {
+    pub fn update(&self, test_dir: &Path, skip_tests: &[&str], only_tests: &[&str]) {
         let mut path = PathBuf::from(test_dir);
         for (test_name, test) in &self.tests {
-            // Reuse path buffer for each test directory
-            path.push(test_name);
-            test.update(&path);
-            path.pop();
-            path.pop();
+            // Same logic as above
+            if only_tests.is_empty() || test_applies(test_name, only_tests) {
+                if !test_applies(test_name, skip_tests) {
+                    // Reuse path buffer for each test directory
+                    path.push(test_name);
+                    test.update(&path);
+                    path.pop();
+                    path.pop();
+                }
+            }
         }
     }
 }
