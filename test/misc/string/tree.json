@@ -16,7 +16,15 @@
                     },
                     {
                         "element": "text",
-                        "data": "\"string\""
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "string"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
                     },
                     {
                         "element": "text",
@@ -41,7 +49,189 @@
                 "elements": [
                     {
                         "element": "text",
-                        "data": "\"This one\\x01 has\\t escapes \\n\\b\""
+                        "data": "An"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "empty"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "string"
+                    },
+                    {
+                        "element": "text",
+                        "data": ":"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "This"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "one"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\\"
+                    },
+                    {
+                        "element": "text",
+                        "data": "x01"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "has"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\\"
+                    },
+                    {
+                        "element": "text",
+                        "data": "t"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "escapes"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "\\"
+                    },
+                    {
+                        "element": "text",
+                        "data": "n"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\\"
+                    },
+                    {
+                        "element": "text",
+                        "data": "b"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "Multiple"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "strings"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "on"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "line"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
                     }
                 ]
             }
