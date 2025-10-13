@@ -9,3 +9,8 @@ An empty string: ""
 treated as text
 
 I don't remember this "object", nor the "doomsday machine"
+
+
+
+"This is
+not a string"

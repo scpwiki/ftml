@@ -68,8 +68,9 @@ where
                         .expect("Gathered string does not end with a double quote");
                     return Ok(slice);
                 }
-                Token::InputEnd => {
-                    warn!("Hit end of input when trying to get a quoted string");
+                // Failure cases
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                    warn!("Hit end of line or input when trying to get a quoted string");
                     return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
                 }
                 _ => end = self.step()?,
