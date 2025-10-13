@@ -123,7 +123,8 @@ pub fn normalize_href(url: &str) -> Cow<'_, str> {
         }
         let mut new_url = split_url.join("/");
         if split_anchor.len() == 2 {
-            new_url = format!("{}#{}", new_url, split_anchor[1]);
+            new_url.push('#');
+            new_url.push_str(split_anchor[1]);
         }
         Cow::Owned(new_url)
     }
