@@ -20,11 +20,9 @@
 
 use super::BlockRule;
 use super::arguments::Arguments;
-use crate::parsing::check_step::check_step;
 use crate::parsing::collect::{collect_text, collect_text_keep};
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
-use crate::parsing::string::parse_string;
 use crate::parsing::{
     ExtractedToken, ParseError, ParseErrorKind, ParseResult, Parser, Token,
     gather_paragraphs,
@@ -338,10 +336,7 @@ where
 
                 // Get the argument value
                 self.get_optional_space()?;
-                let value_raw = self.get_quoted_string()?;
-
-                // Parse the string
-                let value = parse_string(value_raw);
+                let value = self.get_quoted_string()?;
 
                 // Add to argument map
                 map.insert(key, value);
@@ -452,75 +447,4 @@ where
         debug!("Running block rule {} for these tokens", block_rule.name);
         self.set_rule(block_rule.rule());
     }
-
-    /// Gets the contents of a double-quoted string, not escaped.
-    /// Does not include the outer quotes.
-    fn get_quoted_string(&mut self) -> Result<&'t str, ParseError> {
-        check_step(
-            self,
-            Token::DoubleQuote,
-            ParseErrorKind::BlockMalformedArguments,
-        )?;
-
-        let start = self.current();
-        let mut end = start;
-
-        loop {
-            match end.token {
-                Token::DoubleQuote => {
-                    trace!("Hit end of quoted string, stepping after then returning");
-                    self.step()?;
-                    let slice_with_quote = self.full_text().slice(start, end);
-                    let slice = slice_with_quote
-                        .strip_suffix('"')
-                        .expect("Gathered string does not end with a double quote");
-                    return Ok(slice);
-                }
-                // Because we have tokens for '\"' and '\\', we know
-                // that just processing tokens until '"' will get a
-                // valid string.
-                Token::InputEnd => {
-                    warn!("Hit end of input when trying to get a quoted string");
-                    return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
-                }
-                _ => end = self.step()?,
-            }
-        }
-    }
-}
-
-#[test]
-fn quoted_string() {
-    use crate::data::PageInfo;
-    use crate::layout::Layout;
-    use crate::settings::{WikitextMode, WikitextSettings};
-
-    macro_rules! check {
-        ($steps:expr, $wikitext:expr, $expected:expr) => {{
-            let page_info = PageInfo::dummy();
-            let settings =
-                WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-            let tokenization = crate::tokenize($wikitext);
-            let mut parser = Parser::new(&tokenization, &page_info, &settings);
-
-            // Has plus one to account for the Token::InputStart
-            parser.step_n($steps + 1).expect("Unable to step");
-
-            let actual = parser
-                .get_quoted_string()
-                .expect("Unable to get string value");
-
-            assert_eq!(
-                actual, $expected,
-                "Extracted string value doesn't match actual",
-            );
-        }};
-    }
-
-    check!(0, "\"\"", "");
-    check!(0, "\"alpha\"", "alpha");
-    check!(1, "beta\"gamma\"", "gamma");
-    check!(1, "beta\"A B C\"delta", "A B C");
-    check!(2, "gamma \"\" epsilon", "");
-    check!(2, "gamma \"foo\\nbar\\txyz\"", "foo\\nbar\\txyz");
 }
