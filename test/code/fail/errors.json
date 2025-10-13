@@ -30,9 +30,9 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "other",
+        "token": "line-break",
         "rule": "block-code",
-        "span": [39, 40],
+        "span": [54, 55],
         "kind": "block-malformed-arguments"
     },
     {
