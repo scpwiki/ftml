@@ -24,9 +24,10 @@ use crate::parsing::check_step::check_step;
 use crate::parsing::collect::{collect_text, collect_text_keep};
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
+use crate::parsing::string::parse_string;
 use crate::parsing::{
     ExtractedToken, ParseError, ParseErrorKind, ParseResult, Parser, Token,
-    gather_paragraphs, parse_string,
+    gather_paragraphs,
 };
 use crate::tree::Element;
 use regex::Regex;
@@ -452,7 +453,8 @@ where
         self.set_rule(block_rule.rule());
     }
 
-
+    /// Gets the contents of a double-quoted string, not escaped.
+    /// Does not include the outer quotes.
     fn get_quoted_string(&mut self) -> Result<&'t str, ParseError> {
         check_step(
             self,
@@ -469,7 +471,8 @@ where
                     trace!("Hit end of quoted string, stepping after then returning");
                     self.step()?;
                     let slice_with_quote = self.full_text().slice(start, end);
-                    let slice = slice_with_quote.strip_suffix('"')
+                    let slice = slice_with_quote
+                        .strip_suffix('"')
                         .expect("Gathered string does not end with a double quote");
                     return Ok(slice);
                 }
