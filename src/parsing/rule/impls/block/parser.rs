@@ -20,6 +20,7 @@
 
 use super::BlockRule;
 use super::arguments::Arguments;
+use crate::parsing::check_step::check_step;
 use crate::parsing::collect::{collect_text, collect_text_keep};
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -336,7 +337,7 @@ where
 
                 // Get the argument value
                 self.get_optional_space()?;
-                let value_raw = todo!();
+                let value_raw = self.get_quoted_string()?;
 
                 // Parse the string
                 let value = parse_string(value_raw);
@@ -450,4 +451,68 @@ where
         debug!("Running block rule {} for these tokens", block_rule.name);
         self.set_rule(block_rule.rule());
     }
+
+    fn get_quoted_string(&mut self) -> Result<&'t str, ParseError> {
+        let start = self.current();
+        let mut end;
+
+        check_step(
+            self,
+            Token::DoubleQuote,
+            ParseErrorKind::BlockMalformedArguments,
+        )?;
+        end = self.current();
+
+        loop {
+            match end.token {
+                Token::DoubleQuote => {
+                    trace!("Hit end of quoted string, stepping after then returning");
+                    self.step()?;
+                    let slice = self.full_text().slice(start, end);
+                    return Ok(slice);
+                }
+                Token::InputEnd => {
+                    warn!("Hit end of input when trying to get a quoted string");
+                    return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
+                }
+                _ => end = self.step()?,
+            }
+        }
+    }
+}
+
+#[test]
+fn quoted_string() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    macro_rules! check {
+        ($steps:expr, $wikitext:expr, $expected:expr) => {{
+            let page_info = PageInfo::dummy();
+            let settings =
+                WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+            let tokenization = crate::tokenize($wikitext);
+            let mut parser = Parser::new(&tokenization, &page_info, &settings);
+
+            // Has plus one to account for the Token::InputStart
+            parser.step_n($steps + 1).expect("Unable to step");
+
+            let actual = parser
+                .get_quoted_string()
+                .expect("Unable to get string value");
+
+            assert_eq!(
+                actual, $expected,
+                "Extracted string value doesn't match actual",
+            );
+        }};
+    }
+
+    check!(0, "\"\"", "\"\"");
+    check!(0, "\"alpha\"", "\"alpha\"");
+    check!(1, "beta\"gamma\"", "\"gamma\"");
+    check!(1, "beta\"A B C\"delta", "\"A B C\"");
+    check!(2, "gamma \"\" epsilon", "\"\"");
+    check!(2, "gamma \"foo\\nbar\\txyz\"", "\"foo\\nbar\\txyz\"");
 }

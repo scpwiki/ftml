@@ -67,7 +67,6 @@ pub fn check_step<'r, 't>(
     Ok(current)
 }
 
-
 #[test]
 fn test_assert_step() {
     use crate::data::PageInfo;
