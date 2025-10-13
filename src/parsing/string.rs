@@ -18,6 +18,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//! Parsing for string values.
+//!
+//! This is the part of the code which handles strings in the wikitext.
+//! For instance, an argument of `key="1\t2"` has the string value `"1\t2"`,
+//! where we need to interpret escapes like `\"`, `\n`, etc.
+
 use crate::parsing::check_step::check_step;
 use crate::parsing::{ParseError, ParseErrorKind, Parser, Token};
 use std::borrow::Cow;
