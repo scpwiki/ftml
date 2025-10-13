@@ -175,7 +175,7 @@ fn tokens() {
                 span: 12..13,
             },
             ExtractedToken {
-                token: Token::Other,
+                token: Token::DoubleQuote,
                 slice: "\"",
                 span: 13..14,
             },
