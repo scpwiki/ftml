@@ -1,8 +1,19 @@
+**Full URLs**
 [https://example.com/ External link]!
 [*https://scp-sandbox-3.wikidot.com/system:recent-changes Sandbox: Recent Changes ] (new tab)
 
-**Subpath**
+**Page-like Paths**
 [/page Some page]
+[/page#main With anchor]
+[/page/edit Sublink]
+[/page/edit#target Both]
+[/category:page Page with category]
+[/category:page#main Anchor]
+[/category:page/edit Sublink]
+[/category:page/edit#target Both]
 [/relative/link text]
 [/relative/link#toc0 text]
+
+**Other Paths**
+[// Root]
 [//page/edit Edit]

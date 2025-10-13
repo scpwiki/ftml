@@ -7,6 +7,30 @@
                 "attributes": {},
                 "elements": [
                     {
+                        "element": "container",
+                        "data": {
+                            "type": "bold",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Full"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "URLs"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
                         "element": "link",
                         "data": {
                             "type": "direct",
@@ -78,7 +102,23 @@
                             "elements": [
                                 {
                                     "element": "text",
-                                    "data": "Subpath"
+                                    "data": "Page"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "-"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "like"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "Paths"
                                 }
                             ]
                         }
@@ -94,6 +134,126 @@
                             "extra": null,
                             "label": {
                                 "text": "Some page"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/page#main",
+                            "extra": null,
+                            "label": {
+                                "text": "With anchor"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/page/edit",
+                            "extra": null,
+                            "label": {
+                                "text": "Sublink"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/page/edit#target",
+                            "extra": null,
+                            "label": {
+                                "text": "Both"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/category:page",
+                            "extra": null,
+                            "label": {
+                                "text": "Page with category"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/category:page#main",
+                            "extra": null,
+                            "label": {
+                                "text": "Anchor"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/category:page/edit",
+                            "extra": null,
+                            "label": {
+                                "text": "Sublink"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/category:page/edit",
+                            "extra": null,
+                            "label": {
+                                "text": "Sublink"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/category:page/edit#taget",
+                            "extra": null,
+                            "label": {
+                                "text": "Both"
                             },
                             "target": null
                         }
@@ -124,6 +284,51 @@
                             "extra": null,
                             "label": {
                                 "text": "text"
+                            },
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "bold",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Other"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "Paths"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "//",
+                            "extra": null,
+                            "label": {
+                                "text": "Root"
                             },
                             "target": null
                         }
