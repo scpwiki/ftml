@@ -156,3 +156,44 @@ fn detect_dangerous_schemes() {
     check!("data:text/html,<script>alert('XSS');</script>", true);
     check!("DATA:text/html,<script>alert('XSS');</script>", true);
 }
+
+#[test]
+fn test_normalize_href() {
+    macro_rules! check {
+        ($input:expr, $expected:expr $(,)?) => {{
+            let actual = normalize_href($input);
+            assert_eq!(
+                actual.as_ref(),
+                $expected,
+                "For input {:?}, normalize_href() doesn't match expected",
+                $input,
+            );
+        }};
+
+        // For when the input is the same as the output
+        ($input:expr) => {
+            check!($input, $input)
+        };
+    }
+
+    check!("#");
+    check!("#target");
+    check!("#edit-area");
+    check!("javascript:;");
+    check!("http://example.net");
+    check!("https://example.net");
+    check!("irc://irc.scpwiki.com");
+    check!("sftp://ftp.example.com/upload");
+
+    check!("javascript:alert(1)", "#invalid-url");
+    check!("data:text/html,<script>alert('XSS')</script>", "#invalid-url");
+
+    check!("/page");
+    check!("/page#target");
+    check!("/page/edit");
+    check!("/page/edit#target");
+    check!("/category:page");
+    check!("/category:page#target");
+    check!("/category:page/edit");
+    check!("/category:page/edit#target");
+}
