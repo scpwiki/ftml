@@ -25,7 +25,7 @@ use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
 use crate::parsing::{
     ExtractedToken, ParseError, ParseErrorKind, ParseResult, Parser, Token,
-    gather_paragraphs, parse_string,
+    gather_paragraphs,
 };
 use crate::tree::Element;
 use regex::Regex;
@@ -336,11 +336,7 @@ where
 
                 // Get the argument value
                 self.get_optional_space()?;
-                let value_raw = self
-                    .get_token(Token::String, ParseErrorKind::BlockMalformedArguments)?;
-
-                // Parse the string
-                let value = parse_string(value_raw);
+                let value = self.get_quoted_string()?;
 
                 // Add to argument map
                 map.insert(key, value);

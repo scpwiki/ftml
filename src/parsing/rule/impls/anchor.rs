@@ -38,7 +38,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create a named anchor");
-    check_step(parser, Token::LeftBlockAnchor)?;
+    assert_step(parser, Token::LeftBlockAnchor)?;
 
     // Requires a space before the name
     parser.get_token(Token::Whitespace, ParseErrorKind::RuleFailed)?;

@@ -95,7 +95,9 @@ pub static RULE_MAP: LazyLock<EnumMap<Token, Vec<Rule>>> = LazyLock::new(|| {
         Token::Email => vec![RULE_EMAIL],
         Token::Url => vec![RULE_URL],
         Token::Variable => vec![RULE_VARIABLE, RULE_TEXT],
-        Token::String => vec![RULE_TEXT],
+        Token::DoubleQuote => vec![RULE_TEXT],
+        Token::EscapedDoubleQuote => vec![RULE_TEXT],
+        Token::EscapedBackslash => vec![RULE_TEXT],
 
         // Input boundaries
         Token::LineBreak => vec![RULE_BLOCK_SKIP_NEWLINE, RULE_DEFINITION_LIST_SKIP_NEWLINE, RULE_LINE_BREAK],

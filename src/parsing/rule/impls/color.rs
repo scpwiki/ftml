@@ -36,7 +36,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create color container");
-    check_step(parser, Token::Color)?;
+    assert_step(parser, Token::Color)?;
 
     // The pattern for color is:
     // ## [color-style] | [text to be colored] ##

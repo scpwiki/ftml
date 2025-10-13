@@ -425,6 +425,9 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     /// Move the token pointer forward one step.
+    ///
+    /// # Returns
+    /// Returns the new current token.
     #[inline]
     pub fn step(&mut self) -> Result<&'r ExtractedToken<'t>, ParseError> {
         trace!("Stepping to the next token");

@@ -349,7 +349,15 @@
                         },
                         {
                             "element": "text",
-                            "data": "\"fruit\""
+                            "data": "\""
+                        },
+                        {
+                            "element": "text",
+                            "data": "fruit"
+                        },
+                        {
+                            "element": "text",
+                            "data": "\""
                         },
                         {
                             "element": "text",
@@ -369,7 +377,15 @@
                         },
                         {
                             "element": "text",
-                            "data": "\"vegetable\""
+                            "data": "\""
+                        },
+                        {
+                            "element": "text",
+                            "data": "vegetable"
+                        },
+                        {
+                            "element": "text",
+                            "data": "\""
                         },
                         {
                             "element": "text",

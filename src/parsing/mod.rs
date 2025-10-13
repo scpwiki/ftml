@@ -54,7 +54,6 @@ use self::paragraph::{NO_CLOSE_CONDITION, gather_paragraphs};
 use self::parser::Parser;
 use self::parser_wrap::ParserWrap;
 use self::rule::impls::RULE_PAGE;
-use self::string::parse_string;
 use self::strip::{strip_newlines, strip_whitespace};
 use crate::data::PageInfo;
 use crate::next_index::{NextIndex, TableOfContentsIndex};

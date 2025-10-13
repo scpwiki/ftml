@@ -38,7 +38,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create a single-bracket anchor link");
-    check_step(parser, Token::LeftBracketAnchor)?;
+    assert_step(parser, Token::LeftBracketAnchor)?;
 
     // Gather path for link
     let url = collect_text(
