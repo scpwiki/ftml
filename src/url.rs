@@ -21,7 +21,6 @@
 use regex::Regex;
 use std::borrow::Cow;
 use std::sync::LazyLock;
-use wikidot_normalize::normalize;
 
 #[cfg(feature = "html")]
 use crate::tree::LinkLocation;
@@ -122,14 +121,11 @@ pub fn normalize_href(url: &str) -> Cow<'_, str> {
         if !split_url[0].is_empty() || (split_url[0].is_empty() && split_url.len() == 1) {
             split_url.insert(0, "");
         }
-        let mut url = str!(split_url[1]);
-        normalize(&mut url);
-        split_url[1] = &url;
-        url = split_url.join("/");
+        let mut new_url = split_url.join("/");
         if split_anchor.len() == 2 {
-            url = format!("{}#{}", url, split_anchor[1]);
+            new_url = format!("{}#{}", new_url, split_anchor[1]);
         }
-        Cow::Owned(url)
+        Cow::Owned(new_url)
     }
 }
 
