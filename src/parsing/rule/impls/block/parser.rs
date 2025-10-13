@@ -452,23 +452,25 @@ where
         self.set_rule(block_rule.rule());
     }
 
-    fn get_quoted_string(&mut self) -> Result<&'t str, ParseError> {
-        let start = self.current();
-        let mut end;
 
+    fn get_quoted_string(&mut self) -> Result<&'t str, ParseError> {
         check_step(
             self,
             Token::DoubleQuote,
             ParseErrorKind::BlockMalformedArguments,
         )?;
-        end = self.current();
+
+        let start = self.current();
+        let mut end = start;
 
         loop {
             match end.token {
                 Token::DoubleQuote => {
                     trace!("Hit end of quoted string, stepping after then returning");
                     self.step()?;
-                    let slice = self.full_text().slice(start, end);
+                    let slice_with_quote = self.full_text().slice(start, end);
+                    let slice = slice_with_quote.strip_suffix('"')
+                        .expect("Gathered string does not end with a double quote");
                     return Ok(slice);
                 }
                 // Because we have tokens for '\"' and '\\', we know
@@ -512,10 +514,10 @@ fn quoted_string() {
         }};
     }
 
-    check!(0, "\"\"", "\"\"");
-    check!(0, "\"alpha\"", "\"alpha\"");
-    check!(1, "beta\"gamma\"", "\"gamma\"");
-    check!(1, "beta\"A B C\"delta", "\"A B C\"");
-    check!(2, "gamma \"\" epsilon", "\"\"");
-    check!(2, "gamma \"foo\\nbar\\txyz\"", "\"foo\\nbar\\txyz\"");
+    check!(0, "\"\"", "");
+    check!(0, "\"alpha\"", "alpha");
+    check!(1, "beta\"gamma\"", "gamma");
+    check!(1, "beta\"A B C\"delta", "A B C");
+    check!(2, "gamma \"\" epsilon", "");
+    check!(2, "gamma \"foo\\nbar\\txyz\"", "foo\\nbar\\txyz");
 }
