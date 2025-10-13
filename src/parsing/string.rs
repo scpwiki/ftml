@@ -187,7 +187,7 @@ fn quoted_string_escaped() {
     check!(1, "beta\"gamma\"", "gamma");
     check!(1, "beta\"A B C\"delta", "A B C");
     check!(2, "gamma \"\" epsilon", "");
-    check!(2, "gamma \"foo\\nbar\\txyz\"", "foo\\nbar\\txyz");
+    check!(2, "gamma \"foo\\nbar\\txyz\"", "foo\nbar\txyz");
 }
 
 #[test]
@@ -208,20 +208,17 @@ fn test_parse_string() {
         }};
     }
 
-    test!(r#""""#, "", Borrowed);
-    test!(r#""!""#, "!", Borrowed);
-    test!(r#""\"""#, "\"", Owned);
-    test!(r#""\'""#, "\'", Owned);
-    test!(r#""apple banana""#, "apple banana", Borrowed);
-    test!(r#""abc \\""#, "abc \\", Owned);
-    test!(r#""\n def""#, "\n def", Owned);
+    test!("", "", Borrowed);
+    test!("!", "!", Borrowed);
+    test!(r#"\""#, "\"", Owned);
+    test!(r#"\'"#, "\'", Owned);
+    test!(r"apple banana", "apple banana", Borrowed);
+    test!(r"abc \\", "abc \\", Owned);
+    test!(r"\n def", "\n def", Owned);
     test!(
-        r#""abc \t (\\\t) \r (\\\r) def""#,
+        r"abc \t (\\\t) \r (\\\r) def",
         "abc \t (\\\t) \r (\\\r) def",
         Owned,
     );
-    test!(r#""abc \t \x \y \z \n""#, "abc \t \\x \\y \\z \n", Owned);
-    test!("'abc'", "'abc'", Borrowed);
-    test!("\"abc", "\"abc", Borrowed);
-    test!("foo", "foo", Borrowed);
+    test!(r"abc \t \x \y \z \n \0", "abc \t \\x \\y \\z \n \\0", Owned);
 }
