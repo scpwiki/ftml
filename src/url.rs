@@ -65,10 +65,19 @@ pub fn is_url(url: &str) -> bool {
 /// Additionally, there is a check to make sure that there isn't any
 /// funny business going on with the scheme, such as insertion of
 /// whitespace. In such cases, the URL is rejected.
+///
+/// This function does not check anything starting with `/`, since
+/// this would be a relative link.
 pub fn dangerous_scheme(url: &str) -> bool {
     static SCHEME_REGEX: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^[\w\-]+$").unwrap());
 
+    // Ignore relative links
+    if url.starts_with('/') {
+        return false;
+    }
+
+    // Get the scheme from the URL
     url.split_once(':')
         .map(|(scheme, _)| {
             if !SCHEME_REGEX.is_match(scheme) {
@@ -155,6 +164,14 @@ fn detect_dangerous_schemes() {
     check!("data:text/javascript,alert(1)", true);
     check!("data:text/html,<script>alert('XSS');</script>", true);
     check!("DATA:text/html,<script>alert('XSS');</script>", true);
+    check!("/page", false);
+    check!("/page#target", false);
+    check!("/page/edit", false);
+    check!("/page/edit#target", false);
+    check!("/category:page", false);
+    check!("/category:page#target", false);
+    check!("/category:page/edit", false);
+    check!("/category:page/edit#target", false);
 }
 
 #[test]
