@@ -10,3 +10,6 @@ treated as text
 
 [!-- WJ-1066 --]
 I don't remember this "[[[scp-055|object]]]", nor the "**doomsday machine**"
+
+[!-- bug with URLs --]
+[[span data-a="https://example.com" data-b="omega"]][[/span]]

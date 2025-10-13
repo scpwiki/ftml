@@ -391,6 +391,26 @@
             }
         },
         {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "data-a": "https://example.com",
+                                "data-b": "omega"
+                            },
+                            "elements": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
             "element": "footnote-block",
             "data": {
                 "title": null,
