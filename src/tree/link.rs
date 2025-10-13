@@ -171,7 +171,7 @@ fn test_link_location() {
 
     check!("::page" => "::page");
     check!("::component:theme" => "::component:theme");
-    check!("page:multiple:category" => None, "page:multiple:category");
+    check!("multiple:category:page" => None, "multiple-category:page");
 }
 
 #[test]
