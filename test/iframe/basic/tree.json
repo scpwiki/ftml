@@ -26,6 +26,15 @@
             }
         },
         {
+            "element": "iframe",
+            "data": {
+                "url": "https://example.net/my-page",
+                "attributes": {
+                    "frameborder": "0"
+                }
+            }
+        },
+        {
             "element": "footnote-block",
             "data": {
                 "title": null,
