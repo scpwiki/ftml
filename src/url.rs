@@ -21,6 +21,7 @@
 use regex::Regex;
 use std::borrow::Cow;
 use std::sync::LazyLock;
+use wikidot_normalize::normalize;
 
 #[cfg(feature = "html")]
 use crate::tree::LinkLocation;
@@ -116,21 +117,47 @@ pub fn normalize_href(url: &str) -> Cow<'_, str> {
         warn!("Attempt to pass in dangerous URL: {url}");
         Cow::Borrowed("#invalid-url")
     } else {
-        let (url, anchor) = match url.split_once('#') {
+        fn get_first_non_empty<S: AsRef<str>>(parts: &[S]) -> Option<usize> {
+            for (i, part) in parts.iter().enumerate() {
+                if !part.as_ref().is_empty() {
+                    return Some(i);
+                }
+            }
+
+            None
+        }
+
+        // Detach anchor, if present
+        let (main_url, anchor) = match url.split_once('#') {
             Some((url, anchor)) => (url, Some(anchor)),
             None => (url, None),
         };
 
-        let mut split_url: Vec<&str> = url.split("/").collect();
-        if !split_url[0].is_empty() || (split_url[0].is_empty() && split_url.len() == 1) {
-            split_url.insert(0, "");
+        // Get the first non empty page part
+        // And normalize that, *unless* it is just "-",
+        // since that may be a special route, like /-/admin.
+        let mut parts: Vec<Cow<str>> = main_url.split('/').map(|s| cow!(s)).collect();
+        match get_first_non_empty(&parts) {
+            // Nothing to normalize, return as-is
+            None => return cow!(url),
+
+            // Normalize the first set portion, which should be the
+            // page slug of a relative link.
+            Some(index) => {
+                if parts[index] != "-" {
+                    normalize(parts[index].to_mut());
+                }
+            }
         }
 
-        let mut new_url = split_url.join("/");
+        // Recompose the URL
+        let mut new_url = parts.join("/");
+
         if let Some(anchor) = anchor {
             new_url.push('#');
             new_url.push_str(anchor);
         }
+
         Cow::Owned(new_url)
     }
 }
