@@ -110,6 +110,11 @@ pub fn normalize_link<'a>(
     }
 }
 
+/// Normalize a URL string.
+///
+/// This performs a few operations:
+/// * Blocking dangerous URLs (e.g. `javascript:alert(1)`)
+/// * For relative links, normalizing the page portion (e.g. `/SCP-001/edit`)
 pub fn normalize_href(url: &str) -> Cow<'_, str> {
     if is_url(url) || url.starts_with('#') || url == "javascript:;" {
         Cow::Borrowed(url)
@@ -133,9 +138,9 @@ pub fn normalize_href(url: &str) -> Cow<'_, str> {
             None => (url, None),
         };
 
-        // Get the first non empty page part
-        // And normalize that, *unless* it is just "-",
-        // since that may be a special route, like /-/admin.
+        // Get the first non empty page part and normalize
+        // that, *unless* it is just "-", since that may
+        // be a special route, like /-/admin.
         let mut parts: Vec<Cow<str>> = main_url.split('/').map(|s| cow!(s)).collect();
         match get_first_non_empty(&parts) {
             // Nothing to normalize, return as-is
