@@ -155,6 +155,12 @@ pub fn normalize_href(url: &str) -> Cow<'_, str> {
             }
         }
 
+        // Ensure it starts with a / if it doesn't already.
+        // Adding an empty string ensures it is prefixed on re-join.
+        if !parts[0].is_empty() {
+            parts.insert(0, cow!(""));
+        }
+
         // Recompose the URL
         let mut new_url = parts.join("/");
 
