@@ -27,7 +27,7 @@ use crate::data::PageRef;
 use crate::data::{Backlinks, PageInfo};
 use crate::info;
 use crate::layout::Layout;
-use crate::next_index::{NextIndex, TableOfContentsIndex};
+use crate::next_index::{Incrementer, NextIndex, TableOfContentsIndex};
 use crate::render::Handle;
 use crate::settings::WikitextSettings;
 use crate::tree::{
@@ -73,7 +73,7 @@ where
     // Other fields to track
     //
     code_snippet_index: NonZeroUsize,
-    table_of_contents_index: usize,
+    table_of_contents_index: Incrementer,
     equation_index: NonZeroUsize,
     footnote_index: NonZeroUsize,
 }
@@ -122,7 +122,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             bibliographies,
             pages_exists: HashMap::new(),
             code_snippet_index: NonZeroUsize::new(1).unwrap(),
-            table_of_contents_index: 0,
+            table_of_contents_index: settings.id_indexer(),
             equation_index: NonZeroUsize::new(1).unwrap(),
             footnote_index: NonZeroUsize::new(1).unwrap(),
         }
@@ -227,10 +227,9 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         index
     }
 
-    pub fn next_table_of_contents_index(&mut self) -> usize {
-        let index = self.table_of_contents_index;
-        self.table_of_contents_index += 1;
-        index
+    #[inline]
+    pub fn next_table_of_contents_index(&mut self) -> Option<usize> {
+        self.table_of_contents_index.next()
     }
 
     pub fn next_equation_index(&mut self) -> NonZeroUsize {
@@ -361,7 +360,7 @@ impl Write for HtmlContext<'_, '_, '_, '_> {
 
 impl NextIndex<TableOfContentsIndex> for HtmlContext<'_, '_, '_, '_> {
     #[inline]
-    fn next(&mut self) -> usize {
+    fn next(&mut self) -> Option<usize> {
         self.next_table_of_contents_index()
     }
 }

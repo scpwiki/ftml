@@ -56,7 +56,7 @@ use self::parser_wrap::ParserWrap;
 use self::rule::impls::RULE_PAGE;
 use self::strip::{strip_newlines, strip_whitespace};
 use crate::data::PageInfo;
-use crate::next_index::{NextIndex, TableOfContentsIndex};
+use crate::next_index::{Incrementer, NextIndex};
 use crate::settings::WikitextSettings;
 use crate::tokenizer::Tokenization;
 use crate::tree::{
@@ -93,8 +93,8 @@ where
         bibliographies,
     } = parse_internal(page_info, settings, tokenization);
 
-    // For producing table of contents indexes
-    let mut incrementer = Incrementer(0);
+    // Mutable state
+    let mut toc_indexer = settings.id_indexer();
 
     debug!("Finished paragraph gathering, matching on consumption");
     match result {
@@ -116,7 +116,7 @@ where
             // Convert TOC depth lists
             let table_of_contents = process_depths((), table_of_contents_depths)
                 .into_iter()
-                .map(|(_, items)| build_toc_list_element(&mut incrementer, items))
+                .map(|(_, items)| build_toc_list_element(&mut toc_indexer, items))
                 .collect::<Vec<_>>();
 
             // Add a footnote block at the end,
@@ -212,10 +212,13 @@ fn build_toc_list_element(
             element: Box::new(build_toc_list_element(incr, list)),
         },
         DepthItem::Item(name) => {
-            let anchor = format!("#toc{}", incr.next());
+            let anchor = match incr.next() {
+                None => Cow::Borrowed("javascript:;"),
+                Some(index) => Cow::Owned(format!("#toc{index}")),
+            };
             let link = Element::Link {
                 ltype: LinkType::TableOfContents,
-                link: LinkLocation::Url(Cow::Owned(anchor)),
+                link: LinkLocation::Url(anchor),
                 extra: None,
                 label: LinkLabel::Text(Cow::Owned(name)),
                 target: None,
@@ -235,19 +238,6 @@ fn build_toc_list_element(
         ltype: ListType::Bullet,
         items,
         attributes,
-    }
-}
-
-// Incrementer for TOC
-
-#[derive(Debug)]
-struct Incrementer(usize);
-
-impl NextIndex<TableOfContentsIndex> for Incrementer {
-    fn next(&mut self) -> usize {
-        let index = self.0;
-        self.0 += 1;
-        index
     }
 }
 
