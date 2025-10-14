@@ -42,7 +42,6 @@ impl Heading {
 
         if self.has_toc {
             let id = format!("toc{}", indexer.next());
-
             HtmlTag::with_id(tag, id)
         } else {
             HtmlTag::new(tag)
@@ -61,7 +60,6 @@ impl TryFrom<&'_ str> for Heading {
         // This does *not* validate the regex, it assumes the string fits.
 
         let last_char = value.chars().next_back().ok_or(())?;
-
         let (has_toc, len) = match last_char {
             '+' => (true, value.len()),
             '*' => (false, value.len() - 1),
@@ -69,7 +67,6 @@ impl TryFrom<&'_ str> for Heading {
         };
 
         let level = HeadingLevel::try_from(len)?;
-
         Ok(Heading { level, has_toc })
     }
 }

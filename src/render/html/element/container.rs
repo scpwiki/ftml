@@ -28,9 +28,7 @@ pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
         // We wrap with <rp> around the <rt> contents
         ContainerType::RubyText => {
             ctx.html().rp().contents("(");
-
             render_container_internal(ctx, container);
-
             ctx.html().rp().contents(")");
         }
 
