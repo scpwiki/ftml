@@ -13,6 +13,10 @@ Label]
 
 [# Label
 
+**Dangerous**
+[javascript:alert(1) XSS]
+[data:text/html,<script>alert(2)</script> XSS]
+
 ++ Triple-Bracket
 
 [[[!:missing|Label]]]
