@@ -137,6 +137,36 @@
                         "element": "link",
                         "data": {
                             "type": "direct",
+                            "link": "/favicon.ico",
+                            "extra": null,
+                            "label": {
+                                "text": "Favicon"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/robots.txt",
+                            "extra": null,
+                            "label": {
+                                "text": "robots.txt"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
                             "link": "/#main",
                             "extra": null,
                             "label": {

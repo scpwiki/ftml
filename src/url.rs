@@ -21,7 +21,6 @@
 use regex::Regex;
 use std::borrow::Cow;
 use std::sync::LazyLock;
-use wikidot_normalize::normalize;
 
 #[cfg(feature = "html")]
 use crate::tree::LinkLocation;
@@ -115,59 +114,23 @@ pub fn normalize_link<'a>(
 /// This performs a few operations:
 /// * Blocking dangerous URLs (e.g. `javascript:alert(1)`)
 /// * For relative links, normalizing the page portion (e.g. `/SCP-001/edit`)
+/// * Adds a leading `/` if it is missing.
 pub fn normalize_href(url: &str) -> Cow<'_, str> {
-    if is_url(url) || url.starts_with('#') || url == "javascript:;" {
+    if is_url(url)
+        || url.starts_with('/')
+        || url.starts_with('#')
+        || url == "javascript:;"
+    {
+        trace!("Leaving safe URL as-is: {url}");
         Cow::Borrowed(url)
     } else if dangerous_scheme(url) {
         warn!("Attempt to pass in dangerous URL: {url}");
         Cow::Borrowed("#invalid-url")
     } else {
-        fn get_first_non_empty<S: AsRef<str>>(parts: &[S]) -> Option<usize> {
-            for (i, part) in parts.iter().enumerate() {
-                if !part.as_ref().is_empty() {
-                    return Some(i);
-                }
-            }
-
-            None
-        }
-
-        // Detach anchor, if present
-        let (main_url, anchor) = match url.split_once('#') {
-            Some((url, anchor)) => (url, Some(anchor)),
-            None => (url, None),
-        };
-
-        // Get the first non empty page part and normalize
-        // that, *unless* it is just "-", since that may
-        // be a special route, like /-/admin.
-        let mut parts: Vec<Cow<str>> = main_url.split('/').map(|s| cow!(s)).collect();
-        match get_first_non_empty(&parts) {
-            // Nothing to normalize, return as-is
-            None => return cow!(url),
-
-            // Normalize the first set portion, which should be the
-            // page slug of a relative link.
-            Some(index) => {
-                if parts[index] != "-" {
-                    normalize(parts[index].to_mut());
-                }
-            }
-        }
-
-        // Recompose the URL
-        let mut new_url = parts.join("/");
-
-        if !new_url.starts_with('/') {
-            new_url.insert(0, '/');
-        }
-
-        if let Some(anchor) = anchor {
-            new_url.push('#');
-            new_url.push_str(anchor);
-        }
-
-        Cow::Owned(new_url)
+        // In this branch, the URL is not absolute (e.g. https://example.com)
+        // and so must be a relative link with no leading / (e.g. just "some-page").
+        trace!("Adding leading slash to URL: {url}");
+        Cow::Owned(format!("/{url}"))
     }
 }
 
@@ -263,16 +226,4 @@ fn test_normalize_href() {
     check!("some-page#target", "/some-page#target");
     check!("system:some-page", "/system:some-page");
     check!("system:some-page#target", "/system:some-page#target");
-
-    // Normalize slugs
-    check!("SCP-001", "/scp-001");
-    check!("/SCP-001", "/scp-001");
-    check!(
-        "Ethics Committee Orientation",
-        "/ethics-committee-orientation",
-    );
-    check!(
-        "/Ethics Committee Orientation",
-        "/ethics-committee-orientation",
-    );
 }
