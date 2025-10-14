@@ -21,7 +21,6 @@
 use regex::Regex;
 use std::borrow::Cow;
 use std::sync::LazyLock;
-use wikidot_normalize::normalize;
 
 #[cfg(feature = "html")]
 use crate::tree::LinkLocation;
@@ -65,10 +64,19 @@ pub fn is_url(url: &str) -> bool {
 /// Additionally, there is a check to make sure that there isn't any
 /// funny business going on with the scheme, such as insertion of
 /// whitespace. In such cases, the URL is rejected.
+///
+/// This function does not check anything starting with `/`, since
+/// this would be a relative link.
 pub fn dangerous_scheme(url: &str) -> bool {
     static SCHEME_REGEX: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^[\w\-]+$").unwrap());
 
+    // Ignore relative links
+    if url.starts_with('/') {
+        return false;
+    }
+
+    // Get the scheme from the URL
     url.split_once(':')
         .map(|(scheme, _)| {
             if !SCHEME_REGEX.is_match(scheme) {
@@ -101,26 +109,28 @@ pub fn normalize_link<'a>(
     }
 }
 
+/// Normalize a URL string.
+///
+/// This performs a few operations:
+/// * Blocking dangerous URLs (e.g. `javascript:alert(1)`)
+/// * For relative links, normalizing the page portion (e.g. `/SCP-001/edit`)
+/// * Adds a leading `/` if it is missing.
 pub fn normalize_href(url: &str) -> Cow<'_, str> {
-    if is_url(url) || url.starts_with('#') || url == "javascript:;" {
+    if is_url(url)
+        || url.starts_with('/')
+        || url.starts_with('#')
+        || url == "javascript:;"
+    {
+        trace!("Leaving safe URL as-is: {url}");
         Cow::Borrowed(url)
     } else if dangerous_scheme(url) {
         warn!("Attempt to pass in dangerous URL: {url}");
         Cow::Borrowed("#invalid-url")
     } else {
-        let split_anchor: Vec<&str> = url.splitn(2, "#").collect();
-        let mut split_url: Vec<&str> = split_anchor[0].split("/").collect();
-        if !split_url[0].is_empty() || (split_url[0].is_empty() && split_url.len() == 1) {
-            split_url.insert(0, "");
-        }
-        let mut url = str!(split_url[1]);
-        normalize(&mut url);
-        split_url[1] = &url;
-        url = split_url.join("/");
-        if split_anchor.len() == 2 {
-            url = format!("{}#{}", url, split_anchor[1]);
-        }
-        Cow::Owned(url)
+        // In this branch, the URL is not absolute (e.g. https://example.com)
+        // and so must be a relative link with no leading / (e.g. just "some-page").
+        trace!("Adding leading slash to URL: {url}");
+        Cow::Owned(format!("/{url}"))
     }
 }
 
@@ -155,4 +165,65 @@ fn detect_dangerous_schemes() {
     check!("data:text/javascript,alert(1)", true);
     check!("data:text/html,<script>alert('XSS');</script>", true);
     check!("DATA:text/html,<script>alert('XSS');</script>", true);
+    check!("/page", false);
+    check!("/page#target", false);
+    check!("/page/edit", false);
+    check!("/page/edit#target", false);
+    check!("/category:page", false);
+    check!("/category:page#target", false);
+    check!("/category:page/edit", false);
+    check!("/category:page/edit#target", false);
+}
+
+#[test]
+fn test_normalize_href() {
+    macro_rules! check {
+        ($input:expr, $expected:expr $(,)?) => {{
+            let actual = normalize_href($input);
+            assert_eq!(
+                actual.as_ref(),
+                $expected,
+                "For input {:?}, normalize_href() doesn't match expected",
+                $input,
+            );
+        }};
+
+        // For when the input is the same as the output
+        ($input:expr) => {
+            check!($input, $input)
+        };
+    }
+
+    // Basic targets
+    check!("#");
+    check!("#target");
+    check!("#edit-area");
+    check!("javascript:;");
+    check!("http://example.net");
+    check!("https://example.net");
+    check!("irc://irc.scpwiki.com");
+    check!("sftp://ftp.example.com/upload");
+
+    // Dangerous
+    check!("javascript:alert(1)", "#invalid-url");
+    check!(
+        "data:text/html,<script>alert('XSS')</script>",
+        "#invalid-url",
+    );
+
+    // Preserve page links
+    check!("/page");
+    check!("/page#target");
+    check!("/page/edit");
+    check!("/page/edit#target");
+    check!("/category:page");
+    check!("/category:page#target");
+    check!("/category:page/edit");
+    check!("/category:page/edit#target");
+
+    // Missing / prefix
+    check!("some-page", "/some-page");
+    check!("some-page#target", "/some-page#target");
+    check!("system:some-page", "/system:some-page");
+    check!("system:some-page#target", "/system:some-page#target");
 }

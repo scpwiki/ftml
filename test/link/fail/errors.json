@@ -26,115 +26,115 @@
     {
         "token": "line-break",
         "rule": "link-triple",
-        "span": [200, 201],
+        "span": [288, 289],
         "kind": "rule-failed"
     },
     {
         "token": "left-link",
         "rule": "fallback",
-        "span": [179, 182],
+        "span": [267, 270],
         "kind": "no-rules-match"
     },
     {
         "token": "right-link",
         "rule": "fallback",
-        "span": [197, 200],
+        "span": [285, 288],
         "kind": "no-rules-match"
     },
     {
         "token": "paragraph-break",
         "rule": "link-triple",
-        "span": [239, 241],
+        "span": [327, 329],
         "kind": "rule-failed"
     },
     {
         "token": "left-link",
         "rule": "fallback",
-        "span": [201, 204],
+        "span": [289, 292],
         "kind": "no-rules-match"
     },
     {
         "token": "right-link",
         "rule": "fallback",
-        "span": [236, 239],
+        "span": [324, 327],
         "kind": "no-rules-match"
     },
     {
         "token": "identifier",
         "rule": "link-triple",
-        "span": [245, 249],
+        "span": [333, 337],
         "kind": "rule-failed"
     },
     {
         "token": "left-link",
         "rule": "fallback",
-        "span": [241, 244],
+        "span": [329, 332],
         "kind": "no-rules-match"
     },
     {
         "token": "right-link",
         "rule": "fallback",
-        "span": [254, 257],
+        "span": [342, 345],
         "kind": "no-rules-match"
     },
     {
         "token": "identifier",
         "rule": "link-triple-new-tab",
-        "span": [263, 267],
+        "span": [351, 355],
         "kind": "rule-failed"
     },
     {
         "token": "left-link-star",
         "rule": "fallback",
-        "span": [258, 262],
+        "span": [346, 350],
         "kind": "no-rules-match"
     },
     {
         "token": "right-link",
         "rule": "fallback",
-        "span": [272, 275],
+        "span": [360, 363],
         "kind": "no-rules-match"
     },
     {
         "token": "line-break",
         "rule": "link-triple",
-        "span": [291, 292],
+        "span": [379, 380],
         "kind": "rule-failed"
     },
     {
         "token": "left-link",
         "rule": "fallback",
-        "span": [277, 280],
+        "span": [365, 368],
         "kind": "no-rules-match"
     },
     {
         "token": "right-link",
         "rule": "fallback",
-        "span": [297, 300],
+        "span": [385, 388],
         "kind": "no-rules-match"
     },
     {
         "token": "line-break",
         "rule": "link-triple",
-        "span": [314, 315],
+        "span": [402, 403],
         "kind": "rule-failed"
     },
     {
         "token": "left-link",
         "rule": "fallback",
-        "span": [302, 305],
+        "span": [390, 393],
         "kind": "no-rules-match"
     },
     {
         "token": "right-link",
         "rule": "fallback",
-        "span": [315, 318],
+        "span": [403, 406],
         "kind": "no-rules-match"
     },
     {
         "token": "right-link",
         "rule": "fallback",
-        "span": [337, 340],
+        "span": [425, 428],
         "kind": "no-rules-match"
     }
 ]
