@@ -23,8 +23,45 @@
 /// This allows us to generically represent "we need the next index, conditionally"
 /// without tying that function to a particular implementation of its context or state.
 pub trait NextIndex<Kind> {
-    fn next(&mut self) -> usize;
+    /// Yield the next index in the series.
+    ///
+    /// This should always return `None` if indexes are disabled.
+    /// Otherwise, it should return only `Some(_)` values with
+    /// unique values after each invocation.
+    fn next(&mut self) -> Option<usize>;
 }
+
+// Indexer kinds
 
 #[derive(Debug)]
 pub struct TableOfContentsIndex;
+
+// Basic implementation
+
+#[derive(Debug)]
+pub struct Incrementer(Option<usize>);
+
+impl Incrementer {
+    #[inline]
+    pub fn new() -> Self {
+        Incrementer(Some(0))
+    }
+
+    #[inline]
+    pub fn disabled() -> Self {
+        Incrementer(None)
+    }
+}
+
+impl NextIndex<TableOfContentsIndex> for Incrementer {
+    fn next(&mut self) -> Option<usize> {
+        match self.0 {
+            None => None,
+            Some(ref mut value) => {
+                let index = *value;
+                *value += 1;
+                Some(index)
+            }
+        }
+    }
+}

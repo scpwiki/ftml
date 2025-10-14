@@ -21,6 +21,7 @@
 mod interwiki;
 
 use crate::layout::Layout;
+use crate::next_index::Incrementer;
 
 pub use self::interwiki::{DEFAULT_INTERWIKI, EMPTY_INTERWIKI, InterwikiSettings};
 
@@ -149,6 +150,15 @@ impl WikitextSettings {
                 allow_local_paths: true,
                 interwiki,
             },
+        }
+    }
+
+    /// Construct a new `Indexer` based on the setting of `use_true_ids`.
+    pub fn id_indexer(&self) -> Incrementer {
+        if self.use_true_ids {
+            Incrementer::new()
+        } else {
+            Incrementer::disabled()
         }
     }
 }

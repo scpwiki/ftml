@@ -40,8 +40,10 @@ impl Heading {
     pub fn html_tag(self, indexer: &mut dyn NextIndex<TableOfContentsIndex>) -> HtmlTag {
         let tag = self.level.html_tag();
 
-        if self.has_toc {
-            let id = format!("toc{}", indexer.next());
+        if self.has_toc
+            && let Some(index) = indexer.next()
+        {
+            let id = format!("toc{index}");
             HtmlTag::with_id(tag, id)
         } else {
             HtmlTag::new(tag)
