@@ -233,6 +233,7 @@ fn test_normalize_href() {
         };
     }
 
+    // Basic targets
     check!("#");
     check!("#target");
     check!("#edit-area");
@@ -242,9 +243,14 @@ fn test_normalize_href() {
     check!("irc://irc.scpwiki.com");
     check!("sftp://ftp.example.com/upload");
 
+    // Dangerous
     check!("javascript:alert(1)", "#invalid-url");
-    check!("data:text/html,<script>alert('XSS')</script>", "#invalid-url");
+    check!(
+        "data:text/html,<script>alert('XSS')</script>",
+        "#invalid-url",
+    );
 
+    // Preserve page links
     check!("/page");
     check!("/page#target");
     check!("/page/edit");
@@ -253,4 +259,22 @@ fn test_normalize_href() {
     check!("/category:page#target");
     check!("/category:page/edit");
     check!("/category:page/edit#target");
+
+    // Missing / prefix
+    check!("some-page", "/some-page");
+    check!("some-page#target", "/some-page#target");
+    check!("system:some-page", "/system:some-page");
+    check!("system:some-page#target", "/system:some-page#target");
+
+    // Normalize slugs
+    check!("SCP-001", "/scp-001");
+    check!("/SCP-001", "/scp-001");
+    check!(
+        "Ethics Committee Orientation",
+        "/ethics-committee-orientation",
+    );
+    check!(
+        "/Ethics Committee Orientation",
+        "/ethics-committee-orientation",
+    );
 }
