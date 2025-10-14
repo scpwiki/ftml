@@ -43,13 +43,15 @@ pub struct Incrementer(Option<usize>);
 
 impl Incrementer {
     #[inline]
-    pub fn new() -> Self {
-        Incrementer(Some(0))
-    }
-
-    #[inline]
     pub fn disabled() -> Self {
         Incrementer(None)
+    }
+}
+
+impl Default for Incrementer {
+    #[inline]
+    fn default() -> Self {
+        Incrementer(Some(0))
     }
 }
 

@@ -156,7 +156,7 @@ impl WikitextSettings {
     /// Construct a new `Indexer` based on the setting of `use_true_ids`.
     pub fn id_indexer(&self) -> Incrementer {
         if self.use_true_ids {
-            Incrementer::new()
+            Incrementer::default()
         } else {
             Incrementer::disabled()
         }
