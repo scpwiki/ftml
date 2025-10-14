@@ -208,3 +208,83 @@ fn heading() {
     check!("+++++*", 5, false);
     check!("++++++*", 6, false);
 }
+
+#[test]
+fn true_ids() {
+    use crate::next_index::Incrementer;
+
+    macro_rules! check {
+        ($indexer:expr, $level:expr, $expected_html_tag:expr $(,)?) => {{
+            let level =
+                HeadingLevel::try_from($level as u8).expect("Unable to get HeadingLevel");
+
+            let heading = Heading {
+                level,
+                has_toc: true,
+            };
+
+            let actual_html_tag = heading.html_tag(&mut $indexer);
+            assert_eq!(
+                actual_html_tag, $expected_html_tag,
+                "Actual HtmlTag didn't match expected",
+            );
+        }};
+    }
+
+    // Enabled incrementer
+    // Simulates use_true_ids = true
+    {
+        let mut indexer = Incrementer::default();
+        check!(
+            indexer,
+            1,
+            HtmlTag::TagAndId {
+                tag: "h1",
+                id: str!("toc0")
+            },
+        );
+        check!(
+            indexer,
+            3,
+            HtmlTag::TagAndId {
+                tag: "h3",
+                id: str!("toc1")
+            },
+        );
+        check!(
+            indexer,
+            3,
+            HtmlTag::TagAndId {
+                tag: "h3",
+                id: str!("toc2")
+            },
+        );
+        check!(
+            indexer,
+            1,
+            HtmlTag::TagAndId {
+                tag: "h1",
+                id: str!("toc3")
+            },
+        );
+        check!(
+            indexer,
+            5,
+            HtmlTag::TagAndId {
+                tag: "h5",
+                id: str!("toc4")
+            },
+        );
+    }
+
+    // Disabled incrementer
+    // Simulates use_true_ids = false
+    {
+        let mut indexer = Incrementer::disabled();
+        check!(indexer, 1, HtmlTag::Tag("h1"));
+        check!(indexer, 3, HtmlTag::Tag("h3"));
+        check!(indexer, 3, HtmlTag::Tag("h3"));
+        check!(indexer, 2, HtmlTag::Tag("h2"));
+        check!(indexer, 4, HtmlTag::Tag("h4"));
+    }
+}
