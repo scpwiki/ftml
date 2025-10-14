@@ -2,6 +2,10 @@
 [https://example.com/ External link]!
 [*https://scp-sandbox-3.wikidot.com/system:recent-changes Sandbox: Recent Changes ] (new tab)
 
+**Relative Links**
+[/ Root]
+[/#main Main]
+
 **Page-like Paths**
 [/page Some page]
 [/page#main With anchor]
@@ -14,6 +18,7 @@
 [/relative/link text]
 [/relative/link#toc0 text]
 
-**Other Paths**
-[// Root]
-[//page/edit Edit]
+**Double Slash**
+[// Root2]
+[//page Page2]
+[//page/edit Edit2]

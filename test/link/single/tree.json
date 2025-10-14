@@ -102,6 +102,66 @@
                             "elements": [
                                 {
                                     "element": "text",
+                                    "data": "Relative"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "Links"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/",
+                            "extra": null,
+                            "label": {
+                                "text": "Root"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/#main",
+                            "extra": null,
+                            "label": {
+                                "text": "Main"
+                            },
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "bold",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
                                     "data": "Page"
                                 },
                                 {
@@ -290,7 +350,7 @@
                             "elements": [
                                 {
                                     "element": "text",
-                                    "data": "Other"
+                                    "data": "Double"
                                 },
                                 {
                                     "element": "text",
@@ -298,7 +358,7 @@
                                 },
                                 {
                                     "element": "text",
-                                    "data": "Paths"
+                                    "data": "Slash"
                                 }
                             ]
                         }
@@ -313,7 +373,22 @@
                             "link": "//",
                             "extra": null,
                             "label": {
-                                "text": "Root"
+                                "text": "Root2"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "//page",
+                            "extra": null,
+                            "label": {
+                                "text": "Page2"
                             },
                             "target": null
                         }
@@ -328,7 +403,7 @@
                             "link": "//page/edit",
                             "extra": null,
                             "label": {
-                                "text": "Edit"
+                                "text": "Edit2"
                             },
                             "target": null
                         }
