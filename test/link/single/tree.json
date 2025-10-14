@@ -235,22 +235,7 @@
                         "element": "link",
                         "data": {
                             "type": "direct",
-                            "link": "/category:page/edit",
-                            "extra": null,
-                            "label": {
-                                "text": "Sublink"
-                            },
-                            "target": null
-                        }
-                    },
-                    {
-                        "element": "line-break"
-                    },
-                    {
-                        "element": "link",
-                        "data": {
-                            "type": "direct",
-                            "link": "/category:page/edit#taget",
+                            "link": "/category:page/edit#target",
                             "extra": null,
                             "label": {
                                 "text": "Both"
