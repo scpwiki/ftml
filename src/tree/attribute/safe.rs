@@ -70,6 +70,7 @@ pub static SAFE_ATTRIBUTES: LazyLock<HashSet<UniCase<&'static str>>> =
             "draggable",
             "for",
             "form",
+            "frameborder",
             "headers",
             "height",
             "hidden",
