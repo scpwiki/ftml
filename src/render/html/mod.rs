@@ -40,10 +40,11 @@ use super::prelude;
 
 use self::attributes::AddedAttributes;
 use self::context::HtmlContext;
+use self::element::{render_element, render_elements};
 use crate::data::PageInfo;
 use crate::render::{Handle, Render};
 use crate::settings::WikitextSettings;
-use crate::tree::SyntaxTree;
+use crate::tree::{Element, SyntaxTree};
 
 #[derive(Debug)]
 pub struct HtmlRender;
@@ -81,7 +82,22 @@ impl Render for HtmlRender {
         ctx.html()
             .element("wj-body")
             .attr(attr!("class" => "wj-body"))
-            .contents(&tree.elements);
+            .inner(|ctx| {
+                render_elements(ctx, &tree.elements);
+
+                if tree.needs_footnote_block {
+                    info!(
+                        "Page needs footnote but one was not manually included, adding"
+                    );
+                    render_element(
+                        ctx,
+                        &Element::FootnoteBlock {
+                            title: None,
+                            hide: false,
+                        },
+                    );
+                }
+            });
 
         // Build and return HtmlOutput
         ctx.into()
