@@ -417,19 +417,31 @@ fn arb_tree() -> impl Strategy<Value = SyntaxTree<'static>> {
         proptest::collection::vec(element, 1..100),
         proptest::collection::vec(toc_heading, 0..2),
         proptest::collection::vec(footnote, 0..2),
+        any::<bool>(),
         0..250usize,
     )
-        .prop_map(|(elements, table_of_contents, footnotes, wikitext_len)| {
-            SyntaxTree {
+        .prop_map(
+            |(
                 elements,
-                html_blocks: Vec::new(),
-                code_blocks: Vec::new(), // these two are derived fields
                 table_of_contents,
                 footnotes,
-                bibliographies: BibliographyList::new(), // not bothering right now
+                mut needs_footnote_block,
                 wikitext_len,
-            }
-        })
+            )| {
+                needs_footnote_block &= !footnotes.is_empty();
+
+                SyntaxTree {
+                    elements,
+                    html_blocks: Vec::new(),
+                    code_blocks: Vec::new(), // these two are derived fields
+                    table_of_contents,
+                    footnotes,
+                    needs_footnote_block,
+                    bibliographies: BibliographyList::new(), // not bothering right now
+                    wikitext_len,
+                }
+            },
+        )
 }
 
 // Page Info

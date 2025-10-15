@@ -259,6 +259,7 @@ impl Test {
                         html_blocks: Vec::new(),
                         code_blocks: Vec::new(),
                         footnotes: Vec::new(),
+                        needs_footnote_block: true,
                         bibliographies: BibliographyList::new(),
                         wikitext_len: 0,
                     }

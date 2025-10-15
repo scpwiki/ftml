@@ -33,13 +33,6 @@
                     "frameborder": "0"
                 }
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ]
 }

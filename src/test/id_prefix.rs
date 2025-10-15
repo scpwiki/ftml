@@ -63,16 +63,8 @@ fn isolate_user_ids() {
         interwiki: EMPTY_INTERWIKI.clone(),
     };
 
-    fn append_footnote_block(mut elements: Vec<Element>) -> Vec<Element> {
-        elements.push(Element::FootnoteBlock {
-            title: None,
-            hide: false,
-        });
-        elements
-    }
-
     macro_rules! check {
-        ($wikitext:expr, $elements:expr $(,)?) => {{
+        ($wikitext:expr, $expected:expr $(,)?) => {{
             let mut text = str!($wikitext);
 
             crate::preprocess(&mut text);
@@ -81,7 +73,7 @@ fn isolate_user_ids() {
             let (tree, errors) = result.into();
 
             let actual = tree.elements;
-            let expected = append_footnote_block($elements);
+            let expected = $expected;
 
             assert!(errors.is_empty(), "Errors produced during parsing!");
             assert_eq!(actual, expected, "Actual elements didn't match expected");

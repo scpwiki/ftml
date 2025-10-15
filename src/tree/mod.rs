@@ -69,6 +69,7 @@ pub use self::variables::*;
 use self::clone::{elements_lists_to_owned, elements_to_owned, string_to_owned};
 use crate::parsing::{ParseError, ParseOutcome};
 use std::borrow::Cow;
+use std::ops::Not;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -99,6 +100,15 @@ pub struct SyntaxTree<'t> {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub footnotes: Vec<Vec<Element<'t>>>,
 
+    /// Whether the renderer should add its own footnote block.
+    ///
+    /// This is true if there is no footnote block in the element
+    /// list above, *and* there are footnotes to render.
+    // NOTE: Not::not() here is effectively saying "don't serialize if !value"
+    //       which is just "is false".
+    #[serde(default, skip_serializing_if = "Not::not")]
+    pub needs_footnote_block: bool,
+
     /// The full list of bibliographies for this page.
     #[serde(default, skip_serializing_if = "BibliographyList::is_empty")]
     pub bibliographies: BibliographyList<'t>,
@@ -116,7 +126,7 @@ impl<'t> SyntaxTree<'t> {
         errors: Vec<ParseError>,
         (html_blocks, code_blocks): (Vec<Cow<'t, str>>, Vec<CodeBlock<'t>>),
         table_of_contents: Vec<Element<'t>>,
-        footnotes: Vec<Vec<Element<'t>>>,
+        (footnotes, needs_footnote_block): (Vec<Vec<Element<'t>>>, bool),
         bibliographies: BibliographyList<'t>,
         wikitext_len: usize,
     ) -> ParseOutcome<Self> {
@@ -126,6 +136,7 @@ impl<'t> SyntaxTree<'t> {
             html_blocks,
             code_blocks,
             footnotes,
+            needs_footnote_block,
             bibliographies,
             wikitext_len,
         };
@@ -147,6 +158,7 @@ impl<'t> SyntaxTree<'t> {
                 .map(|code| code.to_owned())
                 .collect(),
             footnotes: elements_lists_to_owned(&self.footnotes),
+            needs_footnote_block: self.needs_footnote_block,
             bibliographies: self.bibliographies.to_owned(),
             wikitext_len: self.wikitext_len,
         }

@@ -11,13 +11,6 @@
         {
             "element": "style",
             "data": ".red{color:   red}"
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ]
 }

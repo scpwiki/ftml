@@ -61,13 +61,6 @@
                     }
                 ]
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ],
     "footnotes": [
@@ -466,5 +459,6 @@
                 }
             }
         ]
-    ]
+    ],
+    "needs-footnote-block": true
 }

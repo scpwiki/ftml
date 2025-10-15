@@ -241,13 +241,6 @@
         {
             "element": "clear-float",
             "data": "right"
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ]
 }
