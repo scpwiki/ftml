@@ -273,7 +273,6 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
     pub fn contents<R: ItemRender>(&mut self, item: R) -> &mut Self {
         self.content_start();
         item.render(self.ctx);
-
         self
     }
 
@@ -283,7 +282,6 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
     {
         self.content_start();
         f(self.ctx);
-
         self
     }
 }
