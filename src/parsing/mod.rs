@@ -129,8 +129,7 @@ where
                 errors,
                 (html_blocks, code_blocks),
                 table_of_contents,
-                footnotes,
-                needs_footnote_block,
+                (footnotes, needs_footnote_block),
                 bibliographies,
                 tokenization.full_text().len(),
             )
@@ -155,8 +154,7 @@ where
                 errors,
                 (html_blocks, code_blocks),
                 table_of_contents,
-                footnotes,
-                needs_footnote_block,
+                (footnotes, needs_footnote_block),
                 bibliographies,
                 tokenization.full_text().len(),
             )

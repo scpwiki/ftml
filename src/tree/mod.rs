@@ -126,8 +126,7 @@ impl<'t> SyntaxTree<'t> {
         errors: Vec<ParseError>,
         (html_blocks, code_blocks): (Vec<Cow<'t, str>>, Vec<CodeBlock<'t>>),
         table_of_contents: Vec<Element<'t>>,
-        footnotes: Vec<Vec<Element<'t>>>,
-        needs_footnote_block: bool,
+        (footnotes, needs_footnote_block): (Vec<Vec<Element<'t>>>, bool),
         bibliographies: BibliographyList<'t>,
         wikitext_len: usize,
     ) -> ParseOutcome<Self> {

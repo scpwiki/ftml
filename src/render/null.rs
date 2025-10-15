@@ -55,8 +55,7 @@ fn null() {
         vec![],
         (vec![], vec![]),
         vec![],
-        vec![],
-        true,
+        (vec![], true),
         BibliographyList::new(),
         0,
     );
