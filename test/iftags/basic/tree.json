@@ -63,13 +63,6 @@
         {
             "element": "style",
             "data": "body { color: red; }"
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ]
 }

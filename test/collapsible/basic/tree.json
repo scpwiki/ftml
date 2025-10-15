@@ -534,13 +534,6 @@
                 "show-top": true,
                 "show-bottom": false
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ]
 }

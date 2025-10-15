@@ -144,13 +144,6 @@
                 "language": null,
                 "name": null
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ],
     "code-blocks": [

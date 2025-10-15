@@ -264,13 +264,6 @@
                 },
                 "align": "right"
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ],
     "table-of-contents": [

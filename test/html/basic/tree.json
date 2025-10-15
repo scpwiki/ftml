@@ -103,13 +103,6 @@
                     "id": "special-thing"
                 }
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ],
     "html-blocks": [

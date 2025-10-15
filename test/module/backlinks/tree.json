@@ -35,13 +35,6 @@
                     "page": "scp-001"
                 }
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ]
 }

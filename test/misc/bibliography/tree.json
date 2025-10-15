@@ -178,13 +178,6 @@
                 "title": null,
                 "hide": false
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ],
     "bibliographies": [

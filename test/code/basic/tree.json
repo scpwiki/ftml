@@ -133,13 +133,6 @@
                 "language": null,
                 "name": "b"
             }
-        },
-        {
-            "element": "footnote-block",
-            "data": {
-                "title": null,
-                "hide": false
-            }
         }
     ],
     "code-blocks": [
