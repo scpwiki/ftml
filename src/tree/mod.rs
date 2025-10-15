@@ -69,6 +69,7 @@ pub use self::variables::*;
 use self::clone::{elements_lists_to_owned, elements_to_owned, string_to_owned};
 use crate::parsing::{ParseError, ParseOutcome};
 use std::borrow::Cow;
+use std::ops::Not;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -103,6 +104,9 @@ pub struct SyntaxTree<'t> {
     ///
     /// This is true if there is no footnote block in the element
     /// list above, *and* there are footnotes to render.
+    // NOTE: Not::not() here is effectively saying "don't serialize if !value"
+    //       which is just "is false".
+    #[serde(default, skip_serializing_if = "Not::not")]
     pub needs_footnote_block: bool,
 
     /// The full list of bibliographies for this page.
