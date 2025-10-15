@@ -99,7 +99,7 @@ where
     debug!("Finished paragraph gathering, matching on consumption");
     match result {
         Ok(ParseSuccess {
-            item: mut elements,
+            item: elements,
             errors,
             ..
         }) => {
@@ -119,16 +119,10 @@ where
                 .map(|(_, items)| build_toc_list_element(&mut toc_indexer, items))
                 .collect::<Vec<_>>();
 
-            // Add a footnote block at the end,
-            // if the user doesn't have one already
-            if !has_footnote_block {
-                debug!("No footnote block in elements, appending one");
-
-                elements.push(Element::FootnoteBlock {
-                    title: None,
-                    hide: false,
-                });
-            }
+            // This flag notes that the renderer needs to insert its own footnote
+            // block. This happens when there are footnotes to be rendered, but
+            // there isn't a manually-placed footnote block somewhere in the elements.
+            let needs_footnote_block = !footnotes.is_empty() && !has_footnote_block;
 
             SyntaxTree::from_element_result(
                 elements,
@@ -136,6 +130,7 @@ where
                 (html_blocks, code_blocks),
                 table_of_contents,
                 footnotes,
+                needs_footnote_block,
                 bibliographies,
                 tokenization.full_text().len(),
             )
@@ -152,6 +147,7 @@ where
             let errors = vec![error];
             let table_of_contents = vec![];
             let footnotes = vec![];
+            let needs_footnote_block = true;
             let bibliographies = BibliographyList::new();
 
             SyntaxTree::from_element_result(
@@ -160,6 +156,7 @@ where
                 (html_blocks, code_blocks),
                 table_of_contents,
                 footnotes,
+                needs_footnote_block,
                 bibliographies,
                 tokenization.full_text().len(),
             )
