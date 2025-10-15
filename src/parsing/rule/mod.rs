@@ -86,6 +86,7 @@ impl Debug for Rule {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Rule")
             .field("name", &self.name)
+            .field("position", &self.position)
             .field("try_consume_fn", &(self.try_consume_fn as *const ()))
             .finish()
     }
