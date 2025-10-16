@@ -45,7 +45,7 @@ include_normal = {
 // Compatibility version (accepts [[include]] too)
 include_compatibility = {
     SOI ~ // Because we slice from the start of an include block using regex
-    "[[" ~ space? ~ (^"include" | ^"include") ~ space ~
+    "[[" ~ space? ~ ^"include" ~ space ~
     page_ref ~ space? ~
     ("|" ~ space?)? ~
     (argument ~ space? ~ "|" ~ space?)* ~
