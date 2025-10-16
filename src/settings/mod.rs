@@ -48,14 +48,6 @@ pub struct WikitextSettings {
     /// * Button
     pub enable_page_syntax: bool,
 
-    /// Whether a literal `[[include]]` is permitted.
-    ///
-    /// If this is true, then `[[include]]` is treated as an alias
-    /// for `[[include]]`, which is necessary for Wikidot compatibility.
-    ///
-    /// It is off by default.
-    pub use_include_compatibility: bool,
-
     /// Whether IDs should have true values, or be excluded or randomly generated.
     ///
     /// In the latter case, IDs can be used for navigation, for instance
@@ -110,7 +102,6 @@ impl WikitextSettings {
                 mode,
                 layout,
                 enable_page_syntax: true,
-                use_include_compatibility: false,
                 use_true_ids: true,
                 isolate_user_ids: false,
                 minify_css: DEFAULT_MINIFY_CSS,
@@ -121,7 +112,6 @@ impl WikitextSettings {
                 mode,
                 layout,
                 enable_page_syntax: true,
-                use_include_compatibility: false,
                 use_true_ids: false,
                 isolate_user_ids: false,
                 minify_css: DEFAULT_MINIFY_CSS,
@@ -132,7 +122,6 @@ impl WikitextSettings {
                 mode,
                 layout,
                 enable_page_syntax: false,
-                use_include_compatibility: false,
                 use_true_ids: false,
                 isolate_user_ids: false,
                 minify_css: DEFAULT_MINIFY_CSS,
@@ -143,7 +132,6 @@ impl WikitextSettings {
                 mode,
                 layout,
                 enable_page_syntax: true,
-                use_include_compatibility: false,
                 use_true_ids: false,
                 isolate_user_ids: false,
                 minify_css: DEFAULT_MINIFY_CSS,

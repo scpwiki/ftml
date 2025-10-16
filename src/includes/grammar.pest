@@ -31,19 +31,8 @@
 // That is, all internal parameters need pipes inside, but the last does not,
 // and is optional should the sequence end in a pipe.
 
-// Normal version ([[include]] only)
-include_normal = {
-    SOI ~ // Because we slice from the start of an include block using regex
-    "[[" ~ space? ~ ^"include" ~ space ~
-    page_ref ~ space? ~
-    ("|" ~ space?)? ~
-    (argument ~ space? ~ "|" ~ space?)* ~
-    (argument ~ space? ~ "|"?)? ~
-    space? ~ include_end
-}
-
-// Compatibility version (accepts [[include]] too)
-include_compatibility = {
+// Top-level rule
+include = {
     SOI ~ // Because we slice from the start of an include block using regex
     "[[" ~ space? ~ ^"include" ~ space ~
     page_ref ~ space? ~

@@ -32,7 +32,6 @@ mod parser {
 use self::parser::*;
 use super::IncludeRef;
 use crate::data::{PageRef, PageRefParseError};
-use crate::settings::WikitextSettings;
 use pest::Parser;
 use pest::iterators::Pairs;
 use std::borrow::Cow;
@@ -51,15 +50,8 @@ use std::collections::HashMap;
 pub fn parse_include_block<'t>(
     text: &'t str,
     start: usize,
-    settings: &WikitextSettings,
 ) -> Result<(IncludeRef<'t>, usize), IncludeParseError> {
-    let rule = if settings.use_include_compatibility {
-        Rule::include_compatibility
-    } else {
-        Rule::include_normal
-    };
-
-    match IncludeParser::parse(rule, &text[start..]) {
+    match IncludeParser::parse(Rule::include, &text[start..]) {
         Ok(mut pairs) => {
             // Extract inner pairs
             // These actually make up the include block's tokens

@@ -91,7 +91,7 @@ where
             mtch.as_str(),
         );
 
-        match parse_include_block(input, start, settings) {
+        match parse_include_block(input, start) {
             Ok((include, end)) => {
                 ranges.push(start..end);
                 includes.push(include);
