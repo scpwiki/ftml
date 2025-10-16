@@ -76,7 +76,7 @@ impl FromStr for Layout {
 pub struct LayoutParseError;
 
 #[test]
-fn test_layout() {
+fn test_parse() {
     macro_rules! check {
         ($input:expr, $expected:ident $(,)?) => {{
             let actual: Layout = $input.parse().expect("Invalid layout string");
@@ -107,4 +107,19 @@ fn test_layout() {
     check_err!("invalid");
     check_err!("XXX");
     check_err!("foobar");
+}
+
+#[test]
+fn test_values() {
+    macro_rules! check {
+        ($variant:ident, $value:expr, $legacy:expr, $description:expr $(,)?) => {{
+            let layout = Layout::$variant;
+            assert_eq!(layout.value(), $value);
+            assert_eq!(layout.legacy(), $legacy);
+            assert_eq!(layout.description(), $description);
+        }};
+    }
+
+    check!(Wikidot, "wikidot", true, "Wikidot (legacy)");
+    check!(Wikijump, "wikijump", false, "Wikijump");
 }
