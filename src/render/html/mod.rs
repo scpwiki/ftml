@@ -18,9 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#[cfg(test)]
-mod test;
-
 #[macro_use]
 mod attributes;
 mod builder;
@@ -34,9 +31,6 @@ mod render;
 
 pub use self::meta::{HtmlMeta, HtmlMetaType};
 pub use self::output::HtmlOutput;
-
-#[cfg(test)]
-use super::prelude;
 
 use self::attributes::AddedAttributes;
 use self::context::HtmlContext;
