@@ -36,9 +36,9 @@ include = {
     SOI ~ // Because we slice from the start of an include block using regex
     "[[" ~ space? ~ ^"include" ~ space ~
     page_ref ~ space? ~
-    ("|" ~ space?)? ~
-    (argument ~ space? ~ "|" ~ space?)* ~
-    (argument ~ space? ~ "|"?)? ~
+    ("|"+ ~ space?)? ~
+    (argument ~ space? ~ "|"+ ~ space?)* ~
+    (argument ~ space? ~ "|"*)? ~
     space? ~ include_end
 }
 
