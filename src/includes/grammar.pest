@@ -25,31 +25,23 @@
 //
 // [[include]]s can have leading *and* trailing pipe separators,
 // for instance [[include page | a = 1 ]] or [[include page a = 1 | ]] (or both)
+// and there can be multiple pipes,
+// for instance [[include page || a = 1]] or [[include | | a = 1]]
 //
 // Additionally, each argument must be separated from each other with a pipe.
-// We encapsulate this logic by essentially doing "(parameter ~ pipe)* ~ (parameter ~ pipe?)?
+// We encapsulate this logic by essentially doing
+// "(parameter ~ separator)* ~ (parameter ~ separator?)?
 // That is, all internal parameters need pipes inside, but the last does not,
 // and is optional should the sequence end in a pipe.
 
-// Normal version ([[include]] only)
-include_normal = {
+// Top-level rule
+include = {
     SOI ~ // Because we slice from the start of an include block using regex
     "[[" ~ space? ~ ^"include" ~ space ~
     page_ref ~ space? ~
-    ("|" ~ space?)? ~
-    (argument ~ space? ~ "|" ~ space?)* ~
-    (argument ~ space? ~ "|"?)? ~
-    space? ~ include_end
-}
-
-// Compatibility version (accepts [[include]] too)
-include_compatibility = {
-    SOI ~ // Because we slice from the start of an include block using regex
-    "[[" ~ space? ~ (^"include" | ^"include") ~ space ~
-    page_ref ~ space? ~
-    ("|" ~ space?)? ~
-    (argument ~ space? ~ "|" ~ space?)* ~
-    (argument ~ space? ~ "|"?)? ~
+    (separator ~ space?)? ~
+    (argument ~ space? ~ separator ~ space?)* ~
+    (argument ~ space? ~ separator?)? ~
     space? ~ include_end
 }
 
@@ -61,6 +53,10 @@ argument = {
     identifier ~ space? ~
     "=" ~ space? ~
     value
+}
+
+separator = _{
+    "|" ~ (space? ~ "|")*
 }
 
 value = {

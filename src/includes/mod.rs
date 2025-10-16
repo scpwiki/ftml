@@ -91,7 +91,7 @@ where
             mtch.as_str(),
         );
 
-        match parse_include_block(input, start, settings) {
+        match parse_include_block(input, start) {
             Ok((include, end)) => {
                 ranges.push(start..end);
                 includes.push(include);
@@ -115,7 +115,6 @@ where
     let ranges_iter = ranges.into_iter();
     let includes_iter = includes.into_iter();
     let fetched_iter = fetched_pages.into_iter();
-
     let joined_iter = ranges_iter.zip(includes_iter).zip(fetched_iter).rev();
 
     // Borrowing from the original text and doing in-place insertions

@@ -53,6 +53,10 @@ fn includes() {
     test!("[[include page ]]", vec![PageRef::page_only("page")]);
     test!("[[include page ]]", vec![PageRef::page_only("page")]);
     test!("[[ include page ]]", vec![PageRef::page_only("page")]);
+    test!("[[include page |]]", vec![PageRef::page_only("page")]);
+    test!("[[include page | ]]", vec![PageRef::page_only("page")]);
+    test!("[[include page ||]]", vec![PageRef::page_only("page")]);
+    test!("[[include page || ]]", vec![PageRef::page_only("page")]);
 
     test!("[[include PAGE]]", vec![PageRef::page_only("PAGE")]);
     test!("[[include PAGE ]]", vec![PageRef::page_only("PAGE")]);
@@ -78,7 +82,31 @@ fn includes() {
         vec![PageRef::page_only("banana")],
     );
     test!(
+        "[[include banana a=1||]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana a=1| |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana a=1|||]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana a=1| |  |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
         "[[include banana a=1 |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana a=1 ||]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana a=1 | |]]",
         vec![PageRef::page_only("banana")],
     );
     test!(
@@ -86,7 +114,19 @@ fn includes() {
         vec![PageRef::page_only("banana")],
     );
     test!(
+        "[[include banana ||a=1]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana | |a=1]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
         "[[include banana | a=1]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana || a=1]]",
         vec![PageRef::page_only("banana")],
     );
     test!(
@@ -94,7 +134,15 @@ fn includes() {
         vec![PageRef::page_only("banana")],
     );
     test!(
+        "[[include banana ||a=1|]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
         "[[include banana | a=1|]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana || a=1|]]",
         vec![PageRef::page_only("banana")],
     );
     test!(
@@ -102,7 +150,31 @@ fn includes() {
         vec![PageRef::page_only("banana")],
     );
     test!(
+        "[[include banana |a=1 ||]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana ||a=1 |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana ||a=1 ||]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
         "[[include banana | a=1 |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana | a=1 ||]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana || a=1 |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana || a=1 ||]]",
         vec![PageRef::page_only("banana")],
     );
 
@@ -111,7 +183,23 @@ fn includes() {
         vec![PageRef::page_only("cherry")],
     );
     test!(
+        "[[include cherry a=1||b=2]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
         "[[include cherry a=1|b=2|]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry a=1|b=2||]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry a=1||b=2|]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry a=1||b=2||]]",
         vec![PageRef::page_only("cherry")],
     );
     test!(
@@ -119,7 +207,23 @@ fn includes() {
         vec![PageRef::page_only("cherry")],
     );
     test!(
+        "[[include cherry a=1 |b=2 ||]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry a=1 ||b=2 |]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
         "[[include cherry |a=1|b=2]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry |a=1||b=2]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry ||a=1|b=2]]",
         vec![PageRef::page_only("cherry")],
     );
     test!(
@@ -127,7 +231,35 @@ fn includes() {
         vec![PageRef::page_only("cherry")],
     );
     test!(
+        "[[include cherry | a=1|| b=2]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry || a=1| b=2]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
         "[[include cherry |a=1|b=2|]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry |a=1|b=2|]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry |a=1|b=2||]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry |a=1||b=2|]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry ||a=1|b=2|]]",
+        vec![PageRef::page_only("cherry")],
+    );
+    test!(
+        "[[include cherry ||a=1||b=2||]]",
         vec![PageRef::page_only("cherry")],
     );
     test!(
