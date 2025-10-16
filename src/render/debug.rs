@@ -39,3 +39,24 @@ impl Render for DebugRender {
         format!("{settings:#?}\n{page_info:#?}\n{tree:#?}")
     }
 }
+
+#[test]
+fn debug_render() {
+    use crate::layout::Layout;
+    use crate::tree::BibliographyList;
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let result = SyntaxTree::from_element_result(
+        vec![],
+        vec![],
+        (vec![], vec![]),
+        vec![],
+        (vec![], true),
+        BibliographyList::new(),
+        0,
+    );
+    let (tree, _) = result.into();
+    let output = DebugRender.render(&tree, &page_info, &settings);
+    assert!(!output.is_empty(), "DebugRender produced empty output");
+}
