@@ -86,6 +86,18 @@ fn includes() {
         vec![PageRef::page_only("banana")],
     );
     test!(
+        "[[include banana a=1| |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana a=1|||]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana a=1| |  |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
         "[[include banana a=1 |]]",
         vec![PageRef::page_only("banana")],
     );
@@ -94,11 +106,19 @@ fn includes() {
         vec![PageRef::page_only("banana")],
     );
     test!(
+        "[[include banana a=1 | |]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
         "[[include banana |a=1]]",
         vec![PageRef::page_only("banana")],
     );
     test!(
         "[[include banana ||a=1]]",
+        vec![PageRef::page_only("banana")],
+    );
+    test!(
+        "[[include banana | |a=1]]",
         vec![PageRef::page_only("banana")],
     );
     test!(

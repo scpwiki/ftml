@@ -25,6 +25,8 @@
 //
 // [[include]]s can have leading *and* trailing pipe separators,
 // for instance [[include page | a = 1 ]] or [[include page a = 1 | ]] (or both)
+// and there can be multiple pipes,
+// for instance [[include page || a = 1]] or [[include | | a = 1]]
 //
 // Additionally, each argument must be separated from each other with a pipe.
 // We encapsulate this logic by essentially doing
@@ -54,7 +56,7 @@ argument = {
 }
 
 separator = _{
-    "|"+
+    "|" ~ (space? ~ "|")*
 }
 
 value = {
