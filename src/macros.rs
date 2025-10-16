@@ -62,3 +62,21 @@ macro_rules! str_writeln {
         writeln!($dest, $($arg)*).expect("Writing to string failed");
     }};
 }
+
+#[test]
+fn macros() {
+    use crate::tree::Element;
+    use std::borrow::Cow;
+
+    let cow_value = cow!("alpha");
+    assert_eq!(cow_value, Cow::Borrowed("alpha"));
+    assert_eq!(&cow_value, "alpha");
+
+    let text_element = text!("beta");
+    assert_eq!(text_element, Element::Text(Cow::Borrowed("beta")));
+
+    let mut string = String::new();
+    str_write!(&mut string, "foo");
+    str_writeln!(&mut string, "bar");
+    assert_eq!(&string, "foobar\n");
+}
