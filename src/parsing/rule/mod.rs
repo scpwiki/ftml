@@ -67,15 +67,25 @@ impl Rule {
         }
 
         // Fork parser and try running the rule.
+        let parser_state = parser.get_mutable_state();
         let mut sub_parser = parser.clone_with_rule(self);
         let result = (self.try_consume_fn)(&mut sub_parser);
 
-        if let Ok(ref output) = result {
-            // First, ensure there aren't any partial elements in the result.
-            output.check_partials(parser)?;
+        match result {
+            // Rule succeeded, ensure that changes from the subparser are persisted.
+            Ok(ref output) => {
+                // First, ensure there aren't any partial elements in the result.
+                output.check_partials(parser)?;
 
-            // Now, finally save the parser state since it succeeded.
-            parser.update(&sub_parser);
+                // Now, finally save the parser state since it succeeded.
+                parser.update(&sub_parser);
+            }
+
+            // Rule failed, ensure that any changes are rolled back.
+            //
+            // While normally discarding the subparser is sufficient,
+            // some annoying mutable fields are
+            Err(_) => parser.reset_mutable_state(parser_state),
         }
 
         result
