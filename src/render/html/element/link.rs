@@ -48,6 +48,22 @@ pub fn render_anchor(
         .contents(elements);
 }
 
+pub fn render_anchor_target(ctx: &mut HtmlContext, target: &str) {
+    debug!("Rendering anchor target");
+
+    match ctx.layout() {
+        Layout::Wikidot => {
+            ctx.html().a().attr(attr!("name" => target));
+        }
+        Layout::Wikijump => {
+            ctx.html().a().attr(attr!(
+                "class" => "wj-anchor-target",
+                "id" => target,
+            ));
+        }
+    }
+}
+
 pub fn render_link(
     ctx: &mut HtmlContext,
     link: &LinkLocation,
