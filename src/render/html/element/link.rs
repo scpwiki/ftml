@@ -32,6 +32,7 @@ pub fn render_anchor(
 ) {
     debug!("Rendering anchor");
 
+    let layout = ctx.layout();
     let target_value = match target {
         Some(target) => target.html_attr(),
         None => "",
@@ -40,11 +41,27 @@ pub fn render_anchor(
     ctx.html()
         .a()
         .attr(attr!(
-            "class" => "wj-anchor",
+            "class" => "wj-anchor"; if layout == Layout::Wikijump,
             "target" => target_value; if target.is_some();;
             attributes,
         ))
         .contents(elements);
+}
+
+pub fn render_anchor_target(ctx: &mut HtmlContext, target: &str) {
+    debug!("Rendering anchor target");
+
+    match ctx.layout() {
+        Layout::Wikidot => {
+            ctx.html().a().attr(attr!("name" => target));
+        }
+        Layout::Wikijump => {
+            ctx.html().a().attr(attr!(
+                "class" => "wj-anchor-target",
+                "id" => target,
+            ));
+        }
+    }
 }
 
 pub fn render_link(

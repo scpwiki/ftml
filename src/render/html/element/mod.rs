@@ -46,6 +46,7 @@ mod prelude {
     pub use super::super::context::HtmlContext;
     pub use super::super::random::Random;
     pub use super::{render_element, render_elements};
+    pub use crate::layout::Layout;
     pub use crate::tree::Element;
 }
 
@@ -60,7 +61,7 @@ use self::iframe::{render_html, render_iframe};
 use self::image::render_image;
 use self::include::{render_include, render_variable};
 use self::input::{render_checkbox, render_radio_button};
-use self::link::{render_anchor, render_link};
+use self::link::{render_anchor, render_anchor_target, render_link};
 use self::list::render_list;
 use self::math::{render_equation_reference, render_math_block, render_math_inline};
 use self::style::render_style;
@@ -105,9 +106,7 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             attributes,
             target,
         } => render_anchor(ctx, elements, attributes, *target),
-        Element::AnchorName(id) => {
-            ctx.html().a().attr(attr!("id" => id));
-        }
+        Element::AnchorName(name) => render_anchor_target(ctx, name),
         Element::Link {
             ltype,
             link,

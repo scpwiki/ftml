@@ -36,6 +36,7 @@ use self::attributes::AddedAttributes;
 use self::context::HtmlContext;
 use self::element::{render_element, render_elements};
 use crate::data::PageInfo;
+use crate::layout::Layout;
 use crate::render::{Handle, Render};
 use crate::settings::WikitextSettings;
 use crate::tree::{Element, SyntaxTree};
@@ -73,27 +74,40 @@ impl Render for HtmlRender {
         );
 
         // Crawl through elements and generate HTML
-        ctx.html()
-            .element("wj-body")
-            .attr(attr!("class" => "wj-body"))
-            .inner(|ctx| {
-                render_elements(ctx, &tree.elements);
-
-                if tree.needs_footnote_block {
-                    info!(
-                        "Page needs footnote but one was not manually included, adding"
-                    );
-                    render_element(
-                        ctx,
-                        &Element::FootnoteBlock {
-                            title: None,
-                            hide: false,
-                        },
-                    );
-                }
-            });
+        match settings.layout {
+            Layout::Wikidot => {
+                ctx.html()
+                    .div()
+                    .attr(attr!("id" => "main-content"))
+                    .inner(|ctx| render_contents(ctx, tree));
+            }
+            Layout::Wikijump => {
+                ctx.html()
+                    .article()
+                    .attr(attr!(
+                        "id" => "main-content",
+                        "class" => "wj-body",
+                    ))
+                    .inner(|ctx| render_contents(ctx, tree));
+            }
+        }
 
         // Build and return HtmlOutput
         ctx.into()
+    }
+}
+
+fn render_contents(ctx: &mut HtmlContext, tree: &SyntaxTree) {
+    render_elements(ctx, &tree.elements);
+
+    if tree.needs_footnote_block {
+        info!("Page needs footnote but one was not manually included, adding");
+        render_element(
+            ctx,
+            &Element::FootnoteBlock {
+                title: None,
+                hide: false,
+            },
+        );
     }
 }

@@ -103,6 +103,7 @@ where
     }
 
     tag_method!(a);
+    tag_method!(article);
     tag_method!(br);
     tag_method!(code);
     tag_method!(dd);
