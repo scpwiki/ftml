@@ -207,6 +207,38 @@ impl<'r, 't> Parser<'r, 't> {
         self.has_footnote_block = true;
     }
 
+    /// Gets the parser's mutable state to enable resetting later if needed.
+    ///
+    /// See `reset_mutable_state()`.
+    pub fn get_mutable_state(&self) -> ParserMutableState {
+        ParserMutableState {
+            footnote_index: self.footnotes.borrow().len(),
+            html_block_index: self.html_blocks.borrow().len(),
+            code_block_index: self.code_blocks.borrow().len(),
+            table_of_contents_index: self.table_of_contents.borrow().len(),
+        }
+    }
+
+    /// Reset the parser's mutable state to the point described in the struct.
+    ///
+    /// This structure should be retrieved from `get_mutable_state()`.
+    pub fn reset_mutable_state(
+        &mut self,
+        ParserMutableState {
+            footnote_index,
+            html_block_index,
+            code_block_index,
+            table_of_contents_index,
+        }: ParserMutableState,
+    ) {
+        self.footnotes.borrow_mut().truncate(footnote_index);
+        self.html_blocks.borrow_mut().truncate(html_block_index);
+        self.code_blocks.borrow_mut().truncate(code_block_index);
+        self.table_of_contents
+            .borrow_mut()
+            .truncate(table_of_contents_index);
+    }
+
     // Parse settings helpers
     pub fn check_page_syntax(&self) -> Result<(), ParseError> {
         if self.settings.enable_page_syntax {
@@ -563,6 +595,18 @@ impl<'r, 't> Parser<'r, 't> {
     pub fn make_err(&self, kind: ParseErrorKind) -> ParseError {
         ParseError::new(kind, self.rule, self.current)
     }
+}
+
+/// This struct stores the state of the mutable fields in `Parser`.
+///
+/// This way, on rule failure, we can revert to the state these
+/// fields were in prior to rule execution.
+#[derive(Debug, Copy, Clone)]
+pub struct ParserMutableState {
+    footnote_index: usize,
+    html_block_index: usize,
+    code_block_index: usize,
+    table_of_contents_index: usize,
 }
 
 #[inline]
