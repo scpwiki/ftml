@@ -22,7 +22,6 @@
 macro_rules! cow {
     ($value:expr $(,)?) => {{
         use std::borrow::Cow;
-
         Cow::Borrowed($value)
     }};
 }
@@ -31,7 +30,6 @@ macro_rules! cow {
 macro_rules! text {
     ($value:expr $(,)?) => {{
         use crate::tree::Element;
-
         Element::Text(cow!($value))
     }};
 }
@@ -46,7 +44,6 @@ macro_rules! text {
 macro_rules! str_write {
     ($dest:expr, $($arg:tt)*) => {{
         use std::fmt::Write;
-
         write!($dest, $($arg)*).expect("Writing to string failed");
     }};
 }
@@ -62,7 +59,24 @@ macro_rules! str_write {
 macro_rules! str_writeln {
     ($dest:expr, $($arg:tt)*) => {{
         use std::fmt::Write;
-
         writeln!($dest, $($arg)*).expect("Writing to string failed");
     }};
+}
+
+#[test]
+fn macros() {
+    use crate::tree::Element;
+    use std::borrow::Cow;
+
+    let cow_value = cow!("alpha");
+    assert_eq!(cow_value, Cow::Borrowed("alpha"));
+    assert_eq!(&cow_value, "alpha");
+
+    let text_element = text!("beta");
+    assert_eq!(text_element, Element::Text(Cow::Borrowed("beta")));
+
+    let mut string = String::new();
+    str_write!(&mut string, "foo");
+    str_writeln!(&mut string, "bar");
+    assert_eq!(&string, "foobar\n");
 }

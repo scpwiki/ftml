@@ -80,3 +80,18 @@ impl Display for KarmaLevel {
         write!(f, "{}", self.value())
     }
 }
+
+#[test]
+fn test_parse() {
+    assert_eq!(KarmaLevel::new(0), Some(KarmaLevel::Zero));
+    assert_eq!(KarmaLevel::new(1), Some(KarmaLevel::One));
+    assert_eq!(KarmaLevel::new(2), Some(KarmaLevel::Two));
+    assert_eq!(KarmaLevel::new(3), Some(KarmaLevel::Three));
+    assert_eq!(KarmaLevel::new(4), Some(KarmaLevel::Four));
+    assert_eq!(KarmaLevel::new(5), Some(KarmaLevel::Five));
+    assert_eq!(KarmaLevel::new(6), None);
+    assert_eq!(KarmaLevel::new(7), None);
+    assert_eq!(KarmaLevel::new(8), None);
+    assert_eq!(KarmaLevel::new(9), None);
+    assert_eq!(KarmaLevel::new(10), None);
+}

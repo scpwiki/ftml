@@ -55,3 +55,22 @@ impl From<f64> for ScoreValue {
         ScoreValue::Float(value)
     }
 }
+
+#[test]
+fn test_parse() {
+    assert_eq!(ScoreValue::from(5), ScoreValue::Integer(5));
+    assert_eq!(ScoreValue::from(9999), ScoreValue::Integer(9999));
+    assert_eq!(ScoreValue::from(-2), ScoreValue::Integer(-2));
+
+    assert_eq!(ScoreValue::from(0.0), ScoreValue::Float(0.0));
+    assert_eq!(ScoreValue::from(0.5), ScoreValue::Float(0.5));
+    assert_eq!(ScoreValue::from(69.0), ScoreValue::Float(69.0));
+    assert_eq!(ScoreValue::from(-111.22), ScoreValue::Float(-111.22));
+}
+
+#[test]
+fn test_f64() {
+    assert_eq!(ScoreValue::from(0).to_f64(), 0.0);
+    assert_eq!(ScoreValue::from(1.822).to_f64(), 1.822);
+    assert_eq!(ScoreValue::from(-91).to_f64(), -91.0);
+}

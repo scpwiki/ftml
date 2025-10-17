@@ -156,3 +156,25 @@ fn slice_invalid() {
     // "Durian"
     let _ = full_text.slice(range!(6..7), range!(0..1));
 }
+
+#[test]
+#[should_panic]
+fn slice_partial_invalid() {
+    use crate::parsing::Token;
+
+    let text = "Eggplant!";
+    let full_text = FullText::new(text);
+
+    macro_rules! range {
+        ($span:expr) => {
+            &ExtractedToken {
+                token: Token::Other,
+                slice: &text[$span],
+                span: $span,
+            }
+        };
+    }
+
+    // "Eggplant"
+    let _ = full_text.slice_partial(range!(8..9), range!(2..4));
+}
