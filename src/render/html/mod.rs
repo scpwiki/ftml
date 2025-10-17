@@ -82,24 +82,24 @@ impl Render for HtmlRender {
         ctx.html()
             .element("wj-body")
             .attr(attr!("class" => "wj-body"))
-            .inner(|ctx| {
-                render_elements(ctx, &tree.elements);
-
-                if tree.needs_footnote_block {
-                    info!(
-                        "Page needs footnote but one was not manually included, adding"
-                    );
-                    render_element(
-                        ctx,
-                        &Element::FootnoteBlock {
-                            title: None,
-                            hide: false,
-                        },
-                    );
-                }
-            });
+            .inner(|ctx| render_contents(ctx, tree));
 
         // Build and return HtmlOutput
         ctx.into()
+    }
+}
+
+fn render_contents(ctx: &mut HtmlContext, tree: &SyntaxTree) {
+    render_elements(ctx, &tree.elements);
+
+    if tree.needs_footnote_block {
+        info!("Page needs footnote but one was not manually included, adding");
+        render_element(
+            ctx,
+            &Element::FootnoteBlock {
+                title: None,
+                hide: false,
+            },
+        );
     }
 }
