@@ -32,6 +32,7 @@ pub fn render_anchor(
 ) {
     debug!("Rendering anchor");
 
+    let layout = ctx.layout();
     let target_value = match target {
         Some(target) => target.html_attr(),
         None => "",
@@ -40,7 +41,7 @@ pub fn render_anchor(
     ctx.html()
         .a()
         .attr(attr!(
-            "class" => "wj-anchor",
+            "class" => "wj-anchor"; if layout == Layout::Wikijump,
             "target" => target_value; if target.is_some();;
             attributes,
         ))
