@@ -601,6 +601,13 @@ impl<'r, 't> Parser<'r, 't> {
 ///
 /// This way, on rule failure, we can revert to the state these
 /// fields were in prior to rule execution.
+///
+/// See the "revert" tests for examples of how this reset data is
+/// needed to ensure proper AST formation:
+/// * `test/footnotes/revert`
+/// * `test/html/revert`
+/// * `test/code/revert`
+/// * `test/toc/revert`
 #[derive(Debug, Copy, Clone)]
 pub struct ParserMutableState {
     footnote_index: usize,
