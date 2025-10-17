@@ -487,7 +487,6 @@ impl<'r, 't> Parser<'r, 't> {
     pub fn next_two_tokens(&self) -> (Token, Option<Token>) {
         let first = self.current.token;
         let second = self.look_ahead(0).map(|next| next.token);
-
         (first, second)
     }
 
@@ -496,7 +495,6 @@ impl<'r, 't> Parser<'r, 't> {
         let first = self.current.token;
         let second = self.look_ahead(0).map(|next| next.token);
         let third = self.look_ahead(1).map(|next| next.token);
-
         (first, second, third)
     }
 
