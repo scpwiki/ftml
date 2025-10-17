@@ -175,6 +175,11 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
     }
 
     #[inline]
+    pub fn layout(&self) -> Layout {
+        self.settings.layout
+    }
+
+    #[inline]
     pub fn handle(&self) -> &'h Handle {
         self.handle
     }
