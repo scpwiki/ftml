@@ -46,6 +46,7 @@ mod prelude {
     pub use super::super::context::HtmlContext;
     pub use super::super::random::Random;
     pub use super::{render_element, render_elements};
+    pub use crate::layout::Layout;
     pub use crate::tree::Element;
 }
 
