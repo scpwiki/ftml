@@ -43,8 +43,8 @@ token = _{
 
     // Text-like
     url |
-    identifier |
     email |
+    identifier |
     variable |
     double_quote |
     escaped_double_quote |
@@ -122,9 +122,9 @@ token = _{
 identifier = @{ (ASCII_ALPHANUMERIC | ASCII_DIGIT)+ }
 
 email = @{
-    (!(" " | "\t" | NEWLINE) ~ ANY)+ ~
+    (!(" " | "\t" | "@" | NEWLINE) ~ ANY)+ ~
     "@" ~
-    (!(" " | "\t" | NEWLINE) ~ ANY)+ ~
+    (!(" " | "\t" | "." | NEWLINE) ~ ANY)+ ~
     "." ~
     (!(" " | "\t" | NEWLINE) ~ ANY)+
 }
