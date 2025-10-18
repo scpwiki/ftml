@@ -39,6 +39,17 @@ pub struct PageRef {
 }
 
 impl PageRef {
+    /// Separates a non-normalized page slug (potentially with extra URL parts).
+    fn split_page(page: &str) -> (&str, Option<&str>) {
+        match page.find(&['#', '/']) {
+            None => (page, None),
+            Some(index) => {
+                let (page, extra) = page.split_at(index);
+                (page, Some(extra))
+            }
+        }
+    }
+
     /// Creates a [`PageRef`] with the given page and site.
     #[inline]
     pub fn page_and_site<S1, S2>(site: S1, page: S2) -> Self
@@ -137,6 +148,50 @@ impl Display for PageRef {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PageRefParseError;
+
+// Tests
+
+#[test]
+fn split_page() {
+    macro_rules! test {
+        ($input:expr => $page:expr, $extra:expr $(,)?) => {
+            assert_eq!(
+                PageRef::split_page($input),
+                ($page, $extra),
+                "Split page portion does not have correct page and extra parts",
+            )
+        };
+
+        // Test case with 'extra' part
+        ($input:expr, $page:expr, $extra:expr $(,)?) => {
+            test!($input => $page, Some($extra))
+        };
+
+        // Test case for no 'extra' part
+        ($input:expr) => {
+            test!($input => $input, None)
+        };
+    }
+
+    // This function only does splitting, no normalization
+
+    test!("scp-001");
+    test!("scp-001/edit", "scp-001", "/edit");
+    test!("scp-001/edit/true", "scp-001", "/edit/true");
+    test!("Ethics Committee Orientation");
+    test!(
+        "Ethics Committee Orientation/edit",
+        "Ethics Committee Orientation",
+        "/edit",
+    );
+    test!(
+        "Ethics Committee Orientation/edit/true",
+        "Ethics Committee Orientation",
+        "/edit/true",
+    );
+    test!("main#toc4", "main", "#toc4");
+    test!("SCP-500/edit#page-options", "SCP-500", "/edit#page-options");
+}
 
 #[test]
 fn page_ref() {
