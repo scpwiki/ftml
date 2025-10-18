@@ -103,7 +103,6 @@ pub enum Element<'t> {
         #[serde(rename = "type")]
         ltype: LinkType,
         link: LinkLocation<'t>,
-        extra: Option<Cow<'t, str>>,
         label: LinkLabel<'t>,
         target: Option<AnchorTarget>,
     },
@@ -443,13 +442,11 @@ impl Element<'_> {
             Element::Link {
                 ltype,
                 link,
-                extra,
                 label,
                 target,
             } => Element::Link {
                 ltype: *ltype,
                 link: link.to_owned(),
-                extra: option_string_to_owned(extra),
                 label: label.to_owned(),
                 target: *target,
             },

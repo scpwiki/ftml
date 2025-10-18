@@ -67,7 +67,6 @@ pub fn render_anchor_target(ctx: &mut HtmlContext, target: &str) {
 pub fn render_link(
     ctx: &mut HtmlContext,
     link: &LinkLocation,
-    extra: Option<&str>,
     label: &LinkLabel,
     target: Option<AnchorTarget>,
     ltype: LinkType,
@@ -108,7 +107,7 @@ pub fn render_link(
     let site = ctx.info().site.as_ref().to_string();
     let mut tag = ctx.html().a();
     tag.attr(attr!(
-        "href" => &url extra.unwrap_or(""),
+        "href" => &url,
         "target" => target_value; if target.is_some(),
         "class" => "wj-link " css_class interwiki_class,
         "data-link-type" => ltype.name(),

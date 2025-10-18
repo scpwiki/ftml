@@ -130,7 +130,6 @@ fn build_same<'r, 't>(
     let element = Element::Link {
         ltype,
         link,
-        extra: LinkLocation::parse_extra(cow!(url)),
         label: LinkLabel::Slug(label),
         target,
     };
@@ -184,7 +183,6 @@ fn build_separate<'r, 't>(
     let element = Element::Link {
         ltype,
         link,
-        extra: LinkLocation::parse_extra(cow!(url)),
         label,
         target,
     };
