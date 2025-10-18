@@ -245,7 +245,17 @@ mod prop {
         #![proptest_config(ProptestConfig::with_cases(4096))]
 
         #[test]
-        fn page_ref_prop(s in r"[a-zA-Z_:.]*") {
+        fn page_ref_page_prop(s in r".+") {
+            let _ = PageRef::parse(&s);
+        }
+
+        #[test]
+        fn page_ref_both_prop(s in r".+:.+") {
+            let _ = PageRef::parse(&s);
+        }
+
+        #[test]
+        fn page_ref_extra_prop(s in r".+:.+[#/].+") {
             let _ = PageRef::parse(&s);
         }
     }
