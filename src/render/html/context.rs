@@ -291,7 +291,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
     }
 
     pub fn page_exists(&mut self, page_ref: &PageRef) -> bool {
-        let (site, page) = page_ref.fields_or(&self.info.site);
+        let (site, page, _) = page_ref.fields_or(&self.info.site);
 
         // Get from cache, or fetch and add
         match self.pages_exists.get(page_ref) {

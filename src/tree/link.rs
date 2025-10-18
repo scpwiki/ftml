@@ -93,9 +93,7 @@ fn test_link_location() {
     macro_rules! check {
         ($input:expr => $site:expr, $page:expr) => {{
             let site_opt: Option<&str> = $site;
-            let site = site_opt.map(|s| str!(s));
-            let page = str!($page);
-            let expected = LinkLocation::Page(PageRef { site, page });
+            let expected = LinkLocation::Page(PageRef::new(site_opt, $page));
             check!($input; expected);
         }};
 

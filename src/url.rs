@@ -100,9 +100,11 @@ pub fn normalize_link<'a>(
     match link {
         LinkLocation::Url(url) => normalize_href(url),
         LinkLocation::Page(page_ref) => {
-            let (site, page) = page_ref.fields();
+            let (site, page, extra) = page_ref.fields();
             match site {
-                Some(site) => Cow::Owned(helper.build_url(site, page)),
+                Some(site) => {
+                    Cow::Owned(helper.build_url(site, page, extra.unwrap_or("")))
+                }
                 None => normalize_href(page),
             }
         }
@@ -135,7 +137,7 @@ pub fn normalize_href(url: &str) -> Cow<'_, str> {
 }
 
 pub trait BuildSiteUrl {
-    fn build_url(&self, site: &str, path: &str) -> String;
+    fn build_url(&self, site: &str, path: &str, extra: &str) -> String;
 }
 
 #[test]

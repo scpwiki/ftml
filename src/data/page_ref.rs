@@ -36,6 +36,7 @@ use wikidot_normalize::normalize;
 pub struct PageRef {
     pub site: Option<String>,
     pub page: String,
+    pub extra: Option<String>,
 }
 
 impl PageRef {
@@ -50,22 +51,36 @@ impl PageRef {
         }
     }
 
+    /// Creates a [`PageRef`] with an optional site.
+    pub fn new<S1, S2>(site: Option<S1>, page: S2) -> Self
+    where
+        S1: Into<String>,
+        S2: AsRef<str>,
+    {
+        match site {
+            Some(site) => Self::page_and_site(site, page),
+            None => Self::page_only(page),
+        }
+    }
+
     /// Creates a [`PageRef`] with the given page and site.
     #[inline]
     pub fn page_and_site<S1, S2>(site: S1, page: S2) -> Self
     where
         S1: Into<String>,
-        S2: Into<String>,
+        S2: AsRef<str>,
     {
+        let (page, extra) = Self::split_page(page.as_ref());
         let mut site = site.into();
-        let mut page = page.into();
-
+        let mut page = str!(page);
+        let extra = extra.map(String::from);
         normalize(&mut site);
         normalize(&mut page);
 
         PageRef {
             site: Some(site),
             page,
+            extra,
         }
     }
 
@@ -73,11 +88,17 @@ impl PageRef {
     #[inline]
     pub fn page_only<S>(page: S) -> Self
     where
-        S: Into<String>,
+        S: AsRef<str>,
     {
-        let mut page = page.into();
+        let (page, extra) = Self::split_page(page.as_ref());
+        let mut page = str!(page);
+        let extra = extra.map(String::from);
         normalize(&mut page);
-        PageRef { site: None, page }
+        PageRef {
+            site: None,
+            page,
+            extra,
+        }
     }
 
     #[inline]
@@ -91,13 +112,22 @@ impl PageRef {
     }
 
     #[inline]
-    pub fn fields(&self) -> (Option<&str>, &str) {
-        (self.site(), self.page())
+    pub fn extra(&self) -> Option<&str> {
+        self.extra.as_deref()
     }
 
-    /// Like `fields()`, but uses the passed in value as the current site for local references.
-    pub fn fields_or<'a>(&'a self, current_site: &'a str) -> (&'a str, &'a str) {
-        (self.site().unwrap_or(current_site), self.page())
+    #[inline]
+    pub fn fields(&self) -> (Option<&str>, &str, Option<&str>) {
+        (self.site(), self.page(), self.extra())
+    }
+
+    /// Like `fields()`, but uses the current site value to avoid returning `Option`.
+    pub fn fields_or<'a>(&'a self, current_site: &'a str) -> (&'a str, &'a str, &'a str) {
+        (
+            self.site().unwrap_or(current_site),
+            self.page(),
+            self.extra().unwrap_or(""),
+        )
     }
 
     pub fn parse(s: &str) -> Result<PageRef, PageRefParseError> {

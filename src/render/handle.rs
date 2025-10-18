@@ -24,7 +24,6 @@ use crate::tree::{ImageSource, LinkLabel, LinkLocation, Module};
 use crate::url::BuildSiteUrl;
 use std::borrow::Cow;
 use std::num::NonZeroUsize;
-use wikidot_normalize::normalize;
 
 #[derive(Debug)]
 pub struct Handle;
@@ -113,7 +112,7 @@ impl Handle {
             },
             LinkLabel::Page => match link {
                 LinkLocation::Page(page_ref) => {
-                    let (site, page) = page_ref.fields_or(site);
+                    let (site, page, _) = page_ref.fields_or(site);
                     page_title = match self.get_page_title(site, page) {
                         Some(title) => title,
                         None => page_ref.to_string(),
@@ -175,17 +174,11 @@ impl Handle {
 }
 
 impl BuildSiteUrl for Handle {
-    fn build_url(&self, site: &str, path: &str) -> String {
+    fn build_url(&self, site: &str, path: &str, extra: &str) -> String {
         // TODO make this a parser setting
         // get url of wikijump instance here
 
-        let path = {
-            let mut path = str!(path);
-            normalize(&mut path);
-            path
-        };
-
         // TODO
-        format!("https://{site}.wikijump.com/{path}")
+        format!("https://{site}.wikijump.com/{path}{extra}")
     }
 }
