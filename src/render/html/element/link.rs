@@ -73,10 +73,12 @@ pub fn render_link(
 ) {
     debug!("Rendering link '{:?}' (type {})", link, ltype.name());
     let handle = ctx.handle();
+    let layout = ctx.layout();
 
     // Add to backlinks
     ctx.add_link(link);
 
+    let site = ctx.info().site.as_ref().to_string();
     let url = normalize_link(link, ctx.handle());
 
     let target_value = match target {
@@ -84,37 +86,65 @@ pub fn render_link(
         None => "",
     };
 
-    let css_class = match link {
-        LinkLocation::Url(url) if url == "javascript:;" => "wj-link-anchor",
-        LinkLocation::Url(url) if url.starts_with('#') => "wj-link-anchor",
-        LinkLocation::Url(url) if url.starts_with('/') => "wj-link-internal",
-        LinkLocation::Url(_) => "wj-link-external",
-        LinkLocation::Page(page) => {
-            if ctx.page_exists(page) {
-                "wj-link-internal"
-            } else {
-                "wj-link-internal wj-link-missing"
+    macro_rules! write_a {
+        ($attr:expr) => {{
+            let mut tag = ctx.html().a();
+            tag.attr($attr);
+            handle.get_link_label(&site, link, label, |label| {
+                // Add <a> internals, i.e. the link name
+                tag.contents(label);
+            });
+        }};
+    }
+
+    match layout {
+        Layout::Wikidot => match link {
+            LinkLocation::Url(url) => {
+                write_a!(attr!(
+                    "href" => url,
+                    "target" => target_value; if target.is_some(),
+                ));
             }
+            LinkLocation::Page(page) => {
+                let class = if ctx.page_exists(page) {
+                    "active"
+                } else {
+                    "newpage"
+                };
+                write_a!(attr!(
+                    "class" => class,
+                    "href" => &url,
+                    "target" => target_value; if target.is_some(),
+                ));
+            }
+        },
+        Layout::Wikijump => {
+            let css_class = match link {
+                LinkLocation::Url(url) if url == "javascript:;" => "wj-link-anchor",
+                LinkLocation::Url(url) if url.starts_with('#') => "wj-link-anchor",
+                LinkLocation::Url(url) if url.starts_with('/') => "wj-link-internal",
+                LinkLocation::Url(_) => "wj-link-external",
+                LinkLocation::Page(page) => {
+                    if ctx.page_exists(page) {
+                        "wj-link-internal"
+                    } else {
+                        "wj-link-internal wj-link-missing"
+                    }
+                }
+            };
+
+            let interwiki_class = if ltype == LinkType::Interwiki {
+                " wj-link-interwiki"
+            } else {
+                ""
+            };
+
+            write_a!(attr!(
+                "class" => "wj-link " css_class interwiki_class,
+                "data-link-type" => ltype.name(),
+                "href" => &url,
+                "target" => target_value; if target.is_some(),
+            ));
         }
-    };
-
-    let interwiki_class = if ltype == LinkType::Interwiki {
-        " wj-link-interwiki"
-    } else {
-        ""
-    };
-
-    let site = ctx.info().site.as_ref().to_string();
-    let mut tag = ctx.html().a();
-    tag.attr(attr!(
-        "href" => &url,
-        "target" => target_value; if target.is_some(),
-        "class" => "wj-link " css_class interwiki_class,
-        "data-link-type" => ltype.name(),
-    ));
-
-    // Add <a> internals, i.e. the link name
-    handle.get_link_label(&site, link, label, |label| {
-        tag.contents(label);
-    });
+    }
 }

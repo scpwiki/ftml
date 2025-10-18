@@ -102,8 +102,8 @@ impl Handle {
         F: FnOnce(&str),
     {
         let page_title;
-        let label_text = match *label {
-            LinkLabel::Text(ref text) | LinkLabel::Slug(ref text) => text,
+        let label_text = match label {
+            LinkLabel::Text(text) | LinkLabel::Slug(text) => text,
             LinkLabel::Url => match link {
                 LinkLocation::Url(url) => url.as_ref(),
                 LinkLocation::Page(_) => {
