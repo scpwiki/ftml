@@ -23,24 +23,50 @@ use super::prelude::*;
 pub fn render_wikitext_raw(ctx: &mut HtmlContext, text: &str) {
     debug!("Escaping raw string '{text}'");
 
-    ctx.html()
-        .span()
-        .attr(attr!(
-            "class" => "wj-raw",
-        ))
-        .contents(text);
+    match ctx.layout() {
+        Layout::Wikidot => {
+            ctx.html()
+                .span()
+                .attr(attr!("style" => "white-space: pre-wrap;"))
+                .contents(text);
+        }
+        Layout::Wikijump => {
+            ctx.html()
+                .span()
+                .attr(attr!("class" => "wj-raw"))
+                .contents(text);
+        }
+    }
 }
 
 pub fn render_email(ctx: &mut HtmlContext, email: &str) {
     debug!("Rendering email address '{email}'");
 
-    // Since our usecase doesn't typically have emails as real,
-    // but rather as fictional elements, we're just rendering as text.
+    match ctx.layout() {
+        Layout::Wikidot => {
+            ctx.html()
+                .span()
+                .attr(attr!(
+                    "class" => "wiki-email",
+                    "style" => "visibility: visible;",
+                ))
+                .inner(|ctx| {
+                    ctx.html()
+                        .a()
+                        .attr(attr!("href" => "mailto:" email))
+                        .contents(email);
+                });
+        }
+        Layout::Wikijump => {
+            // Since our usecase doesn't typically have emails as real,
+            // but rather as fictional elements, we're just rendering as text.
 
-    ctx.html()
-        .span()
-        .attr(attr!("class" => "wj-email"))
-        .contents(email);
+            ctx.html()
+                .span()
+                .attr(attr!("class" => "wj-email"))
+                .contents(email);
+        }
+    }
 }
 
 pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str) {
