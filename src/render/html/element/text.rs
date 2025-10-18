@@ -23,12 +23,20 @@ use super::prelude::*;
 pub fn render_wikitext_raw(ctx: &mut HtmlContext, text: &str) {
     debug!("Escaping raw string '{text}'");
 
-    ctx.html()
-        .span()
-        .attr(attr!(
-            "class" => "wj-raw",
-        ))
-        .contents(text);
+    match ctx.layout() {
+        Layout::Wikidot => {
+            ctx.html()
+                .span()
+                .attr(attr!("style" => "white-space: pre-wrap;"))
+                .contents(text);
+        }
+        Layout::Wikijump => {
+            ctx.html()
+                .span()
+                .attr(attr!("class" => "wj-raw"))
+                .contents(text);
+        }
+    }
 }
 
 pub fn render_email(ctx: &mut HtmlContext, email: &str) {
