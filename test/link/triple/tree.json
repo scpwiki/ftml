@@ -38,9 +38,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "scp-001"
+                                        "page": "scp-001",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "slug": "SCP-001"
                                     },
@@ -59,9 +59,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "scp-001"
+                                        "page": "scp-001",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "slug": "SCP-001"
                                     },
@@ -151,9 +151,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "system:recent-changes"
+                                        "page": "system:recent-changes",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "slug": "Recent Changes"
                                     },
@@ -212,9 +212,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "system:recent-changes"
+                                        "page": "system:recent-changes",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "slug": "Recent Changes"
                                     },
@@ -233,9 +233,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "system:recent-changes"
+                                        "page": "system:recent-changes",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "slug": "Recent Changes"
                                     },
@@ -285,9 +285,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "some-page"
+                                        "page": "some-page",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "My label"
                                     },
@@ -306,9 +306,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "some-page"
+                                        "page": "some-page",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "Label"
                                     },
@@ -327,9 +327,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "some-page"
+                                        "page": "some-page",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "My label"
                                     },
@@ -348,9 +348,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "some-page"
+                                        "page": "some-page",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "My label"
                                     },
@@ -369,9 +369,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "missing"
+                                        "page": "missing",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "Wanted page"
                                     },
@@ -445,9 +445,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "some-page"
+                                        "page": "some-page",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": "page",
                                     "target": null
                                 }
@@ -464,9 +464,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "some-page"
+                                        "page": "some-page",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": "page",
                                     "target": "new-tab"
                                 }
@@ -514,9 +514,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "scp-series"
+                                        "page": "scp-series",
+                                        "extra": "#001"
                                     },
-                                    "extra": "#001",
                                     "label": {
                                         "text": "SCP-001 to SCP-099"
                                     },
@@ -535,9 +535,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "home"
+                                        "page": "home",
+                                        "extra": "###"
                                     },
-                                    "extra": "###",
                                     "label": {
                                         "text": "Home"
                                     },
@@ -595,9 +595,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": "scp-wiki",
-                                        "page": "component:theme"
+                                        "page": "component:theme",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "Sigma-9 Theme"
                                     },
@@ -616,9 +616,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": "scp-wiki",
-                                        "page": "scp-1000"
+                                        "page": "scp-1000",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "Children of the Night"
                                     },
@@ -637,9 +637,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": "scp-wiki",
-                                        "page": "system:recent-changes"
+                                        "page": "system:recent-changes",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "slug": "Recent Changes"
                                     },
@@ -658,9 +658,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": "scp-wiki",
-                                        "page": "scp-series"
+                                        "page": "scp-series",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": "page",
                                     "target": null
                                 }
@@ -707,7 +707,6 @@
                                 "data": {
                                     "type": "direct",
                                     "link": "//main/edit",
-                                    "extra": null,
                                     "label": {
                                         "text": "Edit page"
                                     },
@@ -726,9 +725,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "main"
+                                        "page": "main",
+                                        "extra": "/#/page"
                                     },
-                                    "extra": "/#/page",
                                     "label": {
                                         "text": "Hash routing"
                                     },
@@ -747,9 +746,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "example"
+                                        "page": "example",
+                                        "extra": "/edit"
                                     },
-                                    "extra": "/edit",
                                     "label": {
                                         "text": "Edit page"
                                     },
@@ -768,9 +767,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "main"
+                                        "page": "main",
+                                        "extra": "/##/page#toc1"
                                     },
-                                    "extra": "/##/page#toc1",
                                     "label": {
                                         "text": "Hash routing"
                                     },
@@ -819,7 +818,6 @@
                                 "data": {
                                     "type": "direct",
                                     "link": "https://example.com/",
-                                    "extra": null,
                                     "label": {
                                         "text": "Example"
                                     },
@@ -837,7 +835,6 @@
                                 "data": {
                                     "type": "direct",
                                     "link": "https://example.com/",
-                                    "extra": null,
                                     "label": {
                                         "text": "Example"
                                     },
@@ -891,9 +888,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "scp-001-ex"
+                                        "page": "scp-001-ex",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "slug": "SCP-001-EX"
                                     },
@@ -944,9 +941,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "scp-1459-j"
+                                        "page": "scp-1459-j",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "REDACTED"
                                     },
@@ -969,9 +966,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "page-slug"
+                                        "page": "page-slug",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "A|B|C"
                                     },
@@ -1022,9 +1019,9 @@
                                     "type": "page",
                                     "link": {
                                         "site": null,
-                                        "page": "page-slug"
+                                        "page": "page-slug",
+                                        "extra": null
                                     },
-                                    "extra": null,
                                     "label": {
                                         "text": "A | B | C"
                                     },
