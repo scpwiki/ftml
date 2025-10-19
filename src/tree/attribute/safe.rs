@@ -182,7 +182,7 @@ pub static BOOLEAN_ATTRIBUTES: LazyLock<HashSet<UniCase<&'static str>>> =
 /// * `detect_dangerous_schemes()`
 /// * `normalize_href()`
 pub static URL_ATTRIBUTES: LazyLock<HashSet<UniCase<&'static str>>> =
-    LazyLock::new(|| hashset_unicase!["href", "src",]);
+    LazyLock::new(|| hashset_unicase!["href", "src"]);
 
 static ATTRIBUTE_SUFFIX_SAFE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-zA-z0-9\-]+").unwrap());
