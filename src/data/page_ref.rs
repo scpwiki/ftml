@@ -42,7 +42,7 @@ pub struct PageRef {
 impl PageRef {
     /// Separates a non-normalized page slug (potentially with extra URL parts).
     fn split_page(page: &str) -> (&str, Option<&str>) {
-        match page.find(&['#', '/']) {
+        match page.find(['#', '/']) {
             None => (page, None),
             Some(index) => {
                 let (page, extra) = page.split_at(index);
