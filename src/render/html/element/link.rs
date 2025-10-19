@@ -72,8 +72,8 @@ pub fn render_link(
     ltype: LinkType,
 ) {
     debug!("Rendering link '{:?}' (type {})", link, ltype.name());
-    let handle = ctx.handle();
     let layout = ctx.layout();
+    let handle = ctx.handle();
 
     // Add to backlinks
     ctx.add_link(link);
