@@ -174,11 +174,12 @@ impl Handle {
 }
 
 impl BuildSiteUrl for Handle {
-    fn build_url(&self, site: &str, path: &str, extra: &str) -> String {
+    fn build_url(&self, site: &str, path: &str, extra: Option<&str>) -> String {
         // TODO make this a parser setting
         // get url of wikijump instance here
 
         // TODO
+        let extra = extra.unwrap_or("");
         format!("https://{site}.wikijump.com/{path}{extra}")
     }
 }

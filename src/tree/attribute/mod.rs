@@ -70,12 +70,12 @@ impl<'t> AttributeMap<'t> {
 
                 // Check for URL-sensitive attributes
                 if URL_ATTRIBUTES.contains(key) {
-                    value = Cow::Owned(normalize_href(&value).into_owned())
+                    let url = normalize_href(&value, None).into_owned();
+                    value = Cow::Owned(url);
                 }
 
                 // Add key/value pair to map
                 let key = key.into_inner().to_ascii_lowercase();
-
                 Some((Cow::Owned(key), value))
             })
             .collect();

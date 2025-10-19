@@ -98,14 +98,12 @@ pub fn normalize_link<'a>(
     helper: &dyn BuildSiteUrl,
 ) -> Cow<'a, str> {
     match link {
-        LinkLocation::Url(url) => normalize_href(url),
+        LinkLocation::Url(url) => normalize_href(url, None),
         LinkLocation::Page(page_ref) => {
             let (site, page, extra) = page_ref.fields();
             match site {
-                Some(site) => {
-                    Cow::Owned(helper.build_url(site, page, extra.unwrap_or("")))
-                }
-                None => normalize_href(page),
+                Some(site) => Cow::Owned(helper.build_url(site, page, extra)),
+                None => normalize_href(page, extra),
             }
         }
     }
@@ -117,27 +115,38 @@ pub fn normalize_link<'a>(
 /// * Blocking dangerous URLs (e.g. `javascript:alert(1)`)
 /// * For relative links, normalizing the page portion (e.g. `/SCP-001/edit`)
 /// * Adds a leading `/` if it is missing.
-pub fn normalize_href(url: &str) -> Cow<'_, str> {
-    if is_url(url)
-        || url.starts_with('/')
-        || url.starts_with('#')
-        || url == "javascript:;"
-    {
-        trace!("Leaving safe URL as-is: {url}");
+///
+/// The `extra` argument corresponds to `PageRef.extra`.
+/// It shouldn't be `Some(_)` for other kinds of links.
+pub fn normalize_href<'a>(url: &'a str, extra: Option<&'a str>) -> Cow<'a, str> {
+    if url == "javascript:;" {
+        trace!("Leaving no-op link as-is");
         Cow::Borrowed(url)
+    } else if is_url(url) || url.starts_with('/') || url.starts_with('#') {
+        match extra {
+            Some(extra) => {
+                trace!("Leaving safe URL with extra as-is: {url}{extra}");
+                Cow::Owned(format!("{url}{extra}"))
+            }
+            None => {
+                trace!("Leaving safe URL as-is: {url}");
+                Cow::Borrowed(url)
+            }
+        }
     } else if dangerous_scheme(url) {
         warn!("Attempt to pass in dangerous URL: {url}");
         Cow::Borrowed("#invalid-url")
     } else {
         // In this branch, the URL is not absolute (e.g. https://example.com)
         // and so must be a relative link with no leading / (e.g. just "some-page").
-        trace!("Adding leading slash to URL: {url}");
-        Cow::Owned(format!("/{url}"))
+        let extra = extra.unwrap_or("");
+        trace!("Adding leading slash to URL: {url}{extra}");
+        Cow::Owned(format!("/{url}{extra}"))
     }
 }
 
 pub trait BuildSiteUrl {
-    fn build_url(&self, site: &str, path: &str, extra: &str) -> String;
+    fn build_url(&self, site: &str, path: &str, extra: Option<&str>) -> String;
 }
 
 #[test]
@@ -181,7 +190,8 @@ fn detect_dangerous_schemes() {
 fn test_normalize_href() {
     macro_rules! check {
         ($input:expr, $expected:expr $(,)?) => {{
-            let actual = normalize_href($input);
+            // TODO add tests for extra
+            let actual = normalize_href($input, None);
             assert_eq!(
                 actual.as_ref(),
                 $expected,
