@@ -189,8 +189,7 @@ fn detect_dangerous_schemes() {
 #[test]
 fn test_normalize_href() {
     macro_rules! check {
-        ($input:expr, $expected:expr $(,)?) => {{
-            // TODO add tests for extra
+        ($input:expr => $expected:expr $(,)?) => {{
             let actual = normalize_href($input, None);
             assert_eq!(
                 actual.as_ref(),
@@ -200,9 +199,20 @@ fn test_normalize_href() {
             );
         }};
 
+        ($url_input:expr, $extra_input:expr => $expected:expr $(,)?) => {{
+            let actual = normalize_href($url_input, Some($extra_input));
+            assert_eq!(
+                actual.as_ref(),
+                $expected,
+                "For input {:?} / {:?}, normalize_href() doesn't match expected",
+                $url_input,
+                $extra_input,
+            );
+        }};
+
         // For when the input is the same as the output
         ($input:expr) => {
-            check!($input, $input)
+            check!($input => $input)
         };
     }
 
@@ -217,25 +227,24 @@ fn test_normalize_href() {
     check!("sftp://ftp.example.com/upload");
 
     // Dangerous
-    check!("javascript:alert(1)", "#invalid-url");
+    check!("javascript:alert(1)" => "#invalid-url");
     check!(
-        "data:text/html,<script>alert('XSS')</script>",
-        "#invalid-url",
+        "data:text/html,<script>alert('XSS')</script>" => "#invalid-url",
     );
 
     // Preserve page links
     check!("/page");
-    check!("/page#target");
-    check!("/page/edit");
-    check!("/page/edit#target");
+    check!("/page", "#target" => "/page#target");
+    check!("/page", "/edit" => "/page/edit");
+    check!("page", "/edit#target" => "/page/edit#target");
     check!("/category:page");
-    check!("/category:page#target");
-    check!("/category:page/edit");
-    check!("/category:page/edit#target");
+    check!("/category:page", "#target" => "/category:page#target");
+    check!("/category:page", "/edit" => "/category:page/edit");
+    check!("/category:page", "/edit#target" => "/category:page/edit#target");
 
     // Missing / prefix
-    check!("some-page", "/some-page");
-    check!("some-page#target", "/some-page#target");
-    check!("system:some-page", "/system:some-page");
-    check!("system:some-page#target", "/system:some-page#target");
+    check!("some-page" => "/some-page");
+    check!("some-page#target" => "/some-page#target");
+    check!("system:some-page" => "/system:some-page");
+    check!("system:some-page#target" => "/system:some-page#target");
 }
