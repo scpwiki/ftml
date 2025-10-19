@@ -119,9 +119,9 @@ fn arb_target() -> impl Strategy<Value = Option<AnchorTarget>> {
 }
 
 fn arb_page_ref() -> impl Strategy<Value = PageRef> {
-    let site = option::of(r"[a-z0-9\-]+");
-    let page = r"[a-z0-9\-_:]+";
-    (site, page).prop_map(|(site, page)| PageRef { site, page })
+    let site = option::of(r"[\w\-\. ]+");
+    let page = r"[\w\-\._ :]+";
+    (site, page).prop_map(|(site, page)| PageRef::new(site, page))
 }
 
 fn arb_link_location() -> impl Strategy<Value = LinkLocation<'static>> {
@@ -149,20 +149,14 @@ fn arb_link_element() -> impl Strategy<Value = Element<'static>> {
         Just(LinkLabel::Page),
     ];
 
-    (
-        arb_link_type(),
-        arb_link_location(),
-        arb_optional_str(),
-        label,
-        arb_target(),
-    )
-        .prop_map(|(ltype, link, extra, label, target)| Element::Link {
+    (arb_link_type(), arb_link_location(), label, arb_target()).prop_map(
+        |(ltype, link, label, target)| Element::Link {
             ltype,
             link,
-            extra,
             label,
             target,
-        })
+        },
+    )
 }
 
 fn arb_image() -> impl Strategy<Value = Element<'static>> {

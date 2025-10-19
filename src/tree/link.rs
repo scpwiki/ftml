@@ -59,51 +59,17 @@ impl<'a> LinkLocation<'a> {
     }
 
     pub fn parse(link: Cow<'a, str>) -> Self {
-        let mut link_str = link.as_ref();
-
         // Check for direct URLs or anchor links
         // TODO: parse local links into LinkLocation::Page
         // Known bug: single "/" parsed into Url instead of Page
+        let link_str = &link;
         if is_url(link_str) || link_str.starts_with('#') || link_str.starts_with("/") {
             return LinkLocation::Url(link);
         }
 
-        // Take only the first segment for page
-        link_str = link_str
-            .split('#') // get item before the first #
-            .next()
-            .expect("Splits always produce at least one item")
-            .split('/') // get item before the first /
-            .next()
-            .expect("Splits always produce at least one item");
-
         match PageRef::parse(link_str) {
-            Err(_) => LinkLocation::Url(Cow::Owned(link_str.to_owned())),
+            Err(_) => LinkLocation::Url(link),
             Ok(page_ref) => LinkLocation::Page(page_ref),
-        }
-    }
-
-    pub fn parse_extra(link: Cow<'a, str>) -> Option<Cow<'a, str>> {
-        let link_str = link.as_ref();
-
-        // Check for direct URLs or anchor links
-        // Does not parse local links for now
-        if is_url(link_str) || link_str.starts_with('#') || link_str.starts_with('/') {
-            return None;
-        }
-
-        // Remove first path segment and reconstruct the remaining parts
-        let mut split_anchor: Vec<&str> = link_str.splitn(2, "#").collect();
-        let mut split_path: Vec<&str> = split_anchor[0].splitn(2, "/").collect();
-        split_path[0] = "";
-        let mut path = split_path.join("/");
-        split_anchor[0] = &path;
-        path = split_anchor.join("#");
-
-        if path.is_empty() {
-            None
-        } else {
-            Some(Cow::Owned(path))
         }
     }
 
@@ -124,22 +90,32 @@ impl<'a> LinkLocation<'a> {
 
 #[test]
 fn test_link_location() {
+    // Use of a helper function coerces None to be the right kind of Option<T>
+    #[inline]
+    fn convert_opt(s: Option<&str>) -> Option<String> {
+        s.map(String::from)
+    }
+
     macro_rules! check {
-        ($input:expr => $site:expr, $page:expr) => {{
-            let site_opt: Option<&str> = $site;
-            let site = site_opt.map(|s| str!(s));
-            let page = str!($page);
-            let expected = LinkLocation::Page(PageRef { site, page });
+        // LinkLocation::Page
+        ($input:expr => $site:expr, $page:expr, $extra:expr $(,)?) => {{
+            let expected = LinkLocation::Page(PageRef {
+                site: convert_opt($site),
+                page: str!($page),
+                extra: convert_opt($extra),
+            });
             check!($input; expected);
         }};
 
-        ($input:expr => $url:expr) => {
+        // LinkLocation::Url
+        ($input:expr => $url:expr $(,)?) => {
             let url = cow!($url);
             let expected = LinkLocation::Url(url);
             check!($input; expected);
         };
 
-        ($input:expr; $expected:expr) => {{
+        // Specified LinkLocation
+        ($input:expr; $expected:expr $(,)?) => {{
             let actual = LinkLocation::parse(cow!($input));
             assert_eq!(
                 actual,
@@ -153,17 +129,29 @@ fn test_link_location() {
     check!("#" => "#");
     check!("#anchor" => "#anchor");
 
-    check!("page" => None, "page");
-    check!("page/edit" => None, "page");
-    check!("page#toc0" => None, "page");
+    check!("page" => None, "page", None);
+    check!("page/edit" => None, "page", Some("/edit"));
+    check!("page#toc0" => None, "page", Some("#toc0"));
+    check!("page/comments#main" => None, "page", Some("/comments#main"));
 
     check!("/page" => "/page");
     check!("/page/edit" => "/page/edit");
     check!("/page#toc0" => "/page#toc0");
 
-    check!("component:theme" => None, "component:theme");
-    check!(":scp-wiki:scp-1000" => Some("scp-wiki"), "scp-1000");
-    check!(":scp-wiki:component:theme" => Some("scp-wiki"), "component:theme");
+    check!("component:theme" => None, "component:theme", None);
+    check!(":scp-wiki:scp-1000" => Some("scp-wiki"), "scp-1000", None);
+    check!(
+        ":scp-wiki:scp-1000#page-options-bottom" =>
+            Some("scp-wiki"), "scp-1000", Some("#page-options-bottom"),
+    );
+    check!(
+        ":scp-wiki:component:theme" =>
+            Some("scp-wiki"), "component:theme", None,
+    );
+    check!(
+        ":scp-wiki:component:theme/edit/true" =>
+            Some("scp-wiki"), "component:theme", Some("/edit/true"),
+    );
 
     check!("http://blog.wikidot.com/" => "http://blog.wikidot.com/");
     check!("https://example.com" => "https://example.com");
@@ -171,34 +159,7 @@ fn test_link_location() {
 
     check!("::page" => "::page");
     check!("::component:theme" => "::component:theme");
-    check!("multiple:category:page" => None, "multiple-category:page");
-}
-
-#[test]
-fn test_link_extra() {
-    macro_rules! check {
-        ($input:expr => $expected:expr) => {{
-            let actual = LinkLocation::parse_extra(cow!($input));
-            let expected = $expected.map(|s| cow!(s));
-
-            assert_eq!(
-                actual, expected,
-                "Actual link extra segment doesn't match expected",
-            );
-        }};
-    }
-
-    check!("" => None);
-    check!("page" => None);
-    check!("page/edit" => Some("/edit"));
-    check!("page#toc0" => Some("#toc0"));
-    check!("page/edit#toc0" => Some("/edit#toc0"));
-
-    check!("/" => None);
-    check!("/page" => None);
-    check!("/#/page" => None);
-    check!("#" => None);
-    check!("#anchor" => None);
+    check!("multiple:category:page" => None, "multiple-category:page", None);
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]

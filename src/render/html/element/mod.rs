@@ -110,10 +110,9 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
         Element::Link {
             ltype,
             link,
-            extra,
             label,
             target,
-        } => render_link(ctx, link, ref_cow!(extra), label, *target, *ltype),
+        } => render_link(ctx, link, label, *target, *ltype),
         Element::Image {
             source,
             link,

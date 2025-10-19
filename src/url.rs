@@ -98,12 +98,12 @@ pub fn normalize_link<'a>(
     helper: &dyn BuildSiteUrl,
 ) -> Cow<'a, str> {
     match link {
-        LinkLocation::Url(url) => normalize_href(url),
+        LinkLocation::Url(url) => normalize_href(url, None),
         LinkLocation::Page(page_ref) => {
-            let (site, page) = page_ref.fields();
+            let (site, page, extra) = page_ref.fields();
             match site {
-                Some(site) => Cow::Owned(helper.build_url(site, page)),
-                None => normalize_href(page),
+                Some(site) => Cow::Owned(helper.build_url(site, page, extra)),
+                None => normalize_href(page, extra),
             }
         }
     }
@@ -115,27 +115,38 @@ pub fn normalize_link<'a>(
 /// * Blocking dangerous URLs (e.g. `javascript:alert(1)`)
 /// * For relative links, normalizing the page portion (e.g. `/SCP-001/edit`)
 /// * Adds a leading `/` if it is missing.
-pub fn normalize_href(url: &str) -> Cow<'_, str> {
-    if is_url(url)
-        || url.starts_with('/')
-        || url.starts_with('#')
-        || url == "javascript:;"
-    {
-        trace!("Leaving safe URL as-is: {url}");
+///
+/// The `extra` argument corresponds to `PageRef.extra`.
+/// It shouldn't be `Some(_)` for other kinds of links.
+pub fn normalize_href<'a>(url: &'a str, extra: Option<&'a str>) -> Cow<'a, str> {
+    if url == "javascript:;" {
+        trace!("Leaving no-op link as-is");
         Cow::Borrowed(url)
+    } else if is_url(url) || url.starts_with('/') || url.starts_with('#') {
+        match extra {
+            Some(extra) => {
+                trace!("Leaving safe URL with extra as-is: {url}{extra}");
+                Cow::Owned(format!("{url}{extra}"))
+            }
+            None => {
+                trace!("Leaving safe URL as-is: {url}");
+                Cow::Borrowed(url)
+            }
+        }
     } else if dangerous_scheme(url) {
         warn!("Attempt to pass in dangerous URL: {url}");
         Cow::Borrowed("#invalid-url")
     } else {
         // In this branch, the URL is not absolute (e.g. https://example.com)
         // and so must be a relative link with no leading / (e.g. just "some-page").
-        trace!("Adding leading slash to URL: {url}");
-        Cow::Owned(format!("/{url}"))
+        let extra = extra.unwrap_or("");
+        trace!("Adding leading slash to URL: {url}{extra}");
+        Cow::Owned(format!("/{url}{extra}"))
     }
 }
 
 pub trait BuildSiteUrl {
-    fn build_url(&self, site: &str, path: &str) -> String;
+    fn build_url(&self, site: &str, path: &str, extra: Option<&str>) -> String;
 }
 
 #[test]
@@ -178,8 +189,8 @@ fn detect_dangerous_schemes() {
 #[test]
 fn test_normalize_href() {
     macro_rules! check {
-        ($input:expr, $expected:expr $(,)?) => {{
-            let actual = normalize_href($input);
+        ($input:expr => $expected:expr $(,)?) => {{
+            let actual = normalize_href($input, None);
             assert_eq!(
                 actual.as_ref(),
                 $expected,
@@ -188,9 +199,20 @@ fn test_normalize_href() {
             );
         }};
 
+        ($url_input:expr, $extra_input:expr => $expected:expr $(,)?) => {{
+            let actual = normalize_href($url_input, Some($extra_input));
+            assert_eq!(
+                actual.as_ref(),
+                $expected,
+                "For input {:?} / {:?}, normalize_href() doesn't match expected",
+                $url_input,
+                $extra_input,
+            );
+        }};
+
         // For when the input is the same as the output
         ($input:expr) => {
-            check!($input, $input)
+            check!($input => $input)
         };
     }
 
@@ -205,25 +227,24 @@ fn test_normalize_href() {
     check!("sftp://ftp.example.com/upload");
 
     // Dangerous
-    check!("javascript:alert(1)", "#invalid-url");
+    check!("javascript:alert(1)" => "#invalid-url");
     check!(
-        "data:text/html,<script>alert('XSS')</script>",
-        "#invalid-url",
+        "data:text/html,<script>alert('XSS')</script>" => "#invalid-url",
     );
 
     // Preserve page links
     check!("/page");
-    check!("/page#target");
-    check!("/page/edit");
-    check!("/page/edit#target");
+    check!("/page", "#target" => "/page#target");
+    check!("/page", "/edit" => "/page/edit");
+    check!("page", "/edit#target" => "/page/edit#target");
     check!("/category:page");
-    check!("/category:page#target");
-    check!("/category:page/edit");
-    check!("/category:page/edit#target");
+    check!("/category:page", "#target" => "/category:page#target");
+    check!("/category:page", "/edit" => "/category:page/edit");
+    check!("/category:page", "/edit#target" => "/category:page/edit#target");
 
     // Missing / prefix
-    check!("some-page", "/some-page");
-    check!("some-page#target", "/some-page#target");
-    check!("system:some-page", "/system:some-page");
-    check!("system:some-page#target", "/system:some-page#target");
+    check!("some-page" => "/some-page");
+    check!("some-page#target" => "/some-page#target");
+    check!("system:some-page" => "/system:some-page");
+    check!("system:some-page#target" => "/system:some-page#target");
 }

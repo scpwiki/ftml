@@ -36,25 +36,51 @@ use wikidot_normalize::normalize;
 pub struct PageRef {
     pub site: Option<String>,
     pub page: String,
+    pub extra: Option<String>,
 }
 
 impl PageRef {
+    /// Separates a non-normalized page slug (potentially with extra URL parts).
+    fn split_page(page: &str) -> (&str, Option<&str>) {
+        match page.find(['#', '/']) {
+            None => (page, None),
+            Some(index) => {
+                let (page, extra) = page.split_at(index);
+                (page, Some(extra))
+            }
+        }
+    }
+
+    /// Creates a [`PageRef`] with an optional site.
+    pub fn new<S1, S2>(site: Option<S1>, page: S2) -> Self
+    where
+        S1: Into<String>,
+        S2: AsRef<str>,
+    {
+        match site {
+            Some(site) => Self::page_and_site(site, page),
+            None => Self::page_only(page),
+        }
+    }
+
     /// Creates a [`PageRef`] with the given page and site.
     #[inline]
     pub fn page_and_site<S1, S2>(site: S1, page: S2) -> Self
     where
         S1: Into<String>,
-        S2: Into<String>,
+        S2: AsRef<str>,
     {
+        let (page, extra) = Self::split_page(page.as_ref());
         let mut site = site.into();
-        let mut page = page.into();
-
+        let mut page = str!(page);
+        let extra = extra.map(String::from);
         normalize(&mut site);
         normalize(&mut page);
 
         PageRef {
             site: Some(site),
             page,
+            extra,
         }
     }
 
@@ -62,11 +88,17 @@ impl PageRef {
     #[inline]
     pub fn page_only<S>(page: S) -> Self
     where
-        S: Into<String>,
+        S: AsRef<str>,
     {
-        let mut page = page.into();
+        let (page, extra) = Self::split_page(page.as_ref());
+        let mut page = str!(page);
+        let extra = extra.map(String::from);
         normalize(&mut page);
-        PageRef { site: None, page }
+        PageRef {
+            site: None,
+            page,
+            extra,
+        }
     }
 
     #[inline]
@@ -80,13 +112,22 @@ impl PageRef {
     }
 
     #[inline]
-    pub fn fields(&self) -> (Option<&str>, &str) {
-        (self.site(), self.page())
+    pub fn extra(&self) -> Option<&str> {
+        self.extra.as_deref()
     }
 
-    /// Like `fields()`, but uses the passed in value as the current site for local references.
-    pub fn fields_or<'a>(&'a self, current_site: &'a str) -> (&'a str, &'a str) {
-        (self.site().unwrap_or(current_site), self.page())
+    #[inline]
+    pub fn fields(&self) -> (Option<&str>, &str, Option<&str>) {
+        (self.site(), self.page(), self.extra())
+    }
+
+    /// Like `fields()`, but uses the current site value to avoid returning `Option`.
+    pub fn fields_or<'a>(&'a self, current_site: &'a str) -> (&'a str, &'a str, &'a str) {
+        (
+            self.site().unwrap_or(current_site),
+            self.page(),
+            self.extra().unwrap_or(""),
+        )
     }
 
     pub fn parse(s: &str) -> Result<PageRef, PageRefParseError> {
@@ -137,6 +178,50 @@ impl Display for PageRef {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PageRefParseError;
+
+// Tests
+
+#[test]
+fn split_page() {
+    macro_rules! test {
+        ($input:expr => $page:expr, $extra:expr $(,)?) => {
+            assert_eq!(
+                PageRef::split_page($input),
+                ($page, $extra),
+                "Split page portion does not have correct page and extra parts",
+            )
+        };
+
+        // Test case with 'extra' part
+        ($input:expr, $page:expr, $extra:expr $(,)?) => {
+            test!($input => $page, Some($extra))
+        };
+
+        // Test case for no 'extra' part
+        ($input:expr) => {
+            test!($input => $input, None)
+        };
+    }
+
+    // This function only does splitting, no normalization
+
+    test!("scp-001");
+    test!("scp-001/edit", "scp-001", "/edit");
+    test!("scp-001/edit/true", "scp-001", "/edit/true");
+    test!("Ethics Committee Orientation");
+    test!(
+        "Ethics Committee Orientation/edit",
+        "Ethics Committee Orientation",
+        "/edit",
+    );
+    test!(
+        "Ethics Committee Orientation/edit/true",
+        "Ethics Committee Orientation",
+        "/edit/true",
+    );
+    test!("main#toc4", "main", "#toc4");
+    test!("SCP-500/edit#page-options", "SCP-500", "/edit#page-options");
+}
 
 #[test]
 fn page_ref() {
@@ -190,7 +275,17 @@ mod prop {
         #![proptest_config(ProptestConfig::with_cases(4096))]
 
         #[test]
-        fn page_ref_prop(s in r"[a-zA-Z_:.]*") {
+        fn page_ref_page_prop(s in r".+") {
+            let _ = PageRef::parse(&s);
+        }
+
+        #[test]
+        fn page_ref_both_prop(s in r".+:.+") {
+            let _ = PageRef::parse(&s);
+        }
+
+        #[test]
+        fn page_ref_extra_prop(s in r".+:.+[#/].+") {
             let _ = PageRef::parse(&s);
         }
     }
