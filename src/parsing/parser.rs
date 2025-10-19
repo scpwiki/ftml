@@ -631,7 +631,7 @@ fn parser_newline_flag() {
     let page_info = PageInfo::dummy();
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr, $expected_steps:expr $(,)?) => {{
             let tokens = crate::tokenize($input);
             let mut parser = Parser::new(&tokens, &page_info, &settings);
@@ -652,13 +652,13 @@ fn parser_newline_flag() {
         }};
     }
 
-    check!("A", [true]);
-    check!("A\nB C", [true, false, true, false, false]);
-    check!(
+    test!("A", [true]);
+    test!("A\nB C", [true, false, true, false, false]);
+    test!(
         "A\nB\n\nC D\nE",
         [true, false, true, false, true, false, false, false, true],
     );
-    check!(
+    test!(
         "\nA\n\nB\n\n\nC D",
         [true, true, false, true, false, true, false, false],
     );

@@ -49,7 +49,7 @@ pub fn isolate_ids(id_string: &str) -> String {
 
 #[test]
 fn test_isolate_ids() {
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr, $expected:expr) => {
             assert_eq!(
                 isolate_ids($input),
@@ -59,19 +59,19 @@ fn test_isolate_ids() {
         };
     }
 
-    check!("", "");
-    check!("  ", "");
-    check!("apple", "u-apple");
-    check!("apple banana", "u-apple u-banana");
-    check!("apple  banana", "u-apple u-banana");
-    check!(" apple  banana", "u-apple u-banana");
-    check!(" apple   banana ", "u-apple u-banana");
-    check!("apple banana cherry", "u-apple u-banana u-cherry");
-    check!("apple  banana cherry", "u-apple u-banana u-cherry");
-    check!("  apple  banana\tcherry", "u-apple u-banana u-cherry");
-    check!("u-apple banana cherry", "u-apple u-banana u-cherry");
-    check!("u-apple u-banana cherry", "u-apple u-banana u-cherry");
-    check!("u-apple u-banana u-cherry", "u-apple u-banana u-cherry");
-    check!("apple u-banana cherry", "u-apple u-banana u-cherry");
-    check!("u-u-apple", "u-u-apple");
+    test!("", "");
+    test!("  ", "");
+    test!("apple", "u-apple");
+    test!("apple banana", "u-apple u-banana");
+    test!("apple  banana", "u-apple u-banana");
+    test!(" apple  banana", "u-apple u-banana");
+    test!(" apple   banana ", "u-apple u-banana");
+    test!("apple banana cherry", "u-apple u-banana u-cherry");
+    test!("apple  banana cherry", "u-apple u-banana u-cherry");
+    test!("  apple  banana\tcherry", "u-apple u-banana u-cherry");
+    test!("u-apple banana cherry", "u-apple u-banana u-cherry");
+    test!("u-apple u-banana cherry", "u-apple u-banana u-cherry");
+    test!("u-apple u-banana u-cherry", "u-apple u-banana u-cherry");
+    test!("apple u-banana cherry", "u-apple u-banana u-cherry");
+    test!("u-u-apple", "u-u-apple");
 }

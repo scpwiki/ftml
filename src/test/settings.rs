@@ -35,7 +35,7 @@ fn settings() {
 
     let page_info = PageInfo::dummy();
 
-    macro_rules! check_individual {
+    macro_rules! test_individual {
         ($mode:expr, $input:expr, $substring:expr, $contains:expr) => {{
             let settings = WikitextSettings::from_mode($mode, Layout::Wikidot);
             let mut text = str!($input);
@@ -65,37 +65,37 @@ fn settings() {
         }};
     }
 
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr, $substring:expr, $contains:expr $(,)?) => {{
             for (&mode, &contains) in PAGE_MODES.iter().zip($contains.iter()) {
-                check_individual!(mode, $input, $substring, contains);
+                test_individual!(mode, $input, $substring, contains);
             }
         }};
     }
 
-    check!("++ H2", "toc0", [true, false, false, false, false]);
-    check!("[[toc]]", "wj-toc", [true, false, false, false, false]);
-    check!(
+    test!("++ H2", "toc0", [true, false, false, false, false]);
+    test!("[[toc]]", "wj-toc", [true, false, false, false, false]);
+    test!(
         "[[module Rate]]",
         "TODO: module Rate",
         [true, true, false, false, true],
     );
-    check!(
+    test!(
         "[[include-elements page]]",
         "INCLUDED PAGE",
         [true, true, false, false, true],
     );
-    check!(
+    test!(
         "[[image /local-file.png]]",
         "local-file.png",
         [true, true, false, false, true],
     );
-    check!(
+    test!(
         "[[image /some-page/local-file.png]]",
         "local-file.png",
         [true, true, false, false, true],
     );
-    check!(
+    test!(
         "[[image /my-site/some-page/local-file.png]]",
         "local-file.png",
         [true, true, false, false, true],

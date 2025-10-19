@@ -62,7 +62,7 @@ fn isolate_user_ids() {
         interwiki: EMPTY_INTERWIKI.clone(),
     };
 
-    macro_rules! check {
+    macro_rules! test {
         ($wikitext:expr, $expected:expr $(,)?) => {{
             let mut text = str!($wikitext);
 
@@ -80,10 +80,10 @@ fn isolate_user_ids() {
     }
 
     // Trivial
-    check!("", vec![]);
+    test!("", vec![]);
 
     // Anchor block [[a]]
-    check!(
+    test!(
         r#"[[a id="apple"]]X[[/a]]"#,
         vec![Element::Container(Container::new(
             ContainerType::Paragraph,
@@ -97,7 +97,7 @@ fn isolate_user_ids() {
             AttributeMap::new(),
         ))],
     );
-    check!(
+    test!(
         r#"[[a id="u-apple"]]X[[/a]]"#,
         vec![Element::Container(Container::new(
             ContainerType::Paragraph,
@@ -111,7 +111,7 @@ fn isolate_user_ids() {
             AttributeMap::new(),
         ))],
     );
-    check!(
+    test!(
         r#"[[a id="u-u-apple"]]X[[/a]]"#,
         vec![Element::Container(Container::new(
             ContainerType::Paragraph,
@@ -127,7 +127,7 @@ fn isolate_user_ids() {
     );
 
     // Images [[image]]
-    check!(
+    test!(
         r#"[[image example.png class="apple" id="banana"]]"#,
         vec![Element::Container(Container::new(
             ContainerType::Paragraph,
@@ -145,7 +145,7 @@ fn isolate_user_ids() {
             AttributeMap::new(),
         ))],
     );
-    check!(
+    test!(
         r#"[[image example.png class="u-apple" id="u-banana"]]"#,
         vec![Element::Container(Container::new(
             ContainerType::Paragraph,
@@ -165,7 +165,7 @@ fn isolate_user_ids() {
     );
 
     // Lists [[ul]] / [[ol]]
-    check!(
+    test!(
         r#"[[ul id="apple"]] [[li id="u-banana"]]X[[/li]] [[/ul]]"#,
         vec![Element::List {
             ltype: ListType::Bullet,
@@ -180,7 +180,7 @@ fn isolate_user_ids() {
             }],
         }],
     );
-    check!(
+    test!(
         r#"[[ul id="u-apple"]] [[li id="banana"]]X[[/li]] [[/ul]]"#,
         vec![Element::List {
             ltype: ListType::Bullet,
@@ -196,7 +196,7 @@ fn isolate_user_ids() {
         }],
     );
 
-    check!(
+    test!(
         r#"[[ol id="apple"]] [[li id="u-banana"]]X[[/li]] [[/ol]]"#,
         vec![Element::List {
             ltype: ListType::Numbered,
@@ -211,7 +211,7 @@ fn isolate_user_ids() {
             }],
         }],
     );
-    check!(
+    test!(
         r#"[[ol id="u-apple"]] [[li id="banana"]]X[[/li]] [[/ol]]"#,
         vec![Element::List {
             ltype: ListType::Numbered,
@@ -228,7 +228,7 @@ fn isolate_user_ids() {
     );
 
     // Radio buttons and checkboxes
-    check!(
+    test!(
         r#"[[radio vegetables class="apple" id="banana"]] Celery
 [[radio vegetables class="u-cherry" id="u-durian"]] Lettuce"#,
         vec![Element::Container(Container::new(
@@ -257,7 +257,7 @@ fn isolate_user_ids() {
             AttributeMap::new(),
         ))],
     );
-    check!(
+    test!(
         r#"[[checkbox class="apple" id="banana"]] Celery
 [[checkbox class="u-cherry" id="u-durian"]] Lettuce"#,
         vec![Element::Container(Container::new(
@@ -286,7 +286,7 @@ fn isolate_user_ids() {
     );
 
     // Collapsibles [[collapsible]]
-    check!(
+    test!(
         r#"[[collapsible class="apple" id="banana"]]X[[/collapsible]]"#,
         vec![Element::Collapsible {
             elements: vec![Element::Container(Container::new(
@@ -305,7 +305,7 @@ fn isolate_user_ids() {
             show_bottom: false,
         }],
     );
-    check!(
+    test!(
         r#"[[collapsible class="u-apple" id="u-banana"]]X[[/collapsible]]"#,
         vec![Element::Collapsible {
             elements: vec![Element::Container(Container::new(
@@ -326,7 +326,7 @@ fn isolate_user_ids() {
     );
 
     // Table of contents [[toc]]
-    check!(
+    test!(
         r#"[[toc id="apple"]]"#,
         vec![Element::TableOfContents {
             attributes: AttributeMap::from(btreemap! {
@@ -335,7 +335,7 @@ fn isolate_user_ids() {
             align: None,
         }],
     );
-    check!(
+    test!(
         r#"[[toc id="u-apple"]]"#,
         vec![Element::TableOfContents {
             attributes: AttributeMap::from(btreemap! {
@@ -346,7 +346,7 @@ fn isolate_user_ids() {
     );
 
     // Iframes [[iframe]]
-    check!(
+    test!(
         r#"[[iframe https://example.com/ id="apple"]]"#,
         vec![Element::Iframe {
             attributes: AttributeMap::from(btreemap! {
@@ -355,7 +355,7 @@ fn isolate_user_ids() {
             url: cow!("https://example.com/"),
         }],
     );
-    check!(
+    test!(
         r#"[[iframe https://example.com/ id="u-apple"]]"#,
         vec![Element::Iframe {
             attributes: AttributeMap::from(btreemap! {

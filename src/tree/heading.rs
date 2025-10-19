@@ -175,7 +175,7 @@ impl TryFrom<u8> for HeadingLevel {
 
 #[test]
 fn heading() {
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr, $level:expr, $has_toc:expr) => {{
             use std::convert::TryInto;
 
@@ -194,26 +194,26 @@ fn heading() {
         }};
     }
 
-    check!("+", 1, true);
-    check!("++", 2, true);
-    check!("+++", 3, true);
-    check!("++++", 4, true);
-    check!("+++++", 5, true);
-    check!("++++++", 6, true);
+    test!("+", 1, true);
+    test!("++", 2, true);
+    test!("+++", 3, true);
+    test!("++++", 4, true);
+    test!("+++++", 5, true);
+    test!("++++++", 6, true);
 
-    check!("+*", 1, false);
-    check!("++*", 2, false);
-    check!("+++*", 3, false);
-    check!("++++*", 4, false);
-    check!("+++++*", 5, false);
-    check!("++++++*", 6, false);
+    test!("+*", 1, false);
+    test!("++*", 2, false);
+    test!("+++*", 3, false);
+    test!("++++*", 4, false);
+    test!("+++++*", 5, false);
+    test!("++++++*", 6, false);
 }
 
 #[test]
 fn true_ids() {
     use crate::next_index::Incrementer;
 
-    macro_rules! check {
+    macro_rules! test {
         ($indexer:expr, $level:expr, $expected_html_tag:expr $(,)?) => {{
             let level =
                 HeadingLevel::try_from($level as u8).expect("Unable to get HeadingLevel");
@@ -235,7 +235,7 @@ fn true_ids() {
     // Simulates use_true_ids = true
     {
         let mut indexer = Incrementer::default();
-        check!(
+        test!(
             indexer,
             1,
             HtmlTag::TagAndId {
@@ -243,7 +243,7 @@ fn true_ids() {
                 id: str!("toc0")
             },
         );
-        check!(
+        test!(
             indexer,
             3,
             HtmlTag::TagAndId {
@@ -251,7 +251,7 @@ fn true_ids() {
                 id: str!("toc1")
             },
         );
-        check!(
+        test!(
             indexer,
             3,
             HtmlTag::TagAndId {
@@ -259,7 +259,7 @@ fn true_ids() {
                 id: str!("toc2")
             },
         );
-        check!(
+        test!(
             indexer,
             1,
             HtmlTag::TagAndId {
@@ -267,7 +267,7 @@ fn true_ids() {
                 id: str!("toc3")
             },
         );
-        check!(
+        test!(
             indexer,
             5,
             HtmlTag::TagAndId {
@@ -281,10 +281,10 @@ fn true_ids() {
     // Simulates use_true_ids = false
     {
         let mut indexer = Incrementer::disabled();
-        check!(indexer, 1, HtmlTag::Tag("h1"));
-        check!(indexer, 3, HtmlTag::Tag("h3"));
-        check!(indexer, 3, HtmlTag::Tag("h3"));
-        check!(indexer, 2, HtmlTag::Tag("h2"));
-        check!(indexer, 4, HtmlTag::Tag("h4"));
+        test!(indexer, 1, HtmlTag::Tag("h1"));
+        test!(indexer, 3, HtmlTag::Tag("h3"));
+        test!(indexer, 3, HtmlTag::Tag("h3"));
+        test!(indexer, 2, HtmlTag::Tag("h2"));
+        test!(indexer, 4, HtmlTag::Tag("h4"));
     }
 }

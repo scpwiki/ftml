@@ -171,7 +171,7 @@ where
 
 #[test]
 fn depth() {
-    macro_rules! check {
+    macro_rules! test {
         ($depths:expr, $list:expr $(,)?) => {{
             // Map to add unit as the level type
             let depths: Vec<_> = $depths
@@ -211,39 +211,39 @@ fn depth() {
         };
     }
 
-    check!(
+    test!(
         vec![(0, 'a')], //
         vec![item!('a')],
     );
-    check!(
+    test!(
         vec![(0, 'a'), (0, 'b')], //
         vec![item!('a'), item!('b')],
     );
-    check!(
+    test!(
         vec![(0, 'a'), (0, 'b'), (1, 'c')],
         vec![item!('a'), item!('b'), list![item!('c')]]
     );
-    check!(
+    test!(
         vec![(0, 'a'), (0, 'b'), (2, 'c')],
         vec![item!('a'), item!('b'), list![list![item!('c')]]],
     );
-    check!(
+    test!(
         vec![(1, 'a'), (1, 'b')],
         vec![list![item!('a'), item!('b')]],
     );
-    check!(
+    test!(
         vec![(2, 'a'), (2, 'b')],
         vec![list![list![item!('a'), item!('b')]]],
     );
-    check!(
+    test!(
         vec![(2, 'a'), (1, 'b')],
         vec![list![list![item!('a')], item!('b')]],
     );
-    check!(
+    test!(
         vec![(5, 'a')],
         vec![list![list![list![list![list![item!('a')]]]]]],
     );
-    check!(
+    test!(
         vec![(2, 'a'), (3, 'b'), (1, 'c'), (1, 'd'), (2, 'e'), (0, 'f')],
         vec![
             list![
@@ -259,7 +259,7 @@ fn depth() {
 
 #[test]
 fn depth_types() {
-    macro_rules! check {
+    macro_rules! test {
         ($depths:expr, $list:expr $(,)?) => {{
             let expected: Vec<(char, Vec<DepthItem<char, char>>)> = $list;
             let actual = process_depths(' ', $depths);
@@ -286,38 +286,38 @@ fn depth_types() {
         };
     }
 
-    check!(vec![], vec![]);
-    check!(
+    test!(vec![], vec![]);
+    test!(
         vec![(0, '*', 'a')], //
         vec![('*', vec![item!('a')])],
     );
-    check!(
+    test!(
         vec![(0, '*', 'a'), (0, '*', 'b')], //
         vec![('*', vec![item!('a'), item!('b')])],
     );
-    check!(
+    test!(
         vec![(0, '*', 'a'), (0, '#', 'b')], //
         vec![('*', vec![item!('a')]), ('#', vec![item!('b')])],
     );
-    check!(
+    test!(
         vec![(1, '*', 'a'), (1, '#', 'b')],
         vec![(' ', vec![list!['*', item!('a')], list!['#', item!('b')]])],
     );
-    check!(
+    test!(
         vec![(1, '*', 'a'), (1, '#', 'b'), (0, '*', 'c')],
         vec![
             (' ', vec![list!['*', item!('a')], list!['#', item!('b')]]),
             ('*', vec![item!('c')]),
         ],
     );
-    check!(
+    test!(
         vec![(2, '*', 'a'), (2, '#', 'b')],
         vec![(
             ' ',
             vec![list!['*', list!['*', item!('a')], list!['#', item!('b')]]]
         )],
     );
-    check!(
+    test!(
         vec![(0, '#', 'a'), (2, '*', 'b'), (2, '*', 'c'), (1, '*', 'd')],
         vec![(
             '#',
@@ -327,7 +327,7 @@ fn depth_types() {
             ],
         )],
     );
-    check!(
+    test!(
         vec![(0, '#', 'a'), (0, '#', 'b'), (0, '*', 'c'), (1, '#', 'd')],
         vec![
             ('#', vec![item!('a'), item!('b')]),
@@ -341,7 +341,7 @@ mod test {
     use super::*;
     use proptest::prelude::*;
 
-    macro_rules! check {
+    macro_rules! test {
         ($depths:expr) => {{
             let depths_input = $depths;
             let expected_length = depths_input.len();
@@ -378,13 +378,13 @@ mod test {
         #[test]
         #[ignore = "slow test"]
         fn deep_depth_prop(depths in arb_depth(128)) {
-            check!(depths);
+            test!(depths);
         }
 
         #[test]
         #[ignore = "slow test"]
         fn shallow_depth_prop(depths in arb_depth(4)) {
-            check!(depths);
+            test!(depths);
         }
     }
 }

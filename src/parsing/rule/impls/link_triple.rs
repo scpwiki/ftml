@@ -227,7 +227,7 @@ fn strip_category(url: &str) -> Option<&str> {
 
 #[test]
 fn test_strip_category() {
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr, $expected:expr $(,)?) => {{
             let actual = strip_category($input);
 
@@ -238,30 +238,30 @@ fn test_strip_category() {
         }};
     }
 
-    check!("", None);
-    check!("scp-001", None);
-    check!("Guide Hub", None);
-    check!("theme:just-girly-things", Some("just-girly-things"));
-    check!("theme: just-girly-things", Some("just-girly-things"));
-    check!("theme: Just Girly Things", Some("Just Girly Things"));
-    check!("component:fancy-sidebar", Some("fancy-sidebar"));
-    check!("component:Fancy Sidebar", Some("Fancy Sidebar"));
-    check!("component: Fancy Sidebar", Some("Fancy Sidebar"));
-    check!(
+    test!("", None);
+    test!("scp-001", None);
+    test!("Guide Hub", None);
+    test!("theme:just-girly-things", Some("just-girly-things"));
+    test!("theme: just-girly-things", Some("just-girly-things"));
+    test!("theme: Just Girly Things", Some("Just Girly Things"));
+    test!("component:fancy-sidebar", Some("fancy-sidebar"));
+    test!("component:Fancy Sidebar", Some("Fancy Sidebar"));
+    test!("component: Fancy Sidebar", Some("Fancy Sidebar"));
+    test!(
         "multiple:categories:here:test",
         Some("categories:here:test"),
     );
-    check!(
+    test!(
         "multiple: categories: here: test",
         Some("categories: here: test"),
     );
-    check!(":scp-wiki:scp-001", Some("scp-001"));
-    check!(":scp-wiki : SCP-001", Some("SCP-001"));
-    check!(":scp-wiki:system:recent-changes", Some("recent-changes"));
-    check!(
+    test!(":scp-wiki:scp-001", Some("scp-001"));
+    test!(":scp-wiki : SCP-001", Some("SCP-001"));
+    test!(":scp-wiki:system:recent-changes", Some("recent-changes"));
+    test!(
         ":scp-wiki : system : Recent Changes",
         Some("Recent Changes"),
     );
-    check!(": snippets : redirect", Some("redirect"));
-    check!(":", None);
+    test!(": snippets : redirect", Some("redirect"));
+    test!(":", None);
 }

@@ -234,7 +234,7 @@ fn date() {
         (timestamp1 - timestamp2).abs() < 5
     }
 
-    macro_rules! check_ok {
+    macro_rules! test_ok {
         ($input:expr, $date:expr $(,)?) => {{
             let actual = parse_date($input).expect("Datetime parse didn't succeed");
             let expected = $date.into();
@@ -249,7 +249,7 @@ fn date() {
         }};
     }
 
-    macro_rules! check_err {
+    macro_rules! test_err {
         ($input:expr $(,)?) => {{
             parse_date($input).expect_err("Error case for datetime parse succeeded");
         }};
@@ -262,39 +262,39 @@ fn date() {
         };
     }
 
-    check_ok!(".", now());
-    check_ok!("now", now());
-    check_ok!("Now", now());
-    check_ok!("NOW", now());
-    check_ok!("1600000000", timestamp!(1600000000));
-    check_ok!("-1000", timestamp!(-1000));
-    check_ok!("0", timestamp!(0));
-    check_ok!("2001-09-11", date!(2001 - 09 - 11));
-    check_ok!(
+    test_ok!(".", now());
+    test_ok!("now", now());
+    test_ok!("Now", now());
+    test_ok!("NOW", now());
+    test_ok!("1600000000", timestamp!(1600000000));
+    test_ok!("-1000", timestamp!(-1000));
+    test_ok!("0", timestamp!(0));
+    test_ok!("2001-09-11", date!(2001 - 09 - 11));
+    test_ok!(
         "2007-05-12T09:34:51.026490",
         datetime!(2007-05-12 09:34:51.026490),
     );
-    check_ok!(
+    test_ok!(
         "2007-05-12T09:34:51.026490+04:00",
         datetime!(2007-05-12 09:34:51.026490+04:00),
     );
-    check_ok!(
+    test_ok!(
         "2007-05-12T09:34:51.026490-04:00",
         datetime!(2007-05-12 09:34:51.026490-04:00),
     );
 
-    check_err!("");
-    check_err!("*");
-    check_err!("foobar");
-    check_err!("2001-09");
-    check_err!("2001/09");
-    check_err!("2001/09-11");
-    check_err!("2001-09/11");
+    test_err!("");
+    test_err!("*");
+    test_err!("foobar");
+    test_err!("2001-09");
+    test_err!("2001/09");
+    test_err!("2001/09-11");
+    test_err!("2001-09/11");
 }
 
 #[test]
 fn timezone() {
-    macro_rules! check_ok {
+    macro_rules! test_ok {
         ($input:expr, $offset:expr) => {{
             let actual = parse_timezone(&$input).expect("Timezone parse didn't succeed");
 
@@ -306,37 +306,37 @@ fn timezone() {
         }};
     }
 
-    macro_rules! check_err {
+    macro_rules! test_err {
         ($input:expr) => {{
             parse_timezone($input).expect_err("Error case for timezone parse succeeded");
         }};
     }
 
-    check_ok!("12345", 12345);
-    check_ok!("+12345", 12345);
-    check_ok!("-12345", -12345);
+    test_ok!("12345", 12345);
+    test_ok!("+12345", 12345);
+    test_ok!("-12345", -12345);
 
-    check_ok!("8:00", 8 * 60 * 60);
-    check_ok!("+8:00", 8 * 60 * 60);
-    check_ok!("-8:00", -8 * 60 * 60);
+    test_ok!("8:00", 8 * 60 * 60);
+    test_ok!("+8:00", 8 * 60 * 60);
+    test_ok!("-8:00", -8 * 60 * 60);
 
-    check_ok!("08:00", 8 * 60 * 60);
-    check_ok!("+08:00", 8 * 60 * 60);
-    check_ok!("-08:00", -8 * 60 * 60);
+    test_ok!("08:00", 8 * 60 * 60);
+    test_ok!("+08:00", 8 * 60 * 60);
+    test_ok!("-08:00", -8 * 60 * 60);
 
-    check_ok!("08:00", 8 * 60 * 60);
-    check_ok!("+08:00", 8 * 60 * 60);
-    check_ok!("-08:00", -8 * 60 * 60);
+    test_ok!("08:00", 8 * 60 * 60);
+    test_ok!("+08:00", 8 * 60 * 60);
+    test_ok!("-08:00", -8 * 60 * 60);
 
-    check_ok!("0800", 8 * 60 * 60);
-    check_ok!("+0800", 8 * 60 * 60);
-    check_ok!("-0800", -8 * 60 * 60);
+    test_ok!("0800", 8 * 60 * 60);
+    test_ok!("+0800", 8 * 60 * 60);
+    test_ok!("-0800", -8 * 60 * 60);
 
-    check_ok!("800", 8 * 60 * 60);
-    check_ok!("+800", 8 * 60 * 60);
-    check_ok!("-800", -8 * 60 * 60);
+    test_ok!("800", 8 * 60 * 60);
+    test_ok!("+800", 8 * 60 * 60);
+    test_ok!("-800", -8 * 60 * 60);
 
-    check_err!("");
-    check_err!("*");
-    check_err!("8:0");
+    test_err!("");
+    test_err!("*");
+    test_err!("8:0");
 }
