@@ -120,7 +120,7 @@ impl InterwikiSettings {
 fn interwiki_prefixes() {
     use ref_map::*;
 
-    macro_rules! check {
+    macro_rules! test {
         ($link:expr, $expected:expr $(,)?) => {{
             let actual = DEFAULT_INTERWIKI.build($link);
             let expected = $expected;
@@ -133,50 +133,50 @@ fn interwiki_prefixes() {
         }};
     }
 
-    check!("my-link", None);
-    check!(
+    test!("my-link", None);
+    test!(
         "wikipedia:Mallard",
         Some("https://wikipedia.org/wiki/Mallard"),
     );
-    check!(
+    test!(
         "wikipedia:SCP_Foundation",
         Some("https://wikipedia.org/wiki/SCP_Foundation"),
     );
-    check!(
+    test!(
         "wikipedia:Special:RecentChanges",
         Some("https://wikipedia.org/wiki/Special:RecentChanges"),
     );
-    check!(
+    test!(
         "wp:SCP_Foundation",
         Some("https://wikipedia.org/wiki/SCP_Foundation"),
     );
-    check!(
+    test!(
         "wp:it:SCP_Foundation",
         Some("https://wikipedia.org/wiki/it:SCP_Foundation"),
     );
-    check!(
+    test!(
         "commons:File:SCP-682.jpg",
         Some("https://commons.wikimedia.org/wiki/File:SCP-682.jpg"),
     );
-    check!(
+    test!(
         "commons:Category:SCP_Foundation",
         Some("https://commons.wikimedia.org/wiki/Category:SCP_Foundation"),
     );
-    check!(
+    test!(
         "google:what's+my+ip",
         Some("https://google.com/search?q=what's+my+ip"),
     );
-    check!(
+    test!(
         "duckduckgo:what's+my+ip",
         Some("https://duckduckgo.com/?q=what's+my+ip"),
     );
-    check!(
+    test!(
         "ddg:what's+my+ip",
         Some("https://duckduckgo.com/?q=what's+my+ip"),
     );
-    check!("dictionary:oak", Some("https://dictionary.com/browse/oak"));
-    check!("thesaurus:oak", Some("https://thesaurus.com/browse/oak"));
-    check!("banana:fruit-salad", None);
-    check!(":empty", None);
-    check!("no-link:", None);
+    test!("dictionary:oak", Some("https://dictionary.com/browse/oak"));
+    test!("thesaurus:oak", Some("https://thesaurus.com/browse/oak"));
+    test!("banana:fruit-salad", None);
+    test!(":empty", None);
+    test!("no-link:", None);
 }

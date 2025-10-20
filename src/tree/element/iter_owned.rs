@@ -63,7 +63,7 @@ impl<'t> Iterator for OwnedElementsIterator<'t> {
 
 #[test]
 fn iter() {
-    macro_rules! check {
+    macro_rules! test {
         ($elements:expr, $expected:expr $(,)?) => {{
             let elements = $elements;
 
@@ -77,21 +77,21 @@ fn iter() {
         }};
     }
 
-    check!(Elements::None, vec![]);
-    check!(Elements::Single(text!("a")), vec![text!("a")]);
-    check!(
+    test!(Elements::None, vec![]);
+    test!(Elements::Single(text!("a")), vec![text!("a")]);
+    test!(
         Elements::Multiple(vec![]), //
         vec![],
     );
-    check!(
+    test!(
         Elements::Multiple(vec![text!("a")]), //
         vec![text!("a")],
     );
-    check!(
+    test!(
         Elements::Multiple(vec![text!("a"), text!("b")]),
         vec![text!("a"), text!("b")],
     );
-    check!(
+    test!(
         Elements::Multiple(vec![text!("a"), text!("b"), text!("c")]),
         vec![text!("a"), text!("b"), text!("c")],
     );

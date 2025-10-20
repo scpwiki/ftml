@@ -113,13 +113,13 @@ impl TryFrom<&'_ str> for FloatAlignment {
 
 #[test]
 fn image_alignment() {
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr) => {
-            check!($input => None)
+            test!($input => None)
         };
 
         ($input:expr, $align:expr, $float:expr) => {
-            check!($input => Some(FloatAlignment {
+            test!($input => Some(FloatAlignment {
                 align: $align,
                 float: $float,
             }))
@@ -136,21 +136,21 @@ fn image_alignment() {
         }};
     }
 
-    check!("");
-    check!("image");
+    test!("");
+    test!("image");
 
-    check!("=image", Alignment::Center, false);
-    check!(">image", Alignment::Right, false);
-    check!("<image", Alignment::Left, false);
-    check!("f>image", Alignment::Right, true);
-    check!("f<image", Alignment::Left, true);
+    test!("=image", Alignment::Center, false);
+    test!(">image", Alignment::Right, false);
+    test!("<image", Alignment::Left, false);
+    test!("f>image", Alignment::Right, true);
+    test!("f<image", Alignment::Left, true);
 
-    check!("=IMAGE", Alignment::Center, false);
-    check!(">IMAGE", Alignment::Right, false);
-    check!("<IMAGE", Alignment::Left, false);
-    check!("f>IMAGE", Alignment::Right, true);
-    check!("f<IMAGE", Alignment::Left, true);
+    test!("=IMAGE", Alignment::Center, false);
+    test!(">IMAGE", Alignment::Right, false);
+    test!("<IMAGE", Alignment::Left, false);
+    test!("f>IMAGE", Alignment::Right, true);
+    test!("f<IMAGE", Alignment::Left, true);
 
-    check!("F>IMAGE", Alignment::Right, true);
-    check!("F<IMAGE", Alignment::Left, true);
+    test!("F>IMAGE", Alignment::Right, true);
+    test!("F<IMAGE", Alignment::Left, true);
 }

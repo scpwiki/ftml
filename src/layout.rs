@@ -77,7 +77,7 @@ pub struct LayoutParseError;
 
 #[test]
 fn test_parse() {
-    macro_rules! check {
+    macro_rules! test_ok {
         ($input:expr, $expected:ident $(,)?) => {{
             let actual: Layout = $input.parse().expect("Invalid layout string");
             let expected = Layout::$expected;
@@ -89,29 +89,29 @@ fn test_parse() {
         }};
     }
 
-    macro_rules! check_err {
+    macro_rules! test_err {
         ($input:expr $(,)?) => {{
             let result: Result<Layout, LayoutParseError> = $input.parse();
             result.expect_err("Unexpected valid layout string");
         }};
     }
 
-    check!("wikidot", Wikidot);
-    check!("Wikidot", Wikidot);
-    check!("WIKIDOT", Wikidot);
+    test_ok!("wikidot", Wikidot);
+    test_ok!("Wikidot", Wikidot);
+    test_ok!("WIKIDOT", Wikidot);
 
-    check!("wikijump", Wikijump);
-    check!("Wikijump", Wikijump);
-    check!("WIKIJUMP", Wikijump);
+    test_ok!("wikijump", Wikijump);
+    test_ok!("Wikijump", Wikijump);
+    test_ok!("WIKIJUMP", Wikijump);
 
-    check_err!("invalid");
-    check_err!("XXX");
-    check_err!("foobar");
+    test_err!("invalid");
+    test_err!("XXX");
+    test_err!("foobar");
 }
 
 #[test]
 fn test_values() {
-    macro_rules! check {
+    macro_rules! test {
         ($variant:ident, $value:expr, $legacy:expr, $description:expr $(,)?) => {{
             let layout = Layout::$variant;
             assert_eq!(layout.value(), $value);
@@ -120,6 +120,6 @@ fn test_values() {
         }};
     }
 
-    check!(Wikidot, "wikidot", true, "Wikidot (legacy)");
-    check!(Wikijump, "wikijump", false, "Wikijump");
+    test!(Wikidot, "wikidot", true, "Wikidot (legacy)");
+    test!(Wikijump, "wikijump", false, "Wikijump");
 }

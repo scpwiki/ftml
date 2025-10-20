@@ -85,7 +85,7 @@ mod test {
 
     #[test]
     fn utf16_indices() {
-        macro_rules! check {
+        macro_rules! test {
             ($text:expr, $spans:expr) => {{
                 let map = Utf16IndexMap::new($text);
                 let spans: &[(usize, usize)] = &$spans;
@@ -123,12 +123,12 @@ mod test {
             }};
         }
 
-        check!("", []);
-        check!("abc", [(0, 1), (1, 2), (2, 3)]);
-        check!("aßc", [(0, 1), (1, 2), (2, 3)]);
-        check!("aℝc", [(0, 1), (1, 2), (2, 3)]);
-        check!("a🦀c", [(0, 1), (1, 3), (3, 4)]);
-        check!("x💣yßz", [(0, 1), (1, 3), (3, 4), (4, 5), (5, 6)]);
+        test!("", []);
+        test!("abc", [(0, 1), (1, 2), (2, 3)]);
+        test!("aßc", [(0, 1), (1, 2), (2, 3)]);
+        test!("aℝc", [(0, 1), (1, 2), (2, 3)]);
+        test!("a🦀c", [(0, 1), (1, 3), (3, 4)]);
+        test!("x💣yßz", [(0, 1), (1, 3), (3, 4), (4, 5), (5, 6)]);
     }
 
     fn check(text: &str) {

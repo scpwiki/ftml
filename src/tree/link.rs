@@ -96,7 +96,7 @@ fn test_link_location() {
         s.map(String::from)
     }
 
-    macro_rules! check {
+    macro_rules! test {
         // LinkLocation::Page
         ($input:expr => $site:expr, $page:expr, $extra:expr $(,)?) => {{
             let expected = LinkLocation::Page(PageRef {
@@ -104,14 +104,14 @@ fn test_link_location() {
                 page: str!($page),
                 extra: convert_opt($extra),
             });
-            check!($input; expected);
+            test!($input; expected);
         }};
 
         // LinkLocation::Url
         ($input:expr => $url:expr $(,)?) => {
             let url = cow!($url);
             let expected = LinkLocation::Url(url);
-            check!($input; expected);
+            test!($input; expected);
         };
 
         // Specified LinkLocation
@@ -125,41 +125,41 @@ fn test_link_location() {
         }};
     }
 
-    check!("" => "");
-    check!("#" => "#");
-    check!("#anchor" => "#anchor");
+    test!("" => "");
+    test!("#" => "#");
+    test!("#anchor" => "#anchor");
 
-    check!("page" => None, "page", None);
-    check!("page/edit" => None, "page", Some("/edit"));
-    check!("page#toc0" => None, "page", Some("#toc0"));
-    check!("page/comments#main" => None, "page", Some("/comments#main"));
+    test!("page" => None, "page", None);
+    test!("page/edit" => None, "page", Some("/edit"));
+    test!("page#toc0" => None, "page", Some("#toc0"));
+    test!("page/comments#main" => None, "page", Some("/comments#main"));
 
-    check!("/page" => "/page");
-    check!("/page/edit" => "/page/edit");
-    check!("/page#toc0" => "/page#toc0");
+    test!("/page" => "/page");
+    test!("/page/edit" => "/page/edit");
+    test!("/page#toc0" => "/page#toc0");
 
-    check!("component:theme" => None, "component:theme", None);
-    check!(":scp-wiki:scp-1000" => Some("scp-wiki"), "scp-1000", None);
-    check!(
+    test!("component:theme" => None, "component:theme", None);
+    test!(":scp-wiki:scp-1000" => Some("scp-wiki"), "scp-1000", None);
+    test!(
         ":scp-wiki:scp-1000#page-options-bottom" =>
             Some("scp-wiki"), "scp-1000", Some("#page-options-bottom"),
     );
-    check!(
+    test!(
         ":scp-wiki:component:theme" =>
             Some("scp-wiki"), "component:theme", None,
     );
-    check!(
+    test!(
         ":scp-wiki:component:theme/edit/true" =>
             Some("scp-wiki"), "component:theme", Some("/edit/true"),
     );
 
-    check!("http://blog.wikidot.com/" => "http://blog.wikidot.com/");
-    check!("https://example.com" => "https://example.com");
-    check!("mailto:test@example.net" => "mailto:test@example.net");
+    test!("http://blog.wikidot.com/" => "http://blog.wikidot.com/");
+    test!("https://example.com" => "https://example.com");
+    test!("mailto:test@example.net" => "mailto:test@example.net");
 
-    check!("::page" => "::page");
-    check!("::component:theme" => "::component:theme");
-    check!("multiple:category:page" => None, "multiple-category:page", None);
+    test!("::page" => "::page");
+    test!("::component:theme" => "::component:theme");
+    test!("multiple:category:page" => None, "multiple-category:page", None);
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]

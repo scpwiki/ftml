@@ -160,7 +160,7 @@ fn quoted_string_escaped() {
     use crate::layout::Layout;
     use crate::settings::{WikitextMode, WikitextSettings};
 
-    macro_rules! check {
+    macro_rules! test {
         ($steps:expr, $wikitext:expr, $expected:expr) => {{
             let page_info = PageInfo::dummy();
             let settings =
@@ -182,12 +182,12 @@ fn quoted_string_escaped() {
         }};
     }
 
-    check!(0, "\"\"", "");
-    check!(0, "\"alpha\"", "alpha");
-    check!(1, "beta\"gamma\"", "gamma");
-    check!(1, "beta\"A B C\"delta", "A B C");
-    check!(2, "gamma \"\" epsilon", "");
-    check!(2, "gamma \"foo\\nbar\\txyz\"", "foo\nbar\txyz");
+    test!(0, "\"\"", "");
+    test!(0, "\"alpha\"", "alpha");
+    test!(1, "beta\"gamma\"", "gamma");
+    test!(1, "beta\"A B C\"delta", "A B C");
+    test!(2, "gamma \"\" epsilon", "");
+    test!(2, "gamma \"foo\\nbar\\txyz\"", "foo\nbar\txyz");
 }
 
 #[test]

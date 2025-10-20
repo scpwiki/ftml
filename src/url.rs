@@ -151,7 +151,7 @@ pub trait BuildSiteUrl {
 
 #[test]
 fn detect_dangerous_schemes() {
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr, $result:expr $(,)?) => {
             assert_eq!(
                 dangerous_scheme($input),
@@ -162,33 +162,33 @@ fn detect_dangerous_schemes() {
         };
     }
 
-    check!("http://example.com/", false);
-    check!("https://example.com/", false);
-    check!("irc://irc.scpwiki.com", false);
-    check!("javascript:alert(1)", true);
-    check!("JAVASCRIPT:alert(1)", true);
-    check!(" javascript:alert(1)", true);
-    check!("java\nscript:alert(1)", true);
-    check!("javascript\t:alert(1)", true);
-    check!("wtf$1:foo", true);
-    check!("JaVaScRiPt:alert(document.cookie)", true);
-    check!("data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==", true);
-    check!("data:text/javascript,alert(1)", true);
-    check!("data:text/html,<script>alert('XSS');</script>", true);
-    check!("DATA:text/html,<script>alert('XSS');</script>", true);
-    check!("/page", false);
-    check!("/page#target", false);
-    check!("/page/edit", false);
-    check!("/page/edit#target", false);
-    check!("/category:page", false);
-    check!("/category:page#target", false);
-    check!("/category:page/edit", false);
-    check!("/category:page/edit#target", false);
+    test!("http://example.com/", false);
+    test!("https://example.com/", false);
+    test!("irc://irc.scpwiki.com", false);
+    test!("javascript:alert(1)", true);
+    test!("JAVASCRIPT:alert(1)", true);
+    test!(" javascript:alert(1)", true);
+    test!("java\nscript:alert(1)", true);
+    test!("javascript\t:alert(1)", true);
+    test!("wtf$1:foo", true);
+    test!("JaVaScRiPt:alert(document.cookie)", true);
+    test!("data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==", true);
+    test!("data:text/javascript,alert(1)", true);
+    test!("data:text/html,<script>alert('XSS');</script>", true);
+    test!("DATA:text/html,<script>alert('XSS');</script>", true);
+    test!("/page", false);
+    test!("/page#target", false);
+    test!("/page/edit", false);
+    test!("/page/edit#target", false);
+    test!("/category:page", false);
+    test!("/category:page#target", false);
+    test!("/category:page/edit", false);
+    test!("/category:page/edit#target", false);
 }
 
 #[test]
 fn test_normalize_href() {
-    macro_rules! check {
+    macro_rules! test {
         ($input:expr => $expected:expr $(,)?) => {{
             let actual = normalize_href($input, None);
             assert_eq!(
@@ -212,39 +212,39 @@ fn test_normalize_href() {
 
         // For when the input is the same as the output
         ($input:expr) => {
-            check!($input => $input)
+            test!($input => $input)
         };
     }
 
     // Basic targets
-    check!("#");
-    check!("#target");
-    check!("#edit-area");
-    check!("javascript:;");
-    check!("http://example.net");
-    check!("https://example.net");
-    check!("irc://irc.scpwiki.com");
-    check!("sftp://ftp.example.com/upload");
+    test!("#");
+    test!("#target");
+    test!("#edit-area");
+    test!("javascript:;");
+    test!("http://example.net");
+    test!("https://example.net");
+    test!("irc://irc.scpwiki.com");
+    test!("sftp://ftp.example.com/upload");
 
     // Dangerous
-    check!("javascript:alert(1)" => "#invalid-url");
-    check!(
+    test!("javascript:alert(1)" => "#invalid-url");
+    test!(
         "data:text/html,<script>alert('XSS')</script>" => "#invalid-url",
     );
 
     // Preserve page links
-    check!("/page");
-    check!("/page", "#target" => "/page#target");
-    check!("/page", "/edit" => "/page/edit");
-    check!("page", "/edit#target" => "/page/edit#target");
-    check!("/category:page");
-    check!("/category:page", "#target" => "/category:page#target");
-    check!("/category:page", "/edit" => "/category:page/edit");
-    check!("/category:page", "/edit#target" => "/category:page/edit#target");
+    test!("/page");
+    test!("/page", "#target" => "/page#target");
+    test!("/page", "/edit" => "/page/edit");
+    test!("page", "/edit#target" => "/page/edit#target");
+    test!("/category:page");
+    test!("/category:page", "#target" => "/category:page#target");
+    test!("/category:page", "/edit" => "/category:page/edit");
+    test!("/category:page", "/edit#target" => "/category:page/edit#target");
 
     // Missing / prefix
-    check!("some-page" => "/some-page");
-    check!("some-page#target" => "/some-page#target");
-    check!("system:some-page" => "/system:some-page");
-    check!("system:some-page#target" => "/system:some-page#target");
+    test!("some-page" => "/some-page");
+    test!("some-page#target" => "/some-page#target");
+    test!("system:some-page" => "/system:some-page");
+    test!("system:some-page#target" => "/system:some-page#target");
 }

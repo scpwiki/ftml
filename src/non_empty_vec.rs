@@ -121,7 +121,7 @@ impl<T> From<NonEmptyVec<T>> for Vec<T> {
 
 #[test]
 fn first() {
-    macro_rules! check {
+    macro_rules! test {
         ($vec:expr, $values:expr $(,)?) => {{
             assert_eq!(
                 $vec.first(),
@@ -137,16 +137,16 @@ fn first() {
     }
 
     let mut vec = NonEmptyVec::new(0);
-    check!(vec, [0]);
+    test!(vec, [0]);
 
     vec.push(1);
-    check!(vec, [0, 1]);
+    test!(vec, [0, 1]);
 
     vec.push(2);
-    check!(vec, [0, 1, 2]);
+    test!(vec, [0, 1, 2]);
 
     assert_eq!(vec.pop(), Some(2));
-    check!(vec, [0, 1]);
+    test!(vec, [0, 1]);
 }
 
 #[test]
