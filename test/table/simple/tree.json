@@ -4,9 +4,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -74,9 +72,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -154,9 +150,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -247,9 +241,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -304,9 +296,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -381,9 +371,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -409,9 +397,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -533,9 +519,7 @@
             "element": "table",
             "data": {
                 "type": "simple",
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
