@@ -208,7 +208,6 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
         }
         Element::LineBreaks(amount) => {
             let amount = amount.get();
-
             for _ in 0..amount {
                 ctx.html().br();
             }
