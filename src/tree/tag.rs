@@ -25,6 +25,10 @@ pub enum HtmlTag {
         tag: &'static str,
         class: &'static str,
     },
+    TagAndStyle {
+        tag: &'static str,
+        style: &'static str,
+    },
     TagAndId {
         tag: &'static str,
         id: String,
@@ -43,6 +47,11 @@ impl HtmlTag {
     }
 
     #[inline]
+    pub fn with_style(tag: &'static str, style: &'static str) -> HtmlTag {
+        HtmlTag::TagAndStyle { tag, style }
+    }
+
+    #[inline]
     pub fn with_id(tag: &'static str, id: String) -> HtmlTag {
         HtmlTag::TagAndId { tag, id }
     }
@@ -52,6 +61,7 @@ impl HtmlTag {
         match self {
             HtmlTag::Tag(tag) => tag,
             HtmlTag::TagAndClass { tag, .. } => tag,
+            HtmlTag::TagAndStyle { tag, .. } => tag,
             HtmlTag::TagAndId { tag, .. } => tag,
         }
     }

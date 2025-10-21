@@ -24,6 +24,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": []
             }
@@ -52,6 +53,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": [
                     {
@@ -85,6 +87,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": [
                     {
@@ -134,6 +137,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": [
                     {
@@ -172,6 +176,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": [
                     {
@@ -251,6 +256,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {
                     "id": "fruit"
                 },
@@ -295,6 +301,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": [
                     {
@@ -388,6 +395,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": [
                     {
@@ -402,6 +410,7 @@
                                     {
                                         "element": "table",
                                         "data": {
+                                            "type": "advanced",
                                             "attributes": {},
                                             "rows": [
                                                 {
@@ -455,6 +464,7 @@
         {
             "element": "table",
             "data": {
+                "type": "advanced",
                 "attributes": {},
                 "rows": [
                     {
@@ -476,6 +486,7 @@
                                     {
                                         "element": "table",
                                         "data": {
+                                            "type": "advanced",
                                             "attributes": {},
                                             "rows": [
                                                 {
@@ -497,6 +508,7 @@
                                                                 {
                                                                     "element": "table",
                                                                     "data": {
+                                                                        "type": "advanced",
                                                                         "attributes": {},
                                                                         "rows": [
                                                                             {
@@ -518,6 +530,7 @@
                                                                                             {
                                                                                                 "element": "table",
                                                                                                 "data": {
+                                                                                                    "type": "advanced",
                                                                                                     "attributes": {},
                                                                                                     "rows": [
                                                                                                         {
@@ -539,6 +552,7 @@
                                                                                                                         {
                                                                                                                             "element": "table",
                                                                                                                             "data": {
+                                                                                                                                "type": "advanced",
                                                                                                                                 "attributes": {},
                                                                                                                                 "rows": [
                                                                                                                                     {

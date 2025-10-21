@@ -40,7 +40,16 @@ impl Alignment {
         }
     }
 
-    pub fn html_class(self) -> &'static str {
+    pub fn wd_html_style(self) -> &'static str {
+        match self {
+            Alignment::Left => "text-align: left;",
+            Alignment::Right => "text-align: right;",
+            Alignment::Center => "text-align: center;",
+            Alignment::Justify => "text-align: justify;",
+        }
+    }
+
+    pub fn wj_html_class(self) -> &'static str {
         match self {
             Alignment::Left => "wj-align-left",
             Alignment::Right => "wj-align-right",
@@ -83,9 +92,19 @@ impl FloatAlignment {
             .and_then(|mtch| FloatAlignment::try_from(mtch.as_str()).ok())
     }
 
-    pub fn html_class(self) -> &'static str {
+    pub fn wd_html(self) -> FloatAlignmentAttribute {
         match (self.align, self.float) {
-            (align, false) => align.html_class(),
+            (align, false) => FloatAlignmentAttribute::Style(align.wd_html_style()),
+            (Alignment::Left, true) => FloatAlignmentAttribute::Class("floatleft"),
+            (Alignment::Center, true) => FloatAlignmentAttribute::Class("floatcenter"),
+            (Alignment::Right, true) => FloatAlignmentAttribute::Class("floatright"),
+            (Alignment::Justify, true) => FloatAlignmentAttribute::Class("floatjustify"),
+        }
+    }
+
+    pub fn wj_html_class(self) -> &'static str {
+        match (self.align, self.float) {
+            (align, false) => align.wj_html_class(),
             (Alignment::Left, true) => "wj-float-left",
             (Alignment::Center, true) => "wj-float-center",
             (Alignment::Right, true) => "wj-float-right",
@@ -109,6 +128,12 @@ impl TryFrom<&'_ str> for FloatAlignment {
 
         Ok(FloatAlignment { align, float })
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum FloatAlignmentAttribute {
+    Class(&'static str),
+    Style(&'static str),
 }
 
 #[test]

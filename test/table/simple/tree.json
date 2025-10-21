@@ -3,9 +3,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -72,9 +71,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -151,9 +149,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -243,9 +240,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -299,9 +295,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -375,9 +370,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -402,9 +396,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},
@@ -525,9 +518,8 @@
         {
             "element": "table",
             "data": {
-                "attributes": {
-                    "class": "wj-table"
-                },
+                "type": "simple",
+                "attributes": {},
                 "rows": [
                     {
                         "attributes": {},

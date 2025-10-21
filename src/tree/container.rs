@@ -22,6 +22,7 @@
 
 use super::clone::elements_to_owned;
 use super::{Alignment, AttributeMap, Element, Heading, HtmlTag};
+use crate::layout::Layout;
 use crate::next_index::{NextIndex, TableOfContentsIndex};
 use strum_macros::IntoStaticStr;
 
@@ -121,7 +122,12 @@ impl ContainerType {
     }
 
     #[inline]
-    pub fn html_tag(self, indexer: &mut dyn NextIndex<TableOfContentsIndex>) -> HtmlTag {
+    pub fn html_tag(
+        self,
+        layout: Layout,
+        indexer: &mut dyn NextIndex<TableOfContentsIndex>,
+    ) -> HtmlTag {
+        // TODO add wikidot compat
         match self {
             ContainerType::Bold => HtmlTag::new("strong"),
             ContainerType::Italics => HtmlTag::new("em"),
@@ -142,9 +148,10 @@ impl ContainerType {
             ContainerType::Ruby => HtmlTag::new("ruby"),
             ContainerType::RubyText => HtmlTag::new("rt"),
             ContainerType::Paragraph => HtmlTag::new("p"),
-            ContainerType::Align(alignment) => {
-                HtmlTag::with_class("div", alignment.html_class())
-            }
+            ContainerType::Align(alignment) => match layout {
+                Layout::Wikidot => HtmlTag::with_style("div", alignment.wd_html_style()),
+                Layout::Wikijump => HtmlTag::with_class("div", alignment.wj_html_class()),
+            },
             ContainerType::Header(heading) => heading.html_tag(indexer),
         }
     }

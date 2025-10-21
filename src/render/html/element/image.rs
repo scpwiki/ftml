@@ -69,7 +69,8 @@ fn render_image_element(
     trace!("Found URL, rendering image (value '{url}')");
 
     let (space, align_class) = match alignment {
-        Some(align) => (" ", align.html_class()),
+        // TODO add wikidot compat
+        Some(align) => (" ", align.wj_html_class()),
         None => ("", ""),
     };
 

@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::{Alignment, Table, TableCell, TableRow};
+use crate::tree::{Alignment, Table, TableCell, TableRow, TableType};
 use std::mem;
 use std::num::NonZeroU32;
 
@@ -183,10 +183,12 @@ fn try_consume_fn<'r, 't>(
     }
 
     // Build table
-    let mut attributes = AttributeMap::new();
-    attributes.insert("class", cow!("wj-table"));
-
-    let table = Table { rows, attributes };
+    let attributes = AttributeMap::new();
+    let table = Table {
+        rows,
+        attributes,
+        table_type: TableType::Simple,
+    };
     ok!(false; Element::Table(table), errors)
 }
 
