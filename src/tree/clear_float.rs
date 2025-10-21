@@ -27,7 +27,16 @@ pub enum ClearFloat {
 }
 
 impl ClearFloat {
-    pub fn html_class(self) -> &'static str {
+    pub fn wd_html_style(self) -> &'static str {
+        match self {
+            ClearFloat::Left => "clear:left; height: 0px; font-size: 1px",
+            ClearFloat::Right => "clear:right; height: 0px; font-size: 1px",
+            // This is the only variant possible in Wikidot itself
+            ClearFloat::Both => "clear:both; height: 0px; font-size: 1px",
+        }
+    }
+
+    pub fn wj_html_class(self) -> &'static str {
         match self {
             ClearFloat::Left => "wj-clear-float-left",
             ClearFloat::Right => "wj-clear-float-right",
