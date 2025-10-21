@@ -3,6 +3,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
@@ -72,6 +73,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
@@ -151,6 +153,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
@@ -243,6 +246,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
@@ -299,6 +303,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
@@ -375,6 +380,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
@@ -402,6 +408,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
@@ -525,6 +532,7 @@
         {
             "element": "table",
             "data": {
+                "type": "simple",
                 "attributes": {
                     "class": "wj-table"
                 },
