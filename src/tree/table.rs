@@ -25,6 +25,8 @@ use std::num::NonZeroU32;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Table<'t> {
+    #[serde(rename = "type")]
+    pub table_type: TableType,
     pub attributes: AttributeMap<'t>,
     pub rows: Vec<TableRow<'t>>,
 }
@@ -32,10 +34,18 @@ pub struct Table<'t> {
 impl Table<'_> {
     pub fn to_owned(&self) -> Table<'static> {
         Table {
+            table_type: self.table_type,
             attributes: self.attributes.to_owned(),
             rows: self.rows.iter().map(|row| row.to_owned()).collect(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum TableType {
+    Simple,
+    Advanced,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

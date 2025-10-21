@@ -21,7 +21,7 @@
 use super::prelude::*;
 use crate::parsing::{ParserWrap, strip_whitespace};
 use crate::tree::{
-    AcceptsPartial, AttributeMap, PartialElement, Table, TableCell, TableRow,
+    AcceptsPartial, AttributeMap, PartialElement, Table, TableCell, TableRow, TableType,
 };
 use std::num::NonZeroU32;
 
@@ -159,8 +159,7 @@ fn parse_table<'r, 't>(
     let rows = extract_table_items!(parser, elements; TableRow, TableContainsNonRow);
 
     // Build and return table element
-    let element = Element::Table(Table { rows, attributes });
-
+    let element = Element::Table(Table { rows, attributes, table_type: TableType::Advanced });
     ok!(false; element, errors)
 }
 

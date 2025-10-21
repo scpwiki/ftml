@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::Table;
+use crate::tree::{Table, TableType};
 use std::num::NonZeroU32;
 
 pub fn render_table(ctx: &mut HtmlContext, table: &Table) {
