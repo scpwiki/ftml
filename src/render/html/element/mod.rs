@@ -220,6 +220,6 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
         Element::HorizontalRule => {
             ctx.html().hr();
         }
-        Element::Partial(_) => panic!("Encountered partial element during parsing"),
+        Element::Partial(_) => panic!("Encountered partial element during rendering"),
     }
 }
