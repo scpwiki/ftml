@@ -33,7 +33,8 @@ pub fn render_table_of_contents(
         None => "",
         Some(align) => {
             // Only valid for float left / right
-            FloatAlignment { align, float: true }.html_class()
+            // TODO add wikidot compat
+            FloatAlignment { align, float: true }.wj_html_class()
         }
     };
 

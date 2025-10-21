@@ -27,49 +27,81 @@ pub fn render_table(ctx: &mut HtmlContext, table: &Table) {
 
     let mut column_span_buf = String::new();
     let value_one = NonZeroU32::new(1).unwrap();
+    let layout = ctx.layout();
+
+    let table_class = match (layout, table.table_type) {
+        (Layout::Wikidot, TableType::Simple) => "wiki-content-table",
+        (Layout::Wikidot, TableType::Advanced) => "",
+        (Layout::Wikijump, TableType::Simple) => "wj-table wj-table-simple",
+        (Layout::Wikijump, TableType::Advanced) => "wj-table wj-table-advanced",
+    };
+
+    let table_attributes = if table_class.is_empty() {
+        attr!(;; &table.attributes)
+    } else {
+        attr!(
+            "class" => table_class;;
+            &table.attributes,
+        )
+    };
 
     // Full table
-    ctx.html()
-        .table()
-        .attr(attr!(;; &table.attributes))
-        .inner(|ctx| {
-            ctx.html().tbody().inner(|ctx| {
-                // Each row
-                for row in &table.rows {
-                    ctx.html()
-                        .tr()
-                        .attr(attr!(;; &row.attributes))
-                        .inner(|ctx| {
-                            // Each cell in a row
-                            for cell in &row.cells {
-                                let elements: &[Element] = &cell.elements;
-                                let align_class = match cell.align {
-                                    Some(align) => align.html_class(),
-                                    None => "",
-                                };
+    ctx.html().table().attr(table_attributes).inner(|ctx| {
+        ctx.html().tbody().inner(|ctx| {
+            // Each row
+            for row in &table.rows {
+                ctx.html()
+                    .tr()
+                    .attr(attr!(;; &row.attributes))
+                    .inner(|ctx| {
+                        // Each cell in a row
+                        for cell in &row.cells {
+                            let elements: &[Element] = &cell.elements;
 
-                                if cell.column_span > value_one {
-                                    column_span_buf.clear();
-                                    str_write!(column_span_buf, "{}", cell.column_span);
-                                }
-
-                                ctx.html()
-                                    .table_cell(cell.header)
-                                    .attr(attr!(
-                                        // Add column span if not default (1)
-                                        "colspan" => &column_span_buf;
-                                            if cell.column_span > value_one,
-
-                                        // Add alignment if specified
-                                        "class" => align_class;
-                                            if cell.align.is_some();;
-
-                                        &cell.attributes,
-                                    ))
-                                    .contents(elements);
+                            if cell.column_span > value_one {
+                                // SAFETY: The NonZeroU32 type has no possible values which
+                                //         can lead to an XSS when converted directly to a
+                                //         string.
+                                //
+                                //         Also, reusable buffer cleared before each use.
+                                column_span_buf.clear();
+                                str_write!(column_span_buf, "{}", cell.column_span);
                             }
-                        });
-                }
-            });
+
+                            let attributes = match (cell.align, layout) {
+                                (Some(align), Layout::Wikidot) => attr!(
+                                    // Add column span if not default (1)
+                                    "colspan" => &column_span_buf;
+                                        if cell.column_span > value_one,
+
+                                    // Add alignment if specified
+                                    "style" => align.wd_html_style();;
+
+                                    // Add remaining attributes
+                                    &cell.attributes,
+                                ),
+
+                                (Some(align), Layout::Wikijump) => attr!(
+                                    "colspan" => &column_span_buf;
+                                        if cell.column_span > value_one,
+                                    "class" => align.wj_html_class();;
+                                    &cell.attributes,
+                                ),
+
+                                (None, _) => attr!(
+                                    "colspan" => &column_span_buf;
+                                        if cell.column_span > value_one;;
+                                    &cell.attributes,
+                                ),
+                            };
+
+                            ctx.html()
+                                .table_cell(cell.header)
+                                .attr(attributes)
+                                .contents(elements);
+                        }
+                    });
+            }
         });
+    });
 }

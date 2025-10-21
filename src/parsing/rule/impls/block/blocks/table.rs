@@ -159,7 +159,11 @@ fn parse_table<'r, 't>(
     let rows = extract_table_items!(parser, elements; TableRow, TableContainsNonRow);
 
     // Build and return table element
-    let element = Element::Table(Table { rows, attributes, table_type: TableType::Advanced });
+    let element = Element::Table(Table {
+        rows,
+        attributes,
+        table_type: TableType::Advanced,
+    });
     ok!(false; element, errors)
 }
 

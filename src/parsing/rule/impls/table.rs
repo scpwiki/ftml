@@ -184,7 +184,11 @@ fn try_consume_fn<'r, 't>(
 
     // Build table
     let attributes = AttributeMap::new();
-    let table = Table { rows, attributes, table_type: TableType::Simple };
+    let table = Table {
+        rows,
+        attributes,
+        table_type: TableType::Simple,
+    };
     ok!(false; Element::Table(table), errors)
 }
 

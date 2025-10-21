@@ -39,7 +39,8 @@ pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
 
 pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
     // Get HTML tag type for this type of container
-    let tag_spec = container.ctype().html_tag(ctx);
+    let layout = ctx.layout();
+    let tag_spec = container.ctype().html_tag(layout, ctx);
 
     // Get correct ID, based on the render setting
     let random_id = choose_id(ctx, &tag_spec);
@@ -52,6 +53,10 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         HtmlTag::Tag(_) => tag.attr(attr!(;; container.attributes())),
         HtmlTag::TagAndClass { class, .. } => tag.attr(attr!(
             "class" => class;;
+            container.attributes(),
+        )),
+        HtmlTag::TagAndStyle { style, .. } => tag.attr(attr!(
+            "style" => style;;
             container.attributes(),
         )),
         HtmlTag::TagAndId { id, .. } => tag.attr(attr!(
