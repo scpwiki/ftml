@@ -23,6 +23,69 @@ use super::prelude::*;
 pub fn render_user(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
     debug!("Rendering user block (name '{name}', show-avatar {show_avatar})");
 
+    match ctx.layout() {
+        Layout::Wikidot => render_user_wikidot(ctx, name, show_avatar),
+        Layout::Wikijump => render_user_wikijump(ctx, name, show_avatar),
+    }
+}
+
+fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
+    match ctx.handle().get_user_info(name) {
+        Some(user_info) => {
+            let printuser_class = if show_avatar {
+                "printuser avatarhover"
+            } else {
+                "printuser"
+            };
+
+            ctx.html()
+                .span()
+                .attr(attr!("class" => printuser_class))
+                .inner(|ctx| {
+                    if show_avatar {
+                        // Image is wrapped in its own <a>
+                        ctx.html()
+                            .a()
+                            .attr(attr!(
+                                "href" => /* */ "http://www.wikidot.com/user:info/{user_slug}",
+                                "onclick" => /* */ "WIKIDOT.page.listeners.userInfo({user_id}); return false;",
+                            ))
+                            .inner(|ctx| {
+                                ctx.html()
+                                    .img()
+                                    .attr(attr!(
+                                        "class" => "small",
+                                        "src" => /* */ "http://www.wikidot.com/avatar.php?userid={user_id}&amp;amp;size=small&amp;amp;timestamp={timestamp}",
+                                        "alt" => name,
+                                        "style" => /* */ "background-image:url(http://www.wikidot.com/userkarma.php?u={user_id}",
+                                    ));
+                            });
+                    }
+
+                    // Now, the username (text) with its <a>
+                    ctx.html()
+                        .a()
+                        .attr(attr!(
+                            "href" => /* */ "http://www.wikidot.com/user:info/{user_slug}",
+                            "onclick" => /* */ "WIKIDOT.page.listeners.userInfo({user_id}); return false;",
+                        ))
+                        .contents(name);
+                });
+        }
+        None => {
+            ctx.html()
+                .span()
+                .attr(attr!("class" => "error-inline"))
+                .inner(|ctx| {
+                    // TODO localization
+                    ctx.html().em().contents(name);
+                    ctx.push_escaped(" does not match any existing user name");
+                });
+        }
+    }
+}
+
+fn render_user_wikijump(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
     ctx.html()
         .span()
         .attr(attr!("class" => "wj-user-info"))

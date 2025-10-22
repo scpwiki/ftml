@@ -111,6 +111,7 @@ where
     tag_method!(div);
     tag_method!(dl);
     tag_method!(dt);
+    tag_method!(em);
     tag_method!(hr);
     tag_method!(iframe);
     tag_method!(img);
