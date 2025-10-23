@@ -30,12 +30,9 @@ pub fn render_image(
     attributes: &AttributeMap,
 ) {
     debug!(
-        "Rendering image element (source '{}', link {}, alignment {}, float {})",
+        "Rendering image element (source '{}', link {:?}, alignment {}, float {})",
         source.name(),
-        match link {
-            Some(link) => format!("{link:?}"),
-            None => str!("<none>"),
-        },
+        link,
         match alignment {
             Some(image) => image.align.name(),
             None => "<default>",
