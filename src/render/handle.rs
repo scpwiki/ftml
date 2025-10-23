@@ -133,22 +133,22 @@ impl Handle {
         // TODO replace these with inline data image URIs
         match karma {
             KarmaLevel::Zero => {
-                "background-image: url(http://www.wikidot.com/userkarma.php?u=8976177"
+                "background-image: url(https://www.wikidot.com/userkarma.php?u=8976177)"
             }
             KarmaLevel::One => {
-                "background-image: url(http://www.wikidot.com/userkarma.php?u=172570"
+                "background-image: url(https://www.wikidot.com/userkarma.php?u=172570)"
             }
             KarmaLevel::Two => {
-                "background-image: url(http://www.wikidot.com/userkarma.php?u=172952"
+                "background-image: url(https://www.wikidot.com/userkarma.php?u=172952)"
             }
             KarmaLevel::Three => {
-                "background-image: url(http://www.wikidot.com/userkarma.php?u=172904"
+                "background-image: url(https://www.wikidot.com/userkarma.php?u=172904)"
             }
             KarmaLevel::Four => {
-                "background-image: url(http://www.wikidot.com/userkarma.php?u=6040770"
+                "background-image: url(https://www.wikidot.com/userkarma.php?u=6040770)"
             }
             KarmaLevel::Five => {
-                "background-image: url(http://www.wikidot.com/userkarma.php?u=4598089"
+                "background-image: url(https://www.wikidot.com/userkarma.php?u=4598089)"
             }
         }
     }
