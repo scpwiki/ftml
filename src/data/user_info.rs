@@ -28,7 +28,7 @@ pub struct UserInfo<'a> {
     /// The user ID.
     ///
     /// This uniquely identifies a user even if they later change their name.
-    pub user_id: u64,
+    pub user_id: i64,
 
     /// The user's display name.
     pub user_name: Cow<'a, str>,
