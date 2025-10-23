@@ -61,12 +61,60 @@ pub fn render_image(
 
 fn render_image_element(
     ctx: &mut HtmlContext,
-    url: &str,
+    image_url: &str,
     link: &Option<LinkLocation>,
     alignment: Option<FloatAlignment>,
     attributes: &AttributeMap,
 ) {
-    trace!("Found URL, rendering image (value '{url}')");
+    trace!("Found URL, rendering image (value '{image_url}')");
+
+    // Wikidot
+    //
+    // The structure is thus:
+    // 1. If alignment, wrap in <div>. Otherwise nothing.
+    // 2. If link, wrap in <a>. Otherwise nothing.
+    // 3. The image itself, <img>.
+    //
+    // We define the closures in reverse order so
+    // we can properly (conditionally) nest them.
+
+    let render_image = |ctx: &mut HtmlContext| {
+        ctx.html().img().attr(attr!(
+            "src" => image_url,
+            "class" => "image",
+            "crossorigin";;
+            attributes,
+        ));
+    };
+
+    let render_link = |ctx: &mut HtmlContext, link: &LinkLocation| {
+        let url = normalize_link(link, ctx.handle());
+        ctx.html()
+            .a()
+            .attr(attr!("href" => &url))
+            .inner(render_image);
+    };
+
+    let build_link = |ctx: &mut HtmlContext| match link {
+        Some(link) => render_link(ctx, link),
+        None => render_image(ctx),
+    };
+
+    let render_alignment = |ctx: &mut HtmlContext, align: FloatAlignment| {
+        ctx.html()
+            .div()
+            .attr(attr!("class" => "image-container " align.wd_html_class()))
+            .inner(build_link);
+    };
+
+    let build_alignment = |ctx: &mut HtmlContext| match alignment {
+        Some(align) => render_alignment(ctx, align),
+        None => build_link(ctx),
+    };
+
+    build_alignment(ctx);
+
+    // XXX
 
     let (space, align_class) = match alignment {
         // TODO add wikidot compat
@@ -83,7 +131,7 @@ fn render_image_element(
             let build_image = |ctx: &mut HtmlContext| {
                 ctx.html().img().attr(attr!(
                     "class" => "wj-image",
-                    "src" => url,
+                    "src" => image_url,
                     "crossorigin";;
                     attributes
                 ));
