@@ -30,7 +30,9 @@ pub fn render_user(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
 }
 
 fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
-    match ctx.handle().get_user_info(name) {
+    let handle = ctx.handle();
+
+    match handle.get_user_info(name) {
         Some(user_info) => {
             let printuser_class = if show_avatar {
                 "printuser avatarhover"
@@ -73,14 +75,25 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                 });
         }
         None => {
+            let (message_pre, message_post) = {
+                let page_info = ctx.info();
+                let language = &page_info.language;
+                let message_pre = handle.get_message(language, "user-missing-pre");
+                let message_post = handle.get_message(language, "user-missing-post");
+                (message_pre, message_post)
+            };
+
+            ctx.push_escaped(message_pre);
+
             ctx.html()
                 .span()
                 .attr(attr!("class" => "error-inline"))
                 .inner(|ctx| {
                     // TODO localization
                     ctx.html().em().contents(name);
-                    ctx.push_escaped(" does not match any existing user name");
                 });
+
+            ctx.push_escaped(message_post);
         }
     }
 }

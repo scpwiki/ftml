@@ -146,6 +146,8 @@ impl Handle {
             "bibliography-block-title" => "Bibliography",
             "bibliography-cite-not-found" => "Bibliography item not found",
             "image-context-bad" => "No images in this context",
+            "user-missing-pre" => "",
+            "user-missing-post" => " does not match any existing user name",
             _ => {
                 error!("Unknown message requested (key {message})");
                 "?"
