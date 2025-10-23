@@ -92,13 +92,25 @@ impl FloatAlignment {
             .and_then(|mtch| FloatAlignment::try_from(mtch.as_str()).ok())
     }
 
-    pub fn wd_html(self) -> FloatAlignmentAttribute {
+    pub fn wd_html_class(self) -> &'static str {
         match (self.align, self.float) {
-            (align, false) => FloatAlignmentAttribute::Style(align.wd_html_style()),
-            (Alignment::Left, true) => FloatAlignmentAttribute::Class("floatleft"),
-            (Alignment::Center, true) => FloatAlignmentAttribute::Class("floatcenter"),
-            (Alignment::Right, true) => FloatAlignmentAttribute::Class("floatright"),
-            (Alignment::Justify, true) => FloatAlignmentAttribute::Class("floatjustify"),
+            (Alignment::Left, false) => "alignleft",
+            (Alignment::Right, false) => "alignright",
+            (Alignment::Center, false) => "aligncenter",
+            (Alignment::Left, true) => "floatleft",
+            (Alignment::Right, true) => "floatright",
+            (Alignment::Center, true) => "floatcenter",
+            (Alignment::Justify, _) => {
+                // When this case is reached, it means that some element
+                // permits justify alignment even though there should not
+                // be any argument settings which enable this.
+                //
+                // For instance, see FloatAlignment::try_from(&str).
+                //
+                // There is no CSS class in Wikidot for this alignment, so
+                // with both of these factors combined, we should panic.
+                panic!("Attempted to return HTML class for Wikidot justify alignment");
+            }
         }
     }
 
@@ -128,12 +140,6 @@ impl TryFrom<&'_ str> for FloatAlignment {
 
         Ok(FloatAlignment { align, float })
     }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum FloatAlignmentAttribute {
-    Class(&'static str),
-    Style(&'static str),
 }
 
 #[test]
