@@ -40,6 +40,11 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                 "printuser"
             };
 
+            let wikidot_onclick = format!(
+                "WIKIDOT.page.listeners.userInfo({}); return false;",
+                user_info.user_id,
+            );
+
             ctx.html()
                 .span()
                 .attr(attr!("class" => printuser_class))
@@ -49,17 +54,17 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                         ctx.html()
                             .a()
                             .attr(attr!(
-                                "href" => /* */ "http://www.wikidot.com/user:info/{user_slug}",
-                                "onclick" => /* */ "WIKIDOT.page.listeners.userInfo({user_id}); return false;",
+                                "href" => &user_info.user_profile_url,
+                                "onclick" => &wikidot_onclick,
                             ))
                             .inner(|ctx| {
                                 ctx.html()
                                     .img()
                                     .attr(attr!(
                                         "class" => "small",
-                                        "src" => /* */ "http://www.wikidot.com/avatar.php?userid={user_id}&amp;amp;size=small&amp;amp;timestamp={timestamp}",
+                                        "src" => &user_info.user_avatar_data,
                                         "alt" => name,
-                                        "style" => /* */ "background-image:url(http://www.wikidot.com/userkarma.php?u={user_id}",
+                                        "style" => handle.get_karma_style(user_info.user_karma),
                                     ));
                             });
                     }
@@ -68,8 +73,8 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                     ctx.html()
                         .a()
                         .attr(attr!(
-                            "href" => /* */ "http://www.wikidot.com/user:info/{user_slug}",
-                            "onclick" => /* */ "WIKIDOT.page.listeners.userInfo({user_id}); return false;",
+                            "href" => &user_info.user_profile_url,
+                            "onclick" => &wikidot_onclick,
                         ))
                         .contents(name);
                 });

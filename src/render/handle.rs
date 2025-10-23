@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::data::{PageInfo, UserInfo};
+use crate::data::{KarmaLevel, PageInfo, UserInfo};
 use crate::settings::WikitextSettings;
 use crate::tree::{ImageSource, LinkLabel, LinkLocation, Module};
 use crate::url::BuildSiteUrl;
@@ -127,6 +127,30 @@ impl Handle {
         };
 
         f(label_text);
+    }
+
+    pub fn get_karma_style(&self, karma: KarmaLevel) -> &'static str {
+        // TODO replace these with inline data image URIs
+        match karma {
+            KarmaLevel::Zero => {
+                "background-image: url(http://www.wikidot.com/userkarma.php?u=8976177"
+            }
+            KarmaLevel::One => {
+                "background-image: url(http://www.wikidot.com/userkarma.php?u=172570"
+            }
+            KarmaLevel::Two => {
+                "background-image: url(http://www.wikidot.com/userkarma.php?u=172952"
+            }
+            KarmaLevel::Three => {
+                "background-image: url(http://www.wikidot.com/userkarma.php?u=172904"
+            }
+            KarmaLevel::Four => {
+                "background-image: url(http://www.wikidot.com/userkarma.php?u=6040770"
+            }
+            KarmaLevel::Five => {
+                "background-image: url(http://www.wikidot.com/userkarma.php?u=4598089"
+            }
+        }
     }
 
     pub fn get_message(&self, language: &str, message: &str) -> &'static str {

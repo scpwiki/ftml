@@ -30,6 +30,9 @@ pub struct UserInfo<'a> {
     /// This uniquely identifies a user even if they later change their name.
     pub user_id: i64,
 
+    /// The user slug.
+    pub user_slug: Cow<'a, str>,
+
     /// The user's display name.
     pub user_name: Cow<'a, str>,
 
@@ -56,7 +59,8 @@ impl UserInfo<'_> {
 
         UserInfo {
             user_id: 0,
-            user_name: cow!("michal-frackowiak"),
+            user_slug: cow!("michal-frackowiak"),
+            user_name: cow!("Michal Frackowiak"),
             user_karma: KarmaLevel::new(5).unwrap(),
             user_avatar_data: cow!(AVATAR_BASE64_DATA),
             user_profile_url: cow!("/user:info/michal-frackowiak"),
