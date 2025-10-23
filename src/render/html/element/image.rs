@@ -30,12 +30,9 @@ pub fn render_image(
     attributes: &AttributeMap,
 ) {
     debug!(
-        "Rendering image element (source '{}', link {}, alignment {}, float {})",
+        "Rendering image element (source '{}', link {:?}, alignment {}, float {})",
         source.name(),
-        match link {
-            Some(link) => format!("{link:?}"),
-            None => str!("<none>"),
-        },
+        link,
         match alignment {
             Some(image) => image.align.name(),
             None => "<default>",
@@ -61,15 +58,78 @@ pub fn render_image(
 
 fn render_image_element(
     ctx: &mut HtmlContext,
-    url: &str,
+    image_url: &str,
     link: &Option<LinkLocation>,
     alignment: Option<FloatAlignment>,
     attributes: &AttributeMap,
 ) {
-    trace!("Found URL, rendering image (value '{url}')");
+    trace!("Found URL, rendering image (value '{image_url}')");
 
+    match ctx.layout() {
+        Layout::Wikidot => {
+            render_image_element_wikidot(ctx, image_url, link, alignment, attributes);
+        }
+        Layout::Wikijump => {
+            render_image_element_wikijump(ctx, image_url, link, alignment, attributes);
+        }
+    }
+}
+
+/// Render an image block with a Wikidot-compatible DOM.
+///
+/// The structure is thus:
+/// 1. If alignment, wrap in `<div>`. Otherwise nothing.
+/// 2. If link, wrap in `<a>`. Otherwise nothing.
+/// 3. The image itself, `<img>`.
+///
+/// We define the closures in reverse order so
+/// we can properly (conditionally) nest them.
+fn render_image_element_wikidot(
+    ctx: &mut HtmlContext,
+    image_url: &str,
+    link: &Option<LinkLocation>,
+    alignment: Option<FloatAlignment>,
+    attributes: &AttributeMap,
+) {
+    let build_image = |ctx: &mut HtmlContext| {
+        ctx.html().img().attr(attr!(
+            "src" => image_url,
+            "class" => "image",
+            "crossorigin";;
+            attributes,
+        ));
+    };
+
+    let build_link = |ctx: &mut HtmlContext| match link {
+        None => build_image(ctx),
+        Some(link) => {
+            let url = normalize_link(link, ctx.handle());
+            ctx.html()
+                .a()
+                .attr(attr!("href" => &url))
+                .inner(build_image);
+        }
+    };
+
+    match alignment {
+        None => build_link(ctx),
+        Some(align) => {
+            ctx.html()
+                .div()
+                .attr(attr!("class" => "image-container " align.wd_html_class()))
+                .inner(build_link);
+        }
+    }
+}
+
+fn render_image_element_wikijump(
+    ctx: &mut HtmlContext,
+    image_url: &str,
+    link: &Option<LinkLocation>,
+    alignment: Option<FloatAlignment>,
+    attributes: &AttributeMap,
+) {
     let (space, align_class) = match alignment {
-        // TODO add wikidot compat
         Some(align) => (" ", align.wj_html_class()),
         None => ("", ""),
     };
@@ -83,7 +143,7 @@ fn render_image_element(
             let build_image = |ctx: &mut HtmlContext| {
                 ctx.html().img().attr(attr!(
                     "class" => "wj-image",
-                    "src" => url,
+                    "src" => image_url,
                     "crossorigin";;
                     attributes
                 ));
