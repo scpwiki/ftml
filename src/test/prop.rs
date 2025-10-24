@@ -176,12 +176,7 @@ fn arb_image() -> impl Strategy<Value = Element<'static>> {
             .prop_map(|(site, page, file)| ImageSource::File3 { site, page, file }),
     ];
 
-    let alignment = select!([
-        Alignment::Left,
-        Alignment::Right,
-        Alignment::Center,
-    ]);
-
+    let alignment = select!([Alignment::Left, Alignment::Right, Alignment::Center]);
     let image_alignment = option::of(
         (alignment, any::<bool>())
             .prop_map(|(align, float)| FloatAlignment { align, float }),
