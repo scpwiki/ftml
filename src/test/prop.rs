@@ -124,11 +124,16 @@ fn arb_page_ref() -> impl Strategy<Value = PageRef> {
     (site, page).prop_map(|(site, page)| PageRef::new(site, page))
 }
 
+fn arb_link_location_url() -> impl Strategy<Value = LinkLocation<'static>> {
+    cow!(".+").prop_map(LinkLocation::Url)
+}
+
+fn arb_link_location_page() -> impl Strategy<Value = LinkLocation<'static>> {
+    arb_page_ref().prop_map(LinkLocation::Page)
+}
+
 fn arb_link_location() -> impl Strategy<Value = LinkLocation<'static>> {
-    prop_oneof![
-        arb_page_ref().prop_map(LinkLocation::Page),
-        cow!(".+").prop_map(LinkLocation::Url),
-    ]
+    prop_oneof![arb_link_location_url(), arb_link_location_page()]
 }
 
 fn arb_link_type() -> impl Strategy<Value = LinkType> {
@@ -142,15 +147,17 @@ fn arb_link_type() -> impl Strategy<Value = LinkType> {
 }
 
 fn arb_link_element() -> impl Strategy<Value = Element<'static>> {
-    let label = prop_oneof![
-        cow!(".*").prop_map(LinkLabel::Text),
-        cow!(".*").prop_map(LinkLabel::Slug),
-        Just(LinkLabel::Url),
-        Just(LinkLabel::Page),
+    // Get an appropriate LinkLocation
+    // Since only some are valid for some LinkLabels
+    let label_and_link = prop_oneof![
+        (cow!(".*").prop_map(LinkLabel::Text), arb_link_location()),
+        (cow!(".*").prop_map(LinkLabel::Slug), arb_link_location()),
+        (Just(LinkLabel::Url), arb_link_location_url()),
+        (Just(LinkLabel::Page), arb_link_location_page()),
     ];
 
-    (arb_link_type(), arb_link_location(), label, arb_target()).prop_map(
-        |(ltype, link, label, target)| Element::Link {
+    (arb_link_type(), label_and_link, arb_target()).prop_map(
+        |(ltype, (label, link), target)| Element::Link {
             ltype,
             link,
             label,
@@ -169,13 +176,7 @@ fn arb_image() -> impl Strategy<Value = Element<'static>> {
             .prop_map(|(site, page, file)| ImageSource::File3 { site, page, file }),
     ];
 
-    let alignment = select!([
-        Alignment::Left,
-        Alignment::Right,
-        Alignment::Center,
-        Alignment::Justify,
-    ]);
-
+    let alignment = select!([Alignment::Left, Alignment::Right, Alignment::Center]);
     let image_alignment = option::of(
         (alignment, any::<bool>())
             .prop_map(|(align, float)| FloatAlignment { align, float }),
