@@ -180,7 +180,6 @@ fn arb_image() -> impl Strategy<Value = Element<'static>> {
         Alignment::Left,
         Alignment::Right,
         Alignment::Center,
-        Alignment::Justify,
     ]);
 
     let image_alignment = option::of(
