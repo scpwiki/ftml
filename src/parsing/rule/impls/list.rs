@@ -114,8 +114,8 @@ fn try_consume_fn<'r, 't>(
             RULE_LIST,
             &[
                 ParseCondition::current(Token::LineBreak),
-                ParseCondition::current(Token::InputEnd),
                 ParseCondition::current(Token::ParagraphBreak),
+                ParseCondition::current(Token::InputEnd),
             ],
             &[],
             None,
