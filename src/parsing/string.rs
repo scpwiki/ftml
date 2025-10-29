@@ -25,6 +25,8 @@
 //! where we need to interpret escapes like `\"`, `\n`, etc.
 
 use crate::parsing::check_step::check_step;
+use crate::parsing::collect::collect_text;
+use crate::parsing::condition::ParseCondition;
 use crate::parsing::{ParseError, ParseErrorKind, Parser, Token};
 use std::borrow::Cow;
 
@@ -51,31 +53,21 @@ where
             ParseErrorKind::BlockMalformedArguments,
         )?;
 
-        let start = self.current();
-        let mut end = start;
-
-        loop {
-            match end.token {
-                // NOTE: We have tokens for '\"' and '\\', we know that
-                //       just processing tokens until '"' will get a
-                //       valid string.
-                Token::DoubleQuote => {
-                    trace!("Hit end of quoted string, stepping after then returning");
-                    self.step()?;
-                    let slice_with_quote = self.full_text().slice(start, end);
-                    let slice = slice_with_quote
-                        .strip_suffix('"')
-                        .expect("Gathered string does not end with a double quote");
-                    return Ok(slice);
-                }
-                // Failure cases
-                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
-                    warn!("Hit end of line or input when trying to get a quoted string");
-                    return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
-                }
-                _ => end = self.step()?,
-            }
-        }
+        collect_text(
+            self,
+            todo!(),
+            // NOTE: We have tokens for '\"' and '\\', we know that
+            //       just processing tokens until '"' will get a
+            //       valid string.
+            &[ParseCondition::current(Token::DoubleQuote)],
+            // Failure cases
+            &[
+                ParseCondition::current(Token::LineBreak),
+                ParseCondition::current(Token::ParagraphBreak),
+                ParseCondition::current(Token::InputEnd),
+            ],
+            Some(ParseErrorKind::BlockMalformedArguments),
+        )
     }
 }
 
