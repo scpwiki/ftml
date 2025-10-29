@@ -18,8 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::BlockRule;
 use super::arguments::Arguments;
+use super::{BlockRule, RULE_BLOCK};
 use crate::parsing::collect::{collect_text, collect_text_keep};
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -336,7 +336,7 @@ where
 
                 // Get the argument value
                 self.get_optional_space()?;
-                let value = self.get_quoted_string()?;
+                let value = self.get_quoted_string(RULE_BLOCK)?;
 
                 // Add to argument map
                 map.insert(key, value);

@@ -27,6 +27,7 @@
 use crate::parsing::check_step::check_step;
 use crate::parsing::collect::collect_text;
 use crate::parsing::condition::ParseCondition;
+use crate::parsing::rule::Rule;
 use crate::parsing::{ParseError, ParseErrorKind, Parser, Token};
 use std::borrow::Cow;
 
@@ -38,15 +39,18 @@ where
     ///
     /// This also performs the string parsing, so you get the value
     /// as intended, i.e. `"foo\nbar"` has a newline in the middle.
-    pub fn get_quoted_string(&mut self) -> Result<Cow<'t, str>, ParseError> {
-        let escaped = self.get_quoted_string_escaped()?;
+    pub fn get_quoted_string(&mut self, rule: Rule) -> Result<Cow<'t, str>, ParseError> {
+        let escaped = self.get_quoted_string_escaped(rule)?;
         let value = parse_string(escaped);
         Ok(value)
     }
 
     /// Gets the contents of a double-quoted string, with escape codes.
     /// Does not include the outer quotes.
-    pub fn get_quoted_string_escaped(&mut self) -> Result<&'t str, ParseError> {
+    pub fn get_quoted_string_escaped(
+        &mut self,
+        rule: Rule,
+    ) -> Result<&'t str, ParseError> {
         check_step(
             self,
             Token::DoubleQuote,
@@ -55,7 +59,7 @@ where
 
         collect_text(
             self,
-            todo!(),
+            rule,
             // NOTE: We have tokens for '\"' and '\\', we know that
             //       just processing tokens until '"' will get a
             //       valid string.
@@ -150,6 +154,7 @@ fn escape_char(ch: char) -> Option<char> {
 fn quoted_string_escaped() {
     use crate::data::PageInfo;
     use crate::layout::Layout;
+    use crate::parsing::rule::impls::RULE_LIST;
     use crate::settings::{WikitextMode, WikitextSettings};
 
     macro_rules! test {
@@ -163,8 +168,9 @@ fn quoted_string_escaped() {
             // Has plus one to account for the Token::InputStart
             parser.step_n($steps + 1).expect("Unable to step");
 
+            // Arbitrary rule for testing
             let actual = parser
-                .get_quoted_string()
+                .get_quoted_string(RULE_LIST)
                 .expect("Unable to get string value");
 
             assert_eq!(
