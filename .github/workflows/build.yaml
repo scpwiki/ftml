@@ -85,15 +85,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: -A unused -D warnings
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
 
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-
-      - name: Rust Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
 
       - name: Cargo Cache
         uses: actions/cache@v4
@@ -104,15 +102,9 @@ jobs:
             target
           key: ${{ runner.os }}-coverage-${{ hashFiles('**/Cargo.toml') }}
 
-      - name: Install Tarpaulin
-        uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-tarpaulin
-          version: latest
-          use-tool-cache: true
-
       - name: Generate Coverage
-        run: cargo tarpaulin
+        run: |
+          cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
 
       - name: Export Coverage
         uses: codecov/codecov-action@v5
