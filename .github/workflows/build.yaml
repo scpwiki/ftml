@@ -132,8 +132,14 @@ jobs:
             target
           key: ${{ runner.os }}-lint-${{ hashFiles('**/Cargo.toml') }}
 
+      # Unused dependencies
+      - name: Machete
+        uses: bnjbvr/cargo-machete@main
+
+      # Formatting
       - name: Rustfmt
         run: cargo fmt --all -- --check
 
+      # Linter
       - name: Clippy
         run: cargo clippy --tests --no-deps
