@@ -44,7 +44,6 @@ str-macro = "1"
 strum = "0.27"
 strum_macros = "0.27"
 time = { version = "0.3", features = ["formatting", "macros", "parsing", "serde", "serde-human-readable"], default-features = false }
-tinyvec = "1"
 unicase = "2"
 wikidot-normalize = "0.12"
 
