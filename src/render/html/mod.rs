@@ -111,3 +111,52 @@ fn render_contents(ctx: &mut HtmlContext, tree: &SyntaxTree) {
         );
     }
 }
+
+/// Tests that the IDs are present when use_true_ids = true and absent otherwise.
+#[test]
+fn html_id_wrap() {
+    use crate::settings::{EMPTY_INTERWIKI, WikitextMode};
+
+    let page_info = PageInfo::dummy();
+    let tokens = crate::tokenize("CONTENT HERE");
+
+    macro_rules! settings {
+        ($layout:ident, $use_true_ids:expr) => {
+            WikitextSettings {
+                mode: WikitextMode::Page,
+                layout: Layout::$layout,
+                enable_page_syntax: true,
+                use_true_ids: $use_true_ids,
+                isolate_user_ids: false,
+                minify_css: false,
+                allow_local_paths: true,
+                interwiki: EMPTY_INTERWIKI.clone(),
+            }
+        };
+    }
+
+    macro_rules! test {
+        ($layout:ident, $use_true_ids:expr, $starts_with:expr $(,)?) => {{
+            let settings = settings!($layout, $use_true_ids);
+            let (tree, errors) = crate::parse(&tokens, &page_info, &settings).into();
+            assert!(errors.is_empty(), "Found unexpected parse error in test");
+
+            let HtmlOutput { body, .. } = HtmlRender.render(&tree, &page_info, &settings);
+            assert!(
+                body.starts_with($starts_with),
+                "Generated HTML doesn't begin as expected\ncontent: {}\ntested start: {}",
+                body,
+                $starts_with,
+            );
+        }};
+    }
+
+    test!(Wikidot, true, r#"<div id="main-content">"#);
+    test!(Wikidot, false, r#"<div>"#);
+    test!(
+        Wikijump,
+        true,
+        r#"<article id="main-content" class="wj-body">"#,
+    );
+    test!(Wikijump, false, r#"<article class="wj-body">"#);
+}
