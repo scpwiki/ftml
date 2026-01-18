@@ -238,7 +238,7 @@ Value &mdash; (String) The HTML entity to place here.
 Example:
 
 ```
-This file is [[char copy]] 2019-2025 Team Wikijump.
+This file is [[char copy]] 20XX ACME Corporation.
 ```
 
 ### Checkbox
