@@ -108,6 +108,16 @@ impl WikitextSettings {
                 allow_local_paths: true,
                 interwiki,
             },
+            WikitextMode::PageNav => WikitextSettings {
+                mode,
+                layout,
+                enable_page_syntax: true,
+                use_true_ids: false,
+                isolate_user_ids: false,
+                minify_css: DEFAULT_MINIFY_CSS,
+                allow_local_paths: true,
+                interwiki,
+            },
             WikitextMode::Draft => WikitextSettings {
                 mode,
                 layout,
@@ -162,6 +172,9 @@ impl WikitextSettings {
 pub enum WikitextMode {
     /// Processing for the contents of a page on a site.
     Page,
+
+    /// Processing for the navigation panels for a page on a site.
+    PageNav,
 
     /// Processing for a draft of a page.
     Draft,
