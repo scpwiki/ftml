@@ -78,14 +78,14 @@ impl Render for HtmlRender {
             Layout::Wikidot => {
                 ctx.html()
                     .div()
-                    .attr(attr!("id" => "main-content"))
+                    .attr(attr!("id" => "main-content"; if settings.use_true_ids))
                     .inner(|ctx| render_contents(ctx, tree));
             }
             Layout::Wikijump => {
                 ctx.html()
                     .article()
                     .attr(attr!(
-                        "id" => "main-content",
+                        "id" => "main-content"; if settings.use_true_ids,
                         "class" => "wj-body",
                     ))
                     .inner(|ctx| render_contents(ctx, tree));
