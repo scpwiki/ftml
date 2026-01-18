@@ -188,3 +188,10 @@ pub enum WikitextMode {
     /// Processing for modules or other contexts such as `ListPages`.
     List,
 }
+
+impl WikitextMode {
+    /// Whether this mode describes navigational content or not.
+    pub fn is_nav_content(self) -> bool {
+        matches!(self, WikitextMode::PageNav)
+    }
+}

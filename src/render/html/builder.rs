@@ -117,6 +117,7 @@ where
     tag_method!(img);
     tag_method!(input);
     tag_method!(li);
+    tag_method!(nav);
     tag_method!(ol);
     tag_method!(pre);
     tag_method!(rp);

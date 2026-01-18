@@ -81,6 +81,21 @@ impl Render for HtmlRender {
                     .attr(attr!("id" => "main-content"; if settings.use_true_ids))
                     .inner(|ctx| render_contents(ctx, tree));
             }
+            Layout::Wikijump if settings.mode.is_nav_content() => {
+                ctx.html()
+                    .nav()
+                    .attr(attr!(
+                        "id" => "main-content"; if settings.use_true_ids,
+                        "class" => "wj-body",
+                    ))
+                    .inner(|ctx| render_contents(ctx, tree));
+            }
+            Layout::Wikijump if settings.mode.is_nav_content() => {
+                ctx.html()
+                    .nav()
+                    .attr(attr!("class" => "wj-navigation"))
+                    .inner(|ctx| render_contents(ctx, tree));
+            }
             Layout::Wikijump => {
                 ctx.html()
                     .article()
@@ -121,9 +136,9 @@ fn html_id_wrap() {
     let tokens = crate::tokenize("CONTENT HERE");
 
     macro_rules! settings {
-        ($layout:ident, $use_true_ids:expr) => {
+        ($layout:ident, $mode:ident, $use_true_ids:expr) => {
             WikitextSettings {
-                mode: WikitextMode::Page,
+                mode: WikitextMode::$mode,
                 layout: Layout::$layout,
                 enable_page_syntax: true,
                 use_true_ids: $use_true_ids,
@@ -136,8 +151,8 @@ fn html_id_wrap() {
     }
 
     macro_rules! test {
-        ($layout:ident, $use_true_ids:expr, $starts_with:expr $(,)?) => {{
-            let settings = settings!($layout, $use_true_ids);
+        ($layout:ident, $mode:ident, $use_true_ids:expr, $starts_with:expr $(,)?) => {{
+            let settings = settings!($layout, $mode, $use_true_ids);
             let (tree, errors) = crate::parse(&tokens, &page_info, &settings).into();
             assert!(errors.is_empty(), "Found unexpected parse error in test");
 
@@ -151,12 +166,21 @@ fn html_id_wrap() {
         }};
     }
 
-    test!(Wikidot, true, r#"<div id="main-content">"#);
-    test!(Wikidot, false, r#"<div>"#);
+    // With IDs
+    test!(Wikidot, Page, true, r#"<div id="main-content">"#);
+    test!(Wikidot, Page, true, r#"<div id="main-content">"#);
+
+    // Without IDs
+    test!(Wikidot, Page, false, r#"<div>"#);
     test!(
         Wikijump,
+        Page,
         true,
         r#"<article id="main-content" class="wj-body">"#,
     );
-    test!(Wikijump, false, r#"<article class="wj-body">"#);
+    test!(Wikijump, Page, false, r#"<article class="wj-body">"#);
+
+    // Never emit IDs
+    test!(Wikijump, PageNav, true, r#"<nav class="wj-navigation">"#);
+    test!(Wikijump, PageNav, false, r#"<nav class="wj-navigation">"#);
 }
