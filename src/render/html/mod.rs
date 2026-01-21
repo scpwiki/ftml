@@ -32,11 +32,9 @@ mod render;
 pub use self::meta::{HtmlMeta, HtmlMetaType};
 pub use self::output::HtmlOutput;
 
-use self::attributes::AddedAttributes;
 use self::context::HtmlContext;
 use self::element::{render_element, render_elements};
 use crate::data::PageInfo;
-use crate::layout::Layout;
 use crate::render::{Handle, Render};
 use crate::settings::WikitextSettings;
 use crate::tree::{Element, SyntaxTree};
@@ -74,38 +72,7 @@ impl Render for HtmlRender {
         );
 
         // Crawl through elements and generate HTML
-        match settings.layout {
-            Layout::Wikidot => {
-                ctx.html()
-                    .div()
-                    .attr(attr!("id" => "main-content"; if settings.use_true_ids))
-                    .inner(|ctx| render_contents(ctx, tree));
-            }
-            Layout::Wikijump if settings.mode.is_nav_content() => {
-                ctx.html()
-                    .nav()
-                    .attr(attr!(
-                        "id" => "main-content"; if settings.use_true_ids,
-                        "class" => "wj-body",
-                    ))
-                    .inner(|ctx| render_contents(ctx, tree));
-            }
-            Layout::Wikijump if settings.mode.is_nav_content() => {
-                ctx.html()
-                    .nav()
-                    .attr(attr!("class" => "wj-navigation"))
-                    .inner(|ctx| render_contents(ctx, tree));
-            }
-            Layout::Wikijump => {
-                ctx.html()
-                    .article()
-                    .attr(attr!(
-                        "id" => "main-content"; if settings.use_true_ids,
-                        "class" => "wj-body",
-                    ))
-                    .inner(|ctx| render_contents(ctx, tree));
-            }
-        }
+        render_contents(&mut ctx, tree);
 
         // Build and return HtmlOutput
         ctx.into()
@@ -125,62 +92,4 @@ fn render_contents(ctx: &mut HtmlContext, tree: &SyntaxTree) {
             },
         );
     }
-}
-
-/// Tests that the IDs are present when use_true_ids = true and absent otherwise.
-#[test]
-fn html_id_wrap() {
-    use crate::settings::{EMPTY_INTERWIKI, WikitextMode};
-
-    let page_info = PageInfo::dummy();
-    let tokens = crate::tokenize("CONTENT HERE");
-
-    macro_rules! settings {
-        ($layout:ident, $mode:ident, $use_true_ids:expr) => {
-            WikitextSettings {
-                mode: WikitextMode::$mode,
-                layout: Layout::$layout,
-                enable_page_syntax: true,
-                use_true_ids: $use_true_ids,
-                isolate_user_ids: false,
-                minify_css: false,
-                allow_local_paths: true,
-                interwiki: EMPTY_INTERWIKI.clone(),
-            }
-        };
-    }
-
-    macro_rules! test {
-        ($layout:ident, $mode:ident, $use_true_ids:expr, $starts_with:expr $(,)?) => {{
-            let settings = settings!($layout, $mode, $use_true_ids);
-            let (tree, errors) = crate::parse(&tokens, &page_info, &settings).into();
-            assert!(errors.is_empty(), "Found unexpected parse error in test");
-
-            let HtmlOutput { body, .. } = HtmlRender.render(&tree, &page_info, &settings);
-            assert!(
-                body.starts_with($starts_with),
-                "Generated HTML doesn't begin as expected\ncontent: {}\ntested start: {}",
-                body,
-                $starts_with,
-            );
-        }};
-    }
-
-    // With IDs
-    test!(Wikidot, Page, true, r#"<div id="main-content">"#);
-    test!(Wikidot, Page, true, r#"<div id="main-content">"#);
-
-    // Without IDs
-    test!(Wikidot, Page, false, r#"<div>"#);
-    test!(
-        Wikijump,
-        Page,
-        true,
-        r#"<article id="main-content" class="wj-body">"#,
-    );
-    test!(Wikijump, Page, false, r#"<article class="wj-body">"#);
-
-    // Never emit IDs
-    test!(Wikijump, PageNav, true, r#"<nav class="wj-navigation">"#);
-    test!(Wikijump, PageNav, false, r#"<nav class="wj-navigation">"#);
 }
