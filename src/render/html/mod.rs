@@ -24,12 +24,10 @@ mod builder;
 mod context;
 mod element;
 mod escape;
-mod meta;
 mod output;
 mod random;
 mod render;
 
-pub use self::meta::{HtmlMeta, HtmlMetaType};
 pub use self::output::HtmlOutput;
 
 use self::context::HtmlContext;

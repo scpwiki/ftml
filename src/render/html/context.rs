@@ -20,7 +20,6 @@
 
 use super::builder::HtmlBuilder;
 use super::escape::escape;
-use super::meta::{HtmlMeta, HtmlMetaType};
 use super::output::HtmlOutput;
 use super::random::Random;
 use crate::data::PageRef;
@@ -45,7 +44,6 @@ where
     'e: 't,
 {
     body: String,
-    meta: Vec<HtmlMeta>,
     backlinks: Backlinks<'static>,
     info: &'i PageInfo<'i>,
     handle: &'h Handle,
@@ -110,7 +108,6 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         // Build and return
         HtmlContext {
             body: String::with_capacity(capacity),
-            meta: Self::initial_metadata(info, settings.layout),
             backlinks: Backlinks::default(),
             info,
             handle,
@@ -126,41 +123,6 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             equation_index: NonZeroUsize::new(1).unwrap(),
             footnote_index: NonZeroUsize::new(1).unwrap(),
         }
-    }
-
-    fn initial_metadata(info: &PageInfo<'i>, layout: Layout) -> Vec<HtmlMeta> {
-        // Initial version, we can tune how the metadata is generated later.
-
-        vec![
-            HtmlMeta {
-                tag_type: HtmlMetaType::HttpEquiv,
-                name: str!("Content-Type"),
-                value: str!("text/html"),
-            },
-            HtmlMeta {
-                tag_type: HtmlMetaType::Name,
-                name: str!("generator"),
-                value: format!("{} {}", *info::VERSION, layout.description()),
-            },
-            HtmlMeta {
-                tag_type: HtmlMetaType::Name,
-                name: str!("description"),
-                value: {
-                    let mut value = str!(info.title);
-
-                    if let Some(ref alt_title) = info.alt_title {
-                        str_write!(value, " - {alt_title}");
-                    }
-
-                    value
-                },
-            },
-            HtmlMeta {
-                tag_type: HtmlMetaType::Name,
-                name: str!("keywords"),
-                value: info.tags.join(","),
-            },
-        ]
     }
 
     // Field access
@@ -342,15 +304,11 @@ impl<'i, 'h, 'e, 't> From<HtmlContext<'i, 'h, 'e, 't>> for HtmlOutput {
     #[inline]
     fn from(ctx: HtmlContext<'i, 'h, 'e, 't>) -> HtmlOutput {
         let HtmlContext {
-            body,
-            meta,
-            backlinks,
-            ..
+            body, backlinks, ..
         } = ctx;
 
         HtmlOutput {
             body,
-            meta,
             backlinks,
             generator: cow!(&info::VERSION),
         }

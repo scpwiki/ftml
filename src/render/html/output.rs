@@ -18,14 +18,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::meta::HtmlMeta;
 use crate::data::Backlinks;
 use std::borrow::Cow;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HtmlOutput {
     pub body: String,
-    pub meta: Vec<HtmlMeta>,
     pub backlinks: Backlinks<'static>,
     pub generator: Cow<'static, str>,
 }
