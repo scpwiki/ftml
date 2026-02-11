@@ -153,7 +153,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
 
     #[inline]
     pub fn language(&self) -> &str {
-        &self.info.language
+        todo!()
     }
 
     #[inline]

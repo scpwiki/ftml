@@ -94,7 +94,6 @@ impl Test {
             alt_title: None,
             score: ScoreValue::Integer(10),
             tags: vec![cow!("fruit"), cow!("component")],
-            language: cow!("default"),
         }
     }
 

@@ -48,7 +48,6 @@ fn isolate_user_ids() {
         alt_title: None,
         score: ScoreValue::Integer(0),
         tags: vec![],
-        language: cow!("default"),
     };
 
     let settings = WikitextSettings {

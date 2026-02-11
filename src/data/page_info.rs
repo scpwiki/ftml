@@ -21,7 +21,7 @@
 use super::ScoreValue;
 use std::borrow::Cow;
 
-/// Metadata information on the article being rendered.
+/// Metadata information on the page being parsed / rendered.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PageInfo<'a> {
@@ -57,9 +57,6 @@ pub struct PageInfo<'a> {
 
     /// The current set of tags this page has.
     pub tags: Vec<Cow<'a, str>>,
-
-    /// The language that this page is being rendered for.
-    pub language: Cow<'a, str>,
 }
 
 impl PageInfo<'_> {
@@ -74,7 +71,6 @@ impl PageInfo<'_> {
             alt_title: None,
             score: ScoreValue::Float(69.0),
             tags: vec![cow!("tale"), cow!("_cc")],
-            language: cow!("default"),
         }
     }
 }

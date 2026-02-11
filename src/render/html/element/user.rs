@@ -81,8 +81,7 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
         }
         None => {
             let (message_pre, message_post) = {
-                let page_info = ctx.info();
-                let language = &page_info.language;
+                let language = todo!();
                 let message_pre = handle.get_message(language, "user-missing-pre");
                 let message_post = handle.get_message(language, "user-missing-post");
                 (message_pre, message_post)
