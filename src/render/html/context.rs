@@ -352,6 +352,7 @@ impl<'i, 'h, 'e, 't> From<HtmlContext<'i, 'h, 'e, 't>> for HtmlOutput {
             body,
             meta,
             backlinks,
+            generator: cow!(&info::VERSION),
         }
     }
 }
