@@ -111,7 +111,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         HtmlContext {
             body: String::with_capacity(capacity),
             meta: Self::initial_metadata(info, settings.layout),
-            backlinks: Backlinks::new(),
+            backlinks: Backlinks::default(),
             info,
             handle,
             settings,

@@ -28,10 +28,3 @@ pub struct Backlinks<'a> {
     pub internal_links: Vec<PageRef>,
     pub external_links: Vec<Cow<'a, str>>,
 }
-
-impl Backlinks<'_> {
-    #[inline]
-    pub fn new() -> Self {
-        Backlinks::default()
-    }
-}
