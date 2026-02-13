@@ -34,7 +34,7 @@ maplit = "1"
 pest = "2"
 pest_derive = "2"
 rand = { version = "0.9", features = ["small_rng"] }
-ref-map = "0.1"
+ref-map = "0.2"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
