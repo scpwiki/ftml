@@ -19,6 +19,7 @@
  */
 
 use std::io;
+use time::format_description::parse_strftime_borrowed;
 use time::format_description::well_known::Rfc2822;
 use time::{Date, OffsetDateTime, PrimitiveDateTime, UtcOffset};
 
@@ -61,20 +62,53 @@ impl DateItem {
         }
     }
 
-    pub fn format(self) -> io::Result<String> {
-        use time::error::Format;
-
-        let result = match self {
-            DateItem::Date(date) => date.format(&Rfc2822),
-            DateItem::DateTime(datetime) => datetime.format(&Rfc2822),
-            DateItem::DateTimeTz(datetime_tz) => datetime_tz.format(&Rfc2822),
-        };
-
-        result.map_err(|error| match error {
-            Format::StdIo(io_error) => io_error,
-            _ => io::Error::other(error),
-        })
+    pub fn format(self, format: Option<&str>) -> io::Result<String> {
+        match format {
+            Some(format) => self.format_strftime(format),
+            None => self.format_default(),
+        }
     }
+
+    pub fn format_or_default(self, format: Option<&str>) -> String {
+        match self.format(format) {
+            Ok(datetime) => datetime,
+            Err(error) => {
+                error!("Error formatting date into string: {error}");
+
+                self.format_default().unwrap_or_else(|error| {
+                    error!("Error formatting fallback date into string: {error}");
+                    String::from("<ERROR>")
+                })
+            }
+        }
+    }
+
+    fn format_default(self) -> io::Result<String> {
+        let result = self.to_datetime_tz().format(&Rfc2822);
+
+        map_format_result(result)
+    }
+
+    fn format_strftime(self, format: &str) -> io::Result<String> {
+        let items = parse_strftime_borrowed(format).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid strftime format string '{format}': {error}"),
+            )
+        })?;
+
+        let result = self.to_datetime_tz().format(&items);
+        map_format_result(result)
+    }
+}
+
+fn map_format_result(result: Result<String, time::error::Format>) -> io::Result<String> {
+    use time::error::Format;
+
+    result.map_err(|error| match error {
+        Format::StdIo(io_error) => io_error,
+        _ => io::Error::other(error),
+    })
 }
 
 impl From<Date> for DateItem {
@@ -114,4 +148,32 @@ cfg_if! {
             OffsetDateTime::now_utc().into()
         }
     }
+}
+
+#[test]
+fn date_format_supports_strftime() {
+    let date = DateItem::from(time::macros::datetime!(2010-01-01 08:10:00 +00:00));
+
+    assert_eq!(
+        date.format(Some("%Y-%m-%d %H:%M:%S %z")).unwrap(),
+        "2010-01-01 08:10:00 +0000",
+    );
+}
+
+#[test]
+fn date_format_rejects_invalid_strftime() {
+    let date = DateItem::from(time::macros::datetime!(2010-01-01 08:10:00 +00:00));
+
+    date.format(Some("%Q"))
+        .expect_err("invalid strftime format unexpectedly succeeded");
+}
+
+#[test]
+fn date_format_falls_back_to_default() {
+    let date = DateItem::from(time::macros::datetime!(2010-01-01 08:10:00 +00:00));
+
+    assert_eq!(
+        date.format_or_default(Some("%Q")),
+        date.format(None).unwrap(),
+    );
 }

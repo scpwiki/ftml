@@ -27,11 +27,6 @@ pub fn render_date(
     date_format: Option<&str>,
     hover: bool,
 ) {
-    // TEMP
-    if date_format.is_some() {
-        warn!("Time format passed, feature currently not supported!");
-    }
-
     // Get attribute values
     let timestamp = str!(date.timestamp());
     let delta = str!(date.time_since());
@@ -42,14 +37,7 @@ pub fn render_date(
     };
 
     // Format datetime
-    // TODO handle error
-    let formatted_datetime = match date.format() {
-        Ok(datetime) => datetime,
-        Err(error) => {
-            error!("Error formatting date into string: {error}");
-            str!("<ERROR>")
-        }
-    };
+    let formatted_datetime = date.format_or_default(date_format);
 
     // Build HTML elements
     ctx.html()

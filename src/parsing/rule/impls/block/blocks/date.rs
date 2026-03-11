@@ -54,11 +54,6 @@ fn parse_fn<'r, 't>(
     let arg_timezone = arguments.get("tz");
     let hover = arguments.get_bool(parser, "hover")?.unwrap_or(true);
 
-    // For now: we don't support strftime-like formats because the time crate doesn't
-    if format.is_some() {
-        warn!("Time format passed, feature currently not supported!");
-    }
-
     // Parse out timestamp given by user
     let mut date = parse_date(value)
         .map_err(|_| parser.make_err(ParseErrorKind::BlockMalformedArguments))?;
