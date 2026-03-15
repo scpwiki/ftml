@@ -309,7 +309,7 @@ Output: Element::Date / `<span class="wj-date">`
 Body: None
 
 Arguments:
-* `format` &mdash; (String) What format to output the date in. See [`strftime`](https://man7.org/linux/man-pages/man3/strftime.3.html) for more information. Has a default RFC 2822 format string if unspecified, and invalid format strings fall back to that default output.
+* `format` &mdash; (String) What format to output the date in. See [`strftime`](https://man7.org/linux/man-pages/man3/strftime.3.html) for more information. Has a default localized short datetime format if unspecified, and invalid format strings fall back to that default output. Localized names use the render language from `PageInfo.language`.
 * `tz` &mdash; (String) What timezone to put the date in. Either a string like `+08:00` or `-430`, or an integer representing the number of seconds to offset.
 * `hover` &mdash; (Boolean) Whether to show the amount of time until / since a date on hover.
 
