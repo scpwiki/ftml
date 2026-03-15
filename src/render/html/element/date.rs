@@ -37,7 +37,7 @@ pub fn render_date(
     };
 
     // Format datetime
-    let formatted_datetime = date.format_or_default(date_format);
+    let formatted_datetime = date.format_or_default(date_format, ctx.language());
 
     // Build HTML elements
     ctx.html()
