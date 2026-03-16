@@ -537,12 +537,23 @@ fn date_format_uses_localized_relative_time_patterns() {
 }
 
 #[test]
-fn date_format_supports_full_regression_matrix() {
+fn date_format_supports_full_regression_matrix_in_spanish() {
     let date = DateItem::from(time::macros::datetime!(2025-10-12 08:18:05 +02:00));
-    let format = "[a %a] [A %A] [b %b] [B %B] [c %c] [d %d] [D %D] [e %e] [H %H] [I %I] [m %m] [M %M] [O %O] [p %p] [r %r] [R %R] [S %S] [T %T] [y %y] [Y %Y] [z %z] [Z %Z]";
+    let format = "[a %a] [A %A] [b %b] [B %B] [c %c] [d %d] [D %D] [e %e] [H %H] [I %I] [m %m] [M %M] [O %O] [p %p] [P %P] [r %r] [R %R] [S %S] [T %T] [x %x] [X %X] [y %y] [Y %Y] [z %z] [Z %Z]";
 
     assert_eq!(
         date.format(Some(format), "es-ES").unwrap(),
-        "[a dom] [A domingo] [b oct] [B octubre] [c 12/10/2025, 08:18:05] [d 12] [D 10/12/25] [e 12] [H 08] [I 08] [m 10] [M 18] [O hace 151 d\u{00ED}as] [p a. m.] [r 08:18:05 a. m.] [R 08:18] [S 05] [T 08:18:05] [y 25] [Y 2025] [z +0200] [Z GMT+02]"
+        "[a dom] [A domingo] [b oct] [B octubre] [c 12/10/2025, 08:18:05] [d 12] [D 10/12/25] [e 12] [H 08] [I 08] [m 10] [M 18] [O hace 151 d\u{00ED}as] [p a. m.] [P a. m.] [r 08:18:05 a. m.] [R 08:18] [S 05] [T 08:18:05] [x 12/10/25] [X 08:18:05] [y 25] [Y 2025] [z +0200] [Z GMT+02]"
+    );
+}
+
+#[test]
+fn date_format_supports_full_regression_matrix_in_english() {
+    let date = DateItem::from(time::macros::datetime!(2025-10-12 08:18:05 +02:00));
+    let format = "[a %a] [A %A] [b %b] [B %B] [c %c] [d %d] [D %D] [e %e] [H %H] [I %I] [m %m] [M %M] [O %O] [p %p] [P %P] [r %r] [R %R] [S %S] [T %T] [x %x] [X %X] [y %y] [Y %Y] [z %z] [Z %Z]";
+
+    assert_eq!(
+        date.format(Some(format), "en-US").unwrap(),
+        "[a Sun] [A Sunday] [b Oct] [B October] [c 10/12/2025, 8:18:05 AM] [d 12] [D 10/12/25] [e 12] [H 08] [I 08] [m 10] [M 18] [O 151 days ago] [p AM] [P am] [r 08:18:05 AM] [R 08:18] [S 05] [T 08:18:05] [x 10/12/25] [X 8:18:05 AM] [y 25] [Y 2025] [z +0200] [Z GMT+02]"
     );
 }
