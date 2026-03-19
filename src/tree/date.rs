@@ -18,21 +18,29 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use icu_calendar::{Date as IcuDate, Iso};
+use icu_calendar::{Date as IcuDate, Gregorian, Iso};
+use icu_datetime::DateTimeFormatter;
+use icu_datetime::DateTimeFormatterPreferences;
+use icu_datetime::fieldsets::enums::TimeFieldSet;
 use icu_datetime::fieldsets::{E, M, T, YMD, YMDT};
 use icu_datetime::input::{DateTime as IcuDateTime, Time as IcuTime};
 use icu_datetime::options::{TimePrecision, YearStyle};
+use icu_datetime::pattern::{
+    DateTimePattern, DayPeriodNameLength, FixedCalendarDateTimeNames,
+};
 use icu_datetime::preferences::HourCycle;
-use icu_datetime::{DateTimeFormatter, DateTimeFormatterPreferences};
 use icu_decimal::input::Decimal;
 use icu_experimental::relativetime::options::Numeric;
 use icu_experimental::relativetime::{
     RelativeTimeFormatter, RelativeTimeFormatterOptions, RelativeTimeFormatterPreferences,
 };
 use icu_locale::Locale;
+use std::fmt::{self, Write as _};
 use std::io;
+use std::sync::LazyLock;
 use time::format_description::parse_strftime_borrowed;
 use time::{Date, OffsetDateTime, PrimitiveDateTime, UtcOffset};
+use writeable::TryWriteable;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", untagged)]
@@ -97,7 +105,7 @@ impl DateItem {
         let locale = locale_from_language(language);
         let mut rendered = String::new();
         let mut literal_start = 0;
-        let mut chars = format.char_indices().peekable();
+        let mut chars = format.char_indices();
 
         while let Some((index, ch)) = chars.next() {
             if ch != '%' {
@@ -127,7 +135,7 @@ impl DateItem {
             }
 
             let spec = &format[index..spec_end];
-            rendered.push_str(&render_directive(&datetime, &locale, directive, spec)?);
+            render_directive(&mut rendered, &datetime, &locale, directive, spec)?;
             literal_start = spec_end;
         }
 
@@ -139,8 +147,11 @@ impl DateItem {
     fn format_default(self, language: &str) -> io::Result<String> {
         let datetime = self.to_datetime_tz();
         let locale = locale_from_language(language);
+        let mut rendered = String::new();
 
-        format_localized_datetime_short(&datetime, &locale)
+        append_localized_datetime_short(&mut rendered, &datetime, &locale)?;
+
+        Ok(rendered)
     }
 }
 
@@ -154,34 +165,40 @@ fn map_format_result(result: Result<String, time::error::Format>) -> io::Result<
 }
 
 fn render_directive(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
     directive: char,
     spec: &str,
-) -> io::Result<String> {
+) -> io::Result<()> {
     match directive {
-        '%' => Ok(String::from("%")),
-        'a' => format_localized_weekday(datetime, locale, true),
-        'A' => format_localized_weekday(datetime, locale, false),
-        'b' => format_localized_month(datetime, locale, true),
-        'B' => format_localized_month(datetime, locale, false),
-        'c' => format_localized_datetime_full_year(datetime, locale),
-        'O' => format_relative_time(*datetime, locale),
-        'p' => format_localized_day_period(datetime, locale, true),
-        'P' => format_localized_day_period(datetime, locale, false),
-        'r' => format_localized_twelve_hour_time(datetime, locale),
-        'X' => format_localized_time(datetime, locale),
-        'x' => format_localized_date(datetime, locale),
-        'Z' => Ok(format_timezone_gmt(&datetime.offset())),
-        _ => format_unlocalized_directive(datetime, spec),
+        '%' => rendered.push('%'),
+        'a' => append_localized_weekday(rendered, datetime, locale, true)?,
+        'A' => append_localized_weekday(rendered, datetime, locale, false)?,
+        'b' => append_localized_month(rendered, datetime, locale, true)?,
+        'B' => append_localized_month(rendered, datetime, locale, false)?,
+        'c' => append_localized_datetime_full_year(rendered, datetime, locale)?,
+        'O' => append_relative_time(rendered, *datetime, locale)?,
+        'p' => append_localized_day_period(rendered, datetime, locale, true)?,
+        'P' => append_localized_day_period(rendered, datetime, locale, false)?,
+        'r' => append_localized_time_h12(rendered, datetime, locale)?,
+        'X' => append_localized_time(rendered, datetime, locale)?,
+        'x' => append_localized_date(rendered, datetime, locale)?,
+        'Z' => append_timezone_gmt(rendered, &datetime.offset()),
+        _ => append_unlocalized_directive(rendered, datetime, spec)?,
     }
+
+    Ok(())
 }
 
-fn format_localized_weekday(
+/// %a/%A - localized weekday name.
+/// EN: "Fri"/"Friday" | ES: "vie"/"viernes" | JA: "金"/"金曜日"
+fn append_localized_weekday(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
     abbreviated: bool,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let formatter = if abbreviated {
         DateTimeFormatter::try_new(locale.clone().into(), E::short())
     } else {
@@ -190,14 +207,17 @@ fn format_localized_weekday(
     .map_err(localization_error)?;
     let date = to_icu_date(*datetime)?;
 
-    Ok(normalize_icu_spacing(formatter.format(&date).to_string()))
+    append_normalized_display(rendered, formatter.format(&date))
 }
 
-fn format_localized_month(
+/// %b/%B - localized month name.
+/// EN: "Dec"/"December" | ES: "dic"/"diciembre" | JA: "12月"/"12月"
+fn append_localized_month(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
     abbreviated: bool,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let formatter = if abbreviated {
         DateTimeFormatter::try_new(locale.clone().into(), M::medium())
     } else {
@@ -206,37 +226,44 @@ fn format_localized_month(
     .map_err(localization_error)?;
     let date = to_icu_date(*datetime)?;
 
-    Ok(normalize_icu_spacing(formatter.format(&date).to_string()))
+    append_normalized_display(rendered, formatter.format(&date))
 }
 
-fn format_localized_date(
+/// %x - localized short date.
+/// EN: "12/25/09" | ES: "25/12/09" | JA: "2009/12/25"
+fn append_localized_date(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let formatter = DateTimeFormatter::try_new(locale.clone().into(), YMD::short())
         .map_err(localization_error)?;
     let date = to_icu_date(*datetime)?;
 
-    Ok(normalize_icu_spacing(formatter.format(&date).to_string()))
+    append_normalized_display(rendered, formatter.format(&date))
 }
 
-fn format_localized_datetime_short(
+/// Default format - localized short date+time.
+/// EN: "1/1/10, 8:10:00 AM" | ES: "1/1/10, 8:10:00" | JA: "2010/1/1 8:10:00"
+fn append_localized_datetime_short(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let formatter = DateTimeFormatter::try_new(locale.clone().into(), YMDT::short())
         .map_err(localization_error)?;
     let datetime = to_icu_datetime(*datetime)?;
 
-    Ok(normalize_icu_spacing(
-        formatter.format(&datetime).to_string(),
-    ))
+    append_normalized_display(rendered, formatter.format(&datetime))
 }
 
-fn format_localized_datetime_full_year(
+/// %c - localized date+time with full year.
+/// EN: "12/25/2009, 8:18:05 AM" | ES: "25/12/2009, 08:18:05" | JA: "2009/12/25 8:18:05"
+fn append_localized_datetime_full_year(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let formatter = DateTimeFormatter::try_new(
         locale.clone().into(),
         YMDT::short()
@@ -246,66 +273,63 @@ fn format_localized_datetime_full_year(
     .map_err(localization_error)?;
     let datetime = to_icu_datetime(*datetime)?;
 
-    Ok(normalize_icu_spacing(
-        formatter.format(&datetime).to_string(),
-    ))
+    append_normalized_display(rendered, formatter.format(&datetime))
 }
 
-fn format_localized_time(
+/// %X - localized time (follows locale hour cycle).
+/// EN: "8:18:05 AM" | ES: "08:18:05" | JA: "8:18:05"
+fn append_localized_time(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let formatter = DateTimeFormatter::try_new(locale.clone().into(), T::medium())
         .map_err(localization_error)?;
     let time = to_icu_time(*datetime)?;
 
-    Ok(normalize_icu_spacing(formatter.format(&time).to_string()))
+    append_normalized_display(rendered, formatter.format(&time))
 }
 
-fn format_localized_twelve_hour_time(
-    datetime: &OffsetDateTime,
-    locale: &Locale,
-) -> io::Result<String> {
-    let period = format_localized_day_period(datetime, locale, true)?;
-    let time = datetime.time();
-    let hour = match time.hour() % 12 {
-        0 => 12,
-        hour => hour,
-    };
-
-    if period.is_empty() {
-        Ok(format!(
-            "{hour:02}:{:02}:{:02}",
-            time.minute(),
-            time.second()
-        ))
-    } else {
-        Ok(format!(
-            "{hour:02}:{:02}:{:02} {period}",
-            time.minute(),
-            time.second(),
-        ))
-    }
-}
-
-fn format_localized_day_period(
+/// %p/%P - localized day period via ICU pattern "a".
+/// EN: "AM"/"am" | ES: "a. m."/"a. m." | JA: "午前"/"午前"
+fn append_localized_day_period(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
     uppercase: bool,
-) -> io::Result<String> {
-    let formatted = extract_day_period(&format_localized_time_h12(datetime, locale)?);
+) -> io::Result<()> {
+    static DAY_PERIOD_PATTERN: LazyLock<DateTimePattern> =
+        LazyLock::new(|| "a".parse().expect("valid day-period pattern"));
+
+    let time = to_icu_time(*datetime)?;
+    let mut names: FixedCalendarDateTimeNames<Gregorian, TimeFieldSet> =
+        FixedCalendarDateTimeNames::try_new(locale.clone().into())
+            .map_err(localization_error)?;
+    names
+        .include_day_period_names(DayPeriodNameLength::Abbreviated)
+        .map_err(localization_error)?;
+
+    let formatter = names
+        .with_pattern_unchecked(&DAY_PERIOD_PATTERN)
+        .format(&time);
+    let raw = formatter
+        .try_write_to_string()
+        .map_err(|(error, _)| localization_error(error))?;
 
     if uppercase {
-        Ok(normalize_icu_spacing(formatted))
+        append_normalized_display(rendered, raw.as_ref())
     } else {
-        Ok(normalize_icu_spacing(formatted.to_lowercase()))
+        append_normalized_display(rendered, raw.as_ref().to_lowercase())
     }
 }
 
-fn format_localized_time_h12(
+/// %r - localized 12-hour time (forced H12 cycle).
+/// EN: "8:18:05 AM" | ES: "8:18:05 a. m." | JA: "午前8:18:05"
+fn append_localized_time_h12(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     locale: &Locale,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let mut prefs: DateTimeFormatterPreferences = locale.clone().into();
     prefs.hour_cycle = Some(HourCycle::H12);
 
@@ -313,18 +337,16 @@ fn format_localized_time_h12(
         DateTimeFormatter::try_new(prefs, T::medium()).map_err(localization_error)?;
     let time = to_icu_time(*datetime)?;
 
-    Ok(normalize_icu_spacing(formatter.format(&time).to_string()))
+    append_normalized_display(rendered, formatter.format(&time))
 }
 
-fn extract_day_period(formatted_time: &str) -> String {
-    formatted_time
-        .char_indices()
-        .rfind(|(_, ch)| ch.is_ascii_digit())
-        .map(|(index, ch)| formatted_time[index + ch.len_utf8()..].trim().to_string())
-        .unwrap_or_else(|| formatted_time.trim().to_string())
-}
-
-fn format_relative_time(datetime: OffsetDateTime, locale: &Locale) -> io::Result<String> {
+/// %O - localized relative time from now.
+/// EN: "7 days ago" | ES: "hace 7 dias" | JA: "7 日前"
+fn append_relative_time(
+    rendered: &mut String,
+    datetime: OffsetDateTime,
+    locale: &Locale,
+) -> io::Result<()> {
     let (value, unit) = relative_time_value(datetime);
     let prefs: RelativeTimeFormatterPreferences = locale.clone().into();
     let formatter = match unit {
@@ -355,9 +377,7 @@ fn format_relative_time(datetime: OffsetDateTime, locale: &Locale) -> io::Result
     }
     .map_err(localization_error)?;
 
-    Ok(normalize_icu_spacing(
-        formatter.format(Decimal::from(value)).to_string(),
-    ))
+    append_normalized_display(rendered, formatter.format(Decimal::from(value)))
 }
 
 fn relative_time_value(datetime: OffsetDateTime) -> (i64, RelativeTimeUnit) {
@@ -383,7 +403,9 @@ enum RelativeTimeUnit {
     Day,
 }
 
-fn format_timezone_gmt(offset: &UtcOffset) -> String {
+/// %Z - timezone as GMT offset.
+/// "GMT+02" | "GMT-05:30"
+fn append_timezone_gmt(rendered: &mut String, offset: &UtcOffset) {
     let total_seconds = offset.whole_seconds();
     let sign = if total_seconds < 0 { '-' } else { '+' };
     let absolute_seconds = total_seconds.abs();
@@ -391,25 +413,48 @@ fn format_timezone_gmt(offset: &UtcOffset) -> String {
     let minutes = (absolute_seconds % 3600) / 60;
 
     if minutes == 0 {
-        format!("GMT{sign}{hours:02}")
+        write!(rendered, "GMT{sign}{hours:02}").ok();
     } else {
-        format!("GMT{sign}{hours:02}:{minutes:02}")
+        write!(rendered, "GMT{sign}{hours:02}:{minutes:02}").ok();
     }
 }
 
-fn normalize_icu_spacing(value: String) -> String {
-    value.replace(['\u{00A0}', '\u{202F}'], " ")
+fn append_normalized_display(
+    rendered: &mut String,
+    value: impl fmt::Display,
+) -> io::Result<()> {
+    write!(&mut NormalizingWriter(rendered), "{value}").map_err(io::Error::other)
 }
 
-fn format_unlocalized_directive(
+struct NormalizingWriter<'a>(&'a mut String);
+
+impl fmt::Write for NormalizingWriter<'_> {
+    fn write_str(&mut self, value: &str) -> fmt::Result {
+        for ch in value.chars() {
+            if matches!(ch, '\u{00A0}' | '\u{202F}') {
+                self.0.push(' ');
+            } else {
+                self.0.push(ch);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// %d, %H, %I, %m, %M, %R, %S, %T, %y, %Y, %z, etc. - non-localized strftime.
+/// Delegates to the `time` crate's strftime formatter.
+fn append_unlocalized_directive(
+    rendered: &mut String,
     datetime: &OffsetDateTime,
     spec: &str,
-) -> io::Result<String> {
+) -> io::Result<()> {
     let items = parse_strftime_borrowed(spec).map_err(|error| {
         invalid_strftime_error(spec, &format!("failed to parse directive: {error}"))
     })?;
 
-    map_format_result(datetime.format(&items))
+    rendered.push_str(&map_format_result(datetime.format(&items))?);
+    Ok(())
 }
 
 fn to_icu_date(datetime: OffsetDateTime) -> io::Result<IcuDate<Iso>> {
@@ -481,7 +526,7 @@ cfg_if! {
         /// We need a consistent date for render tests to not constantly expire.
         #[inline]
         fn now() -> DateItem {
-            time::macros::datetime!(2026-03-12 06:18:05 +00:00).into()
+            time::macros::datetime!(2010-01-01 08:10:00).into()
         }
     } else {
         /// Helper function to get the current date and time, UTC.
@@ -529,31 +574,70 @@ fn date_format_defaults_to_localized_short_datetime() {
 
 #[test]
 fn date_format_uses_localized_relative_time_patterns() {
-    let past_date = DateItem::from(time::macros::datetime!(2026-03-11 06:18:05 +00:00));
-    let future_date = DateItem::from(time::macros::datetime!(2026-03-13 06:18:05 +00:00));
+    let past_date = DateItem::from(time::macros::datetime!(2009-12-31 08:10:00 +00:00));
+    let future_date = DateItem::from(time::macros::datetime!(2010-01-02 08:10:00 +00:00));
 
     assert_eq!(past_date.format(Some("%O"), "fr").unwrap(), "hier");
     assert_eq!(future_date.format(Some("%O"), "fr").unwrap(), "demain");
 }
 
 #[test]
+fn date_format_supports_prefix_and_non_ascii_day_periods() {
+    let date_am = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +00:00));
+    let date_pm = DateItem::from(time::macros::datetime!(2009-12-25 13:18:05 +00:00));
+
+    // en-US: uppercase native, lowercase via %P
+    assert_eq!(date_am.format(Some("%p"), "en-US").unwrap(), "AM");
+    assert_eq!(date_am.format(Some("%P"), "en-US").unwrap(), "am");
+    assert_eq!(date_pm.format(Some("%p"), "en-US").unwrap(), "PM");
+    assert_eq!(date_pm.format(Some("%P"), "en-US").unwrap(), "pm");
+
+    // other prefix/non-ASCII locales
+    assert_eq!(date_am.format(Some("%p"), "ja").unwrap(), "午前");
+    assert_eq!(date_am.format(Some("%P"), "ja").unwrap(), "午前");
+    assert_eq!(date_pm.format(Some("%p"), "ja").unwrap(), "午後");
+    assert_eq!(date_pm.format(Some("%P"), "ja").unwrap(), "午後");
+    assert_eq!(date_am.format(Some("%p"), "zh-CN").unwrap(), "上午");
+    assert_eq!(date_am.format(Some("%p"), "fa").unwrap(), "ق.ظ.");
+}
+
+#[test]
+fn date_format_supports_prefix_day_periods_in_twelve_hour_time() {
+    let date = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +00:00));
+
+    assert_eq!(date.format(Some("%r"), "zh-CN").unwrap(), "上午8:18:05");
+    assert_eq!(date.format(Some("%r"), "ja").unwrap(), "午前8:18:05");
+}
+
+#[test]
 fn date_format_supports_full_regression_matrix_in_spanish() {
-    let date = DateItem::from(time::macros::datetime!(2025-10-12 08:18:05 +02:00));
+    let date = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +02:00));
     let format = "[a %a] [A %A] [b %b] [B %B] [c %c] [d %d] [D %D] [e %e] [H %H] [I %I] [m %m] [M %M] [O %O] [p %p] [P %P] [r %r] [R %R] [S %S] [T %T] [x %x] [X %X] [y %y] [Y %Y] [z %z] [Z %Z]";
 
     assert_eq!(
         date.format(Some(format), "es-ES").unwrap(),
-        "[a dom] [A domingo] [b oct] [B octubre] [c 12/10/2025, 08:18:05] [d 12] [D 10/12/25] [e 12] [H 08] [I 08] [m 10] [M 18] [O hace 151 d\u{00ED}as] [p a. m.] [P a. m.] [r 08:18:05 a. m.] [R 08:18] [S 05] [T 08:18:05] [x 12/10/25] [X 08:18:05] [y 25] [Y 2025] [z +0200] [Z GMT+02]"
+        "[a vie] [A viernes] [b dic] [B diciembre] [c 25/12/2009, 08:18:05] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O hace 7 d\u{00ED}as] [p a. m.] [P a. m.] [r 8:18:05 a. m.] [R 08:18] [S 05] [T 08:18:05] [x 25/12/09] [X 08:18:05] [y 09] [Y 2009] [z +0200] [Z GMT+02]"
     );
 }
 
 #[test]
 fn date_format_supports_full_regression_matrix_in_english() {
-    let date = DateItem::from(time::macros::datetime!(2025-10-12 08:18:05 +02:00));
+    let date = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +02:00));
     let format = "[a %a] [A %A] [b %b] [B %B] [c %c] [d %d] [D %D] [e %e] [H %H] [I %I] [m %m] [M %M] [O %O] [p %p] [P %P] [r %r] [R %R] [S %S] [T %T] [x %x] [X %X] [y %y] [Y %Y] [z %z] [Z %Z]";
 
     assert_eq!(
         date.format(Some(format), "en-US").unwrap(),
-        "[a Sun] [A Sunday] [b Oct] [B October] [c 10/12/2025, 8:18:05 AM] [d 12] [D 10/12/25] [e 12] [H 08] [I 08] [m 10] [M 18] [O 151 days ago] [p AM] [P am] [r 08:18:05 AM] [R 08:18] [S 05] [T 08:18:05] [x 10/12/25] [X 8:18:05 AM] [y 25] [Y 2025] [z +0200] [Z GMT+02]"
+        "[a Fri] [A Friday] [b Dec] [B December] [c 12/25/2009, 8:18:05 AM] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O 7 days ago] [p AM] [P am] [r 8:18:05 AM] [R 08:18] [S 05] [T 08:18:05] [x 12/25/09] [X 8:18:05 AM] [y 09] [Y 2009] [z +0200] [Z GMT+02]"
+    );
+}
+
+#[test]
+fn date_format_supports_full_regression_matrix_in_japanese() {
+    let date = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +02:00));
+    let format = "[a %a] [A %A] [b %b] [B %B] [c %c] [d %d] [D %D] [e %e] [H %H] [I %I] [m %m] [M %M] [O %O] [p %p] [P %P] [r %r] [R %R] [S %S] [T %T] [x %x] [X %X] [y %y] [Y %Y] [z %z] [Z %Z]";
+
+    assert_eq!(
+        date.format(Some(format), "ja").unwrap(),
+        "[a 金] [A 金曜日] [b 12月] [B 12月] [c 2009/12/25 8:18:05] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O 7 日前] [p 午前] [P 午前] [r 午前8:18:05] [R 08:18] [S 05] [T 08:18:05] [x 2009/12/25] [X 8:18:05] [y 09] [Y 2009] [z +0200] [Z GMT+02]"
     );
 }
