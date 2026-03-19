@@ -35,7 +35,7 @@ use icu_experimental::relativetime::{
     RelativeTimeFormatter, RelativeTimeFormatterOptions, RelativeTimeFormatterPreferences,
 };
 use icu_locale::Locale;
-use std::fmt::{self, Write as _};
+use std::fmt;
 use std::io;
 use std::sync::LazyLock;
 use time::format_description::parse_strftime_borrowed;
@@ -413,9 +413,9 @@ fn append_timezone_gmt(rendered: &mut String, offset: &UtcOffset) {
     let minutes = (absolute_seconds % 3600) / 60;
 
     if minutes == 0 {
-        write!(rendered, "GMT{sign}{hours:02}").ok();
+        str_write!(rendered, "GMT{sign}{hours:02}");
     } else {
-        write!(rendered, "GMT{sign}{hours:02}:{minutes:02}").ok();
+        str_write!(rendered, "GMT{sign}{hours:02}:{minutes:02}");
     }
 }
 
@@ -423,7 +423,8 @@ fn append_normalized_display(
     rendered: &mut String,
     value: impl fmt::Display,
 ) -> io::Result<()> {
-    write!(&mut NormalizingWriter(rendered), "{value}").map_err(io::Error::other)
+    str_write!(&mut NormalizingWriter(rendered), "{value}");
+    Ok(())
 }
 
 struct NormalizingWriter<'a>(&'a mut String);
