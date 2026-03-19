@@ -95,7 +95,7 @@ impl DateItem {
                 error!(
                     "Error formatting date into string: initial error: {first_error}; fallback error: {fallback_error}"
                 );
-                String::from("<ERROR>")
+                str!("<ERROR>")
             }),
         }
     }
