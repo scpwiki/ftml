@@ -149,7 +149,7 @@ impl DateItem {
         let locale = locale_from_language(language);
         let mut rendered = String::new();
 
-        append_localized_datetime_short(&mut rendered, &datetime, &locale)?;
+        append_localized_datetime_full_year(&mut rendered, &datetime, &locale)?;
 
         Ok(rendered)
     }
@@ -241,20 +241,6 @@ fn append_localized_date(
     let date = to_icu_date(*datetime)?;
 
     append_normalized_display(rendered, formatter.format(&date))
-}
-
-/// Default format - localized short date+time.
-/// EN: "1/1/10, 8:10:00 AM" | ES: "1/1/10, 8:10:00" | JA: "2010/1/1 8:10:00"
-fn append_localized_datetime_short(
-    rendered: &mut String,
-    datetime: &OffsetDateTime,
-    locale: &Locale,
-) -> io::Result<()> {
-    let formatter = DateTimeFormatter::try_new(locale.clone().into(), YMDT::short())
-        .map_err(localization_error)?;
-    let datetime = to_icu_datetime(*datetime)?;
-
-    append_normalized_display(rendered, formatter.format(&datetime))
 }
 
 /// %c - localized date+time with full year.
