@@ -556,7 +556,7 @@ fn date_format_falls_back_to_default() {
 fn date_format_defaults_to_localized_short_datetime() {
     let date = DateItem::from(time::macros::datetime!(2010-01-01 08:10:00 +00:00));
 
-    assert_eq!(date.format(None, "en-US").unwrap(), "1/1/10, 8:10:00 AM");
+    assert_eq!(date.format(None, "en-US").unwrap(), "1/1/2010, 8:10:00 AM");
 }
 
 #[test]
