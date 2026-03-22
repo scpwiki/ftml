@@ -212,19 +212,7 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         }
         Element::User { name, .. } => ctx.push_str(name),
         Element::Date { value, format, .. } => {
-            // TEMP
-            if format.is_some() {
-                warn!("Time format passed, feature currently not supported!");
-            }
-
-            // TODO handle error
-            match value.format() {
-                Ok(datetime) => str_write!(ctx, "{}", datetime),
-                Err(error) => {
-                    error!("Error formatting date into string: {error}");
-                    str_write!(ctx, "<ERROR>");
-                }
-            };
+            ctx.push_str(&value.format_or_default(format.as_deref(), ctx.language()));
         }
         Element::Color { elements, .. } => render_elements(ctx, elements),
         Element::Code(CodeBlock { contents, .. }) => {
