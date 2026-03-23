@@ -27,7 +27,46 @@ pub fn render_date(
     date_format: Option<&str>,
     hover: bool,
 ) {
-    // Get attribute values
+    let formatted_datetime = date.format_or_default(date_format, ctx.language());
+
+    match ctx.layout() {
+        Layout::Wikidot => {
+            render_date_wikidot(ctx, date, date_format, hover, &formatted_datetime)
+        }
+        Layout::Wikijump => render_date_wikijump(ctx, date, hover, &formatted_datetime),
+    }
+}
+
+fn render_date_wikidot(
+    ctx: &mut HtmlContext,
+    date: DateItem,
+    date_format: Option<&str>,
+    _hover: bool,
+    formatted_datetime: &str,
+) {
+    let timestamp = date.timestamp();
+    let mut class = format!("odate time_{timestamp}");
+
+    if let Some(date_format) = date_format {
+        class.push_str(" format_");
+        class.push_str(&encode_wikidot_date_format(date_format));
+    }
+
+    ctx.html()
+        .span()
+        .attr(attr!(
+            "class" => &class,
+            "style" => "display: inline;",
+        ))
+        .contents(formatted_datetime);
+}
+
+fn render_date_wikijump(
+    ctx: &mut HtmlContext,
+    date: DateItem,
+    hover: bool,
+    formatted_datetime: &str,
+) {
     let timestamp = str!(date.timestamp());
     let delta = str!(date.time_since());
     let (space, hover_class) = if hover {
@@ -36,10 +75,6 @@ pub fn render_date(
         ("", "")
     };
 
-    // Format datetime
-    let formatted_datetime = date.format_or_default(date_format, ctx.language());
-
-    // Build HTML elements
     ctx.html()
         .span()
         .attr(attr!(
@@ -48,4 +83,29 @@ pub fn render_date(
             "data-delta" => &delta,
         ))
         .contents(formatted_datetime);
+}
+
+fn encode_wikidot_date_format(date_format: &str) -> String {
+    let mut encoded = String::new();
+    for byte in date_format.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(char::from(byte));
+            }
+            _ => {
+                encoded.push('%');
+                encoded.push_str(&format!("{byte:02X}"));
+            }
+        }
+    }
+
+    encoded
+}
+
+#[test]
+fn wikidot_date_format_encoding() {
+    assert_eq!(
+        encode_wikidot_date_format("%d. %m. %Y"),
+        "%25d.%20%25m.%20%25Y"
+    );
 }
