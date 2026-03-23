@@ -56,7 +56,6 @@ fn render_date_wikidot(
         .span()
         .attr(attr!(
             "class" => &class,
-            "style" => "display: inline;",
         ))
         .contents(formatted_datetime);
 }

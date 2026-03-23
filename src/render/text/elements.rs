@@ -211,7 +211,7 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
             // so they are skipped.
         }
         Element::User { name, .. } => ctx.push_str(name),
-        Element::Date { value, format, .. } => {
+        Element::Date { value, .. } => {
             match value.format() {
                 Ok(datetime) => str_write!(ctx, "{}", datetime),
                 Err(error) => {
