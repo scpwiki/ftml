@@ -27,6 +27,11 @@ mathml   = ["html", "latex2mathml"]
 cfg-if = "1"
 enum-map = "2"
 entities = "1"
+icu_calendar = "2.1"
+icu_decimal = "2.1"
+icu_datetime = { version = "2.1", features = ["compiled_data"] }
+icu_experimental = { version = "0.4", features = ["compiled_data"] }
+icu_locale = "2.1"
 latex2mathml = { version = "0.2", optional = true }
 lightningcss = { version = "1.0.0-alpha.67", optional = true }
 log = "0.4"
@@ -46,6 +51,7 @@ strum_macros = "0.27"
 time = { version = "0.3", features = ["formatting", "macros", "parsing", "serde", "serde-human-readable"], default-features = false }
 unicase = "2"
 wikidot-normalize = "0.12"
+writeable = "0.6"
 
 [build-dependencies]
 built = { version = "0.8", features = ["chrono", "git2"] }

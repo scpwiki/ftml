@@ -27,10 +27,8 @@ pub fn render_date(
     date_format: Option<&str>,
     hover: bool,
 ) {
-    let formatted_datetime = date.format().unwrap_or_else(|error| {
-        error!("Error formatting date into string: {error}");
-        str!("<ERROR>")
-    });
+    let formatted_datetime = date.format_or_default(date_format, ctx.language());
+
     match ctx.layout() {
         Layout::Wikidot => {
             render_date_wikidot(ctx, date, date_format, hover, &formatted_datetime)
@@ -56,6 +54,7 @@ fn render_date_wikidot(
         .span()
         .attr(attr!(
             "class" => &class,
+            "style" => "display: inline;",
         ))
         .contents(formatted_datetime);
 }
