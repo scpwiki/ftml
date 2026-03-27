@@ -68,7 +68,7 @@ fn render_date_wikijump(
 ) {
     let timestamp = str!(date.timestamp());
     let delta = str!(date.time_since());
-    let mut class = String::from("wj-date");
+    let mut class = str!("wj-date");
 
     if hover {
         class.push_str(" wj-date-hover");
