@@ -125,7 +125,7 @@ fn wikidot_date_class_includes_format() {
 
 #[test]
 fn wikijump_date_class_includes_format() {
-    let mut class = String::from("wj-date");
+    let mut class = str!("wj-date");
     push_date_format_class(&mut class, Some("%d. %m. %Y"));
 
     assert_eq!(class, "wj-date format_%25d.%20%25m.%20%25Y");
