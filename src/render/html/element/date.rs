@@ -32,7 +32,7 @@ pub fn render_date(
 
     match ctx.layout() {
         Layout::Wikidot => {
-            render_date_wikidot(ctx, date, date_format, agohover, &formatted_datetime)
+            render_date_wikidot(ctx, date, display_format, agohover, &formatted_datetime)
         }
         Layout::Wikijump => {
             render_date_wikijump(ctx, date, display_format, hover, &formatted_datetime)
@@ -49,7 +49,7 @@ fn render_date_wikidot(
 ) {
     let timestamp = date.timestamp();
     let mut class = format!("odate time_{timestamp}");
-    push_date_format_class(&mut class, date_format, None);
+    push_date_format_class(&mut class, date_format, agohover);
     let style = if agohover {
         "cursor: help; display: inline;"
     } else {
@@ -90,7 +90,7 @@ fn render_date_wikijump(
         class.push_str(" wj-date-hover");
     }
 
-    push_date_format_class(&mut class, date_format, None);
+    push_date_format_class(&mut class, date_format, false);
 
     ctx.html()
         .span()
@@ -105,18 +105,18 @@ fn render_date_wikijump(
 fn push_date_format_class(
     class: &mut String,
     date_format: Option<&str>,
-    suffix: Option<&str>,
+    append_agohover: bool,
 ) {
     if let Some(date_format) = date_format {
         class.push_str(" format_");
         class.push_str(&encode_date_format(date_format));
 
-        if let Some(suffix) = suffix {
-            class.push_str(&encode_date_format(suffix));
+        if append_agohover {
+            class.push_str("%7Cagohover");
         }
-    } else if let Some(suffix) = suffix {
+    } else if append_agohover {
         class.push_str(" format_");
-        class.push_str(&encode_date_format(suffix));
+        class.push_str("%7Cagohover");
     }
 }
 
@@ -161,7 +161,7 @@ fn split_agohover_format_leaves_normal_format_unchanged() {
 #[test]
 fn wikidot_date_class_includes_format() {
     let mut class = str!("odate time_1216153821");
-    push_date_format_class(&mut class, Some("%d. %m. %Y"), None);
+    push_date_format_class(&mut class, Some("%d. %m. %Y"), false);
 
     assert_eq!(class, "odate time_1216153821 format_%25d.%20%25m.%20%25Y");
 }
@@ -169,7 +169,7 @@ fn wikidot_date_class_includes_format() {
 #[test]
 fn wikidot_date_class_includes_agohover() {
     let mut class = str!("odate time_1216153821");
-    push_date_format_class(&mut class, Some("%d. %m. %Y"), Some("|agohover"));
+    push_date_format_class(&mut class, Some("%d. %m. %Y"), true);
 
     assert_eq!(
         class,
@@ -180,7 +180,7 @@ fn wikidot_date_class_includes_agohover() {
 #[test]
 fn wikidot_date_class_allows_agohover_without_format() {
     let mut class = str!("odate time_1216153821");
-    push_date_format_class(&mut class, None, Some("|agohover"));
+    push_date_format_class(&mut class, None, true);
 
     assert_eq!(class, "odate time_1216153821 format_%7Cagohover");
 }
@@ -188,7 +188,7 @@ fn wikidot_date_class_allows_agohover_without_format() {
 #[test]
 fn wikijump_date_class_includes_format() {
     let mut class = str!("wj-date");
-    push_date_format_class(&mut class, Some("%d. %m. %Y"), None);
+    push_date_format_class(&mut class, Some("%d. %m. %Y"), false);
 
     assert_eq!(class, "wj-date format_%25d.%20%25m.%20%25Y");
 }
