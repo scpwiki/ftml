@@ -102,7 +102,7 @@ fn encode_date_format(date_format: &str) -> String {
             }
             _ => {
                 encoded.push('%');
-                encoded.push_str(&format!("{byte:02X}"));
+                str_write!(&mut encoded, "{byte:02X}");
             }
         }
     }
