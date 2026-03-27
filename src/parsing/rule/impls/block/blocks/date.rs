@@ -21,6 +21,7 @@
 use super::prelude::*;
 use crate::tree::DateItem;
 use regex::Regex;
+use std::borrow::Cow;
 use std::sync::LazyLock;
 use time::format_description::well_known::{Iso8601, Rfc2822, Rfc3339};
 use time::{Date, OffsetDateTime, PrimitiveDateTime, UtcOffset};
@@ -50,9 +51,9 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_DATE, name);
 
     let (value, mut arguments) = parser.get_head_name_map(&BLOCK_DATE, in_head)?;
-    let format = arguments.get("format");
+    let (format, ago_hover) = split_ago_hover_format(arguments.get("format"));
     let arg_timezone = arguments.get("tz");
-    let hover = arguments.get_bool(parser, "hover")?.unwrap_or(true);
+    let hover = arguments.get_bool(parser, "hover")?.unwrap_or(false) || ago_hover;
 
     // Parse out timestamp given by user
     let mut date = parse_date(value)
@@ -86,6 +87,22 @@ fn parse_fn<'r, 't>(
     };
 
     ok!(element)
+}
+
+fn split_ago_hover_format<'t>(
+    date_format: Option<Cow<'t, str>>,
+) -> (Option<Cow<'t, str>>, bool) {
+    match date_format {
+        Some(Cow::Borrowed(date_format)) => match date_format.strip_suffix("|agohover") {
+            Some(display_format) => (Some(Cow::Borrowed(display_format)), true),
+            None => (Some(Cow::Borrowed(date_format)), false),
+        },
+        Some(Cow::Owned(date_format)) => match date_format.strip_suffix("|agohover") {
+            Some(display_format) => (Some(Cow::Owned(display_format.to_owned())), true),
+            None => (Some(Cow::Owned(date_format)), false),
+        },
+        None => (None, false),
+    }
 }
 
 // Parser functions
@@ -334,4 +351,20 @@ fn timezone() {
     test_err!("");
     test_err!("*");
     test_err!("8:0");
+}
+
+#[test]
+fn split_ago_hover_format_removes_suffix_from_display_format() {
+    assert_eq!(
+        split_ago_hover_format(Some(Cow::Borrowed("%d. %m. %Y|agohover"))),
+        (Some(Cow::Owned(String::from("%d. %m. %Y"))), true)
+    );
+}
+
+#[test]
+fn split_ago_hover_format_leaves_normal_format_unchanged() {
+    assert_eq!(
+        split_ago_hover_format(Some(Cow::Borrowed("%d. %m. %Y"))),
+        (Some(Cow::Borrowed("%d. %m. %Y")), false)
+    );
 }

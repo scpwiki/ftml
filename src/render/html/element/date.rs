@@ -27,15 +27,14 @@ pub fn render_date(
     date_format: Option<&str>,
     hover: bool,
 ) {
-    let (display_format, ago_hover) = split_ago_hover_format(date_format);
-    let formatted_datetime = date.format_or_default(display_format, ctx.language());
+    let formatted_datetime = date.format_or_default(date_format, ctx.language());
 
     match ctx.layout() {
         Layout::Wikidot => {
-            render_date_wikidot(ctx, date, display_format, ago_hover, &formatted_datetime)
+            render_date_wikidot(ctx, date, date_format, hover, &formatted_datetime)
         }
         Layout::Wikijump => {
-            render_date_wikijump(ctx, date, display_format, hover, &formatted_datetime)
+            render_date_wikijump(ctx, date, date_format, hover, &formatted_datetime)
         }
     }
 }
@@ -44,13 +43,13 @@ fn render_date_wikidot(
     ctx: &mut HtmlContext,
     date: DateItem,
     date_format: Option<&str>,
-    ago_hover: bool,
+    hover: bool,
     formatted_datetime: &str,
 ) {
     let timestamp = date.timestamp();
     let mut class = format!("odate time_{timestamp}");
-    push_date_format_class(&mut class, date_format, ago_hover);
-    let style = if ago_hover {
+    push_date_format_class(&mut class, date_format, hover);
+    let style = if hover {
         "cursor: help; display: inline;"
     } else {
         "display: inline;"
@@ -63,16 +62,6 @@ fn render_date_wikidot(
             "style" => style,
         ))
         .contents(formatted_datetime);
-}
-
-fn split_ago_hover_format(date_format: Option<&str>) -> (Option<&str>, bool) {
-    match date_format {
-        Some(date_format) => match date_format.strip_suffix("|agohover") {
-            Some(display_format) => (Some(display_format), true),
-            None => (Some(date_format), false),
-        },
-        None => (None, false),
-    }
 }
 
 fn render_date_wikijump(
@@ -140,22 +129,6 @@ fn encode_date_format(date_format: &str) -> String {
 #[test]
 fn date_format_encoding() {
     assert_eq!(encode_date_format("%d. %m. %Y"), "%25d.%20%25m.%20%25Y");
-}
-
-#[test]
-fn split_ago_hover_format_removes_suffix_from_display_format() {
-    assert_eq!(
-        split_ago_hover_format(Some("%d. %m. %Y|agohover")),
-        (Some("%d. %m. %Y"), true)
-    );
-}
-
-#[test]
-fn split_ago_hover_format_leaves_normal_format_unchanged() {
-    assert_eq!(
-        split_ago_hover_format(Some("%d. %m. %Y")),
-        (Some("%d. %m. %Y"), false)
-    );
 }
 
 #[test]
