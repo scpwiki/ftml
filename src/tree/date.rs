@@ -149,7 +149,7 @@ impl DateItem {
         let locale = locale_from_language(language);
         let mut rendered = String::new();
 
-        append_localized_datetime_short(&mut rendered, &datetime, &locale)?;
+        append_localized_datetime_full_year(&mut rendered, &datetime, &locale)?;
 
         Ok(rendered)
     }
@@ -184,7 +184,7 @@ fn render_directive(
         'r' => append_localized_time_h12(rendered, datetime, locale)?,
         'X' => append_localized_time(rendered, datetime, locale)?,
         'x' => append_localized_date(rendered, datetime, locale)?,
-        'Z' => append_timezone_gmt(rendered, &datetime.offset()),
+        'Z' | 'z' => append_timezone_gmt(rendered, &datetime.offset()),
         _ => append_unlocalized_directive(rendered, datetime, spec)?,
     }
 
@@ -241,20 +241,6 @@ fn append_localized_date(
     let date = to_icu_date(*datetime)?;
 
     append_normalized_display(rendered, formatter.format(&date))
-}
-
-/// Default format - localized short date+time.
-/// EN: "1/1/10, 8:10:00 AM" | ES: "1/1/10, 8:10:00" | JA: "2010/1/1 8:10:00"
-fn append_localized_datetime_short(
-    rendered: &mut String,
-    datetime: &OffsetDateTime,
-    locale: &Locale,
-) -> io::Result<()> {
-    let formatter = DateTimeFormatter::try_new(locale.clone().into(), YMDT::short())
-        .map_err(localization_error)?;
-    let datetime = to_icu_datetime(*datetime)?;
-
-    append_normalized_display(rendered, formatter.format(&datetime))
 }
 
 /// %c - localized date+time with full year.
@@ -544,7 +530,7 @@ fn date_format_supports_strftime() {
 
     assert_eq!(
         date.format(Some("%Y-%m-%d %H:%M:%S %z"), "en").unwrap(),
-        "2010-01-01 08:10:00 +0000",
+        "2010-01-01 08:10:00 GMT+00",
     );
 }
 
@@ -570,7 +556,7 @@ fn date_format_falls_back_to_default() {
 fn date_format_defaults_to_localized_short_datetime() {
     let date = DateItem::from(time::macros::datetime!(2010-01-01 08:10:00 +00:00));
 
-    assert_eq!(date.format(None, "en-US").unwrap(), "1/1/10, 8:10:00 AM");
+    assert_eq!(date.format(None, "en-US").unwrap(), "1/1/2010, 8:10:00 AM");
 }
 
 #[test]
@@ -617,7 +603,7 @@ fn date_format_supports_full_regression_matrix_in_spanish() {
 
     assert_eq!(
         date.format(Some(format), "es-ES").unwrap(),
-        "[a vie] [A viernes] [b dic] [B diciembre] [c 25/12/2009, 08:18:05] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O hace 7 d\u{00ED}as] [p a. m.] [P a. m.] [r 8:18:05 a. m.] [R 08:18] [S 05] [T 08:18:05] [x 25/12/09] [X 08:18:05] [y 09] [Y 2009] [z +0200] [Z GMT+02]"
+        "[a vie] [A viernes] [b dic] [B diciembre] [c 25/12/2009, 08:18:05] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O hace 7 d\u{00ED}as] [p a. m.] [P a. m.] [r 8:18:05 a. m.] [R 08:18] [S 05] [T 08:18:05] [x 25/12/09] [X 08:18:05] [y 09] [Y 2009] [z GMT+02] [Z GMT+02]"
     );
 }
 
@@ -628,7 +614,7 @@ fn date_format_supports_full_regression_matrix_in_english() {
 
     assert_eq!(
         date.format(Some(format), "en-US").unwrap(),
-        "[a Fri] [A Friday] [b Dec] [B December] [c 12/25/2009, 8:18:05 AM] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O 7 days ago] [p AM] [P am] [r 8:18:05 AM] [R 08:18] [S 05] [T 08:18:05] [x 12/25/09] [X 8:18:05 AM] [y 09] [Y 2009] [z +0200] [Z GMT+02]"
+        "[a Fri] [A Friday] [b Dec] [B December] [c 12/25/2009, 8:18:05 AM] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O 7 days ago] [p AM] [P am] [r 8:18:05 AM] [R 08:18] [S 05] [T 08:18:05] [x 12/25/09] [X 8:18:05 AM] [y 09] [Y 2009] [z GMT+02] [Z GMT+02]"
     );
 }
 
@@ -639,6 +625,6 @@ fn date_format_supports_full_regression_matrix_in_japanese() {
 
     assert_eq!(
         date.format(Some(format), "ja").unwrap(),
-        "[a 金] [A 金曜日] [b 12月] [B 12月] [c 2009/12/25 8:18:05] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O 7 日前] [p 午前] [P 午前] [r 午前8:18:05] [R 08:18] [S 05] [T 08:18:05] [x 2009/12/25] [X 8:18:05] [y 09] [Y 2009] [z +0200] [Z GMT+02]"
+        "[a 金] [A 金曜日] [b 12月] [B 12月] [c 2009/12/25 8:18:05] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O 7 日前] [p 午前] [P 午前] [r 午前8:18:05] [R 08:18] [S 05] [T 08:18:05] [x 2009/12/25] [X 8:18:05] [y 09] [Y 2009] [z GMT+02] [Z GMT+02]"
     );
 }
