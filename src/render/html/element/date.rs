@@ -117,7 +117,7 @@ fn date_format_encoding() {
 
 #[test]
 fn wikidot_date_class_includes_format() {
-    let mut class = String::from("odate time_1216153821");
+    let mut class = str!("odate time_1216153821");
     push_date_format_class(&mut class, Some("%d. %m. %Y"));
 
     assert_eq!(class, "odate time_1216153821 format_%25d.%20%25m.%20%25Y");
