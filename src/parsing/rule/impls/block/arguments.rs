@@ -43,16 +43,19 @@ impl<'t> Arguments<'t> {
         Arguments::default()
     }
 
+    /// Inserts a key / value pair into the list of arguments.
     pub fn insert(&mut self, key: &'t str, value: Cow<'t, str>) {
         let key = UniCase::ascii(key);
         self.inner.insert(key, value);
     }
 
+    /// Gets **and removes** a string value from the arguments from its key.
     pub fn get(&mut self, key: &'t str) -> Option<Cow<'t, str>> {
         let key = UniCase::ascii(key);
         self.inner.remove(&key)
     }
 
+    /// Gets **and removes** a boolean value from the arguments from its the key.
     pub fn get_bool(
         &mut self,
         parser: &Parser<'_, 't>,
@@ -67,6 +70,7 @@ impl<'t> Arguments<'t> {
         }
     }
 
+    /// Gets **and removes** a parseable value from the arguments from its key.
     pub fn get_value<T: FromStr>(
         &mut self,
         parser: &Parser<'_, 't>,
