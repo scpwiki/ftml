@@ -1,0 +1,68 @@
+[
+    {
+        "token": "identifier",
+        "rule": "block",
+        "span": [15, 24],
+        "kind": "no-such-block"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [6, 8],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [28, 30],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "identifier",
+        "rule": "block-star",
+        "span": [48, 57],
+        "kind": "no-such-block"
+    },
+    {
+        "token": "left-block-star",
+        "rule": "fallback",
+        "span": [38, 41],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [61, 63],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "block-audio",
+        "span": [80, 82],
+        "kind": "block-missing-name"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [71, 73],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [78, 80],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "block-audio",
+        "span": [112, 112],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [91, 93],
+        "kind": "no-rules-match"
+    }
+]
