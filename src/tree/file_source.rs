@@ -1,5 +1,5 @@
 /*
- * tree/image.rs
+ * tree/file_source.rs
  *
  * ftml - Library to parse Wikidot text
  * Copyright (C) 2019-2026 Wikijump Team
@@ -25,20 +25,20 @@ use strum_macros::IntoStaticStr;
 
 #[derive(Serialize, Deserialize, IntoStaticStr, Debug, Hash, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "type", content = "data")]
-pub enum ImageSource<'a> {
-    /// Image is sourced from an arbitrary URL.
+pub enum FileSource<'a> {
+    /// File is sourced from an arbitrary URL.
     Url(Cow<'a, str>),
 
-    /// Image is attached the current page.
+    /// File is attached the current page.
     File1 { file: Cow<'a, str> },
 
-    /// Image is attached to another page on the site.
+    /// File is attached to another page on the site.
     File2 {
         page: Cow<'a, str>,
         file: Cow<'a, str>,
     },
 
-    /// Image is attached to another page on another site.
+    /// File is attached to another page on another site.
     File3 {
         site: Cow<'a, str>,
         page: Cow<'a, str>,
@@ -46,10 +46,10 @@ pub enum ImageSource<'a> {
     },
 }
 
-impl<'t> ImageSource<'t> {
-    pub fn parse(source: &'t str) -> Option<ImageSource<'t>> {
+impl<'t> FileSource<'t> {
+    pub fn parse(source: &'t str) -> Option<FileSource<'t>> {
         if is_url(source) {
-            return Some(ImageSource::Url(cow!(source)));
+            return Some(FileSource::Url(cow!(source)));
         }
 
         // Strip leading / if present
@@ -60,14 +60,14 @@ impl<'t> ImageSource<'t> {
 
         // Depending on the number of parts, determine the file variant
         let source = match parts.len() {
-            1 => ImageSource::File1 {
+            1 => FileSource::File1 {
                 file: cow!(parts[0]),
             },
-            2 => ImageSource::File2 {
+            2 => FileSource::File2 {
                 page: cow!(parts[0]),
                 file: cow!(parts[1]),
             },
-            3 => ImageSource::File3 {
+            3 => FileSource::File3 {
                 site: cow!(parts[0]),
                 page: cow!(parts[1]),
                 file: cow!(parts[2]),
@@ -83,17 +83,17 @@ impl<'t> ImageSource<'t> {
         self.into()
     }
 
-    pub fn to_owned(&self) -> ImageSource<'static> {
+    pub fn to_owned(&self) -> FileSource<'static> {
         match self {
-            ImageSource::Url(url) => ImageSource::Url(string_to_owned(url)),
-            ImageSource::File1 { file } => ImageSource::File1 {
+            FileSource::Url(url) => FileSource::Url(string_to_owned(url)),
+            FileSource::File1 { file } => FileSource::File1 {
                 file: string_to_owned(file),
             },
-            ImageSource::File2 { page, file } => ImageSource::File2 {
+            FileSource::File2 { page, file } => FileSource::File2 {
                 page: string_to_owned(page),
                 file: string_to_owned(file),
             },
-            ImageSource::File3 { site, page, file } => ImageSource::File3 {
+            FileSource::File3 { site, page, file } => FileSource::File3 {
                 site: string_to_owned(site),
                 page: string_to_owned(page),
                 file: string_to_owned(file),

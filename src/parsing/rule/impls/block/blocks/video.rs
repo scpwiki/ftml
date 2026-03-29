@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::{Alignment, FloatAlignment, VideoSource};
+use crate::tree::{Alignment, FileSource, FloatAlignment};
 
 pub const BLOCK_VIDEO: BlockRule = BlockRule {
     name: "block-video",
@@ -60,7 +60,7 @@ fn parse_fn<'r, 't>(
         None => None,
     };
 
-    let source = match VideoSource::parse(source) {
+    let source = match FileSource::parse(source) {
         Some(source) => source,
         None => return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
     };

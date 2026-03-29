@@ -21,10 +21,9 @@
 use crate::data::PageRef;
 use crate::tree::clone::*;
 use crate::tree::{
-    Alignment, AnchorTarget, AttributeMap, AudioSource, ClearFloat, CodeBlock, Container,
-    DateItem, DefinitionListItem, Embed, FloatAlignment, ImageSource, LinkLabel,
-    LinkLocation, LinkType, ListItem, ListType, Module, PartialElement, Tab, Table,
-    VariableMap, VideoSource,
+    Alignment, AnchorTarget, AttributeMap, ClearFloat, CodeBlock, Container, DateItem,
+    DefinitionListItem, Embed, FileSource, FloatAlignment, LinkLabel, LinkLocation,
+    LinkType, ListItem, ListType, Module, PartialElement, Tab, Table, VariableMap,
 };
 use ref_map::*;
 use std::borrow::Cow;
@@ -114,7 +113,7 @@ pub enum Element<'t> {
     ///
     /// The "link" field is what the `<a>` points to, when the user clicks on the image.
     Image {
-        source: ImageSource<'t>,
+        source: FileSource<'t>,
         link: Option<LinkLocation<'t>>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
@@ -125,13 +124,13 @@ pub enum Element<'t> {
     /// The "source" field is the link to the audio itself.
     ///
     Audio {
-        source: AudioSource<'t>,
+        source: FileSource<'t>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
     },
 
     Video {
-        source: VideoSource<'t>,
+        source: FileSource<'t>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
     },

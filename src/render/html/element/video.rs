@@ -19,11 +19,11 @@
  */
 
 use super::prelude::*;
-use crate::tree::{AttributeMap, FloatAlignment, VideoSource};
+use crate::tree::{AttributeMap, FileSource, FloatAlignment};
 
 pub fn render_video(
     ctx: &mut HtmlContext,
-    source: &VideoSource,
+    source: &FileSource,
     alignment: Option<FloatAlignment>,
     attributes: &AttributeMap,
 ) {
@@ -42,7 +42,7 @@ pub fn render_video(
 
     let source_url = ctx
         .handle()
-        .get_video_link(source, ctx.info(), ctx.settings());
+        .get_file_link(source, ctx.info(), ctx.settings());
 
     match source_url {
         // Found URL

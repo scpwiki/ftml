@@ -22,7 +22,7 @@ use crate::data::{PageInfo, ScoreValue};
 use crate::layout::Layout;
 use crate::settings::{EMPTY_INTERWIKI, WikitextMode, WikitextSettings};
 use crate::tree::{
-    AttributeMap, Container, ContainerType, Element, ImageSource, ListItem, ListType,
+    AttributeMap, Container, ContainerType, Element, FileSource, ListItem, ListType,
 };
 use std::borrow::Cow;
 
@@ -132,7 +132,7 @@ fn isolate_user_ids() {
         vec![Element::Container(Container::new(
             ContainerType::Paragraph,
             vec![Element::Image {
-                source: ImageSource::File1 {
+                source: FileSource::File1 {
                     file: cow!("example.png"),
                 },
                 link: None,
@@ -150,7 +150,7 @@ fn isolate_user_ids() {
         vec![Element::Container(Container::new(
             ContainerType::Paragraph,
             vec![Element::Image {
-                source: ImageSource::File1 {
+                source: FileSource::File1 {
                     file: cow!("example.png"),
                 },
                 link: None,

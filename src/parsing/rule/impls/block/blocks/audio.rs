@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::{Alignment, AudioSource, FloatAlignment};
+use crate::tree::{Alignment, FileSource, FloatAlignment};
 
 pub const BLOCK_AUDIO: BlockRule = BlockRule {
     name: "block-audio",
@@ -61,7 +61,7 @@ fn parse_fn<'r, 't>(
     };
 
     // Parse the audio source based on format
-    let source = match AudioSource::parse(source) {
+    let source = match FileSource::parse(source) {
         Some(source) => source,
         None => return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
     };

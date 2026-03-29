@@ -19,11 +19,11 @@
  */
 
 use super::prelude::*;
-use crate::tree::{AttributeMap, AudioSource, FloatAlignment};
+use crate::tree::{AttributeMap, FileSource, FloatAlignment};
 
 pub fn render_audio(
     ctx: &mut HtmlContext,
-    source: &AudioSource,
+    source: &FileSource,
     alignment: Option<FloatAlignment>,
     attributes: &AttributeMap,
 ) {
@@ -42,7 +42,7 @@ pub fn render_audio(
 
     let source_url = ctx
         .handle()
-        .get_audio_link(source, ctx.info(), ctx.settings());
+        .get_file_link(source, ctx.info(), ctx.settings());
 
     match source_url {
         // Found URL
