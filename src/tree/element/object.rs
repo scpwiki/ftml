@@ -129,6 +129,10 @@ pub enum Element<'t> {
         attributes: AttributeMap<'t>,
     },
 
+    /// An element representing video and its associated metadata.
+    ///
+    /// The "source" field is the link to the video itself.
+    ///
     Video {
         source: FileSource<'t>,
         alignment: Option<FloatAlignment>,
