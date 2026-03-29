@@ -81,6 +81,7 @@ Alternatively you may look here for a formatted list: (though it may not be upda
 | Block Name                                      | Accepted Names                   | Star? | Score? | Newlines? | Argument Type | Body Type |
 |-------------------------------------------------|----------------------------------|-------|--------|-----------|---------------|-----------|
 | [Anchor](#anchor)                               | `a`, `anchor`                    | No    | Yes    | No        | Map           | Elements  |
+| [Audio](#audio)                                 | `audio`                          | No    | No     | No        | Value + Map   | None      |
 | [Bibliography Citation](#bibliography-citation) | `bibcite`                        | No    | Yes    | No        | Value         | None      |
 | [Bibliography](#bibliography-block)             | `bibliography`                   | No    | No     | Yes       | Map           | (See below) |
 | [Blockquote](#blockquote)                       | `blockquote`, `quote`            | No    | No     | Yes       | Map           | Elements  |
@@ -132,6 +133,7 @@ Alternatively you may look here for a formatted list: (though it may not be upda
 | [TOC](#toc)                                     | `toc`                            | No    | No     | Yes       | Map           | None      |
 | [Underline](#underline)                         | `u`, `underline`                 | No    | No     | No        | Map           | Elements  |
 | [User](#user)                                   | `user`                           | Yes   | No     | No        | Value         | None      |
+| [Video](#video)                                 | `video`                          | No    | No     | No        | Value + Map   | None      |
 
 Each of the blocks will be described in more detail below:
 
@@ -543,6 +545,28 @@ Body: None
 Arguments:
 * Value &mdash; (String) The source of the image.
 * `link` &mdash; (String) The link that this image should point to.
+* All accepted attributes.
+
+### Audio
+
+Output: `Element::Audio` / `<audio>`
+
+Body: None
+
+Arguments:
+* Value &mdash; (String) The source of the audio.
+* `align` &mdash; (String) Optional alignment. Accepted values are `left`, `right`, and `center`.
+* All accepted attributes.
+
+### Video
+
+Output: `Element::Video` / `<video>`
+
+Body: None
+
+Arguments:
+* Value &mdash; (String) The source of the video.
+* `align` &mdash; (String) Optional alignment. Accepted values are `left`, `right`, and `center`.
 * All accepted attributes.
 
 ### Include (Elements)

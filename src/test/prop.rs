@@ -24,9 +24,9 @@ use crate::render::{Render, html::HtmlRender, text::TextRender};
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::tree::{
     Alignment, AnchorTarget, AttributeMap, BibliographyList, ClearFloat, CodeBlock,
-    Container, ContainerType, Element, FloatAlignment, Heading, HeadingLevel,
-    ImageSource, LinkLabel, LinkLocation, LinkType, ListItem, ListType, Module,
-    SyntaxTree, attribute::SAFE_ATTRIBUTES,
+    Container, ContainerType, Element, FileSource, FloatAlignment, Heading, HeadingLevel,
+    LinkLabel, LinkLocation, LinkType, ListItem, ListType, Module, SyntaxTree,
+    attribute::SAFE_ATTRIBUTES,
 };
 use proptest::option;
 use proptest::prelude::*;
@@ -168,12 +168,12 @@ fn arb_link_element() -> impl Strategy<Value = Element<'static>> {
 
 fn arb_image() -> impl Strategy<Value = Element<'static>> {
     let source = prop_oneof![
-        cow!(SIMPLE_URL_REGEX).prop_map(ImageSource::Url),
-        cow!(".*").prop_map(|file| ImageSource::File1 { file }),
+        cow!(SIMPLE_URL_REGEX).prop_map(FileSource::Url),
+        cow!(".*").prop_map(|file| FileSource::File1 { file }),
         (cow!(".*"), cow!(".*"))
-            .prop_map(|(page, file)| ImageSource::File2 { page, file }),
+            .prop_map(|(page, file)| FileSource::File2 { page, file }),
         (cow!(".*"), cow!(".*"), cow!(".*"))
-            .prop_map(|(site, page, file)| ImageSource::File3 { site, page, file }),
+            .prop_map(|(site, page, file)| FileSource::File3 { site, page, file }),
     ];
 
     let alignment = select!([Alignment::Left, Alignment::Right, Alignment::Center]);

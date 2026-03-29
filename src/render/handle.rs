@@ -20,7 +20,7 @@
 
 use crate::data::{KarmaLevel, PageInfo, UserInfo};
 use crate::settings::WikitextSettings;
-use crate::tree::{ImageSource, LinkLabel, LinkLocation, Module};
+use crate::tree::{FileSource, LinkLabel, LinkLocation, Module};
 use crate::url::BuildSiteUrl;
 use std::borrow::Cow;
 use std::num::NonZeroUsize;
@@ -63,27 +63,25 @@ impl Handle {
         Some(info)
     }
 
-    pub fn get_image_link<'a>(
+    pub fn get_file_link<'a>(
         &self,
-        source: &ImageSource<'a>,
+        source: &FileSource<'a>,
         info: &PageInfo,
         settings: &WikitextSettings,
     ) -> Option<Cow<'a, str>> {
-        debug!("Getting file link for image");
-
         let (site, page, file): (&str, &str, &str) = match source {
-            ImageSource::Url(url) => return Some(Cow::clone(url)),
-            ImageSource::File1 { .. }
-            | ImageSource::File2 { .. }
-            | ImageSource::File3 { .. }
+            FileSource::Url(url) => return Some(Cow::clone(url)),
+            FileSource::File1 { .. }
+            | FileSource::File2 { .. }
+            | FileSource::File3 { .. }
                 if !settings.allow_local_paths =>
             {
-                warn!("Specified path image source when local paths are disabled");
+                warn!("Specified path file source when local paths are disabled");
                 return None;
             }
-            ImageSource::File1 { file } => (&info.site, &info.page, file),
-            ImageSource::File2 { page, file } => (&info.site, page, file),
-            ImageSource::File3 { site, page, file } => (site, page, file),
+            FileSource::File1 { file } => (&info.site, &info.page, file),
+            FileSource::File2 { page, file } => (&info.site, page, file),
+            FileSource::File3 { site, page, file } => (site, page, file),
         };
 
         // TODO: emit url

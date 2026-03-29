@@ -20,6 +20,7 @@
 
 //! Module that implements HTML rendering for `Element` and its children.
 
+mod audio;
 mod bibliography;
 mod clear_float;
 mod collapsible;
@@ -41,6 +42,7 @@ mod tabs;
 mod text;
 mod toc;
 mod user;
+mod video;
 
 mod prelude {
     pub use super::super::attributes::AddedAttributes;
@@ -51,6 +53,7 @@ mod prelude {
     pub use crate::tree::Element;
 }
 
+use self::audio::render_audio;
 use self::bibliography::{render_bibcite, render_bibliography};
 use self::clear_float::render_clear_float;
 use self::collapsible::{Collapsible, render_collapsible};
@@ -72,6 +75,7 @@ use self::tabs::render_tabview;
 use self::text::{render_code, render_email, render_wikitext_raw};
 use self::toc::render_table_of_contents;
 use self::user::render_user;
+use self::video::render_video;
 use super::HtmlContext;
 use crate::tree::{CodeBlock, Element};
 use ref_map::*;
@@ -120,6 +124,16 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             alignment,
             attributes,
         } => render_image(ctx, source, link, *alignment, attributes),
+        Element::Audio {
+            source,
+            alignment,
+            attributes,
+        } => render_audio(ctx, source, *alignment, attributes),
+        Element::Video {
+            source,
+            alignment,
+            attributes,
+        } => render_video(ctx, source, *alignment, attributes),
         Element::List {
             ltype,
             items,

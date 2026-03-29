@@ -22,7 +22,7 @@ use crate::data::PageRef;
 use crate::tree::clone::*;
 use crate::tree::{
     Alignment, AnchorTarget, AttributeMap, ClearFloat, CodeBlock, Container, DateItem,
-    DefinitionListItem, Embed, FloatAlignment, ImageSource, LinkLabel, LinkLocation,
+    DefinitionListItem, Embed, FileSource, FloatAlignment, LinkLabel, LinkLocation,
     LinkType, ListItem, ListType, Module, PartialElement, Tab, Table, VariableMap,
 };
 use ref_map::*;
@@ -113,8 +113,28 @@ pub enum Element<'t> {
     ///
     /// The "link" field is what the `<a>` points to, when the user clicks on the image.
     Image {
-        source: ImageSource<'t>,
+        source: FileSource<'t>,
         link: Option<LinkLocation<'t>>,
+        alignment: Option<FloatAlignment>,
+        attributes: AttributeMap<'t>,
+    },
+
+    /// An element representing audio and its associated metadata.
+    ///
+    /// The "source" field is the link to the audio itself.
+    ///
+    Audio {
+        source: FileSource<'t>,
+        alignment: Option<FloatAlignment>,
+        attributes: AttributeMap<'t>,
+    },
+
+    /// An element representing video and its associated metadata.
+    ///
+    /// The "source" field is the link to the video itself.
+    ///
+    Video {
+        source: FileSource<'t>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
     },
@@ -330,6 +350,8 @@ impl Element<'_> {
             Element::AnchorName(_) => "AnchorName",
             Element::Link { .. } => "Link",
             Element::Image { .. } => "Image",
+            Element::Audio { .. } => "Audio",
+            Element::Video { .. } => "Video",
             Element::List { .. } => "List",
             Element::DefinitionList(_) => "DefinitionList",
             Element::RadioButton { .. } => "RadioButton",
@@ -383,6 +405,8 @@ impl Element<'_> {
                 true
             }
             Element::Image { .. } => true,
+            Element::Audio { .. } => true,
+            Element::Video { .. } => true,
             Element::List { .. } => false,
             Element::DefinitionList(_) => false,
             Element::RadioButton { .. } | Element::CheckBox { .. } => true,
@@ -467,6 +491,24 @@ impl Element<'_> {
             } => Element::Image {
                 source: source.to_owned(),
                 link: link.ref_map(|link| link.to_owned()),
+                alignment: *alignment,
+                attributes: attributes.to_owned(),
+            },
+            Element::Audio {
+                source,
+                alignment,
+                attributes,
+            } => Element::Audio {
+                source: source.to_owned(),
+                alignment: *alignment,
+                attributes: attributes.to_owned(),
+            },
+            Element::Video {
+                source,
+                alignment,
+                attributes,
+            } => Element::Video {
+                source: source.to_owned(),
                 alignment: *alignment,
                 attributes: attributes.to_owned(),
             },

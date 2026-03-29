@@ -7,6 +7,12 @@ body = "elements"
 html-attributes = true
 html-output = "html,a"
 
+[audio]
+head = "value+map"
+body = "none"
+html-attributes = true
+html-output = "html,audio,wj-audio"
+
 [bibcite]
 accepts-score = true
 head = "value"
@@ -153,6 +159,12 @@ head = "value+map"
 body = "none"
 html-attributes = true
 html-output = "html,img,wj-image"
+
+[video]
+head = "value+map"
+body = "none"
+html-attributes = true
+html-output = "html,video,wj-video"
 
 [include-elements]
 accepts-newlines = true
