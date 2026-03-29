@@ -120,7 +120,7 @@ where
     }
 
     // TODO: html render settings to allow this?
-    arguments.get("autoplay");
+    let _autoplay = arguments.get("autoplay");
 
     ok!(build_element(
         source,
