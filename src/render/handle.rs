@@ -20,7 +20,7 @@
 
 use crate::data::{KarmaLevel, PageInfo, UserInfo};
 use crate::settings::WikitextSettings;
-use crate::tree::{ImageSource, LinkLabel, LinkLocation, Module};
+use crate::tree::{AudioSource, ImageSource, LinkLabel, LinkLocation, Module};
 use crate::url::BuildSiteUrl;
 use std::borrow::Cow;
 use std::num::NonZeroUsize;
@@ -84,6 +84,35 @@ impl Handle {
             ImageSource::File1 { file } => (&info.site, &info.page, file),
             ImageSource::File2 { page, file } => (&info.site, page, file),
             ImageSource::File3 { site, page, file } => (site, page, file),
+        };
+
+        // TODO: emit url
+        Some(Cow::Owned(format!(
+            "https://{site}.wjfiles.com/local--files/{page}/{file}",
+        )))
+    }
+
+    pub fn get_audio_link<'a>(
+        &self,
+        source: &AudioSource<'a>,
+        info: &PageInfo,
+        settings: &WikitextSettings,
+    ) -> Option<Cow<'a, str>> {
+        debug!("Getting file link for audio");
+
+        let (site, page, file): (&str, &str, &str) = match source {
+            AudioSource::Url(url) => return Some(Cow::clone(url)),
+            AudioSource::File1 { .. }
+            | AudioSource::File2 { .. }
+            | AudioSource::File3 { .. }
+                if !settings.allow_local_paths =>
+            {
+                warn!("Specified path audio source when local paths are disabled");
+                return None;
+            }
+            AudioSource::File1 { file } => (&info.site, &info.page, file),
+            AudioSource::File2 { page, file } => (&info.site, page, file),
+            AudioSource::File3 { site, page, file } => (site, page, file),
         };
 
         // TODO: emit url

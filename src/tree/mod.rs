@@ -22,6 +22,7 @@ pub mod attribute;
 
 mod align;
 mod anchor;
+mod audio;
 mod bibliography;
 mod clear_float;
 mod clone;
@@ -46,6 +47,7 @@ mod variables;
 pub use self::align::*;
 pub use self::anchor::*;
 pub use self::attribute::AttributeMap;
+pub use self::audio::*;
 pub use self::bibliography::*;
 pub use self::clear_float::*;
 pub use self::code::CodeBlock;

@@ -21,9 +21,10 @@
 use crate::data::PageRef;
 use crate::tree::clone::*;
 use crate::tree::{
-    Alignment, AnchorTarget, AttributeMap, ClearFloat, CodeBlock, Container, DateItem,
-    DefinitionListItem, Embed, FloatAlignment, ImageSource, LinkLabel, LinkLocation,
-    LinkType, ListItem, ListType, Module, PartialElement, Tab, Table, VariableMap,
+    Alignment, AnchorTarget, AttributeMap, AudioSource, ClearFloat, CodeBlock, Container,
+    DateItem, DefinitionListItem, Embed, FloatAlignment, ImageSource, LinkLabel,
+    LinkLocation, LinkType, ListItem, ListType, Module, PartialElement, Tab, Table,
+    VariableMap,
 };
 use ref_map::*;
 use std::borrow::Cow;
@@ -115,6 +116,16 @@ pub enum Element<'t> {
     Image {
         source: ImageSource<'t>,
         link: Option<LinkLocation<'t>>,
+        alignment: Option<FloatAlignment>,
+        attributes: AttributeMap<'t>,
+    },
+
+    /// An element representing audio and its associated metadata.
+    ///
+    /// The "source" field is the link to the audio itself.
+    ///
+    Audio {
+        source: AudioSource<'t>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
     },
@@ -330,6 +341,7 @@ impl Element<'_> {
             Element::AnchorName(_) => "AnchorName",
             Element::Link { .. } => "Link",
             Element::Image { .. } => "Image",
+            Element::Audio { .. } => "Audio",
             Element::List { .. } => "List",
             Element::DefinitionList(_) => "DefinitionList",
             Element::RadioButton { .. } => "RadioButton",
@@ -383,6 +395,7 @@ impl Element<'_> {
                 true
             }
             Element::Image { .. } => true,
+            Element::Audio { .. } => true,
             Element::List { .. } => false,
             Element::DefinitionList(_) => false,
             Element::RadioButton { .. } | Element::CheckBox { .. } => true,
@@ -467,6 +480,15 @@ impl Element<'_> {
             } => Element::Image {
                 source: source.to_owned(),
                 link: link.ref_map(|link| link.to_owned()),
+                alignment: *alignment,
+                attributes: attributes.to_owned(),
+            },
+            Element::Audio {
+                source,
+                alignment,
+                attributes,
+            } => Element::Audio {
+                source: source.to_owned(),
                 alignment: *alignment,
                 attributes: attributes.to_owned(),
             },

@@ -20,6 +20,7 @@
 
 //! Module that implements HTML rendering for `Element` and its children.
 
+mod audio;
 mod bibliography;
 mod clear_float;
 mod collapsible;
@@ -51,6 +52,7 @@ mod prelude {
     pub use crate::tree::Element;
 }
 
+use self::audio::render_audio;
 use self::bibliography::{render_bibcite, render_bibliography};
 use self::clear_float::render_clear_float;
 use self::collapsible::{Collapsible, render_collapsible};
@@ -120,6 +122,11 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             alignment,
             attributes,
         } => render_image(ctx, source, link, *alignment, attributes),
+        Element::Audio {
+            source,
+            alignment,
+            attributes,
+        } => render_audio(ctx, source, *alignment, attributes),
         Element::List {
             ltype,
             items,
