@@ -1,0 +1,7 @@
+BASIC [[audio filename.mp3]]
+
+LEFT [[audio filename.mp3 align="left"]]
+RIGHT [[audio filename.mp3 align="right"]]
+CENTER [[audio filename.mp3 align="center"]]
+
+EXTERNAL [[audio https://example.com/some-audio.ogg]]
