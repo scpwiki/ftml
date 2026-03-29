@@ -45,13 +45,11 @@ impl<'t> Arguments<'t> {
 
     pub fn insert(&mut self, key: &'t str, value: Cow<'t, str>) {
         let key = UniCase::ascii(key);
-
         self.inner.insert(key, value);
     }
 
     pub fn get(&mut self, key: &'t str) -> Option<Cow<'t, str>> {
         let key = UniCase::ascii(key);
-
         self.inner.remove(&key)
     }
 
