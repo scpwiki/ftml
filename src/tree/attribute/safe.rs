@@ -47,7 +47,7 @@ pub static SAFE_ATTRIBUTES: LazyLock<HashSet<UniCase<&'static str>>> =
             "align",
             "alt",
             "autocapitalize",
-            //"autoplay", TODO: html render settings to allow this?
+            "autoplay",
             "background",
             "bgcolor",
             "border",
@@ -148,7 +148,7 @@ pub static BOOLEAN_ATTRIBUTES: LazyLock<HashSet<UniCase<&'static str>>> =
             "allowpaymentrequest",
             "async",
             "autofocus",
-            //"autoplay",
+            "autoplay",
             "checked",
             "controls",
             "default",

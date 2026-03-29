@@ -69,6 +69,8 @@ fn parse_fn<'r, 't>(
     // The block source is already resolved from the block head.
     // Ignore any user-provided HTML src attribute to avoid conflicts.
     arguments.get("src");
+    // TODO: html render settings to allow this?
+    arguments.get("autoplay");
 
     // Build audio
     let element = Element::Audio {

@@ -6,4 +6,4 @@ CENTER [[audio filename.mp3 align="center"]]
 
 EXTERNAL [[audio https://example.com/some-audio.ogg]]
 
-ATTRS [[audio filename.mp3 src="https://example.com/ignored-audio.ogg" class="custom-audio"]]
+ATTRS [[audio filename.mp3 src="https://example.com/ignored-audio.ogg" autoplay="true" class="custom-audio"]]
