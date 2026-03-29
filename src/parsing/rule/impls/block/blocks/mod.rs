@@ -108,6 +108,7 @@ mod target;
 mod toc;
 mod underline;
 mod user;
+mod video;
 
 pub use self::align_center::BLOCK_ALIGN_CENTER;
 pub use self::align_justify::BLOCK_ALIGN_JUSTIFY;
@@ -164,3 +165,4 @@ pub use self::target::BLOCK_TARGET;
 pub use self::toc::BLOCK_TABLE_OF_CONTENTS;
 pub use self::underline::BLOCK_UNDERLINE;
 pub use self::user::BLOCK_USER;
+pub use self::video::BLOCK_VIDEO;

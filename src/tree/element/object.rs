@@ -24,7 +24,7 @@ use crate::tree::{
     Alignment, AnchorTarget, AttributeMap, AudioSource, ClearFloat, CodeBlock, Container,
     DateItem, DefinitionListItem, Embed, FloatAlignment, ImageSource, LinkLabel,
     LinkLocation, LinkType, ListItem, ListType, Module, PartialElement, Tab, Table,
-    VariableMap,
+    VariableMap, VideoSource,
 };
 use ref_map::*;
 use std::borrow::Cow;
@@ -126,6 +126,12 @@ pub enum Element<'t> {
     ///
     Audio {
         source: AudioSource<'t>,
+        alignment: Option<FloatAlignment>,
+        attributes: AttributeMap<'t>,
+    },
+
+    Video {
+        source: VideoSource<'t>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
     },
@@ -342,6 +348,7 @@ impl Element<'_> {
             Element::Link { .. } => "Link",
             Element::Image { .. } => "Image",
             Element::Audio { .. } => "Audio",
+            Element::Video { .. } => "Video",
             Element::List { .. } => "List",
             Element::DefinitionList(_) => "DefinitionList",
             Element::RadioButton { .. } => "RadioButton",
@@ -396,6 +403,7 @@ impl Element<'_> {
             }
             Element::Image { .. } => true,
             Element::Audio { .. } => true,
+            Element::Video { .. } => true,
             Element::List { .. } => false,
             Element::DefinitionList(_) => false,
             Element::RadioButton { .. } | Element::CheckBox { .. } => true,
@@ -488,6 +496,15 @@ impl Element<'_> {
                 alignment,
                 attributes,
             } => Element::Audio {
+                source: source.to_owned(),
+                alignment: *alignment,
+                attributes: attributes.to_owned(),
+            },
+            Element::Video {
+                source,
+                alignment,
+                attributes,
+            } => Element::Video {
                 source: source.to_owned(),
                 alignment: *alignment,
                 attributes: attributes.to_owned(),
