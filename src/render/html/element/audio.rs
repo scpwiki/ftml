@@ -78,12 +78,11 @@ fn render_audio_element_wikidot(
     attributes: &AttributeMap,
 ) {
     let align_class = alignment.map(FloatAlignment::wd_html_class).unwrap_or("");
-    let align_space = if alignment.is_some() { " " } else { "" };
 
     ctx.html()
         .tag("audio")
         .attr(attr!(
-            "class" => "audio" align_space align_class,
+            "class" => align_class; if alignment.is_some(),
             "controls",
             "preload" => "metadata",
             "crossorigin";;
