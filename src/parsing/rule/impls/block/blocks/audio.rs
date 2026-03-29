@@ -66,6 +66,10 @@ fn parse_fn<'r, 't>(
         None => return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
     };
 
+    // The block source is already resolved from the block head.
+    // Ignore any user-provided HTML src attribute to avoid conflicts.
+    arguments.get("src");
+
     // Build audio
     let element = Element::Audio {
         source,

@@ -5,3 +5,5 @@ RIGHT [[video filename.mp4 align="right"]]
 CENTER [[video filename.mp4 align="center"]]
 
 EXTERNAL [[video https://example.com/some-video.mp4]]
+
+ATTRS [[video filename.mp4 src="https://example.com/ignored-video.mp4" class="custom-video"]]
