@@ -94,7 +94,10 @@ impl Test {
             alt_title: None,
             score: ScoreValue::Integer(10),
             tags: vec![cow!("fruit"), cow!("component")],
-            language: Cow::Owned(self.locale.as_deref().unwrap_or("default").to_string()),
+            language: match self.locale.as_deref() {
+                Some(locale) => cow!(locale),
+                None => cow!("default"),
+            },
         }
     }
 
