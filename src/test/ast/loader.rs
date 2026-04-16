@@ -238,6 +238,7 @@ impl Test {
         let mut wikidot_output = None;
         let mut html_output = None;
         let mut text_output = None;
+        let mut locale = None;
 
         for entry in fs::read_dir(test_dir).expect("Unable to read dir") {
             let entry = entry.expect("Unable to read dir entry");
@@ -274,6 +275,7 @@ impl Test {
                     "wikidot.html" => wikidot_output = Some(String::new()),
                     "output.html" => html_output = Some(String::new()),
                     "output.txt" => text_output = Some(String::new()),
+                    "locale.txt" => locale = Some(String::new()),
                     _ => panic!("Unexpected empty file: {}", entry.path().display()),
                 }
 
@@ -287,6 +289,7 @@ impl Test {
                 "wikidot.html" => wikidot_output = Some(read_text_file(&path)),
                 "output.html" => html_output = Some(read_text_file(&path)),
                 "output.txt" => text_output = Some(read_text_file(&path)),
+                "locale.txt" => locale = Some(read_text_file(&path)),
                 _ => panic!("Unexpected file in AST test: {}", entry.path().display()),
             }
         }
@@ -313,6 +316,7 @@ impl Test {
             wikidot_output,
             html_output,
             text_output,
+            locale,
         };
 
         assert!(

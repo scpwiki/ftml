@@ -159,6 +159,10 @@ pub struct Test {
     /// This refers to the "text renderer" present in ftml.
     /// Read from `output.txt`.
     pub text_output: Option<String>,
+
+    /// The locale for this test.
+    /// Read from `locale.txt`.
+    pub locale: Option<String>,
 }
 
 /// Represents the universe of all AST unit tests read from the filesystem.

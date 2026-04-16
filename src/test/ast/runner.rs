@@ -83,7 +83,7 @@ impl TestUniverse {
 }
 
 impl Test {
-    fn page_info(&self) -> PageInfo<'static> {
+    fn page_info(&self) -> PageInfo<'_> {
         let (group, unit) = self.name.split_once('/').expect("Invalid test name");
 
         PageInfo {
@@ -94,7 +94,10 @@ impl Test {
             alt_title: None,
             score: ScoreValue::Integer(10),
             tags: vec![cow!("fruit"), cow!("component")],
-            language: cow!("default"),
+            language: match self.locale.as_deref() {
+                Some(locale) => cow!(locale),
+                None => cow!("default"),
+            },
         }
     }
 
