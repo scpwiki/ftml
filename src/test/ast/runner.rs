@@ -83,7 +83,7 @@ impl TestUniverse {
 }
 
 impl Test {
-    fn page_info(&self) -> PageInfo<'static> {
+    fn page_info(&self) -> PageInfo<'_> {
         let (group, unit) = self.name.split_once('/').expect("Invalid test name");
 
         PageInfo {
