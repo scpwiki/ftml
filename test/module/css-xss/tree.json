@@ -1,0 +1,16 @@
+{
+    "elements": [
+        {
+            "element": "style",
+            "data": "div#foo {\n    color: red;\n    font-weight: bold;\n}\n\ndiv#bar {\n    color: green;\n}"
+        },
+        {
+            "element": "style",
+            "data": "span { font-style: oblique }</style>\n<div>HTML insertion</div>"
+        },
+        {
+            "element": "style",
+            "data": "</style><script>alert(1)</script>"
+        }
+    ]
+}

@@ -1,0 +1,19 @@
+[[module CSS]]
+div#foo {
+    color: red;
+    font-weight: bold;
+}
+
+div#bar {
+    color: green;
+}
+[[/module]]
+
+[[module css]]
+span { font-style: oblique }</style>
+<div>HTML insertion</div>
+[[/module]]
+
+[[module css]]
+</style><script>alert(1)</script>
+[[/module]]
