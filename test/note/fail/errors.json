@@ -1,5 +1,50 @@
 [
     {
+        "token": "identifier",
+        "rule": "block-note",
+        "span": [
+            73,
+            77
+        ],
+        "kind": "not-supported-inline"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            65,
+            67
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            71,
+            73
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            94,
+            97
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            101,
+            103
+        ],
+        "kind": "no-rules-match"
+    },
+    {
         "token": "left-block-end",
         "rule": "fallback",
         "span": [
@@ -18,13 +63,13 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "input-end",
+        "token": "identifier",
         "rule": "block-note",
         "span": [
-            252,
-            252
+            202,
+            206
         ],
-        "kind": "end-of-input"
+        "kind": "not-supported-inline"
     },
     {
         "token": "left-block",
@@ -41,6 +86,96 @@
         "span": [
             200,
             202
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            223,
+            226
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            230,
+            232
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "identifier",
+        "rule": "block-note",
+        "span": [
+            363,
+            367
+        ],
+        "kind": "not-supported-inline"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            355,
+            357
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            361,
+            363
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            384,
+            387
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            391,
+            393
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "block-note",
+        "span": [
+            453,
+            453
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            395,
+            397
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            401,
+            403
         ],
         "kind": "no-rules-match"
     }

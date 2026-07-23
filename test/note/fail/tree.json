@@ -27,53 +27,68 @@
                         "data": "block"
                     },
                     {
-                        "element": "container",
-                        "data": {
-                            "type": "note",
-                            "attributes": {},
-                            "elements": [
-                                {
-                                    "element": "text",
-                                    "data": "This"
-                                },
-                                {
-                                    "element": "text",
-                                    "data": " "
-                                },
-                                {
-                                    "element": "text",
-                                    "data": "is"
-                                },
-                                {
-                                    "element": "text",
-                                    "data": " "
-                                },
-                                {
-                                    "element": "text",
-                                    "data": "a"
-                                },
-                                {
-                                    "element": "text",
-                                    "data": " "
-                                },
-                                {
-                                    "element": "text",
-                                    "data": "note"
-                                },
-                                {
-                                    "element": "text",
-                                    "data": " "
-                                },
-                                {
-                                    "element": "text",
-                                    "data": "block"
-                                },
-                                {
-                                    "element": "text",
-                                    "data": "."
-                                }
-                            ]
-                        }
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "This"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "is"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "block"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
                     },
                     {
                         "element": "text",
@@ -221,6 +236,252 @@
                     },
                     {
                         "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "This"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "is"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "block"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "<"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "Inline"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "block"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "are"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "not"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "allowed"
+                    },
+                    {
+                        "element": "text",
+                        "data": ","
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "fallback"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "to"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "raw"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "This"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "is"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "note"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "block"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
                     },
                     {
                         "element": "text",

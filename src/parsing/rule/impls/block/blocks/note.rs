@@ -41,14 +41,14 @@ fn parse_note_block<'r, 't>(
     assert!(!flag_score, "Note doesn't allow score flag");
     assert_block_name(&BLOCK_NOTE, name);
 
+    let arguments = parser.get_head_map(&BLOCK_NOTE, in_head)?;
+
     // `[[note]]` is a block element and must start on a new line.
     // Legacy `Text_Wiki` parser also rejected inline note blocks, so preserve
     // that behavior for compatibility.
     if !parser.start_of_line() {
         return Err(parser.make_err(ParseErrorKind::NotSupportedInline));
     }
-
-    let arguments = parser.get_head_map(&BLOCK_NOTE, in_head)?;
 
     // Get body content, without paragraphs
     let (elements, errors, paragraph_safe) =

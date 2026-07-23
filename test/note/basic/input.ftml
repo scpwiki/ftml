@@ -5,11 +5,39 @@ This is a note block.
 [!--No render if no content--]
 [[note]]
 [[/note]]
+Contents after note block(empty).
 
 [[nOtE]]
-weired cases.
+weird cases
 [[/NoTe]]
 
+Contents between note blocks.
+
 [[NOTE]]
-weired cases.
+weird cases
 [[/NOTE]]
+
+[!--full-width characters/Chinese/Japanese/Emoji tests--]
+[[note]]
+中文测试：这是一个 FTML Unicode 测试。
+
+日本語テスト：こんにちは世界！
+これは日本語の文章です。
+
+[!--full-width-characters--]
+全角：
+！ ＂ ＃ ＄ ％ ＆ ’ （ ） ＊ ＋ ， － ． ／
+： ； ＜ ＝ ＞ ？ ＠ ［ ＼ ］ ＾ ＿ ｀
+
+Full-width letters:
+ＡＢＣＤＥＦＧ
+ａｂｃｄｅｆｇ
+１２３４５６７８９０
+
+Emoji:
+😀 😃 😄 😁 😂 🤣 😊 😎 🚀 🔥 ⚡
+🌍 🌙 ⭐ 🧪 🦀 🦖 🎮
+
+Mixed:
+FTML test🚀：日本語＋中文＋emoji😀＋全角符号。
+[[/note]]
