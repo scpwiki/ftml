@@ -11,6 +11,10 @@
         {
             "element": "style",
             "data": "</style><script>alert(1)</script>"
+        },
+        {
+            "element": "style",
+            "data": "#some-data::after { content: \"</style><script>alert(2)</script>\" }"
         }
     ]
 }

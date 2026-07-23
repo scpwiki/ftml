@@ -17,3 +17,7 @@ span { font-style: oblique }</style>
 [[module css]]
 </style><script>alert(1)</script>
 [[/module]]
+
+[[module CSS]]
+#some-data::after { content: "</style><script>alert(2)</script>" }
+[[/module]]
