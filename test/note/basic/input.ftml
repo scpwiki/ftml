@@ -1,0 +1,15 @@
+[[note]]
+This is a note block.
+[/note]
+
+[!--No render if no content--]
+[[note]]
+[[/note]]
+
+[[nOtE]]
+weired cases.
+[[/NoTe]]
+
+[[NOTE]]
+weired cases.
+[[/NOTE]]
