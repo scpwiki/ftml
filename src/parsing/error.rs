@@ -215,6 +215,9 @@ pub enum ParseErrorKind {
 
     /// The URL passed here was invalid.
     InvalidUrl,
+
+    /// The module must be a block, but it's now inline.
+    NotSupportedInline,
 }
 
 impl ParseErrorKind {

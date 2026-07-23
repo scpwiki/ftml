@@ -1,50 +1,5 @@
 [
     {
-        "token": "identifier",
-        "rule": "block",
-        "span": [
-            73,
-            77
-        ],
-        "kind": "no-such-block"
-    },
-    {
-        "token": "left-block",
-        "rule": "fallback",
-        "span": [
-            65,
-            67
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "right-block",
-        "rule": "fallback",
-        "span": [
-            71,
-            73
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "left-block-end",
-        "rule": "fallback",
-        "span": [
-            94,
-            97
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "right-block",
-        "rule": "fallback",
-        "span": [
-            101,
-            103
-        ],
-        "kind": "no-rules-match"
-    },
-    {
         "token": "left-block-end",
         "rule": "fallback",
         "span": [
@@ -63,13 +18,13 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "line-break",
-        "rule": "block",
+        "token": "input-end",
+        "rule": "block-note",
         "span": [
-            202,
-            203
+            252,
+            252
         ],
-        "kind": "no-such-block"
+        "kind": "end-of-input"
     },
     {
         "token": "left-block",

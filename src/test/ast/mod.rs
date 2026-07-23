@@ -50,7 +50,7 @@ const ONLY_TESTS: &[&str] = &[];
 ///
 /// This should be used when adding or changing functionality,
 /// provided you also carefully check the output is as expected.
-const UPDATE_TESTS: bool = false;
+const UPDATE_TESTS: bool = true;
 
 // Constants
 

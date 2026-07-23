@@ -27,68 +27,53 @@
                         "data": "block"
                     },
                     {
-                        "element": "text",
-                        "data": "[["
-                    },
-                    {
-                        "element": "text",
-                        "data": "note"
-                    },
-                    {
-                        "element": "text",
-                        "data": "]]"
-                    },
-                    {
-                        "element": "text",
-                        "data": "This"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "is"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "a"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "note"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "block"
-                    },
-                    {
-                        "element": "text",
-                        "data": "."
-                    },
-                    {
-                        "element": "text",
-                        "data": "[[/"
-                    },
-                    {
-                        "element": "text",
-                        "data": "note"
-                    },
-                    {
-                        "element": "text",
-                        "data": "]]"
+                        "element": "container",
+                        "data": {
+                            "type": "note",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "This"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "is"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "note"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "block"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "."
+                                }
+                            ]
+                        }
                     },
                     {
                         "element": "text",

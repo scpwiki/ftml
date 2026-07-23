@@ -1,6 +1,6 @@
 [[note]]
 This is a note block.
-[/note]
+[[/note]]
 
 [!--No render if no content--]
 [[note]]
