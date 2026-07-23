@@ -265,6 +265,14 @@ body = "elements"
 html-attributes = true
 html-output = "html,code,wj-monospace"
 
+[note]
+aliases = ["note"]
+accepts-newlines = true
+head = "map"
+body = "elements"
+html-attributes = true
+html-output = "html,div,wj-note"
+
 [paragraph]
 aliases = ["p"]
 accepts-newlines = true
