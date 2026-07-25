@@ -30,14 +30,15 @@ fn escape_style_end_tags(css: &mut String) {
     const HTML_END_TAG_START: &str = "</";
     const CSS_ESCAPED_END_TAG_START: &str = r"\3c/";
 
+    replace_all(css, HTML_END_TAG_START, CSS_ESCAPED_END_TAG_START);
+}
+
+fn replace_all(string: &mut String, pattern: &str, replacement: &str) {
     let mut offset = 0;
-    while let Some(relative_start) = css[offset..].find(HTML_END_TAG_START) {
+    while let Some(relative_start) = string[offset..].find(pattern) {
         let start = offset + relative_start;
-        css.replace_range(
-            start..start + HTML_END_TAG_START.len(),
-            CSS_ESCAPED_END_TAG_START,
-        );
-        offset = start + CSS_ESCAPED_END_TAG_START.len();
+        string.replace_range(start..start + pattern.len(), replacement);
+        offset = start + replacement.len();
     }
 }
 
