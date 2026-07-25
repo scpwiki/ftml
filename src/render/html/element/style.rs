@@ -22,10 +22,6 @@ use super::prelude::*;
 use lightningcss::stylesheet::{ParserOptions, PrinterOptions, StyleSheet};
 
 /// Prevent CSS from terminating the HTML `<style>` raw-text element.
-///
-/// This must run after CSS serialization: HTML parsing happens before the
-/// browser parses the CSS, so a CSS escape is needed rather than HTML
-/// escaping. The trailing space terminates the hexadecimal CSS escape.
 fn escape_style_end_tags(css: &mut String) {
     const HTML_END_TAG_START: &str = "</";
     const CSS_ESCAPED_END_TAG_START: &str = r"\3c/";
