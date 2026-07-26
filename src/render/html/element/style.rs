@@ -92,15 +92,15 @@ mod tests {
     fn escapes_any_html_end_tag_start() {
         assert_eq!(
             escaped(r#"content: "</style><script>";"#),
-            r#"content: "\3c /style><script>";"#,
+            r#"content: "\3c/style><script>";"#,
         );
         assert_eq!(
             escaped(r#"content: "</script>";"#),
-            r#"content: "\3c /script>";"#,
+            r#"content: "\3c/script>";"#,
         );
         assert_eq!(
             escaped(r#"content: "</ style>";"#),
-            r#"content: "\3c / style>";"#,
+            r#"content: "\3c/ style>";"#,
         );
     }
 
@@ -108,7 +108,7 @@ mod tests {
     fn escapes_the_style_terminator_exactly() {
         assert_eq!(
             escaped(r#"x { content: "</style"; }"#),
-            r#"x { content: "\3c /style"; }"#,
+            r#"x { content: "\3c/style"; }"#,
         );
     }
 
@@ -116,7 +116,7 @@ mod tests {
     fn preserves_non_ascii_css() {
         assert_eq!(
             escaped(r#"x { content: "café </style>"; }"#),
-            r#"x { content: "café \3c /style>"; }"#,
+            r#"x { content: "café \3c/style>"; }"#,
         );
     }
 
