@@ -116,7 +116,7 @@ enum Outcome {
 
 impl Outcome {
     fn write(&self, buffer: &mut Buffer, path: &Path) -> io::Result<()> {
-        buffer.set_color(&ColorSpec::new().set_bold(true).set_fg(Some(self.color())))?;
+        buffer.set_color(ColorSpec::new().set_bold(true).set_fg(Some(self.color())))?;
 
         match self {
             Outcome::Success(_) => write!(buffer, " pass")?,
