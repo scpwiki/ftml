@@ -17,6 +17,37 @@ Contents between note blocks.
 weird cases
 [[/NOTE]]
 
+[!--Nested note blocks--]
+[[note]]
+[[note]]
+[!--Empty note block--]
+[[/note]]
+[[/note]]
+
+[!--Nested note blocks--]
+[[note]]
+[[note]]
+Contents between note blocks.
+[[/note]]
+[[/note]]
+
+[!--Nested note blocks--]
+[[note]]
+Another Content
+[[note]]
+Contents between note blocks.
+[[/note]]
+[[/note]]
+
+[!--Nested note blocks--]
+[[note]]
+Another Content
+[[note]]
+Contents between note blocks.
+[[/note]]
+Another Content
+[[/note]]
+
 [!--full-width characters/Chinese/Japanese/Emoji tests--]
 [[note]]
 中文测试：这是一个 FTML Unicode 测试。
