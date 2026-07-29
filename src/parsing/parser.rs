@@ -736,3 +736,28 @@ fn parser_newline_flag() {
         [true, true, false, true, false, true, false, false],
     );
 }
+
+#[test]
+fn block_failure_cache_uses_rolled_back_state() {
+    use super::consume::consume;
+    use crate::layout::Layout;
+    use crate::settings::WikitextMode;
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let mut input = String::from("[[div]]\n[[code]]\ncode\n[[/code]]\n");
+
+    crate::preprocess(&mut input);
+    let tokens = crate::tokenize(&input);
+    let mut parser = Parser::new(&tokens, &page_info, &settings);
+
+    parser.step().expect("expected the first input token");
+    let _ = consume(&mut parser).expect("unclosed div should fall back to text");
+
+    let failures = parser.block_failures.borrow();
+    let failure = failures
+        .keys()
+        .next()
+        .expect("expected a cached block failure");
+    assert_eq!(failure.code_block_index, 0);
+}
