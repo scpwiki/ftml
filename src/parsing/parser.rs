@@ -223,6 +223,7 @@ impl<'r, 't> Parser<'r, 't> {
             html_block_index: self.html_blocks.borrow().len(),
             code_block_index: self.code_blocks.borrow().len(),
             table_of_contents_index: self.table_of_contents.borrow().len(),
+            bibliography_index: self.bibliographies.borrow().next_index(),
         }
     }
 
@@ -236,6 +237,7 @@ impl<'r, 't> Parser<'r, 't> {
             html_block_index,
             code_block_index,
             table_of_contents_index,
+            bibliography_index,
         }: ParserMutableState,
     ) {
         self.footnotes.borrow_mut().truncate(footnote_index);
@@ -244,6 +246,9 @@ impl<'r, 't> Parser<'r, 't> {
         self.table_of_contents
             .borrow_mut()
             .truncate(table_of_contents_index);
+        self.bibliographies
+            .borrow_mut()
+            .truncate(bibliography_index);
     }
 
     // Parse settings helpers
@@ -661,7 +666,7 @@ impl<'r, 't> Parser<'r, 't> {
             in_footnote: self.in_footnote,
             has_footnote_block: self.has_footnote_block,
             start_of_line: self.start_of_line,
-            bibliography_index: self.bibliographies.borrow().next_index(),
+            bibliography_index: mutable_state.bibliography_index,
             footnote_index: mutable_state.footnote_index,
             html_block_index: mutable_state.html_block_index,
             code_block_index: mutable_state.code_block_index,
@@ -687,6 +692,7 @@ pub struct ParserMutableState {
     html_block_index: usize,
     code_block_index: usize,
     table_of_contents_index: usize,
+    bibliography_index: usize,
 }
 
 #[inline]
