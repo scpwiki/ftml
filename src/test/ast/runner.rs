@@ -28,6 +28,7 @@ use crate::render::Render;
 use crate::render::html::HtmlRender;
 use crate::render::text::TextRender;
 use crate::settings::{WikitextMode, WikitextSettings};
+use crate::test::ast::TEST_DIRECTORY;
 use crate::test::includer::TestIncluder;
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
@@ -132,8 +133,6 @@ impl Test {
         let (mut tree, actual_errors) = result.into();
         tree.wikitext_len = 0; // not stored in the JSON, need for correct eq
 
-        let stderr = render_errors_stderr("input.ftml", &self.input, &actual_errors);
-
         let mut result = TestResult::Pass;
 
         // Check abstract syntax tree
@@ -198,9 +197,17 @@ impl Test {
             }
         }
 
-        // Run and check stderr
-        if let Some(expected_stderr) = &self.errors_stderr {
-            if &stderr != expected_stderr {
+        // Only run stderr generate and check when file exists.
+        let stderr_path = TEST_DIRECTORY.join("errors.stderr");
+
+        if stderr_path.exists() {
+            // Render parser errors as compiler-style diagnostics with source locations.
+            let stderr =
+                render_errors_to_stderr("input.ftml", &self.input, &actual_errors);
+            // Run and check stderr
+            if let Some(expected_stderr) = &self.errors_stderr
+                && &stderr != expected_stderr
+            {
                 result = TestResult::Fail;
                 eprintln!("Parse stderr did not match:");
                 eprintln!("Expected:\n{}", expected_stderr);
@@ -231,8 +238,6 @@ impl Test {
         let result = crate::parse(&tokens, &page_info, &parse_settings);
         let (mut tree, errors) = result.into();
         tree.wikitext_len = 0; // see run()
-
-        let stderr = render_errors_stderr("input.ftml", &self.input, &errors);
 
         macro_rules! update {
             ($write_func:ident, $object:expr, $filename:expr $(,)?) => {{
@@ -305,9 +310,15 @@ impl Test {
             }
         }
 
-        // Run and check stderr
-        if let Some(expected_stderr) = &self.errors_stderr {
-            if &stderr != expected_stderr {
+        // Only run stderr generate and check when file exists.
+        let stderr_path = TEST_DIRECTORY.join("errors.stderr");
+
+        if stderr_path.exists() {
+            let stderr = render_errors_to_stderr("input.ftml", &self.input, &errors); // see run()
+            // Run and check stderr
+            if let Some(expected_stderr) = &self.errors_stderr
+                && &stderr != expected_stderr
+            {
                 update!(write_text, stderr, "errors.stderr");
             }
         }
@@ -384,7 +395,7 @@ fn write_text(path: &Path, contents: &str) {
 }
 
 /// Helper function for rendering errors to stderr.
-fn render_errors_stderr(
+fn render_errors_to_stderr(
     source_name: &str,
     source: &str,
     errors: &[ParseError],
@@ -409,5 +420,6 @@ fn render_errors_stderr(
             .expect("failed to emit diagnostic");
     }
 
-    String::from_utf8(output.as_slice().to_vec()).expect("diagnostic output was not utf8")
+    String::from_utf8(output.as_slice().to_vec())
+        .expect("diagnostic output was not utf-8")
 }

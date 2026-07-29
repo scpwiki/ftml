@@ -56,7 +56,7 @@ const UPDATE_TESTS: bool = false;
 
 /// The directory where all test files are located.
 /// This is the directory `test` under the repository root.
-static TEST_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| {
+pub(crate) static TEST_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("test");
     path
@@ -147,7 +147,7 @@ pub struct Test {
     /// Read from `errors.json`.
     pub errors: Option<Vec<ParseError>>,
 
-    /// The readable error message for this test.
+    /// The readable error message from this test.
     /// Read from `errors.stderr`.
     pub errors_stderr: Option<String>,
 
