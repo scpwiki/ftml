@@ -30,6 +30,7 @@ use crate::tree::{
 };
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::{mem, ptr};
 
@@ -79,6 +80,11 @@ pub struct Parser<'r, 't> {
     // overriding later ones.
     bibliographies: Rc<RefCell<BibliographyList<'t>>>,
 
+    // Failed block parses can be retried after an enclosing block falls back
+    // to text. Keep terminal failures so malformed nested blocks do not cause
+    // the same suffix to be parsed exponentially many times.
+    block_failures: Rc<RefCell<HashMap<BlockFailureKey, CachedBlockFailure>>>,
+
     // Flags
     accepts_partial: AcceptsPartial,
     in_footnote: bool, // Whether we're currently inside [[footnote]] ... [[/footnote]].
@@ -115,6 +121,7 @@ impl<'r, 't> Parser<'r, 't> {
             code_blocks: make_shared_vec(),
             footnotes: make_shared_vec(),
             bibliographies: Rc::new(RefCell::new(BibliographyList::new())),
+            block_failures: Rc::new(RefCell::new(HashMap::new())),
             accepts_partial: AcceptsPartial::None,
             in_footnote: false,
             has_footnote_block: false,
@@ -290,6 +297,26 @@ impl<'r, 't> Parser<'r, 't> {
 
     pub fn truncate_footnotes(&mut self, count: usize) {
         self.footnotes.borrow_mut().truncate(count);
+    }
+
+    pub(crate) fn cached_block_failure(&self, rule: &'static str) -> Option<ParseError> {
+        let key = self.block_failure_key(rule);
+        self.block_failures
+            .borrow()
+            .get(&key)
+            .filter(|failure| self.depth <= failure.depth)
+            .map(|failure| failure.error.clone())
+    }
+
+    pub(crate) fn cache_block_failure(&mut self, rule: &'static str, error: &ParseError) {
+        let key = self.block_failure_key(rule);
+        self.block_failures.borrow_mut().insert(
+            key,
+            CachedBlockFailure {
+                error: error.clone(),
+                depth: self.depth,
+            },
+        );
     }
 
     #[cold]
@@ -594,6 +621,50 @@ impl<'r, 't> Parser<'r, 't> {
     #[inline]
     pub fn make_err(&self, kind: ParseErrorKind) -> ParseError {
         ParseError::new(kind, self.rule, self.current)
+    }
+}
+
+/// State which affects whether a terminal block parse can be retried.
+///
+/// The recursion depth is intentionally not part of this key. The cached
+/// failure records it separately and is only reused at an equal or shallower
+/// depth, so recursion-limit errors retain their original behavior.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+struct BlockFailureKey {
+    token: usize,
+    rule: &'static str,
+    accepts_partial: AcceptsPartial,
+    in_footnote: bool,
+    has_footnote_block: bool,
+    start_of_line: bool,
+    footnote_index: usize,
+    html_block_index: usize,
+    code_block_index: usize,
+    table_of_contents_index: usize,
+}
+
+#[derive(Debug, Clone)]
+struct CachedBlockFailure {
+    error: ParseError,
+    depth: usize,
+}
+
+impl<'r, 't> Parser<'r, 't> {
+    fn block_failure_key(&self, rule: &'static str) -> BlockFailureKey {
+        let mutable_state = self.get_mutable_state();
+
+        BlockFailureKey {
+            token: self.current as *const ExtractedToken<'t> as usize,
+            rule,
+            accepts_partial: self.accepts_partial,
+            in_footnote: self.in_footnote,
+            has_footnote_block: self.has_footnote_block,
+            start_of_line: self.start_of_line,
+            footnote_index: mutable_state.footnote_index,
+            html_block_index: mutable_state.html_block_index,
+            code_block_index: mutable_state.code_block_index,
+            table_of_contents_index: mutable_state.table_of_contents_index,
+        }
     }
 }
 
