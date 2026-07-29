@@ -91,24 +91,30 @@ fn nested_unclosed_divs() {
     assert_eq!(tree.elements.len(), 1);
 }
 
-/// Failed nested blocks must not reuse a cache entry across bibliography state.
+/// Failed nested blocks must roll back bibliography state before caching.
 #[test]
 fn nested_unclosed_blocks_preserve_bibliography_indices() {
+    const ITERATIONS: usize = 22;
+
     let page_info = PageInfo::dummy();
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
-    let mut input = String::from(
-        "[[div]]\n[[div]]\n[[bibliography]]\n: foo : bar\n[[/bibliography]]\n",
-    );
+    let mut input = String::new();
+    for _ in 0..ITERATIONS {
+        input.push_str("[[div]]\n");
+    }
+    input.push_str("[[bibliography]]\n: foo : bar\n[[/bibliography]]\n");
+
     crate::preprocess(&mut input);
     let tokens = crate::tokenize(&input);
     let (tree, errors) = crate::parse(&tokens, &page_info, &settings).into();
 
-    assert_eq!(errors.len(), 6);
+    assert_eq!(errors.len(), ITERATIONS * 3);
     assert!(matches!(
         tree.elements.last(),
-        Some(Element::BibliographyBlock { index: 3, .. })
+        Some(Element::BibliographyBlock { index: 0, .. })
     ));
+    assert_eq!(tree.bibliographies.next_index(), 1);
 }
 
 /// Test the parser's ability to process large bodies
