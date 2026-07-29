@@ -92,7 +92,7 @@ impl Rule {
             // some annoying mutable fields are
             Err(ref error) => {
                 if memoize_failure && error.kind() == ParseErrorKind::EndOfInput {
-                    parser.cache_block_failure(self.name, &error);
+                    parser.cache_block_failure(self.name, error);
                 }
 
                 parser.reset_mutable_state(parser_state);
