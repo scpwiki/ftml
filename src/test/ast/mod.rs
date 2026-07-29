@@ -147,6 +147,10 @@ pub struct Test {
     /// Read from `errors.json`.
     pub errors: Option<Vec<ParseError>>,
 
+    /// The readable error message for this test.
+    /// Read from `errors.stderr`.
+    pub errors_stderr: Option<String>,
+
     /// The Wikidot-layout HTML expected to be generated from this input.
     /// Read from `wikidot.html`.
     pub wikidot_output: Option<String>,
