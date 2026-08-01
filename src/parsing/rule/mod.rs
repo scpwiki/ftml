@@ -67,7 +67,8 @@ impl Rule {
         }
 
         let memoize_on_failure = matches!(self.name, "block" | "block-star");
-        if memoize_on_failure && let Some(error) = parser.cached_block_failure(self.name) {
+        if memoize_on_failure && let Some(error) = parser.cached_block_failure(self.name)
+        {
             return Err(error);
         }
 
