@@ -110,6 +110,7 @@ fn nested_unclosed_blocks_preserve_bibliography_indices() {
     let (tree, errors) = crate::parse(&tokens, &page_info, &settings).into();
 
     assert_eq!(errors.len(), ITERATIONS * 3);
+    assert_eq!(tree.elements.len(), 2);
     assert!(matches!(
         tree.elements.last(),
         Some(Element::BibliographyBlock { index: 0, .. })
