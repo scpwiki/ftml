@@ -67,7 +67,7 @@ impl Rule {
         }
 
         let memoize_on_failure = matches!(self.name, "block" | "block-star");
-        if memoize_failure && let Some(error) = parser.cached_block_failure(self.name) {
+        if memoize_on_failure && let Some(error) = parser.cached_block_failure(self.name) {
             return Err(error);
         }
 
@@ -93,7 +93,7 @@ impl Rule {
             Err(ref error) => {
                 parser.reset_mutable_state(parser_state);
 
-                if memoize_failure && error.kind() == ParseErrorKind::EndOfInput {
+                if memoize_on_failure && error.kind() == ParseErrorKind::EndOfInput {
                     parser.cache_block_failure(self.name, error);
                 }
             }
