@@ -90,7 +90,7 @@ impl Rule {
             // Rule failed, ensure that any changes are rolled back.
             //
             // While normally discarding the subparser is sufficient,
-            // some annoying mutable fields are
+            // some annoying mutable fields must be manually reset.
             Err(ref error) => {
                 parser.reset_mutable_state(parser_state);
 
