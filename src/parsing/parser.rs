@@ -31,6 +31,7 @@ use crate::tree::{
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::{mem, ptr};
 
@@ -83,7 +84,7 @@ pub struct Parser<'r, 't> {
     // Failed block parses can be retried after an enclosing block falls back
     // to text. Keep terminal failures so malformed nested blocks do not cause
     // the same suffix to be parsed exponentially many times.
-    block_failures: Rc<RefCell<HashMap<BlockFailureKey, CachedBlockFailure>>>,
+    block_failures: Rc<RefCell<HashMap<BlockFailureKey<'t>, CachedBlockFailure>>>,
 
     // Flags
     accepts_partial: AcceptsPartial,
@@ -304,7 +305,10 @@ impl<'r, 't> Parser<'r, 't> {
         self.footnotes.borrow_mut().truncate(count);
     }
 
-    pub(crate) fn cached_block_failure(&self, rule: &'static str) -> Option<ParseError> {
+    pub(crate) fn get_cached_block_failure(
+        &self,
+        rule: &'static str,
+    ) -> Option<ParseError> {
         let key = self.block_failure_key(rule);
         self.block_failures
             .borrow()
@@ -635,8 +639,8 @@ impl<'r, 't> Parser<'r, 't> {
 /// failure records it separately and is only reused at an equal or shallower
 /// depth, so recursion-limit errors retain their original behavior.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-struct BlockFailureKey {
-    token: usize,
+struct BlockFailureKey<'t> {
+    token: ExtractedTokenId<'t>,
     rule: &'static str,
     accepts_partial: AcceptsPartial,
     in_footnote: bool,
@@ -649,6 +653,23 @@ struct BlockFailureKey {
     table_of_contents_index: usize,
 }
 
+#[derive(Debug, Copy, Clone)]
+struct ExtractedTokenId<'t>(*const ExtractedToken<'t>);
+
+impl PartialEq for ExtractedTokenId<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for ExtractedTokenId<'_> {}
+
+impl Hash for ExtractedTokenId<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 #[derive(Debug, Clone)]
 struct CachedBlockFailure {
     error: ParseError,
@@ -656,11 +677,11 @@ struct CachedBlockFailure {
 }
 
 impl<'r, 't> Parser<'r, 't> {
-    fn block_failure_key(&self, rule: &'static str) -> BlockFailureKey {
+    fn block_failure_key(&self, rule: &'static str) -> BlockFailureKey<'t> {
         let mutable_state = self.get_mutable_state();
 
         BlockFailureKey {
-            token: self.current as *const ExtractedToken<'t> as usize,
+            token: ExtractedTokenId(self.current),
             rule,
             accepts_partial: self.accepts_partial,
             in_footnote: self.in_footnote,
