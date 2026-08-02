@@ -102,6 +102,10 @@ impl<'t> BibliographyList<'t> {
         self.0.append(&mut other.0);
     }
 
+    pub(crate) fn truncate(&mut self, length: usize) {
+        self.0.truncate(length);
+    }
+
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()

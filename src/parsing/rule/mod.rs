@@ -66,6 +66,13 @@ impl Rule {
             }
         }
 
+        let memoize_on_failure = matches!(self.name, "block" | "block-star");
+        if memoize_on_failure
+            && let Some(error) = parser.get_cached_block_failure(self.name)
+        {
+            return Err(error);
+        }
+
         // Fork parser and try running the rule.
         let parser_state = parser.get_mutable_state();
         let mut sub_parser = parser.clone_with_rule(self);
@@ -84,8 +91,14 @@ impl Rule {
             // Rule failed, ensure that any changes are rolled back.
             //
             // While normally discarding the subparser is sufficient,
-            // some annoying mutable fields are
-            Err(_) => parser.reset_mutable_state(parser_state),
+            // some annoying mutable fields must be manually reset.
+            Err(ref error) => {
+                parser.reset_mutable_state(parser_state);
+
+                if memoize_on_failure && error.kind() == ParseErrorKind::EndOfInput {
+                    parser.cache_block_failure(self.name, error);
+                }
+            }
         }
 
         result

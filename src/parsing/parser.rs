@@ -30,6 +30,8 @@ use crate::tree::{
 };
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::{mem, ptr};
 
@@ -79,6 +81,11 @@ pub struct Parser<'r, 't> {
     // overriding later ones.
     bibliographies: Rc<RefCell<BibliographyList<'t>>>,
 
+    // Failed block parses can be retried after an enclosing block falls back
+    // to text. Keep terminal failures so malformed nested blocks do not cause
+    // the same suffix to be parsed exponentially many times.
+    block_failures: Rc<RefCell<HashMap<BlockFailureKey<'t>, CachedBlockFailure>>>,
+
     // Flags
     accepts_partial: AcceptsPartial,
     in_footnote: bool, // Whether we're currently inside [[footnote]] ... [[/footnote]].
@@ -115,6 +122,7 @@ impl<'r, 't> Parser<'r, 't> {
             code_blocks: make_shared_vec(),
             footnotes: make_shared_vec(),
             bibliographies: Rc::new(RefCell::new(BibliographyList::new())),
+            block_failures: Rc::new(RefCell::new(HashMap::new())),
             accepts_partial: AcceptsPartial::None,
             in_footnote: false,
             has_footnote_block: false,
@@ -216,6 +224,7 @@ impl<'r, 't> Parser<'r, 't> {
             html_block_index: self.html_blocks.borrow().len(),
             code_block_index: self.code_blocks.borrow().len(),
             table_of_contents_index: self.table_of_contents.borrow().len(),
+            bibliography_index: self.bibliographies.borrow().next_index(),
         }
     }
 
@@ -229,6 +238,7 @@ impl<'r, 't> Parser<'r, 't> {
             html_block_index,
             code_block_index,
             table_of_contents_index,
+            bibliography_index,
         }: ParserMutableState,
     ) {
         self.footnotes.borrow_mut().truncate(footnote_index);
@@ -237,6 +247,9 @@ impl<'r, 't> Parser<'r, 't> {
         self.table_of_contents
             .borrow_mut()
             .truncate(table_of_contents_index);
+        self.bibliographies
+            .borrow_mut()
+            .truncate(bibliography_index);
     }
 
     // Parse settings helpers
@@ -290,6 +303,29 @@ impl<'r, 't> Parser<'r, 't> {
 
     pub fn truncate_footnotes(&mut self, count: usize) {
         self.footnotes.borrow_mut().truncate(count);
+    }
+
+    pub(crate) fn get_cached_block_failure(
+        &self,
+        rule: &'static str,
+    ) -> Option<ParseError> {
+        let key = self.block_failure_key(rule);
+        self.block_failures
+            .borrow()
+            .get(&key)
+            .filter(|failure| self.depth <= failure.depth)
+            .map(|failure| failure.error.clone())
+    }
+
+    pub(crate) fn cache_block_failure(&mut self, rule: &'static str, error: &ParseError) {
+        let key = self.block_failure_key(rule);
+        self.block_failures.borrow_mut().insert(
+            key,
+            CachedBlockFailure {
+                error: error.clone(),
+                depth: self.depth,
+            },
+        );
     }
 
     #[cold]
@@ -597,6 +633,69 @@ impl<'r, 't> Parser<'r, 't> {
     }
 }
 
+/// State which affects whether a terminal block parse can be retried.
+///
+/// The recursion depth is intentionally not part of this key. The cached
+/// failure records it separately and is only reused at an equal or shallower
+/// depth, so recursion-limit errors retain their original behavior.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+struct BlockFailureKey<'t> {
+    token: ExtractedTokenId<'t>,
+    rule: &'static str,
+    accepts_partial: AcceptsPartial,
+    in_footnote: bool,
+    has_footnote_block: bool,
+    start_of_line: bool,
+    bibliography_index: usize,
+    footnote_index: usize,
+    html_block_index: usize,
+    code_block_index: usize,
+    table_of_contents_index: usize,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct ExtractedTokenId<'t>(*const ExtractedToken<'t>);
+
+impl PartialEq for ExtractedTokenId<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for ExtractedTokenId<'_> {}
+
+impl Hash for ExtractedTokenId<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CachedBlockFailure {
+    error: ParseError,
+    depth: usize,
+}
+
+impl<'r, 't> Parser<'r, 't> {
+    fn block_failure_key(&self, rule: &'static str) -> BlockFailureKey<'t> {
+        let mutable_state = self.get_mutable_state();
+
+        BlockFailureKey {
+            token: ExtractedTokenId(self.current),
+            rule,
+            accepts_partial: self.accepts_partial,
+            in_footnote: self.in_footnote,
+            has_footnote_block: self.has_footnote_block,
+            start_of_line: self.start_of_line,
+            bibliography_index: mutable_state.bibliography_index,
+            footnote_index: mutable_state.footnote_index,
+            html_block_index: mutable_state.html_block_index,
+            code_block_index: mutable_state.code_block_index,
+            table_of_contents_index: mutable_state.table_of_contents_index,
+        }
+    }
+}
+
 /// This struct stores the state of the mutable fields in `Parser`.
 ///
 /// This way, on rule failure, we can revert to the state these
@@ -614,6 +713,7 @@ pub struct ParserMutableState {
     html_block_index: usize,
     code_block_index: usize,
     table_of_contents_index: usize,
+    bibliography_index: usize,
 }
 
 #[inline]
@@ -662,4 +762,29 @@ fn parser_newline_flag() {
         "\nA\n\nB\n\n\nC D",
         [true, true, false, true, false, true, false, false],
     );
+}
+
+#[test]
+fn block_failure_cache_uses_rolled_back_state() {
+    use super::consume::consume;
+    use crate::layout::Layout;
+    use crate::settings::WikitextMode;
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let mut input = String::from("[[div]]\n[[code]]\ncode\n[[/code]]\n");
+
+    crate::preprocess(&mut input);
+    let tokens = crate::tokenize(&input);
+    let mut parser = Parser::new(&tokens, &page_info, &settings);
+
+    parser.step().expect("expected the first input token");
+    let _ = consume(&mut parser).expect("unclosed div should fall back to text");
+
+    let failures = parser.block_failures.borrow();
+    let failure = failures
+        .keys()
+        .next()
+        .expect("expected a cached block failure");
+    assert_eq!(failure.code_block_index, 0);
 }
