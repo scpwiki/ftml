@@ -235,6 +235,7 @@ impl Test {
         let mut input = None;
         let mut tree = None;
         let mut errors = None;
+        let mut errors_stderr = None;
         let mut wikidot_output = None;
         let mut html_output = None;
         let mut text_output = None;
@@ -272,6 +273,7 @@ impl Test {
                     ),
                     "tree.json" => tree = Some(empty_syntax_tree()),
                     "errors.json" => errors = Some(Vec::new()),
+                    "errors.stderr" => errors_stderr = Some(String::new()),
                     "wikidot.html" => wikidot_output = Some(String::new()),
                     "output.html" => html_output = Some(String::new()),
                     "output.txt" => text_output = Some(String::new()),
@@ -286,6 +288,7 @@ impl Test {
                 "input.ftml" => input = Some(read_text_file(&path)),
                 "tree.json" => tree = Some(read_json(&path)),
                 "errors.json" => errors = Some(read_json(&path)),
+                "errors.stderr" => errors_stderr = Some(read_text_file(&path)),
                 "wikidot.html" => wikidot_output = Some(read_text_file(&path)),
                 "output.html" => html_output = Some(read_text_file(&path)),
                 "output.txt" => text_output = Some(read_text_file(&path)),
@@ -313,6 +316,7 @@ impl Test {
             input,
             tree,
             errors,
+            errors_stderr,
             wikidot_output,
             html_output,
             text_output,
