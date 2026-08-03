@@ -215,6 +215,9 @@ pub enum ParseErrorKind {
 
     /// The URL passed here was invalid.
     InvalidUrl,
+
+    /// The block must be across multiple lines, but it was inline.
+    NotSupportedInline,
 }
 
 impl ParseErrorKind {
