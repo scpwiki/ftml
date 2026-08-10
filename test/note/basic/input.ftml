@@ -1,0 +1,74 @@
+[[note]]
+This is a note block.
+[[/note]]
+
+[!--No render if no content--]
+[[note]]
+[[/note]]
+Contents after note block(empty).
+
+[[nOtE]]
+weird cases
+[[/NoTe]]
+
+Contents between note blocks.
+
+[[NOTE]]
+weird cases
+[[/NOTE]]
+
+[!--Nested note blocks--]
+[[note]]
+[[note]]
+[!--Empty note block--]
+[[/note]]
+[[/note]]
+
+[!--Nested note blocks--]
+[[note]]
+[[note]]
+Contents between note blocks.
+[[/note]]
+[[/note]]
+
+[!--Nested note blocks--]
+[[note]]
+Another Content
+[[note]]
+Contents between note blocks.
+[[/note]]
+[[/note]]
+
+[!--Nested note blocks--]
+[[note]]
+Another Content
+[[note]]
+Contents between note blocks.
+[[/note]]
+Another Content
+[[/note]]
+
+[!--full-width characters/Chinese/Japanese/Emoji tests--]
+[[note]]
+中文测试：这是一个 FTML Unicode 测试。
+
+日本語テスト：こんにちは世界！
+これは日本語の文章です。
+
+[!--full-width-characters--]
+全角：
+！ ＂ ＃ ＄ ％ ＆ ’ （ ） ＊ ＋ ， － ． ／
+： ； ＜ ＝ ＞ ？ ＠ ［ ＼ ］ ＾ ＿ ｀
+
+Full-width letters:
+ＡＢＣＤＥＦＧ
+ａｂｃｄｅｆｇ
+１２３４５６７８９０
+
+Emoji:
+😀 😃 😄 😁 😂 🤣 😊 😎 🚀 🔥 ⚡
+🌍 🌙 ⭐ 🧪 🦀 🦖 🎮
+
+Mixed:
+FTML test🚀：日本語＋中文＋emoji😀＋全角符号。
+[[/note]]

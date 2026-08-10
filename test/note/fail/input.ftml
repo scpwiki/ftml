@@ -1,0 +1,14 @@
+[!--Note block failed when placing it inline--]
+Failed note block[[note]]This is a note block.[[/note]] <- This will fallback to raw text.
+
+[note]
+Failed if only has the closing tag.
+[[/note]]
+
+[[note]]This is a note block.[[/note]] <- Inline note block are not allowed, fallback to raw text.
+
+[!--if only note block inline, Still fallback to raw text--]
+[[note]]This is a note block.[[/note]]
+
+[[note]]
+Note block failed because of missing closing tag.
