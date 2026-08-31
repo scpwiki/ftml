@@ -25,6 +25,33 @@ use crate::settings::{
 };
 use std::sync::Arc;
 
+// Typescript declarations
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &str = r#"
+export interface IWikitextSettings {
+    mode: WikitextMode;
+    enable_page_syntax: boolean;
+    use_true_ids: boolean;
+    allow_local_paths: boolean;
+}
+
+export type WikitextMode =
+    | 'page'
+    | 'draft'
+    | 'forum-post'
+    | 'direct-message'
+    | 'list'
+"#;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "IWikitextSettings")]
+    pub type IWikitextSettings;
+}
+
+// Wrapper structure
+
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct WikitextSettings {
@@ -46,7 +73,9 @@ impl WikitextSettings {
     }
 
     #[wasm_bindgen(constructor)]
-    pub fn new(settings: JsValue) -> Result<WikitextSettings, JsValue> {
+    pub fn new(settings: IWikitextSettings) -> Result<WikitextSettings, JsValue> {
+        let settings: JsValue = settings.into();
+
         Ok(WikitextSettings {
             inner: Arc::new(js_to_rust!(settings)?),
         })

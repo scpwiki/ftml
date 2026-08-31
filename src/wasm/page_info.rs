@@ -23,6 +23,33 @@ use crate::data::PageInfo as RustPageInfo;
 use ref_map::*;
 use std::sync::Arc;
 
+// Typescript declarations
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &str = r#"
+export interface IPageInfo {
+    page: string;
+    category: string | null;
+    site: string;
+    title: string;
+    alt_title: string | null;
+    score: number;
+    tags: string[];
+    language: string;
+}
+"#;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "IPageInfo")]
+    pub type IPageInfo;
+
+    #[wasm_bindgen(typescript_type = "string[]")]
+    pub type ITags;
+}
+
+// Wrapper structure
+
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct PageInfo {
@@ -44,7 +71,9 @@ impl PageInfo {
     }
 
     #[wasm_bindgen(constructor)]
-    pub fn new(info: JsValue) -> Result<PageInfo, JsValue> {
+    pub fn new(info: IPageInfo) -> Result<PageInfo, JsValue> {
+        let info: JsValue = info.into();
+
         Ok(PageInfo {
             inner: Arc::new(js_to_rust!(info)?),
         })
@@ -83,8 +112,8 @@ impl PageInfo {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn tags(&self) -> Result<JsValue, JsValue> {
-        rust_to_js!(self.inner.tags)
+    pub fn tags(&self) -> Result<ITags, JsValue> {
+        rust_to_js!(self.inner.tags).map(|tags| tags.into())
     }
 
     #[wasm_bindgen(getter)]
