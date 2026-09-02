@@ -18,8 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use std::borrow::Cow;
+
 use super::prelude::*;
-use crate::tree::{FileSource, FloatAlignment, LinkLocation};
+use crate::tree::{AnchorTarget, FileSource, FloatAlignment, LinkLocation};
 
 pub const BLOCK_IMAGE: BlockRule = BlockRule {
     name: "block-image",
@@ -43,7 +45,30 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_IMAGE, name);
 
     let (source, mut arguments) = parser.get_head_name_map(&BLOCK_IMAGE, in_head)?;
-    let link = arguments.get("link").map(LinkLocation::parse);
+
+    let (link, target) = if let Some(link_arg) = arguments.get("link") {
+        let link_ref = link_arg.as_ref();
+        let target = if link_ref.starts_with("*") {
+            Some(AnchorTarget::NewTab)
+        } else {
+            None
+        };
+
+        let parsing_link = if let Some(links) = link_ref.strip_prefix("*") {
+            links
+        } else {
+            link_ref
+        }
+        .trim_start();
+
+        (
+            Some(LinkLocation::parse(Cow::Owned(parsing_link.to_string()))),
+            target,
+        )
+    } else {
+        (None, None)
+    };
+
     let alignment = FloatAlignment::parse(name);
 
     // Parse the image source based on format
@@ -58,6 +83,7 @@ fn parse_fn<'r, 't>(
         link,
         alignment,
         attributes: arguments.to_attribute_map(parser.settings()),
+        target,
     };
 
     ok!(element)

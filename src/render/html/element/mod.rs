@@ -123,7 +123,8 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             link,
             alignment,
             attributes,
-        } => render_image(ctx, source, link, *alignment, attributes),
+            target,
+        } => render_image(ctx, source, link, *alignment, attributes, *target),
         Element::Audio {
             source,
             alignment,
