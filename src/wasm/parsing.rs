@@ -28,6 +28,43 @@ use crate::tree::SyntaxTree as RustSyntaxTree;
 use crate::utf16::Utf16IndexMap;
 use std::sync::Arc;
 
+// Typescript declarations
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &str = r#"
+export interface IElement {
+    element: string;
+    data?: any;
+}
+
+export interface ISyntaxTree {
+    elements: IElement[];
+    table_of_contents: IElement[];
+    footnotes: IElement[][];
+}
+
+export interface IParseError {
+    token: string;
+    rule: string;
+    span: {
+        start: number;
+        end: number;
+    };
+    kind: string;
+}
+"#;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "ISyntaxTree")]
+    pub type ISyntaxTree;
+
+    #[wasm_bindgen(typescript_type = "IParseError[]")]
+    pub type IParseErrorArray;
+}
+
+// Wrapper structures
+
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct ParseOutcome {
@@ -53,8 +90,8 @@ impl ParseOutcome {
     }
 
     #[wasm_bindgen]
-    pub fn errors(&self) -> Result<JsValue, JsValue> {
-        rust_to_js!(self.inner.errors())
+    pub fn errors(&self) -> Result<IParseErrorArray, JsValue> {
+        rust_to_js!(self.inner.errors()).map(|err| err.into())
     }
 }
 
@@ -79,8 +116,8 @@ impl SyntaxTree {
     }
 
     #[wasm_bindgen]
-    pub fn data(&self) -> Result<JsValue, JsValue> {
-        rust_to_js!(*self.inner)
+    pub fn data(&self) -> Result<ISyntaxTree, JsValue> {
+        rust_to_js!(*self.inner).map(|data| data.into())
     }
 }
 
