@@ -46,27 +46,28 @@ fn parse_fn<'r, 't>(
 
     let (source, mut arguments) = parser.get_head_name_map(&BLOCK_IMAGE, in_head)?;
 
-    let (link, target) = if let Some(link_arg) = arguments.get("link") {
-        let link_ref = link_arg.as_ref();
-        let target = if link_ref.starts_with("*") {
-            Some(AnchorTarget::NewTab)
-        } else {
-            None
-        };
+    let (link, target) = match arguments.get("link") {
+        Some(link_arg) => {
+            let (parsing_link, target) = match link_arg {
+                Cow::Borrowed(s) => {
+                    let (s, target) = match s.strip_prefix("*") {
+                        Some(s) => (s, Some(AnchorTarget::NewTab)),
+                        None => (s, None),
+                    };
+                    (Cow::Borrowed(s.trim_start()), target)
+                }
+                Cow::Owned(s) => {
+                    let (s, target) = match s.strip_prefix("*") {
+                        Some(s) => (s, Some(AnchorTarget::NewTab)),
+                        None => (s.as_str(), None),
+                    };
+                    (Cow::Owned(s.trim_start().to_owned()), target)
+                }
+            };
 
-        let parsing_link = if let Some(links) = link_ref.strip_prefix("*") {
-            links
-        } else {
-            link_ref
+            (Some(LinkLocation::parse(parsing_link)), target)
         }
-        .trim_start();
-
-        (
-            Some(LinkLocation::parse(Cow::Owned(parsing_link.to_string()))),
-            target,
-        )
-    } else {
-        (None, None)
+        None => (None, None),
     };
 
     let alignment = FloatAlignment::parse(name);
