@@ -1,0 +1,28 @@
+error: RuleFailed
+  ┌─ input.ftml:1:12
+  │  
+1 │   ##not color
+  │ ╭───────────^
+2 │ │ 
+3 │ │ ##|no spec##
+  │ ╰^ color
+
+error: NoRulesMatch
+  ┌─ input.ftml:1:1
+  │
+1 │ ##not color
+  │ ^^ fallback
+
+error: EndOfInput
+  ┌─ input.ftml:5:14
+  │
+5 │ ##only color|
+  │              ^ color
+
+error: NoRulesMatch
+  ┌─ input.ftml:5:1
+  │
+5 │ ##only color|
+  │ ^^ fallback
+
+

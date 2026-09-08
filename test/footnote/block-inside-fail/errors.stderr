@@ -1,0 +1,19 @@
+error: FootnotesNested
+  ┌─ input.ftml:1:35
+  │
+1 │ Apple[[footnote]][[footnoteblock]][[/footnote]]Banana
+  │                                   ^^^ block-footnote-block
+
+error: NoRulesMatch
+  ┌─ input.ftml:1:18
+  │
+1 │ Apple[[footnote]][[footnoteblock]][[/footnote]]Banana
+  │                  ^^ fallback
+
+error: NoRulesMatch
+  ┌─ input.ftml:1:33
+  │
+1 │ Apple[[footnote]][[footnoteblock]][[/footnote]]Banana
+  │                                 ^^ fallback
+
+

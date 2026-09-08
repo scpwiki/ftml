@@ -23,15 +23,23 @@
 use super::{Test, TestResult, TestStats, TestUniverse};
 use crate::data::{PageInfo, ScoreValue};
 use crate::layout::Layout;
+use crate::parsing::ParseError;
 use crate::render::Render;
 use crate::render::html::HtmlRender;
 use crate::render::text::TextRender;
 use crate::settings::{WikitextMode, WikitextSettings};
+use crate::test::ast::TEST_DIRECTORY;
 use crate::test::includer::TestIncluder;
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    files::SimpleFiles,
+    term,
+};
 use std::borrow::Cow;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use termcolor::Buffer;
 
 macro_rules! cow {
     ($value:expr $(,)?) => {
@@ -189,6 +197,24 @@ impl Test {
             }
         }
 
+        // Only run stderr generate and check when file exists.
+        let stderr_path = TEST_DIRECTORY.join("errors.stderr");
+
+        if stderr_path.exists() {
+            // Render parser errors as compiler-style diagnostics with source locations.
+            let stderr =
+                render_errors_to_stderr("input.ftml", &self.input, &actual_errors);
+            // Run and check stderr
+            if let Some(expected_stderr) = &self.errors_stderr
+                && &stderr != expected_stderr
+            {
+                result = TestResult::Fail;
+                eprintln!("Parse stderr did not match:");
+                eprintln!("Expected:\n{}", expected_stderr);
+                eprintln!("Actual:\n{}", stderr);
+            }
+        }
+
         result
     }
 
@@ -283,6 +309,19 @@ impl Test {
                 update!(write_text, actual_text, "output.txt");
             }
         }
+
+        // Only run stderr generate and check when file exists.
+        let stderr_path = TEST_DIRECTORY.join("errors.stderr");
+
+        if stderr_path.exists() {
+            let stderr = render_errors_to_stderr("input.ftml", &self.input, &errors); // see run()
+            // Run and check stderr
+            if let Some(expected_stderr) = &self.errors_stderr
+                && &stderr != expected_stderr
+            {
+                update!(write_text, stderr, "errors.stderr");
+            }
+        }
     }
 }
 
@@ -353,4 +392,34 @@ fn write_text(path: &Path, contents: &str) {
 
     file.write_all(b"\n")
         .expect("Unable to write final newline to file");
+}
+
+/// Helper function for rendering errors to stderr.
+fn render_errors_to_stderr(
+    source_name: &str,
+    source: &str,
+    errors: &[ParseError],
+) -> String {
+    let mut files = SimpleFiles::new();
+
+    let file_id = files.add(source_name, source);
+
+    let config = term::Config::default();
+
+    // no color because `.stderr` is raw text
+    let mut output = Buffer::no_color();
+
+    for error in errors {
+        let diagnostic = Diagnostic::error()
+            .with_message(error.kind().name())
+            .with_labels(vec![
+                Label::primary(file_id, error.span()).with_message(error.rule()),
+            ]);
+
+        term::emit_to_write_style(&mut output, &config, &files, &diagnostic)
+            .expect("failed to emit diagnostic");
+    }
+
+    String::from_utf8(output.as_slice().to_vec())
+        .expect("diagnostic output was not utf-8")
 }
