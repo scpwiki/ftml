@@ -19,3 +19,7 @@ ATTRS [[image foo.gif class="animated" style="border: 1em solid" data-xyz="bar" 
 LINK [[image foo.gif link="#gif-sucks"]]
 LINK [[image foo.gif link="some-page"]]
 LINK [[image foo.gif link="https://example.com/"]]
+LINK [[image foo.gif link=" https://example.com/"]]
+
+NEW_LINK [[image foo.gif link="*https://example.com/"]]
+NEW_LINK [[image foo.gif link="* https://example.com/"]]

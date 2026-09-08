@@ -117,6 +117,7 @@ pub enum Element<'t> {
         link: Option<LinkLocation<'t>>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
+        target: Option<AnchorTarget>,
     },
 
     /// An element representing audio and its associated metadata.
@@ -488,11 +489,13 @@ impl Element<'_> {
                 link,
                 alignment,
                 attributes,
+                target,
             } => Element::Image {
                 source: source.to_owned(),
                 link: link.ref_map(|link| link.to_owned()),
                 alignment: *alignment,
                 attributes: attributes.to_owned(),
+                target: *target,
             },
             Element::Audio {
                 source,

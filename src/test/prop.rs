@@ -187,13 +187,17 @@ fn arb_image() -> impl Strategy<Value = Element<'static>> {
         option::of(arb_link_location()),
         image_alignment,
         arb_attribute_map(),
+        arb_target(),
     )
-        .prop_map(|(source, link, alignment, attributes)| Element::Image {
-            source,
-            link,
-            alignment,
-            attributes,
-        })
+        .prop_map(
+            |(source, link, alignment, attributes, target)| Element::Image {
+                source,
+                link,
+                alignment,
+                attributes,
+                target,
+            },
+        )
 }
 
 fn arb_list<S>(elements: S) -> impl Strategy<Value = Element<'static>>
