@@ -1,0 +1,2 @@
+[!-- regression: previously failed with a panic on rule bibcite due to check_step() --]
+foo ))
