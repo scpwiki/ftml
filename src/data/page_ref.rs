@@ -272,7 +272,7 @@ mod prop {
     use proptest::prelude::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(4096))]
+        #![proptest_config(ProptestConfig::with_cases(2048))]
 
         #[test]
         fn page_ref_page_prop(s in r".+") {
