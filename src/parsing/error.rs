@@ -20,7 +20,7 @@
 
 use super::{ExtractedToken, Token, rule::Rule};
 use crate::utf16::Utf16IndexMap;
-use serde::{Serializer, ser::SerializeTuple};
+use serde::{Deserialize, Deserializer, Serializer, ser::SerializeTuple};
 use std::borrow::Cow;
 use std::ops::Range;
 use strum_macros::IntoStaticStr;
@@ -37,7 +37,10 @@ use strum_macros::IntoStaticStr;
 pub struct ParseError {
     token: Token,
     rule: Cow<'static, str>,
-    #[serde(serialize_with = "serialize_span")]
+    #[serde(
+        serialize_with = "serialize_span",
+        deserialize_with = "deserialize_span"
+    )]
     span: Range<usize>,
     kind: ParseErrorKind,
 }
@@ -236,4 +239,13 @@ where
     tuple.serialize_element(&span.start)?;
     tuple.serialize_element(&span.end)?;
     tuple.end()
+}
+
+/// Helper function to deserialize spans from a 2-tuple.
+fn deserialize_span<'de, D>(deserializer: D) -> Result<Range<usize>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let (start, end) = <(usize, usize)>::deserialize(deserializer)?;
+    Ok(start..end)
 }
