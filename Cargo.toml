@@ -30,7 +30,7 @@ entities = "1"
 icu_calendar = "2.2"
 icu_decimal = "2.2"
 icu_datetime = { version = "2.2", features = ["compiled_data"] }
-icu_experimental = { version = "0.5", features = ["compiled_data"] }
+icu_experimental = { version = "0.6", features = ["compiled_data"] }
 icu_locale = "2.2"
 latex2mathml = { version = "0.2", optional = true }
 lightningcss = { version = "1.0.0-alpha.70", optional = true }
