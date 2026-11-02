@@ -275,6 +275,33 @@ mod tests {
     use crate::settings::{WikitextMode, WikitextSettings};
 
     #[test]
+    #[test]
+    fn wikidot_span_keeps_unmatched_end_blocks_literal() {
+        for (source, expected) in [
+            (
+                "x [[span]]y [[/foo]] w[[/span]]",
+                "<p>x <span>y [[/foo]] w</span></p>",
+            ),
+            (
+                "x [[span]]y [[/div]] w[[/span]]",
+                "<p>x <span>y [[/div]] w</span></p>",
+            ),
+            (
+                "x [[span]]y [[html]]z[[/html]] w[[/span]]",
+                "<p>x <span>y [[html]]z[[/html]] w</span></p>",
+            ),
+        ] {
+            let page_info = PageInfo::dummy();
+            let settings =
+                WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+            let tokenization = crate::tokenize(source);
+            let (tree, _errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            let html = HtmlRender.render(&tree, &page_info, &settings).body;
+            assert_eq!(html, expected, "{source}");
+        }
+    }
+
     fn wikidot_span_bold_markers_pair_across_span_boundary() {
         let source = "[[span class=\"a\"]]**X[[/span]][[span class=\"b\"]]:** [[/span]]";
         let page_info = PageInfo::dummy();

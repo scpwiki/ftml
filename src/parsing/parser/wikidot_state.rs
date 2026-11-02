@@ -16,7 +16,8 @@ const SINGLE_LINE_CONTENT: u16 = 1 << 9;
 pub(super) struct WikidotState {
     div_body_depth: u16,
     scored_div_body_depth: u16,
-    scored_span_body_depth: u16,
+    scored_span_body_depth: u8,
+    span_body_depth: u8,
     bibliography_body_depth: u16,
     literal_triple_link_depth: u16,
     simple_table_crossed_closers: u16,
@@ -88,6 +89,8 @@ impl Parser<'_, '_> {
         if scored {
             self.wikidot.scored_span_body_depth =
                 self.wikidot.scored_span_body_depth.saturating_add(1);
+        } else {
+            self.wikidot.span_body_depth = self.wikidot.span_body_depth.saturating_add(1);
         }
     }
 
@@ -96,7 +99,14 @@ impl Parser<'_, '_> {
         if scored {
             self.wikidot.scored_span_body_depth =
                 self.wikidot.scored_span_body_depth.saturating_sub(1);
+        } else {
+            self.wikidot.span_body_depth = self.wikidot.span_body_depth.saturating_sub(1);
         }
+    }
+
+    #[inline]
+    pub(crate) fn in_wikidot_span_body(&self) -> bool {
+        self.wikidot.span_body_depth > 0
     }
 
     #[inline]
