@@ -774,8 +774,8 @@ fn test_transliterate_triple_target() {
 mod wikidot_tests {
     use crate::data::PageInfo;
     use crate::layout::Layout;
-    use crate::render::Render;
     use crate::render::html::HtmlRender;
+    use crate::render::{PageExistenceResolver, Render};
     use crate::settings::{WikitextMode, WikitextSettings};
 
     fn render(source: &str) -> String {
@@ -927,6 +927,63 @@ mod wikidot_tests {
         assert!(
             html.contains(r#"class="newpage" href="/">some-page</a>"#),
             "{html}"
+        );
+    }
+
+    struct CallerExistence(bool);
+
+    impl PageExistenceResolver for CallerExistence {
+        fn page_exists(&self, _site: &str, _page: &str) -> bool {
+            self.0
+        }
+    }
+
+    fn render_with_existence(source: &str, exists: bool) -> String {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        HtmlRender
+            .render_with_page_existence(
+                &tree,
+                &page_info,
+                &settings,
+                &CallerExistence(exists),
+            )
+            .body
+    }
+
+    #[test]
+    fn wikidot_triple_links_carry_newpage_only_when_caller_marks_target_missing() {
+        for source in [
+            "[[[!banana:Missing provider]]]",
+            "[[[!:missing|Label]]]",
+            "[[[scp-055|object]]]",
+        ] {
+            let missing = render_with_existence(source, false);
+            assert!(
+                missing.contains(r#"class="newpage""#),
+                "{source}: {missing}"
+            );
+            let present = render_with_existence(source, true);
+            assert!(!present.contains("newpage"), "{source}: {present}");
+        }
+
+        assert_eq!(
+            render_with_existence("[[[!banana:Missing provider]]]", false),
+            r#"<p><a class="newpage" href="/banana:missing-provider">Missing provider</a></p>"#,
+        );
+        assert_eq!(
+            render_with_existence("[[[!banana:Missing provider]]]", true),
+            r#"<p><a href="/banana:missing-provider">Missing provider</a></p>"#,
+        );
+        assert_eq!(
+            render_with_existence("[[[!:missing|Label]]]", false),
+            r#"<p><a class="newpage" href="/missing">Label</a></p>"#,
+        );
+        assert_eq!(
+            render_with_existence("[[[scp-055|object]]]", false),
+            r#"<p><a class="newpage" href="/scp-055">object</a></p>"#,
         );
     }
 
