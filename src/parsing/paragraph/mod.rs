@@ -127,6 +127,7 @@ where
         let div_opener = div_score.is_some();
         let same_line_div_candidate =
             div_opener && wikidot_div_closes_on_current_line(parser);
+        let embed_opener = wikidot_embed_opener(parser);
         let inline_div_opener = div_opener && !parser.start_of_line();
         stack.record_next_element_line_start(
             parser.start_of_line()
@@ -218,6 +219,13 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
+            let embed_error_has_same_line_residual = embed_opener
+                && !paragraph_safe
+                && active_div
+                && !matches!(
+                    parser.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                );
             let div_has_same_line_residual = div_opener
                 && active_div
                 && !matches!(
@@ -276,6 +284,9 @@ where
             }
             if div_has_same_line_residual {
                 stack.mark_wikidot_same_line_div_residual();
+            }
+            if embed_error_has_same_line_residual {
+                stack.mark_wikidot_same_line_embed_residual();
             }
             if complete_raw_line_break {
                 stack.clear_wikidot_complete_raw_line_occupancy();
@@ -379,6 +390,28 @@ where
         .strip_suffix('_')
         .map_or((name, false), |name| (name, true));
     name.eq_ignore_ascii_case("div").then_some(scored)
+}
+
+fn wikidot_embed_opener<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() || parser.current().token != Token::LeftBlock {
+        return false;
+    }
+
+    let source = parser.full_text().inner();
+    let candidate = &source[parser.current().span.start..];
+    let Some(after_open) = candidate.strip_prefix("[[") else {
+        return false;
+    };
+    let after_open = after_open.trim_start_matches([' ', '\t']);
+    let name_end = after_open
+        .find(|character: char| character.is_whitespace() || character == ']')
+        .unwrap_or(after_open.len());
+    let name = &after_open[..name_end];
+    let name = name.strip_suffix('_').unwrap_or(name);
+    name.eq_ignore_ascii_case("embed")
 }
 
 fn wikidot_div_closes_on_current_line(parser: &Parser<'_, '_>) -> bool {

@@ -743,6 +743,14 @@ mod tests {
     }
 
     #[test]
+    fn wikidot_div_drops_the_preceding_line_break_unlike_embed() {
+        assert_eq!(
+            render("text\n[[div]]\nx\n[[/div]]", Layout::Wikidot),
+            "<p>text</p><div><p>x</p></div>",
+        );
+    }
+
+    #[test]
     fn wikidot_div_trims_trailing_class_whitespace_only_in_legacy_layout() {
         let input = "[[div class=\"box \"]]\nbody\n[[/div]]";
 

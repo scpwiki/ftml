@@ -373,11 +373,11 @@ fn wikidot_embed_unmatched_body_renders_error_block() {
         html,
         concat!(
             "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
-            "<p>text</p>",
+            "<p>text<br>\n</p>",
             "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
             "<p>x</p>",
             "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
-            "<p>y</p>",
+            "\ny",
         ),
     );
 }
@@ -403,5 +403,160 @@ fn wikidot_embed_non_https_iframe_renders_error_block() {
     assert_eq!(
         html,
         "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+    );
+}
+
+#[test]
+fn wikidot_embed_error_block_keeps_the_preceding_line_break() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize("text\n[[embed]]x[[/embed]]");
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        concat!(
+            "<p>text<br>\n</p>",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+        ),
+    );
+}
+
+#[test]
+fn wikidot_embed_error_block_leaves_same_line_text_unwrapped() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize("x [[embed]]z[[/embed]] y");
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        concat!(
+            "<p>x</p>",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "\ny",
+        ),
+    );
+}
+
+#[test]
+fn wikidot_embed_error_block_unwrapped_run_continues_over_lines() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize("x [[embed]]z[[/embed]] y\nmore");
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        concat!(
+            "<p>x</p>",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "\ny<br>\nmore",
+        ),
+    );
+}
+
+#[test]
+fn wikidot_embed_error_blocks_separate_bare_text_with_newlines() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization =
+        crate::tokenize("[[embed]]a[[/embed]] mid [[embed]]b[[/embed]] end");
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        concat!(
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "\nmid\n",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "\nend",
+        ),
+    );
+}
+
+#[test]
+fn wikidot_embed_iframe_keeps_the_preceding_line_break() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize(
+        "text\n[[embed]]<iframe src=\"https://example.com\"></iframe>[[/embed]]",
+    );
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        "<p>text<br>\n<iframe src=\"https://example.com\"></iframe></p>",
+    );
+}
+
+#[test]
+fn wikidot_embed_error_block_inside_a_div_keeps_the_line_break() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize("[[div]]\ntext\n[[embed]]x[[/embed]]\n[[/div]]");
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        concat!(
+            "<div><p>text<br>\n</p>",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "</div>",
+        ),
     );
 }
