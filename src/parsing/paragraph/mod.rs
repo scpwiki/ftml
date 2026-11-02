@@ -69,6 +69,9 @@ where
     } else {
         ParagraphStack::new()
     };
+    if parser.settings().layout.legacy() && close_condition_fn.is_none() {
+        stack.enable_wikidot_div_literal_run_wrap();
+    }
 
     let mut finished = false;
     let mut literal_gallery_pending = false;
@@ -203,6 +206,7 @@ where
         if let Some(consumed) = consumed {
             let mixed_paragraph_ownership =
                 parser.take_wikidot_mixed_paragraph_ownership();
+            let div_literal_recovered = parser.take_wikidot_div_literal_recovered();
             let (elements, mut errors, paragraph_safe) = consumed.into();
             let mut elements = elements;
             let literal_list_item = stack.wikidot_list_break_follows_list()
@@ -247,6 +251,9 @@ where
             }
             if inline_div_opener && active_div {
                 stack.mark_wikidot_continued_block_boundary();
+            }
+            if div_literal_recovered {
+                stack.note_wikidot_div_literal_push();
             }
             if empty_quote_control && !paragraph_safe && elements.is_empty() {
                 stack.end_paragraph();
