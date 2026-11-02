@@ -179,9 +179,34 @@ fn wikidot_heading_content(elements: &[Element<'_>]) -> WikidotHeadingContent {
     WikidotHeadingContent::Empty
 }
 
+fn indented_after_quote_marker(parser: &Parser<'_, '_>) -> bool {
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start;
+    let line_start = source[..start].rfind('\n').map_or(0, |offset| offset + 1);
+    let prefix = &source[line_start..start];
+    let Some(marker) = prefix.rfind('>') else {
+        return false;
+    };
+    if !prefix[..marker]
+        .chars()
+        .all(|c| matches!(c, '>' | ' ' | '\t'))
+    {
+        return false;
+    }
+    let tail = &prefix[marker + 1..];
+    tail.len() >= 2 && tail.chars().all(|c| matches!(c, ' ' | '\t'))
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    if parser.settings().layout.legacy()
+        && parser.in_native_blockquote_line()
+        && indented_after_quote_marker(parser)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let success = consume_header_once(parser)?;
     if success.paragraph_safe {
         return Ok(success);
