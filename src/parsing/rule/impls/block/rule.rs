@@ -23,7 +23,8 @@ use super::mapping::{get_block_rule_with_name, get_block_rule_with_name_for_layo
 use super::{
     BlockRule,
     blocks::{
-        BLOCK_COLLAPSIBLE, BLOCK_EMBED_VIDEO, BLOCK_HTML, BLOCK_SPAN, BLOCK_TABVIEW,
+        BLOCK_COLLAPSIBLE, BLOCK_EMBED, BLOCK_EMBED_VIDEO, BLOCK_HTML, BLOCK_SPAN,
+        BLOCK_TABVIEW,
     },
 };
 use crate::parsing::inline_scope::WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE;
@@ -79,9 +80,10 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
             get_block_rule_with_name_for_layout(name, parser.settings().layout)
         };
         match block {
-            Some(block_rule) => {
-                Ok(block_rule.accepts_newlines && block_rule_enabled(parser, block_rule))
-            }
+            Some(block_rule) => Ok(block_rule.accepts_newlines
+                && block_rule_enabled(parser, block_rule)
+                && !(parser.settings().layout.legacy()
+                    && block_rule.name == BLOCK_EMBED.name)),
             None => Ok(false),
         }
     });

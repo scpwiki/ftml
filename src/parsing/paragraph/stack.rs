@@ -79,6 +79,7 @@ pub struct ParagraphStack<'t> {
     suppress_next_line_break: bool,
     suppressed_line_break_restarts_paragraph: bool,
     wikidot_empty_list_break: bool,
+    wikidot_embed_error_residual: bool,
     next_element_started_line: bool,
     wikidot_simple_table_boundary: bool,
     wikidot_reopen_for_footnote: bool,
@@ -209,6 +210,16 @@ impl<'t> ParagraphStack<'t> {
             self.current.push(text!("\n"));
             self.current_unwrapped = true;
             self.unwrapped_after_block_line = true;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn mark_wikidot_same_line_embed_residual(&mut self) {
+        if self.wikidot {
+            self.current.push(text!("\n"));
+            self.current_unwrapped = true;
+            self.unwrapped_after_block_line = true;
+            self.wikidot_embed_error_residual = true;
         }
     }
 
@@ -482,7 +493,8 @@ impl<'t> ParagraphStack<'t> {
                         self.current.last(),
                         Some(Element::Text(text)) if text == " "
                     )
-                    || matches!(self.current.last(), Some(Element::LineBreak)))
+                    || matches!(self.current.last(), Some(Element::LineBreak))
+                    || (self.wikidot_embed_error_residual && self.current.len() == 1))
             {
                 return;
             }
@@ -529,6 +541,10 @@ impl<'t> ParagraphStack<'t> {
             }
             if escaped_note_prefix {
                 self.current_unwrapped = true;
+            }
+            if self.wikidot_embed_error_residual && !self.current.is_empty() {
+                self.trim_trailing_ascii_space();
+                self.current.push(text!("\n"));
             }
             self.end_paragraph();
             self.finished.push(element);
@@ -753,6 +769,9 @@ impl<'t> ParagraphStack<'t> {
                 .splice(index..index, self.pending_suppression_seams.drain(..));
         }
         if self.current_unwrapped {
+            if self.wikidot_embed_error_residual {
+                self.trim_trailing_ascii_space();
+            }
             if self.trim_unwrapped_trailing_line_break
                 && matches!(self.current.last(), Some(Element::LineBreak))
             {
@@ -770,6 +789,7 @@ impl<'t> ParagraphStack<'t> {
         self.unwrapped_after_block_line = false;
         self.wikidot_literal_iftags_line = false;
         self.wikidot_literal_div_line = false;
+        self.wikidot_embed_error_residual = false;
         self.trim_unwrapped_trailing_line_break = false;
         self.suppress_next_line_break = false;
         self.suppressed_line_break_restarts_paragraph = false;
