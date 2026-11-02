@@ -1,14 +1,16 @@
 use super::Parser;
 use crate::parsing::Token;
 
-const COLLAPSIBLE: u8 = 1 << 0;
-const QUOTE_BOUNDARY_CLOSES_BODY: u8 = 1 << 1;
-const PENDING_COLLAPSIBLE_CLOSER: u8 = 1 << 2;
-const COLLAPSIBLE_CLOSED_AT_DEEPER_QUOTE: u8 = 1 << 3;
-const SIMPLE_TABLE_CELL: u8 = 1 << 4;
-const MIXED_PARAGRAPH_OWNERSHIP: u8 = 1 << 5;
-const COLLAPSIBLE_CONTENT_CLOSED: u8 = 1 << 6;
-const IFTAGS_LITERAL_SPAN: u8 = 1 << 7;
+const COLLAPSIBLE: u16 = 1 << 0;
+const QUOTE_BOUNDARY_CLOSES_BODY: u16 = 1 << 1;
+const PENDING_COLLAPSIBLE_CLOSER: u16 = 1 << 2;
+const COLLAPSIBLE_CLOSED_AT_DEEPER_QUOTE: u16 = 1 << 3;
+const SIMPLE_TABLE_CELL: u16 = 1 << 4;
+const MIXED_PARAGRAPH_OWNERSHIP: u16 = 1 << 5;
+const COLLAPSIBLE_CONTENT_CLOSED: u16 = 1 << 6;
+const IFTAGS_LITERAL_SPAN: u16 = 1 << 7;
+const DEFINITION_LIST_LINE: u16 = 1 << 8;
+const SINGLE_LINE_CONTENT: u16 = 1 << 9;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WikidotState {
@@ -19,9 +21,7 @@ pub(super) struct WikidotState {
     literal_triple_link_depth: u16,
     simple_table_crossed_closers: u16,
     center_body_depth: u16,
-    flags: u8,
-    definition_list_line: bool,
-    single_line_content: bool,
+    flags: u16,
 }
 
 impl WikidotState {
@@ -188,19 +188,19 @@ impl Parser<'_, '_> {
     }
 
     pub(crate) fn in_wikidot_definition_list_line(&self) -> bool {
-        self.wikidot.definition_list_line
+        self.wikidot.flags & DEFINITION_LIST_LINE != 0
     }
 
     pub(crate) fn set_in_wikidot_definition_list_line(&mut self, value: bool) {
-        self.wikidot.definition_list_line = value;
+        set_flag(&mut self.wikidot.flags, DEFINITION_LIST_LINE, value);
     }
 
     pub(crate) fn in_wikidot_single_line_content(&self) -> bool {
-        self.wikidot.single_line_content
+        self.wikidot.flags & SINGLE_LINE_CONTENT != 0
     }
 
     pub(crate) fn set_in_wikidot_single_line_content(&mut self, value: bool) {
-        self.wikidot.single_line_content = value;
+        set_flag(&mut self.wikidot.flags, SINGLE_LINE_CONTENT, value);
     }
 
     pub(crate) fn in_wikidot_simple_table_cell(&self) -> bool {
@@ -234,7 +234,7 @@ impl Parser<'_, '_> {
     }
 }
 
-fn set_flag(flags: &mut u8, flag: u8, value: bool) {
+fn set_flag(flags: &mut u16, flag: u16, value: bool) {
     if value {
         *flags |= flag;
     } else {
