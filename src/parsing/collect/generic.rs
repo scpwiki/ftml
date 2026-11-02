@@ -21,6 +21,7 @@
 use super::consume_valid_comment;
 use super::prelude::*;
 use crate::parsing::parser::QuoteBodyLineStatus;
+use crate::parsing::rule::impls::line_break_skipped_for_own_line_block;
 
 /// Generic function to parse upcoming tokens until conditions are met.
 ///
@@ -164,6 +165,21 @@ where
         if parser.in_wikidot_definition_list_line()
             && parser.current().token == Token::LineBreak
             && simple_table_inline_closer(_rule).is_some()
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+
+        if parser.in_wikidot_single_line_content()
+            && parser.current().token == Token::LineBreak
+            && simple_table_inline_closer(_rule).is_some()
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+
+        if parser.settings().layout.legacy()
+            && simple_table_inline_closer(_rule).is_some()
+            && parser.current().token == Token::LineBreak
+            && line_break_skipped_for_own_line_block(parser)
         {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }

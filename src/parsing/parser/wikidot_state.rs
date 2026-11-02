@@ -21,6 +21,7 @@ pub(super) struct WikidotState {
     center_body_depth: u16,
     flags: u8,
     definition_list_line: bool,
+    single_line_content: bool,
 }
 
 impl WikidotState {
@@ -192,6 +193,14 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_in_wikidot_definition_list_line(&mut self, value: bool) {
         self.wikidot.definition_list_line = value;
+    }
+
+    pub(crate) fn in_wikidot_single_line_content(&self) -> bool {
+        self.wikidot.single_line_content
+    }
+
+    pub(crate) fn set_in_wikidot_single_line_content(&mut self, value: bool) {
+        self.wikidot.single_line_content = value;
     }
 
     pub(crate) fn in_wikidot_simple_table_cell(&self) -> bool {

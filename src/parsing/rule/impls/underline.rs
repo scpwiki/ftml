@@ -150,4 +150,53 @@ mod tests {
             "{html}"
         );
     }
+
+    #[test]
+    fn wikidot_formatting_does_not_cross_block_boundaries() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(concat!(
+            "**a\n+++ heading\nb**\n\n",
+            "+++ __a\nb__\n\n",
+            "__a\n+++ heading\nb__\n\n",
+            "* __a\nb__\n",
+        ));
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(
+            html,
+            concat!(
+                "<p>**a</p>",
+                "<h3 id=\"toc0\"><span>heading</span></h3>",
+                "<p>b**</p>",
+                "<h3 id=\"toc1\"><span>__a</span></h3>",
+                "<p>b__</p>",
+                "<p>__a</p>",
+                "<h3 id=\"toc2\"><span>heading</span></h3>",
+                "<p>b__</p>",
+                "<ul>\n<li>__a</li>\n</ul>",
+                "<p>b__</p>",
+            ),
+        );
+    }
+
+    #[test]
+    fn wikidot_underline_still_applies_within_a_heading_or_list_line() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("+++ __a b__\n\n* __c d__\n");
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(
+            html,
+            concat!(
+                "<h3 id=\"toc0\"><span>",
+                "<span style=\"text-decoration: underline;\">a b</span>",
+                "</span></h3>",
+                "<ul>\n<li>",
+                "<span style=\"text-decoration: underline;\">c d</span>",
+                "</li>\n</ul>",
+            ),
+        );
+    }
 }

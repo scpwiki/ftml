@@ -71,7 +71,18 @@ fn consume_header_once<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
     ];
     let ctype = ContainerType::Header(heading);
-    let collected = collect_container(parser, RULE_HEADER, ctype, &close, &[], None)?;
+    let restore_line = if parser.settings().layout.legacy() {
+        let previous = parser.in_wikidot_single_line_content();
+        parser.set_in_wikidot_single_line_content(true);
+        Some(previous)
+    } else {
+        None
+    };
+    let collected = collect_container(parser, RULE_HEADER, ctype, &close, &[], None);
+    if let Some(previous) = restore_line {
+        parser.set_in_wikidot_single_line_content(previous);
+    }
+    let collected = collected?;
     let (mut elements, mut all_errors, _) = collected.into();
 
     let content = match &elements {

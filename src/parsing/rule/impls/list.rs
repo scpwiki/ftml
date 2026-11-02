@@ -329,7 +329,18 @@ fn collect_list_item_elements<'r, 't>(
         ParseCondition::current(Token::InputEnd),
     ];
 
-    let result = collect_consume_keep(parser, RULE_LIST, &close_conditions, &[], None)?;
+    let restore_line = if parser.settings().layout.legacy() {
+        let previous = parser.in_wikidot_single_line_content();
+        parser.set_in_wikidot_single_line_content(true);
+        Some(previous)
+    } else {
+        None
+    };
+    let result = collect_consume_keep(parser, RULE_LIST, &close_conditions, &[], None);
+    if let Some(previous) = restore_line {
+        parser.set_in_wikidot_single_line_content(previous);
+    }
+    let result = result?;
     Ok(result.map(|(elements, last)| {
         let ends_run = matches!(last.token, Token::ParagraphBreak | Token::InputEnd);
         (elements, ends_run)
