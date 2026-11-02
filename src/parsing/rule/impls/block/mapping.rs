@@ -136,7 +136,6 @@ fn wikidot_supports_block_name(name: &str) -> bool {
         "deletion",
         "em",
         "emphasis",
-        "embed",
         "equation",
         "eqref",
         "hidden",
@@ -236,7 +235,11 @@ fn wikidot_layout_rejects_ftml_only_block_names() {
     assert!(get_block_rule_with_name_for_layout("anchor", Layout::Wikidot).is_none());
     assert!(get_block_rule_with_name_for_layout("strong", Layout::Wikidot).is_none());
     assert!(get_block_rule_with_name_for_layout("video", Layout::Wikidot).is_none());
-    assert!(get_block_rule_with_name_for_layout("embed", Layout::Wikidot).is_none());
+    assert_eq!(
+        get_block_rule_with_name_for_layout("embed", Layout::Wikidot)
+            .map(|rule| rule.name),
+        Some("block-embed"),
+    );
     assert_eq!(
         get_block_rule_with_name_for_layout("math", Layout::Wikidot)
             .map(|rule| rule.name),
