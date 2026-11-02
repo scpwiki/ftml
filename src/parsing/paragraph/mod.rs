@@ -541,7 +541,30 @@ fn defer_suppression_seams<'t>(
             Elements::None
         }
         Elements::Multiple(items) => {
-            let mut retained = Vec::with_capacity(items.len());
+            let mut items = items;
+            // A seam in final position closes the elements before it:
+            // the closing typography boundary of a shown conditional
+            // body is the case that matters. Deferring it would flush
+            // it ahead of those elements, recording the seam at the
+            // start of the body instead of its end, so a character run
+            // following the block would regroup against the wrong
+            // offset. Keep one such trailing seam in place; every
+            // other seam is deferred as before. A result consisting
+            // only of seams keeps the old behaviour, since there the
+            // positions coincide.
+            let trailing = match items.split_last() {
+                Some((last, rest))
+                    if items.len() > 1
+                        && matches!(last, Element::Delayed(delayed) if delayed.is_suppression_seam())
+                        && rest.iter().any(|element| {
+                            !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
+                        }) =>
+                {
+                    items.pop()
+                }
+                _ => None,
+            };
+            let mut retained = Vec::with_capacity(items.len() + 1);
             for element in items {
                 if matches!(&element, Element::Delayed(delayed) if delayed.is_suppression_seam())
                 {
@@ -549,6 +572,9 @@ fn defer_suppression_seams<'t>(
                 } else {
                     retained.push(element);
                 }
+            }
+            if let Some(trailing) = trailing {
+                retained.push(trailing);
             }
             match retained.len() {
                 0 => Elements::None,
