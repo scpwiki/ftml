@@ -249,3 +249,167 @@ fn simple_table_combined_header_alignment_markers_remain_literal() {
     assert_eq!(cell.align, None);
     assert_text_content(&cell.elements, "=~ center header");
 }
+
+fn with_wikidot_table<R>(
+    input: &str,
+    check: impl FnOnce(&crate::tree::Table<'_>) -> R,
+) -> R {
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize(input);
+    let result = crate::parse(&tokenization, &page_info, &settings);
+    let (tree, errors) = result.into();
+
+    assert!(errors.is_empty(), "unexpected parse errors: {errors:?}");
+
+    let [Element::Table(table)] = tree.elements.as_slice() else {
+        panic!("expected one table, got {:?}", tree.elements);
+    };
+
+    assert_eq!(table.table_type, TableType::Simple);
+    check(table)
+}
+
+fn assert_bold_text(elements: &[Element<'_>], expected: &str) {
+    let [Element::Container(container)] = elements else {
+        panic!("expected one container, got {elements:?}");
+    };
+
+    assert_eq!(container.ctype(), ContainerType::Bold);
+    assert_single_text(container.elements(), expected);
+}
+
+#[test]
+fn simple_table_bold_closes_at_boundary_with_closer_in_next_row() {
+    enable_test_logging();
+
+    with_wikidot_table("||**a||\n||b**||", |table| {
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].cells.len(), 1);
+        assert_eq!(table.rows[1].cells.len(), 1);
+        assert_bold_text(&table.rows[0].cells[0].elements, "a");
+        assert_single_text(&table.rows[1].cells[0].elements, "b");
+    });
+}
+
+#[test]
+fn simple_table_bold_closes_at_boundary_with_closer_two_rows_down() {
+    enable_test_logging();
+
+    with_wikidot_table("||**a||\n||middle||\n||b**||", |table| {
+        assert_eq!(table.rows.len(), 3);
+        assert_bold_text(&table.rows[0].cells[0].elements, "a");
+        assert_single_text(&table.rows[1].cells[0].elements, "middle");
+        assert_single_text(&table.rows[2].cells[0].elements, "b");
+    });
+}
+
+#[test]
+fn simple_table_color_closes_at_boundary_with_closer_in_next_row() {
+    enable_test_logging();
+
+    with_wikidot_table("||##red|a||\n||b##||", |table| {
+        assert_eq!(table.rows.len(), 2);
+        let [Element::Color { elements, .. }] =
+            table.rows[0].cells[0].elements.as_slice()
+        else {
+            panic!(
+                "expected one color element, got {:?}",
+                table.rows[0].cells[0].elements
+            );
+        };
+        assert_single_text(elements, "a");
+        assert_single_text(&table.rows[1].cells[0].elements, "b");
+    });
+}
+
+#[test]
+fn simple_table_unterminated_row_discards_contents_before_paragraph() {
+    enable_test_logging();
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize("||**a\nb**||");
+    let result = crate::parse(&tokenization, &page_info, &settings);
+    let (tree, _errors) = result.into();
+
+    let [Element::Table(table), Element::Container(paragraph)] = tree.elements.as_slice()
+    else {
+        panic!("expected table then paragraph, got {:?}", tree.elements);
+    };
+
+    assert_eq!(table.rows.len(), 1);
+    assert_eq!(table.rows[0].cells.len(), 1);
+    assert!(table.rows[0].cells[0].elements.is_empty());
+    assert_eq!(paragraph.ctype(), ContainerType::Paragraph);
+    assert_text_content(paragraph.elements(), "b**||");
+}
+
+#[test]
+fn simple_table_unterminated_row_before_next_row_stays_one_table() {
+    enable_test_logging();
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize("||**a\n||b**||");
+    let result = crate::parse(&tokenization, &page_info, &settings);
+    let (tree, _errors) = result.into();
+
+    let [Element::Table(table)] = tree.elements.as_slice() else {
+        panic!("expected one table, got {:?}", tree.elements);
+    };
+
+    assert_eq!(table.rows.len(), 2);
+    assert!(table.rows[0].cells[0].elements.is_empty());
+    assert_text_content(&table.rows[1].cells[0].elements, "b**");
+}
+
+#[test]
+fn simple_table_span_inside_bold_closes_at_cell_boundary() {
+    enable_test_logging();
+
+    with_wikidot_table("||**a [[span]]b||c[[/span]] d**||", |table| {
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].cells.len(), 2);
+        let [Element::Container(bold)] = table.rows[0].cells[0].elements.as_slice()
+        else {
+            panic!(
+                "expected one container, got {:?}",
+                table.rows[0].cells[0].elements
+            );
+        };
+        assert_eq!(bold.ctype(), ContainerType::Bold);
+        let span = bold
+            .elements()
+            .iter()
+            .find_map(|element| match element {
+                Element::Container(container)
+                    if container.ctype() == ContainerType::Span =>
+                {
+                    Some(container)
+                }
+                _ => None,
+            })
+            .expect("expected a span container inside bold");
+        assert_single_text(span.elements(), "b");
+        assert_text_content(&table.rows[0].cells[1].elements, "c d");
+    });
+}
+
+#[test]
+fn simple_table_crossed_closer_ends_span_opened_in_later_cell() {
+    enable_test_logging();
+
+    with_wikidot_table("||**a||[[span]]b** c[[/span]]||", |table| {
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].cells.len(), 2);
+        assert_bold_text(&table.rows[0].cells[0].elements, "a");
+        let cell = &table.rows[0].cells[1];
+        let [Element::Container(span), rest @ ..] = cell.elements.as_slice() else {
+            panic!("expected span then text, got {:?}", cell.elements);
+        };
+        assert_eq!(span.ctype(), ContainerType::Span);
+        assert_single_text(span.elements(), "b");
+        assert_text_content(rest, " c");
+    });
+}

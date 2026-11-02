@@ -161,6 +161,12 @@ where
             return ok!(paragraph_safe; parser.current(), errors);
         }
 
+        if parser.in_wikidot_simple_table_cell()
+            && parser.current().token == Token::LineBreak
+        {
+            return Err(parser.make_err(error_kind.unwrap_or(ParseErrorKind::RuleFailed)));
+        }
+
         if parser.in_wikidot_definition_list_line()
             && parser.current().token == Token::LineBreak
             && simple_table_inline_closer(_rule).is_some()
@@ -226,9 +232,16 @@ where
     loop {
         if matches!(
             scan.current().token,
-            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            Token::ParagraphBreak | Token::InputEnd
         ) {
             return false;
+        }
+
+        if scan.current().token == Token::LineBreak {
+            let mut next = scan.clone();
+            if next.step().is_err() || !is_table_column_token(next.current().token) {
+                return false;
+            }
         }
 
         if scan.current().token == Token::LeftComment {
