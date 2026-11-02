@@ -34,6 +34,20 @@ fn try_consume_fn<'r, 't>(
 
     match current.token {
         // « - LEFT-POINTING DOUBLE ANGLE QUOTATION MARK
+        //
+        // In the Wikidot layout, preprocess typography has already
+        // converted every `<<` in ordinary text, so a `<<` token that
+        // still reaches this rule in text flow is one the preprocess
+        // deferral left raw at a conditional seam (protected owners
+        // such as links and math consume theirs elsewhere). Converting
+        // it here would pair it within its own segment, before the
+        // seam code can regroup it against its joined-text neighbours,
+        // so fail instead: the token falls back to raw text and the
+        // seam code performs the conversion with the seam in view.
+        Token::LeftDoubleAngle if parser.settings().layout.legacy() => {
+            Err(parser.make_err(ParseErrorKind::RuleFailed))
+        }
+
         Token::LeftDoubleAngle => success_elements(text!("\u{0ab}")),
 
         // » - RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK
