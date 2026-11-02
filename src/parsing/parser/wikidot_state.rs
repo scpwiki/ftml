@@ -11,6 +11,7 @@ const COLLAPSIBLE_CONTENT_CLOSED: u16 = 1 << 6;
 const IFTAGS_LITERAL_SPAN: u16 = 1 << 7;
 const DEFINITION_LIST_LINE: u16 = 1 << 8;
 const SINGLE_LINE_CONTENT: u16 = 1 << 9;
+const DIV_LITERAL_RECOVERED: u16 = 1 << 10;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WikidotState {
@@ -233,6 +234,16 @@ impl Parser<'_, '_> {
     pub(crate) fn take_wikidot_mixed_paragraph_ownership(&mut self) -> bool {
         let marked = self.wikidot.flags & MIXED_PARAGRAPH_OWNERSHIP != 0;
         set_flag(&mut self.wikidot.flags, MIXED_PARAGRAPH_OWNERSHIP, false);
+        marked
+    }
+
+    pub(crate) fn mark_wikidot_div_literal_recovered(&mut self) {
+        set_flag(&mut self.wikidot.flags, DIV_LITERAL_RECOVERED, true);
+    }
+
+    pub(crate) fn take_wikidot_div_literal_recovered(&mut self) -> bool {
+        let marked = self.wikidot.flags & DIV_LITERAL_RECOVERED != 0;
+        set_flag(&mut self.wikidot.flags, DIV_LITERAL_RECOVERED, false);
         marked
     }
 

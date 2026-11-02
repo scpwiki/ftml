@@ -260,10 +260,14 @@ where
         } else {
             owner_end
         };
+        let paragraph_safe = !line_started_after_physical_newline && !doc_start_bare;
+        if !paragraph_safe {
+            parser.mark_wikidot_div_literal_recovered();
+        }
         return Ok(Some(ParseSuccess::new(
             text!(&source[literal_start..literal_end]).into(),
             Vec::new(),
-            !line_started_after_physical_newline && !doc_start_bare,
+            paragraph_safe,
         )));
     }
 
@@ -835,6 +839,106 @@ mod tests {
                 "<div><div><p>[[div]]<br>\n",
                 "div closing tag is missing</p></div></div>",
             ),
+        );
+    }
+
+    #[test]
+    fn wikidot_failed_div_lines_share_one_paragraph() {
+        let source = "[[div]]inline[[/div]]\n\n\n[[div]]inline[[/div]]\n";
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            "<p>[[div]]inline[[/div]][[div]]inline[[/div]]</p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_failed_div_lines_wrap_when_no_real_div_is_adjacent() {
+        let source = concat!(
+            "[[div]]inline[[/div]]\n",
+            "\n",
+            "\n",
+            "[[div]]inline, closing tag is on a new line\n",
+            "[[/div]]\n",
+        );
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            concat!(
+                "<p>[[div]]inline[[/div]]",
+                "[[div]]inline, closing tag is on a new line<br>\n",
+                "[[/div]]</p>",
+            ),
+        );
+
+        let source = "[[div]]inline, closing tag is on a new line\n[[/div]]\n";
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            concat!(
+                "<p>[[div]]inline, closing tag is on a new line<br>\n",
+                "[[/div]]</p>",
+            ),
+        );
+
+        let source = concat!(
+            "[[div]]inline, closing tag is on a new line\n",
+            "[[/div]]\n",
+            "\n",
+            "\n",
+            "[[div]]inline[[/div]]\n",
+        );
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            concat!(
+                "<p>[[div]]inline, closing tag is on a new line<br>\n",
+                "[[/div]][[div]]inline[[/div]]</p>",
+            ),
+        );
+    }
+
+    #[test]
+    fn wikidot_failed_div_line_wraps_away_from_real_div_blocks() {
+        let source = concat!(
+            "[[div]]\n",
+            "x\n",
+            "[[/div]]\n",
+            "\n",
+            "\n",
+            "plain text\n",
+            "\n",
+            "\n",
+            "[[div]]inline[[/div]]\n",
+        );
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            concat!(
+                "<div><p>x</p></div>",
+                "<p>plain text</p>",
+                "<p>[[div]]inline[[/div]]</p>",
+            ),
+        );
+
+        let source = "BEFORE\n\n[[div]]inline[[/div]]\n\n\nafter text\n";
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            "<p>BEFORE</p><p>[[div]]inline[[/div]]\n</p><p>after text</p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_failed_div_lines_stay_bare_next_to_a_real_div() {
+        let source = concat!(
+            "[[div]]inline[[/div]]\n",
+            "\n",
+            "\n",
+            "[[div]]inline[[/div]]\n",
+            "\n",
+            "\n",
+            "[[div]]\n",
+            "x\n",
+            "[[/div]]\n",
+        );
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            "[[div]]inline[[/div]][[div]]inline[[/div]]\n<div><p>x</p></div>",
         );
     }
 

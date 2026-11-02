@@ -20,6 +20,7 @@
 
 use crate::parsing::prelude::*;
 use crate::tree::{AttributeMap, Container, ContainerType, ListItem, TableType};
+use std::borrow::Cow;
 use std::mem;
 
 pub(crate) fn collapsible_has_direct_literal_nested_opener(
@@ -75,6 +76,10 @@ pub struct ParagraphStack<'t> {
     unwrapped_after_block_line: bool,
     wikidot_literal_iftags_line: bool,
     wikidot_literal_div_line: bool,
+    wikidot_div_literal_run_wrap: bool,
+    wikidot_div_literal_run: Option<(usize, usize)>,
+    wikidot_div_literal_run_bare: bool,
+    pending_wikidot_div_literal: bool,
     trim_unwrapped_trailing_line_break: bool,
     suppress_next_line_break: bool,
     suppressed_line_break_restarts_paragraph: bool,
@@ -242,6 +247,91 @@ impl<'t> ParagraphStack<'t> {
     }
 
     #[inline]
+    pub(crate) fn enable_wikidot_div_literal_run_wrap(&mut self) {
+        self.wikidot_div_literal_run_wrap = true;
+    }
+
+    #[inline]
+    pub(crate) fn note_wikidot_div_literal_push(&mut self) {
+        if self.wikidot_div_literal_run_wrap {
+            self.pending_wikidot_div_literal = true;
+        }
+    }
+
+    fn register_wikidot_div_literal_range(&mut self, start: usize, end: usize) {
+        if !self.wikidot_div_literal_run_wrap || start >= end {
+            return;
+        }
+        if let Some((_, run_end)) = &mut self.wikidot_div_literal_run {
+            let previous = *run_end - 1;
+            *run_end = end;
+            if let Some(Element::Text(text)) = self.finished.get_mut(previous)
+                && text.ends_with('\n')
+            {
+                let kept = text.len() - 1;
+                *text = Cow::Owned(text[..kept].to_owned());
+            }
+            if let Some(Element::Text(text)) = self.finished.get_mut(start)
+                && text.starts_with('\n')
+            {
+                *text = Cow::Owned(text[1..].to_owned());
+            }
+        } else {
+            let bare = start > 0
+                && matches!(
+                    self.finished.get(start - 1),
+                    Some(Element::Container(container))
+                        if container.ctype() == ContainerType::Div
+                );
+            self.wikidot_div_literal_run = Some((start, end));
+            self.wikidot_div_literal_run_bare = bare;
+        }
+    }
+
+    fn close_wikidot_div_literal_run(&mut self, followed_by_div: bool) {
+        if !self.wikidot_div_literal_run_wrap {
+            return;
+        }
+        let Some((start, end)) = self.wikidot_div_literal_run.take() else {
+            return;
+        };
+        let bare = self.wikidot_div_literal_run_bare;
+        self.wikidot_div_literal_run_bare = false;
+        if bare || followed_by_div || start >= end || end > self.finished.len() {
+            return;
+        }
+        let mut elements: Vec<Element<'t>> = self.finished.drain(start..end).collect();
+        elements.retain(
+            |element| !matches!(element, Element::Text(text) if text.as_ref() == "\n"),
+        );
+        if let Some(Element::Text(text)) = elements.first_mut()
+            && text.starts_with('\n')
+        {
+            *text = Cow::Owned(text[1..].to_owned());
+        }
+        if elements.is_empty() {
+            return;
+        }
+        let paragraph = Element::Container(Container::new(
+            ContainerType::Paragraph,
+            elements,
+            AttributeMap::new(),
+        ));
+        self.finished.insert(start, paragraph);
+    }
+
+    fn shift_wikidot_div_literal_run_before(&mut self, removed: usize) {
+        if let Some((start, end)) = &mut self.wikidot_div_literal_run {
+            if removed < *start {
+                *start -= 1;
+                *end -= 1;
+            } else if removed < *end {
+                *end -= 1;
+            }
+        }
+    }
+
+    #[inline]
     pub(crate) fn mark_wikidot_literal_iftags_line(&mut self) {
         if self.wikidot {
             self.wikidot_literal_iftags_line = true;
@@ -359,6 +449,24 @@ impl<'t> ParagraphStack<'t> {
                 return;
             }
             self.suppressed_line_break_restarts_paragraph = false;
+        }
+        if self.pending_wikidot_div_literal
+            && !paragraph_break_separated
+            && !self.current.is_empty()
+            && matches!(element, Element::Text(_))
+        {
+            self.pending_wikidot_div_literal = false;
+            let mut element = element;
+            if let Element::Text(text) = &element
+                && text.starts_with('\n')
+            {
+                if !matches!(self.current.last(), Some(Element::LineBreak)) {
+                    self.current.push(Element::LineBreak);
+                }
+                element = Element::Text(Cow::Owned(text[1..].to_owned()));
+            }
+            self.current.push(element);
+            return;
         }
         let aligned_image = matches!(
             element,
@@ -547,7 +655,20 @@ impl<'t> ParagraphStack<'t> {
                 self.current.push(text!("\n"));
             }
             self.end_paragraph();
-            self.finished.push(element);
+            if self.pending_wikidot_div_literal {
+                self.pending_wikidot_div_literal = false;
+                self.finished.push(element);
+                let index = self.finished.len() - 1;
+                self.register_wikidot_div_literal_range(index, index + 1);
+            } else {
+                let followed_by_div = matches!(
+                    &element,
+                    Element::Container(container)
+                        if container.ctype() == ContainerType::Div
+                );
+                self.close_wikidot_div_literal_run(followed_by_div);
+                self.finished.push(element);
+            }
             if wikidot_collapsible {
                 self.unwrapped_after_block_line =
                     !wikidot_collapsible_ends_with_blockquote;
@@ -701,6 +822,7 @@ impl<'t> ParagraphStack<'t> {
             && self.finished[index] == Element::LineBreak
         {
             self.finished.remove(index);
+            self.shift_wikidot_div_literal_run_before(index);
         }
     }
 
@@ -745,6 +867,7 @@ impl<'t> ParagraphStack<'t> {
             && matches!(self.finished.get(index), Some(Element::Text(text)) if text == "\n")
         {
             self.finished.remove(index);
+            self.shift_wikidot_div_literal_run_before(index);
         }
     }
 
@@ -768,6 +891,17 @@ impl<'t> ParagraphStack<'t> {
             self.current
                 .splice(index..index, self.pending_suppression_seams.drain(..));
         }
+        let div_literal_flush = self.wikidot_div_literal_run_wrap
+            && self.current_unwrapped
+            && self.wikidot_literal_div_line
+            && !self.current.is_empty();
+        if self.wikidot_div_literal_run_wrap
+            && !div_literal_flush
+            && !self.current.is_empty()
+        {
+            self.close_wikidot_div_literal_run(false);
+        }
+        let flush_start = self.finished.len();
         if self.current_unwrapped {
             if self.wikidot_embed_error_residual {
                 self.trim_trailing_ascii_space();
@@ -778,6 +912,10 @@ impl<'t> ParagraphStack<'t> {
                 self.current.pop();
             }
             self.finished.append(&mut self.current);
+            if div_literal_flush {
+                let flush_end = self.finished.len();
+                self.register_wikidot_div_literal_range(flush_start, flush_end);
+            }
             self.current_unwrapped = false;
         } else if let Some(paragraph) = self.build_paragraph() {
             self.finished.push(paragraph);
@@ -852,6 +990,7 @@ impl<'t> ParagraphStack<'t> {
     pub fn into_result<'r>(mut self) -> ParseResult<'r, 't, Vec<Element<'t>>> {
         self.end_paragraph();
         self.remove_pending_aligned_image_separator();
+        self.close_wikidot_div_literal_run(false);
 
         let elements = self.finished;
         let errors = self.errors;
@@ -864,6 +1003,7 @@ impl<'t> ParagraphStack<'t> {
     pub fn into_elements(mut self) -> Vec<Element<'t>> {
         self.end_paragraph();
         self.remove_pending_aligned_image_separator();
+        self.close_wikidot_div_literal_run(false);
 
         debug_assert!(self.errors.is_empty(), "ParagraphStack errors");
 
