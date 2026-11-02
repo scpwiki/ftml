@@ -65,7 +65,7 @@ Do not narrow the alphabet to hide a class. When a class is fixed, delete its li
 
 Not exercised: `collect_dash_edits`, `range_crosses_seam` in `seam.rs` (dash path only), `native_seam_edits`, `resolve_bound_suppressions`.
 
-**Sync commit: `1466c1994`** (`seam.rs`, `typography.rs` and `delayed.rs`, including the `>>` fix).
+**Sync commit: `795781a58`** (`seam.rs`, `typography.rs`, `delayed.rs` and `seam_equivalence.rs`, including the #775 left-edge deferral and run expansion).
 
 Staleness test: `git diff <sync commit> -- src/delayed/seam.rs src/preproc/typography.rs src/delayed.rs src/parsing/paragraph/mod.rs src/parsing/rule/impls/double_angle.rs`. If it shows changes to the seam rules, the typography regexes, or `TypographyBoundary` handling, rerun both commands, update `known-findings.txt` only for classes you understand, and only then move the sync commit to the new `HEAD`.
 
