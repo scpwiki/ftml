@@ -497,7 +497,11 @@ fn lower_sequence<'t>(
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
                 trim_trailing_space(&mut output);
                 active.remove(ScopeKind::Size);
-                if trailing_space && !next_starts_with_space && !empty {
+                if trailing_space
+                    && !next_starts_with_space
+                    && !empty
+                    && source.peek().is_some()
+                {
                     run.push(text!(" "));
                 }
             } else {
@@ -607,7 +611,12 @@ fn lower_sequence<'t>(
                     trim_trailing_space(&mut output);
                 }
                 active.remove(ScopeKind::Span);
-                if trailing_space && !next_starts_with_space && !empty && !scored {
+                if trailing_space
+                    && !next_starts_with_space
+                    && !empty
+                    && !scored
+                    && source.peek().is_some()
+                {
                     output.push(text!(" "));
                 }
                 if scored {
@@ -1283,7 +1292,7 @@ mod tests {
     }
 
     #[test]
-    fn size_close_moves_trailing_space_outside_the_scope() {
+    fn size_close_at_sequence_end_drops_trailing_space() {
         let mut elements = vec![Element::Container(Container::new(
             ContainerType::Paragraph,
             vec![
@@ -1300,13 +1309,11 @@ mod tests {
         let [Element::Container(paragraph)] = elements.as_slice() else {
             panic!("expected one paragraph: {elements:#?}");
         };
-        let [Element::Container(container), Element::Text(space)] = paragraph.elements()
-        else {
-            panic!("expected a lowered size container and outer space: {paragraph:#?}");
+        let [Element::Container(container)] = paragraph.elements() else {
+            panic!("expected only a lowered size container: {paragraph:#?}");
         };
         assert_eq!(container.ctype(), ContainerType::Size);
         assert_eq!(container.elements(), &[text!("literal")]);
-        assert_eq!(space, " ");
     }
 
     #[test]

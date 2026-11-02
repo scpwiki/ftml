@@ -151,6 +151,14 @@ mod tests {
     }
 
     #[test]
+    fn wikidot_size_space_before_final_close_is_dropped() {
+        assert_eq!(
+            render_wikidot("[[size 120%]]x [[/size]]"),
+            "<p><span style=\"font-size:120%;\">x</span></p>"
+        );
+    }
+
+    #[test]
     fn size_block_requires_size_argument() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
