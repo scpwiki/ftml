@@ -56,6 +56,11 @@ impl Parser<'_, '_> {
     }
 
     #[inline]
+    pub(crate) fn wikidot_div_body_depth(&self) -> usize {
+        usize::from(self.wikidot.div_body_depth)
+    }
+
+    #[inline]
     pub(crate) fn enter_wikidot_div_body(&mut self) {
         self.wikidot.div_body_depth = self.wikidot.div_body_depth.saturating_add(1);
     }

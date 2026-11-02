@@ -214,7 +214,14 @@ impl<'t> ParagraphStack<'t> {
     #[inline]
     pub(crate) fn mark_wikidot_literal_div_line(&mut self) {
         if self.wikidot && !self.wikidot_literal_iftags_line {
-            if !self.finished.is_empty() && !self.current.is_empty() {
+            let continues_raw_text = matches!(
+                self.finished.last(),
+                Some(Element::Text(_) | Element::Raw(_))
+            );
+            if !continues_raw_text
+                && !self.finished.is_empty()
+                && !self.current.is_empty()
+            {
                 self.current.insert(0, text!("\n"));
             }
             self.current_unwrapped = true;
