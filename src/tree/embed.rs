@@ -37,6 +37,12 @@ pub enum Embed<'t> {
 
     #[serde(rename_all = "kebab-case")]
     GitlabSnippet { snippet_id: Cow<'t, str> },
+
+    #[serde(rename_all = "kebab-case")]
+    Iframe {
+        url: Cow<'t, str>,
+        html: Cow<'t, str>,
+    },
 }
 
 impl Embed<'_> {
@@ -46,6 +52,7 @@ impl Embed<'_> {
             Embed::Vimeo { .. } => "Vimeo",
             Embed::GithubGist { .. } => "GithubGist",
             Embed::GitlabSnippet { .. } => "GitlabSnippet",
+            Embed::Iframe { .. } => "Iframe",
         }
     }
 
@@ -59,6 +66,8 @@ impl Embed<'_> {
             Embed::GitlabSnippet { snippet_id } => {
                 format!("https://gitlab.com/-/snippets/{snippet_id}")
             }
+
+            Embed::Iframe { url, .. } => url.to_string(),
         }
     }
 
@@ -79,6 +88,11 @@ impl Embed<'_> {
 
             Embed::GitlabSnippet { snippet_id } => Embed::GitlabSnippet {
                 snippet_id: string_to_owned(snippet_id),
+            },
+
+            Embed::Iframe { url, html } => Embed::Iframe {
+                url: string_to_owned(url),
+                html: string_to_owned(html),
             },
         }
     }
