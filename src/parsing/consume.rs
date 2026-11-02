@@ -131,6 +131,10 @@ where
         return Ok(None);
     }
 
+    if parser.in_wikidot_span_body() {
+        return Ok(None);
+    }
+
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
     let Some(relative_marker_end) = source[start..].find("]]") else {
@@ -355,6 +359,10 @@ where
 {
     if !parser.settings().layout.legacy() || parser.current().token != Token::LeftBlockEnd
     {
+        return Ok(None);
+    }
+
+    if parser.in_wikidot_span_body() {
         return Ok(None);
     }
 
