@@ -249,13 +249,6 @@ fn rejected_code_candidates_do_not_gain_code_whitespace_rules() {
         let (_, _, tree) = render(source);
         assert!(tree.code_blocks.is_empty(), "{source:?}: {tree:#?}");
     }
-
-    let source = "[[code]]\n[[code]]\nalpha\tbeta\u{00a0}gamma\n[[/code]]";
-    let (_, _, tree) = render(source);
-    let [inner] = tree.code_blocks.as_slice() else {
-        panic!("the valid inner candidate should survive outer rollback: {tree:#?}");
-    };
-    assert_eq!(inner.contents, "alpha    beta gamma");
 }
 
 #[test]
@@ -291,4 +284,99 @@ fn dense_and_unclosed_code_candidates_stay_bounded() {
         "unclosed parse took {elapsed:?}",
     );
     assert!(tree.code_blocks.is_empty(), "{tree:#?}");
+}
+
+#[test]
+fn protected_closers_fallback_pairing_matches_live_page_preview() {
+    let cases = [
+        (
+            "code-protected-close",
+            concat!(
+                "[[code]]\n",
+                "[[code type=\"php\"]]\n",
+                "日本語...\n",
+                "line\\\n",
+                "next\n",
+                "[[/code]]\n",
+                "@<[[code]]>@\n",
+                "@<[[/code]]>@\n",
+                "@@[[/code]]@@\n",
+                "tail...\n",
+                "[[/code ]]\n",
+                "\n",
+                "outside...",
+            ),
+            concat!(
+                "<div class=\"code\"><pre><code>[[code type=&quot;php&quot;]]\n",
+                "日本語...\n",
+                "line\\\n",
+                "next</code></pre></div><br>\n",
+                "<span style=\"white-space: pre-wrap;\">[[code]]</span><br>\n",
+                "<span style=\"white-space: pre-wrap;\">[[/code]]</span><br>\n",
+                "<span style=\"white-space: pre-wrap;\">[[/code]]</span><br>\n",
+                "tail…<br>\n",
+                "[[/code ]]\n",
+                "<p>outside…</p>",
+            ),
+            Some("[[code type=\"php\"]]\n日本語...\nline\\\nnext"),
+        ),
+        (
+            "code-typed-inner-two-closers",
+            "[[code]]\n[[code type=\"php\"]]\ninner\n[[/code]]\nafter\n[[/code]]",
+            concat!(
+                "<div class=\"code\"><pre><code>[[code type=&quot;php&quot;]]\n",
+                "inner\n",
+                "[[/code]]\n",
+                "after</code></pre></div>",
+            ),
+            Some("[[code type=\"php\"]]\ninner\n[[/code]]\nafter"),
+        ),
+        (
+            "code-bare-inner-spaced-outer-closer",
+            "[[code]]\n[[code]]\ninner\n[[/code]]\nafter\n[[/code ]]",
+            concat!(
+                "<div class=\"code\"><pre><code>[[code]]\n",
+                "inner</code></pre></div><br>\n",
+                "after<br>\n",
+                "[[/code ]]",
+            ),
+            Some("[[code]]\ninner"),
+        ),
+        (
+            "code-bare-inner-outer-fallback-with-whitespace",
+            "[[code]]\n[[code]]\nalpha\tbeta\u{00a0}gamma\n[[/code]]",
+            "<div class=\"code\"><pre><code>[[code]]\nalpha    beta gamma</code></pre></div>",
+            Some("[[code]]\nalpha    beta gamma"),
+        ),
+        (
+            "code-spaced-closer-stays-literal",
+            "[[code]]\nbody\n[[/code ]]\nafter",
+            "<p>[[code]]<br>\nbody<br>\n[[/code ]]<br>\nafter</p>",
+            None,
+        ),
+    ];
+
+    let mut failures = Vec::new();
+    for (name, source, expected_html, expected_contents) in cases {
+        let (html, _text, tree) = render(source);
+        if html != expected_html {
+            failures.push(format!(
+                "{name} HTML:\n  actual: {html:?}\nexpected: {expected_html:?}",
+            ));
+        }
+        let contents = tree.code_blocks.first().map(|block| &*block.contents);
+        if contents != expected_contents {
+            failures.push(format!(
+                "{name} contents:\n  actual: {contents:?}\nexpected: {expected_contents:?}",
+            ));
+        }
+        let expected_blocks = expected_contents.is_some() as usize;
+        if tree.code_blocks.len() != expected_blocks {
+            failures.push(format!(
+                "{name} blocks:\n  actual: {}\nexpected: {expected_blocks}",
+                tree.code_blocks.len(),
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }

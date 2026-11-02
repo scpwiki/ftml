@@ -52,6 +52,7 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
         body_start: usize,
         nested_closes: usize,
         suppress_nested_openers: bool,
+        fallback_closer: Option<(usize, usize)>,
     }
 
     let mut output = BTreeMap::new();
@@ -75,6 +76,7 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
                     }
                     if let Some(parent) = stack.last_mut() {
                         parent.nested_closes += 1 + open.nested_closes;
+                        parent.fallback_closer = Some((marker_start, marker_end));
                     }
                 }
             } else if let Some(open) = stack.last_mut() {
@@ -98,6 +100,7 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
                 body_start,
                 nested_closes: 0,
                 suppress_nested_openers: false,
+                fallback_closer: None,
             });
             // The opener head is one lexical owner. Do not rescan `[[`
             // lookalikes inside it as independent block markers; otherwise
@@ -107,6 +110,25 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
         }
         cursor = marker_start + 2;
     }
+
+    while let Some(open) = stack.pop() {
+        let Some((closer_start, closer_end)) = open.fallback_closer else {
+            continue;
+        };
+        let candidate = WikidotCodeCandidate {
+            body: open.body_start..closer_start,
+            owner_end: closer_end,
+            end_blocks_to_skip: open.nested_closes - 1,
+        };
+        if !crosses_bold_closer(&source[candidate.body.clone()], &source[closer_end..]) {
+            output.insert(open.opener_start, candidate);
+        }
+        if let Some(parent) = stack.last_mut() {
+            parent.nested_closes += open.nested_closes;
+            parent.fallback_closer = Some((closer_start, closer_end));
+        }
+    }
+
     output
 }
 
@@ -228,8 +250,7 @@ fn code_closer_marker_end(source: &str, closer_start: usize) -> Option<usize> {
     let head_start = closer_start + "[[/".len();
     let relative_end = source[head_start..].find("]]")?;
     let head_end = head_start + relative_end;
-    let name = source[head_start..head_end]
-        .trim_matches(|character: char| character.is_ascii_whitespace());
+    let name = &source[head_start..head_end];
 
     if !name.eq_ignore_ascii_case("code") {
         return None;
@@ -324,12 +345,43 @@ mod tests {
         for source in [
             "[[code]]\nunclosed",
             "prefix[[code]]\nbody\n[[/code]]",
-            "[[code]]\n[[code]]\nnested\n[[/code]]",
             "[[code]]\nouter [[bold]]inner\n[[/code]][[/bold]]",
         ] {
             let opener = source.find("[[code]]").unwrap();
             assert!(candidate_at(source, opener).is_none(), "{source:?}");
         }
+    }
+
+    #[test]
+    fn candidate_pairs_outer_opener_with_the_last_jumped_closer() {
+        let source = "[[code]]\n[[code]]\ninner\n[[/code]]\nafter\n[[/code ]]";
+        let candidate = candidate_at(source, 0).expect("outer code candidate");
+        let closer = source.find("[[/code]]").unwrap();
+
+        assert_eq!(&source[candidate.body.clone()], "\n[[code]]\ninner\n");
+        assert_eq!(candidate.owner_end, closer + "[[/code]]".len());
+        assert_eq!(candidate.end_blocks_to_skip, 0);
+    }
+
+    #[test]
+    fn candidate_fallback_skips_closers_of_earlier_jumped_blocks() {
+        let source = "[[code]]\n[[code]]\na\n[[/code]]\n[[code]]\nb\n[[/code]]";
+        let candidate = candidate_at(source, 0).expect("outer code candidate");
+        let closer = source.rfind("[[/code]]").unwrap();
+
+        assert_eq!(
+            &source[candidate.body.clone()],
+            "\n[[code]]\na\n[[/code]]\n[[code]]\nb\n",
+        );
+        assert_eq!(candidate.owner_end, closer + "[[/code]]".len());
+        assert_eq!(candidate.end_blocks_to_skip, 1);
+    }
+
+    #[test]
+    fn candidate_rejects_spaced_code_closer() {
+        let source = "[[code]]\nbody\n[[/code ]]\nafter";
+
+        assert!(candidates(source).is_empty());
     }
 
     #[test]
