@@ -711,7 +711,7 @@ fn try_consume_leaf_token<'r, 't>(
 where
     'r: 't,
 {
-    if parser.current().token == Token::Url {
+    if matches!(parser.current().token, Token::Url | Token::UrlStar) {
         let elements = url_elements(parser)?;
         return Ok(Some(elements));
     }

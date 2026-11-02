@@ -21,7 +21,7 @@
 use super::prelude::*;
 use crate::parsing::collect::{CommentElidedText, consume_valid_comment};
 use crate::parsing::discard_wikidot_controls;
-use crate::tree::{LinkLabel, LinkLocation, LinkType};
+use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use std::borrow::Cow;
 
 pub const RULE_URL: Rule = Rule {
@@ -43,7 +43,8 @@ where
     let token = parser.current();
     let source = parser.full_text().inner();
     let start = token.span.start;
-    let url = &source[start..token.span.end];
+    let starred = token.token == Token::UrlStar;
+    let url = &source[start + usize::from(starred)..token.span.end];
     let link = Element::Link {
         ltype: LinkType::Direct,
         link: LinkLocation::Url(cow!(url)),
@@ -52,6 +53,9 @@ where
     };
 
     parser.step()?;
+    if starred {
+        return Ok(Elements::Multiple(vec![text!("*"), link]));
+    }
     Ok(Elements::Single(link))
 }
 
@@ -63,6 +67,8 @@ where
 {
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
+    let starred = parser.current().token == Token::UrlStar;
+    let url_start = start + usize::from(starred);
     let mut end = parser.current().span.end;
     let mut comments = Vec::new();
     parser.step()?;
@@ -120,7 +126,7 @@ where
         parser.step()?;
     }
 
-    let field = CommentElidedText::new(source, start..end, comments);
+    let field = CommentElidedText::new(source, url_start..end, comments);
     let mut url = discard_wikidot_controls(field.into_cow());
     let previous = start
         .checked_sub(1)
@@ -134,6 +140,16 @@ where
         url = without_last_character(url);
     }
 
+    let mut trailing = Vec::new();
+    while let Some(last) = url.chars().next_back() {
+        if !matches!(last, ',' | '*') && (last.is_ascii() || last.is_whitespace()) {
+            break;
+        }
+        trailing.push(last);
+        url = without_last_character(url);
+    }
+    let trailing: String = trailing.iter().rev().collect();
+
     let split_terminal_period = url.ends_with('.')
         && (matches!(parser.current().token, Token::Whitespace | Token::InputEnd)
             || suffix.is_some());
@@ -145,9 +161,12 @@ where
         ltype: LinkType::Direct,
         link: LinkLocation::Url(url),
         label: LinkLabel::Url,
-        target: None,
+        target: starred.then_some(AnchorTarget::NewTab),
     };
     let mut elements = vec![link];
+    if !trailing.is_empty() {
+        elements.push(Element::Text(Cow::Owned(trailing)));
+    }
     if split_terminal_period {
         elements.push(text!("."));
     }
@@ -364,5 +383,97 @@ mod tests {
 
         assert_eq!(actual, link("https://example.com/").into());
         assert_eq!(parser.current().token, Token::EscapedDoubleQuote);
+    }
+
+    fn star_link(url: &'static str) -> Element<'static> {
+        Element::Link {
+            ltype: LinkType::Direct,
+            link: LinkLocation::Url(cow!(url)),
+            label: LinkLabel::Url,
+            target: Some(AnchorTarget::NewTab),
+        }
+    }
+
+    #[test]
+    fn wikidot_url_rule_star_prefix_opens_in_a_new_tab() {
+        assert_url_rule(
+            "*https://example.com/new-tab-target",
+            Layout::Wikidot,
+            star_link("https://example.com/new-tab-target").into(),
+        );
+        assert_url_rule(
+            "*https://example.com/new-tab-target",
+            Layout::Wikijump,
+            Elements::Multiple(vec![
+                text!("*"),
+                link("https://example.com/new-tab-target"),
+            ]),
+        );
+    }
+
+    #[test]
+    fn wikidot_url_rule_splits_trailing_comma_and_stars() {
+        assert_url_rule(
+            "http://example.com/page, mid",
+            Layout::Wikidot,
+            Elements::Multiple(vec![link("http://example.com/page"), text!(",")]),
+        );
+        assert_url_rule(
+            "http://example.com/b** end",
+            Layout::Wikidot,
+            Elements::Multiple(vec![link("http://example.com/b"), text!("**")]),
+        );
+        assert_url_rule(
+            "http://example.com/a,b next",
+            Layout::Wikidot,
+            link("http://example.com/a,b").into(),
+        );
+    }
+
+    #[test]
+    fn wikidot_url_rule_stops_at_non_ascii_text() {
+        assert_url_rule(
+            "http://example.com/pg」 quoted",
+            Layout::Wikidot,
+            Elements::Multiple(vec![link("http://example.com/pg"), text!("」")]),
+        );
+        assert_url_rule(
+            "http://example.com/pageです",
+            Layout::Wikidot,
+            Elements::Multiple(vec![link("http://example.com/page"), text!("です")]),
+        );
+    }
+
+    #[test]
+    fn wikidot_autolink_star_and_boundaries_render_like_live() {
+        use crate::render::Render;
+
+        let source = "star mid *http://example.com/star-mid x\n\nbold **http://example.com/b** end\n\nnot-a-link abchttp://example.com/pg here";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        assert!(
+            html.contains(
+                "star mid <a href=\"http://example.com/star-mid\" target=\"_blank\">http://example.com/star-mid</a> x"
+            ),
+            "{html}",
+        );
+        assert!(
+            html.contains(
+                "bold *<a href=\"http://example.com/b\" target=\"_blank\">http://example.com/b</a>** end"
+            ),
+            "{html}",
+        );
+        assert!(
+            html.contains("<p>not-a-link abchttp://example.com/pg here</p>"),
+            "{html}",
+        );
     }
 }
