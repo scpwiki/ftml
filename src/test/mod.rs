@@ -22,6 +22,7 @@ mod ast;
 pub(crate) mod conf_names;
 mod delayed;
 mod id_prefix;
+mod image_paragraphs;
 mod includer;
 mod large;
 mod settings;

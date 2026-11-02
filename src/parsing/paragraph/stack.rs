@@ -445,6 +445,9 @@ impl<'t> ParagraphStack<'t> {
             self.end_paragraph();
             self.current.push(element);
         } else if aligned_image {
+            if self.wikidot && !self.current.is_empty() {
+                self.pop_line_break();
+            }
             self.end_paragraph();
             self.finished.push(element);
         } else if unaligned_image {
