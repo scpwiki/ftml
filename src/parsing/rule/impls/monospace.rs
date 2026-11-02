@@ -52,8 +52,6 @@ fn try_consume_fn<'r, 't>(
     let ((mut elements, terminator), errors, paragraph_safe) = collected.into();
 
     let trailing_padding = if parser.current().token == Token::RightMonospace {
-        // A run of closing braces uses its final pair as the terminator. Every
-        // preceding pair remains monospace text.
         elements.push(text!("}}"));
         while parser.next_two_tokens()
             == (Token::RightMonospace, Some(Token::RightMonospace))

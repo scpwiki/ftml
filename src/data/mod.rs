@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! This module defines POD (plain old data) structs.
-
 mod backlinks;
 mod karma;
 mod page_info;

@@ -31,8 +31,6 @@ use super::settings::WikitextSettings;
 use crate::render::Render;
 use crate::render::text::TextRender;
 
-// Function exports
-
 #[wasm_bindgen]
 pub fn render_text(
     syntax_tree: SyntaxTree,

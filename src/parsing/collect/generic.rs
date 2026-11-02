@@ -83,10 +83,6 @@ where
     )
 }
 
-/// Variant of [`collect`] that leaves a matching closing token unconsumed.
-///
-/// This is used when an enclosing rule owns the terminator and the nested
-/// collector must stop immediately before it.
 pub(super) fn collect_before<'p, 'r, 't, F>(
     parser: &'p mut Parser<'r, 't>,
     rule: Rule,
@@ -143,13 +139,6 @@ where
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
         }
 
-        // Check current token state to decide how to proceed.
-        //
-        // * End the collection, return elements
-        // * Fail the collection, invalid token
-        // * Continue the collection, consume to make a new element
-
-        // See if the container has ended
         if parser.evaluate_any(close_conditions) {
             let last = parser.current();
             if consume_terminator && parser.current().token != Token::InputEnd {
@@ -172,21 +161,17 @@ where
             return ok!(paragraph_safe; parser.current(), errors);
         }
 
-        // See if the container should be aborted
         if parser.evaluate_any(invalid_conditions) {
             return Err(parser.make_err(error_kind.unwrap_or(ParseErrorKind::RuleFailed)));
         }
 
-        // See if we've hit the end
         if parser.current().token == Token::InputEnd {
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
         }
 
-        // Process token(s).
         let old_remaining = parser.remaining();
         process(parser)?.chain(&mut errors, &mut paragraph_safe);
 
-        // If the pointer hasn't moved, we step one token.
         if parser.same_pointer(old_remaining) {
             parser.step()?;
         }

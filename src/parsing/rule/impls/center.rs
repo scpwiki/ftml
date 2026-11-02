@@ -52,7 +52,6 @@ fn try_consume_fn<'r, 't>(
         step_expected(parser, Token::Whitespace)?;
     }
 
-    // Check that the rule has "= "
     step_expected(parser, Token::Equals)?;
     step_expected(parser, Token::Whitespace)?;
 
@@ -67,7 +66,6 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Collect contents
     let close = [
         ParseCondition::current(Token::LineBreak),
         ParseCondition::current(Token::ParagraphBreak),

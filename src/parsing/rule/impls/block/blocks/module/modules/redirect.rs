@@ -86,9 +86,6 @@ mod tests {
 
     #[test]
     fn redirect_argument_names_are_case_insensitive() {
-        // Like the other get()-based modules (Backlinks, Categories, Join),
-        // argument lookup follows Arguments' case folding; only PageTree's
-        // manual raw-name comparison is case-sensitive.
         assert_eq!(
             parse_redirect("[[module Redirect Destination=\"start\"]]"),
             Some("start".to_owned())

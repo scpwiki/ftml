@@ -187,10 +187,6 @@ pub(crate) fn lower_wikidot_inline_size_scopes<'t>(elements: &mut Vec<Element<'t
     );
 }
 
-/// Lower Wikidot inline scopes in an already-inline sequence.
-///
-/// Footnote bodies are stored without their paragraph container, so they need
-/// the same continuous sequence treatment as the contents of a paragraph.
 pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     elements: &mut Vec<Element<'t>>,
 ) {
@@ -211,7 +207,6 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 
 fn collect_valid_scope_pairs(elements: &[Element<'_>]) -> BTreeSet<usize> {
     let mut ordinal = 0;
-    // Separate stacks keep crossed size/span closure matching constant-time.
     let mut open_sizes = Vec::new();
     let mut open_spans = Vec::new();
     let mut active_count = 0;
@@ -554,14 +549,6 @@ fn lower_sequence<'t>(
                     matches!(source.peek(), Some(Element::Text(text)) if text == " ");
                 if leading_space {
                     source.next();
-                    // Hoist only when content precedes the span in this
-                    // sequence and no inline scope is already open:
-                    // paragraph-initial hoisting is unevidenced, so a
-                    // paragraph-leading span keeps the legacy discard, and
-                    // hoisting into an open outer span lands the space
-                    // between the outer open tag and the inner span, which
-                    // breaks the nested set-record shape — a nested span
-                    // keeps the legacy discard too.
                     if !at_start
                         && !active.has_active_scope()
                         && !elements_end_with_space(&output)
@@ -747,12 +734,6 @@ fn flush_run<'t>(
         *last_run_outer_scope = None;
         return;
     };
-    // An inline close re-emits a trailing body space as a lone sibling when
-    // the next element cannot absorb it (e.g. another span open follows).
-    // When that space lands between two runs wrapped in the same outer
-    // inline scope, it must not wedge the runs apart into sibling copies of
-    // the outer container: merge across it, absorbing the space between the
-    // runs so the outer span stays whole.
     let merge_across_separator = matches!(output.last(), Some(Element::Text(text)) if text == " ")
         && match output
             .len()
@@ -1263,7 +1244,6 @@ mod tests {
 
     #[test]
     fn legacy_parse_reports_malformed_list_cell_without_panicking() {
-        // Frozen EN adoption-poster-hx contains this malformed list/cell boundary.
         let source = "[[size 170%]]heading[[/size]]\n* [[/cell]]\n";
         let tokens = crate::tokenize(source);
         let page_info = PageInfo::dummy();

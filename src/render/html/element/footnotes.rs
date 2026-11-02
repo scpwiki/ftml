@@ -32,7 +32,6 @@ pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
     };
     let id = str!(index);
 
-    // TODO make this into a locale template string
     let footnote_string = ctx.handle().get_message(ctx.language(), "footnote");
     let label = format!("{footnote_string} {index}.");
 
@@ -80,7 +79,6 @@ pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
         .span()
         .attr(attr!("class" => "wj-footnote-ref"))
         .inner(|ctx| {
-            // Footnote marker that is hoverable
             ctx.html()
                 .element("wj-footnote-ref-marker")
                 .attr(attr!(
@@ -102,13 +100,11 @@ pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
                     "aria-hidden" => "true",
                 ))
                 .inner(|ctx| {
-                    // Tooltip label
                     ctx.html()
                         .span()
                         .attr(attr!("class" => "wj-footnote-ref-tooltip-label"))
                         .contents(&label);
 
-                    // Actual tooltip contents
                     ctx.html()
                         .span()
                         .attr(attr!("class" => "wj-footnote-ref-contents"))
@@ -211,12 +207,10 @@ pub fn render_footnote_block(ctx: &mut HtmlContext, title: Option<&str>) {
                 .contents(title);
 
             ctx.html().ol().inner(|ctx| {
-                // TODO make this into a footnote helper method
                 for (index, contents) in ctx.footnotes().iter().enumerate() {
                     let index = index + 1;
                     let id = &format!("{index}");
 
-                    // Build actual footnote item
                     ctx.html()
                         .li()
                         .attr(attr!(
@@ -224,7 +218,6 @@ pub fn render_footnote_block(ctx: &mut HtmlContext, title: Option<&str>) {
                             "data-id" => id,
                         ))
                         .inner(|ctx| {
-                            // Number and clickable anchor
                             ctx.html()
                                 .element("wj-footnote-list-item-marker")
                                 .attr(attr!(
@@ -235,14 +228,12 @@ pub fn render_footnote_block(ctx: &mut HtmlContext, title: Option<&str>) {
                                 .inner(|ctx| {
                                     str_write!(ctx, "{index}");
 
-                                    // Period after entry number. Has special class to permit styling.
                                     ctx.html()
                                         .span()
                                         .attr(attr!("class" => "wj-footnote-sep"))
                                         .inner(|ctx| ctx.push_raw('.'));
                                 });
 
-                            // Footnote contents
                             ctx.html()
                                 .div()
                                 .attr(attr!("class" => "wj-footnote-list-item-contents"))

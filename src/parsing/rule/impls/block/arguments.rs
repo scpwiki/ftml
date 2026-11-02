@@ -148,7 +148,6 @@ impl<'t> Arguments<'t> {
         }
     }
 
-    /// Inserts a key / value pair into the list of arguments.
     pub fn insert(&mut self, key: &'t str, value: Cow<'t, str>) {
         self.source_present = true;
         let argument_key = self.key(key);
@@ -166,7 +165,6 @@ impl<'t> Arguments<'t> {
         self.bare.insert(self.key(key));
     }
 
-    /// Gets **and removes** a string value from the arguments from its key.
     #[must_use = "non-idempotent getter method"]
     pub fn get(&mut self, key: &'t str) -> Option<Cow<'t, str>> {
         let key = self.key(key);
@@ -192,7 +190,6 @@ impl<'t> Arguments<'t> {
         self.inner.remove(&key).map(|value| (value, bare))
     }
 
-    /// Gets **and removes** a boolean value from the arguments from its the key.
     #[must_use = "non-idempotent getter method"]
     pub fn get_bool(
         &mut self,
@@ -208,7 +205,6 @@ impl<'t> Arguments<'t> {
         }
     }
 
-    /// Gets **and removes** a parseable value from the arguments from its key.
     #[must_use = "non-idempotent getter method"]
     pub fn get_value<T: FromStr>(
         &mut self,
@@ -270,12 +266,6 @@ impl<'t> Arguments<'t> {
         self.spaced_equals
     }
 
-    /// Produces a separate hash map of argument keys to values.
-    ///
-    /// This returns a new `HashMap` suitable for inclusion in final `Element`s.
-    /// It does not clone any string allocations, as they are all borrowed
-    /// (or already owned, per `Cow`).
-    /// It only makes a new allocation for the new `HashMap`.
     pub fn to_hash_map(&self) -> HashMap<Cow<'t, str>, Cow<'t, str>> {
         self.inner
             .iter()
@@ -292,10 +282,6 @@ impl<'t> Arguments<'t> {
         self.raw
     }
 
-    /// Similar to `to_hash_map()`, but creates an `AttributeMap` instead.
-    ///
-    /// Because all fields are passed from the user, this does ID isolation
-    /// if that is enabled, and so needs `WikitextSettings` to be passed in.
     #[inline]
     pub fn to_attribute_map(&self, settings: &WikitextSettings) -> AttributeMap<'t> {
         let mut map = self.attribute_map_from_entries(settings, |_, _| true);

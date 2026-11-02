@@ -24,8 +24,6 @@ fn render(source: &str, layout: Layout) -> String {
 
 #[test]
 fn wikidot_spans_inside_literal_brackets_keep_their_inline_owner() {
-    // Provenance-backed saved Wikidot source/HTML: scp-9270, scp-8725,
-    // jack-ike-s-proposal-i, and brc-cast-24-a-nice-content-farm-upstate.
     for (source, expected) in [
         (
             "[[[span class=\"blinkbar\"]]1[[/span]]]",

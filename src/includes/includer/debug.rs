@@ -45,12 +45,6 @@ impl<'t> Includer<'t> for DebugIncluder {
 
         for include in includes {
             let content = if first && includes.len() > 1 {
-                // If the requested inclusions are greater than one,
-                // then have the list be a missing page.
-                //
-                // This lets us test the no_such_include() method,
-                // without it affecting typical single-include test cases.
-
                 first = false;
                 None
             } else {
@@ -79,20 +73,14 @@ impl<'t> Includer<'t> for DebugIncluder {
     }
 }
 
-/// Rendering a `HashMap` as a string, sorted alphabetically.
-///
-/// Avoids the uncertain key-value pair ordering inherent in the `Debug`
-/// implementation, which could cause tests to be flakey or system-dependent.
 #[derive(Debug)]
 struct MapWrap<'m, 't>(&'m VariableMap<'t>);
 
 impl<'t> Display for MapWrap<'_, 't> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Get all entries and sort by key
         let mut entries: Vec<(&Cow<'t, str>, &Cow<'t, str>)> = self.0.iter().collect();
         entries.sort_by_key(|(key, _)| *key);
 
-        // Write all entries
         write!(f, "{{")?;
 
         for (i, (key, value)) in entries.iter().enumerate() {
@@ -105,7 +93,6 @@ impl<'t> Display for MapWrap<'_, 't> {
 
         write!(f, "}}")?;
 
-        // Return
         Ok(())
     }
 }
@@ -114,11 +101,8 @@ impl<'t> Display for MapWrap<'_, 't> {
 fn map_wrap() {
     macro_rules! test {
         ($input:expr, $expected:expr $(,)?) => {{
-            // Get what was actually specified as the input,
-            // stripping out the "hashmap!".
             let raw_input = &stringify!($input)[9..];
 
-            // Convert string literals into Cows
             let input = {
                 let original = $input;
                 let mut map = HashMap::new();

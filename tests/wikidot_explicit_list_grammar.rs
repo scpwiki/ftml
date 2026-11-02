@@ -53,8 +53,6 @@ fn assert_case(case: &Case, source: &str, html: &str, text: &str) {
     );
 }
 
-// Anonymous scp-wiki PagePreviewModule provenance:
-// v7-full-syntax cases 000700 through 000717, captured 2026-07-31.
 const ORPHAN_LIST_ITEM_CASES: &[Case] = &[
     Case {
         name: "li-canonical-valid",
@@ -207,8 +205,6 @@ v7 body
     },
 ];
 
-// The `%t%` placeholder runs each PagePreview-backed row once as `ol` and
-// once as `ul`. `%T%` is its measured uppercase control.
 const LIST_CASES: &[Case] = &[
     Case {
         name: "canonical-valid",
@@ -442,7 +438,6 @@ fn repeated_malformed_explicit_list_recovery_stays_bounded() {
     assert!(started.elapsed() < Duration::from_secs(2));
 }
 
-/// Fixture: Rokurolize/ftml#484. Frozen parity case: test--list--block-fail.
 #[test]
 fn issue_484_empty_lists_keep_breaks_and_orphan_recovery_unwrapped() {
     let source = include_str!("../test/list/block-fail/input.ftml");
@@ -476,7 +471,6 @@ fn issue_484_isolated_orphan_list_item_stays_in_a_paragraph() {
     assert!(!errors.is_empty(), "orphan li must remain diagnosed");
 }
 
-/// Fixture: Rokurolize/ftml#485.
 #[test]
 fn issue_485_scored_list_recovery_keeps_literal_markers_in_one_item() {
     let source = include_str!("../test/list/block-score/input.ftml");

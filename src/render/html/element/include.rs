@@ -42,17 +42,12 @@ pub fn render_variable(ctx: &mut HtmlContext, name: &str) {
         value.unwrap_or("<none>"),
     );
 
-    // Write to a separate buffer since we can't borrow &mut for buffer and & for variables.
     let value = match value {
-        // Value exists, substitute normally.
         Some(value) => str!(value),
 
-        // Value is absent, leave as original value.
-        // Variables are {$name}, so just write that back.
         None => format!("{{${name}}}"),
     };
 
-    // Append the formatted string
     ctx.push_escaped(&value);
 }
 

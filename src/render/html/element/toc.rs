@@ -35,11 +35,7 @@ pub fn render_table_of_contents(
 
     let class_value = match align {
         None => "",
-        Some(align) => {
-            // Only valid for float left / right
-            // TODO add wikidot compat
-            FloatAlignment { align, float: true }.wj_html_class()
-        }
+        Some(align) => FloatAlignment { align, float: true }.wj_html_class(),
     };
 
     ctx.html()
@@ -50,19 +46,16 @@ pub fn render_table_of_contents(
             attributes
         ))
         .inner(|ctx| {
-            // TOC buttons
             ctx.html()
                 .div()
                 .attr(attr!("id" => "wj-toc-action-bar"; if use_true_ids))
                 .inner(|ctx| {
-                    // TODO button
                     ctx.html().a().attr(attr!(
                         "href" => "javascript:;",
                         "onclick" => "WIKIJUMP.page.listeners.foldToc(event)",
                     ));
                 });
 
-            // TOC Heading
             let table_of_contents_title = ctx
                 .handle()
                 .get_message(ctx.language(), "table-of-contents");

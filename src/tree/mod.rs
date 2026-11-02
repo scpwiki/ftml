@@ -122,12 +122,6 @@ pub struct SyntaxTree<'t> {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub footnotes: Vec<Vec<Element<'t>>>,
 
-    /// Whether the renderer should add its own footnote block.
-    ///
-    /// This is true if there is no footnote block in the element
-    /// list above, *and* there are footnotes to render.
-    // NOTE: Not::not() here is effectively saying "don't serialize if !value"
-    //       which is just "is false".
     #[serde(default, skip_serializing_if = "Not::not")]
     pub needs_footnote_block: bool,
 
@@ -157,10 +151,6 @@ impl serde::Serialize for SyntaxTree<'_> {
         field_count += usize::from(self.needs_footnote_block);
         field_count += usize::from(!self.bibliographies.is_empty());
 
-        // Element serialization is recursively nested by the public JSON
-        // schema. The parser intentionally supports trees deep enough to
-        // overflow an ordinary native thread stack, so adapt the caller's
-        // serializer rather than changing the schema or lowering parser depth.
         let serializer = serde_stacker::Serializer::new(serializer);
         let mut state = serializer.serialize_struct("SyntaxTree", field_count)?;
         state.serialize_field("elements", &self.elements)?;

@@ -31,7 +31,6 @@ impl ClearFloat {
         match self {
             ClearFloat::Left => "clear:left; height: 0px; font-size: 1px",
             ClearFloat::Right => "clear:right; height: 0px; font-size: 1px",
-            // This is the only variant possible in Wikidot itself
             ClearFloat::Both => "clear:both; height: 0px; font-size: 1px",
         }
     }

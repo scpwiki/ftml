@@ -71,7 +71,6 @@ where
     pub errors: Vec<ParseError>,
     pub paragraph_safe: bool,
 
-    // Marker fields to assert that the 'r lifetime is at least as long as 't.
     #[doc(hidden)]
     _ref_marker: PhantomData<&'r ()>,
     #[doc(hidden)]
@@ -99,13 +98,10 @@ impl<T> ParseSuccess<'_, '_, T> {
         let mut errors = self.errors;
         let paragraph_safe = self.paragraph_safe;
 
-        // Append previous errors
         all_errors.append(&mut errors);
 
-        // Update paragraph safety
         *all_paragraph_safe &= paragraph_safe;
 
-        // Return resultant item
         item
     }
 }
@@ -142,14 +138,11 @@ impl<'r, 't, T> ParseSuccess<'r, 't, T> {
 impl<'t> ParseSuccess<'_, 't, Elements<'t>> {
     pub fn check_partials(&self, parser: &Parser) -> Result<(), ParseError> {
         for element in &self.item {
-            // This check only applies if the element is a partial.
             if let Element::Partial(partial) = element {
                 if partial.is_inline_format_control() {
                     continue;
                 }
-                // Check if the current rule is looking for a partial.
                 if !parser.accepts_partial().matches(partial) {
-                    // Found a partial when not looking for one. Raise the appropriate error.
                     return Err(parser.make_err(partial.parse_error_kind()));
                 }
             }

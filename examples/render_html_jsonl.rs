@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Render newline-delimited syntax cases as Wikidot-layout HTML.
-
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
 use ftml::parsing::ParseError;

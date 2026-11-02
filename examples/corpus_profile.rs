@@ -18,19 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Time the parse pipeline over a corpus and digest every output.
-//!
-//! Reads newline-delimited `{"page_id", "site", "slug", "wikitext"}` objects
-//! from standard input, runs preprocess, tokenize, parse and HTML render with
-//! the Wikidot page settings Wikijump uses, and writes one
-//! `page_id<TAB>sha256<TAB>microseconds` line per page to the file named by
-//! the first argument. Per-stage totals go to standard error. Comparing two digest
-//! files proves a change kept every rendered page byte-identical; element IDs
-//! the renderer draws at random are digested as placeholders.
-//!
-//! `CORPUS_LIMIT` stops after that many pages and `CORPUS_SKIP` takes a
-//! comma-separated list of page IDs to leave out.
-
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
 use ftml::render::Render;
@@ -64,7 +51,6 @@ fn main() {
         .split(',')
         .filter_map(|id| id.parse().ok())
         .collect();
-    // The IDs `render::html::random` generates.
     let random_ids = regex::Regex::new(concat!(
         r"(wj-id-)[A-Za-z0-9]{16}|(bibcite-[0-9]+-)[0-9]+a|",
         r"(wiki-tabview-|wj-button-|wj-embed-video-|wj-gallery-|wj-social-)[0-9a-f]{32}",

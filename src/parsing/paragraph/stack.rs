@@ -51,22 +51,12 @@ pub(crate) fn collapsible_has_direct_literal_nested_opener(
 pub struct ParagraphStack<'t> {
     wikidot: bool,
 
-    /// Elements being accumulated in the current paragraph.
     current: Vec<Element<'t>>,
 
-    /// Suppressed-owner phase markers awaiting the next authored element.
-    /// They must remain typed for later typography without occupying a
-    /// physical Wikidot line or interfering with line-break cleanup.
     pending_suppression_seams: Vec<Element<'t>>,
 
-    /// Whether Wikidot renders the current physical paragraph without a
-    /// paragraph wrapper because it contains a naked image block.
     current_unwrapped: bool,
 
-    /// Whether the current physical line contains an invisible C0 control.
-    ///
-    /// Wikidot drops these controls from output, but a control-only line is
-    /// still occupied and therefore preserves its following line break.
     current_has_discarded_control: bool,
     wikidot_complete_raw_line_occupied: bool,
     wikidot_complete_raw_run_after_block: bool,
@@ -88,16 +78,12 @@ pub struct ParagraphStack<'t> {
     suppress_next_line_break: bool,
     suppressed_line_break_restarts_paragraph: bool,
     wikidot_empty_list_break: bool,
-    // A line-break rule may consume the following block in the same result,
-    // so retain that physical boundary until the element reaches this stack.
     next_element_started_line: bool,
     wikidot_simple_table_boundary: bool,
     wikidot_reopen_for_footnote: bool,
 
-    /// Previous elements created, to be outputted in the final [`SyntaxTree`].
     finished: Vec<Element<'t>>,
 
-    /// Gathered errors from paragraph parsing.
     errors: Vec<ParseError>,
 }
 
@@ -197,8 +183,6 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
-    /// End the preceding inline run without a paragraph wrapper while keeping
-    /// the source newline as insignificant HTML whitespace.
     #[inline]
     pub fn mark_wikidot_continued_block_boundary(&mut self) {
         if self.wikidot && !self.current.is_empty() {
@@ -245,22 +229,12 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
-    /// Preserve the paragraph boundary represented by a spaced empty native
-    /// quote row. Wikidot keeps this row invisible, but it still prevents
-    /// adjacent quoted simple-table rows from joining into one table.
     pub(crate) fn mark_wikidot_simple_table_boundary(&mut self) {
         if self.wikidot {
             self.wikidot_simple_table_boundary = true;
         }
     }
 
-    /// Merge simple tables split by native quote physical lines.
-    ///
-    /// The simple-table rule consumes one physical line at a time while a
-    /// native quote is being assembled. Wikidot joins those rows when the
-    /// intervening empty quote marker is unspaced. This helper is deliberately
-    /// opt-in from native-quote assembly so ordinary page-level table
-    /// boundaries keep their existing semantics.
     pub(crate) fn merge_wikidot_adjacent_simple_tables(&mut self) {
         if !self.wikidot || self.wikidot_simple_table_boundary {
             self.wikidot_simple_table_boundary = false;
@@ -303,7 +277,6 @@ impl<'t> ParagraphStack<'t> {
         self.mark_wikidot_invisible_line_occupancy();
     }
 
-    /// Preserve the physical-line occupancy of invisible legacy syntax.
     #[inline]
     pub(crate) fn mark_wikidot_invisible_line_occupancy(&mut self) {
         if self.wikidot {
@@ -378,8 +351,6 @@ impl<'t> ParagraphStack<'t> {
                 ..
             }
         ) || matches!(&element, Element::Delayed(delayed) if delayed.image_alignment() == Some(None));
-        // A block-level element (including another aligned image) is not the
-        // bare run the speculative aligned-image separator precedes.
         if self.pending_aligned_image_separator.is_some()
             && (aligned_image || !paragraph_safe)
         {
@@ -488,7 +459,6 @@ impl<'t> ParagraphStack<'t> {
             self.current.push(element);
             self.current_unwrapped = true;
         } else if paragraph_safe {
-            // Add it to the current (or new) paragraph. Nothing special.
             if self.wikidot
                 && matches!(element, Element::Text(ref text) if text == " ")
                 && (self.current.is_empty()
@@ -505,8 +475,6 @@ impl<'t> ParagraphStack<'t> {
             }
             self.current.push(element);
         } else {
-            // This has to be its own "finished" element, outside of any
-            // paragraph wrapper. So finish up what we have, then add this element.
             let invisible_block_line = self.wikidot && element == Element::LineBreak;
             let escaped_note_prefix = self.wikidot_note_follows_escaped_prefix(&element);
             let nested_literal_collapsible =
@@ -686,13 +654,6 @@ impl<'t> ParagraphStack<'t> {
         self.errors.append(errors);
     }
 
-    /// Remove the trailing line break if one exists.
-    ///
-    /// Exclusively for native blockquote logic, since
-    /// it needs to build blockquotes but also strip
-    /// excess line breaks.
-    ///
-    /// This should only be between lines in the blockquote.
     #[inline]
     pub fn pop_line_break(&mut self) {
         if let Some(index) = self.current.iter().rposition(|element| {
@@ -725,15 +686,12 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
-    /// Creates a paragraph element out of this instance's current elements.
     pub fn build_paragraph(&mut self) -> Option<Element<'t>> {
         self.trim_trailing_ascii_space();
-        // Don't create empty paragraphs
         if self.current.is_empty() {
             return None;
         }
 
-        // Pull out gathered elements, then make a new paragraph container
         let elements = mem::take(&mut self.current);
         let attributes = AttributeMap::new();
         let container = Container::new(ContainerType::Paragraph, elements, attributes);
@@ -750,7 +708,6 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
-    /// Drop the speculative aligned-image separator, if one is pending.
     fn remove_pending_aligned_image_separator(&mut self) {
         if let Some(index) = self.pending_aligned_image_separator.take()
             && matches!(self.finished.get(index), Some(Element::Text(text)) if text == "\n")
@@ -759,12 +716,8 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
-    /// Set the finished field in this struct to the paragraph element.
     pub fn end_paragraph(&mut self) {
         let finished_before = self.finished.len();
-        // Flushing a non-empty run settles the speculative separator left by
-        // an aligned image at the preceding paragraph break: the newline is
-        // part of Wikidot's output only when this run renders unwrapped.
         if self.pending_aligned_image_separator.is_some() && !self.current.is_empty() {
             if self.current_unwrapped {
                 self.pending_aligned_image_separator = None;
@@ -804,8 +757,6 @@ impl<'t> ParagraphStack<'t> {
         self.trim_unwrapped_trailing_line_break = false;
         self.suppress_next_line_break = false;
         self.suppressed_line_break_restarts_paragraph = false;
-        // Footnote reopening assumes the last finished element is still the
-        // paragraph that preceded the break; anything appended here ends that.
         if self.finished.len() != finished_before {
             self.wikidot_reopen_for_footnote = false;
         }
@@ -861,47 +812,24 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
-    /// Convert all paragraph context into a `ParseResult.`
-    ///
-    /// This returns all collected elements, errors, and returns the final
-    /// paragraph safety value.
     pub fn into_result<'r>(mut self) -> ParseResult<'r, 't, Vec<Element<'t>>> {
-        // Finish current paragraph, if any
         self.end_paragraph();
-        // No following run arrived to claim the speculative separator.
         self.remove_pending_aligned_image_separator();
 
-        // Deconstruct stack
         let elements = self.finished;
         let errors = self.errors;
 
-        // If this has any paragraphs in it, or other incompatible elements,
-        // it's not fit to be wrapped in <p>.
-        //
-        // Otherwise it's just a listing of internal elements.
-        // This is definitely not the common case here, this mostly will happen
-        // if the element list is empty.
         let paragraph_safe = elements.iter().all(|element| element.paragraph_safe());
 
-        // Return finished element list
         ok!(paragraph_safe; elements, errors)
     }
 
-    /// Converts all paragraph context into a set of `Element`s.
-    ///
-    /// You should only use this if you know for sure there are no errors,
-    /// and either have an alternate means of determining paragraph safety, or
-    /// statically know what that value would be.
     pub fn into_elements(mut self) -> Vec<Element<'t>> {
-        // Finish current paragraph, if any
         self.end_paragraph();
-        // No following run arrived to claim the speculative separator.
         self.remove_pending_aligned_image_separator();
 
-        // Check that there are no errors
         debug_assert!(self.errors.is_empty(), "ParagraphStack errors");
 
-        // Deconstruct stack, return
         self.finished
     }
 }

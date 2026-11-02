@@ -99,9 +99,6 @@ mod tests {
 
     #[test]
     fn tagcloud_preserves_link_and_display_combinations() {
-        // Custom target, URL prefix, and category-skipping combinations from
-        // the live TagCloud evidence stay verbatim for the caller, which owns
-        // link building.
         assert_eq!(
             parse_tagcloud(
                 "[[module TagCloud target=\"my-target\" urlAttrPrefix=\"lp\" skipCategoryFromUrl=\"true\" category=\"news\"]]"
@@ -113,8 +110,6 @@ mod tests {
                 ("category".to_owned(), "news".to_owned()),
             ],
         );
-        // Mode and 3D dimensions are preserved without interpretation; the
-        // legacy SWF wrapper belongs to the caller.
         assert_eq!(
             parse_tagcloud("[[module TagCloud mode=\"3d\" width=\"123\" height=\"77\"]]"),
             [
@@ -123,9 +118,6 @@ mod tests {
                 ("height".to_owned(), "77".to_owned()),
             ],
         );
-        // Empty and invalid values are preserved as authored; defaults and
-        // fallbacks (limit 50, showHidden non-empty, paired style validation)
-        // belong to the caller.
         assert_eq!(
             parse_tagcloud(
                 "[[module TagCloud limit=\"0\" showHidden=\"\" minFontSize=\"1em\"]]"
@@ -140,7 +132,6 @@ mod tests {
 
     #[test]
     fn tagcloud_preserves_duplicates_unknowns_and_empty_values() {
-        // Like ListPages, everything is kept in source order for the caller.
         assert_eq!(
             parse_tagcloud(
                 "[[module TagCloud limit=\"2\" limit=\"5\" unknown=\"kept\" showHidden=\"\"]]"

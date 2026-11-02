@@ -28,7 +28,6 @@ mod lexer {
     // Since pest generates some code that clippy doesn't like
     #![allow(clippy::upper_case_acronyms, clippy::empty_docs)]
 
-    // The actual parser definition, which we will re-export
     #[derive(Parser, Debug)]
     #[grammar = "parsing/lexer.pest"]
     pub struct TokenLexer;
@@ -59,15 +58,12 @@ impl ExtractedToken<'_> {
     /// of the text if it were in UTF-16 rather than in UTF-8.
     #[must_use]
     pub fn to_utf16_indices(&self, map: &Utf16IndexMap) -> Self {
-        // Copy fields
         let ExtractedToken { token, slice, span } = self.clone();
 
-        // Map indices to UTF-16
         let start = map.get_index(span.start);
         let end = map.get_index(span.end);
         let span = start..end;
 
-        // Output new ExtractedToken
         ExtractedToken { token, slice, span }
     }
 }
@@ -79,9 +75,6 @@ impl ExtractedToken<'_> {
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum Token {
-    //
-    // Symbols
-    //
     LeftBracket,
     LeftBracketAnchor,
     LeftBracketStar,
@@ -109,16 +102,10 @@ pub enum Token {
     Quote,
     Heading,
 
-    //
-    // Whitespace
-    //
     LineBreak,
     ParagraphBreak,
     Whitespace,
 
-    //
-    // Formatting
-    //
     Bold,
     Italics,
     Underline,
@@ -131,30 +118,18 @@ pub enum Token {
     LeftRaw,
     RightRaw,
 
-    //
-    // Lists
-    //
     BulletItem,
     NumberedItem,
 
-    //
-    // Links
-    //
     LeftLink,
     LeftLinkStar,
     RightLink,
 
-    //
-    // Tables
-    //
     TableColumn,
     TableColumnRight,
     TableColumnCenter,
     TableColumnTitle,
 
-    //
-    // Text components
-    //
     Identifier,
     Email,
     Url,
@@ -167,24 +142,14 @@ pub enum Token {
     GeneratedPageLink,
     GeneratedTagLinks,
 
-    //
-    // Miscellaneous
-    //
     LeftComment,
     InputStart,
     InputEnd,
 
-    //
-    // Catch-all case
-    //
     Other,
 }
 
 impl Token {
-    /// Extracts all tokens from the given text.
-    /// # Errors
-    /// Returns an error if something goes wrong with the parsing process. This will result in the
-    /// only [`Token`] being a raw text containing all of the input.
     pub(crate) fn extract_all(text: &str) -> Vec<ExtractedToken<'_>> {
         debug!("Running lexer on input");
 
@@ -205,7 +170,6 @@ impl Token {
         Self::extract_tokens_from_pairs(text, TokenLexer::parse(Rule::document, text))
     }
 
-    /// Converts lexer pairs into extracted tokens, or fallback tokens on lexer error.
     #[cfg(test)]
     fn extract_tokens_from_pairs<'a>(
         text: &'a str,
@@ -215,8 +179,6 @@ impl Token {
             Ok(pairs) => {
                 debug!("Lexer produced pairs for processing");
 
-                // Map pairs to tokens, and add a Token::InputStart at the beginning
-                // Pest already adds a Token::InputEnd at the end
                 let token = Token::InputStart;
                 let slice = "";
                 let span = 0..0;
@@ -230,28 +192,23 @@ impl Token {
         }
     }
 
-    /// Converts a single [`Pair`] from pest into its corresponding [`ExtractedToken`].
     #[cfg(test)]
     fn convert_pair(pair: Pair<Rule>) -> ExtractedToken {
-        // Extract values from the Pair
         let rule = pair.as_rule();
         let slice = pair.as_str();
         let start = pair.as_span().start();
         let end = pair.as_span().end();
         let span = start..end;
 
-        // Get matching Token.
         let token = Token::get_from_rule(rule);
         trace!("Converting pair '{:?}' into token {}", rule, token.name());
 
         ExtractedToken { token, slice, span }
     }
 
-    /// Maps each pest [`Rule`] to its corresponding [`Token`].
     #[cfg(test)]
     fn get_from_rule(rule: Rule) -> Token {
         match rule {
-            // Symbols
             Rule::left_comment => Token::LeftComment,
             Rule::left_bracket => Token::LeftBracket,
             Rule::left_bracket_anchor => Token::LeftBracketAnchor,
@@ -281,12 +238,10 @@ impl Token {
             Rule::quote => Token::Quote,
             Rule::heading => Token::Heading,
 
-            // Whitespace
             Rule::line_break => Token::LineBreak,
             Rule::paragraph_break => Token::ParagraphBreak,
             Rule::space => Token::Whitespace,
 
-            // Formatting
             Rule::bold => Token::Bold,
             Rule::italics => Token::Italics,
             Rule::underline => Token::Underline,
@@ -298,22 +253,18 @@ impl Token {
             Rule::left_raw => Token::LeftRaw,
             Rule::right_raw => Token::RightRaw,
 
-            // Lists
             Rule::bullet_item => Token::BulletItem,
             Rule::numbered_item => Token::NumberedItem,
 
-            // Links
             Rule::left_link => Token::LeftLink,
             Rule::left_link_star => Token::LeftLinkStar,
             Rule::right_link => Token::RightLink,
 
-            // Tables
             Rule::table_column => Token::TableColumn,
             Rule::table_column_right => Token::TableColumnRight,
             Rule::table_column_center => Token::TableColumnCenter,
             Rule::table_column_title => Token::TableColumnTitle,
 
-            // Text components
             Rule::identifier => Token::Identifier,
             Rule::email => Token::Email,
             Rule::url => Token::Url,
@@ -324,11 +275,9 @@ impl Token {
             Rule::terminal_backslash => Token::LineBreak,
             Rule::discarded_control => Token::DiscardedControl,
 
-            // Other
             Rule::other => Token::Other,
             Rule::EOI => Token::InputEnd,
 
-            // Invalid
             Rule::document | Rule::token => {
                 panic!("Received invalid pest rule: {rule:?}")
             }

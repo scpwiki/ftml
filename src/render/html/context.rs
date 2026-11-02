@@ -59,27 +59,15 @@ where
     settings: &'e WikitextSettings,
     random: Random,
 
-    //
-    // Included page scopes
-    //
     variables: VariableScopes,
 
-    //
-    // Fields from syntax tree
-    //
     table_of_contents: &'e [Element<'t>],
     footnotes: &'e [Vec<Element<'t>>],
     bibliographies: &'e BibliographyList<'t>,
 
-    //
-    // Cached data
-    //
     pages_exists: HashMap<PageRef, bool>,
     table_of_contents_html_range: Option<Range<usize>>,
 
-    //
-    // Other fields to track
-    //
     code_snippet_index: NonZeroUsize,
     table_of_contents_index: Incrementer,
     equation_index: NonZeroUsize,
@@ -154,16 +142,9 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         wikitext_len: usize,
     ) -> Self {
         let (page_existence, user_info) = resolvers;
-        // Heuristic for improving rendering performance by avoiding reallocating.
-        //
-        // Rendered HTML is commonly larger than source wikitext because each
-        // syntax element expands into tags and escaped text. Keep the estimate
-        // conservative and bounded because the source text is caller-controlled
-        // and may contain large comments or other syntax that renders little HTML.
         let estimated_capacity = wikitext_len.saturating_add(wikitext_len / 8);
         let capacity = estimated_capacity.clamp(MIN_BODY_CAPACITY, MAX_BODY_CAPACITY);
 
-        // Build and return
         HtmlContext {
             body: String::with_capacity(capacity),
             meta: Self::initial_metadata(info, settings.layout),
@@ -192,8 +173,6 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
     }
 
     fn initial_metadata(info: &PageInfo<'i>, layout: Layout) -> Vec<HtmlMeta> {
-        // Initial version, we can tune how the metadata is generated later.
-
         let content_type = HtmlMeta {
             tag_type: HtmlMetaType::HttpEquiv,
             name: str!("Content-Type"),
@@ -223,7 +202,6 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         vec![content_type, generator, description, keywords]
     }
 
-    // Field access
     #[inline]
     pub fn info(&self) -> &PageInfo<'i> {
         self.info
@@ -352,12 +330,8 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             .map(|elements| elements.as_slice())
     }
 
-    // Backlinks
     #[inline]
     pub fn add_link(&mut self, link: &LinkLocation) {
-        // TODO: set to internal link if domain matches site
-        // See https://scuttle.atlassian.net/browse/WJ-24
-
         match link {
             LinkLocation::Page(page) => {
                 self.backlinks.internal_links.push(page.to_owned());
@@ -397,7 +371,6 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
     pub fn page_exists(&mut self, page_ref: &PageRef) -> bool {
         let (site, page, _) = page_ref.fields_or(&self.info.site);
 
-        // Get from cache, or fetch and add
         match self.pages_exists.get(page_ref) {
             Some(exists) => *exists,
             None => {
@@ -413,14 +386,12 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         self.page_existence.page_title(site, page)
     }
 
-    // TODO
     #[allow(dead_code)]
     #[inline]
     pub fn add_include(&mut self, page: PageRef) {
         self.backlinks.included_pages.push(page.to_owned());
     }
 
-    // Buffer management
     #[inline]
     pub fn buffer(&mut self) -> &mut String {
         &mut self.body

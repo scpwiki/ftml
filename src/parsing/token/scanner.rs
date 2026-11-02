@@ -20,9 +20,6 @@ fn extract_all_with_comment_scan_visits(
 
     let bytes = text.as_bytes();
     let mut comment_closers = CommentCloserCursor::new(bytes);
-    // A failed `[!--` candidate must retain ordinary token ownership. Once a
-    // validated opener is active, remember the exact closer bracket so a
-    // following `]]` run cannot swallow it into a block or link token.
     let mut comment_active = false;
     let mut comment_closer_bracket = None;
     let mut bracket_run = None::<(u8, usize)>;
@@ -111,8 +108,6 @@ impl<'a> CommentCloserCursor<'a> {
     }
 
     fn find_next(&mut self) {
-        // search_start only moves forward, so all opener checks together
-        // visit each possible closer position at most once.
         while self.search_start + 2 < self.bytes.len() {
             let position = self.search_start;
             self.search_start += 1;
@@ -373,11 +368,6 @@ fn scan_url(bytes: &[u8], start: usize) -> Option<usize> {
     (end > body_start).then_some(end)
 }
 
-/// The character that starts at `index` of the UTF-8 `bytes`.
-///
-/// Only its own bytes are decoded: validating the rest of the input for each
-/// character made every URL scan proportional to the remaining page, and a
-/// long page with many URLs quadratic.
 fn char_at(bytes: &[u8], index: usize) -> Option<char> {
     let width = match *bytes.get(index)? {
         0x00..=0x7f => 1,
@@ -429,8 +419,6 @@ fn is_email_label_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'-'
 }
 
-/// Scans `part(.part)*` from `start`, stopping before a `.` that does not
-/// begin another non-empty part.
 fn scan_email_dotted(bytes: &[u8], start: usize, part: fn(u8) -> bool) -> usize {
     let mut end = start;
     while bytes.get(end).copied().is_some_and(part) {
@@ -632,8 +620,6 @@ mod tests {
 
     #[test]
     fn many_urls_in_a_long_input_tokenize_in_linear_time() {
-        // Each URL character once validated the whole rest of the input, so a
-        // 750 KB page with its includes took 0.6 s to tokenize.
         let input = "see https://scp-wiki.wikidot.com/scp-173 and more\n".repeat(32_768);
         let started = std::time::Instant::now();
         let tokens = extract_all(&input);

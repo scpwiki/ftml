@@ -44,8 +44,6 @@ fn try_consume_fn<'r, 't>(
     let starts_line = parser.start_of_line();
     assert_step(parser, Token::Color)?;
 
-    // Foreground: ## color | body ##
-    // Background: ## | color | body ##
     let legacy = parser.settings().layout.legacy();
     let color_close = if legacy {
         &[
@@ -281,11 +279,6 @@ fn collect_crossed_bold_color<'r, 't>(
     ))
 }
 
-/// Prefix with `#`, if needed.
-///
-/// Normally we pass the color as-is, such as `blue` or `rgb(10, 12, 14)`,
-/// but if a hex specification is passed, and it doesn't already begin with
-/// `#`, then one should be prepended.
 pub(crate) fn normalize_color(color: &str) -> Cow<'_, str> {
     if !is_safe_color(color) {
         return Cow::Borrowed("inherit");
@@ -378,8 +371,6 @@ fn is_css_var_reference(color: &str) -> bool {
         return false;
     }
 
-    // The first argument must be a custom property name: `--` followed
-    // by a non-empty identifier.
     let name = inner.split(',').next().unwrap_or_default().trim();
     let Some(ident) = name.strip_prefix("--") else {
         return false;

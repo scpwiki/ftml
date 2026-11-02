@@ -77,12 +77,6 @@ fn padded_authored_separator_remains_text_in_wikidot() {
 
 #[test]
 fn live_backed_twenty_seven_case_matrix_matches_the_ftml_seam() {
-    // Anonymous scp-wiki edit/PagePreviewModule evidence captured 2026-07-31.
-    // cases.jsonl SHA-256:
-    // 2f1cd7aab03e5a6beb8c37237e5efbe6588c529b3bf9bcba01d48086f0a7d5c7
-    // live-references.jsonl SHA-256:
-    // 2ca951f55e212f2ec6125de9e6fa40bf561182ced3e489616cf57443940054a4
-    // The separate 100-line dense row is the bounded-work test below.
     let cases = [
         (
             "alignment",
@@ -135,8 +129,6 @@ fn live_backed_twenty_seven_case_matrix_matches_the_ftml_seam() {
             "<ul>\n<li>====</li>\n</ul>".to_owned(),
             "====",
         ),
-        // #1031 owns the outer query, rows, and pager. This row exercises its
-        // authored ListPages body at the FTML delayed/List seam.
         (
             "module",
             "[[module ListPages]]\nA\n====\nB\n[[/module]]",

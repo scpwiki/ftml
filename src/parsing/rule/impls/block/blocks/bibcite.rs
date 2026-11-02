@@ -63,8 +63,6 @@ fn parse_fn<'r, 't>(
 
     let label = parser.get_head_value(&BLOCK_BIBCITE, in_head, require_label)?;
 
-    // "bibcite" means we wrap it in brackets
-    // "bibcite_" means it's bare, like ((bibcite))
     let brackets = !flag_score;
 
     ok!(bibliography_cite(label, brackets))

@@ -27,18 +27,9 @@ const LINE_BREAK_RULES: &[Rule] = &[
     RULE_LINE_BREAK,
 ];
 
-/// Mapping of all tokens to the rules they possibly correspond with.
-///
-/// This is the first tokens that could consistute the given rule,
-/// in order of precedence.
-///
-/// An empty list means that this is a special token that shouldn't be used
-/// in this manner. It will of course fall back to interpreting this token
-/// as text, but will also produce an error for the user.
 #[inline]
 pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
     match current.token {
-        // Symbols
         Token::LeftBracket => &[RULE_LINK_SINGLE, RULE_TEXT],
         Token::LeftBracketAnchor => &[RULE_LINK_ANCHOR],
         Token::LeftBracketStar => &[RULE_LINK_SINGLE_NEW_TAB],
@@ -73,7 +64,6 @@ pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
             RULE_TEXT,
         ],
 
-        // Formatting
         Token::Bold => &[RULE_BOLD],
         Token::Italics => &[RULE_ITALICS],
         Token::Underline => &[RULE_UNDERLINE],
@@ -86,22 +76,18 @@ pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
         Token::LeftRaw => &[RULE_RAW],
         Token::RightRaw => &[],
 
-        // Lists
         Token::BulletItem => &[RULE_LIST, RULE_TEXT],
         Token::NumberedItem => &[RULE_LIST, RULE_TEXT],
 
-        // Links
         Token::LeftLink => &[RULE_LINK_TRIPLE],
         Token::LeftLinkStar => &[RULE_LINK_TRIPLE_NEW_TAB],
         Token::RightLink => &[],
 
-        // Tables
         Token::TableColumn => &[RULE_TABLE],
         Token::TableColumnRight => &[RULE_TABLE],
         Token::TableColumnCenter => &[RULE_TABLE],
         Token::TableColumnTitle => &[RULE_TABLE],
 
-        // Text components
         Token::Identifier => &[RULE_TEXT],
         Token::Email => &[RULE_EMAIL],
         Token::Url => &[RULE_URL],
@@ -112,16 +98,13 @@ pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
         Token::DiscardedControl => &[RULE_TEXT],
         Token::GeneratedPageLink | Token::GeneratedTagLinks => &[RULE_DELAYED],
 
-        // Input boundaries
         Token::LineBreak => LINE_BREAK_RULES,
         Token::ParagraphBreak => &[RULE_LINE_BREAK_PARAGRAPH],
         Token::InputStart => &[RULE_NULL],
         Token::InputEnd => &[RULE_NULL],
 
-        // Miscellaneous
         Token::LeftComment => &[RULE_COMMENT],
 
-        // Fallback
         Token::Other if current.slice == "&" => &[RULE_ENTITY, RULE_TEXT],
         Token::RuntimeText | Token::Other => &[RULE_TEXT],
     }

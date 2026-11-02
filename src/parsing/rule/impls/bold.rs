@@ -32,9 +32,6 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create bold (strong) container");
-    // Fail fast when no closing delimiter is reachable before
-    // the enclosing block ends, so an unmatched opener cannot
-    // pair with a later block's delimiter.
     validate_reachable_close(parser, Token::Bold)?;
     assert_unpadded_open(parser, Token::Bold)?;
     let close = [ParseCondition::current(Token::Bold)];

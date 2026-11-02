@@ -62,14 +62,12 @@ fn parse_note_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::NotSupportedInline));
     }
 
-    // Get body content, without paragraphs
     let legacy = parser.settings().layout.legacy();
     parser.set_note_flag(legacy);
     let body = parser.get_body_elements(&BLOCK_NOTE, legacy);
     parser.set_note_flag(false);
     let (elements, errors, paragraph_safe) = body?.into();
 
-    // Build and return element
     let element = Element::Container(Container::new(
         ContainerType::Note,
         elements,
@@ -101,12 +99,10 @@ mod tests {
 
     #[test]
     fn wikidot_note_matches_live_pagepreview() {
-        // references-20261025-01 `test--note--basic`.
         let (html, errors) = render("[[note]]\nBody text.\n[[/note]]", Layout::Wikidot);
         assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(html, "<div class=\"wiki-note\"><p>Body text.</p></div>");
 
-        // Notes do not nest: the inner opener stays literal.
         let (html, _) = render(
             "[[note]]\n[[note]]\nB\n[[/note]]\n[[/note]]",
             Layout::Wikidot,
@@ -114,11 +110,9 @@ mod tests {
         assert_eq!(html.matches("wiki-note").count(), 1, "{html}");
         assert!(html.contains("[[note]]"), "{html}");
 
-        // Arguments are not accepted.
         let (html, _) = render("[[note class=\"x\"]]\nB\n[[/note]]", Layout::Wikidot);
         assert!(!html.contains("wiki-note"), "{html}");
 
-        // The closing tag is required.
         let (html, _) = render("[[note]]\nNo close.", Layout::Wikidot);
         assert!(!html.contains("wiki-note"), "{html}");
         assert!(html.contains("[[note]]"), "{html}");

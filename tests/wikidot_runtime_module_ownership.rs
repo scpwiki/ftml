@@ -58,9 +58,6 @@ fn runtime_module(tree: &SyntaxTree<'_>) -> (String, Vec<(String, String)>, Stri
 
 #[test]
 fn sitegrid_body_is_preserved_as_a_typed_runtime_module() {
-    // Canonical documentation source:
-    // docs/wikidot-specifications/specifications/module/module-sitegrid.md,
-    // lines 17-22, in the Wikijump repository.
     let tree = parse_wikidot(concat!(
         "[[module SiteGrid limit=\"20\"]]\n",
         "wikipiano\n",

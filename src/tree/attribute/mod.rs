@@ -135,21 +135,16 @@ fn normalize_attribute_value<'t>(
     attribute: UniCase<&str>,
     mut value: Cow<'t, str>,
 ) -> Option<Cow<'t, str>> {
-    // Check for special boolean behavior
     if BOOLEAN_ATTRIBUTES.contains(&attribute)
         && let Ok(boolean_value) = parse_boolean(&value)
     {
-        // It's a boolean HTML attribute, like "checked".
         if boolean_value {
-            // true: Have a key-only attribute
             value = cow!("");
         } else {
-            // false: Exclude the key entirely
             return None;
         }
     }
 
-    // Check for URL-sensitive attributes
     if attribute == UniCase::ascii("usemap") {
         value = normalize_usemap(value);
     } else if URL_ATTRIBUTES.contains(&attribute) {
@@ -161,7 +156,6 @@ fn normalize_attribute_value<'t>(
 }
 
 fn normalize_usemap(value: Cow<'_, str>) -> Cow<'_, str> {
-    // Unlike href/src, usemap is only a local hash-name reference.
     if value.len() > 1 && value.starts_with('#') {
         value
     } else {

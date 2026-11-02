@@ -180,10 +180,6 @@ fn parse_fn<'r, 't>(
         };
     }
 
-    // Get body content, without paragraphs. Underclosed nested spans can be
-    // retried from every opener during outer fallback. Cache each owner that
-    // reaches input end so later speculative parses fail immediately instead
-    // of reparsing the same suffix.
     let body = parser.get_body_elements(&BLOCK_SPAN, false);
     let (mut elements, errors, paragraph_safe) = match body {
         Ok(body) => body.into(),

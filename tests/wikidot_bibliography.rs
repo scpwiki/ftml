@@ -42,8 +42,6 @@ fn render(source: &str) -> (String, SyntaxTree<'static>) {
 
 #[test]
 fn complete_v7_bibliography_family_matches_live_page_preview() {
-    // Anonymous scp-wiki edit/PagePreviewModule captures from the V7 campaign.
-    // Cases 62 through 76 are kept in campaign order.
     let cases = [
         (
             "bibliography-canonical-valid",

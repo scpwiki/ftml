@@ -92,10 +92,6 @@ fn anchors(html: &str) -> Vec<Anchor> {
 
 #[test]
 fn live_backed_triple_target_matrix_matches_class_excluded_semantics() {
-    // Anonymous edit/PagePreviewModule evidence captured 2026-07-30:
-    // cases.jsonl SHA-256 f85d44d09640abeba21e1524b3435576e8ff216a0d587f1bf074d32041631567
-    // live.jsonl  SHA-256 043451597da63f90d36411bc3e2be6a8977f7ab34b4f55efaaca969e4ca999d7
-    // semantic.tsv SHA-256 1c6052c7ea547563c7f73bc14ab0ee10b00ca126b431b15512234bdb7b26b197
     let cases = vec![
         (
             "canonical-page",
@@ -420,7 +416,6 @@ fn live_backed_triple_target_matrix_matches_class_excluded_semantics() {
 
 #[test]
 fn live_backed_mailto_variants_split_the_label_at_the_pipe() {
-    // Anonymous edit/PagePreviewModule probe on sandbox-for-codex, 2026-08-07.
     let cases = [
         (
             "lower",
@@ -612,21 +607,6 @@ fn wikijump_layout_keeps_its_existing_special_target_behavior() {
 
 #[test]
 fn live_backed_triple_link_transliteration_targets() {
-    // Frozen W20 live captures for wikijump#3295 (anonymous PagePreviewModule
-    // on sandbox-for-codex, wikidot.py 4.4.1):
-    // * 3295-cyrillic-triple-link.json — `[[[документ]]]` renders
-    //   `<a class="newpage" href="/dokument">документ</a>`: the target is
-    //   transliterated to Latin while the display text keeps the Cyrillic.
-    //   (source SHA-256 c0d6bc8f...01ab5; raw_html SHA-256 4ef332b2...33bb)
-    // * 3295-diacritic-triple-link.json — `[[[café]]]` renders
-    //   `<a class="newpage" href="/cafe">café</a>`: diacritics are stripped
-    //   from the target.
-    //   (source SHA-256 4613edc9...c07b2; raw_html SHA-256 4bb7871f...34b80)
-    // The test harness resolves every non-empty page as existing, so it never
-    // emits the live `class="newpage"` marker (live, neither target page
-    // exists on sandbox-for-codex). The captured behavior — transliterated
-    // href plus unchanged display text — is asserted via anchors and text,
-    // matching this file's established matrix style.
     for (case_id, source, expected_anchors, expected_text) in [
         (
             "cyrillic-same-label",
@@ -652,9 +632,6 @@ fn live_backed_triple_link_transliteration_targets() {
             vec![anchor("/cafe", None, "Label")],
             "Label",
         ),
-        // Behavior preservation (not a live capture): a target with no
-        // transliteration keeps the existing empty-slug fallback, matching
-        // the pinned `[[[日本語|Label]]]` → `/` live evidence above.
         (
             "untransliteratable-same-label",
             "[[[日本語]]]",

@@ -112,13 +112,11 @@ fn render_latex(
     latex_source: &str,
     display: DisplayStyle,
 ) {
-    // error_type is unused if MathML is disabled
     let (html_tag, wj_type, _error_type) = match display {
         DisplayStyle::Block => ("div", "wj-math-block", "wj-error-block"),
         DisplayStyle::Inline => ("span", "wj-math-inline", "wj-error-inline"),
     };
 
-    // Outer container
     ctx.html()
         .tag(html_tag)
         .attr(attr!(
@@ -126,13 +124,11 @@ fn render_latex(
             "data-name" => name.unwrap_or(""); if name.is_some(),
         ))
         .inner(|ctx| {
-            // Add equation index
             if let Some(index) = index {
                 ctx.html()
                     .span()
                     .attr(attr!("class" => "wj-equation-number"))
                     .inner(|ctx| {
-                        // Open parenthesis
                         let class = "wj-equation-paren wj-equation-paren-open";
                         ctx.html()
                             .span()
@@ -141,7 +137,6 @@ fn render_latex(
 
                         str_write!(ctx, "{index}");
 
-                        // Close parenthesis
                         let class = "wj-equation-paren wj-equation-paren-close";
                         ctx.html()
                             .span()
@@ -160,7 +155,6 @@ fn render_latex(
                 ))
                 .contents(latex_source);
 
-            // Add generated MathML
             cfg_if! {
                 if #[cfg(feature = "mathml")] {
                     match latex_to_mathml(latex_source, display) {
@@ -172,7 +166,6 @@ fn render_latex(
                             // structure while escaping text and rejecting unknown tags.
                             let mathml = sanitize_mathml(&mathml);
 
-                            // Inject sanitized MathML elements
                             ctx.html()
                                 .element("wj-math-ml")
                                 .attr(attr!("class" => "wj-math-ml"))
@@ -439,7 +432,6 @@ pub fn render_equation_reference(ctx: &mut HtmlContext, name: &str) {
         .span()
         .attr(attr!("class" => "wj-equation-ref"))
         .inner(|ctx| {
-            // Equation marker that is hoverable
             ctx.html()
                 .element("wj-equation-ref-marker")
                 .attr(attr!(
@@ -449,12 +441,10 @@ pub fn render_equation_reference(ctx: &mut HtmlContext, name: &str) {
                 ))
                 .contents(name);
 
-            // Tooltip shown on hover.
             ctx.html().span().attr(attr!(
                 "class" => "wj-equation-ref-tooltip",
                 "aria-hidden" => "true",
             ));
-            // TODO tooltip contents
         });
 }
 

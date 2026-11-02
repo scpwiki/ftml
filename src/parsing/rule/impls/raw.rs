@@ -41,26 +41,18 @@ fn try_consume_fn<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming tokens until end of raw");
 
-    // Are we in a @@..@@ type raw, or a @<..>@ type?
     let ending_token = match parser.current().token {
         Token::Raw => Token::Raw,
         Token::LeftRaw => Token::RightRaw,
         _ => panic!("Current token is not a starting raw"),
     };
 
-    // Check for four special cases:
-    // * Raw Raw  "@" -> Element::Raw("@")
-    // * Raw Raw !Raw -> Element::Raw("")
-    // * Raw Raw  Raw -> Element::Raw("@@")
-    // * Raw ??   Raw -> Element::Raw(slice)
     if ending_token == Token::Raw {
         trace!("First token is '@@', checking for special cases");
 
-        // Get next two tokens. If they don't exist, exit early
         let next_1 = parser.look_ahead_err(0)?;
         let next_2 = parser.look_ahead_err(1)?;
 
-        // Determine which case they fall under
         let special_case = if next_2.token == Token::Raw
             && let Some(generated) = parser.generated_for(next_1).cloned()
         {
@@ -72,16 +64,12 @@ fn try_consume_fn<'r, 't>(
             )))
         } else {
             match (next_1.token, next_2.token) {
-                // "@@@@@@" -> ordinary text "@@"
                 (Token::Raw, Token::Raw) => {
                     trace!("Found meta-raw (\"@@@@@@\"), returning");
                     parser.step_n(3)?;
                     Some(text!("@@"))
                 }
 
-                // "@@@@@" -> ordinary text "@"
-                // This case is strange since the lexer returns Raw Raw Other (@@ @@ @)
-                // So we capture this and return the intended output
                 (Token::Raw, Token::Other) => {
                     if next_2.slice == "@" {
                         trace!("Found single-raw (\"@@@@@\"), returning");
@@ -94,8 +82,6 @@ fn try_consume_fn<'r, 't>(
                     }
                 }
 
-                // "@@@@" -> no element
-                // Only consumes two tokens.
                 (Token::Raw, _) => {
                     trace!("Found empty raw (\"@@@@\"), returning");
                     parser.step_n(2)?;
@@ -108,7 +94,6 @@ fn try_consume_fn<'r, 't>(
                     };
                 }
 
-                // "@@ \n @@" -> Abort
                 (Token::LineBreak, Token::Raw) | (Token::ParagraphBreak, Token::Raw) => {
                     if parser.settings().layout.legacy() {
                         parser.step_n(3)?;
@@ -127,14 +112,12 @@ fn try_consume_fn<'r, 't>(
                     return ok!(Elements::Multiple(vec![raw!(raw), text!("@")]));
                 }
 
-                // "@@ [something] @@" -> Element::Raw(token)
                 (_, Token::Raw) => {
                     trace!("Found single-element raw, returning");
                     parser.step_n(3)?;
                     return finish_double_at_raw(parser, raw!(next_1.slice));
                 }
 
-                // Other, proceed with rule logic
                 _ => None,
             }
         };
@@ -143,13 +126,6 @@ fn try_consume_fn<'r, 't>(
             return success_elements(element);
         }
     }
-
-    // Handle the other cases, which are:
-    // * "@@ [tokens] @@"
-    // * "@< [tokens] >@"
-    //
-    // Collect the first and last token to build a slice of its contents.
-    // The last will be updated with each step in the iterator.
 
     let current = parser.step()?;
     let (start, mut end) = (current, current);
@@ -282,17 +258,10 @@ fn try_consume_fn<'r, 't>(
 
         trace!("Appending present token to raw");
 
-        // Update last token and step.
         end = parser.step()?;
     }
 }
 
-/// Finish an authored `@@...@@` owner without activating one immediately
-/// adjacent authored `@@...@@` candidate.
-///
-/// The preserved candidate remains canonical source text. Generated and
-/// runtime tokens abort this projection so delayed data is never flattened or
-/// granted authored delimiter authority.
 fn finish_double_at_raw<'r, 't>(
     parser: &mut Parser<'r, 't>,
     element: Element<'t>,

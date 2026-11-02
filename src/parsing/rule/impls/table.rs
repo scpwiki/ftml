@@ -292,7 +292,6 @@ fn try_consume_fn<'r, 't>(
         let mut pending_inline_closers = 0u16;
         let mut pending_inline_scopes = PendingInlineScopes::default();
 
-        // Loop for each cell in the row
         'row: loop {
             let mut elements = Vec::new();
             let cell_start = match parse_cell_start(parser)? {
@@ -303,7 +302,6 @@ fn try_consume_fn<'r, 't>(
                 elements.push(text!(prefix));
             }
 
-            // Loop for each element in the cell
             'cell: loop {
                 let current_closer =
                     Parser::wikidot_simple_table_closer_bit(parser.current().token);
@@ -314,7 +312,6 @@ fn try_consume_fn<'r, 't>(
                 }
 
                 match parser.next_two_tokens() {
-                    // End the cell or row
                     (current, Some(next)) if is_table_column_token(current) => {
                         let (r, c, e) = (&mut rows, &mut cells, &mut elements);
                         let p = std::convert::identity(&mut *parser);
@@ -335,12 +332,10 @@ fn try_consume_fn<'r, 't>(
                         }
                     }
 
-                    // Ignore leading whitespace
                     (Token::Whitespace, _) if elements.is_empty() => {
                         parser.step()?;
                     }
 
-                    // Ignore trailing whitespace
                     (Token::Whitespace, Some(next)) if is_table_column_token(next) => {
                         parser.step()?;
                     }
@@ -425,7 +420,6 @@ fn try_consume_fn<'r, 't>(
                         return finish_simple_table(rows, errors);
                     }
 
-                    // Invalid tokens
                     (Token::LineBreak | Token::ParagraphBreak | Token::InputEnd, _) => {
                         if parser.settings().layout.legacy() && !cells.is_empty() {
                             if parser.current().token == Token::LineBreak
@@ -442,7 +436,6 @@ fn try_consume_fn<'r, 't>(
                         return finish_table_or_fail(parser, rows, errors);
                     }
 
-                    // Consume tokens like normal
                     _ => {
                         let wikidot = parser.settings().layout.legacy();
                         let comment =
@@ -497,17 +490,6 @@ fn trim_one_trailing_ascii_space(elements: &mut Vec<Element<'_>>) {
     }
 }
 
-/// Parse out the cell settings from the start.
-///
-/// Cells have a few settings, such as alignment, and most importantly
-/// here, their span, which is specified by having multiple
-/// `Token::TableColumn` (`||`) adjacent together.
-///
-/// If `Ok(None)` is returned, then the end of the input wasn't reached,
-/// but this is not a valid cell start.
-///
-/// This is not an `Err(_)` case, because this may simply signal the end
-/// of the table if it already has rows.
 fn parse_cell_start<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<TableCellStart<'t>>, ParseError> {
@@ -523,8 +505,6 @@ fn parse_cell_start<'r, 't>(
 
     let (align, header) = loop {
         match parser.current().token {
-            // Style cases, terminal
-            // NOTE: There is no TableColumnLeft
             Token::TableColumnTitle => {
                 let marker_start = parser.current().span.end - 1;
                 increase_span!();
@@ -568,10 +548,8 @@ fn parse_cell_start<'r, 't>(
                 break (Some(Alignment::Right), false);
             }
 
-            // Regular column, iterate to see if it has a span
             Token::TableColumn => increase_span!(),
 
-            // Regular column, terminal
             _ if span > 0
                 && parser.settings().layout.legacy()
                 && parser.current().slice == "<"
@@ -586,7 +564,6 @@ fn parse_cell_start<'r, 't>(
             }
             _ if span > 0 => break (None, false),
 
-            // No span depth, just an invalid token
             _ => return Ok(None),
         }
     };

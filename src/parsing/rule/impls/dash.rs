@@ -42,7 +42,6 @@ fn try_consume_fn<'r, 't>(
         return success_elements(text!("--"));
     }
 
-    // — - EM DASH
     success_elements(text!("\u{2014}"))
 }
 

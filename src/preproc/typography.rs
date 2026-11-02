@@ -45,23 +45,18 @@ pub(crate) struct WikidotSeamEdit {
     pub replacement: &'static str,
 }
 
-// ‘ - LEFT SINGLE QUOTATION MARK
-// ’ - RIGHT SINGLE QUOTATION MARK
 static SINGLE_QUOTES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexSurround {
     regex: Regex::new(r"(?s)`(.*?)'").unwrap(),
     begin: "\u{2018}",
     end: "\u{2019}",
 });
 
-// “ - LEFT DOUBLE QUOTATION MARK
-// ” - RIGHT DOUBLE QUOTATION MARK
 static DOUBLE_QUOTES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexSurround {
     regex: Regex::new(r"(?s)``(.*?)''").unwrap(),
     begin: "\u{201c}",
     end: "\u{201d}",
 });
 
-// „ - DOUBLE LOW-9 QUOTATION MARK
 static LOW_DOUBLE_QUOTES: LazyLock<Replacer> =
     LazyLock::new(|| Replacer::RegexSurround {
         regex: Regex::new(r"(?s),,(.*?)''").unwrap(),
@@ -90,13 +85,11 @@ static NATIVE_LOW_DOUBLE_QUOTES: LazyLock<Replacer> =
         end: "\u{201d}",
     });
 
-// « - LEFT-POINTING DOUBLE ANGLE QUOTATION MARK
 static LEFT_ANGLE_QUOTES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexReplace {
     regex: Regex::new(r"<<").unwrap(),
     replacement: "\u{ab}",
 });
 
-// » - RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK
 static RIGHT_ANGLE_QUOTES: LazyLock<Replacer> =
     LazyLock::new(|| Replacer::RegexReplace {
         regex: Regex::new(r"[^\n>](?<repl>>>)").unwrap(),
@@ -125,7 +118,6 @@ static NUMBER_UNITS: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
-// … - HORIZONTAL ELLIPSIS
 static HORIZONTAL_ELLIPSIS: LazyLock<Replacer> =
     LazyLock::new(|| Replacer::RegexReplace {
         regex: Regex::new(r"(?<repl>\.\.\.|\. \. \.)").unwrap(),
@@ -302,9 +294,6 @@ fn wikidot_getattrs_attribute_ranges(text: &str) -> Vec<Range<usize>> {
             continue;
         }
 
-        // These six Wikidot blocks use the legacy getAttrs path, not FTML's
-        // generic quoted-argument parser. Match its exact `="` delimiter,
-        // last-quote recovery, and first-`]]` head boundary.
         let delimiters = head
             .match_indices("=\"")
             .map(|(index, _)| index)
@@ -339,8 +328,6 @@ fn wikidot_local_link_separator_ranges(text: &str) -> Vec<Range<usize>> {
             .find('\n')
             .map_or(text.len(), |offset| body_start + offset);
         let Some(relative_close) = text[body_start..line_end].find(']') else {
-            // There can be no further local-link opener before this line's
-            // end. Leave the incomplete bracket literal and finish safely.
             break;
         };
         let close = body_start + relative_close;
@@ -592,7 +579,6 @@ fn substitute_wikidot_impl(text: &mut String, defer_conditionals: bool) {
     let mut buffer = String::new();
     debug!("Performing typography substitutions");
 
-    // Quotes
     replace_within_paragraphs(&DOUBLE_QUOTES, text, &mut buffer);
     replace_low_quotes_within_paragraphs(text, &mut buffer);
     replace_within_paragraphs(&SINGLE_QUOTES, text, &mut buffer);
@@ -605,13 +591,10 @@ fn substitute_wikidot_impl(text: &mut String, defer_conditionals: bool) {
     let digit_spaces = digit_space_positions(text);
     let mut protected_ranges = wikidot_typography_protected_ranges(text);
     if replace_number_spaces(text, &protected_ranges, &digit_spaces) {
-        // Recompute after replacing number spaces because U+00A0 occupies one
-        // more UTF-8 byte than the ASCII space it replaces.
         protected_ranges = wikidot_typography_protected_ranges(text);
     }
     replace_unit_spaces(text, &protected_ranges);
 
-    // Miscellaneous
     if defer_conditionals {
         replace_wikidot_ellipsis_deferring(text, &mut buffer);
     } else {

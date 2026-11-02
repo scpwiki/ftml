@@ -49,9 +49,6 @@ fn try_consume_fn<'r, 't>(
         return collect_crossed_bold_italics(parser);
     }
 
-    // Fail fast when no closing delimiter is reachable before
-    // the enclosing block ends, so an unmatched opener cannot
-    // pair with a later block's delimiter.
     validate_reachable_close(parser, Token::Italics)?;
     assert_unpadded_open(parser, Token::Italics)?;
     let close = [ParseCondition::current(Token::Italics)];

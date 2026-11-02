@@ -258,7 +258,6 @@ fn tokens() {
                 tokens
             };
 
-            // Manually implement "assert_eq!" here so we can use full, {:#?} formatting
 
             if result != expected {
                 panic!(
@@ -269,8 +268,6 @@ fn tokens() {
             }
         }};
     }
-
-    // Test cases:
 
     test!("", vec![]);
 
@@ -631,7 +628,6 @@ fn double_bracket_before_color_is_not_an_anchor_opener() {
         ],
     );
 
-    // Real anchor and delayed-conditional openers are unchanged.
     assert_eq!(
         Token::extract_all("[[# anchor]]")[1].token,
         Token::LeftBlockAnchor

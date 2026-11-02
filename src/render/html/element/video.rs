@@ -45,10 +45,8 @@ pub fn render_video(
         .get_file_link(source, ctx.info(), ctx.settings());
 
     match source_url {
-        // Found URL
         Some(url) => render_video_element(ctx, &url, alignment, attributes),
 
-        // Missing or error
         None => render_video_missing(ctx),
     }
 }

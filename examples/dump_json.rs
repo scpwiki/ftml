@@ -18,10 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Helper script to generate JSON output containing syntax trees.
-//!
-//! Run via `scripts/dump_json.sh`
-
 extern crate clap;
 extern crate ftml;
 extern crate serde_json;
@@ -42,8 +38,6 @@ macro_rules! cow {
         Cow::Borrowed($value)
     };
 }
-
-// Command-line processing
 
 #[derive(Debug, Copy, Clone)]
 enum OutputType {
@@ -157,8 +151,6 @@ fn parse_args() -> Config {
     config
 }
 
-// Preparation
-
 fn get_wikitext(path: Option<&Path>) -> String {
     let mut buffer = String::new();
 
@@ -197,8 +189,6 @@ fn get_settings(mut config: Config) -> (PageInfo<'static>, WikitextSettings) {
     let settings = WikitextSettings::from_mode(WikitextMode::Page, config.layout);
     (page_info, settings)
 }
-
-// Main functions
 
 fn output_data<T: Serialize + Debug>(
     output_type: OutputType,

@@ -28,22 +28,15 @@ pub mod impls;
 
 pub use self::mapping::get_rules_for_token;
 
-/// Defines a rule that can possibly match tokens and return an `Element`.
 #[derive(Copy, Clone)]
 pub struct Rule {
-    /// The name for this rule, in kebab-case.
-    ///
-    /// It must be globally unique.
     name: &'static str,
 
-    /// What requirements this rule needs regarding its position in a line.
     position: LineRequirement,
 
-    /// The consumption attempt function for this rule.
     try_consume_fn: TryConsumeFn,
 }
 
-/// Failed attempts that read fewer tokens are cheaper to retry than to remember.
 const MEMOIZED_FAILURE_MIN_TOKENS: usize = 16;
 
 impl Rule {
@@ -56,7 +49,6 @@ impl Rule {
         self,
         parser: &mut Parser<'r, 't>,
     ) -> ParseResult<'r, 't, Elements<'t>> {
-        // Check that the line position matches what the rule wants.
         if let LineRequirement::StartOfLine = self.position
             && !parser.start_of_line()
         {
@@ -70,14 +62,10 @@ impl Rule {
             return Err(error);
         }
 
-        // A failed owner's retry re-runs every attempt inside its body. Those
-        // fail again from the same state, so remember the ones that read far
-        // enough to make the retry expensive.
         if let Some(error) = parser.rule_attempt_failure(self.name) {
             return Err(error);
         }
 
-        // Fork parser and try running the rule.
         let parser_state = parser.get_mutable_state();
         let mut sub_parser = parser.clone_with_rule(self);
         let enclosing_peak = parser.start_rule_attempt();
@@ -91,9 +79,7 @@ impl Rule {
         }
 
         match result {
-            // Rule succeeded, ensure that changes from the subparser are persisted.
             Ok(ref output) => {
-                // First, ensure there aren't any partial elements in the result.
                 if let Err(error) = output.check_partials(parser) {
                     if matches!(
                         error.kind(),
@@ -114,19 +100,10 @@ impl Rule {
                     return Err(error);
                 }
 
-                // Now, finally save the parser state since it succeeded.
                 parser.update(&sub_parser);
             }
 
-            // Rule failed, ensure that any changes are rolled back.
-            //
-            // While normally discarding the subparser is sufficient,
-            // some annoying mutable fields are
             Err(_) => {
-                // A discard parse uses ancestor body boundaries to stop a
-                // malformed parsed child before it consumes its parent's end
-                // marker. Preserve that boundary position while rolling back
-                // every metadata side effect from the failed rule.
                 if parser.discarding_hidden_body() && sub_parser.at_hidden_body_boundary()
                 {
                     parser.update(&sub_parser);
@@ -149,20 +126,13 @@ impl Debug for Rule {
     }
 }
 
-/// The enum describing what requirements a rule has regarding lines.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum LineRequirement {
-    /// This rule does not care where it is in a line.
     Any,
 
-    /// This rule may only activate when it is at the start of a line.
-    ///
-    /// This includes situations which are not technically line breaks,
-    /// such as start of input and paragraph breaks.
     StartOfLine,
 }
 
-/// The function type for actually trying to consume tokens
 pub type TryConsumeFn = for<'p, 'r, 't> fn(
     parser: &'p mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>>;

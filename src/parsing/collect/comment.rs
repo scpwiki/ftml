@@ -15,11 +15,6 @@ use crate::parsing::rule::impls::comment_closer_token_count;
 use std::borrow::Cow;
 use std::ops::Range;
 
-/// An authored field together with the validated comment ranges it owns.
-///
-/// The canonical source is never rewritten. Consumers may request an elided
-/// value, but cannot reparse it as wikitext, and generated/runtime tokens are
-/// rejected before this type is constructed.
 #[derive(Debug)]
 pub(crate) struct CommentElidedText<'t> {
     source: &'t str,

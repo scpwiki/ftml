@@ -33,7 +33,6 @@ fn try_consume_fn<'r, 't>(
     debug!("Creating double angle quote");
 
     match current.token {
-        // « - LEFT-POINTING DOUBLE ANGLE QUOTATION MARK
         //
         // In the Wikidot layout, preprocess typography has already
         // converted every `<<` in ordinary text, so a `<<` token that
@@ -50,13 +49,10 @@ fn try_consume_fn<'r, 't>(
 
         Token::LeftDoubleAngle => success_elements(text!("\u{0ab}")),
 
-        // » - RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK
         Token::Quote if current.slice == ">>" => success_elements(text!("\u{0bb}")),
 
-        // Some other series of ">"s in a line
         Token::Quote => Err(parser.make_err(ParseErrorKind::RuleFailed)),
 
-        // Invalid token for this rule
         _ => unreachable!(),
     }
 }

@@ -31,9 +31,6 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create underline container");
-    // Fail fast when no closing delimiter is reachable before
-    // the enclosing block ends, so an unmatched opener cannot
-    // pair with a later block's delimiter.
     validate_reachable_close(parser, Token::Underline)?;
     assert_unpadded_open(parser, Token::Underline)?;
     let close = [ParseCondition::current(Token::Underline)];

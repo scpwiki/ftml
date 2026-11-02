@@ -75,16 +75,12 @@ impl<'t> From<IncludeRef<'t>> for (PageRef, VariableMap<'t>) {
     }
 }
 
-// Tests
-
 #[test]
 fn to_owned() {
-    // Clone PageRef
     let page_ref_1 = PageRef::page_only("scp-001");
     let page_ref_2 = page_ref_1.clone();
     assert_eq!(page_ref_1, page_ref_2);
 
-    // Clone IncludeRef
     let include_ref_1 = IncludeRef::new(page_ref_1, VariableMap::new());
     let include_ref_2: IncludeRef<'static> = include_ref_1.to_owned();
     assert_eq!(include_ref_1, include_ref_2);
@@ -92,7 +88,6 @@ fn to_owned() {
     assert!(include_ref_1.variables().is_empty());
     assert!(!include_ref_1.has_spaced_empty_separator());
 
-    // Deconstruct IncludeRef
     let (page_ref, variables) = include_ref_2.into();
     assert_eq!(page_ref, page_ref_2);
     assert!(variables.is_empty());

@@ -34,9 +34,6 @@ fn render(source: &str) -> String {
 
 #[test]
 fn live_backed_twenty_case_inline_bibcite_family_stays_fixed() {
-    // Anonymous edit/PagePreviewModule evidence captured 2026-07-30:
-    // cases.jsonl SHA-256 b4e21b23f6b53c1152154c7e5ed4a8048822c7d1a17ab7d610e7d5614ec8db6c
-    // live.jsonl  SHA-256 e3d886ce3a81d2b61d2a9923944601df9bd4552861f6cab6783bd836d3ce8d00
     let cases = [
         (
             "adjacent",

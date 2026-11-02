@@ -33,7 +33,6 @@ const DEFAULT_ENABLE_HTML_BLOCKS: bool = true;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct WikitextSettings {
-    /// What mode we're running in.
     pub mode: WikitextMode,
 
     /// Whether top-level delayed ListPages values should remain outside a
@@ -79,7 +78,6 @@ pub struct WikitextSettings {
     /// isolation.
     pub isolate_user_ids: bool,
 
-    /// Whether to minify CSS in `<style>` blocks.
     pub minify_css: bool,
 
     /// Whether local paths are permitted.
@@ -110,7 +108,6 @@ pub struct WikitextSettings {
 }
 
 impl WikitextSettings {
-    /// Returns the default settings for the given [`WikitextMode`].
     pub fn from_mode(mode: WikitextMode, layout: Layout) -> Self {
         let interwiki = DEFAULT_INTERWIKI.clone();
 
@@ -178,7 +175,6 @@ impl WikitextSettings {
         }
     }
 
-    /// Construct a new `Indexer` based on the setting of `use_true_ids`.
     pub fn id_indexer(&self) -> Incrementer {
         if self.use_true_ids {
             Incrementer::default()
@@ -221,7 +217,6 @@ pub enum WikitextMode {
 }
 
 impl WikitextMode {
-    /// Returns the externally serialized spelling for this mode.
     pub const fn external_name(self) -> &'static str {
         match self {
             WikitextMode::Page => "page",
@@ -233,7 +228,6 @@ impl WikitextMode {
         }
     }
 
-    /// Whether this mode describes navigational content or not.
     pub fn is_nav_content(self) -> bool {
         matches!(self, WikitextMode::PageNav)
     }

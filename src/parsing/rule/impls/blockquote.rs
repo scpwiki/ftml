@@ -120,7 +120,6 @@ fn try_consume_fn<'r, 't>(
         return ok!(false; Elements::None);
     }
 
-    // Context variables
     let mut depths = Vec::new();
     let mut escaped_rows = Vec::new();
     let mut escaped_elements = Vec::new();
@@ -130,7 +129,6 @@ fn try_consume_fn<'r, 't>(
     let mut flatten_following_rows = false;
     let mut append_unquoted_close_break = false;
 
-    // Produce a depth list with elements
     while quote_run_active
         && parser.prepare_quote_body_line()? != QuoteBodyLineStatus::Boundary
         && parser.current().token == Token::Quote
@@ -140,7 +138,6 @@ fn try_consume_fn<'r, 't>(
         }
         let current = parser.current();
 
-        // 1 or more ">"s in one token. Return ASCII length.
         let physical_depth = current.slice.len();
         let (depth, absolute_depth) = parser.native_blockquote_depths(physical_depth);
         debug_assert!(depth > 0, "residual quote depth must be positive");
@@ -149,7 +146,7 @@ fn try_consume_fn<'r, 't>(
         // paragraphs, from an empty `>` row, which has no rendering effect.
         let single_space_after_marker = parser.current().slice == " ";
         let spaced_after_marker = parser.current().token == Token::Whitespace;
-        parser.get_optional_space()?; // allow whitespace after ">"
+        parser.get_optional_space()?;
         if parser.current().token != Token::Quote {
             // Wikidot only counts contiguous quote markers toward native depth.
             // A marker after horizontal space is literal quoted content.
@@ -157,7 +154,6 @@ fn try_consume_fn<'r, 't>(
         }
         let content_start = parser.current().span.start;
 
-        // Check that the depth isn't obscenely deep, to avoid DOS attacks via stack overflow.
         if absolute_depth > MAX_BLOCKQUOTE_DEPTH {
             return Err(parser.make_err(ParseErrorKind::BlockquoteDepthExceeded));
         }
@@ -191,7 +187,6 @@ fn try_consume_fn<'r, 't>(
             break;
         }
 
-        // Parse elements until we hit the end of the line
         let close_conditions = [
             ParseCondition::current(Token::LineBreak),
             ParseCondition::current(Token::ParagraphBreak),
@@ -222,28 +217,18 @@ fn try_consume_fn<'r, 't>(
             debug_assert!(removed, "footnote-first classification found no footnote");
         }
 
-        // The line's collection may have stopped at an enclosing
-        // footnote's closer. That closer is not quote content: if the
-        // line had nothing before it the row is pruned, and either way
-        // the quote run ends here so the footnote can close.
         let stopped_at_footnote_close = wikidot_footnote_close_ahead(parser);
         if stopped_at_footnote_close && elements.is_empty() {
             consumed_pruned_row = true;
             continue;
         }
 
-        // The line's collection may instead have stopped at an
-        // enclosing div's closer, which is likewise not quote content:
-        // prune an empty row, and end the quote run either way so the
-        // div can close.
         let stopped_at_div_close = wikidot_div_close_ahead(parser);
         if stopped_at_div_close && elements.is_empty() {
             consumed_pruned_row = true;
             continue;
         }
 
-        // An unquoted blank line terminates the current native quote run.
-        // A following quote at the same depth starts a sibling blockquote.
         quote_run_active =
             !ends_quote_run && !stopped_at_footnote_close && !stopped_at_div_close;
 
@@ -317,7 +302,6 @@ fn try_consume_fn<'r, 't>(
             !consumed_past_line || paragraph_safe
         };
 
-        // Add a line break for the end of the line
         if !empty_spaced_row
             && keep_line_break
             && !absorbed_unquoted_footnote
@@ -326,12 +310,6 @@ fn try_consume_fn<'r, 't>(
             elements.push(Element::LineBreak);
         }
 
-        // Append blockquote line
-        //
-        // Depth lists expect zero-based list depths, but tokens are one-based.
-        // So, we subtract one.
-        //
-        // This will not overflow because Token::Quote requires at least one ">".
         let row = NativeQuoteRow {
             elements,
             paragraph_safe,
@@ -345,7 +323,6 @@ fn try_consume_fn<'r, 't>(
         flatten_following_rows |= escaped_after_deeper_close;
     }
 
-    // This blockquote has no rows, so the rule fails
     if depths.is_empty() && escaped_elements.is_empty() {
         if consumed_pruned_row {
             return ok!(false; Elements::None, errors);
@@ -414,8 +391,6 @@ where
         return false;
     }
 
-    // Mirror verify_end_block: a closer whose raw text ends in
-    // whitespace before `]]` does not count as an end block.
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
     let Some(close_offset) = source[start..].find("]]") else {
@@ -433,11 +408,6 @@ where
     matches!(probe.get_end_block(), Ok(found) if found.eq_ignore_ascii_case(name))
 }
 
-/// Collect exactly one physical native-quote line.
-///
-/// Several start-of-line rules consume their trailing line-break token. The
-/// generic collector would then continue into the next physical line and can
-/// swallow an enclosing block's closer, causing combinatorial block retries.
 fn collect_native_blockquote_line<'r, 't>(
     parser: &mut Parser<'r, 't>,
     close: &[ParseCondition],
@@ -463,14 +433,10 @@ fn collect_native_blockquote_line<'r, 't>(
             return ok!(paragraph_safe; elements, errors);
         }
 
-        // An enclosing footnote's closer on this line is not quote
-        // content; leave it for the footnote's end-block check.
         if wikidot_footnote_close_ahead(parser) {
             return ok!(paragraph_safe; elements, errors);
         }
 
-        // An enclosing div's closer on this line is not quote content
-        // either; leave it for the div's end-block check.
         if wikidot_div_close_ahead(parser) {
             return ok!(paragraph_safe; elements, errors);
         }
@@ -478,8 +444,6 @@ fn collect_native_blockquote_line<'r, 't>(
         let consumed = consume(parser)?.chain(&mut errors, &mut paragraph_safe);
         elements.extend(consumed);
 
-        // A child rule may already have consumed this line's break. Stop at
-        // the first token after it instead of parsing the enclosing next line.
         if parser.current().span.start >= line_end {
             return ok!(paragraph_safe; elements, errors);
         }
@@ -501,7 +465,6 @@ fn build_blockquote_element(
         ParagraphStack::new()
     };
 
-    // Convert depth list into a list of elements
     for item in list {
         match item {
             DepthItem::Item(row) => push_native_quote_row(&mut stack, row, wikidot),

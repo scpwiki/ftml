@@ -20,15 +20,6 @@
 
 use super::prelude::*;
 
-/// Psuedo block rule for legacy Wikidot include ("messy include").
-///
-/// Because executable includes are performed first, before preprocessing,
-/// tokenizing, or any other steps, no targeted `[[include page]]` blocks
-/// should actually be present in the wikitext.
-///
-/// Wikidot renders the exact targetless marker `[[include]]` literally. Other
-/// residual include shapes indicate an expansion error and retain the strict
-/// invalid-include contract.
 pub const BLOCK_INCLUDE_WIKIDOT: BlockRule = BlockRule {
     name: "block-include",
     accepts_names: &["include"],

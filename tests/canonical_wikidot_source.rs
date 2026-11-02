@@ -53,8 +53,6 @@ fn render_text_and_html_with_layout_and_errors(
 
 #[test]
 fn wikidot_aodaisho_anchor_body_drops_its_opening_space() {
-    // Provenance-backed exact ListPages source:
-    // int:aodaisho-hub:L364:B6751.
     let (_, html) = render_text_and_html(concat!(
         "when opposing ",
         r#"[[a href="http://scp-wiki.wikidot.com/goc-hub-page"]]"#,
@@ -72,8 +70,6 @@ fn wikidot_aodaisho_anchor_body_drops_its_opening_space() {
 
 #[test]
 fn wikidot_aodaisho_footnote_drops_the_preceding_space() {
-    // Provenance-backed exact ListPages source:
-    // vn:aodaisho-hub:L525:B22025.
     let (_, html) = render_text_and_html(concat!(
         "Kashiasu [[footnote]]Note[[/footnote]] là một người.\n",
         "[[footnoteblock]]",
@@ -89,8 +85,6 @@ fn wikidot_aodaisho_footnote_drops_the_preceding_space() {
 
 #[test]
 fn wikidot_aodaisho_nested_ruby_keeps_the_size_scope_outermost() {
-    // Provenance-backed exact ListPages source:
-    // ko:aodaisho-hub:L368:B6729.
     let (_, html) = render_text_and_html(concat!(
         r#"[[size 175%]] **//[[span class="ruby"]]일본열도 뱀의 손"#,
         r#"[[span class="rt"]]Japanese Sarpent's Hand[[/span]][[/span]]//** [[/size]]"#,

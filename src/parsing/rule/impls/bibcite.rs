@@ -44,7 +44,6 @@ fn try_consume_fn<'r, 't>(
     }
     parser.step()?;
 
-    // This is like a poor man's block, it's "((bibcite <label>))"
     let current = parser.current();
     if current.token != Token::Identifier
         || !current.slice.eq_ignore_ascii_case("bibcite")
@@ -54,7 +53,6 @@ fn try_consume_fn<'r, 't>(
     }
     parser.step()?;
 
-    // Then check the next token is a space
     if !matches!(parser.current().token, Token::Whitespace) {
         warn!("'((bibcite' not followed by a space, failing rule");
         return Err(parser.make_err(ParseErrorKind::RuleFailed));

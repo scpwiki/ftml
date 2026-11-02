@@ -26,15 +26,6 @@ pub const RULE_PAGE: Rule = Rule {
     try_consume_fn,
 };
 
-/// The stubbed implementation of `try_consume` for `RULE_PAGE`.
-///
-/// This is a special rule, used to describe the top-level attempt
-/// to produce paragraphs for inclusion in a `SyntaxTree`.
-/// Because it is not explicitly "tried" for
-/// (and cannot directly fail), this rule is never executed directly.
-///
-/// See the `parse()` function `parse/mod.rs` for the code inherently
-/// implementing this consumption action.
 fn try_consume_fn<'r, 't>(_: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     panic!("Manual page rule should not be executed directly!")
 }

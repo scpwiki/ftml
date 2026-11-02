@@ -68,13 +68,10 @@ fn try_consume_fn<'r, 't>(
         }
     }
 
-    // Context variables
     let mut depths = Vec::new();
     let mut errors = Vec::new();
     let mut escaped_elements = Vec::new();
 
-    // Blockquotes are always paragraph-unsafe,
-    // but we need this binding for chain().
     let mut paragraph_safe = false;
 
     let mut ended = false;
@@ -139,7 +136,6 @@ fn try_consume_fn<'r, 't>(
         }
     }
 
-    // This list has no rows, so the rule fails
     if depths.is_empty() && escaped_elements.is_empty() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -378,7 +374,6 @@ fn build_list_element(
 
     let attributes = AttributeMap::new();
 
-    // Return the Element::List object
     Some(Element::List {
         ltype: top_ltype,
         items,

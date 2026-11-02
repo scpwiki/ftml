@@ -169,10 +169,6 @@ where
     let mut nested_end_blocks = 0;
 
     loop {
-        // A new root-level CSS module cannot belong to the current CSS body once
-        // we have seen complete ListPages modules. Stop at that boundary rather
-        // than scanning the rest of the document again for every unclosed CSS
-        // module.
         if nested_end_blocks > 0
             && open_list_pages == 0
             && wikidot_parser_starts_css(&body_probe)
@@ -375,9 +371,6 @@ mod tests {
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let output = HtmlRender.render(&tree, &page_info, &settings);
 
-        // Anonymous Wikidot PagePreview executes this exact shape. Its
-        // provenance-backed raw HTML SHA-256 is
-        // 1c6db6ed75b7c27d758433d4a7157af459157d4e183c342997bef5366d093853.
         assert!(errors.is_empty(), "{errors:#?}");
         assert!(tree.elements.iter().any(|element| {
             matches!(

@@ -50,8 +50,6 @@ pub const BLOCK_RB: BlockRule = BlockRule {
     parse_fn: parse_shortcut,
 };
 
-// Main container block
-
 fn take_ruby_text<'t>(
     ruby_text: &mut RubyText<'t>,
 ) -> (AttributeMap<'t>, Vec<Element<'t>>) {
@@ -116,7 +114,6 @@ fn parse_block<'r, 't>(
     let body = parser.get_body_elements(&BLOCK_RUBY, false)?;
     let (mut elements, errors, paragraph_safe) = body.into();
 
-    // Convert ruby partials to elements
     for element in &mut elements {
         if let Element::Partial(PartialElement::RubyText(ruby_text)) = element {
             let (attributes, elements) = take_ruby_text(ruby_text);
@@ -127,10 +124,8 @@ fn parse_block<'r, 't>(
     #[cfg(debug_assertions)]
     assert_no_partials_after_conversion(&elements);
 
-    // Remove leading and trailing whitespace
     strip_whitespace(&mut elements);
 
-    // Build final ruby element
     let attributes = arguments.to_attribute_map(parser.settings());
     let element = ruby_container(elements, attributes);
 
@@ -144,8 +139,6 @@ fn assert_no_partials_after_conversion(elements: &[Element]) {
         debug_assert!(!is_partial, "partial after conversion");
     }
 }
-
-// Label block
 
 fn parse_text<'r, 't>(
     parser: &mut Parser<'r, 't>,
@@ -164,7 +157,6 @@ fn parse_text<'r, 't>(
     let body = parser.get_body_elements(&BLOCK_RT, false)?;
     let (mut elements, errors, paragraph_safe) = body.into();
 
-    // Remove leading and trailing whitespace
     strip_whitespace(&mut elements);
 
     let attributes = arguments.to_attribute_map(parser.settings());
@@ -176,8 +168,6 @@ fn parse_text<'r, 't>(
 
     ok!(paragraph_safe; element, errors)
 }
-
-// Shortcut block
 
 fn parse_shortcut<'r, 't>(
     parser: &mut Parser<'r, 't>,

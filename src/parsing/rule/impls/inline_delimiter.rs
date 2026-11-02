@@ -20,11 +20,6 @@
 
 use super::prelude::*;
 
-/// Consume an inline formatting opener that may not be followed by whitespace.
-///
-/// The formatting collectors already reject whitespace before a closing
-/// delimiter. Rejecting padding on the opening side before collection also
-/// prevents a malformed marker from searching later list items for a partner.
 pub(super) fn assert_unpadded_open<'r, 't>(
     parser: &mut Parser<'r, 't>,
     token: Token,
@@ -56,20 +51,6 @@ pub(super) fn append_wikidot_line_close_space(
     }
 }
 
-/// Check that a closing delimiter is reachable before the end of the
-/// enclosing block.
-///
-/// Mirrors the strikethrough rule's look-ahead: without it, an
-/// unmatched delimiter's collection can run past the end of the
-/// enclosing block and pair with a later block's delimiter,
-/// swallowing the intervening block structure. An end-block token
-/// only ends the scan when it closes a block that was already open
-/// when the scan began; blocks opened after the delimiter are
-/// tracked by name, so a legitimate container spanning a nested
-/// block (span, size, footnote, ...) still finds its closer. The
-/// collection itself cannot use a static end-block condition for
-/// this: nested blocks are flattened into it as partial elements,
-/// so their end tokens surface at the collection's own steps.
 pub(super) fn validate_reachable_close(
     parser: &Parser<'_, '_>,
     token: Token,
@@ -95,8 +76,6 @@ pub(super) fn validate_reachable_close(
                 }
             }
             Token::LeftLink => {
-                // A `[[[name` whose link parse fails is retried as
-                // the block `[[name`, so track it as an opener too.
                 if let Some(name) = link_name_at(tokens, index) {
                     open_blocks.push(name);
                 }
@@ -104,12 +83,9 @@ pub(super) fn validate_reachable_close(
             Token::LeftBlockEnd => {
                 let name = block_name_at(tokens, index);
                 if !is_block_name(&name) {
-                    // Not a real block name (e.g. the `[[/` inside a
-                    // color span's text): literal text, no boundary.
                 } else if let Some(pos) = open_blocks.iter().rposition(|n| *n == name) {
                     open_blocks.truncate(pos);
                 } else {
-                    // The enclosing block ends before any closing delimiter.
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
             }
@@ -129,9 +105,6 @@ pub(super) fn validate_reachable_close(
     Err(parser.make_err(ParseErrorKind::EndOfInput))
 }
 
-/// Gather the block name following a `[[` / `[[/` token at `index`:
-/// the text up to whitespace, a line break, or `]]`, mirroring how
-/// the block parser reads a name.
 pub(super) fn block_name_at(tokens: &[ExtractedToken<'_>], index: usize) -> String {
     let mut name = String::new();
     for tok in &tokens[index + 1..] {
@@ -144,12 +117,9 @@ pub(super) fn block_name_at(tokens: &[ExtractedToken<'_>], index: usize) -> Stri
             _ => name.push_str(tok.slice),
         }
     }
-    // A trailing underscore is the block's score flag, not its name.
     name.strip_suffix('_').unwrap_or(&name).to_ascii_lowercase()
 }
 
-/// Whether a gathered name can be a real block name: block names are
-/// registered identifiers of ASCII letters, digits, `-`, and `_`.
 pub(super) fn is_block_name(name: &str) -> bool {
     !name.is_empty()
         && name
@@ -157,8 +127,6 @@ pub(super) fn is_block_name(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
-/// The target name following a `[[[` token at `index`, when it is a
-/// plain identifier.
 pub(super) fn link_name_at(
     tokens: &[ExtractedToken<'_>],
     index: usize,

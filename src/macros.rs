@@ -18,23 +18,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/// Alias for `Cow::Borrowed` that isn't quite as long.
 macro_rules! cow {
     ($value:expr $(,)?) => {{ std::borrow::Cow::Borrowed($value) }};
 }
 
-/// Alias for `Element::Text` from a string slice.
 macro_rules! text {
     ($value:expr $(,)?) => {{ crate::tree::Element::Text(cow!($value)) }};
 }
 
-/// Like `std::write!()`, except it asserts the writing succeeded.
-///
-/// This is done because the only failure mode for writing to a `String`
-/// would be insufficient memory, which would cause an abort anyways.
-///
-/// # See also
-/// * [`str_writeln!`](macro.str_writeln.html)
 macro_rules! str_write {
     ($dest:expr, $($arg:tt)*) => {{
         use std::fmt::Write;
@@ -42,14 +33,6 @@ macro_rules! str_write {
     }};
 }
 
-/// Like `std::writeln!()`, except it asserts the writing succeeded.
-///
-/// This is done because the only failure mode for writing to a `String`
-/// would be insufficient memory, which would cause an abort anyways.
-///
-///
-/// # See also
-/// * [`str_write!`](macro.str_write.html)
 macro_rules! str_writeln {
     ($dest:expr, $($arg:tt)*) => {{
         use std::fmt::Write;

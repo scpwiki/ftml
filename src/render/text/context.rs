@@ -46,36 +46,20 @@ where
     handle: &'h Handle,
     settings: &'e WikitextSettings,
 
-    //
-    // Included page scopes
-    //
     variables: VariableScopes,
 
-    //
-    // Elements from the syntax tree
-    //
     table_of_contents: &'e [Element<'t>],
     footnotes: &'e [Vec<Element<'t>>],
     bibliographies: &'e BibliographyList<'t>,
 
-    //
-    // Other fields to track
-    //
-    /// Strings to prepended to each new line.
     prefixes: Vec<&'static str>,
 
-    /// How deep we currently are in the list.
     list_depths: NonEmptyVec<usize>,
 
-    /// Whether we're in "invisible mode".
-    /// When this is non-zero, all non-newline characters
-    /// added are instead replaced with spaces.
     invisible: usize,
 
-    /// The current equation index, for rendering.
     equation_index: NonZeroUsize,
 
-    /// The current footnote index, for rendering.
     footnote_index: NonZeroUsize,
 }
 
@@ -110,7 +94,6 @@ where
         }
     }
 
-    // Getters
     pub fn buffer(&mut self) -> &mut String {
         std::convert::identity(&mut self.output)
     }
@@ -175,7 +158,6 @@ where
         advance_nonzero_index(&mut self.footnote_index)
     }
 
-    // Prefixes
     #[inline]
     pub fn push_prefix(&mut self, prefix: &'static str) {
         self.prefixes.push(prefix);
@@ -186,7 +168,6 @@ where
         self.prefixes.pop();
     }
 
-    // List depth
     #[inline]
     pub fn list_depth(&self) -> usize {
         self.list_depths.len()
@@ -206,7 +187,6 @@ where
         advance_list_index(self.list_depths.last_mut())
     }
 
-    // Invisible mode
     #[inline]
     fn invisible(&self) -> bool {
         self.invisible > 0
@@ -222,7 +202,6 @@ where
         self.invisible -= 1;
     }
 
-    // Buffer management
     pub fn push(&mut self, ch: char) {
         if self.invisible() {
             self.output.push(' ');

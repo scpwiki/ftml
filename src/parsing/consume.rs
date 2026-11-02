@@ -18,14 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Module for look-ahead checking.
-//!
-//! This contains implementations of eager functions that try to interpret the
-//! upcoming tokens as a particular object (e.g. seeing a `[[` and you see if it's a module).
-//!
-//! The parser is not disambiguous because any string of tokens can be interpreted
-//! as raw text as a fallback, which is how Wikidot does it.
-
 use super::Parser;
 use super::parser::QuoteBodyLineStatus;
 use super::prelude::*;
@@ -481,9 +473,6 @@ fn wikidot_leading_space_close_label(source: &str) -> Option<&str> {
 }
 
 fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
-    // Only bypass generic rule dispatch where the current token cannot start
-    // a structural rule in this position. This keeps the public AST shape
-    // unchanged while avoiding parser forks for ordinary text tokens.
     match parser.current().token {
         Token::Identifier
         | Token::RightBracket
@@ -493,7 +482,6 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
         | Token::EscapedDoubleQuote
         | Token::EscapedBackslash => true,
 
-        // Wikijump decodes HTML entities in text (see RULE_ENTITY).
         Token::Other => {
             parser.settings().layout.legacy() || parser.current().slice != "&"
         }
@@ -631,10 +619,6 @@ fn try_consume_line_break<'r, 't>(
         return Ok(Some(Elements::None));
     }
 
-    // A conditional quote cursor can interpret a marker remaining after its
-    // required physical prefix as literal content. The raw lookahead fast path
-    // sees only the outer Quote token, so defer that one shape to the generic
-    // line-break rule after preparing the prefix.
     if parser.quote_body_cursor().is_some() {
         let mut next = parser.clone();
         next.step()?;
@@ -766,8 +750,6 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         parser.clear_wikidot_literal_triple_links();
     }
 
-    // Incrementing recursion depth
-    // Will fail if we're too many layers in
     parser.depth_increment()?;
 
     let pending_unquoted_collapsible_close = parser.settings().layout.legacy()
@@ -824,25 +806,17 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         let footnote_count = parser.footnote_count();
         match rule.try_consume(parser) {
             Ok(output) => {
-                // If the pointer hasn't moved, we step one token.
                 if parser.same_pointer(old_remaining) {
                     parser.step()?;
                 }
 
-                // Explicitly drop errors
-                //
-                // We're returning the successful consumption
-                // so these are going to be dropped as a previously
-                // unsuccessful attempts.
                 mem::drop(all_errors);
 
-                // Decrement recursion depth
                 parser.depth_decrement();
 
                 return Ok(output);
             }
             Err(error) => {
-                // Rollback footnotes added during failed rule attempt
                 parser.truncate_footnotes(footnote_count);
 
                 if parser.discarding_hidden_body() {
@@ -888,7 +862,6 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     };
     parser.step()?;
 
-    // If we've hit the recursion limit, just bail
     if let Some(error) = all_errors.last()
         && error.kind() == ParseErrorKind::RecursionDepthExceeded
     {
@@ -896,27 +869,15 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         return Err(error.clone());
     }
 
-    // Add fallback error to errors list
     let error = ParseError::new(ParseErrorKind::NoRulesMatch, RULE_FALLBACK, current);
     all_errors.push(error);
 
-    // Decrement recursion depth
     parser.depth_decrement();
 
     ok!(element, all_errors)
 }
 
 fn hidden_failure_must_close_to_eof(kind: ParseErrorKind) -> bool {
-    // The failures that belong here leave the construct's extent
-    // undetermined: the input ended mid-construct, the head never closed,
-    // its argument list could not be scanned to the closing brackets, or
-    // the recursion limit cut the scan short. A missing block or module name
-    // is not in this set: it is also reported for complete, terminated
-    // heads (a bare embed block, a name-map head closed without a
-    // sub-name, a wikidot field list rejected for a stray line break),
-    // where ordinary stepping recovery is safe and matches visible
-    // parsing. Treating those as unclosed poisoned the rest of the page
-    // whenever a discarded conditional body contained such a block.
     matches!(
         kind,
         ParseErrorKind::RecursionDepthExceeded

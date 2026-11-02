@@ -61,9 +61,6 @@ fn render(source: &str, resolve: bool) -> String {
     }
 }
 
-// Wikidot observation: anonymous PagePreviewModule, scp-wiki, 2026-10-19
-// (`empty-label-titles`): an empty label shows the existing page's title and
-// the normalized target for a missing page.
 #[test]
 fn empty_labels_show_the_existing_page_title() {
     assert_eq!(
@@ -82,7 +79,6 @@ fn empty_labels_show_the_existing_page_title() {
 
 #[test]
 fn empty_labels_fall_back_to_the_normalized_target() {
-    // No title known (or no resolver): the derived text, as before.
     assert_eq!(
         render("[[[untitled|]]]", true),
         r#"<p><a href="/untitled">untitled</a></p>"#,
@@ -95,7 +91,6 @@ fn empty_labels_fall_back_to_the_normalized_target() {
 
 #[test]
 fn empty_labels_fall_back_when_the_page_has_a_blank_title() {
-    // Rokurolize/wikijump#2957: a title-less page must not render an empty link.
     assert_eq!(
         render("[[[blank-title|]]]", true),
         r#"<p><a href="/blank-title">blank-title</a></p>"#,
@@ -108,7 +103,6 @@ fn authored_and_url_labels_ignore_page_titles() {
         render("[[[scp-173|scp-173]]] [[[scp-173]]]", true),
         r#"<p><a href="/scp-173">scp-173</a> <a href="/scp-173">scp-173</a></p>"#,
     );
-    // A URL target keeps the derived text whatever the resolver knows.
     assert_eq!(
         render("[[[https://example.com/a|]]]", true),
         r#"<p><a href="https://example.com/a">https:example-com-a</a></p>"#,

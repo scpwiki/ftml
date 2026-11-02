@@ -121,7 +121,6 @@ fn parse_fn<'r, 't>(
         )));
     }
 
-    // Get body content, without paragraphs
     let body = parser.get_body_elements(&BLOCK_SIZE, false)?;
     let (elements, errors, paragraph_safe) = body.into();
 

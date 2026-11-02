@@ -103,8 +103,8 @@ pub static BLOCK_RULE_MAP: LazyLock<BlockRuleMap> =
 
 #[inline]
 pub fn get_block_rule_with_name(name: &str) -> Option<&'static BlockRule> {
-    let name = name.strip_suffix('_').unwrap_or(name); // score flag
-    let name = UniCase::ascii(name); // case-insensitive
+    let name = name.strip_suffix('_').unwrap_or(name);
+    let name = UniCase::ascii(name);
 
     BLOCK_RULE_MAP.get(&name).copied()
 }
@@ -368,8 +368,6 @@ fn block_rule_map_rejects_duplicate_names() {
 
 #[test]
 fn block_rules_match_conf() {
-    // Accepted by the parser but with no conf entry: the four alignment blocks,
-    // `social` and `later`.
     crate::test::conf_names::assert_rules_match_conf(
         "blocks.toml",
         "block-",

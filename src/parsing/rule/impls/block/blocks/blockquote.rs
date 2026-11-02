@@ -43,10 +43,8 @@ fn parse_fn<'r, 't>(
 
     let arguments = parser.get_head_map(&BLOCK_BLOCKQUOTE, in_head)?;
 
-    // Get body content, but discard paragraph_safe, since blockquotes never are.
     let (elements, errors, _) = parser.get_body_elements(&BLOCK_BLOCKQUOTE, true)?.into();
 
-    // Build element and return
     let element = Element::Container(Container::new(
         ContainerType::Blockquote,
         elements,

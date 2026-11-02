@@ -130,7 +130,6 @@ fn parse_fn<'r, 't>(
         None
     };
 
-    // Parse the image source based on format
     if is_url(&source) && !source_prefix_is_url {
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
@@ -164,7 +163,6 @@ fn parse_fn<'r, 't>(
         )));
     }
 
-    // Build image
     let element = Element::Image {
         source,
         link,
@@ -565,9 +563,6 @@ mod tests {
 
     #[test]
     fn wikidot_v7_image_family_matches_all_84_evidence_rows() {
-        // Immutable anonymous PagePreview evidence:
-        // /mnt/oracle-store/wjlab/issue-scout-20260731/v7-full-syntax/
-        // comparison.json, cases.jsonl, live-references.jsonl, and SHA256SUMS.
         let families = [
             ("image", "IMAGE"),
             ("=image", "=IMAGE"),
@@ -695,8 +690,6 @@ mod tests {
 
     #[test]
     fn wikidot_double_quoted_image_links_preserve_legacy_internal_targets() {
-        // Immutable live preview evidence:
-        // /mnt/oracle-store/wjlab/ftml-scout-20260730/image-link-target-live.jsonl
         for (target, expected_href) in [
             ("SCP-002", "/SCP-002"),
             ("scp-002", "/scp-002"),
@@ -772,7 +765,6 @@ mod tests {
 
     #[test]
     fn wikidot_image_link_with_leading_whitespace_stays_literal() {
-        // references-20261025-01 `test--image--basic`.
         for target in [" https://example.com/", "* https://example.com/"] {
             let (html, _) =
                 render_wikidot_preview(&format!("[[image foo.gif link=\"{target}\"]]"));
@@ -1065,9 +1057,6 @@ mod tests {
 
     #[test]
     fn wikidot_20260913_image_argument_boundaries_match_live() {
-        // Anonymous PagePreview evidence captured in one 30-case batch on
-        // 2026-09-13. This pins the non-size portions of the same M776/M806
-        // boundary so later parser changes cannot silently widen them.
         for (source, expected_fragment, forbidden_fragment, expect_errors) in [
             (
                 r#"[[f=image https://example.com/a.png width="200px"]]"#,

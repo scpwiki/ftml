@@ -45,7 +45,6 @@ impl<'t> ElementCondition<'t> {
     /// The specification is a space separated list of strings, prefixed with
     /// either `+` or `-` or nothing.
     pub fn parse(raw_spec: &'t str) -> Vec<ElementCondition<'t>> {
-        // Helper to get the value and its condition type
         fn get_spec(value: &str) -> (ElementConditionType, &str) {
             if let Some(value) = value.strip_prefix('+') {
                 return (ElementConditionType::Required, value);
@@ -78,7 +77,7 @@ impl<'t> ElementCondition<'t> {
         let mut required = true;
         let mut prohibited = true;
         let mut present = false;
-        let mut had_present = false; // whether there were any present conditions
+        let mut had_present = false;
 
         for condition in conditions {
             let has_value = values.contains(&condition.value);
@@ -93,13 +92,6 @@ impl<'t> ElementCondition<'t> {
             }
         }
 
-        // Since this is false by default, if there are no present conditions,
-        // it's effectively true.
-        //
-        // Otherwise you have to include a present condition for any iftags to pass!
-        //
-        // We could do "required && prohibited && (present || !had_present)" instead,
-        // but this if block is more readable.
         if !had_present {
             present = true;
         }

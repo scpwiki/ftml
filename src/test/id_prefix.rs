@@ -82,10 +82,8 @@ fn isolate_user_ids() {
         }};
     }
 
-    // Trivial
     test!("", vec![]);
 
-    // Named anchors [[#]]
     test!(
         r#"[[# apple]] X"#,
         vec![Element::Container(Container::new(
@@ -103,7 +101,6 @@ fn isolate_user_ids() {
         ))],
     );
 
-    // Anchor targets [[target]]
     test!(
         r#"[[target apple]] X"#,
         vec![Element::Container(Container::new(
@@ -113,7 +110,6 @@ fn isolate_user_ids() {
         ))],
     );
 
-    // Anchor links [#]
     test!(
         r#"[#apple Jump]"#,
         vec![Element::Container(Container::new(
@@ -141,7 +137,6 @@ fn isolate_user_ids() {
         ))],
     );
 
-    // Anchor block [[a]]
     test!(
         r#"[[a id="apple"]]X[[/a]]"#,
         vec![Element::Container(Container::new(
@@ -185,7 +180,6 @@ fn isolate_user_ids() {
         ))],
     );
 
-    // Images [[image]]
     test!(
         r#"[[image example.png class="apple" id="banana"]]"#,
         vec![Element::Image {
@@ -232,7 +226,6 @@ fn isolate_user_ids() {
         ))],
     );
 
-    // Lists [[ul]] / [[ol]]
     test!(
         r#"[[ul id="apple"]] [[li id="u-banana"]]X[[/li]] [[/ul]]"#,
         vec![Element::List {
@@ -295,7 +288,6 @@ fn isolate_user_ids() {
         }],
     );
 
-    // Radio buttons and checkboxes
     test!(
         r#"[[radio vegetables class="apple" id="banana"]] Celery
 [[radio vegetables class="u-cherry" id="u-durian"]] Lettuce"#,
@@ -353,7 +345,6 @@ fn isolate_user_ids() {
         ))],
     );
 
-    // Collapsibles [[collapsible]]
     test!(
         r#"[[collapsible class="apple" id="banana"]]X[[/collapsible]]"#,
         vec![Element::Collapsible {
@@ -397,7 +388,6 @@ fn isolate_user_ids() {
         }],
     );
 
-    // Table of contents [[toc]]
     test!(
         r#"[[toc id="apple"]]"#,
         vec![Element::TableOfContents {
@@ -417,7 +407,6 @@ fn isolate_user_ids() {
         }],
     );
 
-    // Iframes [[iframe]]
     test!(
         r#"[[iframe https://example.com/ id="apple"]]"#,
         vec![Element::Iframe {

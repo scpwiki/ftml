@@ -99,7 +99,6 @@ impl<'t> FullText<'t> {
         &self.text[start..end]
     }
 
-    /// Gives the length in bytes of the text.
     #[inline]
     pub fn len(&self) -> usize {
         self.text.len()
@@ -152,7 +151,6 @@ fn slice_invalid() {
         };
     }
 
-    // "Durian"
     let _ = full_text.slice(range!(6..7), range!(0..1));
 }
 
@@ -174,6 +172,5 @@ fn slice_partial_invalid() {
         };
     }
 
-    // "Eggplant"
     let _ = full_text.slice_partial(range!(8..9), range!(2..4));
 }

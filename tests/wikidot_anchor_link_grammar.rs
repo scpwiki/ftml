@@ -30,9 +30,6 @@ fn render_wikidot(source: &str) -> String {
 
 #[test]
 fn live_backed_anchor_link_matrix_matches_exact_html_and_source_recovery() {
-    // Anonymous edit/PagePreviewModule evidence captured 2026-07-30:
-    // cases.jsonl SHA-256 f85d44d09640abeba21e1524b3435576e8ff216a0d587f1bf074d32041631567
-    // live.jsonl  SHA-256 043451597da63f90d36411bc3e2be6a8977f7ab34b4f55efaaca969e4ca999d7
     let cases = [
         (
             "canonical",

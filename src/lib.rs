@@ -72,9 +72,6 @@
 //! [`serde`]: https://docs.rs/serde
 //! [`wasm-pack`]: https://rustwasm.github.io/docs/wasm-pack/
 
-// Only list crates which we want global macro imports.
-// Rest are implicit based on Cargo.toml
-
 #[macro_use]
 extern crate cfg_if;
 
@@ -98,8 +95,6 @@ extern crate serde_repr;
 
 #[macro_use]
 extern crate str_macro;
-
-// Library top-level modules
 
 #[cfg(test)]
 mod test;
@@ -151,7 +146,6 @@ pub use self::preproc::{
 pub use self::tokenizer::{Tokenization, tokenize};
 pub use self::utf16::Utf16IndexMap;
 
-/// This module collects commonly used traits from this crate.
 pub mod prelude {
     pub use super::data::{PageInfo, ScoreValue};
     pub use super::includes::{Includer, include};

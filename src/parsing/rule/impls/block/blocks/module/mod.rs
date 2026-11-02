@@ -34,32 +34,18 @@ use std::fmt::{self, Debug};
 pub use self::output::ModuleParseOutput;
 pub use self::rule::BLOCK_MODULE;
 
-/// Define a rule for how to parse a module.
 #[derive(Clone)]
 pub struct ModuleRule {
-    /// The code name of the module.
-    ///
-    /// As this is an internal structure, we can assert the following things:
-    /// * It is in kebab-case.
-    /// * It is globally unique.
-    /// * It is prefixed with `module-`.
     name: &'static str,
 
-    /// Which names you can use this module with. Case-insensitive.
-    /// Will panic if empty.
     accepts_names: &'static [&'static str],
 
-    /// Function which implements the processing for this rule.
     parse_fn: ModuleParseFn,
 }
 
 impl ModuleRule {
-    /// Produces a pseudo parse `Rule` associated with this `BlockRule`.
-    ///
-    /// It should not be invoked, it is for error construction.
     #[cold]
     pub fn rule(&self) -> Rule {
-        // Stubbed try_consume_fn implementation for the Rule.
         fn try_consume_fn<'r, 't>(
             _: &mut Parser<'r, 't>,
         ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -84,12 +70,6 @@ impl Debug for ModuleRule {
     }
 }
 
-/// Function pointer type to implement module parsing.
-///
-/// The arguments are, in order:
-/// * `parser` -- `Parser` instance
-/// * `name` -- The name of this module
-/// * `arguments` -- The arguments passed into the module
 pub type ModuleParseFn = for<'r, 't> fn(
     &mut Parser<'r, 't>,
     &'t str,

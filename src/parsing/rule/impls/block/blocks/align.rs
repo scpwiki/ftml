@@ -109,7 +109,6 @@ pub fn parse_alignment_block<'r, 't>(
         };
     }
 
-    // Get body content, with paragraphs
     let wikidot_center =
         parser.settings().layout.legacy() && alignment == Alignment::Center;
     if wikidot_center {
@@ -121,7 +120,6 @@ pub fn parse_alignment_block<'r, 't>(
     }
     let (elements, errors, _) = body?.into();
 
-    // Build element
     let element = Element::Container(Container::new(
         ContainerType::Align(alignment),
         elements,

@@ -25,9 +25,6 @@ fn render(source: &str) -> (String, Vec<ftml::parsing::ParseError>) {
 
 #[test]
 fn crossed_div_and_collapsible_explicit_lists_match_live_owner_order() {
-    // Anonymous PagePreview evidence captured 2026-08-21/22. Wikidot repairs
-    // the crossed outer close before the nested list close. UL leaves a plain
-    // break; OL leaves the legacy empty synthetic bullet-list tail.
     for (source, expected) in [
         (
             "[[div]]\n[[ul]]\nX\n[[/div]]\n[[/ul]]\n",
@@ -75,8 +72,6 @@ fn crossed_div_and_collapsible_explicit_lists_match_live_owner_order() {
 
 #[test]
 fn rejected_table_before_explicit_list_keeps_live_root_whitespace() {
-    // PagePreview keeps the rejected table opener as an unwrapped root text
-    // node with its standard leading root whitespace. The list still parses.
     for (name, source, list_tag) in [
         ("ul", "[[table]]\n[[ul]]\nX\n[[/table]]\n[[/ul]]\n", "ul"),
         ("ol", "[[table]]\n[[ol]]\nX\n[[/table]]\n[[/ol]]\n", "ol"),
@@ -98,9 +93,6 @@ fn rejected_table_before_explicit_list_keeps_live_root_whitespace() {
 
 #[test]
 fn inline_scope_list_line_break_ownership_matches_live_proper_and_crossed_closes() {
-    // Fresh anonymous PagePreview evidence on 2026-08-22 establishes both
-    // forms: proper closes wrap the opener-line break in a paragraph before
-    // the list; a close from inside the list keeps that break unwrapped.
     for (source, expected) in [
         (
             "[[span class=\"probe\"]]\n[[ul]]\nX\n[[/ul]]\n[[/span]]\n",

@@ -153,7 +153,6 @@ fn modules_require_an_unprefixed_physical_line() {
     assert!(!html.contains("TODO: module"), "{html}");
 }
 
-// Fixture: Rokurolize/ftml#478. Frozen Wikidot provenance: test--div--basic.
 #[test]
 fn same_line_div_after_heading_stays_outside_a_paragraph() {
     let (html, text) = render("++ Regular\n\n[[div]]inline[[/div]]");

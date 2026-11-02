@@ -7,9 +7,6 @@ use std::borrow::Cow;
 use std::sync::mpsc;
 use std::time::Duration;
 
-// Live provenance: anonymous edit/PagePreviewModule in Wikidot layout.
-// Evidence bundle: comment-broad-20260730130843-26974.
-
 fn page_info() -> PageInfo<'static> {
     PageInfo {
         page: Cow::Borrowed("comment-rollback"),

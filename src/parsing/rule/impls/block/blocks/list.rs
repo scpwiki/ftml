@@ -25,8 +25,6 @@ use crate::tree::{
     PartialElement,
 };
 
-// Definitions
-
 pub const BLOCK_UL: BlockRule = BlockRule {
     name: "block-list-unordered",
     accepts_names: &["ul"],
@@ -78,8 +76,6 @@ fn parse_ordered_block<'r, 't>(
     parse_list_block(block, parser, name, flag_star, flag_score, in_head)
 }
 
-// List block
-
 fn parse_list_block<'r, 't>(
     (block_rule, list_type): (&BlockRule, ListType),
     parser: &mut Parser<'r, 't>,
@@ -101,14 +97,12 @@ fn parse_list_block<'r, 't>(
     assert!(!flag_star, "List block doesn't allow star flag");
     assert_block_name(block_rule, name);
 
-    // Get attributes
     let arguments = parser.get_head_map_wikidot(block_rule, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
     if parser.settings().layout.legacy() && !parser.has_body_end_block(block_rule) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get body and convert into list form.
     let body = parser.get_body_elements(block_rule, false)?;
     let closer_has_same_line_residual = !matches!(
         parser.current().token,
@@ -129,7 +123,6 @@ fn parse_list_block<'r, 't>(
     let mut items = Vec::new();
     let mut literal_elements = Vec::new();
 
-    // "ul_" strips outer newlines and paragraph breaks.
     if flag_score {
         strip_newlines(&mut elements);
     }
@@ -146,10 +139,8 @@ fn parse_list_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::ListEmpty));
     }
 
-    // Convert and extract list elements
     for element in elements {
         match element {
-            // Ensure all elements of a list are only items, i.e. [[li]].
             Element::Partial(PartialElement::ListItem(list_item)) => {
                 push_literal_list_item(
                     &mut items,
@@ -163,7 +154,6 @@ fn parse_list_block<'r, 't>(
                 }
             }
 
-            // Or sub-lists.
             element @ Element::List { .. } => {
                 push_literal_list_item(
                     &mut items,
@@ -181,7 +171,6 @@ fn parse_list_block<'r, 't>(
                 items.push(ListItem::SubList { element });
             }
 
-            // Ignore "whitespace" elements
             element if element.is_whitespace() && literal_elements.is_empty() => continue,
 
             // Wikidot wraps bare list body content in an unstyled synthetic
@@ -322,8 +311,6 @@ fn join_lines<'t>(lines: Vec<Vec<Element<'t>>>) -> Vec<Element<'t>> {
     elements
 }
 
-// List item
-
 fn parse_list_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,
@@ -339,7 +326,6 @@ fn parse_list_item<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    // Get attributes
     let arguments = parser.get_head_map_wikidot(&BLOCK_LI, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
     let body_start = parser.current().span.start;
@@ -347,12 +333,10 @@ fn parse_list_item<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get body elements
     let body = parser.get_body_elements(&BLOCK_LI, false)?;
     let source_end = parser.current().span.start;
     let (mut elements, errors, _) = body.into();
 
-    // "li_" strips outer newlines and paragraph breaks.
     if flag_score {
         strip_newlines(&mut elements);
     }

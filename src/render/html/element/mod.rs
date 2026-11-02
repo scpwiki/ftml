@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Module that implements HTML rendering for `Element` and its children.
-
 mod audio;
 mod bibliography;
 mod button;

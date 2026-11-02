@@ -28,35 +28,21 @@ pub struct Utf16IndexMap<'t> {
     /// Schema: utf8_index -> utf16_index
     map: HashMap<usize, usize>,
 
-    /// Borrow marker for the underlying string.
-    ///
-    /// This prevents this object from being valid if the underlying
-    /// UTF-8 string is destructed.
-    ///
-    /// However since we don't actually need the string's contents,
-    /// we use `PhantomData` here.
     marker: PhantomData<&'t str>,
 }
 
 impl<'t> Utf16IndexMap<'t> {
-    /// Produces a mapping of UTF-8 byte index to UTF-16 index.
-    ///
-    /// This enables objects to be converted from UTF-8 into UTF-16 using character indices
-    /// for strings rather than byte indices. This is useful for environments
-    /// which do use UTF-16 strings, such as Javascript (via WebASM).
     pub fn new(text: &'t str) -> Self {
         let mut map = HashMap::new();
         let mut utf16_index = 0;
         let mut last_utf8_index = None;
 
-        // Add index for the start of each character
         for (utf8_index, ch) in text.char_indices() {
             map.insert(utf8_index, utf16_index);
             utf16_index += ch.len_utf16();
             last_utf8_index = Some(utf8_index + ch.len_utf8());
         }
 
-        // Add last index, needed for the final token span.
         if let Some(utf8_index) = last_utf8_index {
             map.insert(utf8_index, utf16_index);
         } else {
@@ -69,7 +55,6 @@ impl<'t> Utf16IndexMap<'t> {
         }
     }
 
-    /// Converts a UTF-8 byte index into a UTF-16 one.
     #[inline]
     pub fn get_index_opt(&self, utf8_index: usize) -> Option<usize> {
         self.map.get(&utf8_index).copied()
@@ -157,16 +142,13 @@ mod test {
         let utf16_bytes: Vec<u16> = text.encode_utf16().collect();
 
         for (utf8_start, ch) in text.char_indices() {
-            // Get UTF-8 slice
             let utf8_stop = utf8_start + ch.len_utf8();
             let utf8_slice = &text[utf8_start..utf8_stop];
 
-            // Get equivalent UTF-16 slice
             let utf16_start = map.get_index(utf8_start);
             let utf16_stop = map.get_index(utf8_stop);
             let utf16_slice = &utf16_bytes[utf16_start..utf16_stop];
 
-            // Check that converting from UTF-16 -> UTF-8 yields the same data
             let utf16_conv_str =
                 String::from_utf16(utf16_slice).expect("UTF-16 slice wasn't valid");
 
@@ -175,7 +157,6 @@ mod test {
                 "Converted UTF-16 -> UTF-8 slice didn't match",
             );
 
-            // Check that converting from UTF-8 -> yields the same data
             let utf8_conv_bytes: Vec<u16> = utf8_slice.encode_utf16().collect();
 
             assert_eq!(

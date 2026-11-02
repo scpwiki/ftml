@@ -47,8 +47,6 @@ impl LiteralRegionIndex {
         Self { ranges: merged }
     }
 
-    /// Literal regions protected from typography: everything in [`Self::new`]
-    /// plus the bodies of `[[module]]` blocks that accept one.
     pub(crate) fn for_typography(source: &str) -> Self {
         let mut ranges = Self::new(source).ranges;
         collect_module_body_ranges(source, &mut ranges);
@@ -96,7 +94,6 @@ impl LiteralRegionIndex {
     }
 }
 
-/// Modules that never take a body, so a later `[[/module]]` is not theirs.
 const BODYLESS_MODULES: [&str; 5] =
     ["rate", "backlinks", "categories", "join", "pagetree"];
 

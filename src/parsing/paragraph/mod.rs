@@ -62,10 +62,8 @@ where
     'r: 't,
     F: FnMut(&mut Parser<'r, 't>) -> Result<bool, ParseError>,
 {
-    // Update parser rule
     parser.set_rule(rule);
 
-    // Create paragraph stack
     let mut stack = if parser.settings().layout.legacy() {
         ParagraphStack::new_wikidot()
     } else {
@@ -73,8 +71,6 @@ where
     };
 
     let mut finished = false;
-    // Gallery parsing must fail for literal fallback. Only paragraph gathering
-    // sees its later closer and can restore the authored physical boundary.
     let mut literal_gallery_pending = false;
     while !finished {
         let quote_line_status = parser.prepare_quote_body_line()?;
@@ -146,39 +142,26 @@ where
                         finished = true;
                         continue;
                     }
-                    // There was a close condition, but it was not satisfied
-                    // before the end of input.
-                    //
-                    // Pass an error up the chain
 
                     warn!("Hit the end of input, producing an error");
                     return Err(parser.make_err(ParseErrorKind::EndOfInput));
                 } else {
-                    // Avoid an unnecessary Element::Null and just exit
-                    // If there's no close condition, then this is not an error
-
                     warn!("Hit the end of input, terminating token iteration");
                     finished = true;
                     None
                 }
             }
 
-            // If we've hit a paragraph break, then finish the current paragraph
             Token::ParagraphBreak => {
                 if stack.wikidot_complete_raw_line_occupied() {
                     stack.clear_wikidot_complete_raw_line_occupancy();
                 }
-                // Paragraph break -- end the paragraph and start a new one!
                 stack.end_paragraph_at_break();
 
-                // We must manually bump up this pointer because
-                // we 'continue' here, skipping the usual pointer update.
                 parser.step()?;
                 None
             }
 
-            // Determine if we're ending the paragraph here,
-            // or continuing with another element
             _ => {
                 let close_condition_met = match close_condition_fn.as_mut() {
                     Some(close_condition_fn) => close_condition_fn(parser)?,
@@ -196,7 +179,6 @@ where
                     if parser.current().token == Token::DiscardedControl {
                         stack.mark_discarded_control();
                     }
-                    // Otherwise, produce consumption from this token pointer
                     match consume(parser) {
                         Ok(consumed) => Some(consumed),
                         Err(error)
@@ -260,7 +242,6 @@ where
                         && error.rule() == "block-gallery"
                 });
 
-            // Add new elements to the list
             if complete_raw_line_break && elements_begin_with_wikidot_center(&elements) {
                 stack.push_element(Element::LineBreak, true);
             }
@@ -338,7 +319,6 @@ where
                 stack.pop_line_break();
             }
 
-            // Process errors
             stack.push_errors(&mut errors);
         }
     }
@@ -595,7 +575,6 @@ fn push_element<'t>(
         stack.mark_next_unwrapped_after_block();
     }
 
-    // Don't add a line break if the paragraph is otherwise empty
     if !(paragraph_safe
         && stack.current_empty()
         && element == Element::LineBreak
@@ -810,8 +789,6 @@ mod tests {
             ),
         );
 
-        // Negative control: a following wrapped paragraph drops the
-        // speculative separator; there is no bare text node to carry it.
         assert_eq!(
             render_wikidot("[[f>image landscape.jpg]]\n\nplain"),
             concat!(
@@ -822,8 +799,6 @@ mod tests {
             ),
         );
 
-        // Negative control: a single line break is not a paragraph break and
-        // gains no leading newline.
         assert_eq!(
             render_wikidot(
                 "[[f>image landscape.jpg]]\nEXTERNAL [[image https://example.com/some-image.webp]]",
@@ -837,7 +812,6 @@ mod tests {
             ),
         );
 
-        // Negative control: no following run, no trailing separator.
         assert_eq!(
             render_wikidot("[[f>image landscape.jpg]]\n\n"),
             concat!(

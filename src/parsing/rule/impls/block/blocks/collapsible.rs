@@ -120,8 +120,6 @@ fn parse_fn<'r, 't>(
 
     let (head, body_start) = parse_collapsible_head(parser, name, in_head)?;
 
-    // Get body content, with paragraphs.
-    // Discard paragraph_safe, since collapsibles never are.
     let previous_collapsible_context = parser.in_wikidot_collapsible();
     if parser.settings().layout.legacy() {
         parser.set_in_wikidot_collapsible(true);
@@ -168,7 +166,6 @@ fn parse_fn<'r, 't>(
         parser.step()?;
     }
 
-    // Build element and return
     let element = head.into_element_with_unfolded_tail(elements, unfolded_tail_start);
 
     let mut output = vec![element];
@@ -777,8 +774,6 @@ mod tests {
 
     #[test]
     fn quoted_collapsible_opener_tails_do_not_hide_the_quoted_closer() {
-        // The closer in front of a following unquoted collapsible must be the
-        // quoted one for any content after the opener on its line.
         for tail in [" ", "\t", " x", " [[/size]]"] {
             let source = format!(
                 "> [[collapsible show=\"T\" hide=\"F\"]]{tail}\n> body\n> [[/collapsible]]\n\nB\n\n[[collapsible show=\"A\" hide=\"a\"]]\n[[code]]\nx\n[[/code]]\n[[/collapsible]]\n"

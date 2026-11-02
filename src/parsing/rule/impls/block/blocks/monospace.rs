@@ -43,7 +43,6 @@ fn parse_fn<'r, 't>(
 
     let arguments = parser.get_head_map(&BLOCK_MONOSPACE, in_head)?;
 
-    // Get body content, without paragraphs
     let body = parser.get_body_elements(&BLOCK_MONOSPACE, false)?;
     let (elements, errors, paragraph_safe) = body.into();
 

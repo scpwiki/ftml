@@ -18,11 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Rule for links to anchors on the same document.
-//!
-//! A variant on single-bracket links which targets an anchor
-//! on the current page, or is a fake link.
-
 use super::RULE_COMMENT;
 use super::prelude::*;
 use crate::id_prefix::isolate_ids;
@@ -71,7 +66,6 @@ fn try_consume_anchor<'r, 't>(
 where
     'r: 't,
 {
-    // Gather path for link
     let url_close = [ParseCondition::current(Token::Whitespace)];
     let url_invalid = [
         ParseCondition::current(Token::RightBracket),
@@ -90,7 +84,6 @@ where
         return Err(parser.make_err(ParseErrorKind::InvalidUrl));
     }
 
-    // Determine if this is an anchor link or fake link
     let url = if url.is_empty() {
         Cow::Borrowed("javascript:;")
     } else {
@@ -108,7 +101,6 @@ where
         Cow::Owned(url)
     };
 
-    // Gather label for link
     let label_close = [ParseCondition::current(Token::RightBracket)];
     let label_invalid = [
         ParseCondition::current(Token::ParagraphBreak),
@@ -130,7 +122,6 @@ where
         }
     };
 
-    // Trim label
     let label = if parser.settings().layout.legacy() {
         trim_wikidot_ascii_cow(discard_wikidot_controls(label))
     } else {
@@ -140,7 +131,6 @@ where
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Build and return link element
     let element = Element::Link {
         ltype: LinkType::Anchor,
         link: LinkLocation::Url(url),

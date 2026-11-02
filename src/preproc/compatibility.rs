@@ -141,8 +141,6 @@ fn crossed_center_close_insertion_line(
     Some(insertion_line)
 }
 
-/// Make crossed center/collapsible owners parseable without losing Wikidot's
-/// authored early close.
 #[cfg(test)]
 fn substitute(text: &mut String) {
     substitute_for_layout(text, false);
@@ -156,9 +154,6 @@ pub(super) fn substitute_for_layout(text: &mut String, wikidot: bool) {
     let literal_lines = literal_line_mask(&lines);
     canonicalize_quote_prefixed_iftags(&mut lines, &literal_lines);
 
-    // The conditional pass can split a spaced-inner marker into a residual
-    // quoted line and a canonical conditional marker line. Rebuild both the
-    // physical line list and literal-region mask before subsequent passes.
     lines = lines
         .concat()
         .split_inclusive('\n')
@@ -282,13 +277,6 @@ fn close_unclosed_div_after_literal_iftags(
     lines.push("[[/div]]".to_owned());
 }
 
-/// Canonicalize closed quote-prefixed `iftags` gates before native quote parsing.
-///
-/// Exact native prefixes stay in place for the quote-aware block collector.
-/// Mismatched closers are moved to the opener's depth. Spaced-inner markers
-/// keep their literal residual on a separate quote line. Tight markers are
-/// hoisted because they otherwise disappear in the tight-line compatibility
-/// pass. Unmatched openers remain byte-for-byte unchanged.
 fn canonicalize_quote_prefixed_iftags(lines: &mut [String], literal_lines: &[bool]) {
     let mut openers = Vec::new();
     let mut pairs = Vec::new();
@@ -500,9 +488,6 @@ fn canonicalize_root_collapsible_inline_quoted_closers(
     *lines = output;
 }
 
-/// Whether a line carries a `[[collapsible` head that terminates on the
-/// same line. The head may share the line with other inline markup (for
-/// example a wrapping `[[size]]` or `[[span]]`).
 fn line_opens_collapsible(line: &str) -> bool {
     let (body, _) = split_line(line);
     let lower = body.to_ascii_lowercase();
@@ -517,8 +502,6 @@ fn line_opens_collapsible(line: &str) -> bool {
         && after.contains("]]")
 }
 
-/// Re-split the working line list into physical lines (earlier passes may
-/// have embedded newlines inside a chunk) and rebuild the literal mask.
 fn resplit_lines(lines: &mut Vec<String>) -> Vec<bool> {
     *lines = lines
         .concat()
@@ -528,9 +511,6 @@ fn resplit_lines(lines: &mut Vec<String>) -> Vec<bool> {
     literal_line_mask(lines)
 }
 
-/// Split a line that consists solely of a div opener, a collapsible head,
-/// and the div's closer into one marker per line, so the line-oriented
-/// crossing repairs can see the shape.
 fn split_div_collapsible_div_lines(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
     for (line, literal) in lines.iter_mut().zip(literal_lines.iter()) {
@@ -563,14 +543,6 @@ fn split_div_collapsible_div_lines(lines: &mut Vec<String>) {
     }
 }
 
-/// Repair a collapsible whose wrapper div closes immediately after the
-/// collapsible opener while a second div wraps the body.
-///
-/// Wikidot renders this as the wrapper div holding a collapsible whose
-/// content closes at the early div close, with the second div as the
-/// unfolded tail. Rewriting the source into the properly nested form
-/// (wrapper div, collapsible, second div, body, then the closers in stack
-/// order) renders the same visible structure.
 fn canonicalize_early_closed_div_wrapped_collapsible(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
     let lines: &mut [String] = lines;
@@ -600,8 +572,6 @@ fn canonicalize_early_closed_div_wrapped_collapsible(lines: &mut Vec<String>) {
             continue;
         }
 
-        // Find the collapsible close. No other standalone div or
-        // collapsible marker at this prefix may appear inside the body.
         let mut close = index + 4;
         let mut collapsible_close = None;
         while close < lines.len() {
@@ -625,8 +595,6 @@ fn canonicalize_early_closed_div_wrapped_collapsible(lines: &mut Vec<String>) {
             continue;
         };
 
-        // After the collapsible close, only blank lines may precede the
-        // wrapper div's own close.
         let mut div_close = collapsible_close + 1;
         while div_close < lines.len()
             && !literal_lines[div_close]
@@ -651,17 +619,6 @@ fn canonicalize_early_closed_div_wrapped_collapsible(lines: &mut Vec<String>) {
     }
 }
 
-/// Repair a collapsible inside an alignment block that closes immediately
-/// after the collapsible opener line, when the alignment block is reopened
-/// immediately before the collapsible close and closed again immediately
-/// after it.
-///
-/// Wikidot renders this as the alignment wrapper holding a collapsible
-/// whose content closes at the early alignment close, with the remaining
-/// body (including the reopened, empty alignment block) as the unfolded
-/// tail. Moving the early alignment close to the very end and swapping the
-/// final crossed pair renders the same visible structure from properly
-/// nested source.
 fn canonicalize_early_closed_align_wrapped_collapsible(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
     let lines: &mut [String] = lines;
@@ -690,8 +647,6 @@ fn canonicalize_early_closed_align_wrapped_collapsible(lines: &mut Vec<String>) 
                 continue;
             }
 
-            // Find the collapsible close. A close of the wrapper alignment
-            // inside the body ends the search; other content is the tail.
             let mut close = index + 3;
             let mut collapsible_close = None;
             while close < lines.len() {
@@ -747,14 +702,6 @@ fn canonicalize_early_closed_align_wrapped_collapsible(lines: &mut Vec<String>) 
     }
 }
 
-/// Hoist a root collapsible's closer off lines the block gatherer cannot
-/// split: a closer alone on a blockquote line, or a closer appended to a
-/// list item.
-///
-/// Wikidot closes the root collapsible at such a closer; the quoted or
-/// listed content before it stays inside the body. Left in place, the
-/// native blockquote and list handling swallow the marker and the whole
-/// pair renders literally.
 fn canonicalize_collapsible_closers_sharing_lines(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
     let mut open_depths: Vec<usize> = Vec::new();
@@ -834,12 +781,6 @@ fn split_list_item_collapsible_close(
     true
 }
 
-/// Insert the missing standalone `[[/div]]` lines for divs left open when
-/// a collapsible closes.
-///
-/// Wikidot closes elements still open at a collapsible's end implicitly;
-/// the tree parser instead lets the unclosed div swallow the collapsible
-/// closer, and the whole pair renders literally.
 fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
     let mut div_depth = 0usize;
@@ -847,9 +788,6 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
     let mut output = Vec::with_capacity(lines.len());
     for (line, literal) in lines.iter().zip(literal_lines.iter()) {
         if !*literal {
-            // Standalone markers tolerate trailing horizontal whitespace
-            // here; the strict line helpers would miss such divs and the
-            // depth count would drift.
             let (body, _) = split_line(line);
             let trimmed = body.trim_end();
             match marker_line(trimmed) {
@@ -880,17 +818,7 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
     *lines = output;
 }
 
-/// Remove lines whose contiguous native quote run is not followed by horizontal space.
-///
-/// Wikidot consumes these lines rather than treating their remainder as quoted
-/// content or literal text. Root-level literal regions remain byte-preserving.
 fn remove_tight_quote_lines(lines: &mut [String], literal_lines: &[bool]) {
-    // Match the parser's native blockquote ceiling.  Deeper valid quote lines
-    // are preserved byte-for-byte so the parser can report the existing
-    // too-deep blockquote error, but compatibility blank lines only need to
-    // retain a parseable quote scope.  Capping the synthesized marker run keeps
-    // a single attacker-controlled deep quote line from being multiplied across
-    // many following tight malformed lines during preprocessing.
     const MAX_SYNTHESIZED_QUOTE_DEPTH: usize = 30;
 
     let mut active_quote_depth = 0;
@@ -922,8 +850,6 @@ fn remove_tight_quote_lines(lines: &mut [String], literal_lines: &[bool]) {
         if active_quote_depth == 0 {
             *line = ending.to_owned();
         } else {
-            // Keep the active depth without introducing horizontal space:
-            // an empty `>` row is invisible, while `> ` splits paragraphs.
             let synthesized_depth = active_quote_depth.min(MAX_SYNTHESIZED_QUOTE_DEPTH);
             *line = format!("{indentation}{}{ending}", ">".repeat(synthesized_depth));
         }
@@ -941,12 +867,6 @@ fn valid_quote_depth(body: &str) -> usize {
     }
 }
 
-/// Move a prematurely crossed bold closer behind its size closer.
-///
-/// Wikidot renders `**[[size 110%]]text**[[/size]]` as properly nested
-/// `<strong><span>text</span></strong>`. Canonicalizing this corpus-backed
-/// shape also prevents repeated crossed delimiters from causing exponential
-/// parser backtracking.
 fn canonicalize_crossed_bold_size_closers(lines: &mut [String], literal_lines: &[bool]) {
     const OPEN: &str = "**[[size ";
     const CROSSED_CLOSE: &str = "**[[/size]]";
@@ -968,8 +888,6 @@ fn canonicalize_crossed_bold_size_closers(lines: &mut [String], literal_lines: &
             };
             let close_start = body_start + close_start;
 
-            // A second bold delimiter makes the intended pairing ambiguous.
-            // Leave such lines to the normal parser.
             if line[body_start..close_start].contains("**") {
                 search_from = body_start;
                 continue;
@@ -1000,9 +918,6 @@ fn canonicalize_unquoted_collapsible_closers(
         let (body, ending) = split_line(line);
         let (line_quote_depth, _) = quote_depth_and_body(body);
 
-        // Literal contents cannot contain compatibility markers, but their
-        // physical quote depth still terminates a quoted candidate when the
-        // parser has returned to a shallower context.
         if literal_lines[index] {
             while openers
                 .last()
@@ -1092,10 +1007,6 @@ fn canonicalize_crossed_collapsible_div_closers(
         let prefix = prefix.to_owned();
         let required_quote_depth = prefix.bytes().filter(|&byte| byte == b'>').count();
 
-        // The div may open after leading body content, not only on the line
-        // immediately after the collapsible opener. Scan forward through
-        // content lines for the first standalone div opener at this prefix;
-        // any other structural marker at the prefix ends the search.
         let mut div_open = index + 1;
         let div_found = loop {
             if div_open >= lines.len() {
@@ -1142,9 +1053,6 @@ fn canonicalize_crossed_collapsible_div_closers(
                 break;
             }
             if literal_lines[close] {
-                // Literal lines are body content (code, raw, comments); any
-                // markers on them are text, so they cannot take part in the
-                // crossing, but they do not end the search either.
                 close += 1;
                 continue;
             }
@@ -1319,10 +1227,6 @@ fn canonicalize_crossed_outer_owner_closers(
     }
 }
 
-/// Repair a centered div header whose final two closers are crossed.
-///
-/// The corpus-backed `div -> center -> /div -> /center` form is equivalent to
-/// closing the center before its containing div on Wikidot.
 fn canonicalize_crossed_div_center_closers(lines: &mut [String], literal_lines: &[bool]) {
     let mut index = 0;
     while index + 1 < lines.len() {
@@ -1401,7 +1305,6 @@ fn canonicalize_crossed_div_center_closers(lines: &mut [String], literal_lines: 
     }
 }
 
-/// Repair a div nested in a center whose final two closers are crossed.
 fn canonicalize_crossed_center_div_closers(lines: &mut [String], literal_lines: &[bool]) {
     let mut index = 0;
     while index + 1 < lines.len() {
@@ -1505,10 +1408,6 @@ fn canonicalize_crossed_center_collapsible_closers(
                 }
                 Marker::CollapsibleClose if candidate.early_center_close.is_some() => {
                     if let Some(reopened) = candidate.reopened_center {
-                        // The reopened-center erase also applies when the
-                        // collapsible sits inside wrapper divs: the lines
-                        // between the collapsible close and the final center
-                        // close must then be exactly those divs' closers.
                         let mut tail_matches = reopened + 1 == index;
                         if tail_matches {
                             for offset in 1..=candidate.wrapper_divs {
@@ -1665,16 +1564,10 @@ fn literal_line_mask(lines: &[String]) -> Vec<bool> {
         let lower = logical.to_ascii_lowercase();
 
         if let Some(literal) = block {
-            // A native quoted raw-text collector fails at the first shallower
-            // physical line. That boundary belongs to the surrounding page,
-            // so process it normally instead of masking it with the stale
-            // literal candidate.
             if literal.quote_depth > 0 && quote_depth < literal.quote_depth {
                 block = None;
             } else {
                 mask.push(true);
-                // Root-level collectors see a closer at any quote depth.
-                // Quoted collectors only accept one at their exact depth.
                 let close_depth_matches =
                     literal.quote_depth == 0 || quote_depth == literal.quote_depth;
                 if close_depth_matches && lower.contains(literal.close) {
@@ -1754,8 +1647,6 @@ fn literal_block_close(lower: &str) -> Option<&'static str> {
         "raw" => Some("[[/raw]]"),
         "html" => Some("[[/html]]"),
         "math" => Some("[[/math]]"),
-        // Named service embeds are single blocks. Only the empty-head form
-        // introduces a literal body terminated by [[/embed]].
         "embed" if words.next().is_none() => Some("[[/embed]]"),
         "module" if words.next() == Some("css") => Some("[[/module]]"),
         _ => None,
@@ -2040,7 +1931,6 @@ mod tests {
 
     #[test]
     fn closed_quoted_iftags_are_canonicalized_before_quote_parsing() {
-        // Live sandbox provenance: run-quoted-conditionals, 2026-07-13.
         for (mut source, expected) in [
             (
                 "> [[iftags -missing]]\n> INCLUDED\n> [[/iftags]]\nAFTER".to_owned(),
@@ -2086,7 +1976,6 @@ mod tests {
 
     #[test]
     fn quoted_crossed_center_and_collapsible_closers_are_canonicalized() {
-        // Corpus provenance: scp-wiki/gears-ground-slowly.
         let original = concat!(
             "> [[=]]\n",
             "> [[collapsible show=\"poetry\" hide=\"poetry\"]]\n",
@@ -2141,7 +2030,6 @@ mod tests {
 
     #[test]
     fn crossed_center_and_div_closers_are_canonicalized() {
-        // Corpus provenance: scp-wiki/fragment:cryptozoology-division-hub-1.
         let mut source = concat!(
             "[[=]]\n",
             "[[div class=\"blockquote\"]]\n",
@@ -2193,7 +2081,6 @@ mod tests {
 
     #[test]
     fn crossed_collapsible_and_div_closers_are_canonicalized() {
-        // Corpus provenance: scp-wiki/kaktuskast-hub.
         let mut source = concat!(
             "[[collapsible show=\"episode\" hide=\"close\"]]\n",
             "[[div class=\"content-panel\"]]\n",
@@ -2226,7 +2113,6 @@ mod tests {
 
     #[test]
     fn crossed_div_and_center_closers_are_canonicalized() {
-        // Corpus provenance: scp-wiki/scp-4700.
         let mut source = concat!(
             "[[div class=\"record-header\"]]\n",
             "[[=]]\n",
@@ -2454,7 +2340,6 @@ mod tests {
 
     #[test]
     fn reopened_center_around_crossed_collapsible_is_canonicalized() {
-        // Corpus provenance: scp-wiki/the-man-who-stood-alone-hub.
         let mut source = concat!(
             "[[=]]\n",
             "[[collapsible show=\"show update\" hide=\"hide update\"]]\n",
@@ -2563,7 +2448,6 @@ mod tests {
 
     #[test]
     fn crossed_bold_and_size_closers_are_canonicalized() {
-        // Corpus provenance: scp-wiki/scp-007-int.
         let mut source = concat!(
             "**[[size 120%]]SITE PT1[[/size]]**\n",
             "**[[size 110%]]OVERWATCH COUNCIL**[[/size]]\n",
@@ -2603,7 +2487,6 @@ mod tests {
 
     #[test]
     fn quoted_collapsible_accepts_corpus_unquoted_standalone_closer() {
-        // Corpus provenance: scp-wiki/foundation-missed-connections.
         let mut source = concat!(
             "> [[collapsible show=\"open\" hide=\"close\"]]\n",
             ">user example\n",
@@ -2631,9 +2514,6 @@ mod tests {
 
     #[test]
     fn root_collapsibles_close_after_inline_quoted_report_lines() {
-        // Reduced from scp-wiki/scp-4239, which repeats this shape thirteen
-        // times inside one tab and previously reparsed the remaining tab body
-        // for every opener.
         let section = concat!(
             "[[collapsible show=\"report\"]]\n",
             "> quoted report\n",
@@ -2735,7 +2615,6 @@ mod tests {
 
     #[test]
     fn unmatched_quoted_tab_closers_are_invisible_like_wikidot() {
-        // Corpus provenance: scp-wiki/foundation-missed-connections.
         let mut source = concat!(
             "> template body\n",
             ">[[/tab]]\n",

@@ -117,8 +117,6 @@ where
             }
             Token::InputEnd => return Err(parser.make_err(ParseErrorKind::EndOfInput)),
 
-            // Generated and runtime values must remain typed leaves. FTML has
-            // no delayed inline-math field that could retain their provenance.
             Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
@@ -213,9 +211,6 @@ where
     }
 }
 
-/// Find a `$]]` closer whose bytes became adjacent after valid comments were
-/// removed. The visible prefix contains one or two delimiter bytes; the
-/// current bracket token supplies the rest and may retain a literal residual.
 fn comment_joined_math_close<'r, 't>(
     parser: &Parser<'r, 't>,
     visible: &str,
@@ -242,10 +237,6 @@ where
     }
 }
 
-/// Validate one authored inline-math candidate without executing nested syntax.
-///
-/// Link-label lookahead uses the same inert collector on a parser clone, so
-/// formula contents cannot duplicate document side effects such as footnotes.
 pub(super) fn wikidot_math_candidate_is_complete<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,

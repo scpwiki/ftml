@@ -18,12 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Rule for anchor name blocks.
-//!
-//! Not to be confused with the anchor block (`[[a]]`), this
-//! "block" is a rule for `[[# name-of-anchor]]`, that is, created an
-//! `<a id="name-of-anchor">` anchor that can be jumped to.
-
 use super::prelude::*;
 use crate::id_prefix::isolate_ids;
 use crate::tree::{LinkLabel, LinkLocation, LinkType};
@@ -43,7 +37,6 @@ fn try_consume_fn<'r, 't>(
     let source_start = parser.current().span.start;
     assert_step(parser, Token::LeftBlockAnchor)?;
 
-    // Requires a space before the name
     parser.get_token(Token::Whitespace, ParseErrorKind::RuleFailed)?;
 
     // Gather name for anchor
@@ -109,7 +102,6 @@ fn try_consume_fn<'r, 't>(
         return ok!(Elements::Multiple(elements));
     }
 
-    // Isolate ID if requested
     let name = if parser.settings().isolate_user_ids && !parser.settings().layout.legacy()
     {
         Cow::Owned(isolate_ids(name))
@@ -117,7 +109,6 @@ fn try_consume_fn<'r, 't>(
         std::convert::identity(cow!(name))
     };
 
-    // Build and return link element
     let anchor = Element::AnchorName(name);
     if residual_closer {
         ok!(Elements::Multiple(vec![anchor, text!("]")]))

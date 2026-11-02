@@ -77,11 +77,6 @@ fn own_line_rules(token: Token) -> &'static [Rule] {
 fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming newline token as line break");
 
-    // Skip this newline if we're coming up on a rule that starts
-    // on its own line.
-    //
-    // Grep for "LineRequirement::StartOfLine" and compare that with this list.
-
     let quote_aware = parser.quote_body_cursor().is_some();
     let upcoming_skip = parser.evaluate_fn(|parser| {
         parser.step()?;
@@ -127,19 +122,5 @@ fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
 fn line_break_paragraph<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    // This rule is kind of special. It's the same as RULE_LINE_BREAK,
-    // except it accepts a *ParagraphBreak* instead, which is normally supposed to split
-    // paragraphs.
-    //
-    // So what's going on?
-    //
-    // In "normal" contexts, you extract paragraphs (see gather_paragraphs()), so any
-    // Token::ParagraphBreak tokens are used to affected the ParagraphStack and create
-    // a new paragraph container.
-    //
-    // However other contexts do not allow new paragraphs to form, such as [[span]].
-    // In these cases, if we encounter two or more newlines, we must pretend it's simply
-    // one regular newline, or a line break.
-
     line_break(parser)
 }

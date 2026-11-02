@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Usage: run.sh            run the exhaustive check against the real src/parsing/depth.rs
-#        run.sh mutants    break a temporary copy of depth.rs five ways; each must make the check fail
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 
-run_check() { # $1 = crate dir
+run_check() {
   (cd "$1" && CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$1/target}" CARGO_INCREMENTAL=0 \
      cargo test --release --quiet -- --nocapture 2>&1)
 }
@@ -25,7 +23,7 @@ cp "$repo/src/non_empty_vec.rs" "$work/src/"
 cp -r "$here" "$work/verification/process-depths"; rm -rf "$work/verification/process-depths/target"
 dst="$work/src/parsing/depth.rs"
 
-mutate() { # name, python-expression replacing text
+mutate() {
   cp "$repo/src/parsing/depth.rs" "$dst"
   python3 - "$dst" "$2" "$3" <<'PY'
 import sys

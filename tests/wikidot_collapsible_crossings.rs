@@ -1,14 +1,3 @@
-//! Regression tests for `[[collapsible]]` pairs whose end marker crosses
-//! other block boundaries in Wikidot-legacy pages.
-//!
-//! Each source mirrors a real page shape that live Wikidot renders as a
-//! working collapsible but that previously rendered the pair literally:
-//! closers sharing a list-item or blockquote line, crossed div closers,
-//! wrapper blocks that close immediately after the collapsible opener,
-//! and divs left open at the collapsible's end. The nested-collapsible
-//! case is a parity control: Wikidot itself leaves the nested opener
-//! literal there, and so do we.
-
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
 use ftml::render::{Render, html::HtmlRender};
@@ -51,7 +40,6 @@ fn assert_clean_pair(html: &str) {
 
 #[test]
 fn closer_on_list_item_line_closes_pair() {
-    // ahbonjour-s-office: the Fiction pair's closer ends a list item.
     let html = render(concat!(
         "[[collapsible show=\"Fiction\"]]\n",
         "intro text\n",
@@ -65,7 +53,6 @@ fn closer_on_list_item_line_closes_pair() {
 
 #[test]
 fn closer_on_blockquote_line_closes_pair() {
-    // scp-3571: inline opener, body quoted, closer alone on a quote line.
     let html = render(concat!(
         "**Addendum:** [[collapsible show=\"Test Log\"]]\n",
         "> first quoted line\n",
@@ -79,8 +66,6 @@ fn closer_on_blockquote_line_closes_pair() {
 
 #[test]
 fn crossed_div_closers_after_content_and_raw_lines() {
-    // scp-5553: paragraph and a spaced line before the div opens, raw and
-    // color lines inside it, then the two closers crossed.
     let html = render(concat!(
         "[[collapsible show=\"Addenda\"]]\n",
         "intro line\n",
@@ -99,8 +84,6 @@ fn crossed_div_closers_after_content_and_raw_lines() {
 
 #[test]
 fn reopened_center_with_wrapper_div() {
-    // scp-9255: license-box fragments assembled across two center blocks
-    // with a wrapper div around the collapsible.
     let html = render(concat!(
         "[[=]]\n",
         "[[div class=\"licensebox\"]]\n",
@@ -123,9 +106,6 @@ fn reopened_center_with_wrapper_div() {
 
 #[test]
 fn align_wrapper_closing_early_with_reopen() {
-    // scp-9923: the opener sits in a right-align block that closes at
-    // once; the body follows in a left-align block and a reopened
-    // right-align block wraps the collapsible close.
     let html = render(concat!(
         "[[>]]\n",
         "[[span class=\"blur\"]][[collapsible show=\"V\" hide=\"H\"]][[/span]]\n",
@@ -148,8 +128,6 @@ fn align_wrapper_closing_early_with_reopen() {
 
 #[test]
 fn div_wrapper_closing_early_with_second_div() {
-    // scp-4036: the bold wrapper div closes right after the opener and a
-    // second div wraps the quoted body.
     let html = render(concat!(
         "[[div style=\"font-weight: bold;\"]]\n",
         "[[collapsible show=\"Level 5\" hide=\"Granted\"]]\n",
@@ -168,8 +146,6 @@ fn div_wrapper_closing_early_with_second_div() {
 
 #[test]
 fn div_collapsible_and_div_close_sharing_one_line() {
-    // Triage synthetic cy-4036: div opener, collapsible head and the
-    // div's closer all share the first line.
     let html = render(concat!(
         "[[div style=\"font-weight: bold;\"]] [[collapsible show=\"A\" hide=\"B\"]] [[/div]]\n",
         "[[div]]\n",
@@ -183,9 +159,6 @@ fn div_collapsible_and_div_close_sharing_one_line() {
 
 #[test]
 fn unclosed_div_at_collapsible_end_in_center_tail() {
-    // scp-7622: size-wrapped opener inside a center block that closes at
-    // once; the body's blockquote div is never closed before the
-    // collapsible's end.
     let html = render(concat!(
         "[[=]]\n",
         "[[size 150%]][[collapsible show=\"Breach\" hide=\"Close\"]][[/size]]\n",
@@ -200,9 +173,6 @@ fn unclosed_div_at_collapsible_end_in_center_tail() {
 
 #[test]
 fn nested_collapsible_stays_literal_like_wikidot() {
-    // Parity control (frozen binding recorded9-collapsible-nested):
-    // Wikidot terminates the outer pair at the first closer and leaves
-    // the nested opener and the outer's own closer as literal text.
     let html = render(concat!(
         "[[collapsible]]\n",
         "[[collapsible]]\n",
@@ -217,8 +187,6 @@ fn nested_collapsible_stays_literal_like_wikidot() {
 
 #[test]
 fn quoted_pair_still_uses_native_quote_parsing() {
-    // Control: a fully quoted pair is the native blockquote machinery's
-    // domain and must not be disturbed.
     let html = render(concat!(
         "> [[collapsible show=\"poetry\"]]\n",
         "> line one\n",

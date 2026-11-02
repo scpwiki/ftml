@@ -18,15 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Module that implements text rendering for `Element` and its children.
-//!
-//! The philosophy of this renderer is essentially to output what the HTML
-//! renderer would, but with all tags, styling, etc stripped.
-//!
-//! Only pure, unformatted text should remain. Whitespace formatting
-//! (such as indenting each line of a blockquote) should not occur.
-//! Any formatting present must be directly justifiable.
-
 use super::TextContext;
 use crate::tree::{
     CodeBlock, ContainerType, DefinitionListItem, Element, ListItem, Module,
@@ -48,11 +39,8 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         Element::Container(container) => {
             let mut invisible = false;
             let add_newlines = match container.ctype() {
-                // Don't render this at all.
                 ContainerType::Hidden => return,
 
-                // Render it, but invisibly.
-                // Requires setting a special mode in the context.
                 ContainerType::Invisible => {
                     ctx.enable_invisible();
                     invisible = true;
@@ -60,20 +48,16 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
                     false
                 }
 
-                // If container is "terminating" (e.g. blockquote, p), then add newlines.
-                // Also, determine if we add a prefix.
                 ContainerType::Div
                 | ContainerType::Paragraph
                 | ContainerType::Blockquote
                 | ContainerType::Header(_) => true,
 
-                // Wrap any ruby text with parentheses
                 ContainerType::RubyText => {
                     ctx.push('(');
                     false
                 }
 
-                // Inline or miscellaneous container.
                 _ => false,
             };
 
@@ -81,10 +65,8 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
                 ctx.add_newline();
             }
 
-            // Render internal elements
             render_elements(ctx, container.elements());
 
-            // Wrap any ruby text with parentheses
             if container.ctype() == ContainerType::RubyText {
                 ctx.push(')');
             }
@@ -108,9 +90,7 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
             );
             ctx.add_newline();
         }
-        Element::Module(_) => {
-            // We don't want to render application-owned modules at all.
-        }
+        Element::Module(_) => {}
         Element::Text(text) | Element::Raw(text) | Element::Email(text) => {
             ctx.push_str(text);
         }
@@ -148,46 +128,30 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         }
         Element::TabView(tabs) => {
             for Tab { label, elements } in tabs {
-                // Add tab name
                 ctx.push_str(label);
                 ctx.add_newline();
 
-                // Add tab contents
                 render_elements(ctx, elements);
                 ctx.add_newline();
             }
         }
         Element::StandaloneButton(button) => ctx.push_str(&button.label),
         Element::SocialButtons(_) => {}
-        Element::EmbedVideo(_) => {
-            // Provider payloads are intentionally invisible in plain text.
-        }
-        Element::Gallery(_) => {
-            // Gallery file selection and entries are caller-resolved media.
-        }
+        Element::EmbedVideo(_) => {}
+        Element::Gallery(_) => {}
         Element::Anchor { elements, .. } => render_elements(ctx, elements),
-        Element::AnchorName(_) => {
-            // Anchor names are an invisible addition to the HTML
-            // to aid navigation. So in text mode, they are ignored.
-        }
+        Element::AnchorName(_) => {}
         Element::Link { link, label, .. } => {
             let site = ctx.info().site.as_ref();
 
             ctx.handle().get_link_label(site, link, label, |label| {
-                // Only write the label, i.e. the part that's visible
                 ctx.push_str(label);
             });
         }
         Element::FileLink { label, .. } => ctx.push_str(label),
-        Element::Image { .. } => {
-            // Text cannot render images, so we don't add anything
-        }
-        Element::Audio { .. } => {
-            // Text cannot render audio, so we don't add anything
-        }
-        Element::Video { .. } => {
-            // Text cannot render video, so we don't add anything
-        }
+        Element::Image { .. } => {}
+        Element::Audio { .. } => {}
+        Element::Video { .. } => {}
         Element::List { items, .. } => {
             if !ctx.ends_with_newline() {
                 ctx.add_newline();
@@ -197,12 +161,10 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
                 match item {
                     ListItem::SubList { element } => render_element(ctx, element),
                     ListItem::Elements { elements, .. } => {
-                        // Don't do anything if it's empty
                         if elements.is_empty() {
                             continue;
                         }
 
-                        // Render elements for this list item
                         render_elements(ctx, elements);
                         if !ctx.ends_with_newline() {
                             ctx.add_newline();
@@ -226,25 +188,15 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
 
             ctx.add_newline();
         }
-        Element::RadioButton { .. } | Element::CheckBox { .. } => {
-            // These cannot be rendered in text mode, and so are ignored.
-        }
+        Element::RadioButton { .. } | Element::CheckBox { .. } => {}
         Element::Collapsible { elements, .. } => {
-            // For collapsibles, we simply show the contents.
-            // No collapsible labels (open or close) are shown.
-
             render_elements(ctx, elements);
         }
-        Element::TableOfContents { .. } => {
-            // Doesn't make sense to have a textual table of contents, skip
-        }
+        Element::TableOfContents { .. } => {}
         Element::Footnote(_)
         | Element::FootnoteBlock { .. }
         | Element::BibliographyCite { .. }
-        | Element::BibliographyBlock { .. } => {
-            // Footnotes and bibliographies cannot be cleanly rendered in text mode,
-            // so they are skipped.
-        }
+        | Element::BibliographyBlock { .. } => {}
         Element::User { name, .. } => ctx.push_str(name),
         Element::Date { value, format, .. } => {
             ctx.push_str(&value.format_or_default(format.as_deref(), ctx.language()));
@@ -255,16 +207,11 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
             ctx.push_str(contents);
             ctx.add_newline();
         }
-        Element::Math { .. } | Element::MathInline { .. } => {
-            // No real way to render arbitrary LaTeX, so we skip it.
-        }
+        Element::Math { .. } | Element::MathInline { .. } => {}
         Element::EquationReference(name) => {
             str_write!(ctx, "[{name}]");
         }
-        Element::Embed(_) | Element::Html { .. } | Element::Iframe { .. } => {
-            // Interactive or HTML elements like this don't make sense in
-            // text mode, so we skip them.
-        }
+        Element::Embed(_) | Element::Html { .. } | Element::Iframe { .. } => {}
         Element::Include {
             variables,
             elements,
@@ -280,21 +227,14 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
             render_elements(ctx, elements);
             ctx.variables_mut().pop_scope();
         }
-        Element::Style(_) | Element::ClearFloat(_) => {
-            // Style blocks and clear float do not do anything in text mode
-        }
+        Element::Style(_) | Element::ClearFloat(_) => {}
         Element::LineBreak => ctx.add_newline(),
         Element::LineBreaks(amount) => {
             for _ in 0..amount.get() {
                 ctx.add_newline();
             }
         }
-        Element::HorizontalRule => {
-            // We could add dashes, but that looks tacky on anything
-            // that is not a fixed-width font.
-            //
-            // So we take the safe option of doing nothing.
-        }
+        Element::HorizontalRule => {}
         Element::Partial(partial) => render_partial(ctx, partial),
     }
 }

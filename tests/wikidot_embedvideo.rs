@@ -233,11 +233,6 @@ fn exact_activation_payload_and_recovery_are_typed() {
 
 #[test]
 fn head_trailing_whitespace_before_line_break_opens_the_block() {
-    // Wikidot ignores spaces and tabs between the embedvideo head's closing
-    // brackets and the end of its physical line, so `[[embedvideo]] \n`
-    // opens the same block as `[[embedvideo]]\n` (the shape used by
-    // art:rookies-episode-three-scp-008). The skipped whitespace stays part
-    // of the payload, like the leading line break in the plain shape.
     let iframe = "<iframe src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\"></iframe>";
     for (source, expected_payload) in [
         (
@@ -264,9 +259,6 @@ fn head_trailing_whitespace_before_line_break_opens_the_block() {
         assert_eq!(requirements[0].embed_video().payload(), expected_payload);
     }
 
-    // Whitespace followed by body text on the same line is not a head
-    // ending: the block stays literal, matching the div head convention and
-    // the syntax documentation's `[[embedvideo]] ... [[/embedvideo]]`.
     for source in [
         "[[embedvideo]] X[[/embedvideo]]".to_string(),
         "[[embedvideo]] ... [[/embedvideo]]".to_string(),

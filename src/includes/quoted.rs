@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Normalization for legacy includes written inside native blockquotes.
-
 use super::parse::parse_include_block;
 
 #[derive(Debug)]
@@ -34,13 +32,6 @@ struct OffsetSegment {
     original_start: usize,
 }
 
-/// Parse an include whose physical lines carry a native quote prefix.
-///
-/// The ordinary include grammar intentionally starts at `[[`. We temporarily
-/// remove exactly one caller-supplied quote depth from each physical line,
-/// parse that normalized block, then own its arguments before the temporary
-/// buffer is dropped. Offset segments translate the grammar's end position
-/// back to the original source without assuming uniform prefix spacing.
 pub(super) fn parse_quoted_include(
     input: &str,
     line_start: usize,
@@ -54,11 +45,6 @@ pub(super) fn parse_quoted_include(
     let parsed =
         normalize_and_parse(input, line_start, marker_start, quote_depth, candidate_end)
             .or_else(|| {
-                // If the first candidate terminator did not complete a syntactically
-                // valid include, parse the whole contiguous quote region once. This
-                // preserves support for quoted multiline includes containing early
-                // malformed `]]` candidates without making valid one-line includes
-                // copy the entire quoted suffix on every scanner match.
                 normalize_and_parse(
                     input,
                     line_start,

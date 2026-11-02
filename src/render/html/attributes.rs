@@ -23,17 +23,12 @@ use crate::tree::AttributeMap;
 type AttributeValue<'a> = &'a [&'a str];
 type AttributeEntry<'a> = (&'a str, AttributeValue<'a>);
 
-/// Helper struct produced by `attr!()` to make setting attributes easier.
 #[derive(Debug)]
 pub struct AddedAttributes<'a> {
     pub entries: &'a [(AttributeEntry<'a>, bool)],
     pub map: Option<&'a AttributeMap<'a>>,
 }
 
-/// Inner macro for `attr!()`. Don't use directly.
-///
-/// This converts the various combinations of specifying a
-/// particular key/value attribute pair into a tuple.
 macro_rules! attr_entry {
     ($key:expr $(,)?) => {
         attr_entry!(=> $key, &[], true)
@@ -56,10 +51,6 @@ macro_rules! attr_entry {
     };
 }
 
-/// Inner macro for `attr!()`. Don't use directly.
-///
-/// This converts the presence / absence of an `AttributeMap`
-/// into the appropriate `Option<AttributeMap>` value.
 macro_rules! attr_map {
     ($attribute_map:expr) => {
         Some(&$attribute_map)
@@ -70,12 +61,6 @@ macro_rules! attr_map {
     };
 }
 
-/// Macro to define a series of HTML attributes to add to a tag.
-///
-/// It permits arbitrary key/value pairs (also handling omitted values),
-/// adding conditions to whether the attribute should be added, and
-/// appending an `AttributeMap` after the fact, using value prepending
-/// if there are key conflicts.
 macro_rules! attr {
     (
         $( $key:expr $( => $( $value:expr )+ )? $( ; if $condition:expr )? ),* $(,)?

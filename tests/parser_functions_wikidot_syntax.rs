@@ -211,16 +211,12 @@ fn complete_live_matrix_matches_parser_function_owned_acceptance() {
         assert!(ids.insert(case_id), "duplicate case ID {case_id}");
         let source = case["source"].as_str().expect("case has source");
         let expected = if case_id == "scout-parserfn-top-expr-docs" {
-            // Fresh 2026-08-18 live evidence (#643) supersedes the older
-            // 11-decimal observation retained in this historical matrix.
             "BEGIN|-3.333333333333|END"
         } else if matches!(
             case_id,
             "scout-parserfn-top-context-time-html"
                 | "scout-parserfn-top-context-time-span-attr"
         ) {
-            // Unsupported parser functions now preserve authored provenance
-            // until the syntax owner performs Wikidot's fallback recovery.
             source
         } else {
             case["expected"].as_str().expect("case has expected output")
@@ -265,8 +261,6 @@ fn complete_live_matrix_matches_parser_function_owned_acceptance() {
 
 #[test]
 fn expression_prefix_matrix_matches_saved_wikidot() {
-    // Live provenance:
-    // ftml-oracle-20260712T211704Z/run-parser-function-prefix.
     let (text, html) = render("OMEGA_ROOT=[[#expr 7*6 ]]\nOMEGA_AFTER");
     assert!(text.contains("OMEGA_ROOT=42"), "{text}");
     assert!(text.contains("OMEGA_AFTER"), "{text}");
@@ -299,9 +293,6 @@ fn expression_prefix_matrix_matches_saved_wikidot() {
 
 #[test]
 fn document_leading_indented_quote_remains_literal_after_parser_functions() {
-    // Live provenance:
-    // ftml-oracle-20260712T214547Z/run-quote-indentation and
-    // ftml-oracle-20260712T215005Z/run-quote-document-leading-whitespace.
     let (text, html) =
         render("\n\t  > [[#expr 7*6 ]] OMEGA_FIRST\n  > OMEGA_SECOND\nOMEGA_AFTER");
     assert!(text.contains("42 OMEGA_FIRST"), "{text}");
@@ -361,9 +352,6 @@ fn simple_if_prefix_matrix_selects_only_the_live_branch() {
 
 #[test]
 fn simple_if_string_truthiness_matches_saved_wikidot() {
-    // Live provenance:
-    // ftml-oracle-20260712T225511Z/run-parser-if-string and
-    // ftml-oracle-20260712T225812Z/run-parser-if-include.
     let (text, html) = render(concat!(
         "[[#if aroace | OMEGA_STRING_TRUE | OMEGA_STRING_FALSE ]]\n",
         "[[#if {$code} | OMEGA_PLACEHOLDER_TRUE | OMEGA_PLACEHOLDER_FALSE ]]\n",
@@ -391,8 +379,6 @@ fn simple_if_string_truthiness_matches_saved_wikidot() {
 
 #[test]
 fn parser_functions_generate_comment_delimiters_before_comment_parsing() {
-    // Live provenance:
-    // ftml-oracle-20260712T230555Z/run-parser-comment-delimiter.
     let (text, html) = render(concat!(
         "[!-- [[#if aroace | --] |  ]]OMEGA_TRUE[!-- --]\n",
         "[!-- [[#if 0 | --] |  ]]OMEGA_FALSE[!-- --]\n",

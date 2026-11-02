@@ -55,12 +55,6 @@ impl TryFrom<&'_ str> for Heading {
     type Error = ();
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        // Headings take the form "\+{1,6}\*?" (regex)
-        // The trailing "*" means that the TOC is *not* applied.
-        // The heading depth is simply the ASCII length of "+" characters.
-        //
-        // This does *not* validate the regex, it assumes the string fits.
-
         let last_char = value.chars().next_back().ok_or(())?;
         let (has_toc, len) = match last_char {
             '+' => (true, value.len()),
@@ -287,8 +281,6 @@ fn true_ids() {
         }};
     }
 
-    // Enabled incrementer
-    // Simulates use_true_ids = true
     {
         let mut indexer = Incrementer::default();
         test!(
@@ -333,8 +325,6 @@ fn true_ids() {
         );
     }
 
-    // Disabled incrementer
-    // Simulates use_true_ids = false
     {
         let mut indexer = Incrementer::disabled();
         test!(indexer, 1, HtmlTag::Tag("h1"));

@@ -1,7 +1,3 @@
-//! Fixture-driven FTML syntax tests for SCP-8980.
-//!
-//! These tests track parser and syntax-representation gaps proved by the Wikijump SCP-8980 fixture work. Runtime ListPages execution belongs to Wikijump; FTML preserves the delayed module node and body template.
-
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
 use ftml::settings::{WikitextMode, WikitextSettings};
@@ -39,7 +35,6 @@ fn with_parsed_tree(input: &str, visit: impl FnOnce(&SyntaxTree<'_>)) {
     visit(&tree);
 }
 
-/// Fixture: Rokurolize/wikijump#7 and Rokurolize/wikijump#17.
 #[test]
 fn scp8980_listpages_shape_is_preserved_as_delayed_node() {
     let source = include_str!("fixtures/scp8980/listpages.ftml");

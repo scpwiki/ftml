@@ -93,8 +93,6 @@ fn includes() {
         }};
     }
 
-    // Valid cases
-
     test!("", vec![]);
     test!("[[include page]]", vec![PageRef::page_only("page")]);
     test!("[[include page ]]", vec![PageRef::page_only("page")]);
@@ -110,7 +108,6 @@ fn includes() {
     test!("[[include PAGE ]]", vec![PageRef::page_only("PAGE")]);
     test!("[[ include PAGE ]]", vec![PageRef::page_only("PAGE")]);
 
-    // Arguments
     test!("[[include apple a =1]]", vec![PageRef::page_only("apple")]);
     test!("[[include apple a= 1]]", vec![PageRef::page_only("apple")]);
     test!("[[include apple a = 1]]", vec![PageRef::page_only("apple")]);
@@ -359,7 +356,6 @@ fn includes() {
         vec![PageRef::page_only("durian")],
     );
 
-    // Off-site includes
     test!(
         "[[include component:my-thing]]",
         vec![PageRef::page_only("component:my-thing")],
@@ -380,7 +376,6 @@ fn includes() {
         )],
     );
 
-    // Multiple includes
     test!(
         "A\n[[include B]]\nC\n[[include D]]\nE\n[[include F]]\nG",
         vec![
@@ -397,7 +392,6 @@ fn includes() {
         ],
     );
 
-    // Multi-line includes
     test!("[[include page\n]]", vec![PageRef::page_only("page")]);
     test!(
         "[[include component:multi-line | contents= \nSome content here \nMore stuff]]",
@@ -423,8 +417,6 @@ fn includes() {
         "My other wonderful page!\n\n[[include component:info-ayers\n\t|lang=en\n\t|page=scp-xxxx\n\t|authorPage=http://scpwiki.com/main\n\t|comments=\n**SCP-XXXX:** My amazing skip \n**Author:** [[*user Username]] \n]]",
         vec![PageRef::page_only("component:info-ayers")],
     );
-
-    // Invalid cases
 
     test!("other text", vec![]);
     test!("include]]", vec![]);
@@ -710,8 +702,6 @@ fn include_tolerates_stray_open_brackets_before_arguments() {
 
 #[test]
 fn include_without_stray_brackets_is_unchanged() {
-    // The tolerance must not change the ordinary shape, and must not swallow an
-    // argument that is written without a leading pipe.
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let text = "[[include component:info\nitem-number= PLAIN\n|clearance= 1\n]]\n";
 

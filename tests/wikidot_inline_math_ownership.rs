@@ -48,9 +48,6 @@ fn assert_error(errors: &[ParseError], kind: ParseErrorKind, source: &str) {
 
 #[test]
 fn canonical_twenty_case_inline_math_family_stays_fixed() {
-    // Anonymous edit/PagePreviewModule evidence captured 2026-07-30:
-    // cases.jsonl SHA-256 b4e21b23f6b53c1152154c7e5ed4a8048822c7d1a17ab7d610e7d5614ec8db6c
-    // live.jsonl  SHA-256 e3d886ce3a81d2b61d2a9923944601df9bd4552861f6cab6783bd836d3ce8d00
     let cases = [
         (
             "adjacent",
@@ -181,8 +178,6 @@ fn canonical_twenty_case_inline_math_family_stays_fixed() {
 
 #[test]
 fn newline_comment_and_closer_recovery_matches_live_boundaries() {
-    // Read-only edit/PagePreviewModule probes on 2026-08-07 established the
-    // separated-newline, CRLF, comment, and malformed-closer rows below.
     for (case_id, source, expected_html) in [
         (
             "two-separated-newlines",

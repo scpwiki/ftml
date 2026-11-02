@@ -73,8 +73,6 @@ where
     Err(parser.make_err(ParseErrorKind::NoSuchEmbed))
 }
 
-// Different embed builders
-
 fn build_youtube<'p, 't>(
     parser: &'p Parser<'_, 't>,
     arguments: &'p mut Arguments<'t>,

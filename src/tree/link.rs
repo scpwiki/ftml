@@ -41,16 +41,13 @@ impl<'a> LinkLocation<'a> {
         link: Cow<'a, str>,
         settings: &WikitextSettings,
     ) -> Option<(Self, LinkType)> {
-        // Handle interwiki (starts with "!", like "!wp:Apple")
         match link.as_ref().strip_prefix('!') {
-            // Not interwiki, parse as normal
             None => {
                 let interwiki = Self::parse(link);
                 let ltype = interwiki.link_type();
                 Some((interwiki, ltype))
             }
 
-            // Try to interpret as interwiki
             Some(link) => {
                 if let Some(url) = settings.interwiki.build(link) {
                     Some((LinkLocation::Url(Cow::Owned(url)), LinkType::Interwiki))
@@ -66,9 +63,6 @@ impl<'a> LinkLocation<'a> {
     }
 
     pub fn parse(link: Cow<'a, str>) -> Self {
-        // Check for direct URLs or anchor links
-        // TODO: parse local links into LinkLocation::Page
-        // Known bug: single "/" parsed into Url instead of Page
         let link_str = &link;
         if is_url(link_str) || link_str.starts_with('#') || link_str.starts_with("/") {
             return LinkLocation::Url(link);
@@ -97,14 +91,12 @@ impl<'a> LinkLocation<'a> {
 
 #[test]
 fn test_link_location() {
-    // Use of a helper function coerces None to be the right kind of Option<T>
     #[inline]
     fn convert_opt(s: Option<&str>) -> Option<String> {
         s.map(String::from)
     }
 
     macro_rules! test {
-        // LinkLocation::Page
         ($input:expr => $site:expr, $page:expr, $extra:expr $(,)?) => {{
             let expected = LinkLocation::Page(PageRef {
                 site: convert_opt($site),
@@ -114,14 +106,12 @@ fn test_link_location() {
             test!($input; expected);
         }};
 
-        // LinkLocation::Url
         ($input:expr => $url:expr $(,)?) => {
             let url = cow!($url);
             let expected = LinkLocation::Url(url);
             test!($input; expected);
         };
 
-        // Specified LinkLocation
         ($input:expr; $expected:expr $(,)?) => {{
             let actual = LinkLocation::parse(cow!($input));
             assert_eq!(
@@ -306,7 +296,6 @@ impl<'a> TryFrom<&'a str> for LinkType {
     }
 }
 
-/// Ensure `LinkType::name()` produces the same output as serde.
 #[test]
 fn link_type_name_serde() {
     use strum::IntoEnumIterator;

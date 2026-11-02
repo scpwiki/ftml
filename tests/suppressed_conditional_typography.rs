@@ -57,12 +57,7 @@ fn render_as(
 
 #[test]
 fn replay_false_iftags_boundary_applies_wikidot_em_dash() {
-    // Anonymous scp-wiki PagePreviewModule replay case
-    // codex-ftml-v7-20260513-170309-case-000435-block-iftags-iftag,
-    // source SHA-256 ce49073035167977dc2d865795d3ce68e13fbb5b55e07d74d63760f758cf415b.
     let source = "start-[[iftags]]\nv7 body\n[[/iftags]]-middle";
-    // The captured preview evaluates iftags against an absent tag list,
-    // so the replay renders with a tag-less page.
     let tagless = PageInfo {
         tags: Vec::new(),
         ..page_info()

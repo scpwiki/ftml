@@ -54,7 +54,6 @@ fn parse_fn<'r, 't>(
         arguments.to_attribute_map(parser.settings())
     };
 
-    // Get anchor target depending on special
     let target = if flag_star {
         Some(AnchorTarget::NewTab)
     } else {
@@ -139,9 +138,6 @@ fn is_ascii_separator(ch: char) -> bool {
     matches!(ch, ' ' | '\t')
 }
 
-/// Whether text before an anchor opener already ends a separator: authored
-/// whitespace, a line start, or an inline closer whose body ended in
-/// whitespace that was moved outside it.
 fn follows_separator_or_line_start(before: &str) -> bool {
     match before.chars().next_back() {
         None | Some('\n') => true,
@@ -216,8 +212,6 @@ mod tests {
 
     #[test]
     fn wikidot_anchor_moves_authored_boundary_whitespace_outside() {
-        // Expected output follows anonymous Wikidot edit/PagePreviewModule
-        // renders of the same sources (2026-10-12).
         let cases = [
             (
                 "leading space inside second anchor",

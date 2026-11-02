@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Helper code to parse tokens out to generate recursive containers.
-
 use super::prelude::*;
 use crate::parsing::collect::collect_consume;
 use crate::tree::{AttributeMap, Container, ContainerType, Element};
@@ -46,11 +44,6 @@ pub fn collect_container<'r, 't>(
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    // An inline container can begin on one native blockquote line and end on
-    // another. Keep the physical quote prefix out of the nested parse instead
-    // of dispatching it as a fresh blockquote on every speculative delimiter
-    // branch. Without this cursor, repeated `> //` / `> text//` pairs cause
-    // combinatorial retries.
     let installed_quote_cursor = if parser.quote_body_cursor().is_none()
         && let Some(required_depth) = parser.native_blockquote_depth()
     {
@@ -60,7 +53,6 @@ pub fn collect_container<'r, 't>(
         false
     };
 
-    // Iterate and consume all the tokens
     let collection = collect_consume(parser, rule, closes, invalids, kind);
     if installed_quote_cursor {
         parser.set_quote_body_cursor(None);
@@ -68,7 +60,6 @@ pub fn collect_container<'r, 't>(
     let collection = collection?;
     let (elements, errors, paragraph_safe) = collection.into();
 
-    // Package into a container
     let container = Container::new(container_type, elements, AttributeMap::new());
     let element = Element::Container(container);
     let safe = paragraph_safe && container_type.paragraph_safe();

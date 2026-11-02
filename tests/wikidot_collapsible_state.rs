@@ -97,10 +97,6 @@ fn error_kinds(errors: &[ParseError]) -> Vec<ParseErrorKind> {
 
 #[test]
 fn v7_duplicate_and_empty_folded_values_keep_the_collapsible() {
-    // Anonymous scp-wiki edit/PagePreviewModule observations from the V7
-    // campaign, captured 2026-07-30. Source SHA-256 values:
-    // duplicate 7cb87ace4cf0280989623edfbaec18205e12d02ed0bcb6eb450347c4f170f816
-    // empty     f5b8f71e3bef49b61b4a653f5adba3983c48b24ef2fac8058e9561bc444af35e
     let expected = concat!(
         r#"<div class="collapsible-block"><div class="collapsible-block-folded">"#,
         r#"<a class="collapsible-block-link" href="javascript:;">+&nbsp;show&nbsp;block</a>"#,
@@ -123,8 +119,6 @@ fn v7_duplicate_and_empty_folded_values_keep_the_collapsible() {
 
 #[test]
 fn full_v7_collapsible_family_matches_saved_page_preview() {
-    // Provenance: anonymous public scp-wiki edit/PagePreviewModule capture,
-    // 2026-07-30, FTML tree 59f18f01a270782e6ac6b36c569593ecbc051758.
     let ordinary = [
         ("[[collapsible]]\nv7 body\n[[/collapsible]]", "v7 body"),
         ("[[COLLAPSIBLE]]\nv7 body\n[[/COLLAPSIBLE]]", "v7 body"),
