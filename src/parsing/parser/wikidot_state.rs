@@ -20,6 +20,7 @@ pub(super) struct WikidotState {
     simple_table_crossed_closers: u16,
     center_body_depth: u16,
     flags: u8,
+    definition_list_line: bool,
 }
 
 impl WikidotState {
@@ -183,6 +184,14 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_in_wikidot_iftags_span(&mut self, value: bool) {
         set_flag(&mut self.wikidot.flags, IFTAGS_LITERAL_SPAN, value);
+    }
+
+    pub(crate) fn in_wikidot_definition_list_line(&self) -> bool {
+        self.wikidot.definition_list_line
+    }
+
+    pub(crate) fn set_in_wikidot_definition_list_line(&mut self, value: bool) {
+        self.wikidot.definition_list_line = value;
     }
 
     pub(crate) fn in_wikidot_simple_table_cell(&self) -> bool {
