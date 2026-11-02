@@ -832,6 +832,7 @@ where
             && block_rule.name == "block-math";
         let mut nested_wikidot_math = 0;
         let mut suppress_nested_wikidot_math = false;
+        let mut last_nested_close = None;
         let start = self.current();
 
         loop {
@@ -844,6 +845,7 @@ where
             if let Some(end) = at_end_block {
                 if nested_wikidot_math > 0 {
                     nested_wikidot_math -= 1;
+                    last_nested_close = Some((end, self.clone()));
                     self.update(&before_end);
                 } else {
                     return Ok((start, end));
@@ -867,11 +869,20 @@ where
             }
 
             // Run the passed-in closure
-            process(self)?;
+            let step_result = process(self).and_then(|()| self.step());
 
             // Step and continue
-            self.step()?;
-            first = false;
+            match step_result {
+                Ok(_) => first = false,
+                Err(error) => {
+                    if let Some((end, resume)) = last_nested_close.take() {
+                        self.update(&resume);
+                        return Ok((start, end));
+                    }
+
+                    return Err(error);
+                }
+            }
         }
     }
 
