@@ -8,6 +8,7 @@ const COLLAPSIBLE_CLOSED_AT_DEEPER_QUOTE: u8 = 1 << 3;
 const SIMPLE_TABLE_CELL: u8 = 1 << 4;
 const MIXED_PARAGRAPH_OWNERSHIP: u8 = 1 << 5;
 const COLLAPSIBLE_CONTENT_CLOSED: u8 = 1 << 6;
+const IFTAGS_LITERAL_SPAN: u8 = 1 << 7;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WikidotState {
@@ -180,6 +181,14 @@ impl Parser<'_, '_> {
             COLLAPSIBLE_CLOSED_AT_DEEPER_QUOTE,
             value,
         );
+    }
+
+    pub(crate) fn in_wikidot_iftags_span(&self) -> bool {
+        self.wikidot.flags & IFTAGS_LITERAL_SPAN != 0
+    }
+
+    pub(crate) fn set_in_wikidot_iftags_span(&mut self, value: bool) {
+        set_flag(&mut self.wikidot.flags, IFTAGS_LITERAL_SPAN, value);
     }
 
     pub(crate) fn in_wikidot_simple_table_cell(&self) -> bool {
