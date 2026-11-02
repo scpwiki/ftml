@@ -100,4 +100,53 @@ mod tests {
         );
         assert_eq!(html.matches("<strong>").count(), 2, "{html}");
     }
+
+    #[test]
+    fn wikidot_bold_comment_only_line_keeps_one_line_break() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("**a\n[!-- c --]\nb**");
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(html, "<p><strong>a<br>\nb</strong></p>");
+    }
+
+    #[test]
+    fn wikidot_multiline_inline_formatting_matches_live_structure() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(concat!(
+            "**a\nb**\n\n",
+            "//a\nb//\n\n",
+            "--a\nb--\n\n",
+            "^^a\nb^^\n\n",
+            ",,a\nb,,\n\n",
+            "{{a\nb}}\n\n",
+            "##c00|a\nb##\n\n",
+            "__a\nb__\n\n",
+            "--a\n--\n\n",
+            "--a \nb--\n\n",
+            "--a\nb --\n\n",
+            "**a\n[!-- c --]\nb**\n",
+        ));
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(
+            html,
+            concat!(
+                "<p><strong>a<br>\nb</strong></p>",
+                "<p><em>a<br>\nb</em></p>",
+                "<p><span style=\"text-decoration: line-through;\">a<br>\nb</span></p>",
+                "<p><sup>a<br>\nb</sup></p>",
+                "<p><sub>a<br>\nb</sub></p>",
+                "<p><tt>a<br>\nb</tt></p>",
+                "<p><span style=\"color: #c00\">a<br>\nb</span></p>",
+                "<p><span style=\"text-decoration: underline;\">a<br>\nb</span></p>",
+                "<p><span style=\"text-decoration: line-through;\">a<br>\n</span></p>",
+                "<p><span style=\"text-decoration: line-through;\">a<br>\nb</span></p>",
+                "<p>\u{2014}a<br>\nb \u{2014}</p>",
+                "<p><strong>a<br>\nb</strong></p>",
+            ),
+        );
+    }
 }

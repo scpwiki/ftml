@@ -53,8 +53,30 @@ pub fn collect_consume_keep<'r, 't>(
 ) -> ParseResult<'r, 't, (Vec<Element<'t>>, &'r ExtractedToken<'t>)> {
     let mut all_elements = Vec::new();
 
+    let mut comment_line_break_pending = false;
     let collection = collect(parser, rule, closes, invalids, kind, |parser| {
-        consume(parser)?.map_ok(|elements| append_elements(&mut all_elements, elements))
+        let drop_line_break = comment_line_break_pending;
+        comment_line_break_pending = false;
+        let comment_line = parser.settings().layout.legacy()
+            && parser.current().token == Token::LeftComment
+            && parser.start_of_line();
+        let success = consume(parser)?;
+        if comment_line
+            && matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            )
+        {
+            comment_line_break_pending = true;
+        }
+        Ok(success.map(|elements| {
+            if !(drop_line_break
+                && matches!(elements, Elements::Single(Element::LineBreak))
+                && matches!(all_elements.last(), Some(Element::LineBreak)))
+            {
+                append_elements(&mut all_elements, elements);
+            }
+        }))
     })?;
     let (last, errors, paragraph_safe) = collection.into();
     if parser.settings().layout.legacy() {

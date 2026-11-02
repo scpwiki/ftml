@@ -77,8 +77,22 @@ fn own_line_rules(token: Token) -> &'static [Rule] {
 fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming newline token as line break");
 
+    if line_break_skipped_for_own_line_block(parser) {
+        debug!("Skipping line break element because of upcoming token");
+        return ok!(Elements::None);
+    }
+
+    ok!(Element::LineBreak)
+}
+
+pub(crate) fn line_break_skipped_for_own_line_block<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> bool
+where
+    'r: 't,
+{
     let quote_aware = parser.quote_body_cursor().is_some();
-    let upcoming_skip = parser.evaluate_fn(|parser| {
+    parser.evaluate_fn(|parser| {
         parser.step()?;
         let padded = parser.current().token == Token::Whitespace;
         parser.get_optional_space()?;
@@ -108,14 +122,7 @@ fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
 
         let rules = own_line_rules(parser.current().token);
         Ok(rules.iter().any(|rule| rule.try_consume(parser).is_ok()))
-    });
-
-    if upcoming_skip {
-        debug!("Skipping line break element because of upcoming token");
-        return ok!(Elements::None);
-    }
-
-    ok!(Element::LineBreak)
+    })
 }
 
 #[inline]
