@@ -687,7 +687,12 @@ fn wikidot_spaced_inner_iftags_preserves_the_residual_quote_marker() {
 
 #[test]
 fn wikidot_nested_tight_iftags_pair_without_crossing() {
-    // Frozen theme sources use adjacent tight gates; pairing must remain LIFO.
+    // ftml #792: live Wikidot pairs iftags at the text level, so the
+    // outer gate's span runs to the second closer and the inner gate is
+    // literal body text, its condition never evaluated. The earlier LIFO
+    // expectation encoded FTML's old nesting, which #792 showed is not
+    // Wikidot's behavior (sandbox probes tq2/tq3, 2026-11-02: the plain
+    // shape renders the body with the inner tags literal).
     let (text, html) = render_text_and_html(concat!(
         ">[[iftags -codex-never]]\n",
         ">[[iftags +codex-never]]\n",
@@ -697,10 +702,11 @@ fn wikidot_nested_tight_iftags_pair_without_crossing() {
         "OMEGA_NESTED_TIGHT_AFTER",
     ));
 
-    assert!(!text.contains("OMEGA_NESTED_TIGHT_BODY"), "{text}");
+    assert!(text.contains("OMEGA_NESTED_TIGHT_BODY"), "{text}");
     assert!(text.contains("OMEGA_NESTED_TIGHT_AFTER"), "{text}");
-    assert!(!html.contains("[[iftags"), "{html}");
-    assert!(!html.contains("[[/iftags"), "{html}");
+    assert!(text.contains("[[iftags +codex-never]]"), "{text}");
+    assert!(html.contains("[[iftags +codex-never]]"), "{html}");
+    assert!(html.contains("[[/iftags]]"), "{html}");
 }
 
 #[test]
