@@ -251,6 +251,47 @@ fn bare_iftags_keeps_tag_dependent_semantics() {
 }
 
 #[test]
+fn false_pair_keeps_trailing_token_literal() {
+    // ftml #809: two false openers pair with the single closer via the
+    // walk's backtracking fallback; whatever follows the pair is outside
+    // the span and stays literal (live-probed shapes tla-018/024/036/086,
+    // page tagged `fruit`).
+    let fruit = vec![Cow::Borrowed("fruit")];
+    assert_eq!(
+        render_layout(
+            "[[iftags -fruit]]\n[[iftags -fruit]]\n[[/iftags]]\ntext4",
+            Layout::Wikidot,
+            fruit.clone(),
+        ),
+        "text4",
+    );
+    assert_eq!(
+        render_layout(
+            "[[iftags -fruit]]\n[[iftags -fruit]]\n[[/iftags]]\n[[iftags -fruit]]",
+            Layout::Wikidot,
+            fruit.clone(),
+        ),
+        "[[iftags -fruit]]",
+    );
+    assert_eq!(
+        render_layout(
+            "[[iftags -fruit]]\n[[iftags +other]]\n[[/iftags]]\n[[iftags -fruit]]",
+            Layout::Wikidot,
+            fruit.clone(),
+        ),
+        "[[iftags -fruit]]",
+    );
+    assert_eq!(
+        render_layout(
+            "[[iftags +other]]\n[[iftags +other]]\n[[/iftags]]\ntext4",
+            Layout::Wikidot,
+            fruit,
+        ),
+        "text4",
+    );
+}
+
+#[test]
 fn native_layout_still_nests() {
     // The Wikijump layout keeps proper nesting; pairing is legacy-only.
     assert_eq!(
