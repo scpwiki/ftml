@@ -45,8 +45,20 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "HTML doesn't allow score flag");
     assert_block_name(&BLOCK_HTML, name);
 
-    if parser.settings().layout.legacy() && !parser.discarding_hidden_body() && in_head {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
+        if in_head {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+        let source = parser.full_text().inner();
+        let name_start = (name.as_ptr() as usize)
+            .checked_sub(source.as_ptr() as usize)
+            .expect("parsed HTML block name belongs to the source");
+        let owner_start = source[..name_start]
+            .rfind("[[")
+            .expect("parsed HTML block name follows its opener");
+        if owner_start > 0 && !source[..owner_start].ends_with('\n') {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
     }
 
     let (arguments, body_start) =
@@ -403,6 +415,67 @@ mod tests {
                 .render(&tree, &page_info, &settings)
                 .body,
             "<p>before<br>\n[[html]]<br>\n&lt;b&gt;X&lt;/b&gt;<br>\n[[/html]]</p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_midline_html_markers_stay_literal_inside_span() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization =
+            crate::tokenize("prefix [[span]] [[html]] [[/span]] [[/html]]");
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+
+        assert!(tree.html_blocks.is_empty(), "{tree:#?}");
+        assert_eq!(
+            crate::render::html::HtmlRender
+                .render(&tree, &page_info, &settings)
+                .body,
+            "<p>prefix <span>[[html]]</span> [[/html]]</p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_midline_html_markers_stay_literal() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+
+        for (source, expected) in [
+            (
+                "prefix [[html]] [[/html]]",
+                "<p>prefix [[html]] [[/html]]</p>",
+            ),
+            (
+                "prefix [[html]]x[[/html]] tail",
+                "<p>prefix [[html]]x[[/html]] tail</p>",
+            ),
+        ] {
+            let tokenization = crate::tokenize(source);
+            let (tree, _errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            let html = crate::render::html::HtmlRender
+                .render(&tree, &page_info, &settings)
+                .body;
+
+            assert!(tree.html_blocks.is_empty(), "{source:?}: {tree:#?}");
+            assert_eq!(html, expected, "{source:?}");
+        }
+    }
+
+    #[test]
+    fn wikidot_html_block_at_line_start_after_text_still_parses() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("prefix\n[[html]]\nx\n[[/html]]");
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(tree.html_blocks.len(), 1, "{tree:#?}");
+        assert!(
+            crate::render::html::HtmlRender
+                .render(&tree, &page_info, &settings)
+                .body
+                .contains("html-block-iframe"),
         );
     }
 }
