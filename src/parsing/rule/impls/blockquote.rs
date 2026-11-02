@@ -28,7 +28,7 @@ use crate::parsing::paragraph::{
 };
 use crate::parsing::parser::QuoteBodyLineStatus;
 use crate::parsing::{DepthItem, DepthList, process_depths};
-use crate::tree::{AttributeMap, Container, ContainerType};
+use crate::tree::{AttributeMap, Container, ContainerType, ListItem, ListType};
 
 const MAX_BLOCKQUOTE_DEPTH: usize = 128;
 
@@ -37,6 +37,7 @@ struct NativeQuoteRow<'t> {
     elements: Vec<Element<'t>>,
     paragraph_safe: bool,
     empty_spaced: bool,
+    indent: usize,
 }
 
 fn consume_deeper_collapsible_close<'r, 't>(
@@ -153,6 +154,7 @@ fn try_consume_fn<'r, 't>(
             parser.mark_virtual_start_of_line();
         }
         let content_start = parser.current().span.start;
+        let row_indent = quote_row_indent(parser.full_text().inner(), content_start);
 
         if absolute_depth > MAX_BLOCKQUOTE_DEPTH {
             return Err(parser.make_err(ParseErrorKind::BlockquoteDepthExceeded));
@@ -175,6 +177,7 @@ fn try_consume_fn<'r, 't>(
                         elements: vec![control],
                         paragraph_safe: false,
                         empty_spaced: false,
+                        indent: row_indent,
                     },
                 ));
             } else {
@@ -314,6 +317,7 @@ fn try_consume_fn<'r, 't>(
             elements,
             paragraph_safe,
             empty_spaced: empty_spaced_row,
+            indent: row_indent,
         };
         if flatten_following_rows {
             escaped_rows.push(row);
@@ -512,6 +516,64 @@ fn merge_adjacent_native_list_rows(
     merged
 }
 
+fn quote_row_indent(source: &str, content_start: usize) -> usize {
+    let line_start = source[..content_start]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    let prefix = &source[line_start..content_start];
+    let Some(marker) = prefix.rfind('>') else {
+        return 0;
+    };
+    let tail = &prefix[marker + 1..];
+    if tail.chars().all(|c| matches!(c, ' ' | '\t')) {
+        tail.len().saturating_sub(1)
+    } else {
+        0
+    }
+}
+
+fn insert_native_list_item<'t>(
+    list: &mut Element<'t>,
+    depth: usize,
+    ltype: ListType,
+    elements: Vec<Element<'t>>,
+) -> bool {
+    let Element::List { items, .. } = list else {
+        return false;
+    };
+    if depth == 0 {
+        items.push(ListItem::Elements {
+            attributes: AttributeMap::new(),
+            elements,
+        });
+        return true;
+    }
+    if !matches!(items.last(), Some(ListItem::Elements { .. })) {
+        items.push(ListItem::Elements {
+            attributes: AttributeMap::new(),
+            elements: Vec::new(),
+        });
+    }
+    let Some(ListItem::Elements {
+        elements: last_elements,
+        ..
+    }) = items.last_mut()
+    else {
+        return false;
+    };
+    if !matches!(last_elements.last(), Some(Element::List { .. })) {
+        last_elements.push(Element::List {
+            ltype,
+            items: Vec::new(),
+            attributes: AttributeMap::new(),
+        });
+    }
+    let Some(sublist) = last_elements.last_mut() else {
+        return false;
+    };
+    insert_native_list_item(sublist, depth - 1, ltype, elements)
+}
+
 fn merge_native_list_rows<'t>(
     previous: &mut NativeQuoteRow<'t>,
     current: &mut NativeQuoteRow<'t>,
@@ -519,18 +581,19 @@ fn merge_native_list_rows<'t>(
     if previous.empty_spaced || current.empty_spaced {
         return false;
     }
+    let depth = current.indent.saturating_sub(previous.indent);
     let Some(previous_list) = native_list_element(previous) else {
-        return false;
-    };
-    let Some(current_list) = native_list_element(current) else {
         return false;
     };
     let Element::List {
         ltype: previous_type,
-        items: previous_items,
         ..
-    } = previous_list
+    } = &*previous_list
     else {
+        return false;
+    };
+    let previous_type = *previous_type;
+    let Some(current_list) = native_list_element(current) else {
         return false;
     };
     let Element::List {
@@ -541,11 +604,17 @@ fn merge_native_list_rows<'t>(
     else {
         return false;
     };
-    if previous_type != current_type {
+    let current_type = *current_type;
+    if depth == 0 && previous_type != current_type {
         return false;
     }
-    previous_items.append(current_items);
-    true
+    if current_items.len() != 1 {
+        return false;
+    }
+    let Some(ListItem::Elements { elements, .. }) = current_items.pop() else {
+        return false;
+    };
+    insert_native_list_item(previous_list, depth, current_type, elements)
 }
 
 fn native_list_element<'a, 't>(
@@ -1000,5 +1069,75 @@ mod tests {
             assert_eq!(html.matches("<br>").count(), 127, "{open}: {html}");
             assert_eq!(html.matches("quoted text").count(), 64, "{open}: {html}");
         }
+    }
+
+    #[test]
+    fn native_blockquote_clear_float_row_is_consumed() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut input = String::from(
+            "> ----\n\n> ||~ Head A ||~ Head B ||\n> || 1 || 2 ||\n\n> [[div class=\"note\"]]\n> +++ Inside div\n> [[/div]]\n\n> [[=]]\n> Centered\n> [[/=]]\n\n> ~~~~\n",
+        );
+        crate::preprocess(&mut input);
+        let tokenization = crate::tokenize(&input);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        assert!(errors.is_empty(), "{errors:#?}");
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(
+            html.contains(
+                "<div style=\"clear:both; height: 0px; font-size: 1px\"></div>"
+            ),
+            "{html}",
+        );
+        assert!(!html.contains("~~~~"), "{html}");
+        assert!(
+            html.contains("<h3 id=\"toc0\"><span>Inside div</span></h3>"),
+            "{html}",
+        );
+    }
+
+    #[test]
+    fn native_blockquote_indented_heading_marker_stays_literal() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut input = String::from(
+            "> + Level one\n> ++ Level two\n> +++ Level three\n> ++++ Level four\n> +++++ Level five\n> ++++++ Level six\n\n> +++* Hidden from the table of contents\n> +++ **Bold heading**\n>  +++ Indented is not a heading\n>> +++ Nested depth\n",
+        );
+        crate::preprocess(&mut input);
+        let tokenization = crate::tokenize(&input);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        assert!(errors.is_empty(), "{errors:#?}");
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(
+            html.contains("<p>+++ Indented is not a heading</p>"),
+            "{html}",
+        );
+        assert!(
+            html.contains("<h3 id=\"toc7\"><span>Nested depth</span></h3>"),
+            "{html}",
+        );
+        assert!(!html.contains("toc8"), "{html}");
+    }
+
+    #[test]
+    fn native_blockquote_indented_list_items_nest() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut input = String::from(
+            "> * Apple\n>  * Banana\n>   * Cherry\n> * Durian\n\n> # One\n> # Two\n\n> : Term : Definition\n",
+        );
+        crate::preprocess(&mut input);
+        let tokenization = crate::tokenize(&input);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        assert!(errors.is_empty(), "{errors:#?}");
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(html.contains("<li>Apple\n<ul>"), "{html}");
+        assert!(html.contains("<li>Banana\n<ul>"), "{html}");
+        assert!(html.contains("<li>Cherry</li>"), "{html}");
+        assert!(html.contains("<li>Durian</li>"), "{html}");
+        assert_eq!(html.matches("<ul>").count(), 3, "{html}");
+        assert_eq!(html.matches("</ul>").count(), 3, "{html}");
+        assert!(html.contains("<li>One</li>"), "{html}");
+        assert!(html.contains("<dt>Term</dt>"), "{html}");
     }
 }

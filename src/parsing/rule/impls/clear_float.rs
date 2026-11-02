@@ -40,7 +40,9 @@ fn try_consume_fn<'r, 't>(
         let line_end = source[current.span.end..]
             .find(['\r', '\n'])
             .map_or(source.len(), |offset| current.span.end + offset);
-        if !starts_line || current.span.end != line_end {
+        if !(starts_line || parser.in_native_blockquote_line())
+            || current.span.end != line_end
+        {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
     }
