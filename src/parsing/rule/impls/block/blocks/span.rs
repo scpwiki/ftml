@@ -284,8 +284,30 @@ mod tests {
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
         assert_eq!(
             html,
-            "<p><span class=\"a\"><strong>X</strong></span><strong><span class=\"b\">:</span></strong> </p>",
+            "<p><span class=\"a\"><strong>X</strong></span><strong><span class=\"b\">:</span></strong></p>",
         );
+    }
+
+    #[test]
+    fn wikidot_span_space_before_final_close_is_dropped() {
+        let source = "[[span]]x [[/span]]";
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(html, "<p><span>x</span></p>");
+    }
+
+    #[test]
+    fn wikidot_span_space_before_mid_text_close_is_kept() {
+        let source = "[[span]]x [[/span]] y";
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(html, "<p><span>x</span> y</p>");
     }
 
     #[test]
