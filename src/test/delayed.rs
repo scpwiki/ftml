@@ -1746,6 +1746,39 @@ fn right_angle_run_touching_a_suppressed_seam_converts_every_pair() {
 }
 
 #[test]
+fn left_angle_and_ellipsis_runs_touching_a_suppressed_seam_convert_with_joined_grouping()
+{
+    // Live Wikidot renders a hidden block as if it were absent, so each of
+    // these must equal the typography of the joined text (evidence:
+    // verification/seam-typography/evidence/wikidot-2026-11-01.json).
+    assert_eq!(render("<[!-- %%title_linked%% --]<<<"), "<p>««</p>");
+    assert_eq!(render(".[!-- %%title_linked%% --]..."), "<p>….</p>");
+    assert_eq!(render(".[!-- %%title_linked%% --]....."), "<p>……</p>");
+    // A run starting exactly at the seam was grouped without its left
+    // neighbour, so a seam flush with the run start counts too.
+    assert_eq!(render("a[!-- %%title_linked%% --]..."), "<p>a…</p>");
+    // An authored literal angle quote next to raw angles across a seam
+    // is not regrouped: `<`, `«`, `<` stay as authored. Decoding a
+    // produced `«` back into `<<` would break this case.
+    assert_eq!(
+        render("<[!-- %%title_linked%% --]\u{ab}<"),
+        "<p>&lt;«&lt;</p>",
+    );
+}
+
+#[test]
+fn runtime_origin_text_stays_a_typography_barrier_at_a_seam() {
+    // Modeled on the runtime--authored cases in
+    // suppressed_delayed_owners_apply_typography_only_across_authored_text:
+    // the `<` from the runtime segment must not group with the authored
+    // `<<` across the suppressed comment. The authored pair still
+    // converts on its own, because its run starts at the seam.
+    let source = "runtime-<[!-- %%title_linked%% --]<<";
+    let input = page_link_input_with_runtime_prefix(source, "runtime-<");
+    assert_eq!(render_input(&input), "<p>runtime-&lt;«</p>");
+}
+
+#[test]
 fn suppressed_delayed_owners_apply_typography_only_across_authored_text() {
     assert_eq!(
         render("left-[[iftags +missing]]\n%%title_linked%%\n[[/iftags]]-right"),

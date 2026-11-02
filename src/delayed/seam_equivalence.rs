@@ -20,19 +20,37 @@
 
 //! Exhaustive check that suppression seams are transparent to Wikidot typography.
 //!
-//! Property: take authored text segments separated by typography boundaries (seams).
-//! Typographically substitute each segment alone, as the delayed pipeline does for
-//! authored segments, then resolve the seams. The joined text of the result must equal
-//! `substitute_wikidot` run on the plain concatenation of the raw segments, as if the
-//! suppressed content had never been in the source. It must also not panic and must
-//! leave no seam behind. Run through `verification/seam-typography/run.sh`; see the
-//! `verify-seam-typography` skill. The test is `#[ignore]`.
+//! Property, modeled on the real preprocess path: join the authored text
+//! segments with a hidden conditional block between each pair of neighbours,
+//! `seg0 + BLOCK + seg1 + ...` where `BLOCK` is a false `[[iftags]]` block,
+//! and run the preprocess-path typography
+//! (`substitute_wikidot_deferring_conditionals`) on the whole source, exactly
+//! as `preprocess_internal` does for a page. Split the output on the literal
+//! block, insert a typography boundary between the pieces, and resolve the
+//! seams. The joined text of the result must equal `substitute_wikidot` run
+//! on the plain concatenation of the raw segments, as if the suppressed
+//! content had never been in the source. It must also not panic and must
+//! leave no seam behind. Run through `verification/seam-typography/run.sh`;
+//! see the `verify-seam-typography` skill. The tests are `#[ignore]`.
+//!
+//! No production caller typographs segments one at a time: the preprocess
+//! path typographs the whole source, and Deepwell typographs the whole row
+//! template before allocating its slots. The earlier per-segment model
+//! described no real caller.
 
 use super::seam::resolve_static_suppressions;
 use crate::delayed::DelayedElement;
-use crate::preproc::typography::substitute_wikidot;
+use crate::preproc::typography::{
+    substitute_wikidot, substitute_wikidot_deferring_conditionals,
+};
 use crate::tree::Element;
 use std::borrow::Cow;
+
+/// The hidden block placed between segments. Its body is a single text
+/// character, and the block itself contains no typography sequences, so
+/// the preprocess-path typography leaves it byte-identical and the
+/// output can be split on it literally.
+const BLOCK: &str = "[[iftags +zz-no-such-tag]]x[[/iftags]]";
 
 /// Text tokens; `None` in a sequence is a seam. Dash runs are excluded: they become
 /// separate dash elements, not text.
@@ -44,6 +62,15 @@ fn typography(raw: &str) -> String {
     let mut text = raw.to_owned();
     substitute_wikidot(&mut text);
     text
+}
+
+/// Run the preprocess-path typography on `source` (which contains
+/// [`BLOCK`] between its segments) and return the pieces obtained by
+/// splitting the output on the literal block.
+fn preprocess_pieces(source: &str) -> Vec<String> {
+    let mut text = source.to_owned();
+    substitute_wikidot_deferring_conditionals(&mut text);
+    text.split(BLOCK).map(str::to_owned).collect()
 }
 
 /// Names a mismatch by the characters on which the two strings disagree (as multisets),
@@ -66,8 +93,26 @@ fn difference_class(got: &str, expected: &str) -> String {
     class
 }
 
+/// Whether the input's token pick contains a `>` or `>>` token. Such
+/// failures are labelled with a `right-angle:` prefix, so a class that
+/// does not involve right angles can never hide among them.
+fn pick_has_right_angle(pick: &[usize]) -> bool {
+    pick.iter()
+        .any(|&p| p < TOKENS.len() && matches!(TOKENS[p], ">" | ">>"))
+}
+
 /// `pick` indexes TOKENS, with `TOKENS.len()` meaning a seam.
 fn check(pick: &[usize]) -> Option<(String, String)> {
+    check_inner(pick).map(|(class, message)| {
+        if pick_has_right_angle(pick) {
+            (format!("right-angle:{class}"), message)
+        } else {
+            (class, message)
+        }
+    })
+}
+
+fn check_inner(pick: &[usize]) -> Option<(String, String)> {
     let seam = TOKENS.len();
     let mut segments: Vec<String> = vec![String::new()];
     for &p in pick {
@@ -85,13 +130,19 @@ fn check(pick: &[usize]) -> Option<(String, String)> {
             .join(" | ")
     };
 
+    // The real path: one typography pass over the whole source with a
+    // hidden block between the segments, then split on the block.
+    let with_blocks = segments.join(BLOCK);
+    let pieces = preprocess_pieces(&with_blocks);
+    debug_assert_eq!(pieces.len(), segments.len());
+
     let mut elements: Vec<Element<'static>> = Vec::new();
-    for (i, segment) in segments.iter().enumerate() {
+    for (i, piece) in pieces.iter().enumerate() {
         if i > 0 {
             elements.push(Element::Delayed(DelayedElement::typography_boundary()));
         }
-        if !segment.is_empty() {
-            elements.push(Element::Text(Cow::Owned(typography(segment))));
+        if !piece.is_empty() {
+            elements.push(Element::Text(Cow::Owned(piece.clone())));
         }
     }
     let had_seam = segments.len() > 1;
@@ -182,4 +233,184 @@ fn seams_are_transparent_to_wikidot_typography() {
         "{failure_count} inputs broke the property in {} classes (listed above)",
         shortest.len()
     );
+}
+
+/// End-to-end layer: the split harness above does not exercise the
+/// parser, so this test runs the full pipeline (preprocess, tokenize,
+/// parse, render) at bound 4 on sources with an `a` prefix, comparing
+/// the with-block source against the joined source. The prefix keeps
+/// the conditional block away from the paragraph start. Inputs whose
+/// pick contains a `>` or `>>` token belong to the known right-angle
+/// gap and are reported, not asserted. Mismatches that disappear when
+/// spaces are removed from both renders are whitespace-only: how many
+/// spaces survive around a suppressed block is a pre-existing seam
+/// behaviour of the paragraph stack (verified identical on the parent
+/// commit of the #775 change, e.g. `a ` + BLOCK + ` "` renders two
+/// spaces where the joined `a  "` renders one) and is reported, not
+/// asserted; every other mismatch fails.
+#[test]
+#[ignore = "end-to-end seam check; run explicitly with --ignored"]
+fn seams_are_transparent_end_to_end() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::{Render, html::HtmlRender};
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    fn render(source: &str) -> String {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut text = source.to_owned();
+        crate::preprocess_for_layout(&mut text, Layout::Wikidot);
+        let tokens = crate::tokenize(&text);
+        let (tree, _) = crate::parse(&tokens, &page_info, &settings).into();
+        HtmlRender.render(&tree, &page_info, &settings).body
+    }
+
+    let max_tokens = 4usize;
+    let choices = TOKENS.len() + 1;
+    let seam = TOKENS.len();
+    let mut checked = 0u64;
+    let mut right_angle_failures = 0u64;
+    let mut whitespace_failures = 0u64;
+    let mut other_failures = 0u64;
+    let mut failures: Vec<String> = Vec::new();
+    for len in 0..=max_tokens {
+        let mut pick = vec![0usize; len];
+        loop {
+            checked += 1;
+            let mut segments: Vec<String> = vec![String::new()];
+            for &p in &pick {
+                if p == seam {
+                    segments.push(String::new());
+                } else {
+                    segments.last_mut().unwrap().push_str(TOKENS[p]);
+                }
+            }
+            if segments.len() > 1 {
+                let with_blocks = format!("a{}", segments.join(BLOCK));
+                let joined = format!("a{}", segments.concat());
+                let got = render(&with_blocks);
+                let expected = render(&joined);
+                if got != expected {
+                    if pick_has_right_angle(&pick) {
+                        right_angle_failures += 1;
+                    } else if got.replace(' ', "") == expected.replace(' ', "") {
+                        whitespace_failures += 1;
+                    } else {
+                        other_failures += 1;
+                        if failures.len() < 10 {
+                            failures.push(format!(
+                                "segments {:?}: with-block rendered {got:?} but joined rendered {expected:?}",
+                                segments.join(" | ")
+                            ));
+                        }
+                    }
+                }
+            }
+            let mut pos = 0;
+            while pos < len {
+                pick[pos] += 1;
+                if pick[pos] < choices {
+                    break;
+                }
+                pick[pos] = 0;
+                pos += 1;
+            }
+            if pos == len {
+                break;
+            }
+        }
+    }
+    println!(
+        "SEAM-E2E max_tokens={max_tokens} checked={checked} right_angle_failures={right_angle_failures} whitespace_failures={whitespace_failures} other_failures={other_failures}"
+    );
+    for failure in &failures {
+        println!("E2E-FAIL {failure}");
+    }
+    assert!(
+        other_failures == 0,
+        "{other_failures} end-to-end seam mismatches outside the right-angle classes: {failures:?}"
+    );
+}
+
+/// Plain-parse regression tests for ftml #775: a hidden `[[iftags]]`
+/// block splitting a quote or ellipsis run must render exactly as the
+/// joined text does. Live Wikidot evidence is in
+/// `verification/seam-typography/evidence/wikidot-2026-11-01.json` and
+/// `wikidot-2026-11-02.json`. Unlike the exhaustive harness above, this
+/// test is not `#[ignore]`: it runs the real pipeline (preprocess,
+/// tokenize, parse, render) on the recorded shapes only.
+#[test]
+fn plain_parse_hidden_iftags_typography_matches_joined_text() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::{Render, html::HtmlRender};
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    fn render(source: &str) -> String {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut text = source.to_owned();
+        crate::preprocess_for_layout(&mut text, Layout::Wikidot);
+        let tokens = crate::tokenize(&text);
+        let (tree, _) = crate::parse(&tokens, &page_info, &settings).into();
+        HtmlRender.render(&tree, &page_info, &settings).body
+    }
+
+    // `PageInfo::dummy()` carries neither tag, so the `+` block is
+    // hidden and the `-` block is shown.
+    const HIDDEN: &str = "[[iftags +zz-no-such-tag]]x[[/iftags]]";
+
+    // The issue table (all four rows).
+    assert_eq!(render(&format!("<{HIDDEN}<<<")), "<p>««</p>");
+    assert_eq!(render(&format!(".{HIDDEN}...")), "<p>….</p>");
+    assert_eq!(render(&format!(".{HIDDEN}.....")), "<p>……</p>");
+    assert_eq!(render(&format!("\"{HIDDEN}>>>>")), "<p>&quot;»»</p>");
+
+    // A shown body behaves as if the tags were absent: the run after
+    // the opener and the run after the closer both regroup with their
+    // visible neighbours (wikidot-2026-11-02.json, shown-body-* rows).
+    assert_eq!(
+        render("<[[iftags -zz-no-such-tag]]<<<[[/iftags]]"),
+        "<p>««</p>",
+    );
+    assert_eq!(
+        render("<[[iftags -zz-no-such-tag]]x[[/iftags]]<<<"),
+        "<p>&lt;x«&lt;</p>",
+    );
+    assert_eq!(
+        render(".[[iftags -zz-no-such-tag]]...[[/iftags]]"),
+        "<p>….</p>",
+    );
+    assert_eq!(
+        render(".[[iftags -zz-no-such-tag]]x[[/iftags]]..."),
+        "<p>.x…</p>",
+    );
+
+    // A non-text body keeps the runs on either side of it apart.
+    assert_eq!(
+        render("<[[iftags -zz-no-such-tag]]**b**[[/iftags]]<<<"),
+        "<p>&lt;<strong>b</strong>«&lt;</p>",
+    );
+
+    // Negatives: with no balanced, non-literal iftags pair there is no
+    // deferral, and the runs convert exactly as `substitute_wikidot`
+    // converts them.
+    assert_eq!(render("[[/iftags]]..."), "<p>[[/iftags]]…</p>");
+    assert_eq!(
+        render("[[ifcategory x]]y[[/ifcategory]]..."),
+        "<p>[[ifcategory x]]y[[/ifcategory]]…</p>",
+    );
+    let unclosed = render("<[[iftags -zz-no-such-tag]]<<<");
+    assert!(
+        !unclosed.contains("<<<"),
+        "an unclosed opener must not defer the run: {unclosed}",
+    );
+    assert!(unclosed.contains('«'), "the run still converts: {unclosed}");
+
+    // An authored literal `«` across a hidden block is not regrouped
+    // into the neighbouring raw `<` characters: `<`, `«`, `<` stay as
+    // authored. This is the case that rejects decoding produced
+    // characters back into authored ones.
+    assert_eq!(render(&format!("<\u{ab}{HIDDEN}<")), "<p>&lt;«&lt;</p>",);
 }
