@@ -294,6 +294,14 @@ fn wrap_wikidot_malformed_scored_items(elements: &mut Vec<Element<'_>>) {
         if line.is_empty() {
             continue;
         }
+        if line
+            .iter()
+            .all(|element| matches!(element, Element::Text(_)))
+            && line_text(&line) == "[[/li]]"
+        {
+            elements.extend(line);
+            continue;
+        }
         let paragraph =
             Container::new(ContainerType::Paragraph, line, AttributeMap::new());
         elements.push(Element::Container(paragraph));
@@ -780,7 +788,7 @@ Alpha
                         )
                     })
                     .count(),
-                3,
+                2,
             );
             assert_eq!(element_text(gamma), "GAMMA[[li_]] DELTA [[/li]]");
         });
