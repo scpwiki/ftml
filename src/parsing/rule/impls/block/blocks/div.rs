@@ -110,6 +110,47 @@ fn wikidot_div_is_inline_scored_line_literal(
         .is_empty()
 }
 
+fn wikidot_next_line_opens_div(source: &str, mut position: usize) -> bool {
+    let bytes = source.as_bytes();
+    while matches!(bytes.get(position), Some(b'\n' | b'\r')) {
+        position += 1;
+    }
+    let line_end = source[position..]
+        .find('\n')
+        .map_or(source.len(), |offset| position + offset);
+    let line = source[position..line_end].trim_start_matches([' ', '\t']);
+    let Some(head) = line.get(..5) else {
+        return false;
+    };
+    head.eq_ignore_ascii_case("[[div")
+        && matches!(
+            line.as_bytes().get(5),
+            Some(b']' | b' ' | b'\t' | b'_' | b'=')
+        )
+}
+
+fn wikidot_div_end_blocks_after(parser: &Parser<'_, '_>, limit: usize) -> usize {
+    let mut scan = parser.clone();
+    let mut count = 0;
+    while scan.current().token != Token::InputEnd {
+        if scan.current().token == Token::LeftBlockEnd
+            && scan.look_ahead(0).is_some_and(|token| {
+                token.token == Token::Identifier
+                    && token.slice.eq_ignore_ascii_case("div")
+            })
+        {
+            count += 1;
+            if count > limit {
+                break;
+            }
+        }
+        if scan.step().is_err() {
+            break;
+        }
+    }
+    count
+}
+
 fn try_recover_wikidot_div_literal<'r, 't>(
     parser: &mut Parser<'r, 't>,
     owner_start: usize,
@@ -209,7 +250,12 @@ where
         } else {
             owner_start
         };
-        let literal_end = if source.as_bytes().get(owner_end) == Some(&b'\n') {
+        let doc_start_bare = line_start == 0
+            && source[..owner_start].trim_matches([' ', '\t']).is_empty()
+            && wikidot_next_line_opens_div(source, owner_end);
+        let literal_end = if doc_start_bare {
+            owner_end
+        } else if source.as_bytes().get(owner_end) == Some(&b'\n') {
             owner_end + 1
         } else {
             owner_end
@@ -217,7 +263,7 @@ where
         return Ok(Some(ParseSuccess::new(
             text!(&source[literal_start..literal_end]).into(),
             Vec::new(),
-            !line_started_after_physical_newline,
+            !line_started_after_physical_newline && !doc_start_bare,
         )));
     }
 
@@ -524,6 +570,25 @@ fn parse_fn<'r, 't>(
         )));
     }
 
+    if parser.settings().layout.legacy()
+        && body_start == BlockBodyStart::NextPhysicalLine
+        && head_started_physical_line
+        && parser.in_wikidot_div_body()
+        && !parser.discarding_hidden_body()
+        && parser.native_blockquote_depth().is_none()
+        && parser.accepts_partial() != AcceptsPartial::ListItem
+    {
+        let depth = parser.wikidot_div_body_depth();
+        if wikidot_div_end_blocks_after(parser, depth) <= depth {
+            let head_end = parser.current().span.start;
+            let literal_end = source[..head_end].trim_end_matches(['\r', '\n']).len();
+            let literal = text!(&source[owner_start..literal_end]);
+            let elements = Elements::Multiple(vec![literal, Element::LineBreak]);
+            let paragraph_safe = elements.paragraph_safe();
+            return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
+        }
+    }
+
     let wrap_paragraphs = !flag_score;
     if parser.settings().layout.legacy() {
         parser.enter_wikidot_div_body();
@@ -711,6 +776,66 @@ mod tests {
         assert_eq!(
             render_preprocessed_wikidot(source),
             "<div><p>body text</p></div><br>\nafter text",
+        );
+    }
+
+    fn render_preprocessed_wikidot_allowing_errors(source: &str) -> String {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, settings.layout);
+        let tokenization = crate::tokenize(&source);
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        HtmlRender.render(&tree, &page_info, &settings).body
+    }
+
+    #[test]
+    fn wikidot_div_unbalanced_fallback_keeps_raw_join_and_literal_opener() {
+        let source = concat!(
+            "[[div]]inline[[/div]]\n",
+            "\n",
+            "\n",
+            "[[div]]inline, closing tag is on a new line\n",
+            "[[/div]]\n",
+            "\n",
+            "\n",
+            "\n",
+            "[[div]]\n",
+            "[[div]]\n",
+            "div opening tag is missing\n",
+            "[[/div]]\n",
+            "[[/div]]\n",
+            "[[/div]]\n",
+            "\n",
+            "\n",
+            "\n",
+            "[[div]]\n",
+            "[[div]]\n",
+            "[[div]]\n",
+            "div closing tag is missing\n",
+            "[[/div]]\n",
+            "[[/div]]\n",
+        );
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            concat!(
+                "[[div]]inline[[/div]]",
+                "[[div]]inline, closing tag is on a new line<br>\n",
+                "[[/div]]\n",
+                "<div><div><p>div opening tag is missing</p></div></div><br>\n",
+                "[[/div]]\n",
+                "<div><div><p>[[div]]<br>\n",
+                "div closing tag is missing</p></div></div>",
+            ),
+        );
+    }
+
+    #[test]
+    fn wikidot_div_excess_nested_opener_stays_literal() {
+        let source = "[[div]]\n[[div]]\nx\n[[/div]]\n";
+        assert_eq!(
+            render_preprocessed_wikidot(source),
+            "<div><p>[[div]]<br>\nx</p></div>",
         );
     }
 
