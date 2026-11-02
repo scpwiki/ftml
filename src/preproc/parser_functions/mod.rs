@@ -976,6 +976,26 @@ mod tests {
     }
 
     #[test]
+    fn resolves_expr_error_fidelity_cases() {
+        let source = concat!(
+            "[[#expr unknown_func(1)]]\n",
+            "[[#expr 1..2]]\n",
+            "[[#expr ]]\n",
+            "[[#expr 2+2]]",
+        );
+
+        assert_eq!(
+            resolve_wikidot_parser_functions(source),
+            concat!(
+                "run-time error: undefined function \"unknown_func\"\n",
+                "run-time error: too many values in the stack\n",
+                "\n",
+                "4",
+            ),
+        );
+    }
+
+    #[test]
     fn simple_if_uses_wikidot_nonempty_string_truthiness() {
         for (condition, expected) in [
             ("foo", "true branch"),
