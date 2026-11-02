@@ -180,6 +180,7 @@ fn normalize_sequence<'t>(elements: &mut Vec<Element<'t>>) {
             | repair_same_family_pass(elements)
             | repair_crossed_pass(elements)
             | repair_raw_strike_pairs_pass(elements)
+            | repair_span_crossed_bold_pairs_pass(elements)
             | split_strike_runs_pass(elements);
         if !changed {
             break;
@@ -469,6 +470,113 @@ fn repair_raw_strike_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     changed
 }
 
+fn repair_span_crossed_bold_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let closes: Vec<Option<(usize, Vec<usize>)>> = (0..elements.len())
+        .map(|index| span_crossed_bold_close(elements, index))
+        .collect();
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+
+    while index < input.len() {
+        let Some((close, splits)) = &closes[index] else {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        };
+        discard_range(&mut input, index..index + 1);
+        let mut segment_start = index + 1;
+        for split in splits {
+            let segment = take_range(&mut input, segment_start..*split);
+            push_bold_segment(&mut output, segment);
+            output.push(take_element(&mut input, *split));
+            segment_start = split + 1;
+        }
+        let segment = take_range(&mut input, segment_start..*close);
+        push_bold_segment(&mut output, segment);
+        discard_range(&mut input, *close..*close + 1);
+        index = close + 1;
+        changed = true;
+    }
+
+    *elements = output;
+    changed
+}
+
+fn push_bold_segment<'t>(output: &mut Vec<Element<'t>>, segment: Vec<Element<'t>>) {
+    let has_content = segment.iter().any(|element| {
+        !matches!(element, Element::Partial(_))
+            && text(element).is_none_or(|value| !value.trim().is_empty())
+    });
+    if has_content {
+        output.push(bold_shell().build(segment));
+    } else {
+        output.extend(segment);
+    }
+}
+
+fn span_crossed_bold_close<'t>(
+    elements: &[Element<'t>],
+    open: usize,
+) -> Option<(usize, Vec<usize>)> {
+    if !is_exact_text(&elements[open], "**") {
+        return None;
+    }
+    if elements
+        .get(open + 1)
+        .is_none_or(|element| element_starts_with_ascii_space(element))
+    {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    for element in &elements[..open] {
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(_)) => depth += 1,
+            Element::Partial(PartialElement::InlineSpanClose(_)) => {
+                depth = depth.checked_sub(1)?;
+            }
+            _ => {}
+        }
+    }
+
+    let mut floor = depth;
+    let mut crossed = false;
+    let mut has_content = false;
+    let mut splits = Vec::new();
+    let mut index = open + 1;
+    while index < elements.len() {
+        let element = &elements[index];
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(_)) => {
+                depth += 1;
+                crossed = true;
+            }
+            Element::Partial(PartialElement::InlineSpanClose(_)) => {
+                if depth == floor {
+                    splits.push(index);
+                    floor = floor.checked_sub(1)?;
+                }
+                depth = depth.checked_sub(1)?;
+                crossed = true;
+            }
+            Element::Partial(_) => return None,
+            _ if is_exact_text(element, "**") => {
+                if element_ends_with_ascii_space(&elements[index - 1]) {
+                    return None;
+                }
+                return (crossed && has_content).then_some((index, splits));
+            }
+            _ => {
+                has_content |= text(element).is_none_or(|value| !value.trim().is_empty());
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
 fn split_strike_runs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     let mut output = Vec::with_capacity(elements.len());
     let mut changed = false;
@@ -737,6 +845,14 @@ fn kind_from_container(ctype: ContainerType) -> Option<FormatKind> {
         ContainerType::Superscript => Some(FormatKind::Superscript),
         ContainerType::Monospace => Some(FormatKind::Monospace),
         _ => None,
+    }
+}
+
+fn bold_shell<'t>() -> FormatShell<'t> {
+    FormatShell::Container {
+        kind: FormatKind::Bold,
+        ctype: ContainerType::Bold,
+        attributes: AttributeMap::new(),
     }
 }
 
