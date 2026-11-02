@@ -500,3 +500,83 @@ fn issue_485_scored_list_recovery_keeps_literal_markers_in_one_item() {
         "malformed scored li must remain diagnosed"
     );
 }
+
+#[test]
+fn issue_803_stray_li_closer_in_scored_recovery_stays_literal() {
+    let (html, text, errors) = render(concat!(
+        "[[ul]]\n\n",
+        "[[li_]]\nALPHA\n[[/li]]\n\n",
+        "[[li_]]\n\nBETA\n\n[[/li]]\n",
+        "[[li]]GAMMA[[/li]]\n\n",
+        "[[li_]] DELTA [[/li]]\n\n",
+        "[[/ul]]",
+    ));
+
+    assert_eq!(
+        html,
+        concat!(
+            "<ul>\n",
+            "<li style=\"list-style: none\">[[li_]]<br>\n",
+            "ALPHA<br>\n[[/li]]\n",
+            "<p>[[li_]]</p>\n\n<p>BETA</p>\n[[/li]]</li>\n",
+            "<li>GAMMA[[li_]] DELTA [[/li]]</li>\n",
+            "</ul><br>\n",
+        ),
+    );
+    assert_eq!(
+        text,
+        "[[li_]]\nALPHA\n[[/li]]\n[[li_]]\n\nBETA\n[[/li]]\nGAMMA[[li_]] DELTA [[/li]]",
+    );
+    assert!(
+        !errors.is_empty(),
+        "malformed scored li must remain diagnosed"
+    );
+}
+
+#[test]
+fn issue_803_wdpr_block_fail_input_matches_live_structure() {
+    let (html, text, errors) = render(concat!(
+        "[[ul]]\n[[/ul]]\n\n",
+        "[[ol]]\n[[/ol]]\n\n",
+        "[[ul]]\n[[li]]\n[[/li]]\n[[/ul]]\n\n",
+        "[[ul]] [[/ul]]\n\n",
+        "[[ol]] [[/ol]]\n\n",
+        "[[ul]] [[li]] [[/li]] [[/ul]]\n\n",
+        "[[ul]]\nFoo\n[[/ul]]\n\n",
+        "[[ol]]\nBar\n[[/ol]]\n\n",
+        "[[li]]\nBaz\n[[/li]]\n\n",
+        "[[ul]]\n\n",
+        "[[li_]]\nALPHA\n[[/li]]\n\n",
+        "[[li_]]\n\nBETA\n\n[[/li]]\n",
+        "[[li]]GAMMA[[/li]]\n\n",
+        "[[li_]] DELTA [[/li]]\n\n",
+        "[[/ul]]",
+    ));
+
+    assert_eq!(
+        html,
+        concat!(
+            "<br>\n<br>\n<br>\n<br>\n<br>\n<br>\n",
+            "<ul>\n<li style=\"list-style: none\">Foo</li>\n</ul><br>\n",
+            "<ol>\n<li style=\"list-style: none\">Bar</li>\n</ol><br>\n",
+            "[[li]]<br>\nBaz<br>\n[[/li]] <ul>\n",
+            "<li style=\"list-style: none\">[[li_]]<br>\n",
+            "ALPHA<br>\n[[/li]]\n",
+            "<p>[[li_]]</p>\n\n<p>BETA</p>\n[[/li]]</li>\n",
+            "<li>GAMMA[[li_]] DELTA [[/li]]</li>\n",
+            "</ul><br>\n",
+        ),
+    );
+    assert_eq!(
+        text,
+        concat!(
+            "Foo\n\nBar\n\n[[li]]\nBaz\n[[/li]] \n",
+            "[[li_]]\nALPHA\n[[/li]]\n[[li_]]\n\nBETA\n[[/li]]\n",
+            "GAMMA[[li_]] DELTA [[/li]]",
+        ),
+    );
+    assert!(
+        !errors.is_empty(),
+        "malformed list shapes must remain diagnosed"
+    );
+}

@@ -19,7 +19,8 @@
  */
 
 use super::prelude::*;
-use crate::tree::Embed;
+use crate::tree::{AttributeMap, Embed};
+use std::borrow::Cow;
 
 type EmbedBuilderFn = for<'p, 't> fn(
     &'p Parser<'_, 't>,
@@ -47,10 +48,193 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Embed doesn't allow star flag");
     assert_block_name(&BLOCK_EMBED, name);
 
+    if parser.settings().layout.legacy() {
+        return parse_wikidot_embed(parser, in_head);
+    }
+
     let (name, mut arguments) = parser.get_head_name_map(&BLOCK_EMBED, in_head)?;
     let embed = build_embed(parser, name, &mut arguments)?;
 
     ok!(Element::Embed(embed))
+}
+
+fn parse_wikidot_embed<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    in_head: bool,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    let (arguments, _) =
+        parser.get_head_map_with_body_start_wikidot(&BLOCK_EMBED, in_head)?;
+    if !arguments.is_empty() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    let body = parser.get_body_text(&BLOCK_EMBED)?;
+    match wikidot_embed_iframe(&body) {
+        Some(embed) => ok!(true; Element::Embed(embed)),
+        None => {
+            let mut attributes = AttributeMap::new();
+            attributes.insert("class", cow!("error-block"));
+            let element = Element::Container(Container::new(
+                ContainerType::Div,
+                vec![text!("Sorry, no match for the embedded content.")],
+                attributes,
+            ));
+
+            ok!(false; element)
+        }
+    }
+}
+
+fn wikidot_embed_iframe(body: &str) -> Option<Embed<'static>> {
+    let text = body.trim();
+    let bytes = text.as_bytes();
+    if !text
+        .get(..7)
+        .is_some_and(|head| head.eq_ignore_ascii_case("<iframe"))
+    {
+        return None;
+    }
+    if !matches!(
+        bytes.get(7),
+        Some(b' ' | b'\t' | b'\r' | b'\n' | b'>' | b'/')
+    ) {
+        return None;
+    }
+
+    let mut parsed: Vec<(String, Cow<'_, str>)> = Vec::new();
+    let mut pos = 7;
+    let self_closing = loop {
+        while bytes
+            .get(pos)
+            .is_some_and(|byte| byte.is_ascii_whitespace())
+        {
+            pos += 1;
+        }
+        match bytes.get(pos) {
+            Some(b'>') => {
+                pos += 1;
+                break false;
+            }
+            Some(b'/') if bytes.get(pos + 1) == Some(&b'>') => {
+                pos += 2;
+                break true;
+            }
+            Some(_) => {
+                let name_start = pos;
+                while let Some(&byte) = bytes.get(pos) {
+                    if byte.is_ascii_whitespace() || matches!(byte, b'=' | b'>' | b'/') {
+                        break;
+                    }
+                    pos += 1;
+                }
+                if pos == name_start {
+                    return None;
+                }
+                let name = text[name_start..pos].to_ascii_lowercase();
+
+                while bytes
+                    .get(pos)
+                    .is_some_and(|byte| byte.is_ascii_whitespace())
+                {
+                    pos += 1;
+                }
+                let value = if bytes.get(pos) == Some(&b'=') {
+                    pos += 1;
+                    while bytes
+                        .get(pos)
+                        .is_some_and(|byte| byte.is_ascii_whitespace())
+                    {
+                        pos += 1;
+                    }
+                    match bytes.get(pos) {
+                        Some(quote @ (b'"' | b'\'')) => {
+                            let value_start = pos + 1;
+                            let mut value_end = value_start;
+                            while bytes.get(value_end).is_some_and(|byte| byte != quote) {
+                                value_end += 1;
+                            }
+                            if bytes.get(value_end) != Some(quote) {
+                                return None;
+                            }
+                            pos = value_end + 1;
+                            Cow::Borrowed(&text[value_start..value_end])
+                        }
+                        Some(_) => {
+                            let value_start = pos;
+                            while let Some(&byte) = bytes.get(pos) {
+                                if byte.is_ascii_whitespace() || byte == b'>' {
+                                    break;
+                                }
+                                pos += 1;
+                            }
+                            Cow::Borrowed(&text[value_start..pos])
+                        }
+                        None => return None,
+                    }
+                } else {
+                    Cow::Owned(name.clone())
+                };
+                parsed.push((name, value));
+            }
+            None => return None,
+        }
+    };
+
+    let rest = &text[pos..];
+    let contents = if self_closing {
+        if !rest.is_empty() {
+            return None;
+        }
+        ""
+    } else {
+        let close = rest.to_ascii_lowercase().find("</iframe>")?;
+        if !rest[close + 9..].is_empty() {
+            return None;
+        }
+        rest[..close].trim()
+    };
+
+    let src = parsed
+        .iter()
+        .find(|(name, _)| name == "src")
+        .map(|(_, value)| value.trim())?;
+    if !src
+        .get(..8)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("https://"))
+    {
+        return None;
+    }
+
+    let mut html = String::from("<iframe");
+    for (name, value) in &parsed {
+        html.push(' ');
+        html.push_str(name);
+        html.push_str("=\"");
+        for ch in value.chars() {
+            match ch {
+                '&' => html.push_str("&amp;"),
+                '"' => html.push_str("&quot;"),
+                '<' => html.push_str("&lt;"),
+                _ => html.push(ch),
+            }
+        }
+        html.push('\"');
+    }
+    html.push('>');
+    for ch in contents.chars() {
+        match ch {
+            '&' => html.push_str("&amp;"),
+            '<' => html.push_str("&lt;"),
+            '>' => html.push_str("&gt;"),
+            _ => html.push(ch),
+        }
+    }
+    html.push_str("</iframe>");
+
+    Some(Embed::Iframe {
+        url: Cow::Owned(src.to_owned()),
+        html: Cow::Owned(html),
+    })
 }
 
 fn build_embed<'r, 't>(
@@ -105,6 +289,7 @@ fn embed_builder_types() {
 fn embed_rejects_unknown_provider() {
     use crate::data::PageInfo;
     use crate::layout::Layout;
+    use crate::render::Render;
     use crate::settings::{WikitextMode, WikitextSettings};
 
     let page_info = PageInfo::dummy();
@@ -117,5 +302,106 @@ fn embed_rejects_unknown_provider() {
             .iter()
             .any(|error| error.kind() == ParseErrorKind::NoSuchEmbed),
         "unknown embed provider should report NoSuchEmbed: {errors:?}",
+    );
+}
+
+#[test]
+fn wikidot_embed_iframe_body_renders_iframe() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize(concat!(
+        "[[embed]]\n",
+        "<iframe width=\"1208\" height=\"680\" ",
+        "src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\" ",
+        "title=\"Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)\" ",
+        "frameborder=\"0\" ",
+        "allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; ",
+        "gyroscope; picture-in-picture; web-share\" ",
+        "referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen></iframe>\n",
+        "[[/embed]]",
+    ));
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        concat!(
+            "<p><iframe width=\"1208\" height=\"680\" ",
+            "src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\" ",
+            "title=\"Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)\" ",
+            "frameborder=\"0\" ",
+            "allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; ",
+            "gyroscope; picture-in-picture; web-share\" ",
+            "referrerpolicy=\"strict-origin-when-cross-origin\" ",
+            "allowfullscreen=\"allowfullscreen\"></iframe></p>",
+        ),
+    );
+}
+
+#[test]
+fn wikidot_embed_unmatched_body_renders_error_block() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize(concat!(
+        "[[embed]]x[[/embed]]\n",
+        "\n",
+        "text\n",
+        "[[embed]]x[[/embed]]\n",
+        "\n",
+        "x [[embed]]z[[/embed]] y",
+    ));
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        concat!(
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "<p>text</p>",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "<p>x</p>",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+            "<p>y</p>",
+        ),
+    );
+}
+
+#[test]
+fn wikidot_embed_non_https_iframe_renders_error_block() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize(
+        "[[embed]]<iframe src=\"http://example.com/x\"></iframe>[[/embed]]",
+    );
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    let html = crate::render::html::HtmlRender
+        .render(&tree, &page_info, &settings)
+        .body;
+
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(
+        html,
+        "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
     );
 }

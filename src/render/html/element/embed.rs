@@ -28,6 +28,11 @@ pub fn render_embed(ctx: &mut HtmlContext, embed: &Embed) {
         embed.direct_url(),
     );
 
+    if let Embed::Iframe { html, .. } = embed {
+        ctx.push_raw_str(html);
+        return;
+    }
+
     ctx.html()
         .div()
         .attr(attr!(
@@ -63,6 +68,8 @@ pub fn render_embed(ctx: &mut HtmlContext, embed: &Embed) {
 
                 ctx.html().script().attr(attr!("src" => &url));
             }
+
+            Embed::Iframe { .. } => unreachable!(),
 
             Embed::GitlabSnippet { snippet_id } => {
                 let url = format!("https://gitlab.com/-/snippets/{snippet_id}.js");
