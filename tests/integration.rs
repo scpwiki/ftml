@@ -95,6 +95,8 @@ mod strikethrough_inline_regression;
 #[path = "wikidot_root_list_ownership.rs"]
 mod wikidot_root_list_ownership;
 
+#[path = "wikidot_html_line_start.rs"]
+mod wikidot_html_line_start;
 #[path = "wikidot_span_scope.rs"]
 mod wikidot_span_scope;
 
