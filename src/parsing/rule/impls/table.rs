@@ -127,6 +127,111 @@ fn clip_wikidot_inline_scopes_at_cell_boundary<'t>(
     }
     pending.spans += spans;
     pending.sizes += sizes;
+    let mut nested_spans = 0usize;
+    let mut nested_sizes = 0usize;
+    for element in elements.iter_mut() {
+        if let Element::Container(container) = element {
+            let (spans, sizes) = close_nested_inline_scopes(container.elements_mut());
+            nested_spans += spans;
+            nested_sizes += sizes;
+        }
+    }
+    pending.spans += nested_spans;
+    pending.sizes += nested_sizes;
+}
+
+fn close_wikidot_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, usize) {
+    let mut spans = 0usize;
+    let mut sizes = 0usize;
+    for element in elements.iter() {
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(_)) => spans += 1,
+            Element::Partial(PartialElement::InlineSpanClose(_)) => {
+                spans = spans.saturating_sub(1)
+            }
+            Element::Partial(PartialElement::InlineSizeOpen(_)) => sizes += 1,
+            Element::Partial(PartialElement::InlineSizeClose(_)) => {
+                sizes = sizes.saturating_sub(1)
+            }
+            _ => {}
+        }
+    }
+    for _ in 0..spans {
+        elements.push(Element::Partial(PartialElement::InlineSpanClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    for _ in 0..sizes {
+        elements.push(Element::Partial(PartialElement::InlineSizeClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    (spans, sizes)
+}
+
+fn swallow_early_closed_scopes<'t>(
+    elements: &mut Vec<Element<'t>>,
+    start: usize,
+    spans: &mut usize,
+    sizes: &mut usize,
+) {
+    let mut index = start;
+    while index < elements.len() {
+        let drop = match &elements[index] {
+            Element::Partial(PartialElement::InlineSpanClose(_)) if *spans > 0 => {
+                *spans -= 1;
+                true
+            }
+            Element::Partial(PartialElement::InlineSizeClose(_)) if *sizes > 0 => {
+                *sizes -= 1;
+                true
+            }
+            _ => false,
+        };
+        if drop {
+            elements.remove(index);
+        } else {
+            index += 1;
+        }
+    }
+}
+
+fn close_nested_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, usize) {
+    let mut closed_spans = 0usize;
+    let mut closed_sizes = 0usize;
+    for element in elements.iter_mut() {
+        if let Element::Container(container) = element {
+            let (spans, sizes) = close_nested_inline_scopes(container.elements_mut());
+            closed_spans += spans;
+            closed_sizes += sizes;
+        }
+    }
+    let mut spans = 0usize;
+    let mut sizes = 0usize;
+    for element in elements.iter() {
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(_)) => spans += 1,
+            Element::Partial(PartialElement::InlineSpanClose(_)) => {
+                spans = spans.saturating_sub(1)
+            }
+            Element::Partial(PartialElement::InlineSizeOpen(_)) => sizes += 1,
+            Element::Partial(PartialElement::InlineSizeClose(_)) => {
+                sizes = sizes.saturating_sub(1)
+            }
+            _ => {}
+        }
+    }
+    for _ in 0..spans {
+        elements.push(Element::Partial(PartialElement::InlineSpanClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    for _ in 0..sizes {
+        elements.push(Element::Partial(PartialElement::InlineSizeClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    (closed_spans + spans, closed_sizes + sizes)
 }
 
 fn append_cell_elements<'t>(all_elements: &mut Vec<Element<'t>>, elements: Elements<'t>) {
@@ -283,17 +388,19 @@ fn try_consume_fn<'r, 't>(
     let mut rows = Vec::new();
     let mut errors = Vec::new();
     let mut paragraph_break = false;
+    let mut pending_inline_closers = 0u16;
+    let mut pending_inline_scopes = PendingInlineScopes::default();
 
     loop {
         if parser.native_blockquote_depth().is_some() && !rows.is_empty() {
             return finish_simple_table(rows, errors);
         }
         let mut cells = Vec::new();
-        let mut pending_inline_closers = 0u16;
-        let mut pending_inline_scopes = PendingInlineScopes::default();
 
         'row: loop {
             let mut elements = Vec::new();
+            let mut early_closed_spans = 0usize;
+            let mut early_closed_sizes = 0usize;
             let cell_start = match parse_cell_start(parser)? {
                 Some(cell_start) => cell_start,
                 None => return finish_table_or_fail(parser, rows, errors),
@@ -306,6 +413,9 @@ fn try_consume_fn<'r, 't>(
                 let current_closer =
                     Parser::wikidot_simple_table_closer_bit(parser.current().token);
                 if pending_inline_closers & current_closer != 0 {
+                    let (spans, sizes) = close_wikidot_inline_scopes(&mut elements);
+                    early_closed_spans += spans;
+                    early_closed_sizes += sizes;
                     parser.step()?;
                     pending_inline_closers &= !current_closer;
                     continue;
@@ -403,6 +513,27 @@ fn try_consume_fn<'r, 't>(
                             && rows.is_empty()
                             && cells.is_empty() =>
                     {
+                        if parser.current().token == Token::LineBreak
+                            && parser
+                                .look_ahead(0)
+                                .is_some_and(|token| is_table_column_token(token.token))
+                        {
+                            elements.clear();
+                            let empty_cell_start = TableCellStart {
+                                align: None,
+                                header: false,
+                                column_span: NonZeroU32::new(1).unwrap(),
+                                literal_prefix: None,
+                            };
+                            push_cell(
+                                &mut cells,
+                                &mut elements,
+                                empty_cell_start,
+                                &mut pending_inline_scopes,
+                            );
+                            parser.step()?;
+                            break 'row;
+                        }
                         elements.clear();
                         let empty_cell_start = TableCellStart {
                             align: None,
@@ -461,7 +592,14 @@ fn try_consume_fn<'r, 't>(
                             trim_one_trailing_ascii_space(&mut elements);
                         }
 
+                        let elements_before = elements.len();
                         append_cell_elements(&mut elements, new_items);
+                        swallow_early_closed_scopes(
+                            &mut elements,
+                            elements_before,
+                            &mut early_closed_spans,
+                            &mut early_closed_sizes,
+                        );
                     }
                 }
             }
