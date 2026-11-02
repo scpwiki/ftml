@@ -1148,7 +1148,7 @@ fn wikidot_false_iftags_sparse_closer_matrix_preserves_public_behavior() {
                 assert!(text.contains("visible"), "{text}");
             }
             1 => assert_eq!(text, "visible"),
-            2 | 3 => assert!(text.is_empty(), "{closer_count}: {text}"),
+            2 | 3 => assert_eq!(text, "visible", "{closer_count}: {text}"),
             _ => unreachable!(),
         }
     }

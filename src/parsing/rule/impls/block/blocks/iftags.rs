@@ -179,19 +179,17 @@ fn parse_fn<'r, 't>(
     // would pick; the gather below is restricted to that designated closer
     // and nested iftags gates are literal inside the span. An unpairable opener
     // renders literally, as before. Gates parsed while a hidden body is
-    // discarded, gates inside blockquote bodies, false gates whose paired
-    // span nests further gates, and false gates whose only closers sit
-    // inside regions the search cannot see into all keep the legacy guards
-    // and gathers (hidden bodies discard one gate at a time, fail-closed).
+    // discarded, gates inside blockquote bodies, and false gates whose only
+    // closers sit inside regions the search cannot see into all keep the
+    // legacy guards and gathers (hidden bodies discard one gate at a time,
+    // fail-closed).
     let legacy = parser.settings().layout.legacy();
     let mut designated_end = None;
     if legacy && !parser.discarding_hidden_body() && !parser.in_quote_body() {
-        let (pairing, span_nested) = parser.wikidot_iftags_pairing_end();
+        let (pairing, _) = parser.wikidot_iftags_pairing_end();
         match pairing {
             Some(end) => {
-                if include_body || !span_nested {
-                    designated_end = Some(end);
-                }
+                designated_end = Some(end);
             }
             None => {
                 if include_body || !parser.has_body_end_block(&BLOCK_IFTAGS) {
