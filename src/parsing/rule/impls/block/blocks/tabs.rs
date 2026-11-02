@@ -59,23 +59,18 @@ fn parse_tabview<'r, 't>(
 
     let (elements, errors, _) = parser.get_body_elements(&BLOCK_TABVIEW, false)?.into();
 
-    // Build element and return
     let mut tabs = Vec::new();
 
     for element in elements {
         match element {
-            // Append the next tab item.
             Element::Partial(PartialElement::Tab(tab)) => tabs.push(tab),
 
-            // Ignore internal whitespace.
             element if element.is_whitespace() => (),
 
-            // Return an error for anything else.
             _ => return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab)),
         }
     }
 
-    // Ensure it's not empty
     if tabs.is_empty() {
         return Err(parser.make_err(ParseErrorKind::TabViewEmpty));
     }
@@ -118,7 +113,6 @@ fn parse_tab<'r, 't>(
 
     let (elements, errors, _) = parser.get_body_elements(&BLOCK_TAB, true)?.into();
 
-    // Build element and return
     let element = Element::Partial(PartialElement::Tab(Tab {
         label: std::borrow::Cow::Borrowed(label),
         elements,

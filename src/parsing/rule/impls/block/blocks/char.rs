@@ -43,7 +43,6 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Char doesn't allow score flag");
     assert_block_name(&BLOCK_CHAR, name);
 
-    // Parse the entity and get the string
     let string = parser.get_head_value(&BLOCK_CHAR, in_head, parse_entity)?;
 
     ok!(Element::Text(string))
@@ -63,8 +62,6 @@ fn parse_entity<'t>(
         None => Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
     }
 }
-
-/* Tests */
 
 #[test]
 fn parse_entity_rejects_missing_argument() {

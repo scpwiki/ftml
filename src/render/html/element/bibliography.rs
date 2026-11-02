@@ -31,7 +31,6 @@ pub fn render_bibcite(ctx: &mut HtmlContext, label: &str, brackets: bool, inline
     }
 
     match ctx.get_bibliography_ref(label) {
-        // Valid bibliography reference, render it
         Some((index, contents)) => {
             if ctx.layout().legacy() {
                 render_wikidot_bibcite(ctx, index, brackets);
@@ -39,20 +38,17 @@ pub fn render_bibcite(ctx: &mut HtmlContext, label: &str, brackets: bool, inline
                 return;
             }
 
-            // TODO make this into a locale template string
             let reference_string = ctx
                 .handle()
                 .get_message(ctx.language(), "bibliography-reference");
             let label = format!("{reference_string} {index}.");
 
-            // TODO: For now, copied from footnotes
             ctx.html()
                 .span()
                 .attr(attr!("class" => "wj-bibliography-ref"))
                 .inner(|ctx| {
                     let id = str!(index);
 
-                    // Bibliography marker that is hoverable
                     if brackets {
                         ctx.push_raw('[');
                     }
@@ -82,7 +78,6 @@ pub fn render_bibcite(ctx: &mut HtmlContext, label: &str, brackets: bool, inline
                             "aria-hidden" => "true",
                         ))
                         .inner(|ctx| {
-                            // Tooltip label
                             ctx.html()
                                 .span()
                                 .attr(
@@ -90,7 +85,6 @@ pub fn render_bibcite(ctx: &mut HtmlContext, label: &str, brackets: bool, inline
                                 )
                                 .contents(&label);
 
-                            // Actual tooltip contents
                             ctx.html()
                                 .span()
                                 .attr(attr!("class" => "wj-bibliography-ref-contents"))
@@ -250,11 +244,9 @@ pub fn render_bibliography(
             let mut id = String::new();
             let mut class = String::new();
             for (entry_index, (_, elements)) in bibliography.slice().iter().enumerate() {
-                // Convert to 1-indexing
                 let bibliography_index = bibliography_index + 1;
                 let entry_index = entry_index + 1;
 
-                // Produce HTML ID
                 id.clear();
                 str_write!(
                     id,
@@ -266,12 +258,10 @@ pub fn render_bibliography(
                     "wj-bibliography-item bibitem bibitem-{bibliography_index}-{entry_index}",
                 );
 
-                // Make bibliography row
                 ctx.html()
                     .div()
                     .attr(attr!("class" => &class, "id" => &id))
                     .inner(|ctx| {
-                        // Number and clickable anchor
                         ctx.html()
                             .element("wj-bibliography-item-marker")
                             .attr(attr!(
@@ -282,7 +272,6 @@ pub fn render_bibliography(
                             .inner(|ctx| {
                                 str_write!(ctx, "{entry_index}");
 
-                                // Period after entry number. Has special class to permit styling.
                                 ctx.html()
                                     .span()
                                     .attr(attr!("class" => "wj-bibliography-sep"))

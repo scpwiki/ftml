@@ -273,9 +273,6 @@ where
     Ok(None)
 }
 
-// Keep post-body normalization out of the recursively nested div parser's
-// stack frame. The deep parser deliberately supports 1024 nested owners on a
-// bounded worker stack.
 #[inline(never)]
 fn normalize_wikidot_div_elements(elements: &mut Vec<Element<'_>>, flag_score: bool) {
     if flag_score {
@@ -527,11 +524,7 @@ fn parse_fn<'r, 't>(
         )));
     }
 
-    // "div" means we wrap in paragraphs, like normal
-    // "div_" means we don't wrap it
     let wrap_paragraphs = !flag_score;
-    // Get body content, based on whether we want paragraphs or not.
-    // Discard paragraph_safe, since divs never are.
     if parser.settings().layout.legacy() {
         parser.enter_wikidot_div_body();
         if flag_score {
@@ -572,7 +565,6 @@ fn parse_fn<'r, 't>(
         return ok!(false; Elements::None, errors);
     }
 
-    // Build element and return
     let mut attributes = arguments.to_attribute_map(parser.settings());
     if parser.settings().layout.legacy()
         && !attributes.get().contains_key("class")

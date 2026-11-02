@@ -6,10 +6,6 @@ pub(super) fn substitute_wikidot(text: &mut String) {
         return;
     }
 
-    // Comments are removed after parser-function preprocessing but before
-    // whitespace/token ownership. That ordering lets comment elision form
-    // ordinary Wikidot delimiters without retroactively executing a newly
-    // formed parser function. Canonical literal owners keep their bytes.
     let literal_regions = LiteralRegionIndex::new(text);
     let block_name_comments = regular_block_name_comment_starts(text);
     let mut output = String::with_capacity(text.len());

@@ -105,14 +105,8 @@ fn iter() {
 
     test!(Elements::None, vec![]);
     test!(Elements::Single(text!("a")), vec![text!("a")]);
-    test!(
-        Elements::Multiple(vec![]), //
-        vec![],
-    );
-    test!(
-        Elements::Multiple(vec![text!("a")]), //
-        vec![text!("a")],
-    );
+    test!(Elements::Multiple(vec![]), vec![],);
+    test!(Elements::Multiple(vec![text!("a")]), vec![text!("a")],);
     test!(
         Elements::Multiple(vec![text!("a"), text!("b")]),
         vec![text!("a"), text!("b")],

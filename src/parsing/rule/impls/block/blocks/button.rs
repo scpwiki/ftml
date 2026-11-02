@@ -224,9 +224,6 @@ fn parse_set_tags(mut tail: &str, wikidot: bool) -> ParsedButton<'_> {
 }
 
 fn is_set_tags_head(head: &str) -> bool {
-    // This predicate runs at every line break in an unclosed multiline head.
-    // Inspect only the action prefix rather than repeatedly trimming the
-    // growing suffix.
     let head = head.trim_start_matches(is_wikidot_set_tags_separator);
     let action_end = head
         .find(is_wikidot_set_tags_separator)

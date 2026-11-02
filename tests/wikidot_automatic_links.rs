@@ -543,8 +543,6 @@ fn automatic_links_do_not_steal_structural_or_literal_owners() {
 
 #[test]
 fn wikidot_email_stops_at_its_last_domain_label() {
-    // Expected output follows anonymous Wikidot edit/PagePreviewModule
-    // renders of the same sources (2026-10-13).
     let email = |local: &str, domain: &str| {
         let reversed = |part: &str| part.chars().rev().collect::<String>();
         let obfuscated = format!("{}|{}", reversed(domain), reversed(local));

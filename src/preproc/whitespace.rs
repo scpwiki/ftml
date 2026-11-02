@@ -250,31 +250,20 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
         };
     }
 
-    // Replace DOS and Mac newlines
     replace!(DOS_MAC_NEWLINES);
 
-    // Preserve a syntax barrier when document-leading indentation precedes a
-    // structural marker. FTML owns the source grammar at this seam; any
-    // lifecycle-specific source normalization performed while Wikidot saves a
-    // page belongs to the caller before parsing.
     if wikidot_compatibility {
         preserve_document_leading_indentation_barrier(text);
     }
     replace!(LEADING_DOCUMENT_WHITESPACE);
 
     if wikidot_compatibility {
-        // NBSP-only lines are not blank lines to Wikidot. Remove ordinary
-        // indentation-only lines while preserving non-ASCII leading spaces as
-        // authored syntax barriers.
         replace!(WIKIDOT_WHITESPACE_ONLY_LINE);
     } else {
-        // Replace leading non-standard spaces with regular spaces and strip
-        // lines with only whitespace for the native parser.
         replace_leading_spaces(text);
         replace!(WHITESPACE_ONLY_LINE);
     }
 
-    // Join concatenated lines (ending with '\').
     join_continued_lines(text, &mut buffer, wikidot_compatibility);
 
     if wikidot_compatibility {
@@ -283,18 +272,12 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
         preserve_adjacent_wikidot_tab_link_spacing(text);
     }
 
-    // Replace tabs in one linear pass instead of repeatedly shifting the
-    // remaining string for every match. Wikidot normally collapses a tab to
-    // one parser-space, but preserves its four-column width inside a legacy
-    // `getAttrs` quoted value. That distinction remains observable in custom
-    // collapsible labels, where ordinary spaces become non-breaking spaces.
     replace_tabs(text, &mut buffer, wikidot_compatibility);
 
     if !wikidot_compatibility && text.contains('\0') {
         *text = text.replace('\0', " ");
     }
 
-    // Remove trailing newlines
     replace!(TRAILING_NEWLINES);
 }
 
@@ -553,9 +536,6 @@ fn append_replaced_tabs(output: &mut String, input: &str, width: usize) {
 
 fn append_wikidot_block_head_tabs(output: &mut String, head: &str) {
     if wikidot_user_block_head(head) {
-        // Live #1026 V7 evidence preserves NBSP but collapses an authored tab
-        // in the positional user lookup key to one parser-space. It is not a
-        // getAttrs quoted value even when the key contains the bytes `="`.
         append_replaced_tabs(output, head, 1);
         return;
     }
@@ -666,9 +646,6 @@ fn wikidot_spaced_inner_include_example(text: &str, leading_len: usize) -> bool 
 }
 
 pub(super) fn filter_characters(text: &mut String, preserve_terminal_marker: bool) {
-    // U+FFFD is an unsafe Wikidot-internal token delimiter. Other discarded
-    // controls remain until tokenization because Wikidot uses them as invisible
-    // syntax barriers before dropping their output.
     let terminal_marker = preserve_terminal_marker && text.ends_with("\u{fffd}\\");
     if terminal_marker {
         text.truncate(text.len() - "\u{fffd}\\".len());
@@ -696,10 +673,6 @@ fn join_continued_lines(
         return;
     }
 
-    // Wikidot takes code and math bodies raw: a `\\` before a line break
-    // inside one is part of the body, not a continuation (a code body keeps
-    // its trailing backslash, and a math body keeps its LaTeX `\\\\` line
-    // breaks, which also decide the environment Wikidot wraps it in).
     let raw_body_ranges = if wikidot_compatibility {
         let mut ranges = wikidot_math_body_ranges(text);
         ranges.extend(crate::wikidot_code::active_body_ranges(text));
@@ -741,11 +714,6 @@ fn join_continued_lines(
     std::mem::swap(text, buffer);
 }
 
-/// Byte ranges of line-owned math block bodies: from the line after an opener
-/// that stands alone on its line to the start of the matching `[[/math]]` line
-/// (nested standalone openers are counted, as the block parser counts them).
-/// An opener without a closer owns no range. Code blocks are skipped; their
-/// contents are literal.
 fn wikidot_math_body_ranges(source: &str) -> Vec<Range<usize>> {
     if !source.contains("[[") {
         return Vec::new();
@@ -813,16 +781,11 @@ fn wikidot_standalone_math_opener(marker: &str) -> bool {
 }
 
 fn wikidot_continued_div_opener(text: &str) -> bool {
-    // Wikidot suppresses the visible break but still recognizes a standalone
-    // div opener on the next physical line.
     let line = text.split_once('\n').map_or(text, |(line, _)| line);
     let marker = line.trim_matches([' ', '\t']);
     WIKIDOT_CONTINUED_DIV_OPENER.is_match(marker)
 }
 
-/// In-place replaces leading non-standard spaces (such as nbsp) on content
-/// lines with standard spaces. A line containing only those spaces and ASCII
-/// indentation is authored Wikidot content and must retain its NBSP bytes.
 fn replace_leading_spaces(text: &mut String) {
     trace!("Replacing leading non-standard spaces with regular spaces");
 
@@ -1282,8 +1245,6 @@ fn linear_line_continuation_join_matches_repeated_replacement() {
 
 #[test]
 fn line_continuation_cascade_scales_to_large_inputs() {
-    // A repeated full-rescan implementation performs quadratic work on this
-    // shape because each pass exposes exactly one new continuation boundary.
     const DEPTH: usize = 32 * 1024;
     let mut text = format!("prefix{}{}suffix", "\\".repeat(DEPTH), "\n".repeat(DEPTH),);
     let mut buffer = String::new();
@@ -1301,14 +1262,10 @@ fn wikidot_math_bodies_are_exempt_from_line_continuation() {
     super::preprocess_for_layout(&mut wikidot, Layout::Wikidot);
     assert_eq!(wikidot, "a b\n[[math]]\nx \\\\\ny \\\n[[/math]]\nc d");
 
-    // Without a closer there is no math body: the continuation applies.
     let mut unclosed = "[[math]]\nx \\\ny".to_owned();
     super::preprocess_for_layout(&mut unclosed, Layout::Wikidot);
     assert_eq!(unclosed, "[[math]]\nx y");
 
-    // A code body is raw too: it keeps a trailing backslash and its line
-    // break (jp/wiki-syntax:math's `h} \` example), including math markers
-    // written inside it.
     let mut in_code =
         "[[code]]\n[[math]]\nx \\\ny\n[[/math]]\n[[/code]]\nu \\\nv".to_owned();
     super::preprocess_for_layout(&mut in_code, Layout::Wikidot);
@@ -1317,7 +1274,6 @@ fn wikidot_math_bodies_are_exempt_from_line_continuation() {
         "[[code]]\n[[math]]\nx \\\ny\n[[/math]]\n[[/code]]\nu v"
     );
 
-    // The native layout keeps joining everywhere.
     let mut native = "[[math]]\nx \\\ny\n[[/math]]".to_owned();
     super::preprocess_for_layout(&mut native, Layout::Wikijump);
     assert!(native.contains("x y"), "{native}");

@@ -31,8 +31,6 @@ macro_rules! tag_method {
     };
 }
 
-// Main struct
-
 #[derive(Debug)]
 pub struct HtmlBuilder<'c, 'i, 'h, 'e, 't>
 where
@@ -50,7 +48,6 @@ where
         HtmlBuilder { ctx }
     }
 
-    /// Create a new HTML element with the given tag type.
     #[inline]
     pub fn tag(self, tag: &'t str) -> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         debug_assert!(is_alphanumeric(tag));
@@ -76,7 +73,6 @@ where
         }
     }
 
-    /// Creates an inline `<svg>` using the `ui.svg` spritesheet.
     pub fn sprite(self, id: &'t str) {
         let viewbox = if id == "wj-karma" {
             "0 0 64 114"
@@ -133,8 +129,6 @@ where
     }
 }
 
-// Helper structs
-
 #[derive(Debug)]
 pub struct HtmlBuilderTag<'c, 'i, 'h, 'e, 't>
 where
@@ -186,17 +180,6 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
     }
 
     pub fn attr_single(&mut self, key: &str, value_parts: &[&str]) -> &mut Self {
-        // If value_parts is empty, then we just give the key.
-        //
-        // For instance, ("checked", &[]) in input produces
-        // <input checked> rather than <input checked="...">
-        //
-        // Alternatively, if it's only composed of empty strings,
-        // the same intent is signalled.
-        //
-        // Because .all() is true for empty slices, this expression
-        // checks both:
-
         let has_value = !value_parts.iter().all(|s| s.is_empty());
 
         self.attr_key(key, has_value);
@@ -232,7 +215,6 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         let mut merged = HashSet::new();
         let mut merged_value = Vec::new();
 
-        // Merge any attributes in common.
         for (key, value_parts) in filter_attribute_entries(&attributes) {
             if let Some(map_value) = attribute_map.get(&cow!(key)) {
                 if omit_empty_user_class(key, map_value) {
@@ -240,8 +222,6 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
                     merged.insert(key);
                     continue;
                 }
-                // Merge keys by prepending value_parts before
-                // the attribute map value.
 
                 merged_value.clear();
                 merged_value.extend(value_parts);
@@ -253,14 +233,12 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
             }
         }
 
-        // Add attributes from renderer.
         for (key, value_parts) in filter_attribute_entries(&attributes) {
             if !merged.contains(key) {
                 self.attr_single(key, value_parts);
             }
         }
 
-        // Add attributes from user-provided map.
         for (key, value) in attribute_map {
             if !merged.contains(key.as_ref()) && !omit_empty_user_class(key, value) {
                 self.attr_single(key, &[value]);
@@ -310,8 +288,6 @@ impl Drop for HtmlBuilderTag<'_, '_, '_, '_, '_> {
         }
     }
 }
-
-// Helpers
 
 fn is_alphanumeric(value: &str) -> bool {
     value

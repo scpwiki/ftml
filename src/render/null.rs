@@ -18,11 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! A trivial renderer.
-//!
-//! This implementation of `Render` will consume any input syntax tree
-//! and produce a unit value as output.
-
 use super::prelude::*;
 
 #[derive(Debug)]
@@ -39,7 +34,6 @@ impl Render for NullRender {
         _settings: &WikitextSettings,
     ) {
         info!("Running null renderer");
-        // do nothing
     }
 }
 

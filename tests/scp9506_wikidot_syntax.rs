@@ -1,7 +1,3 @@
-//! Fixture-driven FTML syntax tests for SCP-9506.
-//!
-//! These tests track parser and syntax-representation gaps proved by the Wikijump SCP-9506 fixture work. Runtime ListPages execution belongs to Wikijump; FTML preserves the delayed module node and body template.
-
 use ftml::data::{PageInfo, PageRef, ScoreValue};
 use ftml::includes::{FetchedPage, IncludeRef, Includer};
 use ftml::layout::Layout;
@@ -112,7 +108,6 @@ impl<'t> Includer<'t> for StaticIncluder {
     }
 }
 
-/// Fixture: Rokurolize/wikijump#52, Rokurolize/wikijump#59, and Rokurolize/wikijump#60.
 #[test]
 fn scp9506_theme_and_component_includes_expand_with_variables() {
     let source = r#"[[include :scp-wiki:theme:basalt | hidetitle=true]]
@@ -172,7 +167,6 @@ fn scp9506_theme_and_component_includes_expand_with_variables() {
     assert!(expanded.contains("%%content{1}%%"));
 }
 
-/// Fixture: Rokurolize/wikijump#52, Rokurolize/wikijump#59, and Rokurolize/wikijump#60.
 #[test]
 fn scp9506_listpages_syntax_is_preserved_as_delayed_node() {
     let expanded_source = r#"[[module CSS]]

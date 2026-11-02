@@ -823,8 +823,6 @@ fn hidden_conditionals_do_not_publish_metadata_blocks() {
     assert!(wikijump.code_blocks.is_empty(), "{wikijump:?}");
     assert!(wikijump.html_blocks.is_empty(), "{wikijump:?}");
 
-    // Wikidot has no active ifcategory gate: the marker is literal and its
-    // ordinary body syntax remains active.
     let (wikidot, literal_errors) = parse_with_errors(ifcategory, Layout::Wikidot);
     assert!(!literal_errors.is_empty());
     assert!(!wikidot.elements.is_empty(), "{wikidot:?}");
@@ -949,11 +947,6 @@ fn false_iftags_nested_conditionals_do_not_close_the_outer_body() {
 
 #[test]
 fn false_iftags_split_line_image_head_does_not_close_the_page() {
-    // A block head split across a line break is rejected as a field list,
-    // but the head is complete and terminated: the discard must still end
-    // at the conditional's own closer, and text after it must render.
-    // (Seen in the wild inside theme documentation included by pages
-    // whose theme tag made the enclosing iftags body hidden.)
     for layout in [Layout::Wikijump, Layout::Wikidot] {
         assert_false_iftags_guarded(
             "[[image http://example.com/x.png\n link=#]]",
@@ -964,12 +957,6 @@ fn false_iftags_split_line_image_head_does_not_close_the_page() {
 
 #[test]
 fn false_iftags_nameless_embed_head_does_not_close_the_page() {
-    // A bare embed head has no provider sub-name, so the block fails, but
-    // the construct is just its terminated head: the discard must still
-    // end at the conditional's own closer, and text after it must render.
-    // (This head shape appears in included theme documentation, where the
-    // embed carries a raw iframe body; pages including that documentation
-    // under a failed conditional lost everything after the conditional.)
     for layout in [Layout::Wikijump, Layout::Wikidot] {
         assert_false_iftags_guarded("[[embed]]\n[[/embed]]", layout);
     }
@@ -1309,7 +1296,6 @@ fn decoded_text_entities_cannot_inject_markup() {
                  &#91;&#91;div&#93;&#93; &#42;&#42;x&#42;&#42;";
     let tree = parse(input, Layout::Wikijump);
 
-    // Decoded characters are text, never markup or wikitext syntax.
     assert_eq!(
         render_html(&tree, Layout::Wikijump),
         "<p>&lt;script&gt;alert(1)&lt;/script&gt; &lt;b&gt; &quot;&#39;&amp;lt; \

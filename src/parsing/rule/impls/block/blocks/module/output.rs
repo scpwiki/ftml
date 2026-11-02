@@ -27,7 +27,6 @@ pub enum ModuleParseOutput<'t> {
     None,
 }
 
-// Conversion into
 impl<'t> From<Module<'t>> for ModuleParseOutput<'t> {
     #[inline]
     fn from(module: Module<'t>) -> ModuleParseOutput<'t> {
@@ -49,7 +48,6 @@ impl<'t> From<Option<()>> for ModuleParseOutput<'t> {
     }
 }
 
-// Conversion out of
 impl<'t> From<ModuleParseOutput<'t>> for Elements<'t> {
     fn from(output: ModuleParseOutput<'t>) -> Elements<'t> {
         match output {

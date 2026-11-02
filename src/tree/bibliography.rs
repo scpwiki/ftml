@@ -41,10 +41,6 @@ impl<'t> Bibliography<'t> {
     }
 
     pub fn add(&mut self, label: Cow<'t, str>, elements: Vec<Element<'t>>) {
-        // If the reference already exists, it is *not* overwritten.
-        //
-        // This maintains the invariant that the first reference with a given label,
-        // across any bibliography, is the one which is used.
         if self.get(&label).is_none() {
             self.0.push((label, elements));
         } else {
@@ -67,13 +63,6 @@ impl<'t> Bibliography<'t> {
     }
 
     pub fn get(&self, label: &str) -> Option<(usize, &[Element<'t>])> {
-        // References are maintained as a list, which means that searching
-        // for a particular label is O(n), but this is fine as the number
-        // of references is always going to be bounded. Even at 100 references
-        // this would run at essentially the same speed.
-        //
-        // This also gives us free indexing based on this order, and the
-        // order based on it, so we don't need a two-index map here.
         let mut index = 0;
         for (ref_label, elements) in &self.0 {
             if Self::is_residual(ref_label) {
@@ -142,7 +131,6 @@ impl<'t> BibliographyList<'t> {
 
     pub fn get_reference(&self, label: &str) -> Option<(usize, &[Element<'t>])> {
         for bibliography in &self.0 {
-            // Find the first entry with the label, per the above invariant.
             let reference = bibliography.get(label);
             if reference.is_some() {
                 return reference;

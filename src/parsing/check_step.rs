@@ -72,7 +72,7 @@ fn test_assert_step() {
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let tokenization = crate::tokenize("//Apple// banana");
     let mut parser = Parser::new(&tokenization, &page_info, &settings);
-    parser.step().expect("cannot step"); // get over the Token::InputStart
+    parser.step().expect("cannot step");
 
     let _ = assert_step(&mut parser, Token::Italics);
 }
@@ -83,12 +83,12 @@ fn test_check_step() {
     use crate::layout::Layout;
     use crate::settings::{WikitextMode, WikitextSettings};
 
-    let error_kind = ParseErrorKind::InvalidInclude; // arbitrary
+    let error_kind = ParseErrorKind::InvalidInclude;
     let page_info = PageInfo::dummy();
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let tokenization = crate::tokenize("//Apple// banana");
     let mut parser = Parser::new(&tokenization, &page_info, &settings);
-    parser.step().expect("cannot step"); // get over the Token::InputStart
+    parser.step().expect("cannot step");
 
     let result = check_step(&mut parser, Token::Bold, error_kind);
     let error = result.expect_err("check_step() succeeded when it was supposed to fail");

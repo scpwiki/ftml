@@ -18,12 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Meta-rule for all block constructs.
-//!
-//! This matches `[[` or `[[*` and runs the block parsing
-//! against the upcoming tokens in accordance to how the
-//! various blocks define themselves.
-
 use crate::parsing::Parser;
 use crate::parsing::result::ParseResult;
 use crate::parsing::rule::{LineRequirement, Rule};
@@ -42,61 +36,24 @@ pub use self::arguments::Arguments;
 pub(crate) use self::parser::BlockBodyStart;
 pub use self::rule::{RULE_BLOCK, RULE_BLOCK_SKIP_NEWLINE, RULE_BLOCK_STAR};
 
-/// Define a rule for how to parse a block.
 #[derive(Clone)]
 pub struct BlockRule {
-    /// The code name of the block.
-    ///
-    /// As this is an internal structure, we can assert the following things:
-    /// * It is in kebab-case.
-    /// * It is globally unique.
-    /// * It is prefixed with `block-`.
     name: &'static str,
 
-    /// Which names you can use this block with. Case-insensitive.
-    /// Will panic if empty.
     accepts_names: &'static [&'static str],
 
-    /// Whether this block accepts the star flag (`*`).
-    ///
-    /// For instance, user can be invoked as both
-    /// `[[user aismallard]]` and `[[*user aismallard]]`.
     accepts_star: bool,
 
-    /// Whether this block accepts the score flag (`_`).
-    ///
-    /// For instance, div can be invoked as both
-    /// `[[div]]` and `[[div_]]`.
     accepts_score: bool,
 
-    /// Whether this block optionally allows its head and tail to be separated by newlines.
-    /// These newlines will be consumed and not be interpreted as line breaks.
-    ///
-    /// For instance, `[[div]]`, which can be declared on separate lines, or inline, without
-    /// those newlines becoming part of the resultant element:
-    ///
-    /// ```text
-    /// [[div]]
-    /// My fancy div!
-    /// [[/div]]
-    /// ```
-    ///
-    /// ```text
-    /// [[div]]My fancy inline div![[/div]]
-    /// ```
     accepts_newlines: bool,
 
-    /// Function which implements the processing for this rule.
     parse_fn: BlockParseFn,
 }
 
 impl BlockRule {
-    /// Produces a pseudo parse `Rule` associated with this `BlockRule`.
-    ///
-    /// It should not be invoked, it is for error construction.
     #[cold]
     pub fn rule(&self) -> Rule {
-        // Stubbed try_consume_fn implementation for the Rule.
         fn try_consume_fn<'r, 't>(
             _: &mut Parser<'r, 't>,
         ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -124,14 +81,6 @@ impl Debug for BlockRule {
     }
 }
 
-/// Function pointer type to implement block parsing.
-///
-/// The arguments are, in order:
-/// * `parser` -- `Parser` instance
-/// * `name` -- The name of the block
-/// * `flag_star` -- Whether this block is has the star flag (`*`).
-/// * `flag_score` -- Whether this block has the score flag (`_`).
-/// * `in_head` -- Whether we're still in the block head, or if it's finished
 pub type BlockParseFn = for<'r, 't> fn(
     &mut Parser<'r, 't>,
     &'t str,

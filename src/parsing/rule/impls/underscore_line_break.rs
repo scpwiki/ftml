@@ -36,13 +36,6 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // These can start in two ways:
-    // Either a space, or start of line.
-    //
-    // Put in a regex-like syntax, we want:
-    // " "? ~ "_" ~ "\n"
-    //
-    // So if it's not newline-based, we step to get onto the underscore.
     match parser.next_two_tokens() {
         (Token::Whitespace, Some(Token::Underscore)) => {
             parser.step()?;
@@ -52,7 +45,6 @@ fn try_consume_fn<'r, 't>(
         _ => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
     }
 
-    // Now the current token should be underscore, then newline.
     let (current, next) = parser.next_two_tokens();
     let terminal = parser.settings().layout.legacy()
         && current == Token::Underscore
@@ -69,7 +61,6 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Since we know where we are, we can step over them, then be done.
     parser.step_n(2)?;
 
     if parser.settings().layout.legacy() && paragraph_break {

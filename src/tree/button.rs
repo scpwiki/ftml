@@ -84,8 +84,6 @@ impl TagAlteration<'_> {
     }
 }
 
-/// Accept only the small CSS surface present in the live evidence. Unknown or
-/// executable-looking declarations are dropped instead of becoming authority.
 pub(crate) fn is_safe_standalone_button_style(style: &str) -> bool {
     if style.len() > MAX_STANDALONE_BUTTON_STYLE_BYTES
         || style

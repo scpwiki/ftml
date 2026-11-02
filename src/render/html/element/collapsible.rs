@@ -259,33 +259,28 @@ fn render_collapsible_wikijump(
             attributes,
         ))
         .inner(|ctx| {
-            // Open/close button
             ctx.html()
                 .summary()
                 .attr(attr!(
                     "class" => "wj-collapsible-button wj-collapsible-button-top",
                 ))
                 .inner(|ctx| {
-                    // Block is folded text
                     ctx.html()
                         .span()
                         .attr(attr!("class" => "wj-collapsible-show-text"))
                         .contents(show_text);
 
-                    // Block is unfolded text
                     ctx.html()
                         .span()
                         .attr(attr!("class" => "wj-collapsible-hide-text"))
                         .contents(hide_text);
                 });
 
-            // Content block
             ctx.html()
                 .div()
                 .attr(attr!("class" => "wj-collapsible-content"))
                 .contents(elements);
 
-            // Bottom open/close button
             if show_bottom {
                 ctx.html()
                     .element("wj-collapsible-button-bottom")
@@ -293,7 +288,6 @@ fn render_collapsible_wikijump(
                         "class" => "wj-collapsible-button wj-collapsible-button-bottom",
                     ))
                     .inner(|ctx| {
-                        // Block is unfolded text
                         ctx.html()
                             .span()
                             .attr(attr!("class" => "wj-collapsible-hide-text"))

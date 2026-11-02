@@ -8,11 +8,6 @@ use std::borrow::Cow;
 use std::sync::mpsc;
 use std::time::Duration;
 
-// Live provenance: anonymous edit/PagePreviewModule in Wikidot layout.
-// Evidence bundle: comment-broad-20260730130843-26974.
-// cases.jsonl SHA-256: 31db31c40e9cffd955cc5bbe749980ee1acbde3cb9f0b7f5b74754989d849957
-// live.jsonl SHA-256: 00c96faebb599baa01a0028e64889f77011b1494cefd7333ed0bd3ef959eec8c
-
 fn page_info() -> PageInfo<'static> {
     PageInfo {
         page: Cow::Borrowed("comment-consumers"),

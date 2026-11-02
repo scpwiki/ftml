@@ -51,9 +51,6 @@ pub fn render_email(ctx: &mut HtmlContext, email: &str) {
                 .contents(&obfuscated);
         }
         Layout::Wikijump => {
-            // Since our usecase doesn't typically have emails as real,
-            // but rather as fictional elements, we're just rendering as text.
-
             ctx.html()
                 .span()
                 .attr(attr!("class" => "wj-email"))
@@ -94,7 +91,6 @@ pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str
         .element("wj-code")
         .attr(attr!("class" => &class))
         .inner(|ctx| {
-            // Panel for holding additional features
             ctx.html()
                 .div()
                 .attr(attr!(
@@ -105,7 +101,6 @@ pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str
                         .handle()
                         .get_message(ctx.language(), "button-copy-clipboard");
 
-                    // Copy to clipboard button
                     ctx.html()
                         .element("wj-code-copy")
                         .attr(attr!(
@@ -115,11 +110,9 @@ pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str
                         ))
                         .inner(|ctx| {
                             ctx.html().sprite("wj-clipboard");
-                            // Hidden normally, shown when clicked
                             ctx.html().sprite("wj-clipboard-success");
                         });
 
-                    // Span showing name of language
                     ctx.html()
                         .span()
                         .attr(attr!(
@@ -128,7 +121,6 @@ pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str
                         .contents(language.unwrap_or(""));
                 });
 
-            // Code block containing highlighted contents
             ctx.html().pre().inner(|ctx| {
                 ctx.html().code().contents(contents);
             });

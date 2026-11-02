@@ -132,7 +132,6 @@ where
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    // TODO: html render settings to allow this?
     let _autoplay = arguments.get("autoplay");
 
     let attributes = arguments.to_attribute_map(parser.settings());

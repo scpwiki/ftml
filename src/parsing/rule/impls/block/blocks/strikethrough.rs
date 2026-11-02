@@ -43,7 +43,6 @@ fn parse_fn<'r, 't>(
 
     let arguments = parser.get_head_map(&BLOCK_STRIKETHROUGH, in_head)?;
 
-    // Get body content, without paragraphs
     let (elements, errors, paragraph_safe) = parser
         .get_body_elements(&BLOCK_STRIKETHROUGH, false)?
         .into();

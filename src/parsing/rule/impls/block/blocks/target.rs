@@ -46,12 +46,10 @@ fn parse_fn<'r, 't>(
     let block = &BLOCK_TARGET;
     let name = parser.get_head_value(block, in_head, require_trimmed_block_argument)?;
 
-    // Handle invalid anchor names
     if name.is_empty() || name.contains(' ') {
         return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
     }
 
-    // Isolate ID if requested
     let name = if parser.settings().isolate_user_ids {
         Cow::Owned(isolate_ids(name))
     } else {

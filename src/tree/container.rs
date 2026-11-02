@@ -131,7 +131,6 @@ impl ContainerType {
         layout: Layout,
         indexer: &mut dyn NextIndex<TableOfContentsIndex>,
     ) -> HtmlTag {
-        // TODO add wikidot compat
         match self {
             ContainerType::Bold => HtmlTag::new("strong"),
             ContainerType::Italics => HtmlTag::new("em"),

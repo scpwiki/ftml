@@ -59,7 +59,6 @@ pub fn render_iframe(ctx: &mut HtmlContext, url: &str, attributes: &AttributeMap
 pub fn render_html(ctx: &mut HtmlContext, contents: &str, attributes: &AttributeMap) {
     debug!("Rendering html block (submitting to remote for iframe)");
 
-    // Submit HTML to be hosted on wjfiles, then get back its URL for the iframe.
     let iframe_url = ctx.handle().post_html(ctx.info(), contents);
     let src = normalize_href(&iframe_url, None);
 

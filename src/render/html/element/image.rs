@@ -120,15 +120,6 @@ fn render_image_element(
     }
 }
 
-/// Render an image block with a Wikidot-compatible DOM.
-///
-/// The structure is thus:
-/// 1. If alignment, wrap in `<div>`. Otherwise nothing.
-/// 2. If link, wrap in `<a>`. Otherwise nothing.
-/// 3. The image itself, `<img>`.
-///
-/// We define the closures in reverse order so
-/// we can properly (conditionally) nest them.
 fn render_image_element_wikidot(
     ctx: &mut HtmlContext,
     image_url: &str,

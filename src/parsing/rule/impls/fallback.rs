@@ -26,14 +26,6 @@ pub const RULE_FALLBACK: Rule = Rule {
     try_consume_fn,
 };
 
-/// The stubbed implementation of `try_consume` for `RULE_FALLBACK`.
-///
-/// This is a special case, since we never "try" to consume a fallback,
-/// it always activates when all other rules fail. As such, it is never
-/// executed directly.
-///
-/// See the end of the `consume()` function in `parse/consume.rs` for
-/// where the fallback action is performed.
 fn try_consume_fn<'r, 't>(_: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     panic!("Manual fallback rule should not be executed directly!")
 }

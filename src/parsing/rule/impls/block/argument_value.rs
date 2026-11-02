@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Quoted and bare Wikidot block argument values.
-
 use super::BlockRule;
 use crate::parsing::string::parse_string;
 use crate::parsing::{ParseError, ParseErrorKind, Parser, Token};
@@ -203,7 +201,6 @@ mod tests {
 
     #[test]
     fn doubled_quotes_preserve_literal_quotes_in_block_arguments() {
-        // Corpus provenance: scp-wiki/gears-ground-slowly.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let source = concat!(
@@ -225,7 +222,6 @@ mod tests {
 
     #[test]
     fn embedded_unescaped_quotes_remain_inside_block_argument() {
-        // Corpus provenance: scp-wiki/foundation-missed-connections.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let source = concat!(

@@ -70,10 +70,8 @@ where
         if parser.evaluate_any(closes) {
             let last = parser.current();
             let slice = match (start, end) {
-                // We have a token span, use to get string slice
                 (start, Some(end)) => parser.full_text().slice(start, end),
 
-                // Empty list of tokens, resultant slice must be empty
                 (_, None) => "",
             };
 

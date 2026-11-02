@@ -994,8 +994,6 @@ fn lost_owner_body_keeps_metadata_and_collapsible_arguments() {
 
 #[test]
 fn wikidot_list_owner_extended_matrix_matches_live_dom() {
-    // Anonymous edit/PagePreviewModule observations from sandbox-for-codex,
-    // captured 2026-08-07 after the issue's original 2026-07-30 matrix.
     for (case_id, source, expected) in [
         (
             "issue-305-nested-ul-div",

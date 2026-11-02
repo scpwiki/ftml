@@ -78,12 +78,10 @@ fn parse_definition_list<'r, 't>(
         return ok!(false; Elements::None, errors);
     }
 
-    // Definition list needs at least one item
     let (item, at_end) = parse_item(parser)?.chain(&mut errors, &mut _paragraph_safe);
 
     items.push(item);
 
-    // Collect remainder, halting if there's a failure
     let mut at_end = at_end;
     while !at_end {
         let next = parse_next_item(parser, &mut errors, &mut _paragraph_safe);
@@ -95,7 +93,6 @@ fn parse_definition_list<'r, 't>(
         }
     }
 
-    // Build and return element
     ok!(Element::DefinitionList(items))
 }
 
@@ -130,15 +127,10 @@ fn parse_item<'r, 't>(
     let mut errors = Vec::new();
     let mut _paragraph_safe = false;
 
-    // The pattern for a definition list row is:
-    // : key : value \n
-
-    // Ensure the start of the line
     if !parser.start_of_line() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Ensure that it matches expected token state
     if !starts_definition_item(parser) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -150,10 +142,8 @@ fn parse_item<'r, 't>(
     let (key_string, key_elements) = key;
     let (value_elements, last) = value;
 
-    // collect_value only stops on line, paragraph, or input boundaries.
     let should_break = matches!(last.token, Token::ParagraphBreak | Token::InputEnd);
 
-    // Build and return
     let key_string = std::borrow::Cow::Borrowed(key_string);
     let item = DefinitionListItem {
         key_string,
@@ -314,7 +304,6 @@ impl log::Log for TestLogger {
         true
     }
 
-    // This test logger only exercises logging call sites; it does not capture output.
     fn log(&self, _record: &log::Record<'_>) {}
 
     fn flush(&self) {}

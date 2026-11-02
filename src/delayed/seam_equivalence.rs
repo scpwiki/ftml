@@ -52,8 +52,6 @@ use std::borrow::Cow;
 /// output can be split on it literally.
 const BLOCK: &str = "[[iftags +zz-no-such-tag]]x[[/iftags]]";
 
-/// Text tokens; `None` in a sequence is a seam. Dash runs are excluded: they become
-/// separate dash elements, not text.
 const TOKENS: &[&str] = &[
     "\"", "'", "a", " ", ".", "...", "<", ">", "<<", ">>", "\u{e9}",
 ];
@@ -73,8 +71,6 @@ fn preprocess_pieces(source: &str) -> Vec<String> {
     text.split(BLOCK).map(str::to_owned).collect()
 }
 
-/// Names a mismatch by the characters on which the two strings disagree (as multisets),
-/// so one root cause is one class however many inputs reach it.
 fn difference_class(got: &str, expected: &str) -> String {
     let mut counts: std::collections::BTreeMap<char, i64> =
         std::collections::BTreeMap::new();
@@ -101,7 +97,6 @@ fn pick_has_right_angle(pick: &[usize]) -> bool {
         .any(|&p| p < TOKENS.len() && matches!(TOKENS[p], ">" | ">>"))
 }
 
-/// `pick` indexes TOKENS, with `TOKENS.len()` meaning a seam.
 fn check(pick: &[usize]) -> Option<(String, String)> {
     check_inner(pick).map(|(class, message)| {
         if pick_has_right_angle(pick) {

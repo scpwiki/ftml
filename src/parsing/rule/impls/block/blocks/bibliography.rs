@@ -127,10 +127,6 @@ fn parse_fn<'r, 't>(
         })
         .flatten();
 
-    // Build up the bibliography
-    //
-    // Look through to find definition lists, ignoring "space" type elements,
-    // and adding definition list values to the bibliography as we find them.
     let mut bibliography = Bibliography::new();
     let mut in_residual = false;
     let mut seen_definition = false;
@@ -139,7 +135,6 @@ fn parse_fn<'r, 't>(
 
     for element in elements {
         match element {
-            // Append definition list entries
             Element::DefinitionList(items) => {
                 if seen_definition && crossed_residual_inserted {
                     crossed_residual_done = true;
@@ -164,10 +159,8 @@ fn parse_fn<'r, 't>(
                 in_residual = true;
             }
 
-            // Skip structural whitespace between definition lists.
             _ if element.is_whitespace() && !in_residual => continue,
 
-            // Other elements are preserved without an item number.
             _ => {
                 bibliography.add_residual(element);
                 in_residual = true;
@@ -175,7 +168,6 @@ fn parse_fn<'r, 't>(
         }
     }
 
-    // Add bibliography object to parser for unified tracking, like footnotes.
     let index = parser.push_bibliography(bibliography);
 
     ok!(Element::BibliographyBlock { index, title, hide }, errors)

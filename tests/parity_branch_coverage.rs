@@ -21,18 +21,13 @@ const REFERENCE_FILES: &[&str] = &[
     "tests/fixtures/wikidot-parity/references-20260816-03.jsonl",
 ];
 
-// One live witness for every independently reviewed parser/preprocessor branch
-// family in this campaign. Equivalent permutations inside one branch do not
-// need a Cartesian live matrix; deleting a representative reopens the audit.
 const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
-    // Comment lifecycle and rollback.
     "tests--fixtures--parity-gaps--comment-close-exact",
     "tests--fixtures--parity-gaps--comment-close-extended",
     "tests--fixtures--parity-gaps--comment-nonadjacent-close",
     "tests--fixtures--parity-gaps--comment-nested-first-close",
     "tests--fixtures--parity-gaps--comment-unclosed",
     "tests--fixtures--parity-gaps--comment-unmatched-close",
-    // Block names, closers, literal owners, and head consumers.
     "tests--fixtures--parity-gaps--comment-block-name-owner",
     "tests--fixtures--parity-gaps--comment-block-include-name",
     "tests--fixtures--parity-gaps--comment-block-closer-name-owner",
@@ -53,7 +48,6 @@ const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
     "tests--fixtures--parity-gaps--comment-hidden-block-owner",
     "tests--fixtures--parity-gaps--comment-style-javascript-seam",
     "tests--fixtures--parity-gaps--comment-style-unicode-javascript-seam",
-    // Parser functions and variables.
     "tests--fixtures--parity-gaps--comment-parserfn-name-owner",
     "tests--fixtures--parity-gaps--comment-parserfn-ifexpr-name-owner",
     "tests--fixtures--parity-gaps--comment-parserfn-expr-name-owner",
@@ -62,7 +56,6 @@ const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
     "tests--fixtures--parity-gaps--comment-parserfn-opener-owner",
     "tests--fixtures--parity-gaps--comment-variable-token",
     "tests--fixtures--parity-gaps--comment-variable-name-owner",
-    // URL, link, image, email, and scheme classification.
     "tests--fixtures--parity-gaps--comment-autourl-joined",
     "tests--fixtures--parity-gaps--comment-autourl-split-scheme",
     "tests--fixtures--parity-gaps--comment-autourl-split-ftp-scheme",
@@ -76,7 +69,6 @@ const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
     "tests--fixtures--parity-gaps--comment-triple-safe-scheme",
     "tests--fixtures--parity-gaps--comment-triple-fields-owner",
     "tests--fixtures--parity-gaps--comment-email-token",
-    // Multi-character scanner tokens and token caps.
     "tests--fixtures--parity-gaps--comment-delimiter-block-open",
     "tests--fixtures--parity-gaps--comment-delimiter-block-close-open",
     "tests--fixtures--parity-gaps--comment-delimiter-block-star",
@@ -99,7 +91,6 @@ const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
     "tests--fixtures--parity-gaps--comment-delimiter-clearfloat",
     "tests--fixtures--parity-gaps--comment-delimiter-horizontal-rule",
     "tests--fixtures--parity-gaps--comment-delimiter-quote-run",
-    // Line ownership and whitespace preprocessing.
     "tests--fixtures--parity-gaps--comment-join-paragraph-break",
     "tests--fixtures--parity-gaps--comment-join-line-continuation",
     "tests--fixtures--parity-gaps--comment-crlf-join",
@@ -117,7 +108,6 @@ const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
     "tests--fixtures--parity-gaps--comment-prefix-clearfloat",
     "tests--fixtures--parity-gaps--comment-table-row-owner",
     "tests--fixtures--parity-gaps--comment-table-space-trim",
-    // Content-separator length, whitespace, control, and owner classes.
     "tests--fixtures--parity-gaps--content-separator-under-threshold",
     "tests--fixtures--parity-gaps--content-separator-run-five",
     "tests--fixtures--parity-gaps--content-separator-run-six",

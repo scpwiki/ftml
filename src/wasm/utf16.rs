@@ -23,8 +23,6 @@ use crate::Utf16IndexMap as RustUtf16IndexMap;
 use self_cell::self_cell;
 use std::sync::Arc;
 
-// Wrapper structures
-
 self_cell!(
     struct Utf16IndexMapInner {
         owner: String,

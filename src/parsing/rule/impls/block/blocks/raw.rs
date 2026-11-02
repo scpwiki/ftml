@@ -22,7 +22,6 @@ use super::span::wikidot_literal_with_empty_scored_spans_elided;
 use crate::delayed::DelayedElement;
 use std::borrow::Cow;
 
-// NOTE: "accepts_newlines" needs to be false here to avoid end trimming from get_body_text
 pub const BLOCK_RAW: BlockRule = BlockRule {
     name: "block-raw",
     accepts_names: &["raw"],
@@ -95,13 +94,9 @@ fn parse_fn<'r, 't>(
 
     let mut content = parser.get_body_text(&BLOCK_RAW)?;
 
-    // Empty block
     if content == "\n" {
         content = Cow::Borrowed("");
-    }
-    // Trim the first and last \n if it's a multi-line block.
-    // We already checked for the single newline case above.
-    else if content.starts_with('\n') && content.ends_with('\n') {
+    } else if content.starts_with('\n') && content.ends_with('\n') {
         content = match content {
             Cow::Borrowed(content) => {
                 Cow::Borrowed(content.trim_start_matches('\n').trim_end_matches('\n'))

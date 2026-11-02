@@ -18,14 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Module which contains functions to iterate through tokens and output according to rules.
-//!
-//! The main function here is `collect()`, which is a generic procedure to perform
-//! some action over tokens, finishing or abortion when it reaches certain tokens.
-//!
-//! The other functions are extensions of `collect()` which perform more specific functions,
-//! but still with the same customization.
-
 mod prelude {
     pub use super::collect;
     pub use crate::parsing::condition::ParseCondition;

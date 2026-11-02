@@ -12,8 +12,6 @@ const IFTAGS_LITERAL_SPAN: u8 = 1 << 7;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WikidotState {
-    // Parser recursion is capped well below `u16::MAX`; compact counters keep
-    // this state out of every recursive parser frame's pointer-sized padding.
     div_body_depth: u16,
     scored_div_body_depth: u16,
     scored_span_body_depth: u16,
@@ -25,10 +23,6 @@ pub(super) struct WikidotState {
 }
 
 impl WikidotState {
-    /// This state as part of a rule attempt key.
-    ///
-    /// Div bodies are entered and left in pairs around the body parse and
-    /// only read as "inside any div", so their depth collapses to that bit.
     pub(super) fn attempt_key(self) -> Self {
         Self {
             div_body_depth: self.div_body_depth.min(1),

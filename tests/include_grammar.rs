@@ -89,9 +89,6 @@ impl<'t> Includer<'t> for CapturedIncludes {
 
 #[test]
 fn live_include_grammar_matrix() {
-    // Exact source matrix from anonymous Wikidot PagePreview run
-    // 20260730123701-464. The source artifact is cases.jsonl with SHA-256
-    // ddb0b79c6c56726be61312448522245604df19818d2d84412d212bd657c787ca.
     let cases: &[MatrixCase<'_>] = &[
         (
             "canonical-no-args",
@@ -449,15 +446,6 @@ fn live_include_grammar_matrix() {
 
 #[test]
 fn live_include_with_nested_span_caption_is_consumed_whole() {
-    // Frozen W20 capture for wikijump#2990 (anonymous PagePreviewModule on
-    // sandbox-for-codex, wikidot.py 4.4.1):
-    // 2990-scp7728-shape-preview.json previews the exact scp-7728 image-block
-    // line, whose caption value contains a nested `[[span ...]]...[[/span]]`
-    // block. Live Wikidot consumes the whole construct as one include: the
-    // output is only the missing-include error block, with no leftover
-    // literal text. The inner `[[/span]]` `]]` therefore does not terminate
-    // the include (or the caption value).
-    // (syntax_case SHA-256 79fb91a9...ad37ee; raw_html SHA-256 ecdbbbbe...39f60)
     let source = concat!(
         "[[include component:image-block name=scary.jpg",
         "|caption=[[span style=\"font-family: 'Schoolbell';  font-size: 20px;\"]]",

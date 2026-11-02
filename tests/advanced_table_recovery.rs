@@ -33,8 +33,6 @@ fn render(source: &str) -> String {
 
 #[test]
 fn advanced_table_structural_recovery_matches_live_wikidot() {
-    // Anonymous edit/PagePreviewModule capture:
-    // advanced-table-20260730131818-10599/live.jsonl.
     assert_eq!(
         render(concat!(
             "[[table]]\n",
@@ -129,9 +127,6 @@ fn advanced_table_invocation_scope_matches_live_wikidot() {
 
 #[test]
 fn advanced_table_cell_closer_matrix_matches_live_wikidot() {
-    // The four base cases come from the frozen 2026-07-30 capture. The extra
-    // hcell and duplicate cases were rechecked through anonymous PagePreview
-    // on 2026-08-07 without saving a page.
     for (opener, closer, tag) in [
         ("cell", "cell", "td"),
         ("cell", "hcell", "th"),

@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
-# Usage: run.sh            run the seam-transparency check against src/delayed/seam.rs
-#        run.sh mutants    break a temporary copy of the repo; each break must add a class the known list lacks
-# Exit 0 only when the failure classes found equal verification/seam-typography/known-findings.txt
-# (limited to classes whose shortest input fits the bound used).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 
-summarize() { # $1 = repo dir; prints "<class>|<len>" lines on stdout, bound on stderr
+summarize() {
   (cd "$1" && CARGO_INCREMENTAL=0 cargo test --lib --quiet seam_equivalence -- --ignored --nocapture 2>&1 || true) \
   | python3 -I -c '
 import re, sys
@@ -25,13 +21,11 @@ for line in raw.splitlines():
 '
 }
 
-known_for_bound() { # $1 = bound
-  # Lines are <class>|<shortest length>|<failing inputs at the default bound 5>. The count is
-  # compared only at the default bound; other bounds compare class and shortest length.
+known_for_bound() {
   { grep -v '^#' "$here/known-findings.txt" || true; } | awk -F'|' -v b="$1" '$2 <= b { if (b == 5) print $1 "|" $2 "|" $3; else print $1 "|" $2 }' | sort
 }
 
-compare() { # $1 = actual file, $2 = bound
+compare() {
   known_for_bound "$2" > "$1.known"
   if [ "$2" = 5 ]; then sort "$1" > "$1.actual"; else cut -d'|' -f1,2 "$1" | sort > "$1.actual"; fi
   if diff -u "$1.known" "$1.actual" > "$1.diff"; then
@@ -41,7 +35,7 @@ compare() { # $1 = actual file, $2 = bound
   grep '^[-+][^-+]' "$1.diff"; return 1
 }
 
-run_one() { # $1 = repo dir, $2 = tmp file; sets BOUND
+run_one() {
   BOUND="$( { summarize "$1" > "$2"; } 2>&1 >/dev/null | sed -n 's/^bound: max_tokens=//p' )"
   [ -n "$BOUND" ] || { cat "$2"; echo "CHECK DID NOT RUN"; return 3; }
 }

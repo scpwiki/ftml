@@ -178,9 +178,6 @@ fuzz_target!(|data: &[u8]| {
     if data.is_empty() {
         return;
     }
-    // Derive the control bytes from the complete input instead of reserving a
-    // prefix. This keeps stable parity seeds intact as meaningful syntax while
-    // still letting libFuzzer mutate the delayed segmentation strategy.
     let c0 = data.len() as u8;
     let c1 = data.iter().fold(0_u8, |sum, byte| sum.wrapping_add(*byte));
     let c2 = data.iter().fold(0_u8, |xor, byte| xor ^ *byte);

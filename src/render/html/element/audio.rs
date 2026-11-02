@@ -45,10 +45,8 @@ pub fn render_audio(
         .get_file_link(source, ctx.info(), ctx.settings());
 
     match source_url {
-        // Found URL
         Some(url) => render_audio_element(ctx, &url, alignment, attributes),
 
-        // Missing or error
         None => render_audio_missing(ctx),
     }
 }

@@ -18,12 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/// Creates a `ParseResult::Ok` with the given fields.
-///
-/// There are two variants, for if there are errors or if there are not.
 macro_rules! ok {
-    // Derive paragraph safety
-    // Must return Elements instead of T
     ($item:expr $(,)?) => {
         ok!($item, Vec::new())
     };
@@ -37,7 +32,6 @@ macro_rules! ok {
         Ok(ParseSuccess::new(item, $errors, paragraph_safe))
 
     }};
-    // Specify paragraph safety
     ($paragraph_safe:expr; $item:expr $(,)?) => {
         ok!($paragraph_safe; $item, Vec::new())
     };

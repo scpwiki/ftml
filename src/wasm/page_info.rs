@@ -23,8 +23,6 @@ use crate::data::PageInfo as RustPageInfo;
 use ref_map::*;
 use std::sync::Arc;
 
-// Typescript declarations
-
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &str = r#"
 export interface IPageInfo {
@@ -47,8 +45,6 @@ extern "C" {
     #[wasm_bindgen(typescript_type = "string[]")]
     pub type ITags;
 }
-
-// Wrapper structure
 
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
@@ -78,8 +74,6 @@ impl PageInfo {
             inner: Arc::new(js_to_rust!(info)?),
         })
     }
-
-    // Getters
 
     #[wasm_bindgen(getter)]
     pub fn page(&self) -> String {

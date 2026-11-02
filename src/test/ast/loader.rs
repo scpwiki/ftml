@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Submodule responsible for defining the AST test loader system.
-
 use super::{Test, TestUniverse};
 use crate::tree::{BibliographyList, SyntaxTree};
 use serde::de::DeserializeOwned;
@@ -28,8 +26,6 @@ use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
-
-// File helper functions
 
 fn open_file(path: &Path) -> File {
     match File::open(path) {
@@ -68,16 +64,12 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> T {
     }
 }
 
-// String helper functions
-
 fn convert_os_string(s: OsString) -> String {
     match s.into_string() {
         Ok(s) => s,
         Err(s) => panic!("Unable to convert OsString: {}", s.display()),
     }
 }
-
-// Windows compatibility
 
 #[cfg(not(target_os = "windows"))]
 fn process_newlines(_: &mut String) {}
@@ -90,49 +82,12 @@ fn process_newlines(text: &mut String) {
     }
 }
 
-// Main loader functionality
-
 impl TestUniverse {
-    /// Loads all tests from the filesystem.
-    ///
-    /// There is a particular directory structure to AST tests.
-    /// Within `/test` in the repo, there is a set of directories,
-    /// which correspond to the main "test groups", a set of tests
-    /// which are related in some way (generally to a specific piece
-    /// of syntax or functionality).
-    ///
-    /// Then within each group, is another set of directories, which
-    /// are each actual test case.
-    ///
-    /// For instance, consider this structure:
-    /// ```text
-    /// test/
-    /// ├── diff
-    /// │   ├── alias
-    /// │   ├── basic
-    /// │   └── newlines
-    /// └── underline
-    ///     ├── basic
-    ///     ├── empty
-    ///     └── fail
-    /// ```
-    ///
-    /// This will create six test cases:
-    /// * `diff/alias`
-    /// * `diff/basic`
-    /// * `diff/newlines`
-    /// * `underline/basic`
-    /// * `underline/empty`
-    /// * `underline/fail`
     #[inline]
     pub fn load(test_dir: &Path) -> Self {
         Self::load_inner(test_dir, false)
     }
 
-    /// Like `TestUniverse::load()`, except that empty files are permitted.
-    ///
-    /// This is to make adding new tests more convenient, to be used with
-    /// `UPDATE_TESTS = true`.
     #[inline]
     #[cold]
     pub fn load_permissive(test_dir: &Path) -> Self {
@@ -142,7 +97,6 @@ impl TestUniverse {
     fn load_inner(test_dir: &Path, permissive: bool) -> Self {
         let mut tests = BTreeMap::new();
 
-        // Read all test groups
         for entry in fs::read_dir(test_dir).expect("Unable to read dir") {
             let entry = entry.expect("Unable to read dir entry");
             let metadata = entry.metadata().expect("Unable to get dir entry metadata");
@@ -150,16 +104,10 @@ impl TestUniverse {
             let test_group = convert_os_string(entry.file_name());
 
             if metadata.is_dir() {
-                // Read all individual tests
                 Self::load_group(&mut tests, &test_group, &path, permissive);
             } else if Self::ignore_test_file(&path) {
-                // One of the files we always ignore when loading
                 continue;
             } else {
-                // Anything else is unexpected and should result in a failed build
-                //
-                // If it's a known ignored file, add it to ignore_test_file(),
-                // and if it's not supposed to be there, remove it!
                 panic!("Unexpected file! {}", path.display());
             }
         }
@@ -178,7 +126,6 @@ impl TestUniverse {
             let metadata = entry.metadata().expect("Unable to get dir entry metadata");
             let path = entry.path();
             let name = {
-                // Write out the test name as 'group/name'
                 let mut test_name = convert_os_string(entry.file_name());
                 test_name.insert(0, '/');
                 test_name.insert_str(0, test_group);
@@ -189,7 +136,6 @@ impl TestUniverse {
                 panic!("Found a non-directory test path: {}", path.display());
             }
 
-            // Read test object
             let test_name = name.clone();
             let test = if permissive {
                 Test::load_permissive(test_name, &path)
@@ -216,15 +162,11 @@ impl TestUniverse {
 }
 
 impl Test {
-    /// Loads a particular test case from the filesystem.
     #[inline]
     pub fn load(name: String, test_dir: &Path) -> Self {
         Self::load_inner(name, test_dir, false)
     }
 
-    /// Like `Test::load()`, except empty files are treated as default values.
-    ///
-    /// See `TestUniverse::load_permissive()` for more information.
     #[inline]
     #[cold]
     pub fn load_permissive(name: String, test_dir: &Path) -> Self {
@@ -250,8 +192,6 @@ impl Test {
                 .to_str()
                 .expect("Encountered non-UTF-8 path");
 
-            // Special handling for empty files in permissive mode
-            // See TestUniverse::load_permissive().
             if metadata.len() == 0 && permissive {
                 fn empty_syntax_tree() -> SyntaxTree<'static> {
                     SyntaxTree {
@@ -294,13 +234,11 @@ impl Test {
             }
         }
 
-        // Extract required field, with better panic message
         let input = match input {
             Some(input) => input,
             None => panic!("No wikitext file (input.ftml) found for test '{name}'!"),
         };
 
-        // Ensure syntax tree is present for fail tests
         if errors.is_some() {
             assert!(
                 tree.is_some(),

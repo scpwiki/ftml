@@ -67,13 +67,11 @@ fn try_consume_fn<'r, 't>(
                 };
             }
 
-            // Hit the end of the input, abort
             Token::InputEnd => {
                 trace!("Reached end of input, aborting");
                 return Err(parser.make_err(ParseErrorKind::EndOfInput));
             }
 
-            // Consume any other token
             _ => {
                 trace!("Token inside comment received. Discarding.");
                 parser.step()?;
@@ -88,8 +86,6 @@ pub(crate) fn comment_closer_token_count(parser: &Parser<'_, '_>) -> Option<usiz
         current.token,
         Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
     );
-    // URL and email tokens may own the comment body's last authored bytes.
-    // Their adjacent trailing hyphens still close the active comment.
     let trailing_hyphens = current
         .slice
         .bytes()
@@ -112,8 +108,6 @@ pub(crate) fn comment_closer_token_count(parser: &Parser<'_, '_>) -> Option<usiz
         .chain(parser.remaining())
         .enumerate()
     {
-        // Runtime and generated values are data. They cannot contribute even
-        // one half of an authored closer across a provenance boundary.
         if matches!(
             token.token,
             Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks

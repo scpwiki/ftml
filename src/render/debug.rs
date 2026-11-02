@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! A simple renderer that outputs the `SyntaxTree` using Rust's debug formatter.
-
 use super::prelude::*;
 
 #[derive(Debug)]

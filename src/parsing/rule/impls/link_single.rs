@@ -18,12 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Rules for single-bracket links.
-//!
-//! Wikidot, in its infinite wisdom, has two means for designating links.
-//! This method allows any URL, either opening in a new tab or not.
-//! Its syntax is `[https://example.com/ Label text]`.
-
 use super::RULE_COMMENT;
 use super::math::wikidot_math_candidate_is_complete;
 use super::prelude::*;
@@ -98,7 +92,6 @@ fn link_new_tab<'r, 't>(
     try_consume_link(parser, RULE_LINK_SINGLE_NEW_TAB, Some(AnchorTarget::NewTab))
 }
 
-/// Build a single-bracket link with the given target.
 fn try_consume_link<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -108,7 +101,6 @@ fn try_consume_link<'r, 't>(
         return try_consume_wikidot_link(parser, target);
     }
 
-    // Gather path for link
     let url_close = [ParseCondition::current(Token::Whitespace)];
     let url_invalid = [
         ParseCondition::current(Token::RightBracket),
@@ -156,7 +148,6 @@ fn try_consume_link<'r, 't>(
         )));
     }
 
-    // Gather label for link
     let label_close = [ParseCondition::current(Token::RightBracket)];
     let label_invalid = [
         ParseCondition::current(Token::ParagraphBreak),
@@ -164,7 +155,6 @@ fn try_consume_link<'r, 't>(
     ];
     let label = collect_text(parser, rule, &label_close, &label_invalid, None)?;
 
-    // Trim label
     let label = label.trim();
 
     let element = Element::Link {
@@ -174,7 +164,6 @@ fn try_consume_link<'r, 't>(
         target,
     };
 
-    // Return result
     success_elements(element)
 }
 
@@ -436,9 +425,6 @@ fn wikidot_label_has_complete_named_anchor_owner<'r, 't>(parser: &Parser<'r, 't>
 where
     'r: 't,
 {
-    // Scan once instead of trying the anchor rule at every candidate. A long
-    // malformed label can contain many openers, so repeated forward parses
-    // would make owner detection quadratic.
     let mut scan = parser.clone();
     let mut anchor = WikidotNamedAnchorOwnerScan::default();
     loop {
@@ -472,11 +458,6 @@ where
     }
 }
 
-/// Check link-label ownership without executing nested formula syntax.
-///
-/// Parser clones share footnote and other document state. This scan finds the
-/// authored candidate, while the math module's inert collector validates its
-/// close and comment/raw ownership without invoking formula contents.
 fn wikidot_label_has_complete_math_owner<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,
@@ -672,17 +653,14 @@ fn valid_bounded_scheme(scheme: &str) -> bool {
 }
 
 fn url_valid(url: &str) -> bool {
-    // If url is an empty string
     if url.is_empty() {
         return false;
     }
 
-    // If it's a relative link
     if url.starts_with('/') {
         return true;
     }
 
-    // If it's a URL
     if is_url(url) {
         return true;
     }
@@ -719,7 +697,6 @@ mod tests {
             "{html}"
         );
 
-        // Unknown prefixes are not links.
         let html = render("[nosuchwiki:Mallard The duck]");
         assert!(!html.contains("<a "), "{html}");
 

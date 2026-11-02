@@ -18,11 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Rules for strikethrough.
-//!
-//! Wikidot had implemented strikethrough using --text--
-//! however we also added the more conventional way ~~text~~
-
 use super::inline_delimiter::assert_unpadded_open;
 use super::prelude::*;
 
@@ -51,7 +46,6 @@ fn tilde<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t
     try_consume_strikethrough(parser, RULE_STRIKETHROUGH_TILDE, Token::DoubleTilde)
 }
 
-/// Build a strikethrough with the given rule and token.
 fn try_consume_strikethrough<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -65,11 +59,6 @@ fn try_consume_strikethrough<'r, 't>(
         assert_step(parser, token)?;
     }
     let close = [ParseCondition::current(token)];
-    // A bare end-block token at a collection step is the end of an
-    // enclosing block: nested blocks consume their own end tokens, so
-    // an inline container may never consume this one. Without the
-    // abort, an unmatched delimiter pairs with a later block's
-    // delimiter and swallows the intervening block structure.
     let invalid = [
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LeftBlockEnd),
@@ -80,12 +69,6 @@ fn try_consume_strikethrough<'r, 't>(
     collect_container(parser, rule, ctype, &close, &invalid, None)
 }
 
-/// Check that collection can reach a closing delimiter.
-///
-/// Without this cheap look-ahead, every prose double dash can recursively
-/// retry all later block and inline rules before eventually discovering that
-/// no closing dash exists. Large advanced tables amplify that backtracking
-/// into minutes of CPU time.
 fn validate_reachable_close(
     parser: &Parser<'_, '_>,
     token: Token,
@@ -105,7 +88,6 @@ fn validate_reachable_close(
                     .get_or_insert_with(|| scan.make_err(ParseErrorKind::RuleFailed));
             }
             Token::LeftBlockEnd => {
-                // The enclosing block ends before any closing delimiter.
                 return Err(scan.make_err(ParseErrorKind::RuleFailed));
             }
             current if current == token => {

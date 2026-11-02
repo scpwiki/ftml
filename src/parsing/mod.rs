@@ -99,11 +99,6 @@ pub fn parse<'r, 't>(
 where
     'r: 't,
 {
-    // `consume()` intentionally uses direct recursion for parser state. Deep
-    // but valid component trees therefore run on a bounded stack rather than
-    // inheriting the caller's thread stack. The ordinary limit is attempted
-    // first; only its structured recursion error triggers the higher bounded
-    // retry, preserving the established parser semantics.
     std::thread::scope(|scope| {
         let handle =
             match std::thread::Builder::new()
@@ -176,7 +171,6 @@ fn parse_on_current_stack<'r, 't>(
 where
     'r: 't,
 {
-    // Run parsing, get raw results
     let parsed = parse_internal_with_recursion_limit(
         page_info,
         settings,
@@ -199,7 +193,6 @@ where
                     || (has_generated && token.slice.eq_ignore_ascii_case("span"))))
     });
 
-    // Mutable state
     let mut toc_indexer = settings.id_indexer();
 
     debug!("Finished paragraph gathering, matching on consumption");
@@ -249,20 +242,15 @@ where
                 errors.len()
             );
 
-            // process_depths() wants a "list type", so we map in a () for each.
             let table_of_contents_depths = table_of_contents_depths
                 .into_iter()
                 .map(|(depth, contents)| (depth, (), contents));
 
-            // Convert TOC depth lists
             let table_of_contents = process_depths((), table_of_contents_depths)
                 .into_iter()
                 .map(|(_, items)| build_toc_list_element(&mut toc_indexer, items))
                 .collect::<Vec<_>>();
 
-            // This flag notes that the renderer needs to insert its own footnote
-            // block. This happens when there are footnotes to be rendered, but
-            // there isn't a manually-placed footnote block somewhere in the elements.
             let needs_footnote_block = !footnotes.is_empty() && !has_footnote_block;
 
             SyntaxTree::from_element_result(
@@ -276,11 +264,6 @@ where
             )
         }
         Err(error) => {
-            // This path is only reachable if a very bad error occurs.
-            //
-            // If this happens, then just return the input source as the output
-            // and the error.
-
             error!("Fatal error occurred at highest-level parsing: {error:#?}");
             let wikitext = tokenization.full_text().inner();
             let elements = vec![text!(wikitext)];
@@ -340,11 +323,9 @@ where
         )
     };
 
-    // At the top level, we gather elements into paragraphs
     debug!("Running parser on {} tokens", tokenization.tokens().len());
     let result = gather_paragraphs(&mut parser, RULE_PAGE, NO_CLOSE_CONDITION);
 
-    // Build and return
     let html_blocks = parser.remove_html_blocks();
     let code_blocks = parser.remove_code_blocks();
     let table_of_contents_depths = parser.remove_table_of_contents();
@@ -362,8 +343,6 @@ where
         bibliographies,
     }
 }
-
-// Helper functions
 
 fn build_toc_list_element(
     incr: &mut Incrementer,

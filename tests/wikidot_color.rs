@@ -117,10 +117,6 @@ fn foreground_and_background_admit_only_static_color_values() {
 
 #[test]
 fn css_var_color_values_render_as_spans() {
-    // Live Wikidot passes var() references through as the color value:
-    // component:croqstyle's documentation builds its syntax-highlighted
-    // code samples from ##var(--c-...)|...## spans, and the live page
-    // renders them as colored spans (stafflab run-03 S5 baseline).
     for (source, expected) in [
         (
             "##var(--c-keyword)|A##",
@@ -198,10 +194,6 @@ fn dense_valid_and_malformed_color_runs_remain_bounded() {
 
 #[test]
 fn color_close_after_double_bracket_is_not_eaten_by_anchor_token() {
-    // Regression (S5 residuals A/B): `[[#` used to tokenize as
-    // LeftBlockAnchor even when the `#` was the first half of a `##`
-    // color close, so a color span whose body ended in `[[` never closed
-    // and the whole span fell back to literal text.
     for (source, expected) in [
         (
             "##darkred|[[##",
@@ -223,7 +215,6 @@ fn color_close_after_double_bracket_is_not_eaten_by_anchor_token() {
             "**##darkred|[[##**##blue|include##",
             "<p><strong><span style=\"color: darkred\">[[</span></strong><span style=\"color: blue\">include</span></p>",
         ),
-        // A real named anchor inside a color body still parses as one.
         (
             "##darkred|[[# anchor]]##",
             "<p><span style=\"color: darkred\"><a name=\"anchor\"></a></span></p>",

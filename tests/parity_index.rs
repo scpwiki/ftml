@@ -980,7 +980,6 @@ fn frozen_wikidot_parity_artifacts_are_complete_and_current() {
             "{}: binding FTML HTML hash",
             id
         );
-        // ponytail: production Random makes these generated IDs volatile; functional DOM and text checks remain bound above.
         let source = case.source.to_ascii_lowercase();
         if ![
             "[[bibliography",

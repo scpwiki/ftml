@@ -80,7 +80,6 @@ pub fn render_link(
     let layout = ctx.layout();
     let handle = ctx.handle();
 
-    // Add to backlinks
     ctx.add_link(link);
 
     let site = ctx.info().site.as_ref().to_string();
@@ -93,14 +92,11 @@ pub fn render_link(
     let opens_new_tab =
         target == Some(AnchorTarget::NewTab) && layout == Layout::Wikijump;
 
-    // An empty Wikidot label shows the page title once the page exists.
     let titled;
     let label = match (label, link) {
         (LinkLabel::Title(_), LinkLocation::Page(page))
             if !page.page().is_empty() && ctx.page_exists(page) =>
         {
-            // A page without a title keeps the derived label (the normalized
-            // target), as when no title is known.
             match ctx
                 .page_title(page)
                 .filter(|title| !title.trim().is_empty())
@@ -120,7 +116,6 @@ pub fn render_link(
             let mut tag = ctx.html().a();
             tag.attr($attr);
             handle.get_link_label(&site, link, label, |label| {
-                // Add <a> internals, i.e. the link name
                 tag.contents(label);
             });
         }};

@@ -239,13 +239,10 @@ mod tests {
         let (html, _) = render(Layout::Wikidot, "[[math]]\nx\n[[/math]] ");
         assert_eq!(html.matches("math-equation").count(), 1, "{html}");
 
-        // Text after the closer on the same line keeps the recorded behavior.
         let (html, _) = render(Layout::Wikidot, "[[math]]\nx\n[[/math]] y\n\nz");
         assert_eq!(html.matches("math-equation").count(), 0, "{html}");
     }
 
-    /// Renders the way Deepwell does for the Wikidot layout: the preprocessor
-    /// runs with the layout's compatibility rules.
     fn render_wikidot(source: &str) -> (String, Vec<crate::parsing::ParseError>) {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
@@ -280,7 +277,6 @@ mod tests {
             ),
             "{html}"
         );
-        // Outside a math body the continuation still joins lines.
         let (html, _) = render_wikidot("joined \\\nline\n");
         assert!(html.contains("joined line"), "{html}");
         assert!(!html.contains('\\'), "{html}");

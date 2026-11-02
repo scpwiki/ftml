@@ -43,8 +43,6 @@ fn render(source: &str) -> (String, String, SyntaxTree<'static>) {
 
 #[test]
 fn complete_v7_code_family_matches_live_page_preview() {
-    // Anonymous scp-wiki edit/PagePreviewModule captures from the V7 campaign.
-    // Cases 203 through 217 are kept in campaign order.
     let cases = [
         (
             "code-canonical-valid",

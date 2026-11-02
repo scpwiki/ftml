@@ -1,12 +1,3 @@
-//! Implicit-attachment image display follows the attachment's file type.
-//!
-//! Anonymous Wikidot PagePreview evidence (scp-wiki, 2026-10-11) is frozen in
-//! `tests/fixtures/wikidot-image-attachment-default-20261011.json`. A
-//! current-page attachment without a recognized quoted size shows the original
-//! only when its name ends in `.png`, `.jpg`, or `.gif` (ASCII
-//! case-insensitive); every other name shows the linked `medium.jpg` resize.
-//! Saved pages in the shared EN corpus follow the same split.
-
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
 use ftml::render::{Render, html::HtmlRender};
@@ -37,8 +28,6 @@ fn render(source: &str) -> String {
     HtmlRender.render(&tree, &page_info, &settings).body
 }
 
-/// Extract `(anchor href, img src, alt)` from the first image, mapping FTML's
-/// file host to Wikidot's so only the selected shape is compared.
 fn image_shape(html: &str) -> (Option<String>, String, String) {
     let image =
         Regex::new(r#"(?:<a href="([^"]*)">)?<img src="([^"]*)"[^>]*? alt="([^"]*)""#)
@@ -80,8 +69,6 @@ fn implicit_attachment_display_matches_live_file_type_default() {
 
 #[test]
 fn page_qualified_attachments_follow_the_same_file_type_default() {
-    // Issue #734: the owning page replaces the (empty) current page in both
-    // the resized-image path and the original-file link.
     for (source, resized) in [
         ("[[image some-page/a.png]]", false),
         ("[[image some-page/a.JPG]]", false),
@@ -106,7 +93,6 @@ fn page_qualified_attachments_follow_the_same_file_type_default() {
         }
     }
 
-    // A recognized quoted size resizes a page-qualified attachment too.
     let html = render(r#"[[image some-page/a.png size="small"]]"#);
     assert!(
         html.contains("/local--resized-images/some-page/a.png/small.jpg"),

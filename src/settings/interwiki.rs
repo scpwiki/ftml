@@ -22,7 +22,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-/// An [`InterwikiSettings`] instance that has no prefixes.
 pub static EMPTY_INTERWIKI: LazyLock<InterwikiSettings> =
     LazyLock::new(|| InterwikiSettings {
         prefixes: hashmap! {},
@@ -65,7 +64,6 @@ pub struct InterwikiSettings {
 }
 
 impl InterwikiSettings {
-    /// Creates a new instance with no prefixes.
     #[inline]
     pub fn new() -> Self {
         InterwikiSettings::default()
@@ -85,26 +83,19 @@ impl InterwikiSettings {
     /// - The interwiki prefix is not found
     pub fn build(&self, link: &str) -> Option<String> {
         match link.find(':') {
-            // Starting with a colon is not interwiki, skip.
-            // Or, if no colon, no interwiki.
             Some(0) | None => None,
 
-            // Split at first colon, any further are treated as part of the link contents.
             Some(idx) => {
                 let (prefix, rest) = link.split_at(idx);
-                let path = &rest[1..]; // Safe because we're splitting on ':', an ASCII character.
+                let path = &rest[1..];
 
-                // Special handling, if it's empty then fail
                 if path.is_empty() {
                     return None;
                 }
 
-                // If there's an interwiki prefix, apply the template.
                 self.prefixes.get(prefix).map(|template| {
-                    // Substitute all $$s in the URL templates.
                     let mut url = template.replace("$$", path);
 
-                    // Substitute all spaces into url-encoded form.
                     while let Some(idx) = url.find(' ') {
                         url.replace_range(idx..idx + 1, "%20");
                     }

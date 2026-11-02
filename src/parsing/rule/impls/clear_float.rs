@@ -52,7 +52,6 @@ fn try_consume_fn<'r, 't>(
         _ => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
     };
 
-    // Optionally consume newline after
     parser.get_optional_line_break()?;
 
     ok!(Element::ClearFloat(clear_float))

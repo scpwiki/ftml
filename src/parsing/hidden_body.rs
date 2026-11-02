@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Parser-local state for parsing conditional bodies into a discard sink.
 use super::{ParseError, Parser, Token};
 
 #[derive(Debug, Copy, Clone)]

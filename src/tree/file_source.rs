@@ -52,13 +52,10 @@ impl<'t> FileSource<'t> {
             return Some(FileSource::Url(cow!(source)));
         }
 
-        // Strip leading / if present
         let source = source.strip_prefix('/').unwrap_or(source);
 
-        // Get parts for path
         let parts: Vec<&str> = source.split('/').collect();
 
-        // Depending on the number of parts, determine the file variant
         let source = match parts.len() {
             1 => FileSource::File1 {
                 file: cow!(parts[0]),

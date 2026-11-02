@@ -18,14 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Exhaustive operation-order check for `ParagraphStack`.
-//!
-//! Property: whatever order the parser drives the stack's operations in, finishing
-//! the stack never panics (no `unreachable!`, `expect`, index or `debug_assert`
-//! failure). Run through `verification/paragraph-stack/run.sh`; see the
-//! `verify-paragraph-stack` skill. The test is `#[ignore]` so ordinary `cargo test`
-//! does not run it.
-
 use super::ParagraphStack;
 use crate::delayed::DelayedElement;
 use crate::tree::Alignment;
@@ -119,7 +111,6 @@ thread_local! {
     static LAST_PANIC: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-/// Replays `ops` on a fresh stack; returns the panic message if it panics.
 fn replay(wikidot: bool, ops: &[usize]) -> Option<String> {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let mut stack = if wikidot {
@@ -137,8 +128,6 @@ fn replay(wikidot: bool, ops: &[usize]) -> Option<String> {
         .map(|_| LAST_PANIC.with(|m| m.borrow().clone()))
 }
 
-/// Depth-first over operation orders; a failing order is reported once, and its
-/// extensions are not explored, so every report is a shortest failing order.
 fn explore(
     wikidot: bool,
     prefix: &mut Vec<usize>,

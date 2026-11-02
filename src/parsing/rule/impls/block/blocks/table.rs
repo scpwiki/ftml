@@ -77,8 +77,6 @@ const BLOCK_TABLE_CELL_BODY: BlockRule = BlockRule {
     parse_fn: parse_cell_header,
 };
 
-// Helper functions and macros
-
 #[derive(Debug)]
 struct ParsedBlock<'t> {
     elements: Vec<Element<'t>>,
@@ -149,7 +147,6 @@ where
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get attributes
     let (arguments, body_start) =
         parser.get_head_map_with_body_start_wikidot(block_rule, in_head)?;
     let has_arguments = arguments.has_source();
@@ -161,14 +158,12 @@ where
         arguments.to_attribute_map(parser.settings())
     };
 
-    // Get body elements
     let as_paragraphs = parser.settings().layout.legacy()
         && attribute_owner == AdvancedTableElement::Cell;
     let body =
         parser.get_body_elements_with_context(block_rule, as_paragraphs, body_start)?;
     let (elements, errors, _) = body.into();
 
-    // Return result
     let parsed = ParsedBlock {
         elements,
         attributes,
@@ -187,7 +182,6 @@ fn extract_table_rows<'r, 't>(
 
     for element in elements {
         match element {
-            // Append the next table row.
             Element::Partial(PartialElement::TableRow(row)) => {
                 rows.push(row);
             }
@@ -196,10 +190,8 @@ fn extract_table_rows<'r, 't>(
                 residuals.push(text);
             }
 
-            // Ignore internal whitespace.
             element if element.is_whitespace() => {}
 
-            // Return an error for anything else.
             _ => return Err(parser.make_err(ParseErrorKind::TableContainsNonRow)),
         }
     }
@@ -216,7 +208,6 @@ fn extract_table_cells<'r, 't>(
 
     for element in elements {
         match element {
-            // Append the next table cell.
             Element::Partial(PartialElement::TableCell(cell)) if residuals.is_empty() => {
                 cells.push(cell);
             }
@@ -225,10 +216,8 @@ fn extract_table_cells<'r, 't>(
                 residuals.push(text);
             }
 
-            // Ignore internal whitespace.
             element if element.is_whitespace() => {}
 
-            // Return an error for anything else.
             _ => return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell)),
         }
     }
@@ -393,8 +382,6 @@ where
     }
 }
 
-// Table block
-
 fn parse_table<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,
@@ -420,7 +407,6 @@ fn parse_table<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get block contents.
     let parsed = match parse_block(
         parser,
         name,
@@ -476,7 +462,6 @@ fn parse_table<'r, 't>(
     }
     let attributes = parsed.attributes;
 
-    // Build and return table element
     let table_type = TableType::Advanced;
     let table = Table {
         rows,
@@ -499,8 +484,6 @@ fn parse_table<'r, 't>(
         ok!(false; Elements::Multiple(elements), errors)
     }
 }
-
-// Table row
 
 fn parse_row<'r, 't>(
     parser: &mut Parser<'r, 't>,
@@ -526,7 +509,6 @@ fn parse_row<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get block contents.
     let parsed = match parse_block(
         parser,
         name,
@@ -567,7 +549,6 @@ fn parse_row<'r, 't>(
     let attributes = parsed.attributes;
     let errors = parsed.errors;
 
-    // Build and return table row
     let row = TableRow { cells, attributes };
     let element = Element::Partial(PartialElement::TableRow(row));
     if residuals.is_empty() {
@@ -578,8 +559,6 @@ fn parse_row<'r, 't>(
         ok!(false; Elements::Multiple(elements), errors)
     }
 }
-
-// Table cell
 
 fn parse_cell_regular<'r, 't>(
     parser: &mut Parser<'r, 't>,
@@ -611,7 +590,6 @@ fn parse_cell_regular<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get block contents.
     let parsed = match parse_block(
         parser,
         name,
@@ -673,7 +651,6 @@ fn parse_cell_header<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get block contents.
     let parsed = match parse_block(
         parser,
         name,
@@ -725,7 +702,6 @@ fn parse_cell<'r, 't>(
     preserve_single_paragraph: bool,
     legacy: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    // Remove leading and trailing whitespace
     trim_cell_whitespace(&mut elements);
     if wikidot_paragraphs {
         strip_cell_paragraph_boundaries(&mut elements);
@@ -790,9 +766,6 @@ fn column_span_one() -> NonZeroU32 {
 fn parse_column_span_semantic(value: &str) -> Option<NonZeroU32> {
     const MAX_U32_DECIMAL_DIGITS: usize = 10;
 
-    // Discard leading zeroes before the fixed-width bound so a padded value
-    // retains its numeric meaning without ever feeding a long lexeme to the
-    // integer parser.
     let digits = value.strip_prefix('+').unwrap_or(value);
     let significant = digits.trim_start_matches('0');
     if significant.is_empty() || significant.len() > MAX_U32_DECIMAL_DIGITS {
@@ -1003,9 +976,6 @@ mod tests {
 
     #[test]
     fn wikidot_quoted_simple_table_keeps_adjacent_rows_in_one_table() {
-        // Live full-page oracle: sandbox-oracle-20260805-p5-r2,
-        // frozen-captures.json (SHA-256
-        // 3d175d8ea69434a214c252954be8fc65e80632973dba3668e528bd2801d2765f).
         let source = concat!(
             "> Quote lead\n",
             ">\n",

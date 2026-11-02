@@ -129,9 +129,6 @@ fn parse_fn<'r, 't>(
         name,
     };
 
-    // We need to clone here since the same code block is
-    // conveyed in two places, and some of the fields may
-    // be Cow::Owned.
     let element = Element::Code(code_block.clone());
     parser.push_code_block(code_block);
     ok!(element)

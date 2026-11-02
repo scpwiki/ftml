@@ -31,8 +31,6 @@ fn assert_renders(source: &str, expected: &str) {
     assert_eq!(render(source), expected, "source: {source:?}");
 }
 
-// Wikidot observations: anonymous PagePreviewModule, scp-wiki, 2026-10-19.
-
 #[test]
 fn div_head_with_arguments_ignores_trailing_spaces_before_the_line_break() {
     let expected = "<div class=\"a\"><p>A</p></div>";
@@ -69,7 +67,6 @@ fn consecutive_divs_with_trailing_head_space_both_open() {
 
 #[test]
 fn div_head_trailing_space_before_inline_text_is_not_a_line_break() {
-    // Text after the head on the same line keeps the inline-body path.
     let html = render("[[div class=\"a\"]] A[[/div]]");
     assert!(html.contains("A"), "{html:?}");
 }

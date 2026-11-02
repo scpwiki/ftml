@@ -43,11 +43,9 @@ fn parse_fn<'r, 't>(
 
     let arguments = parser.get_head_map(&BLOCK_INS, in_head)?;
 
-    // Get body content, without paragraphs
     let body = parser.get_body_elements(&BLOCK_INS, false)?;
     let (elements, errors, paragraph_safe) = body.into();
 
-    // Build and return element
     let element = Element::Container(Container::new(
         ContainerType::Insertion,
         elements,

@@ -100,8 +100,6 @@ fn wikidot_missing_user_suffix_remains_inside_the_error_span() {
         ),
     );
 
-    // Sealed #1026 V7 observation `block-user-whitespace-name`: Wikidot
-    // normalizes this one authored tab to one parser-space and retains NBSP.
     assert_eq!(
         render_wikidot_with_missing_user("[[user v7ws=\"alpha\tbeta\u{00a0}gamma\"]]",),
         concat!(

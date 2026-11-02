@@ -50,7 +50,6 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Accept exactly "&" ~ "#"? ~ identifier ~ ";", with no gaps between tokens.
     let remaining = parser.remaining();
     let body_len = match remaining.first() {
         Some(token) if token.token == Token::NumberedItem => 2,
@@ -78,7 +77,6 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     };
 
-    // Step over "&", the entity body, and ";".
     parser.step_n(body_len + 2)?;
     ok!(Element::Text(decoded))
 }
@@ -144,37 +142,26 @@ pub(crate) fn decode_semicolon_entities(s: &str) -> Cow<'_, str> {
     }
 }
 
-/// Find the string corresponding to the passed entity, if any.
 pub(crate) fn find_entity(entity: &str) -> Option<Cow<'_, str>> {
-    // Named entity
     if let Some(result) = ENTITY_MAPPING.get(entity) {
         return Some(cow!(result));
     }
 
-    // Hexadecimal entity
     if let Some(value) = entity.strip_prefix("#x")
         && let Some(result) = get_char(value, 16)
     {
         return Some(result);
     }
 
-    // Decimal entity
     if let Some(value) = entity.strip_prefix('#')
         && let Some(result) = get_char(value, 10)
     {
         return Some(result);
     }
 
-    // Not found
     None
 }
 
-/// Gets the appropriate character from the number specified in the string.
-///
-/// Using the passed radix, it gets the integer value, then finds the appropriate
-/// character, if one exists.
-///
-/// Then converts the character into a string with only that value.
 fn get_char(value: &str, radix: u32) -> Option<Cow<'_, str>> {
     let codepoint = match u32::from_str_radix(value, radix) {
         Ok(codepoint) => codepoint,
@@ -185,8 +172,6 @@ fn get_char(value: &str, radix: u32) -> Option<Cow<'_, str>> {
     Some(Cow::Owned(ch.to_string()))
 }
 
-/// If a string starts with `&` or ends with `;`, those are removed.
-/// First trims the string of whitespace.
 pub(crate) fn strip_entity(mut s: &str) -> &str {
     s = s.trim();
 
@@ -217,20 +202,17 @@ fn test_get_entity() {
 
     test!("", None);
 
-    // Names
     test!("amp", Some(cow!("&")));
     test!("lt", Some(cow!("<")));
     test!("gt", Some(cow!(">")));
     test!("copy", Some(cow!("\u{a9}")));
     test!("xxxzzz", None);
 
-    // Decimal
     test!("#32", Some(cow!(" ")));
     test!("#255", Some(cow!("\u{ff}")));
     test!("#128175", Some(cow!("\u{1f4af}")));
     test!("#2097151", None);
 
-    // Hex
     test!("#x20", Some(cow!(" ")));
     test!("#xff", Some(cow!("\u{ff}")));
     test!("#x1f4af", Some(cow!("\u{1f4af}")));
@@ -251,13 +233,11 @@ fn test_get_char() {
         }};
     }
 
-    // Decimal
     test!("32", 10, Some(Cow::Owned(str!(' '))));
     test!("255", 10, Some(Cow::Owned(str!('\u{ff}'))));
     test!("128175", 10, Some(Cow::Owned(str!('\u{1f4af}'))));
     test!("2097151", 10, None);
 
-    // Hex
     test!("20", 16, Some(Cow::Owned(str!(' '))));
     test!("ff", 16, Some(Cow::Owned(str!('\u{ff}'))));
     test!("1f4af", 16, Some(Cow::Owned(str!('\u{1f4af}'))));
@@ -341,7 +321,6 @@ fn wikijump_text_decodes_complete_entities() {
 fn entity_spellings_stay_escaped_unless_decoded_by_wikijump_text() {
     use crate::layout::Layout;
 
-    // Incomplete, unknown, and control or noncharacter entities stay literal.
     assert_eq!(
         render_entity_html(
             "&mdash &bogus; &#X41; &#0; &#x80; &#xFFFE; &Tab;",

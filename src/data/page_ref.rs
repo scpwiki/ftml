@@ -79,7 +79,6 @@ pub struct PageRef {
 }
 
 impl PageRef {
-    /// Separates a non-normalized page slug (potentially with extra URL parts).
     fn split_page(page: &str) -> (&str, Option<&str>) {
         match page.find(['#', '/']) {
             None => (page, None),
@@ -90,7 +89,6 @@ impl PageRef {
         }
     }
 
-    /// Creates a [`PageRef`] with an optional site.
     pub fn new<S1, S2>(site: Option<S1>, page: S2) -> Self
     where
         S1: Into<String>,
@@ -102,7 +100,6 @@ impl PageRef {
         }
     }
 
-    /// Creates a [`PageRef`] with the given page and site.
     #[inline]
     pub fn page_and_site<S1, S2>(site: S1, page: S2) -> Self
     where
@@ -123,7 +120,6 @@ impl PageRef {
         }
     }
 
-    /// Creates a [`PageRef`] with the given page and no site.
     #[inline]
     pub fn page_only<S>(page: S) -> Self
     where
@@ -176,28 +172,20 @@ impl PageRef {
         }
 
         let result = match s.find(':') {
-            // Off-site page, e.g. ":scp-wiki:something"
             Some(0) => {
-                // Find the second colon
                 let idx = match s[1..].find(':') {
-                    // Empty site name, e.g. "::something"
-                    // or no second colon, e.g. ":something"
                     Some(0) | None => return Err(PageRefParseError),
 
-                    // Slice off the rest
                     Some(idx) => idx + 1,
                 };
 
-                // Get site and page slices
                 let site = s[1..idx].trim();
                 let page = s[idx + 1..].trim();
                 PageRef::page_and_site(site, page)
             }
 
-            // On-site page, e.g. "component:thing"
             Some(_) => PageRef::page_only(s),
 
-            // On-site page, with no category, e.g. "page"
             None => PageRef::page_only(s),
         };
 
@@ -222,29 +210,21 @@ impl PageRef {
         }
 
         let result = match s.find(':') {
-            // Off-site page, e.g. ":scp-wiki:something"
             Some(0) => {
-                // Find the second colon
                 let idx = match s[1..].find(':') {
-                    // Empty site name, e.g. "::something"
-                    // or no second colon, e.g. ":something"
                     Some(0) | None => return Err(PageRefParseError),
 
-                    // Slice off the rest
                     Some(idx) => idx + 1,
                 };
 
-                // Get site and page slices
                 let site = s[1..idx].trim();
                 let page = s[idx + 1..].trim();
                 let site = canonical_include_site(site);
                 PageRef::page_and_site(site.into_owned(), page)
             }
 
-            // On-site page, e.g. "component:thing"
             Some(_) => PageRef::page_only(s),
 
-            // On-site page, with no category, e.g. "page"
             None => PageRef::page_only(s),
         };
 
@@ -269,8 +249,6 @@ impl Display for PageRef {
 #[derive(Debug, PartialEq, Eq)]
 pub struct PageRefParseError;
 
-// Tests
-
 #[test]
 fn split_page() {
     macro_rules! test {
@@ -282,18 +260,14 @@ fn split_page() {
             )
         };
 
-        // Test case with 'extra' part
         ($input:expr, $page:expr, $extra:expr $(,)?) => {
             test!($input => $page, Some($extra))
         };
 
-        // Test case for no 'extra' part
         ($input:expr) => {
             test!($input => $input, None)
         };
     }
-
-    // This function only does splitting, no normalization
 
     test!("scp-001");
     test!("scp-001/edit", "scp-001", "/edit");
@@ -376,7 +350,6 @@ fn page_ref() {
 fn canonical_include_site_strips_host_form_before_normalization() {
     use std::borrow::Cow;
 
-    // These map to a canonical slug (case preserved; normalize folds later).
     for (input, expected) in [
         ("scp-jp.wikidot.com", "scp-jp"),
         ("SCP-JP.WIKIDOT.COM", "SCP-JP"),
@@ -394,9 +367,6 @@ fn canonical_include_site_strips_host_form_before_normalization() {
         );
     }
 
-    // These stay unchanged: bare service host, empty prefix, a further dot,
-    // the dashed spelling (a distinct, legal slug), other hosts, and custom
-    // domains.
     for input in [
         "wikidot.com",
         ".wikidot.com",
@@ -418,7 +388,6 @@ fn canonical_include_site_strips_host_form_before_normalization() {
 
 #[test]
 fn parse_include_canonicalizes_dotted_site_segments() {
-    // The known dotted include spells the same reference as the canonical one.
     assert_eq!(
         PageRef::parse_include(":scp-jp.wikidot.com:component:jstyles"),
         PageRef::parse(":scp-jp:component:jstyles"),
@@ -427,13 +396,10 @@ fn parse_include_canonicalizes_dotted_site_segments() {
         PageRef::parse_include(":SCP-JP.WIKIDOT.COM:component:jstyles"),
         PageRef::parse(":scp-jp:component:jstyles"),
     );
-    // Non-dotted spellings, including the karathh / scp-karathh-paper
-    // sandbox sites, behave exactly as before.
     assert_eq!(
         PageRef::parse_include(":scp-jp-sandbox3:component:jstyles"),
         PageRef::parse(":scp-jp-sandbox3:component:jstyles"),
     );
-    // Malformed targets still fail.
     assert!(PageRef::parse_include("").is_err());
     assert!(PageRef::parse_include(":scp-jp.wikidot.com:").is_err());
 }

@@ -18,11 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Isolated module for WASM HTML rendering.
-//!
-//! This submodule is separate to easily gate it within `#[cfg(feature = "html")]`,
-//! and so imports essentially the same fields as its parent.
-
 use super::super::page_info::PageInfo;
 use super::super::parsing::SyntaxTree;
 use super::super::prelude::*;
@@ -30,8 +25,6 @@ use super::super::settings::WikitextSettings;
 use crate::render::Render;
 use crate::render::html::{HtmlOutput as RustHtmlOutput, HtmlRender};
 use std::sync::Arc;
-
-// Typescript declarations
 
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &str = r#"
@@ -65,8 +58,6 @@ extern "C" {
     #[wasm_bindgen(typescript_type = "IBacklinks")]
     pub type IBacklinks;
 }
-
-// Wrapper structures
 
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
@@ -108,8 +99,6 @@ impl HtmlOutput {
         rust_to_js!(self.inner.backlinks).map(|backlinks| backlinks.into())
     }
 }
-
-// Function exports
 
 #[wasm_bindgen]
 pub fn render_html(

@@ -52,18 +52,14 @@ pub struct PageInfo<'a> {
     /// If this is None then the main title is used instead.
     pub alt_title: Option<Cow<'a, str>>,
 
-    /// The score this page currently has.
     pub score: ScoreValue,
 
-    /// The current set of tags this page has.
     pub tags: Vec<Cow<'a, str>>,
 
-    /// The language that this page is being rendered for.
     pub language: Cow<'a, str>,
 }
 
 impl PageInfo<'_> {
-    /// Generate a dummy PageInfo instance for tests.
     #[cfg(test)]
     pub fn dummy() -> Self {
         PageInfo {

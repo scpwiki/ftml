@@ -31,14 +31,12 @@ pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
     }
 
     match container.ctype() {
-        // We wrap with <rp> around the <rt> contents
         ContainerType::RubyText => {
             ctx.html().rp().contents("(");
             render_container_internal(ctx, container);
             ctx.html().rp().contents(")");
         }
 
-        // Render normally
         _ => render_container_internal(ctx, container),
     }
 }
@@ -76,14 +74,11 @@ fn render_plain_div_chain(ctx: &mut HtmlContext, container: &Container) -> bool 
 }
 
 pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
-    // Get HTML tag type for this type of container
     let layout = ctx.layout();
     let tag_spec = container.ctype().html_tag(layout, ctx);
 
-    // Get correct ID, based on the render setting
     let random_id = choose_id(ctx, &tag_spec);
 
-    // Build the tag
     let mut tag = ctx.html().tag(tag_spec.tag());
 
     let mut generated_class_attributes = None;
@@ -101,7 +96,6 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         container.attributes()
     };
 
-    // Merge the class attribute with the container's class, if it conflicts
     match tag_spec {
         HtmlTag::Tag(_) => tag.attr(attr!(
             "class" => ""; if preserve_generated_empty_class;;
@@ -178,7 +172,6 @@ pub fn render_color(
 }
 
 fn choose_id(ctx: &mut HtmlContext, tag_spec: &HtmlTag) -> Option<String> {
-    // If we're in a situation where we want a randomly generated ID
     if matches!(tag_spec, HtmlTag::TagAndId { .. }) && !ctx.settings().use_true_ids {
         Some(ctx.random().generate_html_id())
     } else {

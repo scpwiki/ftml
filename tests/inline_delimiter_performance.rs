@@ -71,11 +71,6 @@ fn repeated_underline_spacer_run_stays_linear_and_invisible() {
 fn quoted_multiline_inline_delimiter_pairs_stay_bounded() {
     const PAIR_COUNT: usize = 64;
 
-    // Reduced from EN:indigo-eyes (source SHA-256
-    // cfa1824195734d22ce15ee525deba2a48f5bbcc5824ee86646c24cee72011e97),
-    // where repeated journal paragraphs open italics on one quoted line and
-    // close them on the next. Twelve pairs exceeded the replay's five-second
-    // parse budget before the quote cursor was carried into inline collectors.
     for (marker, opening) in [
         ("**", "<strong>"),
         ("//", "<em>"),
@@ -104,9 +99,6 @@ fn quoted_multiline_inline_delimiter_pairs_stay_bounded() {
 fn email_after_block_closer_does_not_hide_the_closer() {
     const ROW_COUNT: usize = 128;
 
-    // Reduced from EN:scp-9945. The email scanner used to accept `]` in the
-    // local part, turning `[[/span]]19@scip.net` into one email token. The
-    // missing closer then made every enclosing block search to end of input.
     let row = concat!(
         "[[div class=\"contact\"]]\n",
         "[[span style=\"color: red;\"]]name[[/span]]19@scip.net\n",
@@ -135,7 +127,6 @@ fn email_after_block_closer_does_not_hide_the_closer() {
 fn repeated_wikidot_size_scopes_crossing_structural_blocks_stay_bounded() {
     const ROW_COUNT: usize = 128;
 
-    // Reduced from EN:scp-9021 after include expansion.
     let row = concat!(
         "[[size larger]]\n",
         "[[div_ class=\"colmod-block\"]]\n",
@@ -167,12 +158,6 @@ fn repeated_wikidot_size_scopes_crossing_structural_blocks_stay_bounded() {
 fn crossed_color_monospace_prompts_in_blocks_stay_bounded() {
     const PROMPT_COUNT: usize = 64;
 
-    // Reduced from EN:scp-6279 (source SHA-256
-    // f14b68009c2f3553109c5cf70baf3a06f0792caeccea4b0f1a3d2bc060af7fa2), a
-    // terminal transcript of right-aligned prompts whose color closes inside
-    // monospace. Each color fails only after reading every block after it,
-    // and each failure retried those blocks: its 24 prompts took minutes.
-    // Wikidot renders every prompt as the color around the monospace.
     let mut input =
         "[[>]]\n##63ff54|{{@@ >  @@boot##}}\n[[/>]]\n{{TEXT}}\n".repeat(PROMPT_COUNT);
     let page_info = page_info();
@@ -212,10 +197,6 @@ fn crossed_color_monospace_prompts_in_blocks_stay_bounded() {
 fn long_block_bodies_without_closers_stay_linear() {
     const LINE_COUNT: usize = 8_000;
 
-    // Reduced from EN:scp-9659 (source SHA-256
-    // 615a628d51b690b37729b7e09ce3853736635f9354db14e77f3225d83e0cfe52), 185 KB
-    // with 31 `]]`. Looking for each div's closer searched the rest of the page
-    // for `]]` from every token of its body, which took seconds.
     let mut input = format!(
         "[[div]]\n{}[[/div]]\n",
         "plain words on a line\n".repeat(LINE_COUNT),

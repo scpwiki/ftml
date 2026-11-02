@@ -46,9 +46,6 @@ impl VariableScopes {
     }
 
     pub fn push_scope(&mut self, scope: &VariableMap) {
-        // We clone here since managing multiple, scope-dependent
-        // lifetimes for each call is impractical, and we can't
-        // use Rc or RefCell because it is borrowed from Element.
         self.scopes.push(string_map_to_owned(scope));
     }
 

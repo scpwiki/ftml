@@ -1,5 +1,3 @@
-//! Deferred table-of-contents labels for generated heading leaves.
-
 use super::elements_contain_delayed;
 use crate::tree::{ContainerType, Element, ListItem, PartialElement, SyntaxTree};
 

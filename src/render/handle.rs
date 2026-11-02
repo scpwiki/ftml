@@ -66,7 +66,6 @@ impl UserInfoResolver for Handle {
 
 impl Handle {
     pub fn render_module(&self, buffer: &mut String, module: &Module) {
-        // Modules only render to HTML
         debug!("Rendering module '{}'", module.name());
         str_write!(buffer, "<p>TODO: module {}</p>", module.name());
     }
@@ -74,13 +73,11 @@ impl Handle {
     pub fn get_page_title(&self, _site: &str, _page: &str) -> Option<String> {
         debug!("Fetching page title");
 
-        // For testing
         #[cfg(test)]
         if _page == "missing" {
             return None;
         }
 
-        // TODO
         Some(format!("TODO: actual title ({_site} {_page})"))
     }
 
@@ -91,7 +88,6 @@ impl Handle {
             return false;
         }
 
-        // TODO
         true
     }
 
@@ -158,7 +154,6 @@ impl Handle {
             FileSource::File3 { site, page, file } => (site, page, file),
         };
 
-        // TODO: emit url
         Some(Cow::Owned(format!(
             "https://{site}.wjfiles.com/local--files/{page}/{file}",
         )))
@@ -185,8 +180,6 @@ impl Handle {
             return None;
         }
 
-        // A page-qualified attachment uses its owning page verbatim; the
-        // current page's category prefix never applies to it.
         let page = match page {
             Some(page) => page.to_owned(),
             None => match info.category.as_deref() {
@@ -268,7 +261,6 @@ impl Handle {
     }
 
     pub fn get_karma_style(&self, karma: KarmaLevel) -> &'static str {
-        // TODO replace these with inline data image URIs
         match karma {
             KarmaLevel::Zero => {
                 "background-image: url(https://www.wikidot.com/userkarma.php?u=8976177)"
@@ -306,7 +298,6 @@ impl Handle {
         let _ = info;
         let _ = html;
 
-        // TODO
         str!("https://example.com/")
     }
 
@@ -315,17 +306,11 @@ impl Handle {
 
         let _ = index;
         let _ = code;
-
-        // TODO
     }
 }
 
 impl BuildSiteUrl for Handle {
     fn build_url(&self, site: &str, path: &str, extra: Option<&str>) -> String {
-        // TODO make this a parser setting
-        // get url of wikijump instance here
-
-        // TODO
         let extra = extra.unwrap_or("");
         format!("https://{site}.wikijump.com/{path}{extra}")
     }
@@ -439,8 +424,6 @@ fn handle_fallbacks_cover_rendering_helpers() {
             "https://sandbox.wjfiles.com/local--files/run-owned:some-page/folder/image.png".to_owned(),
         )),
     );
-    // A page-qualified attachment resolves against its owning page, not the
-    // current page or its category.
     assert_eq!(
         handle.get_implicit_attachment_image_links(
             "photo.jpeg",

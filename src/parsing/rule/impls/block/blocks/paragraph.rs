@@ -42,13 +42,11 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Paragraph doesn't allow score flag");
     assert_block_name(&BLOCK_PARAGRAPH, name);
 
-    // Gather paragraphs
     let arguments = parser.get_head_map(&BLOCK_PARAGRAPH, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
     let body = parser.get_body_elements(&BLOCK_PARAGRAPH, true)?;
     let (mut elements, errors, _) = body.into();
 
-    // Apply attributes to each paragraph
     for element in &mut elements {
         if let Element::Container(container) = element
             && container.ctype() == ContainerType::Paragraph

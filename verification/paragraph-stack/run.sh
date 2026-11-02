@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
-# Usage: run.sh            run the operation-order check against src/parsing/paragraph/stack.rs
-#        run.sh mutants    break a temporary copy of the repo four ways; each must produce a finding the known list lacks
-# Exit 0 only when the failures found equal verification/paragraph-stack/known-findings.txt.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 
-# $1 = repo dir. Prints the findings summary as "<message>|<shortest length>" lines.
 summarize() {
   (cd "$1" && CARGO_INCREMENTAL=0 cargo test --lib --quiet stack_orders -- --ignored --nocapture 2>&1 || true) \
   | python3 -I -c '
@@ -33,7 +29,7 @@ for msg, n in sorted(best.items()):
 '
 }
 
-compare() { # $1 = actual summary file
+compare() {
   { grep -v '^#' "$here/known-findings.txt" || true; } | sort > "$1.known"
   sort "$1" > "$1.actual"
   if diff -u "$1.known" "$1.actual" > "$1.diff"; then

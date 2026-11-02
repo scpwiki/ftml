@@ -60,11 +60,9 @@ fn consume_header_once<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create header container");
 
-    // Get header depth
     let heading_token = step_expected(parser, Token::Heading)?;
     let heading = heading_from_token(heading_token);
 
-    // Step over whitespace
     step_expected(parser, Token::Whitespace)?;
 
     let close = [
@@ -92,9 +90,6 @@ fn consume_header_once<'r, 't>(
         );
     }
 
-    // An empty heading cannot acquire syntax authority from a footnote on the
-    // next physical line. Consume the footnote through its ordinary block
-    // rule, then return the heading marker as paragraph text.
     if parser.settings().layout.legacy()
         && content == WikidotHeadingContent::Empty
         && parser.current().token == Token::LeftBlock
@@ -114,7 +109,6 @@ fn consume_header_once<'r, 't>(
         }
     }
 
-    // If this heading wants a table of contents (TOC) entry, then add one
     if heading.has_toc
         && let Elements::Single(Element::Container(ref container)) = elements
     {
@@ -141,7 +135,6 @@ fn consume_header_once<'r, 't>(
         }
     }
 
-    // Build final Elements object
     ok!(false; elements, all_errors)
 }
 

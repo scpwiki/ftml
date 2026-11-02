@@ -25,8 +25,6 @@ use crate::utf16::Utf16IndexMap;
 use self_cell::self_cell;
 use std::sync::Arc;
 
-// Typescript declarations
-
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &str = r#"
 export interface IToken {
@@ -44,8 +42,6 @@ extern "C" {
     #[wasm_bindgen(typescript_type = "IToken[]")]
     pub type ITokenArray;
 }
-
-// Wrapper structures
 
 self_cell!(
     struct TokenizationInner {
@@ -91,8 +87,6 @@ impl Tokenization {
     }
 }
 
-// Exported functions
-
 #[wasm_bindgen]
 pub fn tokenize(text: String) -> Tokenization {
     let inner = TokenizationInner::new(text, |text: &String| crate::tokenize(text));
@@ -102,14 +96,9 @@ pub fn tokenize(text: String) -> Tokenization {
     }
 }
 
-// Utility functions
-
 fn convert_tokens_utf16<'a>(
     tokenization: &'a RustTokenization,
 ) -> Vec<RustExtractedToken<'a>> {
-    // Because the list of tokens is almost certainly not empty,
-    // we don't perform the same check here that we do for errors.
-
     let full_text = tokenization.full_text().inner();
     let utf16_map = Utf16IndexMap::new(full_text);
 

@@ -22,12 +22,6 @@ use super::prelude::*;
 use crate::data::PageRef;
 use crate::parsing::UnstructuredParseResult;
 
-// TODO: maybe scrap this? we want to move to components anyways
-
-/// Block rule for include (elements).
-///
-/// This takes the resultant `SyntaxTree` from another page and
-/// inserts them into this page being built.
 pub const BLOCK_INCLUDE_ELEMENTS: BlockRule = BlockRule {
     name: "block-include-elements",
     accepts_names: &["include-elements"],
@@ -50,7 +44,6 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Include (elements) doesn't allow score flag");
     assert_block_name(&BLOCK_INCLUDE_ELEMENTS, name);
 
-    // Parse block
     let head = parser.get_head_name_map(&BLOCK_INCLUDE_ELEMENTS, in_head)?;
     let (page_name, variables) = head;
 
@@ -122,8 +115,6 @@ fn include_page<'r, 't>(
     if page.page().is_empty() {
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
-
-    // TODO stubbed
 
     let elements = vec![text!("<INCLUDED PAGE (ELEMENTS)>")];
     let result = Ok(ParseSuccess::new(elements, Vec::new(), false));

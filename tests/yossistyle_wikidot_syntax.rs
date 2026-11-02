@@ -1,5 +1,3 @@
-//! Fixture-driven FTML syntax tests for `theme:yossistyle`.
-
 use ftml::data::{PageInfo, PageRef, ScoreValue};
 use ftml::includes::DebugIncluder;
 use ftml::layout::Layout;
@@ -53,7 +51,6 @@ fn expand_parse_render(input: &str) -> (String, String, Vec<ParseError>, Vec<Pag
     expand_parse_render_with_layout(input, Layout::Wikidot)
 }
 
-/// Fixture: <https://scp-wiki.wikidot.com/theme:yossistyle>, read-only GET verified 2026-07-13.
 #[test]
 fn yossistyle_targetless_include_is_literal_and_error_free() {
     let source = include_str!("fixtures/yossistyle/targetless_include.ftml");

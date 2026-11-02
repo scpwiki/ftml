@@ -18,16 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Rules for triple-bracket links.
-//!
-//! This method of designating links is for local pages.
-//! The syntax here uses a pipe to separate the destination from the label.
-//! However, this method also works for regular URLs, for some reason.
-//!
-//! Wikidot, in its infinite wisdom, has two means for designating links.
-//! This method allows any URL, either opening in a new tab or not.
-//! Its syntax is `[[[page-name | Label text]`.
-
 use super::prelude::*;
 use crate::data::PageRef;
 use crate::parsing::collect::{collect_comment_elided_keep, consume_valid_comment};
@@ -85,14 +75,12 @@ fn link_new_tab<'r, 't>(
     )
 }
 
-/// Build a triple-bracket link with the given target.
 fn try_consume_link<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
     target: Option<AnchorTarget>,
     source_start: usize,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    // Gather path for link
     let url_close = [
         ParseCondition::current(Token::Pipe),
         ParseCondition::current(Token::RightLink),
@@ -122,11 +110,9 @@ fn try_consume_link<'r, 't>(
         (Cow::Borrowed(url), last, is_url(url.trim_start()))
     };
 
-    // Trim text
     let leading_space = url.trim_start_matches([' ', '\t']).len() != url.len();
     let url = trim_wikidot_ascii_cow(url);
 
-    // If url is an empty string, parsing should fail, there's nothing here
     if url.is_empty()
         && parser.settings().layout.legacy()
         && target.is_some()
@@ -146,9 +132,7 @@ fn try_consume_link<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Determine what token we ended on, i.e. which [[[ variant it is.
     match last.token {
-        // [[[name]]] type links
         Token::RightLink => build_same(
             parser,
             url,
@@ -157,7 +141,6 @@ fn try_consume_link<'r, 't>(
             target,
         ),
 
-        // [[[url|label]]] type links
         Token::Pipe => build_separate(
             parser,
             rule,
@@ -168,13 +151,10 @@ fn try_consume_link<'r, 't>(
             source_start,
         ),
 
-        // Token was already checked in collect_text(), impossible case
         _ => unreachable!(),
     }
 }
 
-/// Helper to build link with the same URL and label.
-/// e.g. `[[[name]]]`
 fn build_same<'r, 't>(
     parser: &mut Parser<'r, 't>,
     url: Cow<'t, str>,
@@ -182,8 +162,6 @@ fn build_same<'r, 't>(
     authored_url_prefix_is_url: bool,
     target: Option<AnchorTarget>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    // Remove category, if present.
-    // If None, then the label is the original URL.
     let label = match url.clone() {
         Cow::Borrowed(url) => Cow::Borrowed(same_link_label(parser, url)),
         Cow::Owned(url) => Cow::Owned(same_link_label(parser, &url).to_owned()),
@@ -198,14 +176,12 @@ fn build_same<'r, 't>(
         label
     };
 
-    // Parse out link location
     let parsed_link =
         parse_link_location(parser, url, leading_space, authored_url_prefix_is_url);
     let Some((link, ltype)) = parsed_link else {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     };
 
-    // Build and return element
     let element = Element::Link {
         ltype,
         target: wikidot_target(parser, target, &link),
@@ -230,8 +206,6 @@ fn same_link_label<'t>(parser: &Parser<'_, '_>, url: &'t str) -> &'t str {
     }
 }
 
-/// Helper to build link with separate URL and label.
-/// e.g. `[[[page|label]]]`, or `[[[page|]]]`
 fn build_separate<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -241,7 +215,6 @@ fn build_separate<'r, 't>(
     target: Option<AnchorTarget>,
     source_start: usize,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    // Gather label for link
     let label_close = [ParseCondition::current(Token::RightLink)];
     let legacy = parser.settings().layout.legacy();
     let label_invalid = [ParseCondition::current(Token::ParagraphBreak)];
@@ -271,7 +244,6 @@ fn build_separate<'r, 't>(
         )?)
     };
 
-    // Trim label
     let label = if legacy {
         trim_wikidot_ascii_cow(discard_wikidot_controls(label))
     } else {
@@ -281,7 +253,6 @@ fn build_separate<'r, 't>(
         }
     };
 
-    // Parse out link location
     let parsed_link = parse_link_location(
         parser,
         url.clone(),
@@ -302,8 +273,6 @@ fn build_separate<'r, 't>(
             normalized.remove(0);
         }
         normalize(&mut normalized);
-        // A page target shows its title when the page exists; the renderer
-        // falls back to this normalized text otherwise.
         match link {
             LinkLocation::Page(_) => LinkLabel::Title(Cow::Owned(normalized)),
             LinkLocation::Url(_) => LinkLabel::Text(Cow::Owned(normalized)),
@@ -314,7 +283,6 @@ fn build_separate<'r, 't>(
         LinkLabel::Text(label)
     };
 
-    // Build link element
     let element = Element::Link {
         ltype,
         target: wikidot_target(parser, target, &link),
@@ -322,7 +290,6 @@ fn build_separate<'r, 't>(
         label,
     };
 
-    // Return result
     success_elements(element)
 }
 
@@ -385,10 +352,6 @@ where
                 parser.step()?;
             }
 
-            // A valid comment is transparent to the label. Speculatively use
-            // the ordinary comment rule so extended closers and generated
-            // input retain their existing behavior. An incomplete comment is
-            // a bracket owner and therefore rolls back the outer link.
             Token::LeftComment => {
                 let comment_start = parser.current().span.start;
                 let mut comment_parser = parser.clone();
@@ -402,8 +365,6 @@ where
                 segment_start = comment_parser.current().span.start;
                 parser.update(&comment_parser);
 
-                // The comment's final `]` can also be the first bracket in
-                // the outer `]]]` closer, leaving `]]` as the current token.
                 if parser.current().token == Token::RightBlock {
                     parser.step()?;
                     return Ok(WikidotLabelCandidate::Label(Cow::Owned(
@@ -412,9 +373,6 @@ where
                 }
             }
 
-            // Only complete raw syntax owns the outer label. This preserves
-            // unmatched `@@` and `@<` as literal label text while allowing a
-            // valid raw span to render after the outer transaction rolls back.
             Token::Raw | Token::LeftRaw => {
                 let alternate = parser.current().token == Token::LeftRaw;
                 let known_unclosed = if alternate {
@@ -480,10 +438,6 @@ where
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
 
-            // Only the live-backed inline block owners may execute after the
-            // outer link rolls back. Other block-shaped labels still invalidate
-            // the link, but preserve the complete invocation as text so hosted
-            // HTML, modules, includes, and future blocks gain no authority.
             Token::LeftBlock => {
                 if wikidot_label_block_executes(parser) {
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -561,16 +515,15 @@ fn transliterate_triple_target(url: &str) -> Option<String> {
     Some(transliterated)
 }
 
-/// Combining marks produced by NFKD decomposition of Latin and Cyrillic text.
 fn is_transliteration_combining_mark(character: char) -> bool {
     matches!(
         character,
-        '\u{300}'..='\u{36f}' // Combining Diacritical Marks
-            | '\u{483}'..='\u{489}' // Combining Cyrillic marks
-            | '\u{1ab0}'..='\u{1aff}' // Combining Diacritical Marks Extended
-            | '\u{1dc0}'..='\u{1dff}' // Combining Diacritical Marks Supplement
-            | '\u{20d0}'..='\u{20ff}' // Combining Diacritical Marks for Symbols
-            | '\u{fe20}'..='\u{fe2f}' // Combining Half Marks
+        '\u{300}'..='\u{36f}'
+            | '\u{483}'..='\u{489}'
+            | '\u{1ab0}'..='\u{1aff}'
+            | '\u{1dc0}'..='\u{1dff}'
+            | '\u{20d0}'..='\u{20ff}'
+            | '\u{fe20}'..='\u{fe2f}'
     )
 }
 
@@ -723,13 +676,6 @@ fn parse_link_location<'r, 't>(
     LinkLocation::parse_with_interwiki(url, parser.settings())
 }
 
-/// Strip off the category for use in URL triple-bracket links.
-///
-/// The label for a URL link is its URL, but without its category.
-/// For instance, `theme: Sigma-9` becomes just `Sigma-9`.
-///
-/// It returns `Some(_)` if a slice was performed, and `None` if
-/// the string would have been returned as-is.
 fn strip_category(url: &str) -> Option<&str> {
     // A URL scheme colon is not a Wikidot page-category separator. Live
     // Wikidot keeps the complete URL as the default label for both ordinary
@@ -738,27 +684,18 @@ fn strip_category(url: &str) -> Option<&str> {
         return None;
     }
     match url.find(':') {
-        // Link with site, e.g. :scp-wiki:component:image-block.
         Some(0) => {
             let url = &url[1..];
 
-            // If there is no colon, it's malformed, return None.
-            // Else, return a stripped version
             url.find(':').map(|idx| {
                 let url = url[idx + 1..].trim_start();
 
-                // Skip past the site portion, then use the regular strip case.
-                //
-                // We unwrap_or() here because, at minimum, we return the substring
-                // not containing the site.
                 strip_category(url).unwrap_or(url)
             })
         }
 
-        // Link with category but no site, e.g. theme:sigma-9.
         Some(idx) => Some(url[idx + 1..].trim_start()),
 
-        // No stripping necessary
         None => None,
     }
 }
@@ -822,16 +759,12 @@ fn test_transliterate_triple_target() {
     test!("документ", Some("dokument"));
     test!("café", Some("cafe"));
 
-    // Uppercase Cyrillic maps to lowercase Latin (slugs are case-folded
-    // downstream); uppercase ASCII passes through untouched.
     test!("ДОКУМЕНТ", Some("dokument"));
     test!("CAFÉ", Some("CAFE"));
 
-    // Precomposed Cyrillic letters decompose to their base letters first.
     test!("й", Some("i"));
     test!("ё", Some("e"));
 
-    // No transliteration: the caller keeps the empty-slug fallback.
     test!("日本語", None);
     test!("документ日本語", None);
     test!("ß", None);

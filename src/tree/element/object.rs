@@ -577,13 +577,6 @@ impl Element<'_> {
             Element::LineBreak | Element::LineBreaks { .. } => true,
             Element::ClearFloat(_) => false,
             Element::HorizontalRule => false,
-            // Partial elements are intermediate parser structures.  Inline
-            // formatting controls can remain inside a paragraph, while a
-            // structural partial must force the enclosing paragraph to stay
-            // unwrapped until its owner consumes it.  Malformed or
-            // unterminated input can leave such a partial at the top level;
-            // treating it as unsafe keeps rendering fail-closed instead of
-            // panicking while computing paragraph safety.
             Element::Partial(partial) if partial.is_inline_format_control() => true,
             Element::Partial(_) => false,
         }

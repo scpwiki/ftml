@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Submodule responsible for defining the AST test runner.
-
 use super::{Test, TestResult, TestStats, TestUniverse};
 use crate::data::{PageInfo, ScoreValue};
 use crate::layout::Layout;
@@ -49,10 +47,7 @@ impl TestUniverse {
     pub fn run(&self, skip_tests: &[&str], only_tests: &[&str]) -> TestStats {
         let mut stats = TestStats::new();
         for (test_name, test) in &self.tests {
-            // Either we are running all tests (is empty),
-            // or it's one of the only tests we're actually running.
             if only_tests.is_empty() || test_applies(test_name, only_tests) {
-                // But not a skipped test
                 let result = if test_applies(test_name, skip_tests) {
                     TestResult::Skip
                 } else {
@@ -68,11 +63,9 @@ impl TestUniverse {
     pub fn update(&self, test_dir: &Path, skip_tests: &[&str], only_tests: &[&str]) {
         let mut path = PathBuf::from(test_dir);
         for (test_name, test) in &self.tests {
-            // Same logic as above
             if (only_tests.is_empty() || test_applies(test_name, only_tests))
                 && !test_applies(test_name, skip_tests)
             {
-                // Reuse path buffer for each test directory
                 path.push(test_name);
                 test.update(&path);
                 path.pop();
@@ -101,10 +94,6 @@ impl Test {
         }
     }
 
-    /// Runs this test, yielding its result.
-    ///
-    /// # Returns
-    /// Either `TestResult::Pass` or `TestResult::Fail`.
     pub fn run(&self) -> TestResult {
         println!("+ {}", self.name);
 
@@ -123,11 +112,10 @@ impl Test {
         let tokens = crate::tokenize(&text);
         let result = crate::parse(&tokens, &page_info, &parse_settings);
         let (mut tree, actual_errors) = result.into();
-        tree.wikitext_len = 0; // not stored in the JSON, need for correct eq
+        tree.wikitext_len = 0;
 
         let mut result = TestResult::Pass;
 
-        // Check abstract syntax tree
         if let Some(expected_tree) = &self.tree {
             let actual_tree = &tree;
             if actual_tree != expected_tree {
@@ -138,10 +126,6 @@ impl Test {
             }
         }
 
-        // Check errors
-        //
-        // We always check this, since if there _are_ errors
-        // but there is no errors.json file, then
         let expected_errors = match self.errors {
             Some(ref errors) => errors.as_slice(),
             None => &[],
@@ -153,7 +137,6 @@ impl Test {
             eprintln!("Actual:   {}", json(&actual_errors));
         }
 
-        // Run and check wikidot render
         if let Some(expected_html) = &self.wikidot_output {
             let settings = settings!(Wikidot);
             let (mut wikidot_text, _pages) =
@@ -172,7 +155,6 @@ impl Test {
             }
         }
 
-        // Run and check wikijump render
         if let Some(expected_html) = &self.html_output {
             let settings = settings!(Wikijump);
             let actual_output = HtmlRender.render(&tree, &page_info, &settings);
@@ -185,7 +167,6 @@ impl Test {
             }
         }
 
-        // Run and check text render
         if let Some(expected_text) = &self.text_output {
             let settings = settings!(Wikijump);
             let actual_text = TextRender.render(&tree, &page_info, &settings);
@@ -205,7 +186,7 @@ impl Test {
 
         let page_info = self.page_info();
         let parse_settings = settings!(Wikijump);
-        let mut path = PathBuf::from(directory); // reuse buffer for each written file
+        let mut path = PathBuf::from(directory);
 
         let (mut text, _pages) = crate::include(
             &self.input,
@@ -219,7 +200,7 @@ impl Test {
         let tokens = crate::tokenize(&text);
         let result = crate::parse(&tokens, &page_info, &parse_settings);
         let (mut tree, errors) = result.into();
-        tree.wikitext_len = 0; // see run()
+        tree.wikitext_len = 0;
 
         macro_rules! update {
             ($write_func:ident, $object:expr, $filename:expr $(,)?) => {{
@@ -230,19 +211,12 @@ impl Test {
             }};
         }
 
-        // Update abstract syntax tree
         if let Some(expected_tree) = &self.tree {
             let actual_tree = &tree;
             if actual_tree != expected_tree {
                 update!(write_json, actual_tree, "tree.json");
             }
         }
-
-        // Update errors
-        //
-        // If there are errors but no errors.json file, then
-        // we complain. This may indicate the test wasn't
-        // *intended* to poduce parse errors and should be fixed.
 
         if !errors.is_empty() {
             path.push("errors.json");
@@ -265,7 +239,6 @@ impl Test {
             update!(write_json, errors, "errors.json");
         }
 
-        // Run and check wikidot render
         if let Some(expected_html) = &self.wikidot_output {
             let settings = settings!(Wikidot);
             let (mut wikidot_text, _pages) =
@@ -281,7 +254,6 @@ impl Test {
             }
         }
 
-        // Run and check wikijump render
         if let Some(expected_html) = &self.html_output {
             let settings = settings!(Wikijump);
             let html_output = HtmlRender.render(&tree, &page_info, &settings);
@@ -290,7 +262,6 @@ impl Test {
             }
         }
 
-        // Run and check text render
         if let Some(expected_text) = &self.text_output {
             let settings = settings!(Wikijump);
             let actual_text = TextRender.render(&tree, &page_info, &settings);
@@ -301,21 +272,12 @@ impl Test {
     }
 }
 
-// Helper functions
-
-/// Determine if any of the given patterns apply to this test.
-/// What "apply" means depends on the function:
-/// * `SKIP_TESTS` &mdash; This test should be skipped.
-/// * `ONLY_TESTS` &mdash; This is one of the only tests to be run.
 fn test_applies(test_name: &str, patterns: &[&str]) -> bool {
     for &pattern in patterns {
-        // Literal test name
         if pattern == test_name {
             return true;
         }
 
-        // Test group, match as a prefix
-        // e.g. 'underline/' to match all underline tests
         if pattern.ends_with('/') && test_name.starts_with(pattern) {
             return true;
         }
@@ -379,8 +341,6 @@ where
     json_writer(object, &mut buffer);
     String::from_utf8(buffer).expect("JSON was not valid UTF-8")
 }
-
-// Helper functions for updating test files
 
 fn write_json<T>(path: &Path, object: &T)
 where

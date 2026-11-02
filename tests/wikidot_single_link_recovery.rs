@@ -96,9 +96,6 @@ fn anchors(html: &str) -> Vec<Anchor> {
 
 #[test]
 fn live_backed_single_link_matrix_matches_href_target_and_text() {
-    // Anonymous edit/PagePreviewModule evidence captured 2026-07-30:
-    // cases.jsonl SHA-256 f85d44d09640abeba21e1524b3435576e8ff216a0d587f1bf074d32041631567
-    // live.jsonl  SHA-256 043451597da63f90d36411bc3e2be6a8977f7ab34b4f55efaaca969e4ca999d7
     let dense_source = "[https://example.com A]".repeat(20);
     let dense_anchors = (0..20)
         .map(|_| anchor("https://example.com", None, "A"))
@@ -410,7 +407,6 @@ fn unsafe_and_noncanonical_schemes_never_become_hrefs() {
 
 #[test]
 fn valid_comments_are_elided_from_single_link_targets_and_labels() {
-    // Anonymous edit/PagePreviewModule evidence from comment-broad-20260730130843-26974.
     for (source, href, label) in [
         (
             "[https://exam[!--x--]ple.com AB]",

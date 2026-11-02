@@ -670,9 +670,6 @@ fn resolve_unsupported_candidate(
     _candidate: ParserFunctionCandidate,
     _scan_budget: &mut ConditionalScanBudget,
 ) -> ScanResult<(usize, String)> {
-    // Unsupported parser-function names retain their authored bytes until the
-    // ordinary Wikidot parser runs. That parser owns the legacy single-anchor
-    // recovery and, critically, preserves which closing brackets were authored.
     ScanResult::NotFound
 }
 
@@ -835,11 +832,6 @@ fn find_conditional_parts_indexed(
             if crossing_link_depth == Some(depth)
                 && let Some(first) = separators[0]
             {
-                // Wikidot permits the final `]]` of an inline `[[a ...]]` or
-                // `[[/a ...]]` branch to close the surrounding conditional as
-                // well. Prefer an ordinary balanced outer close whenever one
-                // exists; this fallback is used only if the remaining source
-                // never closes the conditional.
                 let close_end = cursor + 2;
                 if close_end == source.len()
                     || is_wikidot_conditional_opener(&source[close_end..])
@@ -985,9 +977,6 @@ mod tests {
 
     #[test]
     fn simple_if_uses_wikidot_nonempty_string_truthiness() {
-        // Live provenance:
-        // ftml-oracle-20260712T225511Z/run-parser-if-string and
-        // ftml-oracle-20260712T225812Z/run-parser-if-include.
         for (condition, expected) in [
             ("foo", "true branch"),
             ("no", "true branch"),
@@ -1038,12 +1027,6 @@ mod tests {
 
     #[test]
     fn resolves_crossing_listpages_link_conditionals() {
-        // Live provenance: the exact ListPages body from
-        // jp:old:scp-7884:L87:B2643, observed anonymously through
-        // edit/PagePreviewModule on 2026-07-30. Source SHA-256:
-        // 42e104fbe6b89be364fc99a331c59ddf8c368996650ff696c687fb54600f1916.
-        // Runtime substitution makes each condition false and each
-        // %%content{0}%% branch empty.
         let source = concat!(
             "[[#ifexpr 0-0>0 | [[a class=\"point\" href=\"https://scp-jp.wikidot.com/example\" ",
             "style=\"bottom: calc(172px + 0px * sin(56)); left: calc(172px + 0px * cos(56));\" | ",

@@ -58,13 +58,8 @@ where
 
     pub fn new_list(&mut self, ltype: L) {
         if self.stack.is_single() {
-            // This is the last layer, so the pop/push trick doesn't work.
-            //
-            // Instead, output this entire thing as a finished list tree,
-            // then create a new one for the process to continue.
             self.finish_depth_list(Some(ltype));
         } else {
-            // We can just decrease and increase to make a new list
             self.decrease_depth();
             self.increase_depth(ltype);
         }
@@ -85,8 +80,6 @@ where
     }
 
     fn finish_depth_list(&mut self, new_ltype: Option<L>) {
-        // Wrap all opened layers
-        // Start at 1 since it's a non-empty vec
         for _ in 1..self.stack.len() {
             self.decrease_depth();
         }
@@ -94,18 +87,12 @@ where
         let stack_is_collapsed = self.stack.is_single();
         debug_assert!(stack_is_collapsed, "open layers remain");
 
-        // Return top-level layer
         let (ltype, list) = {
-            // For into_trees(), we don't care what the new ltype is,
-            // so we just reuse the last one.
-            //
-            // But for new_list() we do, we want a new list layer.
             let new_ltype = new_ltype.unwrap_or(self.stack.first().0);
 
             mem::replace(self.stack.first_mut(), (new_ltype, Vec::new()))
         };
 
-        // Only push if the list has elements
         if !list.is_empty() {
             self.finished.push((ltype, list));
         }
@@ -124,42 +111,21 @@ where
 {
     let mut stack = DepthStack::new(top_ltype);
 
-    // The depth value for the previous item
     let mut previous = 0;
 
-    // Iterate through each of the items
     for (depth, ltype, item) in items {
-        // Add or remove new depth levels as appropriate,
-        // based on what our new depth value is compared
-        // to the value in the previous iteration.
-        //
-        // If previous == depth, then neither of these for loops will run
-        // If previous < depth, then only the first will run
-        // If previous > depth, then only the second will run
-
-        // Open new levels
         for _ in previous..depth {
             stack.increase_depth(ltype);
         }
 
-        // Close existing levels
         for _ in depth..previous {
             stack.decrease_depth();
         }
 
-        // Create new level if the type doesn't match
-        //
-        // Here we decrease and increase the depth to close
-        // the current layer, then make a new one with the
-        // type this item has.
-        //
-        // We'll keep appending to this remade layer until
-        // we hit a different depth or a different type.
         if stack.last_type() != ltype {
             stack.new_list(ltype);
         }
 
-        // Push element and update state
         stack.push_item(item);
         previous = depth;
     }
@@ -171,13 +137,11 @@ where
 fn depth() {
     macro_rules! test {
         ($depths:expr, $list:expr $(,)?) => {{
-            // Map to add unit as the level type
             let depths: Vec<_> = $depths
                 .into_iter()
                 .map(|(depth, item)| (depth, (), item))
                 .collect();
 
-            // Get results
             let list: Vec<DepthItem<(), char>> = $list;
             let expected = ((), list);
             let actual = process_depths((), depths);
@@ -345,7 +309,6 @@ mod test {
             let expected_length = depths_input.len();
             let depth_list = process_depths(900, depths_input);
 
-            // Count all elements in the tree, recursively
             fn count(list: &DepthList<i32, String>) -> usize {
                 list.iter()
                     .map(|item| match item {
@@ -358,7 +321,6 @@ mod test {
             let actual_length: usize =
                 depth_list.iter().map(|(_, list)| count(list)).sum();
 
-            // Verify that it's the same as the number of elements in the original
             assert_eq!(
                 actual_length, expected_length,
                 "Actual depth list output doesn't match input",

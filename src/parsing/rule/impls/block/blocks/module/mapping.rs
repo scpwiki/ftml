@@ -154,7 +154,6 @@ fn module_rule_map_rejects_duplicate_names() {
 
 #[test]
 fn module_rules_match_conf() {
-    // `Redirect` and `TagCloud` are accepted by the parser but have no conf entry yet.
     crate::test::conf_names::assert_rules_match_conf(
         "modules.toml",
         "module-",

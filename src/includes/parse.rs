@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! This module provides functions to parse strings into [`IncludeRef`]s
-
 mod parser {
     // Since pest generates some code that clippy doesn't like
     #![allow(clippy::empty_docs)]
@@ -64,17 +62,13 @@ pub fn parse_include_block<'t>(
 ) -> Result<(IncludeRef<'t>, usize), IncludeParseError> {
     match IncludeParser::parse(Rule::include, &text[start..]) {
         Ok(mut pairs) => {
-            // Extract inner pairs
-            // These actually make up the include block's tokens
             let first = pairs.next().expect("No pairs returned on successful parse");
             let span = first.as_span();
 
             debug!("Parsed include block");
 
-            // Convert into an IncludeRef
             let include = process_pairs(first.into_inner())?;
 
-            // Adjust offset and return
             Ok((include, start + span.end()))
         }
         Err(error) => {
@@ -84,7 +78,6 @@ pub fn parse_include_block<'t>(
     }
 }
 
-/// Creates an [`IncludeRef`] out of pest [`Pairs`].
 fn process_pairs(mut pairs: Pairs<Rule>) -> Result<IncludeRef, IncludeParseError> {
     let page_raw = pairs.next().ok_or(IncludeParseError)?.as_str();
     let page_ref = validate_include_page_ref(PageRef::parse_include(page_raw)?)?;
@@ -123,8 +116,6 @@ fn scan_include_arguments<'t>(
                 index = end;
                 continue;
             }
-            // An unterminated comment can own every later pipe and candidate
-            // closer. Its boundary is ambiguous, so recovery must fail closed.
             return Err(IncludeParseError);
         }
         if bytes[index] == b'|' {

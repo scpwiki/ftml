@@ -52,34 +52,23 @@ fn parse_footnote_ref<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Check footnote flag
-    //
-    // This is true if we're a [[footnote]] inside a [[footnote]],
-    // which is not allowed.
     if parser.in_footnote() {
         return Err(parser.make_err(ParseErrorKind::FootnotesNested));
     }
 
-    // Set footnote ref flag
     let parser = &mut ParserWrap::new(parser);
 
-    // Parse out block
     assert!(!flag_star, "Footnote reference doesn't allow star flag");
     assert!(!flag_score, "Footnote reference doesn't allow score flag");
     assert_block_name(&BLOCK_FOOTNOTE, name);
 
     parser.get_head_none(&BLOCK_FOOTNOTE, in_head)?;
 
-    // Gather footnote contents with paragraphs.
-    //
-    // However, if there's only one, then we strip it
-    // and make it inline.
     let body = parser.get_body_elements(&BLOCK_FOOTNOTE, true)?;
     let (mut elements, errors, _) = body.into();
 
     if elements.len() == 1 {
         match elements.pop().unwrap() {
-            // Unwrap the paragraph and get its contents.
             Element::Container(container)
                 if container.ctype() == ContainerType::Paragraph =>
             {
@@ -87,7 +76,6 @@ fn parse_footnote_ref<'r, 't>(
                 elements.append(&mut new_elements);
             }
 
-            // Other element, keep as-is.
             element => elements.push(element),
         };
     } else if parser.settings().layout.legacy()
@@ -121,7 +109,6 @@ fn parse_footnote_ref<'r, 't>(
         elements.pop();
     }
 
-    // Append footnote contents and return.
     let index = parser.push_footnote(elements);
 
     ok!(Element::Footnote(index), errors)
@@ -151,7 +138,6 @@ fn parse_footnote_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Parse arguments
     let mut arguments = parser.get_head_map_wikidot(&BLOCK_FOOTNOTE_BLOCK, in_head)?;
 
     let title = arguments.get("title");
@@ -165,16 +151,11 @@ fn parse_footnote_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    // Only a valid first footnote block needs the line-prefix ownership scan.
-    // Rejecting duplicates and malformed arguments first avoids repeatedly
-    // rescanning a growing physical-line prefix.
     let inline_prose = parser.settings().layout.legacy()
         && wikidot_footnote_block_has_inline_prefix(parser);
 
-    // Tell parser that a footnote block was added
     parser.set_footnote_block();
 
-    // Build and return
     ok!(inline_prose; Element::FootnoteBlock { title, hide })
 }
 
@@ -189,10 +170,6 @@ fn wikidot_footnote_block_has_inline_prefix(parser: &Parser<'_, '_>) -> bool {
         .any(|character| !matches!(character, ' ' | '\t' | '\0'))
 }
 
-/// Helper structure to set the `in_footnote` flag.
-///
-/// This is only for `[[footnote]]`, the flag is meant
-/// to prevent nested `[[footnote]]`s.
 #[derive(Debug)]
 struct ParserWrap<'p, 'r, 't> {
     parser: &'p mut Parser<'r, 't>,

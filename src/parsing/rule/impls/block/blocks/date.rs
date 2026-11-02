@@ -79,7 +79,6 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    // Parse out timestamp given by user
     let mut date = parse_date(value)
         .map_err(|_| parser.make_err(ParseErrorKind::BlockMalformedArguments))?;
 
@@ -103,7 +102,6 @@ fn parse_fn<'r, 't>(
         }
     }
 
-    // Build and return element
     ok!(Element::Date {
         value: date,
         format,
@@ -150,19 +148,14 @@ fn split_ago_hover_format<'t>(
     }
 }
 
-// Parser functions
-
-/// Parse a datetime string and produce its time value, as well as possible timezone info.
 fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
     debug!("Parsing possible date value '{value}'");
 
-    // Special case, current time
     if value.eq_ignore_ascii_case("now") || value == "." {
         trace!("Was now");
         return Ok(now().into());
     }
 
-    // Try UNIX timestamp (e.g. 1398763929)
     if let Ok(timestamp) = value.parse::<i64>() {
         trace!("Was UNIX timestamp '{timestamp}'");
         let date =
@@ -171,7 +164,6 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
         return Ok(date.into());
     }
 
-    // Try datetime strings
     if let Ok(datetime_tz) = OffsetDateTime::parse(value, &Rfc3339) {
         trace!("Was RFC 3339 datetime string, result '{datetime_tz}'");
         return Ok(datetime_tz.into());
@@ -192,26 +184,21 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
         return Ok(datetime_tz.into());
     }
 
-    // Try date strings
     if let Ok(date) = Date::parse(value, &Iso8601::PARSING) {
         trace!("Was ISO 8601 date string, result '{date}'");
         return Ok(date.into());
     }
 
-    // Exhausted all cases, failing
     Err(DateParseError)
 }
 
-/// Parse the timezone based on the specifier string.
 fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
     static TIMEZONE_REGEX: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^(\+|-)?([0-9]{1,2}):?([0-9]{2})?$").unwrap());
 
     debug!("Parsing possible timezone value '{value}'");
 
-    // Try hours / minutes (via regex)
     if let Some(captures) = TIMEZONE_REGEX.captures(value) {
-        // Get sign (+1 or -1)
         let sign = match captures.get(1) {
             None => 1,
             Some(mtch) => match mtch.as_str() {
@@ -221,7 +208,6 @@ fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
             },
         };
 
-        // Get hour value
         let hour = captures
             .get(2)
             .expect("No hour in timezone despite match")
@@ -229,7 +215,6 @@ fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
             .parse::<i32>()
             .expect("Hour wasn't integer despite match");
 
-        // Get minute value
         let minute = match captures.get(3) {
             None => 0,
             Some(mtch) => mtch
@@ -238,23 +223,17 @@ fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
                 .expect("Minute wasn't integer despite match"),
         };
 
-        // Get offset in seconds
         let seconds = sign * (hour * 3600 + minute * 60);
 
         trace!("Was offset via +HH:MM (sign {sign}, hour {hour}, minute {minute})");
         return get_offset(seconds);
     }
 
-    // Try number of seconds
-    //
-    // This is lower-priority than the regex to permit "integer" cases,
-    // such as "0800".
     if let Ok(seconds) = value.parse::<i32>() {
         trace!("Was offset in seconds ({seconds})");
         return get_offset(seconds);
     }
 
-    // Exhausted all cases, failing
     Err(DateParseError)
 }
 
@@ -288,19 +267,8 @@ fn get_offset(seconds: i32) -> Result<UtcOffset, DateParseError> {
     UtcOffset::from_whole_seconds(seconds).map_err(|_| DateParseError)
 }
 
-// Tests
-
 #[test]
 fn date() {
-    // Since time will obviously pass between when the time
-    // object is created and when we check it, this function
-    // makes sure the time is *reasonably close*.
-    //
-    // This function *will* fail if there's a seam, such as a
-    // change to daylight savings or the system clock jumps.
-    //
-    // Since this is just a test suite, we don't care about such edge
-    // cases, just rerun the tests.
     fn dates_equal(date1: DateItem, date2: DateItem) -> bool {
         let timestamp1 = date1.timestamp();
         let timestamp2 = date2.timestamp();

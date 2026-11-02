@@ -91,7 +91,6 @@ fn only_cell<'a, 't>(tree: &'a SyntaxTree<'t>) -> &'a ftml::tree::TableCell<'t> 
 
 #[test]
 fn advanced_table_header_case_matrix_matches_live_wikidot() {
-    // Frozen 2026-07-30 anonymous PagePreview `case` group.
     for (table, row, cell, expected_tag) in [
         ("table", "row", "cell", "td"),
         ("TABLE", "ROW", "CELL", "td"),
@@ -117,8 +116,6 @@ fn advanced_table_header_case_matrix_matches_live_wikidot() {
 
 #[test]
 fn advanced_table_element_attribute_matrix_matches_live_wikidot() {
-    // Every row is backed by the `table`, `row`, and `cell` attribute groups
-    // in advanced-table-20260730131818-10599/live.jsonl.
     let cases = [
         (r#" class="grid""#, r#" class="grid""#),
         (

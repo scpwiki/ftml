@@ -26,8 +26,6 @@ use crate::settings::{
 use std::str::FromStr;
 use std::sync::Arc;
 
-// Typescript declarations
-
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &str = r#"
 export interface IWikitextSettings {
@@ -50,8 +48,6 @@ extern "C" {
     #[wasm_bindgen(typescript_type = "IWikitextSettings")]
     pub type IWikitextSettings;
 }
-
-// Wrapper structure
 
 #[wasm_bindgen]
 #[derive(Debug, Clone)]

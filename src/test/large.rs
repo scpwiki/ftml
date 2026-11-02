@@ -35,11 +35,6 @@ fn run_on_bounded_test_stack(name: &str, test: fn()) {
         .expect("large-parser test panicked");
 }
 
-/// Test the parser's recursion limit.
-///
-/// Manually implemented test, since this test would be
-/// tremendously huge on disk as a JSON file, and
-/// also goes past serde_json's recursion limit, lol.
 #[test]
 fn recursion_depth() {
     run_on_bounded_test_stack(
@@ -52,8 +47,6 @@ fn recursion_depth_on_bounded_test_stack() {
     let page_info = PageInfo::dummy();
     let wikidot = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
-    // Exercise the production-thread stack. The explicit parser limit must
-    // produce a recoverable error before a caller stack can overflow.
     let mut input = String::new();
 
     for _ in 0..=DEEP_MAX_RECURSION_DEPTH {
@@ -122,9 +115,6 @@ fn corpus_colmod_tree_parses_on_bounded_stack_worker() {
 }
 
 fn corpus_colmod_tree_on_bounded_stack() {
-    // fragment:scp-5764-1 expands a recursive navigation component into this
-    // balanced shape. Each row adds several parser frames, so its 231 rows are
-    // materially deeper than 231 plain div blocks.
     const CORPUS_BACKED_ROWS: usize = 231;
 
     let page_info = PageInfo::dummy();
@@ -160,7 +150,6 @@ fn corpus_colmod_tree_on_bounded_stack() {
     );
 }
 
-/// Unclosed nested blocks used to retry the same suffix exponentially often.
 #[test]
 fn nested_unclosed_divs() {
     const ITERATIONS: usize = 22;
@@ -183,7 +172,6 @@ fn nested_unclosed_divs() {
     assert_eq!(tree.elements.len(), 1);
 }
 
-/// Failed nested blocks must roll back bibliography state before caching.
 #[test]
 fn nested_unclosed_blocks_preserve_bibliography_indices() {
     const ITERATIONS: usize = 22;
@@ -210,7 +198,6 @@ fn nested_unclosed_blocks_preserve_bibliography_indices() {
     assert_eq!(tree.bibliographies.next_index(), 1);
 }
 
-/// Test the parser's ability to process large bodies
 #[test]
 #[ignore = "slow test"]
 fn large_payload() {
@@ -219,11 +206,9 @@ fn large_payload() {
     let page_info = PageInfo::dummy();
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
-    // Build wikitext input
     let mut input = String::new();
 
     for _ in 0..ITERATIONS {
-        // Lines intentionally broken in weird places
         input.push_str("
 [[div]]
 Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -240,11 +225,9 @@ In hac habitasse platea dictumst. Vestibulum fermentum libero nec erat porttitor
         ");
     }
 
-    // Run parser steps
     crate::preprocess(&mut input);
     let tokens = crate::tokenize(&input);
     let (_tree, errors) = crate::parse(&tokens, &page_info, &settings).into();
 
-    // Check output
     assert_eq!(errors.len(), ITERATIONS * 3);
 }

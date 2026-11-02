@@ -109,11 +109,6 @@ impl Random {
 
 #[test]
 fn html_id() {
-    // Random output is deterministic in tests.
-    //
-    // This is to ensure HTML test output is consistent,
-    // but that means we can test for exact values here.
-
     let mut rand = Random::default();
     let mut buffer = String::new();
 

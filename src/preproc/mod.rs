@@ -80,8 +80,6 @@ impl Replacer {
         }
     }
 
-    /// Replaces the text in the manner defined by its enum, using the buffer as a temporary space
-    /// to copy to.
     fn replace(&self, text: &mut String, buffer: &mut String) {
         use self::Replacer::*;
 
@@ -108,7 +106,7 @@ impl Replacer {
                 loop {
                     let mtch = capture
                         .name("repl")
-                        .unwrap_or_else(|| capture.get(0).unwrap()); // alternative is full match
+                        .unwrap_or_else(|| capture.get(0).unwrap());
 
                     debug_assert!(mtch.start() < mtch.end());
 

@@ -79,7 +79,6 @@ impl ParseError {
 
     #[must_use]
     pub fn to_utf16_indices(&self, map: &Utf16IndexMap) -> Self {
-        // Copy fields
         let ParseError {
             token,
             rule,
@@ -87,12 +86,10 @@ impl ParseError {
             kind,
         } = self.clone();
 
-        // Map indices to UTF-16
         let start = map.get_index(span.start);
         let end = map.get_index(span.end);
         let span = start..end;
 
-        // Output new error
         ParseError {
             token,
             rule,

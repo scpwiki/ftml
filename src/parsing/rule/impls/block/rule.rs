@@ -44,11 +44,9 @@ pub const RULE_BLOCK_STAR: Rule = Rule {
 
 pub const RULE_BLOCK_SKIP_NEWLINE: Rule = Rule {
     name: "block-skip",
-    position: LineRequirement::Any, // this rule happens *on* a newline, not after one
+    position: LineRequirement::Any,
     try_consume_fn: block_skip,
 };
-
-// Rule implementations
 
 fn block_regular<'r, 't>(
     parser: &mut Parser<'r, 't>,
@@ -68,17 +66,13 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
     let current = parser.step()?;
     let flag_star = current.token == Token::LeftBlockStar;
 
-    // See if there's a block upcoming
     let result = parser.evaluate_fn(|parser| {
-        // Make sure this is the start of a block
         if ![Token::LeftBlock, Token::LeftBlockStar].contains(&current.token) {
             return Ok(false);
         }
 
-        // Get the block's name
         let (name, _) = parser.get_block_name(false)?;
 
-        // Get the block rule: if it accepts newlines, then we consume here
         let block = if parser.discarding_hidden_body() {
             get_block_rule_with_name(name)
         } else {
@@ -178,8 +172,6 @@ fn block_rule_enabled(parser: &Parser<'_, '_>, block_rule: &BlockRule) -> bool {
         || parser.settings().layout.legacy()
 }
 
-// Block parsing implementation
-
 fn parse_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
     flag_star: bool,
@@ -190,14 +182,12 @@ where
     let parent_rule = parser.rule();
     let opener_start = parser.current().span.start;
 
-    // Set general rule based on presence of star flag
     parser.set_rule(if flag_star {
         RULE_BLOCK_STAR
     } else {
         RULE_BLOCK
     });
 
-    // Get block name
     let spaced_name = parser
         .look_ahead(0)
         .is_some_and(|token| token.token == Token::Whitespace);
@@ -231,7 +221,6 @@ where
         return Err(parser.make_err(ParseErrorKind::NoSuchBlock));
     }
 
-    // Get the block rule for this name
     let block = match if parser.discarding_hidden_body() {
         get_block_rule_with_name(name)
     } else {
@@ -311,28 +300,18 @@ where
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Set block rule for better errors
     parser.set_block(block);
 
-    // Check if this block allows star invocation (the '[[*' token)
     if !block.accepts_star && flag_star {
         return Err(parser.make_err(ParseErrorKind::BlockDisallowsStar));
     }
 
-    // Check if this block allows score invocation ('_' after name)
     if !block.accepts_score && flag_score {
         return Err(parser.make_err(ParseErrorKind::BlockDisallowsScore));
     }
 
     parser.get_optional_space()?;
 
-    // A failed Wikijump page-mode block can be retried from the same authored
-    // opener by each enclosing speculative owner. Once that exact block has
-    // reached input end, retrying it cannot discover a closer that was absent
-    // from the immutable token stream. Memoize the failure at the common block
-    // dispatch seam instead of requiring every body-owning block to implement
-    // the same protection independently. Hidden-body and Wikidot compatibility
-    // parsing retain their specialized recovery semantics and are excluded.
     let cache_wikijump_failure = !parser.settings().layout.legacy()
         && parser.settings().mode == WikitextMode::Page
         && !parser.discarding_hidden_body();
@@ -367,11 +346,6 @@ where
         return Err(error);
     }
 
-    // Run the parse function until the end.
-    //
-    // This is responsible for parsing any arguments,
-    // and terminating the block (the ']]' token),
-    // then processing the body (if any) and tail block.
     let result = (block.parse_fn)(parser, name, flag_star, flag_score, in_head);
     if let Err(error) = &result {
         let deterministic_failure = error.kind() == ParseErrorKind::EndOfInput

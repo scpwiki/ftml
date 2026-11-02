@@ -1,11 +1,3 @@
-//! Property: for every list of rows `(depth, list type, id)` inside the bounds below,
-//! `process_depths` (a) does not panic, (b) returns every row exactly once, in input
-//! order, (c) places each row at nesting depth equal to its input depth (the tree root
-//! is depth 0), (d) places each row directly inside a list of that row's own list type,
-//! and (e) never returns an empty tree or an empty sub-list.
-//!
-//! Bounds: up to MAX_ROWS rows, depth 0..=MAX_DEPTH (any jump, up or down), LTYPES list
-//! types. Raise them with FTML_DEPTH_ROWS / FTML_DEPTH_MAX / FTML_DEPTH_TYPES.
 
 use ftml_process_depths_verification::depth::{DepthItem, DepthList, process_depths};
 
@@ -44,7 +36,6 @@ fn describe(rows: &[(usize, u8, usize)]) -> String {
         .join(", ")
 }
 
-/// Returns a plain-words failure for `rows`, or None when every property holds.
 fn check(rows: &[(usize, u8, usize)]) -> Option<String> {
     let trees = process_depths(9u8, rows.to_vec());
     let mut placed = Vec::new();
@@ -83,7 +74,6 @@ fn every_input_inside_the_bounds_keeps_its_rows() {
     let max_depth = env("FTML_DEPTH_MAX", 3);
     let ltypes = env("FTML_DEPTH_TYPES", 3) as u8;
 
-    // Odometer over all (depth, type) choices for each length 0..=max_rows.
     let choices: Vec<(usize, u8)> = (0..=max_depth)
         .flat_map(|d| (0..ltypes).map(move |t| (d, t)))
         .collect();
@@ -104,7 +94,6 @@ fn every_input_inside_the_bounds_keeps_its_rows() {
                     failures.push(message);
                 }
             }
-            // Advance the odometer.
             let mut pos = 0;
             while pos < len {
                 pick[pos] += 1;

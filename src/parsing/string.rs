@@ -18,12 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Parsing for string values.
-//!
-//! This is the part of the code which handles strings in the wikitext.
-//! For instance, an argument of `key="1\t2"` has the string value `"1\t2"`,
-//! where we need to interpret escapes like `\"`, `\n`, etc.
-
 use crate::parsing::check_step::check_step;
 use crate::parsing::collect::collect_text;
 use crate::parsing::condition::ParseCondition;
@@ -54,7 +48,6 @@ where
         let malformed = ParseErrorKind::BlockMalformedArguments;
         check_step(self, Token::DoubleQuote, malformed)?;
 
-        // We have tokens for '\"' and '\\', so consuming until '"' produces a valid string.
         let close = [ParseCondition::current(Token::DoubleQuote)];
         let invalid = [
             ParseCondition::current(Token::LineBreak),
@@ -85,15 +78,6 @@ pub fn parse_string(input: &str) -> Cow<'_, str> {
         .strip_prefix('"')
         .and_then(|stripped| stripped.strip_suffix('"'))
         .unwrap_or(input);
-
-    // The only case where this is Cow::Borrowed(_)
-    // is if there are no escapes. So instead of trying
-    // to iterate through and borrow from the original,
-    // we go for something simpler.
-    //
-    // If there are no backslashes, then return as-is.
-    // Otherwise, build a new string, since it's going
-    // to be Cow::Owned(_) anyways.
 
     if !input.contains('\\') {
         trace!("No escapes, returning as-is: {:?}", input);
@@ -128,7 +112,6 @@ pub fn parse_string(input: &str) -> Cow<'_, str> {
     Cow::Owned(output)
 }
 
-/// Helper function to convert escapes to the actual character.
 fn escape_char(ch: char) -> Option<char> {
     let escaped = match ch {
         '\\' => '\\',
@@ -142,8 +125,6 @@ fn escape_char(ch: char) -> Option<char> {
 
     Some(escaped)
 }
-
-// Tests
 
 #[test]
 fn quoted_string_escaped() {
@@ -160,10 +141,8 @@ fn quoted_string_escaped() {
             let tokenization = crate::tokenize($wikitext);
             let mut parser = Parser::new(&tokenization, &page_info, &settings);
 
-            // Has plus one to account for the Token::InputStart
             parser.step_n($steps + 1).expect("Unable to step");
 
-            // Arbitrary rule for testing
             let actual = parser
                 .get_quoted_string(RULE_LIST)
                 .expect("Unable to get string value");

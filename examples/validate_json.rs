@@ -18,10 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Helper script to validate / pretty-print JSON files containing syntax trees.
-//!
-//! Run via `scripts/validate_json.sh`
-
 extern crate ftml;
 extern crate serde_json;
 
@@ -49,7 +45,6 @@ fn main() {
         process::exit(0);
     }
 
-    // Read files
     let mut results: Vec<(PathBuf, Outcome)> = Vec::new();
 
     for json_path in json_paths {
@@ -77,7 +72,6 @@ fn main() {
         results.push((path, outcome));
     }
 
-    // Output results
     let mut buf_writer = BufferWriter::stdout(ColorChoice::Auto);
     let mut success = true;
     println!();
@@ -88,7 +82,6 @@ fn main() {
         success &= matches!(outcome, Outcome::Success(_));
     }
 
-    // Exit
     if !success {
         process::exit(1);
     }

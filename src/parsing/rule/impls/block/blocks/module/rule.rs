@@ -54,7 +54,6 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get module name and arguments
     let (subname, arguments, body_start) =
         parser.get_head_name_map_with_body_start_wikidot(&BLOCK_MODULE, in_head)?;
 
@@ -68,7 +67,6 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Get the module rule for this name
     let module_rule = match get_module_rule_with_name(subname) {
         Some(rule) => rule,
         None if parser.settings().layout.legacy() => {
@@ -108,14 +106,8 @@ fn parse_fn<'r, 't>(
         None => return Err(parser.make_err(ParseErrorKind::NoSuchModule)),
     };
 
-    // Prepare to run the module's parsing function
     parser.set_module(module_rule);
 
-    // Run the parse function until the end.
-    // This starts after the head and its newline.
-    //
-    // If the module accepts a body, it should consume it,
-    // then the tail. Otherwise it shouldn't move the token pointer.
     let output = (module_rule.parse_fn)(parser, subname, arguments)?;
     let (elements, errors, paragraph_safe) = output.into();
 
@@ -192,8 +184,6 @@ mod tests {
     fn quoted_module_markers_remain_literal_like_wikidot() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-        // Quoted CSS module examples occur on theme:minimalist-bhl,
-        // theme:jakstyle, and manna-charitable-foundation-hub.
         for input in [
             "> [[module CSS]]\n> .OMEGA_CSS_DEPTH_ONE { color: red; }\n> [[/module]]",
             ">> [[module CSS]]\n>> .OMEGA_CSS_DEPTH_TWO { color: red; }\n>> [[/module]]",
@@ -313,9 +303,6 @@ mod tests {
     fn wikidot_unknown_module_body_ownership_matches_live_boundaries() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-        // Live c18 evidence: /home/roku/oracle-store/wjlab/
-        // sandbox-oracle-20260806-unknown-c18/{unknown-inline-tail-later,
-        // unknown-newline-unclosed-later}.html.
         let inline_tail =
             crate::tokenize("[[module UnknownOracleModule]]TAIL\n[[module RandomPage]]");
         let (tree, errors) = crate::parse(&inline_tail, &page_info, &settings).into();
@@ -357,8 +344,6 @@ mod tests {
     fn wikidot_invalid_module_heads_remain_literal() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-        // Live c17 evidence: /home/roku/oracle-store/wjlab/
-        // sandbox-oracle-20260806-unknown-c17/{assignment-only,url-shaped}.html.
         for (input, expected_body) in [
             (
                 r#"[[module foo="bar"]]"#,

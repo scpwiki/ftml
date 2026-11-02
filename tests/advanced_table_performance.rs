@@ -22,11 +22,6 @@ fn page_info() -> PageInfo<'static> {
 fn repeated_wikidot_header_cell_closers_stay_bounded() {
     const TABLE_COUNT: usize = 64;
 
-    // Reduced from EN:scp-4354 (source SHA-256
-    // ebcf9926f045d2aaa8f73596e5a256d12fe4d0ac3364eb7fb66cc7caa447f169).
-    // Wikidot accepts /cell as the closer but renders the mismatched hcell as
-    // a regular cell. Treating it as an unclosed block made four sibling
-    // advanced tables exceed five seconds.
     let table = "[[table]]\n[[row]]\n[[hcell]]Heading[[/cell]]\n[[/row]]\n[[/table]]\n";
     let input = table.repeat(TABLE_COUNT);
     let page_info = page_info();
@@ -47,11 +42,6 @@ fn repeated_wikidot_header_cell_closers_stay_bounded() {
 fn quoted_advanced_tables_stay_bounded() {
     const TABLE_COUNT: usize = 16;
 
-    // Reduced from EN:scp-2102 (source SHA-256
-    // 474dd6012d711f976fa74eb34ad3f8ae0e4a5d37e00445ba74c09f6432c20f61).
-    // Its advanced tables and every nested row/cell live on native blockquote
-    // lines. Without the quote-aware block body cursor, three sibling tables
-    // exceeded five seconds while the same unquoted table parsed in 19 ms.
     let table = concat!(
         "> [[table]]\n",
         "> [[row]]\n",

@@ -443,8 +443,6 @@ enum RelativeTimeUnit {
     Day,
 }
 
-/// %Z - timezone as GMT offset.
-/// "GMT+02" | "GMT-05:30"
 fn append_timezone_gmt(rendered: &mut String, offset: &UtcOffset) {
     let total_seconds = offset.whole_seconds();
     let sign = if total_seconds < 0 { '-' } else { '+' };
@@ -562,15 +560,11 @@ impl From<OffsetDateTime> for DateItem {
 
 cfg_if! {
     if #[cfg(test)] {
-        /// Produces a fixed constant value as "now".
-        ///
-        /// We need a consistent date for render tests to not constantly expire.
         #[inline]
         fn now() -> DateItem {
             time::macros::datetime!(2010-01-01 08:10:00).into()
         }
     } else {
-        /// Helper function to get the current date and time, UTC.
         #[inline]
         fn now() -> DateItem {
             OffsetDateTime::now_utc().into()
@@ -772,13 +766,11 @@ fn date_format_supports_prefix_and_non_ascii_day_periods() {
     let date_am = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +00:00));
     let date_pm = DateItem::from(time::macros::datetime!(2009-12-25 13:18:05 +00:00));
 
-    // en-US: uppercase native, lowercase via %P
     assert_eq!(date_am.format(Some("%p"), "en-US").unwrap(), "AM");
     assert_eq!(date_am.format(Some("%P"), "en-US").unwrap(), "am");
     assert_eq!(date_pm.format(Some("%p"), "en-US").unwrap(), "PM");
     assert_eq!(date_pm.format(Some("%P"), "en-US").unwrap(), "pm");
 
-    // other prefix/non-ASCII locales
     assert_eq!(date_am.format(Some("%p"), "ja").unwrap(), "午前");
     assert_eq!(date_am.format(Some("%P"), "ja").unwrap(), "午前");
     assert_eq!(date_pm.format(Some("%p"), "ja").unwrap(), "午後");

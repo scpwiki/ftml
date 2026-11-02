@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Usage: run.sh            run the exhaustive check against the real src/includes/mod.rs
-#        run.sh mutants    break a temporary copy of the repo; each break must make the check fail
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 
-run_check() { # $1 = crate dir
+run_check() {
   (cd "$1" && CARGO_INCREMENTAL=0 cargo test --release --quiet -- --nocapture 2>&1)
 }
 

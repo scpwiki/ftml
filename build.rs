@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    // Generate build information
     if let Ok(profile) = env::var("PROFILE") {
         println!("cargo:rustc-cfg=build={:?}", profile);
     }

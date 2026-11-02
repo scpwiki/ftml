@@ -28,8 +28,6 @@ use crate::tree::SyntaxTree as RustSyntaxTree;
 use crate::utf16::Utf16IndexMap;
 use std::sync::Arc;
 
-// Typescript declarations
-
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &str = r#"
 export interface IElement {
@@ -62,8 +60,6 @@ extern "C" {
     #[wasm_bindgen(typescript_type = "IParseError[]")]
     pub type IParseErrorArray;
 }
-
-// Wrapper structures
 
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
@@ -121,15 +117,12 @@ impl SyntaxTree {
     }
 }
 
-// Exported functions
-
 #[wasm_bindgen]
 pub fn parse(
     tokens: Tokenization,
     page_info: PageInfo,
     settings: WikitextSettings,
 ) -> Result<ParseOutcome, JsValue> {
-    // Borrow and perform parsing
     let tokenization = tokens.get();
     let page_info = page_info.get();
     let settings = settings.get();
@@ -139,23 +132,17 @@ pub fn parse(
     // safely passed to JS, where it will live for an unknown time.
     let syntax_tree = syntax_tree.to_owned();
 
-    // Convert errors to use UTF-16 indices
     let errors = convert_errors_utf16(tokenization, errors);
 
-    // Create inner wrapper
     let inner = Arc::new(RustParseOutcome::new(syntax_tree, errors));
 
     Ok(ParseOutcome { inner })
 }
 
-// Utility functions
-
 fn convert_errors_utf16(
     tokenization: &RustTokenization,
     errors: Vec<RustParseError>,
 ) -> Vec<RustParseError> {
-    // As an optimization, we can avoid the (relatively expensive) Utf16IndexMap creation
-    // if we know there are no errors to map indices of.
     if errors.is_empty() {
         return errors;
     }

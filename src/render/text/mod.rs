@@ -126,10 +126,6 @@ fn page_category<'a>(page_info: &'a PageInfo) -> &'a str {
     page_info.category.as_deref().unwrap_or("_default")
 }
 
-/// Helper structure to pass in values for `render_partial_direct()`.
-///
-/// This exists because otherwise the function would take an excessive
-/// number of parameters, which Clippy dislikes.
 #[derive(Debug)]
 struct RenderPartial<'a> {
     elements: &'a [Element<'a>],

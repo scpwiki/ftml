@@ -18,9 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! This module contains tools which format pages after they have been referenced in an include
-//! block.
-
 mod debug;
 mod null;
 

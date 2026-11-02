@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
-# Usage: run.sh            run the block-end closer-variant check and the nested-pairing table on the real parser
-#        run.sh mutants    break a temporary copy of the repo three ways; each must change the result
-# Exit 0 only when the findings equal verification/block-end/known-findings.txt and the
-# pairing table equals verification/block-end/recorded-pairing.txt.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 
-# $1 = repo dir. Prints "F|<finding>" lines (closer-variant check) and "P|<row>" lines (pairing table).
 summarize() {
   (cd "$1" && CARGO_INCREMENTAL=0 cargo test --lib --quiet block_end_closers -- --ignored --nocapture --test-threads=1 2>&1 || true) \
   | python3 -I -c '
@@ -33,7 +28,7 @@ for line in sorted(findings) + pairing:
 '
 }
 
-compare() { # $1 = actual summary file
+compare() {
   { grep -v '^#' "$here/known-findings.txt" | sed 's/^/F|/' || true; grep -v '^#' "$here/recorded-pairing.txt" | sed 's/^/P|/'; } | sort > "$1.known"
   sort "$1" > "$1.actual"
   if diff -u "$1.known" "$1.actual" > "$1.diff"; then

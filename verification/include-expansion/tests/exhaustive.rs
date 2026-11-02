@@ -1,17 +1,3 @@
-//! Property: for every input made of up to FTML_INCLUDE_TOKENS tokens from the alphabet
-//! below, `ftml::includes::include`
-//!  (a) returns without panicking (and finishes), for four includers;
-//!  (b) returns exactly one page reference per include block the includer was asked for;
-//!  (c) agrees across includers about WHICH text is consumed: an includer that returns an
-//!      empty page gives byte-identical output to one that reports the page missing, and
-//!      for inputs without line breaks, an includer returning a marker gives the same
-//!      output as the missing-page includer once the marker and the padding line breaks
-//!      it adds are deleted;
-//!  (e) when the page is missing or empty the output is the input with text deleted
-//!      (nothing added);
-//!  (f) in `include_padding_follows_surrounding_line_endings`, an expanded page gets exactly one
-//!      line ending on each side that has caller text, copying `\r\n` when the caller used it;
-//!  (d) leaves input unchanged when no include was asked for and the input has no `>`.
 
 use ftml::data::PageRef;
 use ftml::includes::{FetchedPage, IncludeRef, Includer, include};
@@ -70,7 +56,6 @@ const TOKENS: &[&str] = &[
 fn run(input: &str, kind: Kind) -> Result<(String, Vec<PageRef>, usize), String> {
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let probe = Probe { kind, asked: 0 };
-    // `include` takes the includer by value, so recover `asked` through a shared cell.
     let asked = std::cell::Cell::new(0usize);
     struct Counting<'a>(Probe, &'a std::cell::Cell<usize>);
     impl<'t, 'a> Includer<'t> for Counting<'a> {
@@ -114,13 +99,9 @@ fn check(input: &str) -> Option<String> {
             miss_pages.len()
         ));
     }
-    // A tight quote-prefixed include (`>[[include x]]`) is consumed without being fetched,
-    // on purpose (Wikidot parity, see the comment in src/includes/mod.rs), so only input
-    // with no `>` must come back unchanged.
     if *asked == 0 && !input.contains('>') && miss_out != input {
         return Some(format!("{}: no include block asked for, yet text changed to {}", describe(input), describe(miss_out)));
     }
-    // (e) Inserting nothing can only delete text: the output is a subsequence of the input.
     {
         let mut rest = miss_out.chars().peekable();
         for c in input.chars() {

@@ -30,18 +30,15 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
         return;
     }
 
-    // Generate IDs for each tab
     let button_ids = generate_ids(ctx.random(), tabs.len());
     let tab_ids = generate_ids(ctx.random(), tabs.len());
 
-    // Entire tab view
     ctx.html()
         .element("wj-tabs")
         .attr(attr!(
             "class" => "wj-tabs",
         ))
         .inner(|ctx| {
-            // Tab buttons
             ctx.html()
                 .div()
                 .attr(attr!(
@@ -56,7 +53,6 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                             ("false", "-1")
                         };
 
-                        // Each tab button
                         ctx.html()
                             .element("wj-tabs-button")
                             .attr(attr!(
@@ -72,7 +68,6 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                     }
                 });
 
-            // Tab panels
             ctx.html()
                 .div()
                 .attr(attr!(
@@ -80,7 +75,6 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                 ))
                 .inner(|ctx| {
                     for (i, tab) in tabs.iter().enumerate() {
-                        // Each tab panel
                         ctx.html()
                             .div()
                             .attr(attr!(

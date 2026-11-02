@@ -65,7 +65,6 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                 .attr(attr!("class" => printuser_class))
                 .inner(|ctx| {
                     if show_avatar {
-                        // Image is wrapped in its own <a>
                         ctx.html()
                             .a()
                             .attr(attr!(
@@ -82,7 +81,6 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                             });
                     }
 
-                    // Now, the username (text) with its <a>
                     ctx.html()
                         .a()
                         .attr(attr!(
@@ -107,7 +105,6 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                 .span()
                 .attr(attr!("class" => "error-inline"))
                 .inner(|ctx| {
-                    // TODO localization
                     ctx.html().em().contents(name);
                     ctx.push_escaped(message_post);
                 });
@@ -167,7 +164,6 @@ fn render_user_wikijump(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                     .attr(attr!("class" => "wj-error-inline"))
                     .inner(|ctx| {
                         if show_avatar {
-                            // Karma SVG
                             ctx.html()
                                 .span()
                                 .attr(attr!(
@@ -193,7 +189,6 @@ fn render_user_wikijump(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
         });
 }
 
-/// The avatar base used when the resolver supplies no Wikidot avatar URL.
 const DEFAULT_WIKIDOT_AVATAR_BASE: &str = "http://www.wikidot.com";
 
 /// Return the `scheme://host` base of a Wikidot `avatar.php` URL.

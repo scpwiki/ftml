@@ -42,8 +42,6 @@ fn parse_conditions<'r, 't>(
 
     let mut conditions = ElementCondition::parse(spec);
     conditions.iter_mut().for_each(|condition| {
-        // Because a page can be in at most one category, required conditions
-        // collapse to present checks here.
         if condition.ctype == ElementConditionType::Required {
             condition.ctype = ElementConditionType::Present;
         }
@@ -69,7 +67,6 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Parse out tag conditions
     let rule = &BLOCK_IFCATEGORY;
     let conditions = parser.get_head_value(rule, in_head, parse_conditions)?;
     if parser.settings().layout.legacy()
@@ -79,7 +76,6 @@ fn parse_fn<'r, 't>(
         return ok!(Elements::None);
     }
 
-    // Get body content, never with paragraphs
     let parser_state = parser.get_mutable_state();
     let body_start = parser.current().span.start;
     let body = parser.get_body_elements(&BLOCK_IFCATEGORY, false)?;
@@ -92,7 +88,6 @@ fn parse_fn<'r, 't>(
         elements.len(),
     );
 
-    // Return elements based on condition
     let elements = if check_ifcategory(parser.page_info(), &conditions) {
         trace!("Conditions passed, including elements");
         let mut bounded = Vec::with_capacity(elements.len() + 2);
