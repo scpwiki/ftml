@@ -62,6 +62,7 @@ pub struct ParagraphStack<'t> {
     wikidot_complete_raw_run_after_block: bool,
 
     pending_unwrapped_separator: bool,
+    paragraph_break_since_element: bool,
 
     /// Index into `finished` of a speculative newline separator emitted at a
     /// paragraph break that directly followed a standalone aligned image.
@@ -312,6 +313,10 @@ impl<'t> ParagraphStack<'t> {
 
     #[inline]
     pub fn push_element(&mut self, element: Element<'t>, paragraph_safe: bool) {
+        let paragraph_break_separated = self.paragraph_break_since_element;
+        if element != Element::LineBreak {
+            self.paragraph_break_since_element = false;
+        }
         if self.wikidot_reopen_for_footnote && matches!(element, Element::Footnote(_)) {
             self.wikidot_reopen_for_footnote = false;
             let Some(Element::Container(paragraph)) = self.finished.pop() else {
@@ -428,6 +433,7 @@ impl<'t> ParagraphStack<'t> {
                     if matches!(container.ctype(), ContainerType::Align(_))
             )
             && self.current.is_empty()
+            && !paragraph_break_separated
             && matches!(
                 self.finished.last(),
                 Some(Element::Container(container))
@@ -817,6 +823,7 @@ impl<'t> ParagraphStack<'t> {
             self.finished.push(text!("\n"));
             self.pending_aligned_image_separator = Some(self.finished.len() - 1);
         }
+        self.paragraph_break_since_element = true;
     }
 
     pub fn into_result<'r>(mut self) -> ParseResult<'r, 't, Vec<Element<'t>>> {

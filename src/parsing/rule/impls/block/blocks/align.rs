@@ -279,4 +279,36 @@ mod tests {
         assert_eq!(html.matches("[[&gt;]]").count(), BLOCK_COUNT, "{html}");
         assert!(!html.contains("text-align: right;"), "{html}");
     }
+
+    #[test]
+    fn wikidot_paragraph_break_separated_alignment_blocks_have_no_break() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(
+            "[[>]]\nRight\n[[/>]]\n\n[[<]]\nLeft\n[[/<]]\n\n[[=]]\nCenter\n[[/=]]\n\n[[==]]\nJustify\n[[/==]]\n\n\nDeep align blocks:\n[[=]]\nApple\n[[>]]\nBanana\n[[==]]\nCherry\n[[<]]\nBlueberry\n[[/<]]\n[[/==]]\n[[/>]]\n[[/=]]",
+        );
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            html,
+            "<div style=\"text-align: right;\"><p>Right</p></div><div style=\"text-align: left;\"><p>Left</p></div><div style=\"text-align: center;\"><p>Center</p></div><div style=\"text-align: justify;\"><p>Justify</p></div><p>Deep align blocks:<br>\n</p><div style=\"text-align: center;\"><p>Apple<br>\n</p><div style=\"text-align: right;\"><p>Banana<br>\n</p><div style=\"text-align: justify;\"><p>Cherry<br>\n</p><div style=\"text-align: left;\"><p>Blueberry</p></div></div></div></div>",
+        );
+    }
+
+    #[test]
+    fn wikidot_adjacent_line_alignment_blocks_keep_their_break() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("[[=]]\nA\n[[/=]]\n[[=]]\nB\n[[/=]]");
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            html,
+            "<div style=\"text-align: center;\"><p>A</p></div><br>\n<div style=\"text-align: center;\"><p>B</p></div>",
+        );
+    }
 }
