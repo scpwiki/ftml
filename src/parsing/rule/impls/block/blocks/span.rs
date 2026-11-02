@@ -275,6 +275,45 @@ mod tests {
     use crate::settings::{WikitextMode, WikitextSettings};
 
     #[test]
+    fn wikidot_span_bold_markers_pair_across_span_boundary() {
+        let source = "[[span class=\"a\"]]**X[[/span]][[span class=\"b\"]]:** [[/span]]";
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(
+            html,
+            "<p><span class=\"a\"><strong>X</strong></span><strong><span class=\"b\">:</span></strong> </p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_span_bold_open_inside_close_outside_pairs() {
+        let source = "[[span]]**X[[/span]]Y**";
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(
+            html,
+            "<p><span><strong>X</strong></span><strong>Y</strong></p>"
+        );
+    }
+
+    #[test]
+    fn wikidot_span_unmatched_bold_marker_stays_literal() {
+        let source = "[[span]]**X[[/span]]";
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(html, "<p><span>**X</span></p>");
+    }
+
+    #[test]
     fn score_span_strips_line_breaks_from_body() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
