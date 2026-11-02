@@ -416,7 +416,7 @@ fn relative_time_fmt_options(
     numeric: cache::RelativeTimeNumeric,
 ) -> RelativeTimeFormatterOptions {
     let mut options = RelativeTimeFormatterOptions::default();
-    options.numeric = numeric.as_icu_numeric();
+    options.numeric = Some(numeric.as_icu_numeric());
     options
 }
 
