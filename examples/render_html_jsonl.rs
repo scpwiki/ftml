@@ -21,9 +21,9 @@
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
 use ftml::parsing::ParseError;
-use ftml::render::Render;
 use ftml::render::html::HtmlRender;
 use ftml::render::text::TextRender;
+use ftml::render::{PageExistenceResolver, Render};
 use ftml::settings::{WikitextMode, WikitextSettings};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -56,6 +56,15 @@ struct SyntaxCase {
     title: String,
     page_context: Option<PageContext>,
     layout: Option<InputLayout>,
+    existing_pages: Option<Vec<String>>,
+}
+
+struct ExistingPages(std::collections::HashSet<String>);
+
+impl PageExistenceResolver for ExistingPages {
+    fn page_exists(&self, _site: &str, page: &str) -> bool {
+        self.0.contains(page)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,7 +162,15 @@ fn render_case(case: SyntaxCase) -> RenderResult {
     ftml::preprocess_for_layout(&mut source, settings.layout);
     let tokenization = ftml::tokenize(&source);
     let (tree, parse_errors) = ftml::parse(&tokenization, &page_info, &settings).into();
-    let html = HtmlRender.render(&tree, &page_info, &settings).body;
+    let html = match &case.existing_pages {
+        Some(pages) => {
+            let resolver = ExistingPages(pages.iter().cloned().collect());
+            HtmlRender
+                .render_with_page_existence(&tree, &page_info, &settings, &resolver)
+                .body
+        }
+        None => HtmlRender.render(&tree, &page_info, &settings).body,
+    };
     let text = TextRender.render(&tree, &page_info, &settings);
 
     RenderResult {
@@ -245,6 +262,37 @@ mod tests {
         assert_eq!(
             results[1]["html"],
             "<p><a class=\"wj-anchor\" href=\"/x\">X</a></p>"
+        );
+    }
+
+    #[test]
+    fn existing_pages_control_the_newpage_class() {
+        let input = concat!(
+            r#"{"schema":"wikijump_syntax_differential.syntax_case.v1","case_id":"undeclared","source":"[[[!banana:Missing provider]]]","title":"T"}"#,
+            "\n",
+            r#"{"schema":"wikijump_syntax_differential.syntax_case.v1","case_id":"missing","source":"[[[!banana:Missing provider]]]","title":"T","existing_pages":[]}"#,
+            "\n",
+            r#"{"schema":"wikijump_syntax_differential.syntax_case.v1","case_id":"present","source":"[[[!banana:Missing provider]]]","title":"T","existing_pages":["banana:missing-provider"]}"#,
+            "\n",
+        );
+        let mut output = Vec::new();
+        process_lines(Cursor::new(input), &mut output).expect("process syntax cases");
+        let results: Vec<Value> = String::from_utf8(output)
+            .expect("JSONL is UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("result is JSON"))
+            .collect();
+        assert_eq!(
+            results[0]["html"],
+            "<p><a href=\"/banana:missing-provider\">Missing provider</a></p>"
+        );
+        assert_eq!(
+            results[1]["html"],
+            "<p><a class=\"newpage\" href=\"/banana:missing-provider\">Missing provider</a></p>"
+        );
+        assert_eq!(
+            results[2]["html"],
+            "<p><a href=\"/banana:missing-provider\">Missing provider</a></p>"
         );
     }
 
