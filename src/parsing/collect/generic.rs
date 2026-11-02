@@ -161,6 +161,13 @@ where
             return ok!(paragraph_safe; parser.current(), errors);
         }
 
+        if parser.in_wikidot_definition_list_line()
+            && parser.current().token == Token::LineBreak
+            && simple_table_inline_closer(_rule).is_some()
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+
         if parser.evaluate_any(invalid_conditions) {
             return Err(parser.make_err(error_kind.unwrap_or(ParseErrorKind::RuleFailed)));
         }

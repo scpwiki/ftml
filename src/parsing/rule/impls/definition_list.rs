@@ -66,15 +66,7 @@ fn parse_definition_list<'r, 't>(
     let mut _paragraph_safe = false;
 
     if starts_definition_item(parser) && !has_definition_separator(parser) {
-        while !matches!(
-            parser.current().token,
-            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
-        ) {
-            parser.step()?;
-        }
-        if parser.current().token == Token::LineBreak {
-            parser.step()?;
-        }
+        discard_current_line(parser)?;
         return ok!(false; Elements::None, errors);
     }
 
@@ -84,6 +76,14 @@ fn parse_definition_list<'r, 't>(
 
     let mut at_end = at_end;
     while !at_end {
+        if starts_definition_item(parser)
+            && !has_definition_separator(parser)
+            && has_separator_on_line(parser)
+        {
+            discard_current_line(parser)?;
+            break;
+        }
+
         let next = parse_next_item(parser, &mut errors, &mut _paragraph_safe);
         if let Some((item, item_at_end)) = next {
             items.push(item);
@@ -137,8 +137,20 @@ fn parse_item<'r, 't>(
 
     parser.step_n(2)?;
 
-    let key = collect_key(parser, &mut errors, &mut _paragraph_safe)?;
-    let value = collect_value(parser, &mut errors, &mut _paragraph_safe)?;
+    let restore_line = if parser.settings().layout.legacy() {
+        let previous = parser.in_wikidot_definition_list_line();
+        parser.set_in_wikidot_definition_list_line(true);
+        Some(previous)
+    } else {
+        None
+    };
+    let parts = collect_key(parser, &mut errors, &mut _paragraph_safe).and_then(|key| {
+        collect_value(parser, &mut errors, &mut _paragraph_safe).map(|value| (key, value))
+    });
+    if let Some(previous) = restore_line {
+        parser.set_in_wikidot_definition_list_line(previous);
+    }
+    let (key, value) = parts?;
     let (key_string, key_elements) = key;
     let (value_elements, last) = value;
 
@@ -194,6 +206,45 @@ fn has_definition_separator<'r, 't>(parser: &Parser<'r, 't>) -> bool {
     }
 }
 
+fn discard_current_line<'r, 't>(parser: &mut Parser<'r, 't>) -> Result<(), ParseError> {
+    while !matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    ) {
+        parser.step()?;
+    }
+    if parser.current().token == Token::LineBreak {
+        parser.step()?;
+    }
+    Ok(())
+}
+
+fn has_separator_on_line<'r, 't>(parser: &Parser<'r, 't>) -> bool {
+    if !starts_definition_item(parser) {
+        return false;
+    }
+
+    let mut cursor = parser.clone();
+    if cursor.step_n(2).is_err() {
+        return false;
+    }
+    if cursor.current().token == Token::Colon {
+        return true;
+    }
+    loop {
+        if cursor.next_two_tokens() == (Token::Whitespace, Some(Token::Colon)) {
+            return true;
+        }
+        if matches!(
+            cursor.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) || cursor.step().is_err()
+        {
+            return false;
+        }
+    }
+}
+
 fn collect_key<'r, 't>(
     parser: &mut Parser<'r, 't>,
     errors: &mut Vec<ParseError>,
@@ -216,8 +267,8 @@ where
     ];
     let rule = RULE_DEFINITION_LIST;
 
-    let collected = collect_consume(parser, rule, &close, &invalid, None)?;
-    let mut key_elements = collected.chain(errors, paragraph_safe);
+    let collected = collect_consume_before(parser, rule, &close, &invalid, None)?;
+    let (mut key_elements, _) = collected.chain(errors, paragraph_safe);
     let end_token = parser.current();
 
     if parser.settings().layout.legacy() {
@@ -455,5 +506,53 @@ mod tests {
             assert!(errors.is_empty(), "{source:?}: {errors:?}");
             assert!(tree.elements.is_empty(), "{source:?}: {:?}", tree.elements);
         }
+    }
+
+    #[test]
+    fn wikidot_definition_list_empty_value_item_is_dropped() {
+        use crate::render::{Render, html::HtmlRender};
+
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = ": 用語 : 定義\n: 空 :\n本文\n".to_owned();
+        crate::preprocess_for_layout(&mut source, settings.layout);
+        let tokenization = crate::tokenize(&source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            html,
+            "<dl>\n<dt>用語</dt>\n<dd>定義</dd>\n</dl>\n<p>本文</p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_definition_list_value_formatting_stops_at_line_end() {
+        use crate::render::{Render, html::HtmlRender};
+
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source =
+            ": @<a:b>@ : value\n: **key : value\n: key : __value\nnext__\n".to_owned();
+        crate::preprocess_for_layout(&mut source, settings.layout);
+        let tokenization = crate::tokenize(&source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert_eq!(
+            html,
+            concat!(
+                "<dl>\n",
+                "<dt><span style=\"white-space: pre-wrap;\">a:b</span></dt>\n",
+                "<dd>value</dd>\n",
+                "<dt>**key</dt>\n",
+                "<dd>value</dd>\n",
+                "<dt>key</dt>\n",
+                "<dd>__value</dd>\n",
+                "</dl>\n",
+                "<p>next__</p>",
+            ),
+        );
     }
 }
