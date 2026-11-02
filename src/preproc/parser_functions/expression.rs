@@ -33,6 +33,7 @@ pub(super) enum ExpressionError {
     TooFewArguments(String, usize, usize),
     TooManyArguments(String, usize, usize),
     MisplacedComma,
+    TooManyValues,
     SyntaxNear(String),
     DivisionByZero,
     RemainderByZero,
@@ -59,6 +60,9 @@ impl ExpressionError {
             )),
             Self::MisplacedComma => {
                 Some("parser error: missing token `(` or misplaced token `,`".to_owned())
+            }
+            Self::TooManyValues => {
+                Some("run-time error: too many values in the stack".to_owned())
             }
             Self::SyntaxNear(tail) => Some(format!("syntax error near `{tail}`")),
             Self::DivisionByZero => Some("run-time error: division by zero".to_owned()),
@@ -122,6 +126,9 @@ pub(super) fn evaluate(
         if tail_ref.starts_with(',') && is_safe_error_tail(tail_ref) {
             return Err(ExpressionError::MisplacedComma);
         }
+        if leading_number(tail_ref) {
+            return Err(ExpressionError::TooManyValues);
+        }
         if let Some(identifier) = leading_identifier(tail_ref) {
             return Err(ExpressionError::UndefinedConstant(identifier.to_owned()));
         }
@@ -142,14 +149,25 @@ fn syntax_tail(expression: &str, offset: usize) -> String {
 
 fn leading_identifier(tail: &str) -> Option<&str> {
     let tail = tail.trim_start_matches(|character: char| character.is_ascii_whitespace());
-    if !tail.as_bytes().first().is_some_and(u8::is_ascii_alphabetic) {
+    if !tail
+        .as_bytes()
+        .first()
+        .is_some_and(|byte| byte.is_ascii_alphabetic() || *byte == b'_')
+    {
         return None;
     }
     let end = tail
         .bytes()
-        .position(|byte| !byte.is_ascii_alphanumeric())
+        .position(|byte| !(byte.is_ascii_alphanumeric() || byte == b'_'))
         .unwrap_or(tail.len());
     Some(&tail[..end])
+}
+
+fn leading_number(tail: &str) -> bool {
+    let tail = tail.trim_start_matches(|character: char| character.is_ascii_whitespace());
+    let bytes = tail.as_bytes();
+    bytes.first().is_some_and(u8::is_ascii_digit)
+        || (bytes.first() == Some(&b'.') && bytes.get(1).is_some_and(u8::is_ascii_digit))
 }
 
 fn is_safe_error_tail(tail: &str) -> bool {
@@ -329,7 +347,7 @@ impl ExpressionParser<'_> {
         if self
             .input
             .get(self.offset)
-            .is_some_and(u8::is_ascii_alphabetic)
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || *byte == b'_')
         {
             return self.parse_function();
         }
@@ -342,7 +360,7 @@ impl ExpressionParser<'_> {
         while self
             .input
             .get(self.offset)
-            .is_some_and(u8::is_ascii_alphabetic)
+            .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
         {
             self.offset += 1;
         }
@@ -583,7 +601,7 @@ mod tests {
 
         assert_eq!(
             evaluate("1 2", options),
-            Err(ExpressionError::SyntaxNear("2".to_owned())),
+            Err(ExpressionError::TooManyValues),
         );
         for expression in ["(1", "abs(1", "."] {
             assert_eq!(
@@ -604,6 +622,35 @@ mod tests {
             options,
         };
         assert_eq!(parser.operation(), Err(ExpressionError::Invalid));
+    }
+
+    #[test]
+    fn wikidot_error_fidelity_for_unknown_functions_and_extra_values() {
+        let options = WikidotParserFunctionOptions::default();
+        assert_eq!(
+            evaluate("unknown_func(1)", options),
+            Err(ExpressionError::UndefinedFunction(
+                "unknown_func".to_owned()
+            )),
+        );
+        assert_eq!(
+            evaluate("unknown_func(1)", options)
+                .unwrap_err()
+                .runtime_message(),
+            Some(r#"run-time error: undefined function "unknown_func""#.to_owned()),
+        );
+        assert_eq!(
+            evaluate("abc_def", options),
+            Err(ExpressionError::UndefinedConstant("abc_def".to_owned())),
+        );
+        assert_eq!(
+            evaluate("1..2", options),
+            Err(ExpressionError::TooManyValues),
+        );
+        assert_eq!(
+            evaluate("1..2", options).unwrap_err().runtime_message(),
+            Some("run-time error: too many values in the stack".to_owned()),
+        );
     }
 
     #[test]
