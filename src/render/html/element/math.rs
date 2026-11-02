@@ -60,7 +60,7 @@ fn render_wikidot_math_block(
     index: NonZeroUsize,
     latex_source: &str,
 ) {
-    let environment = if latex_source.contains('{') {
+    let environment = if latex_source.contains('{') || latex_source.contains('\\') {
         "align"
     } else {
         "equation"

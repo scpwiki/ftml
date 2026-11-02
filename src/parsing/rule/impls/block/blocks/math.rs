@@ -339,6 +339,70 @@ mod tests {
     }
 
     #[test]
+    fn wikidot_math_one_line_block_merges_and_numbers_first() {
+        let source = concat!(
+            "[[math]] A = \\pi \\cdot r^2 [[/math]]\n\n",
+            "[[math]]\nC = 2\\pi r\n[[/math]]\n\n",
+            "Apple[[eref quadratic-formula]]\n\n",
+            "Banana cherry[[equation quadratic-formula]] Gooseberry\n\n",
+            "Pineapple[[eref navier-stokes]]Blueberry\n",
+        );
+        let (html, errors) = render_wikidot(source);
+
+        assert!(
+            errors.iter().all(|error| error.rule() != "block-math"),
+            "{errors:#?}"
+        );
+        assert_eq!(html.matches("math-equation").count(), 1, "{html}");
+        assert!(html.contains(
+            "<span class=\"equation-number\">(1)</span>\n<div class=\"math-equation\" id=\"equation-1\">\\begin{align} A = \\pi \\cdot r^2 [[/math]] [[math]] C = 2\\pi r \\end{align}</div>",
+        ), "{html}");
+        assert!(html.contains(
+            "<p>Apple<a class=\"eref\" href=\"javascript:;\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;equation-&#39;)\"></a></p>",
+        ), "{html}");
+        assert!(
+            html.contains(
+                "<p>Banana cherry[[equation quadratic-formula]] Gooseberry</p>",
+            ),
+            "{html}"
+        );
+        assert!(html.contains(
+            "<p>Pineapple<a class=\"eref\" href=\"javascript:;\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;equation-&#39;)\"></a>Blueberry</p>",
+        ), "{html}");
+    }
+
+    #[test]
+    fn wikidot_math_one_line_opener_close_fallback_boundaries() {
+        let (html, errors) =
+            render_wikidot("[[math]] A [[/math]]\n\n[[math]]\nB\n[[/math]]\n");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(html.contains(
+            "<div class=\"math-equation\" id=\"equation-1\">\\begin{equation} A [[/math]] [[math]] B \\end{equation}</div>",
+        ), "{html}");
+
+        let (html, _) = render_wikidot("[[math]] A [[/math]]\n");
+        assert_eq!(html.matches("math-equation").count(), 0, "{html}");
+        assert!(html.contains("<p>[[math]] A [[/math]]</p>"), "{html}");
+    }
+
+    #[test]
+    fn wikidot_math_align_environment_for_backslash_bodies() {
+        let (html, errors) = render_wikidot("[[math]]\n\\alpha + \\beta\n[[/math]]\n");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            html.contains("\\begin{align} \\alpha + \\beta \\end{align}"),
+            "{html}"
+        );
+
+        let (html, errors) = render_wikidot("[[math]]\nx^2\n[[/math]]\n");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            html.contains("\\begin{equation} x^2 \\end{equation}"),
+            "{html}"
+        );
+    }
+
+    #[test]
     fn wikijump_math_rendering_is_unchanged() {
         let (html, errors) = render(
             Layout::Wikijump,
