@@ -222,11 +222,14 @@ fn seams_are_transparent_to_wikidot_typography() {
         }
     }
     let _ = std::panic::take_hook();
+    // The leading newlines keep the marker lines at a line start even
+    // when another test's progress output is interleaved into the
+    // nocapture stream; run.sh matches them with `^CLASS` / `^SEAM-BOUND`.
     for (class, (len, count, example)) in &shortest {
-        println!("CLASS {class}|{len}|{count}|{example}");
+        println!("\nCLASS {class}|{len}|{count}|{example}");
     }
     println!(
-        "SEAM-BOUND max_tokens={max_tokens} checked={checked} failures={failure_count}"
+        "\nSEAM-BOUND max_tokens={max_tokens} checked={checked} failures={failure_count}"
     );
     assert!(
         shortest.is_empty(),
