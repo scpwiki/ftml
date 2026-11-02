@@ -174,6 +174,15 @@ fn next_token(
         return (Token::Whitespace, scan_space(bytes, start));
     }
 
+    if byte == b'*' {
+        if let Some(end) = scan_url(bytes, start + 1) {
+            return (Token::UrlStar, end);
+        }
+        if has(bytes, start, b"**") && scan_url(bytes, start + 2).is_some() {
+            return (Token::Other, start + 1);
+        }
+    }
+
     if let Some((token, end)) = scan_literal(
         bytes,
         start,

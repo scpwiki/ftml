@@ -1065,7 +1065,7 @@ fn wikidot_angle_quote_protected_ranges(text: &str) -> Vec<Range<usize>> {
     let tokens = tokenization.tokens();
 
     for token in tokens {
-        if token.token == Token::Url {
+        if matches!(token.token, Token::Url | Token::UrlStar) {
             ranges.push(token.span.clone());
         }
     }

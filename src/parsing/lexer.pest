@@ -44,6 +44,8 @@ token = _{
     left_comment |
 
     // Text-like
+    url_star |
+    url_star_pre |
     url |
     email |
     identifier |
@@ -144,6 +146,10 @@ url = @{
     (((("http" ~ "s"?) | "ftp") ~ "://") | "mailto:") ~
     (!(NEWLINE | " " | "\t" | "\"" | "'" | "|" | "[" | "]" | ">@" | "@@" | discarded_control) ~ ANY)+
 }
+
+url_star = @{ "*" ~ url }
+
+url_star_pre = @{ "*" ~ &url_star }
 
 // }}}
 
