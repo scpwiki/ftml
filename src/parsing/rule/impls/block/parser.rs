@@ -45,6 +45,159 @@ pub(crate) enum BlockBodyStart {
     NextPhysicalLine,
 }
 
+/// Token index just past a `[[name ...]]` block head starting at `start`,
+/// or `None` if the tokens at `start` are not such a head. Used by the
+/// Wikidot iftags pairing search (#792), which classifies heads
+/// syntactically over the token stream.
+fn named_block_head_end(
+    tokens: &[&ExtractedToken<'_>],
+    start: usize,
+    name: &str,
+) -> Option<usize> {
+    if tokens.get(start)?.token != Token::LeftBlock {
+        return None;
+    }
+    let mut i = start + 1;
+    if tokens.get(i)?.token == Token::Whitespace {
+        i += 1;
+    }
+    let ident = tokens.get(i)?;
+    if ident.token != Token::Identifier || !ident.slice.eq_ignore_ascii_case(name) {
+        return None;
+    }
+    i += 1;
+    loop {
+        match tokens.get(i)?.token {
+            Token::RightBlock => return Some(i + 1),
+            Token::LeftBlock
+            | Token::LeftBlockEnd
+            | Token::InputEnd
+            | Token::ParagraphBreak => return None,
+            _ => i += 1,
+        }
+    }
+}
+
+/// Token index just past a `[[/name]]` end head starting at `start`.
+fn named_block_end_head_end(
+    tokens: &[&ExtractedToken<'_>],
+    start: usize,
+    name: &str,
+) -> Option<usize> {
+    if tokens.get(start)?.token != Token::LeftBlockEnd {
+        return None;
+    }
+    let mut i = start + 1;
+    if tokens.get(i)?.token == Token::Whitespace {
+        i += 1;
+    }
+    let ident = tokens.get(i)?;
+    if ident.token != Token::Identifier || !ident.slice.eq_ignore_ascii_case(name) {
+        return None;
+    }
+    i += 1;
+    if tokens.get(i)?.token == Token::Whitespace {
+        i += 1;
+    }
+    if tokens.get(i)?.token == Token::RightBlock {
+        Some(i + 1)
+    } else {
+        None
+    }
+}
+
+fn iftags_block_head_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+    named_block_head_end(tokens, start, "iftags")
+}
+
+fn iftags_end_head_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+    named_block_end_head_end(tokens, start, "iftags")
+}
+
+/// Token index just past a region the Wikidot iftags pairing walk cannot
+/// see into, starting at `start`: a raw-bodied block span (`[[code]]`,
+/// `[[html]]`, `[[raw]]`, `[[math]]`, `[[module]]`, through the first end
+/// head of the same name) or a raw span (`@@...@@`, `@<...>@`). `None` when
+/// no such region starts here (including an unterminated block or `@@`,
+/// which are literal text, not regions).
+fn protected_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+    match tokens.get(start)?.token {
+        Token::Raw => {
+            let mut i = start + 1;
+            while i < tokens.len() {
+                if tokens[i].token == Token::Raw {
+                    return Some(i + 1);
+                }
+                i += 1;
+            }
+            None
+        }
+        Token::LeftRaw => {
+            let mut i = start + 1;
+            while i < tokens.len() {
+                if tokens[i].token == Token::RightRaw {
+                    return Some(i + 1);
+                }
+                i += 1;
+            }
+            None
+        }
+        Token::LeftBlock => raw_block_span_end(tokens, start),
+        _ => None,
+    }
+}
+
+// Blocks whose bodies are raw text for the pairing scan: an `[[/iftags]]`
+// inside one is body content, never a pairing candidate. Live Wikidot
+// steps over code blocks (probe p13b); the rest of the set matches the
+// opacity FTML's hidden-body security behavior has always given these
+// constructs, so their end markers stay hidden inside a false gate.
+const IFTAGS_OPAQUE_BLOCKS: [&str; 5] = ["code", "html", "math", "module", "raw"];
+
+/// If a raw-bodied block head starts at `start`, the token index just past
+/// its first end head. An unterminated block is not a span.
+fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+    if tokens.get(start)?.token != Token::LeftBlock {
+        return None;
+    }
+    let mut i = start + 1;
+    if tokens.get(i)?.token == Token::Whitespace {
+        i += 1;
+    }
+    let ident = tokens.get(i)?;
+    if ident.token != Token::Identifier
+        || !IFTAGS_OPAQUE_BLOCKS
+            .iter()
+            .any(|name| ident.slice.eq_ignore_ascii_case(name))
+    {
+        return None;
+    }
+    let name = ident.slice;
+    i += 1;
+    loop {
+        match tokens.get(i)?.token {
+            Token::RightBlock => {
+                i += 1;
+                break;
+            }
+            Token::LeftBlock
+            | Token::LeftBlockEnd
+            | Token::InputEnd
+            | Token::ParagraphBreak => {
+                return None;
+            }
+            _ => i += 1,
+        }
+    }
+    while i < tokens.len() {
+        if let Some(end) = named_block_end_head_end(tokens, i, name) {
+            return Some(end);
+        }
+        i += 1;
+    }
+    None
+}
+
 fn token_ends_argument_key(token: Token) -> bool {
     matches!(
         token,
@@ -478,6 +631,17 @@ where
         restrict_quote_close: bool,
         allow_inline_quote_close: bool,
     ) -> Option<&'r ExtractedToken<'t>> {
+        // Wikidot iftags pairing (#792): while a matched iftags body is
+        // gathered, only the end block the pairing search designated may
+        // close it. Any other `[[/iftags]]` in the span is literal text.
+        if block_rule.name == "block-iftags"
+            && self.settings().layout.legacy()
+            && let Some(designated) = self.wikidot_iftags_body_end()
+            && !self.at_designated_iftags_end(designated)
+        {
+            return None;
+        }
+
         self.save_evaluate_fn(|parser| {
             if restrict_quote_close
                 && allow_inline_quote_close
@@ -1300,6 +1464,93 @@ where
                 Err(error) => return Err(error),
             }
         }
+    }
+
+    /// Whether the end block at the current position (after the one line
+    /// break `verify_end_block` may step over) is the designated
+    /// `[[/iftags]]` at byte offset `designated`.
+    fn at_designated_iftags_end(&self, designated: usize) -> bool {
+        let mut probe = self.clone();
+        if probe.current().token == Token::LineBreak && probe.step().is_err() {
+            return false;
+        }
+        probe.current().token == Token::LeftBlockEnd
+            && probe.current().span.start == designated
+    }
+
+    /// Wikidot `[[iftags]]` pairing search (ftml #792), run from the first
+    /// body token of an iftags opener whose head has just been parsed.
+    /// Returns the byte offset of the `[[/iftags]]` head that pairs with
+    /// this opener (`None` = unpairable, renders literally), plus whether
+    /// the paired span contains a nested iftags opener head. The search is
+    /// bounded to a window of tokens after the opener.
+    pub(crate) fn wikidot_iftags_pairing_end(&self) -> (Option<usize>, bool) {
+        const WINDOW: usize = 8192;
+
+        let mut tokens: Vec<&ExtractedToken<'t>> = Vec::new();
+        let mut scan = self.clone();
+        loop {
+            let token = scan.current();
+            let at_end = token.token == Token::InputEnd;
+            tokens.push(token);
+            if at_end || tokens.len() >= WINDOW {
+                break;
+            }
+            if scan.step().is_err() {
+                break;
+            }
+        }
+
+        let n = tokens.len();
+        // ends[i] = token indices of `[[/iftags]]` heads (their LeftBlockEnd
+        // token) that a body starting at token i can end at, in the walk's
+        // preference order, de-duplicated. All dependencies are at larger
+        // indices, so fill the table back to front.
+        let mut ends: Vec<Vec<usize>> = vec![Vec::new(); n + 1];
+        // De-duplication stamps: seen[end] holds i + 1 while position i's
+        // list is being built, so no separate set is needed.
+        let mut seen: Vec<usize> = vec![0; n + 1];
+        for i in (0..n).rev() {
+            let stamp = i + 1;
+            let mut out: Vec<usize> = Vec::new();
+            let mut push = |out: &mut Vec<usize>, end: usize| {
+                if seen[end] != stamp {
+                    seen[end] = stamp;
+                    out.push(end);
+                }
+            };
+            if iftags_end_head_end(&tokens, i).is_some() {
+                push(&mut out, i);
+            }
+            if let Some(head_end) = iftags_block_head_end(&tokens, i) {
+                for inner in ends[head_end].clone() {
+                    let after = iftags_end_head_end(&tokens, inner)
+                        .expect("ends entries are iftags end heads");
+                    for end in ends[after].clone() {
+                        push(&mut out, end);
+                    }
+                }
+            }
+            let step_to = protected_span_end(&tokens, i).unwrap_or(i + 1);
+            for end in ends[step_to].clone() {
+                push(&mut out, end);
+            }
+            ends[i] = out;
+        }
+
+        let Some(&closer) = ends[0].first() else {
+            return (None, false);
+        };
+        let mut nested = false;
+        let mut i = 0;
+        while i < closer {
+            if iftags_block_head_end(&tokens, i).is_some() {
+                nested = true;
+                break;
+            }
+            i = protected_span_end(&tokens, i).unwrap_or(i + 1);
+        }
+        (Some(tokens[closer].span.start), nested)
     }
 
     pub fn has_body_end_block(&self, block_rule: &BlockRule) -> bool {

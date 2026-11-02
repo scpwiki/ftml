@@ -138,6 +138,9 @@ struct BlockScanCache {
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
+    // Designated `[[/iftags]]` byte offset for the Wikidot pairing gather
+    // currently in progress (#792); see `Parser::wikidot_iftags_body_end`.
+    wikidot_iftags_body_end: Cell<Option<usize>>,
 }
 
 fn token_starts_line(token: Token) -> bool {
@@ -318,6 +321,41 @@ impl<'r, 't> Parser<'r, 't> {
             quote_body_cursor: None,
             wikidot: WikidotState::default(),
         }
+    }
+
+    // Wikidot [[iftags]] pairing state (legacy layout only, #792). While a
+    // matched iftags body is gathered, this is the byte offset of the one
+    // `[[/iftags]]` head the pairing search designated as the body's end;
+    // other iftags end blocks inside the span are literal text. It lives in
+    // the shared scan cache, not in the parser value, because the parser
+    // state has a hard size budget for deep recursive parsing; access is
+    // stack-disciplined (the owning iftags rule sets it around its body
+    // gather and restores the previous value, and nested iftags rules
+    // consume their unit literally without touching it, via
+    // `WikidotState`'s iftags-span flag).
+    #[inline]
+    pub(crate) fn wikidot_iftags_body_end(&self) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_iftags_body_end
+            .get()
+    }
+
+    #[inline]
+    pub(crate) fn set_wikidot_iftags_body_end(&self, value: Option<usize>) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_iftags_body_end
+            .set(value);
+    }
+
+    // Whether this parser is currently consuming blockquote body content
+    // under a quote body cursor. Wikidot [[iftags]] pairing (#792) does
+    // not apply there: a pairing span must not cross a quote boundary, so
+    // gates in quote bodies keep the legacy nesting behavior.
+    #[inline]
+    pub(crate) fn in_quote_body(&self) -> bool {
+        self.quote_body_cursor.is_some()
     }
 
     // Getters

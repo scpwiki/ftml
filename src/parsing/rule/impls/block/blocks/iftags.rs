@@ -22,6 +22,7 @@ use super::prelude::*;
 use crate::data::PageInfo;
 use crate::delayed::DelayedElement;
 use crate::parsing::ElementCondition;
+use std::borrow::Cow;
 
 pub const BLOCK_IFTAGS: BlockRule = BlockRule {
     name: "block-iftags",
@@ -47,6 +48,93 @@ fn parse_conditions<'r, 't>(
     }
 }
 
+/// Consume an iftags gate inside a matched Wikidot span as literal text
+/// (#792): its head, plus its body through its own paired closer when it
+/// has one before the enclosing span's designated end. The condition is
+/// never evaluated and the consumed range renders verbatim.
+fn literal_span_gate<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    name: &'t str,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    // The block machinery has already consumed `[[` and the name, so the
+    // head's start is recovered by scanning the source back from the
+    // current token: optional whitespace, the name, optional whitespace,
+    // then `[[`.
+    let text = parser.full_text().inner();
+    let mut start = parser.current().span.start;
+    let bytes = text.as_bytes();
+    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
+        start -= 1;
+    }
+    if start < name.len() || !text[start - name.len()..start].eq_ignore_ascii_case(name) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    start -= name.len();
+    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
+        start -= 1;
+    }
+    if start < 2 || &text[start - 2..start] != "[[" {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    start -= 2;
+
+    // Consume the rest of the head.
+    loop {
+        match parser.current().token {
+            Token::RightBlock => {
+                parser.step()?;
+                break;
+            }
+            Token::InputEnd
+            | Token::ParagraphBreak
+            | Token::LeftBlock
+            | Token::LeftBlockEnd => {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            _ => parser.step()?,
+        };
+    }
+
+    let (pairing_end, _) = parser.wikidot_iftags_pairing_end();
+    let designated = parser.wikidot_iftags_body_end();
+    match (pairing_end, designated) {
+        // This gate's pairing reaches or passes the enclosing span's end:
+        // consume up to (not including) the designated closer.
+        (Some(pe), Some(d)) if pe >= d => {
+            while parser.current().span.start < d
+                && parser.current().token != Token::InputEnd
+            {
+                parser.step()?;
+            }
+        }
+        // Consume through this gate's own paired closer.
+        (Some(pe), _) => loop {
+            let token = parser.current();
+            if token.token == Token::LeftBlockEnd && token.span.start == pe {
+                while parser.current().token != Token::RightBlock
+                    && parser.current().token != Token::InputEnd
+                {
+                    parser.step()?;
+                }
+                if parser.current().token == Token::RightBlock {
+                    parser.step()?;
+                }
+                break;
+            }
+            if token.span.start > pe || token.token == Token::InputEnd {
+                break;
+            }
+            parser.step()?;
+        },
+        // Unpairable here: the head alone is the literal unit; the rest of
+        // the enclosing body is gathered normally.
+        _ => {}
+    }
+
+    let end = parser.current().span.start;
+    ok!(true; Element::Text(Cow::Borrowed(&text[start..end])), Vec::new())
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,
@@ -59,24 +147,20 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "IfTags doesn't allow score flag");
     assert_block_name(&BLOCK_IFTAGS, name);
 
+    // Inside a matched Wikidot iftags span, iftags tags are literal text:
+    // the enclosing span's pairing was decided at the text level and its
+    // body is never rescanned (ftml #792). Consume this gate's own paired
+    // unit as literal text, without evaluating its condition.
+    if parser.settings().layout.legacy() && parser.in_wikidot_iftags_span() {
+        return literal_span_gate(parser, name);
+    }
+
     // Parse out tag conditions
     let (conditions, body_start) = parser.get_head_value_with_body_start(
         &BLOCK_IFTAGS,
         in_head,
         parse_conditions,
     )?;
-    if parser.settings().layout.legacy()
-        && !parser.discarding_hidden_body()
-        && !parser.has_body_end_block(&BLOCK_IFTAGS)
-    {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
-    }
-    if parser.settings().layout.legacy()
-        && parser.discarding_hidden_body()
-        && !parser.has_two_body_end_blocks(&BLOCK_IFTAGS)
-    {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
-    }
 
     // A closed no-argument gate on Wikidot passes exactly when the page
     // carries at least one tag. The frozen PagePreview parity bindings are
@@ -89,38 +173,94 @@ fn parse_fn<'r, 't>(
     } else {
         check_iftags(parser.page_info(), &conditions)
     };
-    if !include_body {
-        trace!("Conditions failed, skipping hidden body");
-        let hidden_start = parser.current().span.start;
-        parser.discard_body_elements_with_literal_quote_context(
-            &BLOCK_IFTAGS,
-            body_start,
-        )?;
-        let hidden_end = parser.current().span.start;
-        let generated = parser.generated_in_range(hidden_start..hidden_end);
-        return ok!(true; Element::Delayed(DelayedElement::suppressed(&generated)), Vec::new());
+
+    // Wikidot pairing (#792): in a visible context, the opener pairs with
+    // the closer the pairing search chooses, not the closer proper nesting
+    // would pick; the gather below is restricted to that designated closer
+    // and nested iftags gates are literal inside the span. An unpairable opener
+    // renders literally, as before. Gates parsed while a hidden body is
+    // discarded, gates inside blockquote bodies, false gates whose paired
+    // span nests further gates, and false gates whose only closers sit
+    // inside regions the search cannot see into all keep the legacy guards
+    // and gathers (hidden bodies discard one gate at a time, fail-closed).
+    let legacy = parser.settings().layout.legacy();
+    let mut designated_end = None;
+    if legacy && !parser.discarding_hidden_body() && !parser.in_quote_body() {
+        let (pairing, span_nested) = parser.wikidot_iftags_pairing_end();
+        match pairing {
+            Some(end) => {
+                if include_body || !span_nested {
+                    designated_end = Some(end);
+                }
+            }
+            None => {
+                if include_body || !parser.has_body_end_block(&BLOCK_IFTAGS) {
+                    return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                }
+            }
+        }
+    } else if legacy {
+        if parser.discarding_hidden_body() {
+            if !parser.has_two_body_end_blocks(&BLOCK_IFTAGS) {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+        } else if !parser.has_body_end_block(&BLOCK_IFTAGS) {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
     }
 
-    // Get body content, never with paragraphs
-    let body = parser.get_body_elements_with_literal_quote_context(
-        &BLOCK_IFTAGS,
-        false,
-        body_start,
-    )?;
-    let (elements, errors, paragraph_safe) = body.into();
+    let previous_body_end = parser.wikidot_iftags_body_end();
+    let previous_span = parser.in_wikidot_iftags_span();
+    if designated_end.is_some() {
+        parser.set_wikidot_iftags_body_end(designated_end);
+        parser.set_in_wikidot_iftags_span(true);
+    }
 
-    trace!(
-        "IfTags parsed {} conditions and {} elements",
-        conditions.len(),
-        elements.len(),
-    );
+    let result = if !include_body {
+        trace!("Conditions failed, skipping hidden body");
+        let hidden_start = parser.current().span.start;
+        match parser
+            .discard_body_elements_with_literal_quote_context(&BLOCK_IFTAGS, body_start)
+        {
+            Ok(()) => {
+                let hidden_end = parser.current().span.start;
+                let generated = parser.generated_in_range(hidden_start..hidden_end);
+                ok!(true; Element::Delayed(DelayedElement::suppressed(&generated)), Vec::new())
+            }
+            Err(error) => Err(error),
+        }
+    } else {
+        // Get body content, never with paragraphs
+        match parser.get_body_elements_with_literal_quote_context(
+            &BLOCK_IFTAGS,
+            false,
+            body_start,
+        ) {
+            Ok(body) => {
+                let (elements, errors, paragraph_safe) = body.into();
 
-    trace!("Conditions passed, including elements");
-    let mut bounded = Vec::with_capacity(elements.len() + 2);
-    bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
-    bounded.extend(elements);
-    bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
-    ok!(paragraph_safe; Elements::Multiple(bounded), errors)
+                trace!(
+                    "IfTags parsed {} conditions and {} elements",
+                    conditions.len(),
+                    elements.len(),
+                );
+
+                trace!("Conditions passed, including elements");
+                let mut bounded = Vec::with_capacity(elements.len() + 2);
+                bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
+                bounded.extend(elements);
+                bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
+                ok!(paragraph_safe; Elements::Multiple(bounded), errors)
+            }
+            Err(error) => Err(error),
+        }
+    };
+
+    if designated_end.is_some() {
+        parser.set_wikidot_iftags_body_end(previous_body_end);
+        parser.set_in_wikidot_iftags_span(previous_span);
+    }
+    result
 }
 
 pub fn check_iftags(info: &PageInfo, conditions: &[ElementCondition]) -> bool {
