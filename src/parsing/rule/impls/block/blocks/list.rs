@@ -139,6 +139,8 @@ fn parse_list_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::ListEmpty));
     }
 
+    let content_follows = wikidot_content_follows(parser.remaining());
+
     for element in elements {
         match element {
             Element::Partial(PartialElement::ListItem(list_item)) => {
@@ -147,6 +149,7 @@ fn parse_list_block<'r, 't>(
                     &mut literal_elements,
                     wikidot,
                     flag_score,
+                    content_follows,
                 );
                 if !matches!(&list_item, ListItem::Elements { elements, .. } if elements.is_empty())
                 {
@@ -160,6 +163,7 @@ fn parse_list_block<'r, 't>(
                     &mut literal_elements,
                     wikidot,
                     flag_score,
+                    content_follows,
                 );
                 if parser.settings().layout.legacy()
                     && let Some(ListItem::Elements { elements, .. }) = items.last_mut()
@@ -179,7 +183,13 @@ fn parse_list_block<'r, 't>(
             element => literal_elements.push(element),
         }
     }
-    push_literal_list_item(&mut items, &mut literal_elements, wikidot, flag_score);
+    push_literal_list_item(
+        &mut items,
+        &mut literal_elements,
+        wikidot,
+        flag_score,
+        content_follows,
+    );
 
     if wikidot && flag_score {
         for item in &mut items {
@@ -229,6 +239,7 @@ fn push_literal_list_item<'t>(
     elements: &mut Vec<Element<'t>>,
     append_to_last: bool,
     outer_list_is_scored: bool,
+    content_follows: bool,
 ) {
     while elements.last().is_some_and(Element::is_whitespace) {
         elements.pop();
@@ -246,7 +257,7 @@ fn push_literal_list_item<'t>(
         item_elements.append(elements);
     } else {
         if append_to_last && !outer_list_is_scored {
-            wrap_wikidot_malformed_scored_items(elements);
+            wrap_wikidot_malformed_scored_items(elements, content_follows);
         }
         let mut attributes = AttributeMap::new();
         assert!(attributes.insert("style", cow!("list-style: none")));
@@ -257,7 +268,42 @@ fn push_literal_list_item<'t>(
     }
 }
 
-fn wrap_wikidot_malformed_scored_items(elements: &mut Vec<Element<'_>>) {
+fn wikidot_content_follows(tokens: &[ExtractedToken<'_>]) -> bool {
+    let mut in_comment = false;
+    let mut in_block_end = false;
+    let mut comment_tail_dashes = false;
+    for extracted in tokens {
+        if in_block_end {
+            if extracted.token == Token::RightBlock {
+                in_block_end = false;
+            }
+            continue;
+        }
+        if in_comment {
+            if comment_tail_dashes && extracted.token == Token::RightBracket {
+                in_comment = false;
+                comment_tail_dashes = false;
+            } else {
+                comment_tail_dashes = extracted.slice.ends_with("--");
+            }
+            continue;
+        }
+        match extracted.token {
+            Token::InputEnd => return false,
+            Token::LineBreak | Token::ParagraphBreak | Token::Whitespace => {}
+            Token::LeftComment => in_comment = true,
+            Token::LeftBlockEnd => in_block_end = true,
+            Token::Other if extracted.slice.trim().is_empty() => {}
+            _ => return true,
+        }
+    }
+    false
+}
+
+fn wrap_wikidot_malformed_scored_items(
+    elements: &mut Vec<Element<'_>>,
+    content_follows: bool,
+) {
     let mut lines = vec![Vec::new()];
     for element in std::mem::take(elements) {
         if element == Element::LineBreak {
@@ -298,6 +344,7 @@ fn wrap_wikidot_malformed_scored_items(elements: &mut Vec<Element<'_>>) {
             .iter()
             .all(|element| matches!(element, Element::Text(_)))
             && line_text(&line) == "[[/li]]"
+            && !content_follows
         {
             elements.extend(line);
             continue;
