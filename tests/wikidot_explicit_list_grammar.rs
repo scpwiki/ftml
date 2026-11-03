@@ -580,3 +580,36 @@ fn issue_803_wdpr_block_fail_input_matches_live_structure() {
         "malformed list shapes must remain diagnosed"
     );
 }
+#[test]
+fn issue_841_stray_li_closer_in_scored_recovery_wraps_when_content_follows() {
+    let (html, text, errors) = render(concat!(
+        "[[ul]]\n\n",
+        "[[li_]]\nALPHA\n[[/li]]\n\n",
+        "[[li_]]\n\nBETA\n\n[[/li]]\n",
+        "[[li]]GAMMA[[/li]]\n\n",
+        "[[li_]] DELTA [[/li]]\n\n",
+        "[[/ul]]\n\n",
+        "[[ol]]\n[[li]]BETA[[/li]]\n[[/ol]]",
+    ));
+
+    assert_eq!(
+        html,
+        concat!(
+            "<ul>\n",
+            "<li style=\"list-style: none\">[[li_]]<br>\n",
+            "ALPHA<br>\n[[/li]]\n",
+            "<p>[[li_]]</p>\n\n<p>BETA</p>\n\n<p>[[/li]]</p>\n</li>\n",
+            "<li>GAMMA[[li_]] DELTA [[/li]]</li>\n",
+            "</ul><br>\n",
+            "<ol>\n<li>BETA</li>\n</ol><br>\n",
+        ),
+    );
+    assert_eq!(
+        text,
+        "[[li_]]\nALPHA\n[[/li]]\n[[li_]]\n\nBETA\n\n[[/li]]\nGAMMA[[li_]] DELTA [[/li]]\n\nBETA",
+    );
+    assert!(
+        !errors.is_empty(),
+        "malformed scored li must remain diagnosed"
+    );
+}
