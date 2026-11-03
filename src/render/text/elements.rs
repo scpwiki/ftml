@@ -199,7 +199,12 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         | Element::BibliographyBlock { .. } => {}
         Element::User { name, .. } => ctx.push_str(name),
         Element::Date { value, format, .. } => {
-            ctx.push_str(&value.format_or_default(format.as_deref(), ctx.language()));
+            let formatted = if ctx.settings().layout.legacy() {
+                value.format_or_default_wikidot(format.as_deref(), ctx.language())
+            } else {
+                value.format_or_default(format.as_deref(), ctx.language())
+            };
+            ctx.push_str(&formatted);
         }
         Element::Color { elements, .. } => render_elements(ctx, elements),
         Element::Code(CodeBlock { contents, .. }) => {

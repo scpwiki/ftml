@@ -219,3 +219,6 @@ mod wikidot_collapsible_crossings;
 
 #[path = "wikidot_param_bracket_values.rs"]
 mod wikidot_param_bracket_values;
+
+#[path = "wikidot_date_format_directives.rs"]
+mod wikidot_date_format_directives;
