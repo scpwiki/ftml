@@ -26,7 +26,7 @@ pub const BLOCK_PARAGRAPH: BlockRule = BlockRule {
     accepts_names: &["p", "paragraph"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn,
 };
 

@@ -218,7 +218,7 @@ fn block_rule_map_accepts_case_insensitive_names() {
         accepts_names: &["CustomBlock"],
         accepts_star: false,
         accepts_score: false,
-        accepts_newlines: false,
+        accepts_newlines_outside_body: false,
         parse_fn: BLOCK_BOLD.parse_fn,
     }];
 
@@ -322,7 +322,7 @@ fn block_rule_map_rejects_empty_accepted_names() {
         accepts_names: &[],
         accepts_star: false,
         accepts_score: false,
-        accepts_newlines: false,
+        accepts_newlines_outside_body: false,
         parse_fn: BLOCK_BOLD.parse_fn,
     }];
 
@@ -337,7 +337,7 @@ fn block_rule_map_rejects_invalid_rule_name_prefix() {
         accepts_names: &["custom"],
         accepts_star: false,
         accepts_score: false,
-        accepts_newlines: false,
+        accepts_newlines_outside_body: false,
         parse_fn: BLOCK_BOLD.parse_fn,
     }];
 
@@ -353,7 +353,7 @@ fn block_rule_map_rejects_duplicate_names() {
             accepts_names: &["duplicate"],
             accepts_star: false,
             accepts_score: false,
-            accepts_newlines: false,
+            accepts_newlines_outside_body: false,
             parse_fn: BLOCK_BOLD.parse_fn,
         },
         BlockRule {
@@ -361,7 +361,7 @@ fn block_rule_map_rejects_duplicate_names() {
             accepts_names: &["DUPLICATE"],
             accepts_star: false,
             accepts_score: false,
-            accepts_newlines: false,
+            accepts_newlines_outside_body: false,
             parse_fn: BLOCK_BOLD.parse_fn,
         },
     ];

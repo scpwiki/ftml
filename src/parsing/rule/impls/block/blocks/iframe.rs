@@ -28,7 +28,7 @@ pub const BLOCK_IFRAME: BlockRule = BlockRule {
     accepts_names: &["iframe"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn,
 };
 

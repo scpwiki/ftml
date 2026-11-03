@@ -34,7 +34,7 @@ pub const BLOCK_DIV: BlockRule = BlockRule {
     accepts_names: &["div"],
     accepts_star: false,
     accepts_score: true,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn,
 };
 

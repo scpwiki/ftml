@@ -80,7 +80,7 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
             get_block_rule_with_name_for_layout(name, parser.settings().layout)
         };
         match block {
-            Some(block_rule) => Ok(block_rule.accepts_newlines
+            Some(block_rule) => Ok(block_rule.accepts_newlines_outside_body
                 && block_rule_enabled(parser, block_rule)
                 && !(parser.settings().layout.legacy()
                     && block_rule.name == BLOCK_EMBED.name)),

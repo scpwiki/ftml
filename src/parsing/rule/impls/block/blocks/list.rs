@@ -30,7 +30,7 @@ pub const BLOCK_UL: BlockRule = BlockRule {
     accepts_names: &["ul"],
     accepts_star: false,
     accepts_score: true,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_unordered_block,
 };
 
@@ -39,7 +39,7 @@ pub const BLOCK_OL: BlockRule = BlockRule {
     accepts_names: &["ol"],
     accepts_star: false,
     accepts_score: true,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_ordered_block,
 };
 
@@ -48,7 +48,7 @@ pub const BLOCK_LI: BlockRule = BlockRule {
     accepts_names: &["li"],
     accepts_star: false,
     accepts_score: true,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_list_item,
 };
 

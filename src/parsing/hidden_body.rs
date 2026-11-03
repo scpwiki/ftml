@@ -23,7 +23,7 @@ use super::{ParseError, Parser, Token};
 #[derive(Debug, Copy, Clone)]
 pub(super) struct HiddenBodyBoundary {
     accepts_names: &'static [&'static str],
-    accepts_newlines: bool,
+    accepts_newlines_outside_body: bool,
 }
 
 impl<'r, 't> Parser<'r, 't> {
@@ -40,11 +40,11 @@ impl<'r, 't> Parser<'r, 't> {
     pub(crate) fn push_hidden_body_boundary(
         &mut self,
         accepts_names: &'static [&'static str],
-        accepts_newlines: bool,
+        accepts_newlines_outside_body: bool,
     ) {
         let boundary = HiddenBodyBoundary {
             accepts_names,
-            accepts_newlines,
+            accepts_newlines_outside_body,
         };
         self.hidden_body_boundaries.push(boundary);
     }
@@ -105,7 +105,7 @@ impl<'r, 't> Parser<'r, 't> {
             let invalid_iftags_score_close = self.settings().layout.legacy()
                 && score_close
                 && names.contains(&"iftags");
-            (!after_line_break || boundary.accepts_newlines)
+            (!after_line_break || boundary.accepts_newlines_outside_body)
                 && matches_name
                 && !invalid_iftags_score_close
         })

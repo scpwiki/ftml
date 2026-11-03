@@ -34,7 +34,7 @@ pub const BLOCK_LATER: BlockRule = BlockRule {
     accepts_names: &["later"],
     accepts_star: true,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn,
 };
 

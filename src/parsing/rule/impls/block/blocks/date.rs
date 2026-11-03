@@ -42,7 +42,7 @@ pub const BLOCK_DATE: BlockRule = BlockRule {
     accepts_names: &["date"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

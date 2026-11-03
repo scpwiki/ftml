@@ -30,7 +30,7 @@ pub const BLOCK_SPAN: BlockRule = BlockRule {
     accepts_names: &["span"],
     accepts_star: false,
     accepts_score: true,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

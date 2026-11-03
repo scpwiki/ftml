@@ -26,7 +26,7 @@ pub const BLOCK_FOOTNOTE: BlockRule = BlockRule {
     accepts_names: &["footnote"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn: parse_footnote_ref,
 };
 
@@ -35,7 +35,7 @@ pub const BLOCK_FOOTNOTE_BLOCK: BlockRule = BlockRule {
     accepts_names: &["footnoteblock"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_footnote_block,
 };
 

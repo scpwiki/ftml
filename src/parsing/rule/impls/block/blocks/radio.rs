@@ -25,7 +25,7 @@ pub const BLOCK_RADIO: BlockRule = BlockRule {
     accepts_names: &["radio", "radio-button"],
     accepts_star: true,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 
