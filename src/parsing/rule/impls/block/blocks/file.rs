@@ -17,7 +17,7 @@ pub const BLOCK_FILE: BlockRule = BlockRule {
     accepts_names: &["file"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

@@ -25,7 +25,7 @@ pub const BLOCK_CHECKBOX: BlockRule = BlockRule {
     accepts_names: &["checkbox"],
     accepts_star: true,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

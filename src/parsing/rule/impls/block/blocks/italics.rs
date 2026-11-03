@@ -25,7 +25,7 @@ pub const BLOCK_ITALICS: BlockRule = BlockRule {
     accepts_names: &["i", "italics", "em", "emphasis"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

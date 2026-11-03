@@ -29,7 +29,7 @@ pub const BLOCK_HTML: BlockRule = BlockRule {
     accepts_names: &["html"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn,
 };
 

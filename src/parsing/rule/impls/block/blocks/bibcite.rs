@@ -25,7 +25,7 @@ pub const BLOCK_BIBCITE: BlockRule = BlockRule {
     accepts_names: &["bibcite"],
     accepts_star: false,
     accepts_score: true,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

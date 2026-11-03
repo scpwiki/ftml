@@ -26,7 +26,7 @@ pub const BLOCK_AUDIO: BlockRule = BlockRule {
     accepts_names: &["audio"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn: parse_audio,
 };
 
@@ -35,7 +35,7 @@ pub const BLOCK_VIDEO: BlockRule = BlockRule {
     accepts_names: &["video"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn: parse_video,
 };
 

@@ -26,7 +26,7 @@ pub const BLOCK_BUTTON: BlockRule = BlockRule {
     accepts_names: &["button"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 
@@ -68,7 +68,7 @@ fn parse_fn<'r, 't>(
             }
             Token::LineBreak | Token::ParagraphBreak => {
                 let head = &parser.full_text().inner()[start..current.span.start];
-                if parser.settings().layout.legacy() && is_set_tags_head(head) {
+                if parser.settings().layout.legacy() && head_prefix_is_set_tags(head) {
                     parser.step()?;
                     continue;
                 }
@@ -223,7 +223,7 @@ fn parse_set_tags(mut tail: &str, wikidot: bool) -> ParsedButton<'_> {
     })
 }
 
-fn is_set_tags_head(head: &str) -> bool {
+fn head_prefix_is_set_tags(head: &str) -> bool {
     let head = head.trim_start_matches(is_wikidot_set_tags_separator);
     let action_end = head
         .find(is_wikidot_set_tags_separator)

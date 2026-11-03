@@ -27,7 +27,7 @@ pub const BLOCK_CHAR: BlockRule = BlockRule {
     accepts_names: &["char", "character"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

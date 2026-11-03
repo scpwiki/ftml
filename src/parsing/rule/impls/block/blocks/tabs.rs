@@ -27,7 +27,7 @@ pub const BLOCK_TABVIEW: BlockRule = BlockRule {
     accepts_names: &["tabview", "tabs"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_tabview,
 };
 
@@ -36,7 +36,7 @@ pub const BLOCK_TAB: BlockRule = BlockRule {
     accepts_names: &["tab"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_tab,
 };
 

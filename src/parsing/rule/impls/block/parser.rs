@@ -652,7 +652,7 @@ where
             // gathered as their own element stream, and Wikidot closes a
             // footnote's math at its first [[/math]] even mid-line (e.g.
             // scp-7079's table-header footnote), so they do not apply there.
-            if block_rule.accepts_newlines {
+            if block_rule.accepts_newlines_outside_body {
                 if !first_iteration
                     && parser.settings().layout.legacy()
                     && !parser.discarding_hidden_body()
@@ -810,7 +810,7 @@ where
         let mut probe = self.clone();
         let mut stepped_line_break = false;
         if !first_iteration
-            && block_rule.accepts_newlines
+            && block_rule.accepts_newlines_outside_body
             && probe.current().token == Token::LineBreak
         {
             if probe.step().is_err() {
@@ -1154,7 +1154,7 @@ where
         if track_boundary {
             self.push_hidden_body_boundary(
                 block_rule_end_names(block_rule, self.settings().layout.legacy()),
-                block_rule.accepts_newlines,
+                block_rule.accepts_newlines_outside_body,
             );
         }
 
@@ -1293,7 +1293,7 @@ where
         fork.set_discarding_hidden_body(true);
         fork.push_hidden_body_boundary(
             block_rule_end_names(block_rule, fork.settings().layout.legacy()),
-            block_rule.accepts_newlines,
+            block_rule.accepts_newlines_outside_body,
         );
 
         let discard_result =
@@ -2300,7 +2300,7 @@ where
             self.get_token(Token::RightBlock, ParseErrorKind::BlockMissingCloseBrackets)?;
         }
 
-        if block_rule.accepts_newlines {
+        if block_rule.accepts_newlines_outside_body {
             if self.current().token == Token::LineBreak {
                 self.step()?;
                 return Ok(BlockBodyStart::NextPhysicalLine);

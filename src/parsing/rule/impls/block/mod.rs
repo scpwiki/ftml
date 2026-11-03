@@ -46,7 +46,7 @@ pub struct BlockRule {
 
     accepts_score: bool,
 
-    accepts_newlines: bool,
+    accepts_newlines_outside_body: bool,
 
     parse_fn: BlockParseFn,
 }
@@ -75,7 +75,10 @@ impl Debug for BlockRule {
             .field("accepts_names", &self.accepts_names)
             .field("accepts_star", &self.accepts_star)
             .field("accepts_score", &self.accepts_score)
-            .field("accepts_newlines", &self.accepts_newlines)
+            .field(
+                "accepts_newlines_outside_body",
+                &self.accepts_newlines_outside_body,
+            )
             .field("parse_fn", &(self.parse_fn as *const ()))
             .finish()
     }
@@ -107,7 +110,7 @@ mod tests {
         assert!(debug.contains("accepts_names"));
         assert!(debug.contains("accepts_star"));
         assert!(debug.contains("accepts_score"));
-        assert!(debug.contains("accepts_newlines"));
+        assert!(debug.contains("accepts_newlines_outside_body"));
         assert!(debug.contains("parse_fn"));
     }
 

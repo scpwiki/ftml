@@ -34,7 +34,7 @@ pub const BLOCK_TABLE: BlockRule = BlockRule {
     accepts_names: &["table"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_table,
 };
 
@@ -43,7 +43,7 @@ pub const BLOCK_TABLE_ROW: BlockRule = BlockRule {
     accepts_names: &["row"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_row,
 };
 
@@ -52,7 +52,7 @@ pub const BLOCK_TABLE_CELL_REGULAR: BlockRule = BlockRule {
     accepts_names: &["cell"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_cell_regular,
 };
 
@@ -61,7 +61,7 @@ pub const BLOCK_TABLE_CELL_HEADER: BlockRule = BlockRule {
     accepts_names: &["hcell"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_cell_header,
 };
 
@@ -73,7 +73,7 @@ const BLOCK_TABLE_CELL_BODY: BlockRule = BlockRule {
     accepts_names: &["hcell", "cell"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_cell_header,
 };
 

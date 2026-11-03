@@ -28,7 +28,7 @@ pub const BLOCK_RUBY: BlockRule = BlockRule {
     accepts_names: &["ruby"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_block,
 };
 
@@ -37,7 +37,7 @@ pub const BLOCK_RT: BlockRule = BlockRule {
     accepts_names: &["rt", "rubytext"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn: parse_text,
 };
 
@@ -46,7 +46,7 @@ pub const BLOCK_RB: BlockRule = BlockRule {
     accepts_names: &["rb", "ruby2"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn: parse_shortcut,
 };
 

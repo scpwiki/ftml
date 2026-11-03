@@ -19,7 +19,7 @@ pub const BLOCK_SOCIAL: BlockRule = BlockRule {
     accepts_names: &["social"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

@@ -25,7 +25,7 @@ pub const BLOCK_UNDERLINE: BlockRule = BlockRule {
     accepts_names: &["u", "underline"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

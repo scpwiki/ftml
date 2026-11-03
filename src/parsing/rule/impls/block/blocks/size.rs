@@ -28,7 +28,7 @@ pub const BLOCK_SIZE: BlockRule = BlockRule {
     accepts_names: &["size"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: false,
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 

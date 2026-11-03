@@ -27,7 +27,7 @@ pub const BLOCK_BIBLIOGRAPHY: BlockRule = BlockRule {
     accepts_names: &["bibliography"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn,
 };
 

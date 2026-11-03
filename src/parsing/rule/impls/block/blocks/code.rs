@@ -28,7 +28,7 @@ pub const BLOCK_CODE: BlockRule = BlockRule {
     accepts_names: &["code"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines: true,
+    accepts_newlines_outside_body: true,
     parse_fn,
 };
 
