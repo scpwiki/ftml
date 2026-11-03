@@ -626,6 +626,9 @@ fn wikidot_link_disposition(url: &str) -> WikidotLinkDisposition {
         || url.starts_with("http://")
         || url.starts_with("https://")
         || url.starts_with("ftp://")
+        || url.starts_with("gopher://")
+        || url.starts_with("news://")
+        || url.starts_with("mms://")
         || url.starts_with("mailto:")
     {
         return WikidotLinkDisposition::Link;
@@ -714,6 +717,9 @@ mod tests {
             "http://example.com",
             "https://example.com",
             "ftp://example.com/a",
+            "gopher://example.com/g",
+            "news://example.com/n",
+            "mms://example.com/m",
             "mailto:user@example.com",
             "/start",
             "//example.com/a",

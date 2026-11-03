@@ -30,6 +30,28 @@ pub const RULE_URL: Rule = Rule {
     try_consume_fn,
 };
 
+pub const RULE_WIKIDOT_SCHEME_URL: Rule = Rule {
+    name: "wikidot-scheme-url",
+    position: LineRequirement::Any,
+    try_consume_fn: wikidot_scheme_url,
+};
+
+const WIKIDOT_ONLY_AUTOLINK_SCHEMES: [&str; 3] = ["gopher://", "news://", "mms://"];
+
+pub(crate) fn is_wikidot_only_autolink_url(url: &str) -> bool {
+    WIKIDOT_ONLY_AUTOLINK_SCHEMES
+        .iter()
+        .any(|scheme| url.starts_with(scheme))
+}
+
+pub(crate) fn starts_wikidot_only_scheme_url(source: &str, start: usize) -> bool {
+    WIKIDOT_ONLY_AUTOLINK_SCHEMES.iter().any(|scheme| {
+        source[start..].starts_with(scheme)
+            && wikidot_automatic_url_end(source, start, source.len())
+                > start + scheme.len()
+    })
+}
+
 pub(crate) fn url_elements<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Elements<'t>, ParseError>
@@ -69,10 +91,46 @@ where
     let start = parser.current().span.start;
     let starred = parser.current().token == Token::UrlStar;
     let url_start = start + usize::from(starred);
-    let mut end = parser.current().span.end;
-    let mut comments = Vec::new();
+    let end = parser.current().span.end;
+    let comments = Vec::new();
     parser.step()?;
 
+    wikidot_url_elements_rest(parser, source, start, url_start, end, starred, comments)
+}
+
+fn wikidot_scheme_url<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    debug!("Consuming identifier as a Wikidot-only scheme URL");
+    if !parser.settings().layout.legacy() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start;
+    if !starts_wikidot_only_scheme_url(source, start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    let end = parser.current().span.end;
+    let comments = Vec::new();
+    parser.step()?;
+
+    ok!(wikidot_url_elements_rest(
+        parser, source, start, start, end, false, comments
+    )?)
+}
+
+fn wikidot_url_elements_rest<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    source: &'t str,
+    start: usize,
+    url_start: usize,
+    mut end: usize,
+    starred: bool,
+    mut comments: Vec<std::ops::Range<usize>>,
+) -> Result<Elements<'t>, ParseError>
+where
+    'r: 't,
+{
     loop {
         if parser.current_generated().is_some()
             || matches!(
@@ -142,7 +200,9 @@ where
 
     let mut trailing = Vec::new();
     while let Some(last) = url.chars().next_back() {
-        if !matches!(last, ',' | '*') && (last.is_ascii() || last.is_whitespace()) {
+        if !matches!(last, ',' | '*' | '-' | '}')
+            && (last.is_ascii() || last.is_whitespace())
+        {
             break;
         }
         trailing.push(last);
@@ -475,5 +535,120 @@ mod tests {
             html.contains("<p>not-a-link abchttp://example.com/pg here</p>"),
             "{html}",
         );
+    }
+
+    #[test]
+    fn wikidot_url_rule_splits_trailing_dash_and_brace_runs() {
+        assert_url_rule(
+            "http://example.com/a-- next",
+            Layout::Wikidot,
+            Elements::Multiple(vec![link("http://example.com/a"), text!("--")]),
+        );
+        assert_url_rule(
+            "http://example.com/a}}",
+            Layout::Wikidot,
+            Elements::Multiple(vec![link("http://example.com/a"), text!("}}")]),
+        );
+        assert_url_rule(
+            "http://example.com/a-",
+            Layout::Wikidot,
+            Elements::Multiple(vec![link("http://example.com/a"), text!("-")]),
+        );
+        assert_url_rule(
+            "http://example.com/a--b",
+            Layout::Wikidot,
+            link("http://example.com/a--b").into(),
+        );
+        assert_url_rule(
+            "http://example.com/a-- next",
+            Layout::Wikijump,
+            link("http://example.com/a--").into(),
+        );
+        assert_url_rule(
+            "http://example.com/a}}",
+            Layout::Wikijump,
+            link("http://example.com/a}}").into(),
+        );
+    }
+
+    #[test]
+    fn wikidot_autolink_recognizes_live_schemes() {
+        use crate::render::Render;
+
+        let source = "more-schemes gopher://example.com/g news://example.com/n mms://example.com/m end\n\ndescribed [gopher://example.com/g G] [news://example.com/n N] [mms://example.com/m M] end\n\nstar *gopher://example.com/g mid **news://example.com/n end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        for expected in [
+            "<a href=\"gopher://example.com/g\">gopher://example.com/g</a>",
+            "<a href=\"news://example.com/n\">news://example.com/n</a>",
+            "<a href=\"mms://example.com/m\">mms://example.com/m</a>",
+            "<a href=\"gopher://example.com/g\">G</a>",
+            "<a href=\"news://example.com/n\">N</a>",
+            "<a href=\"mms://example.com/m\">M</a>",
+            "<a href=\"gopher://example.com/g\" target=\"_blank\">gopher://example.com/g</a>",
+            "*<a href=\"news://example.com/n\" target=\"_blank\">news://example.com/n</a>",
+        ] {
+            assert!(html.contains(expected), "{expected} missing from {html}");
+        }
+    }
+
+    #[test]
+    fn wikidot_autolink_schemes_stay_literal_in_wikijump_layout() {
+        use crate::render::Render;
+
+        let source = "more-schemes gopher://example.com/g news://example.com/n mms://example.com/m end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
+        let tokenization = crate::tokenize(source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        assert_eq!(
+            html,
+            "<p>more-schemes gopher:<em>example.com/g news:</em>example.com/n mms://example.com/m end</p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_containers_close_over_urls_like_live() {
+        use crate::render::Render;
+
+        let source = "mono {{http://example.com/m}} end\n\nstrike --http://example.com/s-- end\n\nmono-text {{see http://example.com/m}} end\n\nstrike-text --see http://example.com/s-- end\n\nrun {{http://example.com/m}}}} end\n\ninternal --http://example.com/a--b-- end\n\nnoclose --http://example.com/a--b end\n\nbare http://example.com/a-- http://example.com/a}} http://example.com/a- end\n\nglued --http://example.com/s--tail {{http://example.com/m}}tail end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        for expected in [
+            "<tt><a href=\"http://example.com/m\">http://example.com/m</a></tt>",
+            "<span style=\"text-decoration: line-through;\"><a href=\"http://example.com/s\">http://example.com/s</a></span>",
+            "<tt>see <a href=\"http://example.com/m\">http://example.com/m</a></tt>",
+            "<span style=\"text-decoration: line-through;\">see <a href=\"http://example.com/s\">http://example.com/s</a></span>",
+            "<tt><a href=\"http://example.com/m\">http://example.com/m</a>}}</tt>",
+            "<span style=\"text-decoration: line-through;\"><a href=\"http://example.com/a--b\">http://example.com/a--b</a></span>",
+            "\u{2014}<a href=\"http://example.com/a--b\">http://example.com/a--b</a>",
+            "<a href=\"http://example.com/a\">http://example.com/a</a>\u{2014}",
+            "<a href=\"http://example.com/a\">http://example.com/a</a>}}",
+            "<a href=\"http://example.com/a\">http://example.com/a</a>-",
+            "\u{2014}<a href=\"http://example.com/s--tail\">http://example.com/s--tail</a>",
+            "{{<a href=\"http://example.com/m}}tail\">http://example.com/m}}tail</a>",
+        ] {
+            assert!(html.contains(expected), "{expected} missing from {html}");
+        }
     }
 }

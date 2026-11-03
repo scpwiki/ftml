@@ -91,7 +91,11 @@ pub(crate) fn classify_href(url: &str) -> HrefKind {
         HrefKind::NoOp
     } else if url.starts_with('#') {
         HrefKind::Anchor
-    } else if url.starts_with("//") || is_url(url) {
+    } else if url.starts_with("//")
+        || url.starts_with("news://")
+        || url.starts_with("mms://")
+        || is_url(url)
+    {
         HrefKind::External
     } else if url.starts_with('/') {
         HrefKind::AbsolutePath

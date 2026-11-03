@@ -23,7 +23,9 @@ use super::parser::QuoteBodyLineStatus;
 use super::prelude::*;
 use super::rule::{
     get_rules_for_token,
-    impls::{RULE_FALLBACK, starts_own_line_rule, url_elements},
+    impls::{
+        RULE_FALLBACK, starts_own_line_rule, starts_wikidot_only_scheme_url, url_elements,
+    },
 };
 use crate::tree::{LinkLabel, LinkLocation, LinkType, PartialElement};
 use std::{borrow::Cow, mem};
@@ -482,8 +484,15 @@ fn wikidot_leading_space_close_label(source: &str) -> Option<&str> {
 
 fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
     match parser.current().token {
-        Token::Identifier
-        | Token::RightBracket
+        Token::Identifier => {
+            !(parser.settings().layout.legacy()
+                && starts_wikidot_only_scheme_url(
+                    parser.full_text().inner(),
+                    parser.current().span.start,
+                ))
+        }
+
+        Token::RightBracket
         | Token::RightParentheses
         | Token::Pipe
         | Token::DoubleQuote

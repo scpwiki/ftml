@@ -88,6 +88,9 @@ pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
         Token::TableColumnCenter => &[RULE_TABLE],
         Token::TableColumnTitle => &[RULE_TABLE],
 
+        Token::Identifier if matches!(current.slice, "gopher" | "news" | "mms") => {
+            &[RULE_WIKIDOT_SCHEME_URL, RULE_TEXT]
+        }
         Token::Identifier => &[RULE_TEXT],
         Token::Email => &[RULE_EMAIL],
         Token::Url => &[RULE_URL],

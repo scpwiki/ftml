@@ -1,6 +1,9 @@
-use crate::parsing::rule::impls::normalize_wikidot_color;
+use crate::parsing::rule::impls::{
+    is_wikidot_only_autolink_url, normalize_wikidot_color,
+};
 use crate::tree::{
-    AttributeMap, Container, ContainerType, Element, ListItem, PartialElement,
+    AnchorTarget, AttributeMap, Container, ContainerType, Element, LinkLabel,
+    LinkLocation, ListItem, PartialElement,
 };
 use std::borrow::Cow;
 use std::mem;
@@ -181,6 +184,8 @@ fn normalize_sequence<'t>(elements: &mut Vec<Element<'t>>) {
             | repair_crossed_pass(elements)
             | repair_raw_strike_pairs_pass(elements)
             | repair_span_crossed_bold_pairs_pass(elements)
+            | repair_monospace_link_close_pass(elements)
+            | repair_wikidot_scheme_star_pass(elements)
             | split_strike_runs_pass(elements);
         if !changed {
             break;
@@ -467,6 +472,111 @@ fn repair_raw_strike_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     }
 
     *elements = output;
+    changed
+}
+
+fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+
+    while index < input.len() {
+        let is_opener = input[index]
+            .as_ref()
+            .is_some_and(|element| is_exact_text(element, "{{"));
+        let close = is_opener
+            .then(|| monospace_link_close(&input, index))
+            .flatten();
+        let Some((close, run)) = close else {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        };
+        discard_range(&mut input, index..index + 1);
+        let mut contents = take_range(&mut input, index + 1..close);
+        let padding = take_leading_monospace_padding(&mut contents);
+        discard_range(&mut input, close..close + 1);
+        if run > 2 {
+            contents.push(Element::Text(Cow::Owned("}".repeat(run - 2))));
+        }
+        if let Some(padding) = padding
+            && !output
+                .last()
+                .is_some_and(|element| element_ends_with_ascii_space(element))
+            && !output.is_empty()
+        {
+            output.push(padding);
+        }
+        output.push(monospace_shell().build(contents));
+        index = close + 1;
+        changed = true;
+    }
+
+    *elements = output;
+    changed
+}
+
+fn monospace_link_close(
+    input: &[Option<Element<'_>>],
+    opener: usize,
+) -> Option<(usize, usize)> {
+    ((opener + 1)..input.len()).find_map(|index| {
+        input[index]
+            .as_ref()
+            .and_then(|element| brace_run_len(element))
+            .map(|run| (index, run))
+    })
+}
+
+fn brace_run_len(element: &Element<'_>) -> Option<usize> {
+    let value = text(element)?;
+    (value.len() >= 2 && value.bytes().all(|byte| byte == b'}')).then_some(value.len())
+}
+
+fn take_leading_monospace_padding<'t>(
+    contents: &mut Vec<Element<'t>>,
+) -> Option<Element<'t>> {
+    let is_padding = contents.first().is_some_and(|element| {
+        text(element).is_some_and(|value| {
+            !value.is_empty() && value.bytes().all(|byte| matches!(byte, b' ' | b'\t'))
+        })
+    });
+    is_padding.then(|| contents.remove(0))
+}
+
+fn repair_wikidot_scheme_star_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut changed = false;
+    let mut index = 1;
+
+    while index < elements.len() {
+        let is_scheme_link = match &elements[index] {
+            Element::Link {
+                link: LinkLocation::Url(url),
+                label: LinkLabel::Url,
+                target,
+                ..
+            } => target.is_none() && is_wikidot_only_autolink_url(url),
+            _ => false,
+        };
+        let has_star =
+            matches!(&elements[index - 1], Element::Text(value) if value.ends_with('*'));
+        if is_scheme_link && has_star {
+            if let Element::Text(value) = &mut elements[index - 1] {
+                *value = Cow::Owned(value[..value.len() - 1].to_owned());
+            }
+            if matches!(&elements[index - 1], Element::Text(value) if value.is_empty()) {
+                elements.remove(index - 1);
+                index -= 1;
+            }
+            if let Element::Link { target, .. } = &mut elements[index] {
+                *target = Some(AnchorTarget::NewTab);
+            }
+            changed = true;
+        }
+        index += 1;
+    }
+
     changed
 }
 
@@ -852,6 +962,14 @@ fn bold_shell<'t>() -> FormatShell<'t> {
     FormatShell::Container {
         kind: FormatKind::Bold,
         ctype: ContainerType::Bold,
+        attributes: AttributeMap::new(),
+    }
+}
+
+fn monospace_shell<'t>() -> FormatShell<'t> {
+    FormatShell::Container {
+        kind: FormatKind::Monospace,
+        ctype: ContainerType::Monospace,
         attributes: AttributeMap::new(),
     }
 }

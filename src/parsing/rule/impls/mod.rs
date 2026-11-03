@@ -119,6 +119,8 @@ pub use self::table::RULE_TABLE;
 pub use self::text::RULE_TEXT;
 pub use self::underline::RULE_UNDERLINE;
 pub use self::underscore_line_break::RULE_UNDERSCORE_LINE_BREAK;
-pub use self::url::RULE_URL;
-pub(crate) use self::url::url_elements;
+pub use self::url::{RULE_URL, RULE_WIKIDOT_SCHEME_URL};
+pub(crate) use self::url::{
+    is_wikidot_only_autolink_url, starts_wikidot_only_scheme_url, url_elements,
+};
 pub use self::variable::RULE_VARIABLE;
