@@ -637,3 +637,39 @@ fn double_bracket_before_color_is_not_an_anchor_opener() {
         Token::LeftBlockAnchor
     );
 }
+
+#[test]
+fn bracket_star_before_bold_is_not_a_new_tab_opener() {
+    for input in [
+        "[**text**]",
+        "[**",
+        "[*",
+        "[*https://example.com Label]",
+        "**[**text**]**",
+        "[***text***]",
+    ] {
+        assert_fast_tokens_match_pest(input);
+    }
+
+    let pairs: Vec<(Token, &str)> = Token::extract_all("[**text**]")
+        .iter()
+        .map(|token| (token.token, token.slice))
+        .collect();
+    assert_eq!(
+        pairs,
+        vec![
+            (Token::InputStart, ""),
+            (Token::LeftBracket, "["),
+            (Token::Bold, "**"),
+            (Token::Identifier, "text"),
+            (Token::Bold, "**"),
+            (Token::RightBracket, "]"),
+            (Token::InputEnd, ""),
+        ],
+    );
+
+    assert_eq!(
+        Token::extract_all("[*https://example.com Label]")[1].token,
+        Token::LeftBracketStar,
+    );
+}

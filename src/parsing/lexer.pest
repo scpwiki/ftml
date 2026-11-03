@@ -163,7 +163,7 @@ left_comment = @{ "[!--" ~ &((!"--]" ~ ANY)* ~ "--]") }
 
 left_bracket = @{ "[" }
 left_bracket_anchor = @{ "[#" }
-left_bracket_star = @{ "[*" }
+left_bracket_star = @{ "[*" ~ !("*") }
 left_block = @{ "[[" }
 left_block_end = @{ "[[/" }
 // `[[##` is not an anchor opener (a named anchor needs whitespace after

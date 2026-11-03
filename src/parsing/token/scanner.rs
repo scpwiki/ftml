@@ -234,7 +234,9 @@ fn scan_literal(
         b'[' if has(bytes, start, b"[[/") => (Token::LeftBlockEnd, start + 3),
         b'[' if has(bytes, start, b"[[") => (Token::LeftBlock, start + 2),
         b'[' if has(bytes, start, b"[#") => (Token::LeftBracketAnchor, start + 2),
-        b'[' if has(bytes, start, b"[*") => (Token::LeftBracketStar, start + 2),
+        b'[' if has(bytes, start, b"[*") && !has(bytes, start, b"[**") => {
+            (Token::LeftBracketStar, start + 2)
+        }
         b'[' => (Token::LeftBracket, start + 1),
         b'(' if has(bytes, start, b"((") => (Token::LeftParentheses, start + 2),
         b']' if force_right_bracket => (Token::RightBracket, start + 1),

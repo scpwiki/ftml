@@ -58,6 +58,9 @@ mod wikidot_triple_link_special_targets;
 #[path = "wikidot_bracketed_spans.rs"]
 mod wikidot_bracketed_spans;
 
+#[path = "wikidot_bold_after_literal_bracket.rs"]
+mod wikidot_bold_after_literal_bracket;
+
 #[path = "wikidot_lexical_owner_residuals.rs"]
 mod wikidot_lexical_owner_residuals;
 
