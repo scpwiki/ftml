@@ -216,3 +216,6 @@ mod wikidot_empty_link_label_title;
 
 #[path = "wikidot_collapsible_crossings.rs"]
 mod wikidot_collapsible_crossings;
+
+#[path = "wikidot_param_bracket_values.rs"]
+mod wikidot_param_bracket_values;
