@@ -376,8 +376,6 @@ fn wikidot_attribute_key<'t>(
     comment_mask: &[bool],
     range: std::ops::Range<usize>,
 ) -> &'t str {
-    // A leading comment is removed before the next key. A comment within a
-    // key breaks that key instead of joining fragments into new authority.
     let fragment_start = comment_mask[range.clone()]
         .iter()
         .rposition(|masked| *masked)
@@ -445,7 +443,6 @@ where
 
         self.get_optional_space()?;
 
-        // Collect block name and determine whether the head is done
         self.get_block_name_internal(ParseErrorKind::BlockMissingName)
     }
 
@@ -539,7 +536,6 @@ where
         ))
     }
 
-    /// Matches an ending block, returning the name present.
     pub fn get_end_block(&mut self) -> Result<&'t str, ParseError> {
         self.get_token(Token::LeftBlockEnd, ParseErrorKind::BlockExpectedEnd)?;
         self.get_optional_space()?;
@@ -569,8 +565,6 @@ where
             })
     }
 
-    /// Matches a legacy inline `span` or `size` close whose final `]]` is
-    /// lexically joined to a triple-link closer as one `]]]` token.
     pub(crate) fn get_wikidot_link_owned_inline_end_block(
         &mut self,
     ) -> Result<&'t str, ParseError> {
@@ -621,9 +615,6 @@ where
         line.bytes().all(|byte| matches!(byte, b' ' | b'\t'))
     }
 
-    /// Consumes an entire block end, validating that the newline and names match.
-    ///
-    /// Used internally by the body parsing methods.
     fn verify_end_block(
         &mut self,
         first_iteration: bool,
@@ -671,7 +662,6 @@ where
                     parser
                         .get_token(Token::LineBreak, ParseErrorKind::BlockExpectedEnd)?;
                 } else if !first_iteration {
-                    // Only check after the first, to permit empty blocks
                     parser.get_optional_line_break()?;
                 }
             }
@@ -699,12 +689,6 @@ where
                 }
             }
 
-            // Check if it's an end block
-            //
-            // This will ignore any errors produced,
-            // since it's just more text
-            // Only `[[/` can begin an end block; skip searching the rest of the
-            // page for `]]` from every other token of a body.
             let end_start = parser.current().span.start;
             if parser.settings().layout.legacy()
                 && !parser.discarding_hidden_body()
@@ -773,7 +757,6 @@ where
                 return Ok(true);
             }
 
-            // Check if it's valid
             for end_block_name in
                 block_rule_end_names(block_rule, parser.settings().layout.legacy())
             {
@@ -808,11 +791,6 @@ where
         })
     }
 
-    // Body parsing
-
-    /// Generic helper function that performs the primary block collection.
-    ///
-    /// Extended by the other, more specific functions.
     fn get_body_generic<F>(
         &mut self,
         block_rule: &BlockRule,
@@ -824,8 +802,6 @@ where
         let has_end_names = !block_rule.accepts_names.is_empty();
         debug_assert!(has_end_names, "block body has no valid end names");
 
-        // Keep iterating until we find the end.
-        // Preserve parse progress if we've hit the end block.
         let mut first = true;
         let wikidot_math = self.settings().layout.legacy()
             && !self.discarding_hidden_body()
@@ -841,7 +817,6 @@ where
                 wikidot_math && self.at_wikidot_crossed_math_close(first);
             let at_end_block = self.verify_end_block(first, block_rule, false, false);
 
-            // If there's a match, return the last body token
             if let Some(end) = at_end_block {
                 if nested_wikidot_math > 0 {
                     nested_wikidot_math -= 1;
@@ -868,10 +843,8 @@ where
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
-            // Run the passed-in closure
             let step_result = process(self).and_then(|()| self.step());
 
-            // Step and continue
             match step_result {
                 Ok(_) => first = false,
                 Err(error) => {
@@ -929,14 +902,6 @@ where
             )
     }
 
-    /// Collect a block's body to its end, as string slice.
-    ///
-    /// This requires that the has already been parsed using
-    /// one of the "get argument" methods.
-    ///
-    /// The `accepts_newlines` argument designates whether this
-    /// block assumes multiline construction (e.g. `[[div]]`, `[[code]]`)
-    /// or not (e.g. `[[span]]`).
     pub fn get_body_text(
         &mut self,
         block_rule: &BlockRule,
@@ -948,7 +913,6 @@ where
             return self.get_native_blockquote_body_text(block_rule, required_depth);
         }
 
-        // State variables for collecting span
         let (start, end) = self.get_body_generic(block_rule, |_| Ok(()))?;
         let slice = self.full_text().slice_partial(start, end);
         Ok(Cow::Borrowed(slice))
@@ -1033,9 +997,6 @@ where
         let mut body = String::new();
         let mut trailing_line_break_len = 0;
 
-        // Blocks such as [[raw]] retain their opening line break in the
-        // ordinary contiguous-slice path. The normalized quoted result below
-        // is returned without either outer line break, so consume it here.
         if self.current().token == Token::LineBreak {
             self.step()?;
         }
@@ -1240,11 +1201,6 @@ where
         }
     }
 
-    /// Parse a hidden body with the normal grammar, discard its output and errors,
-    /// and retain only the final token position.
-    ///
-    /// Parser metadata is shared by cheap parser clones, so it is restored from a
-    /// transaction snapshot before the fork's token position is committed.
     pub fn discard_body_elements(
         &mut self,
         block_rule: &BlockRule,
@@ -1263,9 +1219,6 @@ where
         fork.pop_hidden_body_boundary();
 
         if discard_result.is_err() {
-            // A malformed or unclosed hidden construct is ambiguous.  Keep the
-            // conditional closed through EOF instead of falling back to visible
-            // text outside an attacker-controlled delimiter.
             fork.skip_to_input_end()?;
         }
 
@@ -1329,9 +1282,6 @@ where
         let rule = self.rule();
 
         let is_end = move |parser: &mut Parser<'r, 't>| {
-            // A rejected complete nested tab opener is literal, so its
-            // matching closer is literal too and cannot close the active
-            // outer tab.
             if wikidot_tab
                 && let Some(opener) = parser.wikidot_nested_tab_opener()
                 && last_nested_wikidot_tab != Some(opener)
@@ -1350,10 +1300,6 @@ where
 
             if result.is_some() && nested_wikidot_tabs > 0 {
                 parser.update(&before_end);
-                // The close probe can see through the preceding physical line
-                // break. Keep the reservation until the closer itself is the
-                // current token so the same literal closer is not counted
-                // twice.
                 if matches!(
                     before_end.current().token,
                     Token::LineBreak | Token::ParagraphBreak
@@ -1462,9 +1408,6 @@ where
             first = false;
             match consume(self) {
                 Ok(consumed) => {
-                    // Mixed paragraph ownership is an instruction for the
-                    // outer paragraph stack. A no-paragraph body has no such
-                    // stack, so consume and discard that local marker here.
                     self.take_wikidot_mixed_paragraph_ownership();
                     process(consumed);
                 }
@@ -1772,9 +1715,6 @@ where
         loop {
             let token_start = parser.current().span.start;
             let key = (block_rule.name, token_start, first);
-            // Unlike the single-close scan, this result only counts raw close
-            // markers in the suffix. Consuming an optional leading line break
-            // changes where a close is recognized, but not how many exist.
             let cached = self.two_block_end_scan_outcome(key).or_else(|| {
                 self.two_block_end_scan_outcome((block_rule.name, token_start, !first))
             });
@@ -1827,7 +1767,6 @@ where
             .is_some()
     }
 
-    /// Whether the matching block end occurs before the current line ends.
     pub fn has_body_end_block_on_line(&self, block_rule: &BlockRule) -> bool {
         let mut parser = self.clone();
 
@@ -1855,11 +1794,6 @@ where
         }
     }
 
-    /// Scan raw physical quote lines for a close at `required_depth`.
-    ///
-    /// The result depends only on immutable tokens, the block rule, and the
-    /// required physical quote depth, so exact line-start outcomes are shared
-    /// safely across speculative parser clones.
     pub(crate) fn has_native_blockquote_body_end(
         &self,
         block_rule: &BlockRule,
@@ -1955,7 +1889,6 @@ where
         }
     }
 
-    // Block head / argument parsing
     pub fn get_head_map(
         &mut self,
         block_rule: &BlockRule,
@@ -1972,42 +1905,27 @@ where
     ) -> Result<(Arguments<'t>, BlockBodyStart), ParseError> {
         let mut map = Arguments::new();
         if in_head {
-            // Only process if the block isn't done yet
             loop {
                 while token_is_argument_spacing(self.current().token) {
                     self.step()?;
                 }
-
-                // Try to get the argument key
-                // Allows any token that matches the regular expression
-                // i.e., alphanumeric, dash, or underscore
-                //
-                // This logic determines if we stop or keep getting arguments
-                //
-                // We could use collect_text_keep() here, but it messes with
-                // get_head_block() so we just have it inline. Also it's a bit
-                // strange since one of the outcomes is to break out of the loop.
 
                 let start = self.current();
                 let mut args_finished = false;
                 loop {
                     let current = self.current();
                     match current.token {
-                        // End parsing block head
                         Token::RightBlock => {
                             args_finished = true;
                             break;
                         }
 
-                        // End parsing argument key
                         token if token_ends_argument_key(token) => break,
 
-                        // Continue iterating to gather key
                         _ if ARGUMENT_KEY.is_match(current.slice) => {
                             self.step()?;
                         }
 
-                        // Invalid token
                         _ => {
                             return Err(
                                 self.make_err(ParseErrorKind::BlockMalformedArguments)
@@ -2016,30 +1934,25 @@ where
                     }
                 }
 
-                // Stop iterating for more argument key-value pairs
                 if args_finished {
                     break std::convert::identity(());
                 }
 
-                // Gather argument key string slice
                 let end = self.current();
                 let key = self.full_text().slice_partial(start, end);
                 if key.is_empty() {
                     return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
                 }
 
-                // Equal sign
                 let space_before_equals = self.current().token == Token::Whitespace;
                 self.get_optional_space()?;
                 self.get_token(Token::Equals, ParseErrorKind::BlockMalformedArguments)?;
 
-                // Get the argument value
                 let space_after_equals = self.current().token == Token::Whitespace;
                 self.get_optional_space()?;
                 let bare = self.current().token != Token::DoubleQuote;
                 let value = self.get_block_argument_value(block_rule, key)?;
 
-                // Add to argument map
                 if bare {
                     map.insert_bare(key, value);
                 } else {
@@ -2136,11 +2049,9 @@ where
             return Err(self.make_err(ParseErrorKind::BlockMissingName));
         }
 
-        // Get module's name
         let missing_name = ParseErrorKind::ModuleMissingName;
         let (subname, in_head) = self.get_block_name_internal(missing_name)?;
 
-        // Get arguments and end of block
         let (arguments, body_start) =
             self.get_head_map_with_body_start(block_rule, in_head)?;
 
@@ -2168,8 +2079,6 @@ where
             return self.get_head_name_map_with_body_start(block_rule, in_head);
         }
 
-        // The positional module name retains its canonical source owner. Only
-        // the already-owned argument field receives the comment-elided view.
         let missing_name = ParseErrorKind::ModuleMissingName;
         let (subname, in_head) = self.get_block_name_internal(missing_name)?;
         let (arguments, body_start) =
@@ -2219,11 +2128,6 @@ where
             ParseCondition::current(Token::LineBreak),
             ParseCondition::current(Token::ParagraphBreak),
         ];
-        // A malformed field (e.g. a line break inside an image source) is a
-        // local failure of this block only, so it must stay recoverable
-        // (RuleFailed, as in every other caller). Classifying it with the
-        // head-shape kinds would make a discarded hidden body containing
-        // such a block keep its conditional closed through end of input.
         let (field, last) = collect_comment_elided_keep(self, &closes, &invalids, None)?;
         let arguments =
             self.get_head_map_wikidot(block_rule, last.token != Token::RightBlock)?;
@@ -2253,7 +2157,6 @@ where
         F: FnOnce(&Self, Option<&'t str>) -> Result<T, ParseError>,
     {
         let argument = if in_head {
-            // Gather slice of tokens in value
             let end_conditions = [ParseCondition::current(Token::RightBlock)];
             let reject_conditions = [
                 ParseCondition::current(Token::ParagraphBreak),
@@ -2271,10 +2174,8 @@ where
             None
         };
 
-        // Convert the value into a type of the caller's choosing
         let value = convert(self, argument)?;
 
-        // Set to false because the collection will always end the block
         let body_start = self.get_head_block_with_body_start(block_rule, false)?;
         Ok((value, body_start))
     }
@@ -2297,21 +2198,15 @@ where
         self.get_head_block_with_body_start(block_rule, in_head)
     }
 
-    // Helper function to finish up the head block
     fn get_head_block_with_body_start(
         &mut self,
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<BlockBodyStart, ParseError> {
-        // If we're still in the head, finish
         if in_head {
             self.get_token(Token::RightBlock, ParseErrorKind::BlockMissingCloseBrackets)?;
         }
 
-        // If the block wants a newline after, take it
-        //
-        // It's fine if we're at the end of the input,
-        // it could be an empty block type.
         if block_rule.accepts_newlines {
             if self.current().token == Token::LineBreak {
                 self.step()?;
@@ -2325,7 +2220,6 @@ where
         Ok(BlockBodyStart::Inline)
     }
 
-    // Utilities
     #[inline]
     pub fn set_block(&mut self, block_rule: &BlockRule) {
         self.set_rule(block_rule.rule());

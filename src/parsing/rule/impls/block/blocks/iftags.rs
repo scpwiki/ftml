@@ -155,7 +155,6 @@ fn parse_fn<'r, 't>(
         return literal_span_gate(parser, name);
     }
 
-    // Parse out tag conditions
     let (conditions, body_start) = parser.get_head_value_with_body_start(
         &BLOCK_IFTAGS,
         in_head,
@@ -228,7 +227,6 @@ fn parse_fn<'r, 't>(
             Err(error) => Err(error),
         }
     } else {
-        // Get body content, never with paragraphs
         match parser.get_body_elements_with_literal_quote_context(
             &BLOCK_IFTAGS,
             false,
@@ -280,7 +278,6 @@ mod tests {
             tags: Vec::new(),
             ..PageInfo::dummy()
         };
-        // PageInfo::dummy() carries tags, like the saved pages on record.
         let tagged = PageInfo::dummy();
         assert!(!tagged.tags.is_empty());
 
@@ -329,8 +326,6 @@ mod tests {
             &legacy
         ));
 
-        // The Wikijump layout is unchanged: a missing or empty spec is
-        // an error rather than an always-true condition.
         let modern = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
         for source in ["[[iftags]]body[[/iftags]]", "[[iftags   ]]body[[/iftags]]"] {
             let tokenization = crate::tokenize(source);

@@ -760,12 +760,6 @@ fn replace_wikidot_ellipsis_deferring(text: &mut String, buffer: &mut String) {
     replace_ellipsis_outside_ranges(text, buffer, &protected_ranges);
 }
 
-/// Return only typography edits whose lexical match crosses a removed,
-/// authored-source seam.
-///
-/// Callers keep element provenance and syntax ownership; this function never
-/// tokenizes or parses the joined text. The seam positions are byte offsets in
-/// `text`, sorted in ascending order.
 pub(crate) fn wikidot_seam_edits(text: &str, seams: &[usize]) -> Vec<WikidotSeamEdit> {
     if seams.is_empty() {
         return Vec::new();
@@ -830,11 +824,6 @@ pub(crate) fn wikidot_seam_edits(text: &str, seams: &[usize]) -> Vec<WikidotSeam
         let candidate = captures.name("repl").unwrap();
         let full = captures.get(0).unwrap().range();
         if range_crosses_seam(&full, seams) {
-            // The regex matches only the first pair of a `>` run, because the
-            // preceding character must not be `>`. Joined text converts every
-            // pair of the run (see `replace_right_angle_quotes`), and a seam can
-            // make the whole run eligible, so convert the remaining pairs too.
-            // Typography never produces `>`, so each `>` here is authored text.
             let start = candidate.start();
             let run_len = text.as_bytes()[start..]
                 .iter()
@@ -1250,12 +1239,8 @@ const TEST_CASES: [(&str, &str); 39] = [
     ("how could you ...", "how could you …"),
     ("how could you. . .", "how could you…"),
     ("how could you . . .", "how could you …"),
-    // Spaced with an extra dot after the third.
     (". . .. ....", "…. …."),
-    // Multiple spaced dots in a row
     ("... . . . . . .", "… … …"),
-    // Live Wikidot greedily consumes every complete group of three periods
-    // from a longer run and leaves the one- or two-period remainder.
     (".... ..", "…. .."),
     (".....", "….."),
     ("......", "……"),
@@ -1265,11 +1250,8 @@ const TEST_CASES: [(&str, &str); 39] = [
     ("..........", "………."),
     ("...........", "……….."),
     ("............", "…………"),
-    // Groups of three dots
     ("... ... ...", "… … …"),
-    // Groups of three, mixed spaced and continuous
     ("... . . . ...", "… … …"),
-    // Context characters can overlap between replacement matches.
     ("x... ...y. . . z", "x… …y… z"),
     ("<<French quotes>>", "«French quotes»"),
     ("1 234 567", "1\u{a0}234\u{a0}567"),
@@ -1628,8 +1610,6 @@ fn typography_preserves_literal_regions_and_module_bodies_in_both_layouts() {
         }
     }
 
-    // Outside literal regions the substitution still applies, and a bodyless
-    // module does not shield later prose.
     for layout in [Layout::Wikidot, Layout::Wikijump] {
         let mut text =
             "[[module Rate]]\nWait... [[module CSS]]\n...\n[[/module]]\nend..."

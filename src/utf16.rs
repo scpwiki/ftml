@@ -60,7 +60,6 @@ impl<'t> Utf16IndexMap<'t> {
         self.map.get(&utf8_index).copied()
     }
 
-    /// Converts a UTF-8 byte index into a UTF-16 one.
     ///
     /// # Panics
     /// Panics if the index is out of range for the string,
