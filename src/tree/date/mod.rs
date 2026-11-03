@@ -34,6 +34,12 @@ use writeable::TryWriteable;
 const MAX_DATE_FORMAT_BYTES: usize = 512;
 const MAX_DATE_FORMAT_DIRECTIVES: usize = 64;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum DateFormatFlavor {
+    Strftime,
+    Wikidot,
+}
+
 mod cache;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -77,7 +83,9 @@ impl DateItem {
 
     pub fn format(self, format: Option<&str>, language: &str) -> io::Result<String> {
         match format {
-            Some(format) => self.format_strftime(format, language),
+            Some(format) => {
+                self.format_strftime(format, language, DateFormatFlavor::Strftime)
+            }
             None => self.format_default(language),
         }
     }
@@ -87,7 +95,34 @@ impl DateItem {
         format_or_default_result(formatted, || self.format(None, language))
     }
 
-    fn format_strftime(self, format: &str, language: &str) -> io::Result<String> {
+    pub fn format_wikidot(
+        self,
+        format: Option<&str>,
+        language: &str,
+    ) -> io::Result<String> {
+        match format {
+            Some(format) => {
+                self.format_strftime(format, language, DateFormatFlavor::Wikidot)
+            }
+            None => self.format_default(language),
+        }
+    }
+
+    pub fn format_or_default_wikidot(
+        self,
+        format: Option<&str>,
+        language: &str,
+    ) -> String {
+        let formatted = self.format_wikidot(format, language);
+        format_or_default_result(formatted, || self.format_wikidot(None, language))
+    }
+
+    fn format_strftime(
+        self,
+        format: &str,
+        language: &str,
+        flavor: DateFormatFlavor,
+    ) -> io::Result<String> {
         if !date_format_within_limits(format) {
             return Err(date_format_limit_error());
         }
@@ -106,6 +141,12 @@ impl DateItem {
             rendered.push_str(&format[literal_start..index]);
 
             let Some((directive_index, mut directive)) = chars.next() else {
+                if flavor == DateFormatFlavor::Wikidot {
+                    rendered.push('%');
+                    literal_start = index + 1;
+                    continue;
+                }
+
                 return Err(invalid_strftime_error(
                     format,
                     "unexpected end of input after '%'",
@@ -113,8 +154,15 @@ impl DateItem {
             };
 
             let mut spec_end = directive_index + directive.len_utf8();
+            let mut padded = false;
             if matches!(directive, '_' | '-' | '0') {
                 let Some((component_index, component)) = chars.next() else {
+                    if flavor == DateFormatFlavor::Wikidot {
+                        rendered.push_str(&format[index..spec_end]);
+                        literal_start = spec_end;
+                        continue;
+                    }
+
                     return Err(invalid_strftime_error(
                         format,
                         "unexpected end of input after padding modifier",
@@ -123,10 +171,17 @@ impl DateItem {
 
                 directive = component;
                 spec_end = component_index + component.len_utf8();
+                padded = true;
             }
 
             let spec = &format[index..spec_end];
-            render_directive(&mut rendered, &datetime, &locale, directive, spec)?;
+            if flavor == DateFormatFlavor::Wikidot
+                && (padded || !wikidot_format_directive(directive))
+            {
+                rendered.push_str(spec);
+            } else {
+                render_directive(&mut rendered, &datetime, &locale, directive, spec)?;
+            }
             literal_start = spec_end;
         }
 
@@ -236,6 +291,32 @@ fn map_format_result(result: Result<String, time::error::Format>) -> io::Result<
         Format::StdIo(io_error) => io_error,
         _ => io::Error::other(error),
     })
+}
+
+fn wikidot_format_directive(directive: char) -> bool {
+    matches!(
+        directive,
+        'r' | 'R'
+            | 'T'
+            | 'D'
+            | 'a'
+            | 'A'
+            | 'b'
+            | 'B'
+            | 'c'
+            | 'd'
+            | 'e'
+            | 'H'
+            | 'I'
+            | 'm'
+            | 'M'
+            | 'p'
+            | 'S'
+            | 'y'
+            | 'Y'
+            | 'z'
+            | 'O'
+    )
 }
 
 fn render_directive(
@@ -664,6 +745,33 @@ fn date_format_falls_back_to_default() {
         date.format_or_default(Some("%Q"), "en"),
         date.format(None, "en").unwrap(),
     );
+}
+
+#[test]
+fn date_format_wikidot_expands_only_format_odate_directives() {
+    let date = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +02:00));
+    let format = "[a %a] [A %A] [b %b] [B %B] [c %c] [d %d] [D %D] [e %e] [H %H] [I %I] [m %m] [M %M] [O %O] [p %p] [r %r] [R %R] [S %S] [T %T] [y %y] [Y %Y] [z %z]";
+
+    assert_eq!(
+        date.format_wikidot(Some(format), "en").unwrap(),
+        "[a Fri] [A Friday] [b Dec] [B December] [c 12/25/2009, 8:18:05 AM] [d 25] [D 12/25/09] [e 25] [H 08] [I 08] [m 12] [M 18] [O 7 days ago] [p AM] [r 8:18:05 AM] [R 08:18] [S 05] [T 08:18:05] [y 09] [Y 2009] [z GMT+02]",
+    );
+}
+
+#[test]
+fn date_format_wikidot_leaves_other_directives_literal() {
+    let date = DateItem::from(time::macros::datetime!(2009-12-25 08:18:05 +02:00));
+    let format = "[C %C] [F %F] [g %g] [G %G] [h %h] [j %j] [n %n] [P %P] [s %s] [t %t] [u %u] [U %U] [V %V] [w %w] [W %W] [x %x] [X %X] [Z %Z] [Q %Q]";
+
+    assert_eq!(date.format_wikidot(Some(format), "en").unwrap(), format);
+    assert_eq!(date.format_wikidot(Some("%%"), "en").unwrap(), "%%");
+    assert_eq!(
+        date.format_wikidot(Some("%_d %-d %0d"), "en").unwrap(),
+        "%_d %-d %0d",
+    );
+    assert_eq!(date.format_wikidot(Some("%Y %"), "en").unwrap(), "2009 %",);
+    assert_eq!(date.format_wikidot(Some("%_"), "en").unwrap(), "%_");
+    assert_eq!(date.format_or_default_wikidot(Some("%s"), "en"), "%s");
 }
 
 #[test]
