@@ -128,17 +128,42 @@ fn crossed_center_close_insertion_line(
     prefix: &str,
     wrapper_divs: usize,
 ) -> Option<usize> {
-    let mut insertion_line = collapsible_close;
-    for _ in 0..wrapper_divs {
-        insertion_line += 1;
-        if insertion_line >= lines.len()
-            || literal_lines[insertion_line]
-            || standalone_div_marker(&lines[insertion_line], prefix) != Some(false)
-        {
+    if wrapper_divs == 0 {
+        return Some(collapsible_close);
+    }
+    let required_quote_depth = prefix.bytes().filter(|&byte| byte == b'>').count();
+    let mut found = 0;
+    let mut extra_div_depth = 0usize;
+    let mut index = collapsible_close + 1;
+    while index < lines.len() {
+        if literal_lines[index] {
             return None;
         }
+        let (body, _) = split_line(&lines[index]);
+        let (line_quote_depth, _) = quote_depth_and_body(body);
+        if line_quote_depth < required_quote_depth {
+            return None;
+        }
+        if marker_line(&lines[index]).is_some_and(|(line_prefix, _)| line_prefix == prefix) {
+            return None;
+        }
+        match standalone_div_marker(&lines[index], prefix) {
+            Some(true) => extra_div_depth += 1,
+            Some(false) => {
+                if extra_div_depth > 0 {
+                    extra_div_depth -= 1;
+                } else {
+                    found += 1;
+                    if found == wrapper_divs {
+                        return Some(index);
+                    }
+                }
+            }
+            None => {}
+        }
+        index += 1;
     }
-    Some(insertion_line)
+    None
 }
 
 #[cfg(test)]
@@ -983,6 +1008,7 @@ struct CrossedClose {
     wrapper_divs: usize,
     early_center_close: Option<usize>,
     reopened_center: Option<usize>,
+    nested_collapsible_depth: usize,
 }
 
 /// Repair a collapsible whose wrapper div is closed one line too late.
@@ -1407,6 +1433,11 @@ fn canonicalize_crossed_center_collapsible_closers(
                     continue;
                 }
                 Marker::CollapsibleClose if candidate.early_center_close.is_some() => {
+                    if candidate.nested_collapsible_depth > 0 {
+                        candidate.nested_collapsible_depth -= 1;
+                        index += 1;
+                        continue;
+                    }
                     if let Some(reopened) = candidate.reopened_center {
                         let mut tail_matches = reopened + 1 == index;
                         if tail_matches {
@@ -1477,6 +1508,9 @@ fn canonicalize_crossed_center_collapsible_closers(
                     index = insertion_line + 1;
                     continue;
                 }
+                Marker::CollapsibleOpen if candidate.early_center_close.is_some() => {
+                    candidate.nested_collapsible_depth += 1;
+                }
                 Marker::CenterOpen | Marker::CollapsibleOpen => pending = None,
                 _ => {}
             }
@@ -1497,6 +1531,7 @@ fn canonicalize_crossed_center_collapsible_closers(
                     wrapper_divs,
                     early_center_close: None,
                     reopened_center: None,
+                    nested_collapsible_depth: 0,
                 });
                 index = opener_index + 1;
                 continue;

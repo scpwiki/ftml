@@ -384,7 +384,10 @@ fn parse_list_item<'r, 't>(
     let arguments = parser.get_head_map_wikidot(&BLOCK_LI, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
     let body_start = parser.current().span.start;
-    if wikidot && !parser.has_body_end_block(&BLOCK_LI) {
+    if wikidot
+        && !parser.has_body_end_block(&BLOCK_LI)
+        && !parser.has_wikidot_list_close_ahead()
+    {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 

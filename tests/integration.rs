@@ -1,3 +1,6 @@
+#[path = "wikidot_2568_crossed_closers.rs"]
+mod wikidot_2568_crossed_closers;
+
 #[path = "coverage_parser_edges.rs"]
 mod coverage_parser_edges;
 

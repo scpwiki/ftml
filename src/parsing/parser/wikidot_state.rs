@@ -165,6 +165,42 @@ impl Parser<'_, '_> {
         set_flag(&mut self.wikidot.flags, PENDING_COLLAPSIBLE_CLOSER, value);
     }
 
+    pub(crate) fn record_wikidot_crossed_close(&mut self, block_rule_name: &str) {
+        let (shift, max) = match block_rule_name {
+            "block-div" => (11, 3),
+            "block-collapsible" => (13, 1),
+            "block-blockquote" => (14, 1),
+            "block-anchor" => (15, 1),
+            _ => return,
+        };
+        if (self.wikidot.flags >> shift) & max < max {
+            self.wikidot.flags += 1 << shift;
+        }
+    }
+
+    pub(crate) fn has_wikidot_crossed_close(&self) -> bool {
+        self.wikidot.flags >> 11 != 0
+    }
+
+    pub(crate) fn take_wikidot_crossed_close(&mut self, end_name: &str) -> bool {
+        let (shift, max) = if end_name.eq_ignore_ascii_case("div") {
+            (11, 3)
+        } else if end_name.eq_ignore_ascii_case("collapsible") {
+            (13, 1)
+        } else if end_name.eq_ignore_ascii_case("blockquote") {
+            (14, 1)
+        } else if end_name.eq_ignore_ascii_case("a") {
+            (15, 1)
+        } else {
+            return false;
+        };
+        if (self.wikidot.flags >> shift) & max == 0 {
+            return false;
+        }
+        self.wikidot.flags -= 1 << shift;
+        true
+    }
+
     pub(crate) fn in_wikidot_center_body(&self) -> bool {
         self.wikidot.center_body_depth > 0
     }

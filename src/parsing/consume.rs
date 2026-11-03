@@ -295,6 +295,21 @@ where
         }
     }
 
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser.has_wikidot_crossed_close()
+        && parser.current().token == Token::LeftBlockEnd
+    {
+        let mut close = parser.clone();
+        if let Ok(name) = close.get_end_block() {
+            let name = name.strip_suffix('_').unwrap_or(name);
+            if parser.take_wikidot_crossed_close(name) {
+                parser.update(&close);
+                return Ok(Some(Elements::None));
+            }
+        }
+    }
+
     if !parser.settings().layout.legacy() || parser.current().token != Token::LeftBlockEnd
     {
         return Ok(None);

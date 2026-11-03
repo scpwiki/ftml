@@ -791,6 +791,88 @@ where
         })
     }
 
+    pub(crate) fn terminate_at_wikidot_list_close(
+        &mut self,
+        block_rule: &BlockRule,
+        first_iteration: bool,
+    ) -> bool {
+        if !self.settings().layout.legacy()
+            || self.discarding_hidden_body()
+            || matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            )
+            || self.accepts_partial() != crate::tree::AcceptsPartial::ListItem
+        {
+            return false;
+        }
+
+        let mut probe = self.clone();
+        let mut stepped_line_break = false;
+        if !first_iteration
+            && block_rule.accepts_newlines
+            && probe.current().token == Token::LineBreak
+        {
+            if probe.step().is_err() {
+                return false;
+            }
+            stepped_line_break = true;
+        }
+        if probe.current().token != Token::LeftBlockEnd {
+            return false;
+        }
+        let start = probe.current().span.start;
+        let Ok(raw_name) = probe.get_end_block() else {
+            return false;
+        };
+        let end = probe.current().span.start;
+        let source = &self.full_text().inner()[start..end];
+        if !source.eq_ignore_ascii_case(&format!("[[/{raw_name}]]")) {
+            return false;
+        }
+        let name = raw_name.strip_suffix('_').unwrap_or(raw_name);
+        let terminates = if block_rule.name == "block-list-item" {
+            name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+        } else {
+            name.eq_ignore_ascii_case("li")
+                || name.eq_ignore_ascii_case("ul")
+                || name.eq_ignore_ascii_case("ol")
+        };
+        if !terminates {
+            return false;
+        }
+
+        if stepped_line_break && self.step().is_err() {
+            return false;
+        }
+        self.record_wikidot_crossed_close(block_rule.name);
+        true
+    }
+
+    pub(crate) fn has_wikidot_list_close_ahead(&self) -> bool {
+        let mut probe = self.clone();
+        loop {
+            match probe.current().token {
+                Token::InputEnd => return false,
+                Token::LeftBlockEnd => {
+                    let mut end = probe.clone();
+                    if let Ok(name) = end.get_end_block() {
+                        let name = name.strip_suffix('_').unwrap_or(name);
+                        if name.eq_ignore_ascii_case("ul")
+                            || name.eq_ignore_ascii_case("ol")
+                        {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            if probe.step().is_err() {
+                return false;
+            }
+        }
+    }
+
     fn get_body_generic<F>(
         &mut self,
         block_rule: &BlockRule,
@@ -1290,6 +1372,7 @@ where
                 nested_wikidot_tabs += 1;
             }
             let before_end = parser.clone();
+            let first_iteration = first;
             let result = parser.verify_end_block(
                 first,
                 block_rule,
@@ -1315,6 +1398,12 @@ where
                 && parser.at_hidden_body_ancestor_boundary()
             {
                 return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if result.is_none()
+                && parser.terminate_at_wikidot_list_close(block_rule, first_iteration)
+            {
+                return Ok(true);
             }
 
             Ok(result.is_some())
@@ -1391,6 +1480,10 @@ where
                 allow_inline_quote_close,
             );
             if result.is_some() {
+                return Ok(());
+            }
+
+            if self.terminate_at_wikidot_list_close(block_rule, first) {
                 return Ok(());
             }
 
