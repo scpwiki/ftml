@@ -348,7 +348,6 @@ where
                 && parser.settings().layout.legacy()
                 && parser.current().token == Token::Whitespace
             {
-                stack.push_paragraph_safe_elements(vec![text!(" ")]);
                 parser.step()?;
             }
             if literal_list_item {
@@ -925,7 +924,7 @@ mod tests {
         );
         assert_eq!(
             render_wikidot("alpha\n[!-- hidden --] visible\nomega"),
-            "<p>alpha<br>\n visible<br>\nomega</p>",
+            "<p>alpha visible<br>\nomega</p>",
         );
         assert_eq!(
             render_wikidot("before [!-- hidden --] after"),

@@ -355,9 +355,16 @@ fn parse_fn<'r, 't>(
                 .get(parser.current().span.end),
             Some(b'\n') | Some(b'\r'),
         );
+    let whitespace_only_body = body_start == BlockBodyStart::Inline
+        && parser.current().token == Token::Whitespace
+        && matches!(
+            parser.look_ahead(0),
+            Some(next) if next.token == Token::LeftBlockEnd,
+        );
     if body_start == BlockBodyStart::Inline
         && parser.current().token == Token::Whitespace
         && !spaced_head
+        && !whitespace_only_body
     {
         parser.step()?;
     }
