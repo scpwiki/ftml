@@ -172,23 +172,28 @@ pub(super) fn preserve_wikidot_document_indentation_barrier(text: &mut String) {
         return;
     }
     let structural = text.as_bytes().get(leading_len).copied();
-    let centered_line = text[leading_len..].starts_with("= ");
-    let indented = text[..leading_len]
-        .bytes()
-        .any(|byte| matches!(byte, b' ' | b'\t'));
-    let colon_line_indented = text[..leading_len]
+    let own_line_indented = text[..leading_len]
         .rsplit('\n')
         .next()
         .is_some_and(|line| line.bytes().any(|byte| matches!(byte, b' ' | b'\t')));
-    if !centered_line
-        && ((indented
-            && matches!(
-                structural,
-                Some(b'>' | b'=' | b'+' | b'|' | b'[' | b'_' | b'*' | b'#' | b'~' | b'-')
-            ))
-            || (structural == Some(b':') && colon_line_indented))
+    if own_line_indented
+        && matches!(
+            structural,
+            Some(
+                b'>' | b'='
+                    | b'+'
+                    | b'|'
+                    | b'['
+                    | b'_'
+                    | b'*'
+                    | b'#'
+                    | b'~'
+                    | b':'
+                    | b'-',
+            )
+        )
     {
-        let replacement = if text.as_bytes().get(leading_len) == Some(&b'_') {
+        let replacement = if structural == Some(b'_') {
             "\0 "
         } else {
             "\0"
@@ -633,11 +638,12 @@ fn preserve_document_leading_indentation_barrier(text: &mut String) {
     if wikidot_spaced_inner_include_example(text, leading_len) {
         return;
     }
-    let leading = &text[..leading_len];
+    let own_line_indented = text[..leading_len]
+        .rsplit('\n')
+        .next()
+        .is_some_and(|line| line.bytes().any(|byte| matches!(byte, b' ' | b'\t')));
     let structural = text.as_bytes().get(leading_len).copied();
-    if leading.bytes().any(|byte| matches!(byte, b' ' | b'\t'))
-        && structural == Some(b'>')
-    {
+    if own_line_indented && structural == Some(b'>') {
         text.replace_range(..leading_len, "\0");
     }
 }
@@ -1056,6 +1062,15 @@ fn preserves_a_syntax_barrier_for_indented_non_center_document_openers() {
         (" : A : 1", "\0: A : 1"),
         ("\n\n : A : 1", "\0: A : 1"),
         (" \n: A : 1", ": A : 1"),
+        (" ----", "\0----"),
+        ("\n\n ----", "\0----"),
+        (" \n----", "----"),
+        (" = centered", "\0= centered"),
+        (" \n= centered", "= centered"),
+        (" \n* item", "* item"),
+        (" \n> quoted", "> quoted"),
+        (" _", "\0 _"),
+        (" \n_\nfoo", "_\nfoo"),
     ] {
         let mut text = input.to_owned();
         preserve_wikidot_document_indentation_barrier(&mut text);
@@ -1065,8 +1080,8 @@ fn preserves_a_syntax_barrier_for_indented_non_center_document_openers() {
 }
 
 #[test]
-fn trims_document_indentation_before_a_centered_line() {
-    let mut text = "\t= centered".to_owned();
+fn trims_document_indentation_before_a_centered_line_after_a_spaced_line() {
+    let mut text = " \n= centered".to_owned();
 
     preserve_wikidot_document_indentation_barrier(&mut text);
     substitute_wikidot(&mut text);

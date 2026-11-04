@@ -305,6 +305,31 @@ fn registry_center_line_residuals_match_live_wikidot() {
         (
             "residual-center-line-leading-space",
             " = centered",
+            "<p>= centered</p>",
+        ),
+        (
+            "residual-center-line-leading-tab",
+            "\t= centered",
+            "<p>= centered</p>",
+        ),
+        (
+            "residual-center-line-blank-then-indented",
+            "\n\n = centered =",
+            "<p>= centered =</p>",
+        ),
+        (
+            "residual-center-line-mid-document-indented",
+            "foo\n\n = centered =",
+            "<p>foo</p><p>= centered =</p>",
+        ),
+        (
+            "residual-center-line-mid-paragraph-indented",
+            "foo\n = centered =",
+            "<p>foo<br>\n= centered =</p>",
+        ),
+        (
+            "residual-center-line-after-spaced-line",
+            " \n= centered",
             r#"<p style="text-align: center;">centered</p>"#,
         ),
         (
