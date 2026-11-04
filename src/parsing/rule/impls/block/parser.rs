@@ -3522,17 +3522,22 @@ where
                 )
             });
             if head_has_comment && !head_has_non_authored_input {
-                let closes = [ParseCondition::current(Token::RightBlock)];
-                let (head, _) = collect_comment_elided_keep(self, &closes, &[], None)?;
+                let closes = [
+                    ParseCondition::current(Token::RightBlock),
+                    ParseCondition::current(Token::RightLink),
+                ];
+                let (head, last) = collect_comment_elided_keep(self, &closes, &[], None)?;
+                if last.token == Token::RightLink {
+                    self.note_fused_name_residual(last.span.end);
+                }
                 (parse_wikidot_attribute_field(&head), true)
             } else {
                 let start = self.current();
                 let mut elisions = Vec::new();
                 let raw_head = block_rule.name == "block-code";
-                let fused_name_close = self.head_had_segment();
                 while !matches!(self.current().token, Token::RightBlock | Token::InputEnd)
                 {
-                    if fused_name_close && self.current().token == Token::RightLink {
+                    if self.current().token == Token::RightLink {
                         break;
                     }
                     if !raw_head
