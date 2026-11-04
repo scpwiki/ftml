@@ -1,0 +1,143 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "a",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "b",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "c",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "d",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "e",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "g",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "h",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "i",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "a: Alpha.\n: b :Bravo.\n: c:  Charlie.\n: d",
+                [
+                    {
+                        "element": "text",
+                        "data": "Delta"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ],
+            [
+                "i",
+                [
+                    {
+                        "element": "text",
+                        "data": "India"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ]
+        ]
+    ]
+}

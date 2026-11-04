@@ -39,6 +39,14 @@ fn skip_newline<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Seeing if we skip due to an upcoming definition list");
 
+    if in_wikidot_bibliography_body(parser) {
+        let mut next_line = parser.clone();
+        if next_line.step().is_ok() && starts_wikidot_bibliography_item(&next_line) {
+            return ok!(Elements::None);
+        }
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     if parser.next_three_tokens()
         == (
             Token::LineBreak,
@@ -66,11 +74,21 @@ fn parse_definition_list<'r, 't>(
     let mut paragraph_safe = false;
 
     loop {
-        let next = scan_item(parser)?.chain(&mut errors, &mut paragraph_safe);
+        let next = match scan_item(parser) {
+            Ok(success) => success.chain(&mut errors, &mut paragraph_safe),
+            Err(error) => {
+                if !items.is_empty() && in_wikidot_bibliography_body(parser) {
+                    break;
+                }
+                return Err(error);
+            }
+        };
         match next {
             Some((item, _)) => {
                 items.push(item);
-                if !starts_definition_item(parser) {
+                if !starts_definition_item(parser)
+                    && !starts_wikidot_bibliography_item(parser)
+                {
                     break;
                 }
             }
@@ -98,6 +116,10 @@ where
 
     if !parser.start_of_line() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    if in_wikidot_bibliography_body(parser) {
+        return scan_wikidot_bibliography_item(parser);
     }
 
     if !starts_definition_item(parser) {
@@ -168,6 +190,174 @@ fn parse_item<'r, 't>(
 
 fn starts_definition_item<'r, 't>(parser: &Parser<'r, 't>) -> bool {
     parser.next_two_tokens() == (Token::Colon, Some(Token::Whitespace))
+}
+
+fn in_wikidot_bibliography_body(parser: &Parser<'_, '_>) -> bool {
+    parser.settings().layout.legacy() && parser.in_wikidot_bibliography_body()
+}
+
+fn starts_wikidot_bibliography_item(parser: &Parser<'_, '_>) -> bool {
+    in_wikidot_bibliography_body(parser)
+        && parser.current().token == Token::Colon
+        && wikidot_bibliography_head(
+            parser.full_text().inner(),
+            parser.current().span.start,
+        )
+        .is_some()
+}
+
+fn wikidot_bibliography_head(
+    text: &str,
+    line_start: usize,
+) -> Option<(std::ops::Range<usize>, usize, usize)> {
+    let bytes = text.as_bytes();
+    let mut index = line_start;
+    if bytes.get(index) != Some(&b':') {
+        return None;
+    }
+    index += 1;
+    if bytes.get(index) == Some(&b' ') {
+        index += 1;
+    }
+    let label_start = index;
+    while bytes.get(index).is_some_and(u8::is_ascii_alphanumeric) {
+        index += 1;
+    }
+    if index == label_start {
+        return None;
+    }
+    let label = label_start..index;
+    let after_separator = if bytes.get(index) == Some(&b':') {
+        index + 1
+    } else if matches!(bytes.get(index), Some(&b' ') | Some(&b'\n'))
+        && bytes.get(index + 1) == Some(&b':')
+    {
+        index + 2
+    } else {
+        return None;
+    };
+    let value_start = if bytes.get(after_separator) == Some(&b'\n') {
+        after_separator + 1
+    } else if matches!(bytes.get(after_separator), Some(&b' ') | Some(&b'\t')) {
+        let mut end = after_separator;
+        while matches!(bytes.get(end), Some(&b' ') | Some(&b'\t')) {
+            end += 1;
+        }
+        end
+    } else if after_separator == bytes.len() {
+        after_separator
+    } else {
+        return None;
+    };
+    let line_end = text[value_start..]
+        .find('\n')
+        .map_or(bytes.len(), |offset| value_start + offset);
+    Some((label, value_start, line_end))
+}
+
+fn scan_wikidot_bibliography_item<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Option<(DefinitionListItem<'t>, bool)>>
+where
+    'r: 't,
+{
+    let mut errors = Vec::new();
+    let mut paragraph_safe = false;
+
+    let text = parser.full_text().inner();
+    let line_start = parser.current().span.start;
+    let Some((label_range, value_start, line_end)) =
+        wikidot_bibliography_head(text, line_start)
+    else {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    };
+    let label: std::borrow::Cow<'t, str> = std::borrow::Cow::Borrowed(&text[label_range]);
+
+    let previous = parser.in_wikidot_definition_list_line();
+    parser.set_in_wikidot_definition_list_line(true);
+
+    while parser.current().span.start < value_start {
+        parser.step()?;
+    }
+
+    let value_at_line_start =
+        value_start > line_start && text.as_bytes()[value_start - 1] == b'\n';
+    let collected = if value_start == line_end {
+        Ok(Vec::new())
+    } else if parser.current().span.start != value_start {
+        Err(parser.make_err(ParseErrorKind::RuleFailed))
+    } else {
+        collect_wikidot_bibliography_value(
+            parser,
+            &mut errors,
+            &mut paragraph_safe,
+            value_at_line_start,
+        )
+    };
+    let value_elements = match collected {
+        Ok(elements) => elements,
+        Err(error) => {
+            parser.set_in_wikidot_definition_list_line(previous);
+            return Err(error);
+        }
+    };
+    let last = parser.current();
+    let should_break = matches!(last.token, Token::ParagraphBreak | Token::InputEnd);
+    parser.set_in_wikidot_definition_list_line(previous);
+
+    let item = DefinitionListItem {
+        key_string: label.clone(),
+        key_elements: vec![Element::Text(label)],
+        value_elements,
+    };
+
+    ok!(false; Some((item, should_break)), errors)
+}
+
+fn collect_wikidot_bibliography_value<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    errors: &mut Vec<ParseError>,
+    paragraph_safe: &mut bool,
+    value_at_line_start: bool,
+) -> Result<Vec<Element<'t>>, ParseError>
+where
+    'r: 't,
+{
+    let mut prefix = Vec::new();
+    if value_at_line_start
+        && matches!(
+            parser.current().token,
+            Token::Colon
+                | Token::BulletItem
+                | Token::NumberedItem
+                | Token::Heading
+                | Token::Equals
+                | Token::Quote
+                | Token::TableColumn
+                | Token::TripleDash
+                | Token::ClearFloatBoth
+                | Token::ClearFloatLeft
+                | Token::ClearFloatRight
+        )
+    {
+        prefix.push(Element::Text(parser.current().slice.into()));
+        parser.step()?;
+    }
+    let close = [
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::current(Token::LineBreak),
+        ParseCondition::current(Token::InputEnd),
+        ParseCondition::token_pair(Token::LeftBlockEnd, Token::Identifier),
+    ];
+    let collected =
+        collect_consume_before(parser, RULE_DEFINITION_LIST, &close, &[], None)?;
+    let (mut value_elements, last) = collected.chain(errors, paragraph_safe);
+    if matches!(last.token, Token::LineBreak | Token::ParagraphBreak) {
+        parser.step()?;
+    }
+    prefix.append(&mut value_elements);
+    strip_wikidot_ascii_padding(&mut prefix);
+    Ok(prefix)
 }
 
 fn has_definition_separator<'r, 't>(parser: &Parser<'r, 't>) -> bool {

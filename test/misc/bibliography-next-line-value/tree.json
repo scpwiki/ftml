@@ -1,0 +1,201 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "a",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "b",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "c",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "d",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "table-of-contents": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc0",
+                                    "label": {
+                                        "text": "Not a heading."
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "\u0000",
+                [
+                    {
+                        "element": "text",
+                        "data": "Value"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "on"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "next"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "line"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "line-break"
+                    }
+                ]
+            ],
+            [
+                "b:\n: c",
+                [
+                    {
+                        "element": "text",
+                        "data": "See"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ],
+            [
+                "\u0000",
+                [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": {
+                                "header": {
+                                    "level": 1,
+                                    "has-toc": true
+                                }
+                            },
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Not"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "heading"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "."
+                                }
+                            ]
+                        }
+                    }
+                ]
+            ]
+        ]
+    ]
+}
