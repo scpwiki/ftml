@@ -135,6 +135,8 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_footnote_zone_until: Cell<Option<usize>>,
     fused_name_residual: Cell<Option<usize>>,
     head_had_segment: Cell<bool>,
+    wikidot_tab_quote_ejection: Cell<bool>,
+    wikidot_body_soft_ended: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
@@ -794,9 +796,56 @@ impl<'r, 't> Parser<'r, 't> {
                 .all(|character| character == '>' || character.is_ascii_whitespace())
     }
 
+    pub(crate) fn quote_body_close_follows_tab_close(&self) -> bool {
+        let Some(QuoteBodyCursor {
+            line_state: QuoteBodyLineState::PreparedContent { content_start },
+            ..
+        }) = self.quote_body_cursor
+        else {
+            return false;
+        };
+        let here = self.current().span.start;
+        if content_start >= here {
+            return false;
+        }
+        let prefix = &self.full_text().inner()[content_start..here];
+        let trimmed = prefix.trim_end_matches(|c: char| c.is_ascii_whitespace());
+        trimmed
+            .get(trimmed.len().saturating_sub(8)..)
+            .is_some_and(|suffix| suffix.eq_ignore_ascii_case("[[/tab]]"))
+    }
+
     #[rustfmt::skip]
     pub(crate) fn quote_body_needs_prefix(&self) -> bool {
         matches!(self.quote_body_cursor, Some(QuoteBodyCursor { line_state: QuoteBodyLineState::NeedPrefix, .. }))
+    }
+
+    pub(crate) fn wikidot_tab_quote_ejection(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_tab_quote_ejection
+            .get()
+    }
+
+    pub(crate) fn set_wikidot_tab_quote_ejection(&self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_tab_quote_ejection
+            .set(value);
+    }
+
+    pub(crate) fn set_wikidot_body_soft_ended(&self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_body_soft_ended
+            .set(value);
+    }
+
+    pub(crate) fn take_wikidot_body_soft_ended(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let value = cache.wikidot_body_soft_ended.get();
+        cache.wikidot_body_soft_ended.set(false);
+        value
     }
 
     pub(crate) fn push_quote_escaped_unit(&self, unit: QuoteEscapedUnit<'t>) {

@@ -25,7 +25,11 @@ use crate::parsing::collect::{
     consume_iftags_segment_fused, consume_valid_comment, iftags_segment_fused,
 };
 use crate::parsing::consume::consume;
-use crate::tree::{AcceptsPartial, PartialElement, Tab, TabViewItem};
+use crate::parsing::paragraph::{ParagraphStack, gather_paragraphs};
+use crate::parsing::parser::{QuoteBodyLineStatus, QuoteEscapedUnit};
+use crate::tree::{
+    AcceptsPartial, AttributeMap, Container, PartialElement, Tab, TabViewItem,
+};
 
 pub const BLOCK_TABVIEW: BlockRule = BlockRule {
     name: "block-tabview",
@@ -96,6 +100,9 @@ fn parse_tabview<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    let quote_ejection = parser.settings().layout.legacy()
+        && parser.native_blockquote_depth().is_some();
+
     let parser = &mut ParserWrap::new(parser, AcceptsPartial::Tab);
 
     debug!("Parsing tabview block (name '{name}', in-head {in_head})");
@@ -111,14 +118,37 @@ fn parse_tabview<'r, 't>(
 
     let records_at_entry = parser.degraded_title_record_count();
 
-    let (elements, errors, _) =
+    let previous_ejection = parser.wikidot_tab_quote_ejection();
+    if quote_ejection {
+        parser.set_wikidot_tab_quote_ejection(true);
+        parser.set_wikidot_body_soft_ended(false);
+    }
+
+    let (elements, mut errors, _) =
         match parser.get_body_elements_with_context(&BLOCK_TABVIEW, false, body_start) {
             Ok(success) => success.into(),
             Err(error) => {
+                if quote_ejection {
+                    parser.set_wikidot_tab_quote_ejection(previous_ejection);
+                }
                 parser.truncate_degraded_title_records(records_at_entry);
                 return Err(error);
             }
         };
+
+    if quote_ejection {
+        let soft_ended = parser.take_wikidot_body_soft_ended();
+        let degraded = if soft_ended {
+            consume_degraded_tabview_close(parser, &mut errors)
+        } else {
+            Ok(())
+        };
+        parser.set_wikidot_tab_quote_ejection(previous_ejection);
+        if let Err(error) = degraded {
+            parser.truncate_degraded_title_records(records_at_entry);
+            return Err(error);
+        }
+    }
 
     let mut items = Vec::new();
     let mut run = Vec::new();
@@ -164,6 +194,282 @@ fn parse_tabview<'r, 't>(
         );
     }
     success_elements_with_paragraph_safety(false, tabview, errors)
+}
+
+fn classify_quote_line<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> Option<(usize, Parser<'r, 't>)>
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    let mut depth = 0usize;
+    while probe.current().token == Token::Quote {
+        depth += probe.current().slice.len();
+        probe.step().ok()?;
+        probe.get_optional_space().ok()?;
+    }
+    if depth == 0 {
+        return None;
+    }
+    Some((depth, probe))
+}
+
+fn end_block_tag_at<'r, 't>(parser: &Parser<'r, 't>) -> Option<&'static str>
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    let name = probe.get_end_block().ok()?;
+    let tag = if name.eq_ignore_ascii_case("tab") {
+        "tab"
+    } else if name.eq_ignore_ascii_case("tabview") || name.eq_ignore_ascii_case("tabs") {
+        "tabview"
+    } else {
+        return None;
+    };
+    let _ = probe.get_optional_space();
+    matches!(
+        probe.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd | Token::LeftBlockEnd
+    )
+    .then_some(tag)
+}
+
+fn consume_degraded_tabview_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    errors: &mut Vec<ParseError>,
+) -> Result<(), ParseError>
+where
+    'r: 't,
+{
+    let Some((depth, after_prefix)) = classify_quote_line(parser) else {
+        return Err(parser.make_err(ParseErrorKind::EndOfInput));
+    };
+    if end_block_tag_at(&after_prefix) != Some("tabview") {
+        return Err(parser.make_err(ParseErrorKind::EndOfInput));
+    }
+    let saved_cursor = parser.quote_body_cursor();
+    parser.install_quote_body_cursor(depth);
+    let result = parser.get_body_elements(&BLOCK_TABVIEW, false);
+    parser.set_quote_body_cursor(saved_cursor);
+    let (_elements, close_errors, _) = result?.into();
+    errors.extend(close_errors);
+    if parser.current().token == Token::LineBreak {
+        parser.step()?;
+    }
+    Ok(())
+}
+
+fn collect_quote_scan_line<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    errors: &mut Vec<ParseError>,
+) -> Result<(Vec<Element<'t>>, bool), ParseError>
+where
+    'r: 't,
+{
+    let line_end = std::iter::once(parser.current())
+        .chain(parser.remaining().iter())
+        .find(|token| {
+            matches!(
+                token.token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            )
+        })
+        .expect("tokenization always ends with input-end")
+        .span
+        .end;
+    let mut elements = Vec::new();
+    let mut paragraph_safe = true;
+    loop {
+        if matches!(
+            parser.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            break;
+        }
+        let before = parser.current().span.start;
+        let success = consume(parser)?;
+        let crate::parsing::ParseSuccess {
+            item,
+            errors: chunk_errors,
+            paragraph_safe: chunk_safe,
+            ..
+        } = success;
+        errors.extend(chunk_errors);
+        paragraph_safe &= chunk_safe;
+        match item {
+            Elements::Multiple(chunk) => elements.extend(chunk),
+            Elements::Single(element) => elements.push(element),
+            Elements::None => {}
+        }
+        if parser.current().span.start >= line_end || parser.current().span.start == before {
+            break;
+        }
+    }
+    Ok((elements, paragraph_safe))
+}
+
+fn gather_quote_ejecta_run<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    errors: &mut Vec<ParseError>,
+) -> Result<(Vec<Element<'t>>, bool), ParseError>
+where
+    'r: 't,
+{
+    let saved_cursor = parser.quote_body_cursor();
+    let saved_depth = parser.native_blockquote_depth();
+    parser.set_quote_body_cursor(None);
+    parser.set_native_blockquote_depth(None);
+    let rule = parser.rule();
+    let result = gather_paragraphs(parser, rule, Some(|p: &mut Parser<'r, 't>| {
+        Ok(p.start_of_line() && p.current().token == Token::Quote)
+    }));
+    parser.set_quote_body_cursor(saved_cursor);
+    parser.set_native_blockquote_depth(saved_depth);
+    let (elements, run_errors, paragraph_safe) = result?.into();
+    errors.extend(run_errors);
+    Ok((elements, paragraph_safe))
+}
+
+fn form_quote_scan_segment<'t>(
+    row_elements: Vec<Element<'t>>,
+    wrap_depth: usize,
+) -> Vec<Element<'t>> {
+    let mut stack = ParagraphStack::new_wikidot();
+    for element in row_elements {
+        stack.push_element(element, true);
+    }
+    stack.pop_line_break();
+    let mut formed = stack.into_elements();
+    for _ in 0..wrap_depth {
+        formed = vec![Element::Container(Container::new(
+            ContainerType::Blockquote,
+            formed,
+            AttributeMap::new(),
+        ))];
+    }
+    formed
+}
+
+fn flush_quote_scan_segment<'t>(
+    units: &mut Vec<QuoteEscapedUnit<'t>>,
+    pending: &mut Option<(usize, Vec<Element<'t>>)>,
+) {
+    if let Some((depth, elements)) = pending.take() {
+        units.push(QuoteEscapedUnit::Elements(
+            form_quote_scan_segment(elements, depth),
+            false,
+        ));
+    }
+}
+
+fn scan_tab_close_after_soft_end<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    required_depth: usize,
+    errors: &mut Vec<ParseError>,
+) -> Result<(), ParseError>
+where
+    'r: 't,
+{
+    let mut units: Vec<QuoteEscapedUnit<'t>> = Vec::new();
+    let mut pending_segment: Option<(usize, Vec<Element<'t>>)> = None;
+    loop {
+        match parser.current().token {
+            Token::InputEnd => {
+                return Err(parser.make_err(ParseErrorKind::EndOfInput));
+            }
+            Token::ParagraphBreak | Token::LineBreak => {
+                parser.step()?;
+            }
+            Token::Quote => {
+                let Some((depth, after_prefix)) = classify_quote_line(parser) else {
+                    return Err(parser.make_err(ParseErrorKind::EndOfInput));
+                };
+                if after_prefix.current().token == Token::LineBreak {
+                    while parser.current().token == Token::Quote {
+                        parser.step()?;
+                        parser.get_optional_space()?;
+                    }
+                    parser.step()?;
+                    continue;
+                }
+                match end_block_tag_at(&after_prefix) {
+                    Some("tabview") if depth <= required_depth => {
+                        return Err(parser.make_err(ParseErrorKind::EndOfInput));
+                    }
+                    Some("tab") if depth <= required_depth => {
+                        if depth < required_depth {
+                            parser.install_quote_body_cursor(depth);
+                        }
+                        let (_elements, close_errors, _) =
+                            parser.get_body_elements(&BLOCK_TAB, true)?.into();
+                        errors.extend(close_errors);
+                        flush_quote_scan_segment(&mut units, &mut pending_segment);
+                        break;
+                    }
+                    _ => {
+                        let saved_cursor = parser.quote_body_cursor();
+                        let saved_depth = parser.native_blockquote_depth();
+                        while parser.current().token == Token::Quote {
+                            parser.step()?;
+                            parser.get_optional_space()?;
+                        }
+                        if parser.current().token != Token::Quote {
+                            parser.mark_virtual_start_of_line();
+                        }
+                        parser.install_quote_body_cursor_at_current_line(depth);
+                        parser.set_native_blockquote_depth(Some(depth));
+                        let collected = collect_quote_scan_line(parser, errors);
+                        parser.set_quote_body_cursor(saved_cursor);
+                        parser.set_native_blockquote_depth(saved_depth);
+                        let (row_elements, row_safe) = collected?;
+                        if depth < required_depth {
+                            flush_quote_scan_segment(&mut units, &mut pending_segment);
+                            let run_ended = units.iter().any(|unit| {
+                                matches!(unit, QuoteEscapedUnit::Elements(..))
+                            });
+                            if run_ended {
+                                units.push(QuoteEscapedUnit::Elements(
+                                    form_quote_scan_segment(row_elements, depth),
+                                    false,
+                                ));
+                            } else {
+                                units.push(QuoteEscapedUnit::Row(
+                                    depth, row_elements, row_safe,
+                                ));
+                            }
+                        } else {
+                            match &mut pending_segment {
+                                Some((pending_depth, elements))
+                                    if *pending_depth == depth =>
+                                {
+                                    elements.push(Element::LineBreak);
+                                    elements.extend(row_elements);
+                                }
+                                _ => {
+                                    flush_quote_scan_segment(
+                                        &mut units,
+                                        &mut pending_segment,
+                                    );
+                                    pending_segment = Some((depth, row_elements));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {
+                flush_quote_scan_segment(&mut units, &mut pending_segment);
+                let (elements, safe) = gather_quote_ejecta_run(parser, errors)?;
+                units.push(QuoteEscapedUnit::Elements(elements, safe));
+            }
+        }
+    }
+    for unit in units {
+        parser.push_quote_escaped_unit(unit);
+    }
+    Ok(())
 }
 
 fn tab_label_finish<'t>(
@@ -979,7 +1285,20 @@ fn parse_tab<'r, 't>(
         }
     };
 
-    let (mut elements, errors, _) = parser.get_body_elements(&BLOCK_TAB, true)?.into();
+    let (mut elements, mut errors, _) = parser.get_body_elements(&BLOCK_TAB, true)?.into();
+    if parser.settings().layout.legacy()
+        && parser.wikidot_tab_quote_ejection()
+        && parser.quote_body_cursor().is_some()
+        && let Some(required_depth) = parser.native_blockquote_depth()
+    {
+        let mut probe = parser.clone();
+        if matches!(
+            probe.prepare_quote_body_line(),
+            Ok(QuoteBodyLineStatus::Boundary)
+        ) {
+            scan_tab_close_after_soft_end(parser, required_depth, &mut errors)?;
+        }
+    }
     if let Some(leftover) = leftover {
         elements.insert(0, Element::Text(std::borrow::Cow::Borrowed(leftover)));
     }

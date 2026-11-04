@@ -1,0 +1,7 @@
+[[tabview]]
+[[tab One]]
+Body one
+[[tab Two]]
+Body two
+[[/tab]]
+[[/tabview]]

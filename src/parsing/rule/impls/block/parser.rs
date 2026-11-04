@@ -1137,7 +1137,12 @@ where
             if restrict_quote_close && !parser.quote_body_close_allowed_here() {
                 let follows_only_literal_quotes =
                     parser.quote_body_close_follows_only_literal_quotes();
+                let follows_tab_close = block_rule.name == "block-tabview"
+                    && parser.settings().layout.legacy()
+                    && !parser.discarding_hidden_body()
+                    && parser.quote_body_close_follows_tab_close();
                 if !follows_only_literal_quotes
+                    && !follows_tab_close
                     && (!allow_inline_quote_close
                         || !matches!(
                             parser.current().token,
@@ -1145,6 +1150,9 @@ where
                         ))
                 {
                     return Ok(false);
+                }
+                if follows_tab_close {
+                    parser.get_optional_space()?;
                 }
                 while parser.current().token == Token::Quote {
                     parser.step()?;
@@ -1733,11 +1741,18 @@ where
         let allow_inline_quote_close = self.settings().layout.legacy()
             && !self.discarding_hidden_body()
             && block_rule.name == "block-collapsible";
-        let has_close = self.has_native_blockquote_body_end_with_mode(
-            block_rule,
-            required_depth,
-            allow_inline_quote_close,
-        );
+        let tabview_quote_ejection = self.settings().layout.legacy()
+            && !self.discarding_hidden_body()
+            && block_rule.name == "block-tabview";
+        let has_close = if tabview_quote_ejection {
+            self.has_native_blockquote_body_end_tolerant(block_rule)
+        } else {
+            self.has_native_blockquote_body_end_with_mode(
+                block_rule,
+                required_depth,
+                allow_inline_quote_close,
+            )
+        };
         let has_later_close =
             allow_inline_quote_close && !has_close && self.has_body_end_block(block_rule);
         if !has_close && !has_later_close {
@@ -1751,7 +1766,7 @@ where
             self.install_quote_body_cursor(required_depth);
         }
         let previous_boundary_policy = self.quote_boundary_closes_body();
-        self.set_quote_boundary_closes_body(has_later_close);
+        self.set_quote_boundary_closes_body(has_later_close || tabview_quote_ejection);
         let result = self.get_body_elements_internal(
             block_rule,
             as_paragraphs,
@@ -1887,7 +1902,10 @@ where
             );
             first = false;
 
-            if result.is_some() && nested_wikidot_tabs > 0 {
+            if result.is_some()
+                && nested_wikidot_tabs > 0
+                && parser.wikidot_later_tab_close_exists()
+            {
                 parser.update(&before_end);
                 if matches!(
                     before_end.current().token,
@@ -1922,6 +1940,29 @@ where
             Ok(result.is_some())
         };
         gather_paragraphs(self, rule, Some(is_end))
+    }
+
+    fn wikidot_later_tab_close_exists(&self) -> bool {
+        let mut scan = self.clone();
+        loop {
+            match scan.current().token {
+                Token::InputEnd => return false,
+                Token::LeftBlockEnd => {
+                    let mut end = scan.clone();
+                    if end.get_end_block().is_ok_and(|name| {
+                        name.strip_suffix('_')
+                            .unwrap_or(&name)
+                            .eq_ignore_ascii_case("tab")
+                    }) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+            if scan.step().is_err() {
+                return false;
+            }
+        }
     }
 
     fn wikidot_nested_tab_opener(&self) -> Option<usize> {
@@ -2879,6 +2920,10 @@ where
 
         loop {
             if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                if self.wikidot_tab_quote_ejection() && !self.discarding_hidden_body() {
+                    self.set_wikidot_body_soft_ended(true);
+                    return Ok(());
+                }
                 return Err(self.make_err(ParseErrorKind::EndOfInput));
             }
 
@@ -3419,6 +3464,90 @@ where
             #[cfg(test)]
             self.increment_quote_scan_token_visits();
             parser.step().expect("line break must precede input-end");
+        }
+    }
+
+    fn has_native_blockquote_body_end_tolerant(&self, block_rule: &BlockRule) -> bool {
+        let depth_key = usize::MAX;
+        let mut parser = self.clone();
+        let mut traversed_line_starts = Vec::new();
+        loop {
+            let line_start = parser.current().span.start;
+            if let Some(outcome) =
+                self.quote_scan_outcome((block_rule.name, depth_key, false, line_start))
+            {
+                self.cache_native_quote_scan(
+                    block_rule,
+                    depth_key,
+                    false,
+                    &traversed_line_starts,
+                    outcome,
+                );
+                return outcome == QuoteScanOutcome::HasCandidateClose;
+            }
+            traversed_line_starts.push(line_start);
+            match parser.current().token {
+                Token::InputEnd => {
+                    self.cache_native_quote_scan(
+                        block_rule,
+                        depth_key,
+                        false,
+                        &traversed_line_starts,
+                        QuoteScanOutcome::Missing,
+                    );
+                    return false;
+                }
+                Token::ParagraphBreak => {
+                    parser.step().expect("tokenization always ends with input-end");
+                    continue;
+                }
+                _ => {}
+            }
+            if let Some((_, _, after_prefix)) = parser.scan_absolute_quote_prefix(1) {
+                parser.update(&after_prefix);
+            }
+            loop {
+                let mut end = parser.clone();
+                let matching_close = end.get_end_block().is_ok_and(|name| {
+                    block_rule_accepts_end_name(
+                        block_rule,
+                        name.strip_suffix('_').unwrap_or(&name),
+                        self.settings().layout.legacy(),
+                    )
+                });
+                if matching_close {
+                    let _ = end.get_optional_space();
+                    if token_is_body_boundary(end.current().token) {
+                        self.cache_native_quote_scan(
+                            block_rule,
+                            depth_key,
+                            false,
+                            &traversed_line_starts,
+                            QuoteScanOutcome::HasCandidateClose,
+                        );
+                        return true;
+                    }
+                }
+                if token_is_body_boundary(parser.current().token) {
+                    break;
+                }
+                parser.step().expect("tokenization always ends with input-end");
+            }
+            match parser.current().token {
+                Token::LineBreak | Token::ParagraphBreak => {
+                    parser.step().expect("line break must precede input-end");
+                }
+                _ => {
+                    self.cache_native_quote_scan(
+                        block_rule,
+                        depth_key,
+                        false,
+                        &traversed_line_starts,
+                        QuoteScanOutcome::Missing,
+                    );
+                    return false;
+                }
+            }
         }
     }
 
