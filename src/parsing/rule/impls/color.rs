@@ -41,6 +41,7 @@ fn try_consume_fn<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create color container");
     let starts_line = parser.start_of_line();
+    let head_start = parser.current().span.start;
     assert_step(parser, Token::Color)?;
 
     let legacy = parser.settings().layout.legacy();
@@ -165,10 +166,22 @@ fn try_consume_fn<'r, 't>(
     }
 
     let spaces_vanish = legacy && !body_was_empty && elements.is_empty();
+    let space_survives = spaces_vanish
+        && !starts_line
+        && terminator.token == Token::Color
+        && ws_color_space_survives(
+            parser.full_text().inner(),
+            head_start,
+            terminator.span.end,
+            table_owned,
+        );
     let element = color_element(spec, elements);
     let mut output = Vec::with_capacity(3);
     if !starts_line && !spaces_vanish && let Some(space) = leading_space {
         output.push(space);
+    }
+    if space_survives {
+        output.push(text!(" "));
     }
     output.push(element);
     if !spaces_vanish && let Some(space) = trailing_space {
@@ -176,6 +189,44 @@ fn try_consume_fn<'r, 't>(
     }
 
     ok!(paragraph_safe; Elements::Multiple(output), errors)
+}
+
+fn ws_color_space_survives(
+    source: &str,
+    head_start: usize,
+    close_end: usize,
+    table_owned: bool,
+) -> bool {
+    let bytes = source.as_bytes();
+    if head_start == 0 || close_end >= bytes.len() {
+        return false;
+    }
+    let prev = bytes[head_start - 1];
+    if matches!(prev, b' ' | b'\t' | b'\n' | b'\r') {
+        return false;
+    }
+    if prev == b']' {
+        let before = &source[..head_start];
+        if before.ends_with("]]")
+            && let Some(open) = before.rfind("[[")
+        {
+            let after = &before[open + 2..];
+            if !after.starts_with('/') && !after.starts_with('[') {
+                return false;
+            }
+        }
+    }
+    let next = bytes[close_end];
+    if matches!(next, b' ' | b'\t' | b'\n' | b'\r') {
+        return false;
+    }
+    if source[close_end..].starts_with("[[/") {
+        return false;
+    }
+    if table_owned && next == b'|' {
+        return false;
+    }
+    true
 }
 
 fn is_table_column_token(token: Token) -> bool {

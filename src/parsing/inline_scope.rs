@@ -626,6 +626,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes<'t>(elements: &mut Vec<Element<'t
         &mut trim_next_break,
     );
     drop_empty_inline_scopes(elements);
+    drop_vanished_paragraphs(elements);
 }
 
 pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
@@ -648,6 +649,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     );
     eject_segment_trailing_space(elements);
     drop_empty_inline_scopes(elements);
+    drop_vanished_paragraphs(elements);
 }
 
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
@@ -2103,6 +2105,48 @@ fn drop_empty_inline_scopes(elements: &mut Vec<Element>) {
         } else {
             index += 1;
         }
+    }
+}
+
+fn drop_vanished_paragraphs(elements: &mut Vec<Element>) {
+    for element in elements.iter_mut() {
+        visit_children_mut(element, &mut |children| {
+            drop_vanished_paragraphs(children)
+        });
+        if let Element::List { items, .. } = element {
+            items.retain(|item| !vanished_list_item(item));
+        }
+    }
+    elements.retain(|element| !vanished_block(element));
+}
+
+fn all_whitespace_text(elements: &[Element]) -> bool {
+    elements.iter().all(|child| {
+        matches!(child, Element::Text(text) if text.chars().all(|c| matches!(c as u32, 32 | 9 | 10 | 13)))
+    })
+}
+
+fn vanished_block(element: &Element) -> bool {
+    match element {
+        Element::Container(container) => {
+            matches!(
+                container.ctype(),
+                ContainerType::Paragraph | ContainerType::Blockquote
+            ) && container.attributes().get().is_empty()
+                && all_whitespace_text(container.elements())
+        }
+        Element::List { items, .. } => items.is_empty(),
+        _ => false,
+    }
+}
+
+fn vanished_list_item(item: &ListItem) -> bool {
+    match item {
+        ListItem::Elements {
+            attributes,
+            elements,
+        } => attributes.get().is_empty() && all_whitespace_text(elements),
+        ListItem::SubList { .. } => false,
     }
 }
 
