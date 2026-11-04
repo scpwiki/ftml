@@ -190,7 +190,7 @@ where
                 Elements::Single(element) => vec![element],
                 Elements::None => Vec::new(),
             };
-            if let Some(Element::Partial(PartialElement::InlineSpanOpen(attributes))) =
+            if let Some(Element::Partial(PartialElement::InlineSpanOpen(attributes, ..))) =
                 elements.first_mut()
             {
                 attributes.insert(WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE, cow!(""));

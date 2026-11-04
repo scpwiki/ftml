@@ -176,8 +176,8 @@ pub fn collect_consume_keep_split<'r, 't>(
         } = success;
         for element in elements.as_ref() {
             match element {
-                Element::Partial(PartialElement::InlineSpanOpen(_))
-                | Element::Partial(PartialElement::InlineSizeOpen(_)) => {
+                Element::Partial(PartialElement::InlineSpanOpen(..))
+                | Element::Partial(PartialElement::InlineSizeOpen(..)) => {
                     inline_scope_depth += 1;
                 }
                 Element::Partial(PartialElement::InlineSpanClose(_))

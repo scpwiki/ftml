@@ -336,9 +336,9 @@ fn exercise_partial_element_helpers(partial: &PartialElement<'_>) -> usize {
 
     match partial {
         PartialElement::WikidotEmptyInlineOwner
-        | PartialElement::InlineSizeOpen(_)
+        | PartialElement::InlineSizeOpen(..)
         | PartialElement::InlineSizeClose(_)
-        | PartialElement::InlineSpanOpen(_)
+        | PartialElement::InlineSpanOpen(..)
         | PartialElement::InlineSpanClose(_)
         | PartialElement::InlineFormatOpen(_)
         | PartialElement::InlineFormatClose(_)

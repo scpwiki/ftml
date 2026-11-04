@@ -126,6 +126,13 @@ fn parse_fn<'r, 't>(
         };
     let generated = parser.generated_until_right_block();
     let arguments = parser.get_head_map_wikidot(&BLOCK_SPAN, in_head)?;
+    let head_source = if wikidot_head_source(parser, opener_start).is_empty() {
+        Cow::Borrowed("")
+    } else {
+        Cow::Borrowed(
+            &parser.full_text().inner()[opener_start..parser.current().span.start],
+        )
+    };
     let scored_starts_next_physical_line = flag_score
         && matches!(
             parser.current().token,
@@ -186,26 +193,20 @@ fn parse_fn<'r, 't>(
                 attributes.insert(WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE, cow!(""));
             }
         }
-        let span = Element::Partial(PartialElement::InlineSpanOpen(attributes));
         let leading_separator = !in_head
             && !flag_score
             && wikidot_body_leading_separator(parser, opener_start);
+        let span = Element::Partial(PartialElement::InlineSpanOpen(
+            attributes,
+            head_source,
+            leading_separator,
+        ));
         if flag_score && in_head && parser.current().token == Token::Whitespace {
             parser.step()?;
         }
         parser.enter_wikidot_span_body(flag_score);
         return if generated.is_empty() {
-            if leading_separator {
-                ok!(Elements::Multiple(vec![text!(" "), span]))
-            } else {
-                ok!(span)
-            }
-        } else if leading_separator {
-            ok!(Elements::Multiple(vec![
-                text!(" "),
-                span,
-                Element::Delayed(DelayedElement::suppressed(&generated)),
-            ]))
+            ok!(span)
         } else {
             ok!(Elements::Multiple(vec![
                 span,
@@ -630,3 +631,19 @@ mod tests {
     }
 }
 
+pub(super) fn wikidot_head_source<'r, 't>(
+    parser: &Parser<'r, 't>,
+    opener_start: usize,
+) -> Cow<'t, str> {
+    let source = parser.full_text().inner();
+    let end = parser.current().span.start;
+    if opener_start > end {
+        return Cow::Borrowed("");
+    }
+    let slice = source[opener_start..end].trim_end_matches([' ', '\t']);
+    if slice.ends_with("]]") {
+        Cow::Borrowed(slice)
+    } else {
+        Cow::Borrowed("")
+    }
+}

@@ -2311,9 +2311,9 @@ fn dash_unit(element: &Element<'_>, admit_link: bool) -> DashUnit {
         Element::LineBreak => DashUnit::Atom('\n'),
         Element::Partial(partial) => match partial {
             PartialElement::WikidotEmptyInlineOwner
-            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_)
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
@@ -3763,9 +3763,9 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             PartialElement::Tab(tab) => visit(&mut tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&mut ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner
-            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_)
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)

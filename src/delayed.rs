@@ -895,9 +895,9 @@ fn resolve_elements(
                     resolve_elements(&mut text.elements, bindings, resolved_occurrences)?;
                 }
                 PartialElement::WikidotEmptyInlineOwner
-                | PartialElement::InlineSizeOpen(_)
+                | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
-                | PartialElement::InlineSpanOpen(_)
+                | PartialElement::InlineSpanOpen(..)
                 | PartialElement::InlineSpanClose(_)
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
@@ -971,9 +971,9 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
             PartialElement::Tab(tab) => elements_contain_delayed(&tab.elements),
             PartialElement::RubyText(text) => elements_contain_delayed(&text.elements),
             PartialElement::WikidotEmptyInlineOwner
-            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_)
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)

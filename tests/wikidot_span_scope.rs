@@ -29,9 +29,9 @@ fn render(source: &str) -> (String, Vec<ftml::parsing::ParseError>) {
 fn contains_inline_control(elements: &[Element<'_>]) -> bool {
     elements.iter().any(|element| match element {
         Element::Partial(
-            PartialElement::InlineSizeOpen(_)
+            PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_),
         ) => true,
         Element::Container(container) => contains_inline_control(container.elements()),

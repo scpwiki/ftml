@@ -101,7 +101,7 @@ fn is_safe_size_value(size: &str) -> bool {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -113,13 +113,15 @@ fn parse_fn<'r, 't>(
 
     let size =
         parser.get_head_value_resolved(&BLOCK_SIZE, in_head, parse_size_argument)?;
+    let head_source = super::span::wikidot_head_source(parser, opener_start);
 
     if parser.settings().layout.legacy() {
         if !parser.has_body_end_block(&BLOCK_SIZE) {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
         return ok!(Element::Partial(PartialElement::InlineSizeOpen(
-            Cow::Owned(size)
+            Cow::Owned(size),
+            head_source,
         )));
     }
 

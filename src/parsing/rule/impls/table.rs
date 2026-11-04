@@ -113,7 +113,7 @@ fn clip_wikidot_inline_scopes_at_cell_boundary<'t>(
     let mut sizes = 0usize;
     let mut anchors = 0usize;
     elements.retain(|element| match element {
-        Element::Partial(PartialElement::InlineSpanOpen(_)) => {
+        Element::Partial(PartialElement::InlineSpanOpen(..)) => {
             spans += 1;
             true
         }
@@ -125,7 +125,7 @@ fn clip_wikidot_inline_scopes_at_cell_boundary<'t>(
             spans -= 1;
             true
         }
-        Element::Partial(PartialElement::InlineSizeOpen(_)) => {
+        Element::Partial(PartialElement::InlineSizeOpen(..)) => {
             sizes += 1;
             true
         }
@@ -194,11 +194,11 @@ fn close_wikidot_inline_scopes<'t>(
     let mut anchors = 0usize;
     for element in elements.iter() {
         match element {
-            Element::Partial(PartialElement::InlineSpanOpen(_)) => spans += 1,
+            Element::Partial(PartialElement::InlineSpanOpen(..)) => spans += 1,
             Element::Partial(PartialElement::InlineSpanClose(_)) => {
                 spans = spans.saturating_sub(1)
             }
-            Element::Partial(PartialElement::InlineSizeOpen(_)) => sizes += 1,
+            Element::Partial(PartialElement::InlineSizeOpen(..)) => sizes += 1,
             Element::Partial(PartialElement::InlineSizeClose(_)) => {
                 sizes = sizes.saturating_sub(1)
             }
@@ -279,11 +279,11 @@ fn close_nested_inline_scopes<'t>(
     let mut anchors = 0usize;
     for element in elements.iter() {
         match element {
-            Element::Partial(PartialElement::InlineSpanOpen(_)) => spans += 1,
+            Element::Partial(PartialElement::InlineSpanOpen(..)) => spans += 1,
             Element::Partial(PartialElement::InlineSpanClose(_)) => {
                 spans = spans.saturating_sub(1)
             }
-            Element::Partial(PartialElement::InlineSizeOpen(_)) => sizes += 1,
+            Element::Partial(PartialElement::InlineSizeOpen(..)) => sizes += 1,
             Element::Partial(PartialElement::InlineSizeClose(_)) => {
                 sizes = sizes.saturating_sub(1)
             }

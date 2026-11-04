@@ -167,9 +167,9 @@ where
                 rewrite_elements(&mut text.elements, apply_typography, classify)?;
             }
             PartialElement::WikidotEmptyInlineOwner
-            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_)
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)

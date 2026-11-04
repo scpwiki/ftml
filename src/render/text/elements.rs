@@ -264,9 +264,9 @@ fn render_partial(ctx: &mut TextContext, partial: &PartialElement) {
 
     match partial {
         PartialElement::WikidotEmptyInlineOwner
-        | PartialElement::InlineSizeOpen(_)
+        | PartialElement::InlineSizeOpen(..)
         | PartialElement::InlineSizeClose(_)
-        | PartialElement::InlineSpanOpen(_)
+        | PartialElement::InlineSpanOpen(..)
         | PartialElement::InlineSpanClose(_)
         | PartialElement::InlineFormatOpen(_)
         | PartialElement::InlineFormatClose(_)

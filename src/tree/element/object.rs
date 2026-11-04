@@ -447,9 +447,9 @@ impl Element<'_> {
                     offset_elements(&mut ruby_text.elements);
                 }
                 PartialElement::WikidotEmptyInlineOwner
-                | PartialElement::InlineSizeOpen(_)
+                | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
-                | PartialElement::InlineSpanOpen(_)
+                | PartialElement::InlineSpanOpen(..)
                 | PartialElement::InlineSpanClose(_)
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)

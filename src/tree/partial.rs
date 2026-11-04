@@ -80,11 +80,11 @@ impl InlineFormatKind {
 pub enum PartialElement<'t> {
     WikidotEmptyInlineOwner,
 
-    InlineSizeOpen(Cow<'t, str>),
+    InlineSizeOpen(Cow<'t, str>, Cow<'t, str>),
 
     InlineSizeClose(Cow<'t, str>),
 
-    InlineSpanOpen(AttributeMap<'t>),
+    InlineSpanOpen(AttributeMap<'t>, Cow<'t, str>, bool),
 
     InlineSpanClose(Cow<'t, str>),
 
@@ -115,9 +115,9 @@ impl PartialElement<'_> {
     pub fn name(&self) -> &'static str {
         match self {
             PartialElement::WikidotEmptyInlineOwner => "WikidotEmptyInlineOwner",
-            PartialElement::InlineSizeOpen(_) => "InlineSizeOpen",
+            PartialElement::InlineSizeOpen(..) => "InlineSizeOpen",
             PartialElement::InlineSizeClose(_) => "InlineSizeClose",
-            PartialElement::InlineSpanOpen(_) => "InlineSpanOpen",
+            PartialElement::InlineSpanOpen(..) => "InlineSpanOpen",
             PartialElement::InlineSpanClose(_) => "InlineSpanClose",
             PartialElement::InlineFormatOpen(_) => "InlineFormatOpen",
             PartialElement::InlineFormatClose(_) => "InlineFormatClose",
@@ -137,9 +137,9 @@ impl PartialElement<'_> {
     pub fn parse_error_kind(&self) -> ParseErrorKind {
         match self {
             PartialElement::WikidotEmptyInlineOwner
-            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_)
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
@@ -160,14 +160,21 @@ impl PartialElement<'_> {
             PartialElement::WikidotEmptyInlineOwner => {
                 PartialElement::WikidotEmptyInlineOwner
             }
-            PartialElement::InlineSizeOpen(value) => {
-                PartialElement::InlineSizeOpen(Cow::Owned(value.to_string()))
+            PartialElement::InlineSizeOpen(value, head) => {
+                PartialElement::InlineSizeOpen(
+                    Cow::Owned(value.to_string()),
+                    Cow::Owned(head.to_string()),
+                )
             }
             PartialElement::InlineSizeClose(source) => {
                 PartialElement::InlineSizeClose(Cow::Owned(source.to_string()))
             }
-            PartialElement::InlineSpanOpen(attributes) => {
-                PartialElement::InlineSpanOpen(attributes.to_owned())
+            PartialElement::InlineSpanOpen(attributes, head, separator) => {
+                PartialElement::InlineSpanOpen(
+                    attributes.to_owned(),
+                    Cow::Owned(head.to_string()),
+                    *separator,
+                )
             }
             PartialElement::InlineSpanClose(source) => {
                 PartialElement::InlineSpanClose(Cow::Owned(source.to_string()))
@@ -215,9 +222,9 @@ impl PartialElement<'_> {
         matches!(
             self,
             PartialElement::WikidotEmptyInlineOwner
-                | PartialElement::InlineSizeOpen(_)
+                | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
-                | PartialElement::InlineSpanOpen(_)
+                | PartialElement::InlineSpanOpen(..)
                 | PartialElement::InlineSpanClose(_)
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
@@ -315,9 +322,9 @@ mod tests {
             assert_eq!(partial.to_owned(), partial);
         }
         for partial in [
-            PartialElement::InlineSizeOpen(cow!("font-size: larger;")),
+            PartialElement::InlineSizeOpen(cow!("font-size: larger;"), cow!("")),
             PartialElement::InlineSizeClose(cow!("[[/SiZe]]")),
-            PartialElement::InlineSpanOpen(AttributeMap::new()),
+            PartialElement::InlineSpanOpen(AttributeMap::new(), cow!(""), false),
             PartialElement::InlineSpanClose(cow!("[[/span]]")),
             PartialElement::InlineFormatOpen(InlineFormatKind::Bold),
             PartialElement::InlineFormatClose(InlineFormatKind::Monospace),

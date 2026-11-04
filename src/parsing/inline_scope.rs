@@ -753,7 +753,16 @@ impl PendingScopes {
     ) {
         let close = *ordinal;
         *ordinal += 1;
-        if let Some(open) = self.stack_mut(class).pop() {
+        let stack = self.stack_mut(class);
+        let popped = if !synthetic
+            && matches!(class, ScopeClass::Span | ScopeClass::Size)
+            && !stack.is_empty()
+        {
+            Some(stack.remove(0))
+        } else {
+            stack.pop()
+        };
+        if let Some(open) = popped {
             if open.accepted {
                 self.active_count -= 1;
                 if synthetic {
@@ -1059,13 +1068,13 @@ fn collect_valid_pairs(
 ) {
     for element in elements {
         match element {
-            Element::Partial(PartialElement::InlineSizeOpen(_)) => {
+            Element::Partial(PartialElement::InlineSizeOpen(..)) => {
                 pending.open(ScopeClass::Size, ordinal);
             }
             Element::Partial(PartialElement::InlineSizeClose(source)) => {
                 pending.close(ScopeClass::Size, ordinal, valid, source.is_empty());
             }
-            Element::Partial(PartialElement::InlineSpanOpen(_)) => {
+            Element::Partial(PartialElement::InlineSpanOpen(..)) => {
                 pending.open(ScopeClass::Span, ordinal);
             }
             Element::Partial(PartialElement::InlineSpanClose(source)) => {
@@ -1174,7 +1183,9 @@ fn lower_sequence<'t>(
                     && sequence_ends_with_space(&output, &run);
             continue;
         }
-        if let Element::Partial(PartialElement::InlineSizeOpen(style)) = element {
+        if let Element::Partial(PartialElement::InlineSizeOpen(style, head_source)) =
+            element
+        {
             flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
             let current = *ordinal;
             *ordinal += 1;
@@ -1204,6 +1215,8 @@ fn lower_sequence<'t>(
                     false,
                 );
                 active.record_open_instance(current);
+            } else if !head_source.is_empty() {
+                run.push(Element::Text(head_source));
             }
             continue;
         }
@@ -1295,7 +1308,11 @@ fn lower_sequence<'t>(
         {
             *wikidot_label_spans = active.wikidot_label_spans();
         }
-        if let Element::Partial(PartialElement::InlineSpanOpen(mut attributes)) = element
+        if let Element::Partial(PartialElement::InlineSpanOpen(
+            mut attributes,
+            head_source,
+            body_separator,
+        )) = element
         {
             let at_start = output.is_empty() && run.is_empty();
             let scored = attributes.remove("data-ftml-score-span").is_some();
@@ -1314,6 +1331,15 @@ fn lower_sequence<'t>(
             let current = *ordinal;
             *ordinal += 1;
             if valid.contains(&current) {
+                if body_separator {
+                    run.push(text!(" "));
+                    flush_run(
+                        &mut output,
+                        &mut run,
+                        active,
+                        &mut last_run_outer_scope,
+                    );
+                }
                 let leading_space =
                     matches!(source.peek(), Some(Element::Text(text)) if text == " ");
                 if leading_space {
@@ -1343,6 +1369,8 @@ fn lower_sequence<'t>(
                         at_start && scored_starts_next_physical_line;
                     *trim_next_break = true;
                 }
+            } else if !scored && !head_source.is_empty() {
+                run.push(Element::Text(head_source));
             }
             continue;
         }
@@ -2469,9 +2497,9 @@ fn contains_inline_scope_control(element: &Element<'_>) -> bool {
     if matches!(
         element,
         Element::Partial(
-            PartialElement::InlineSizeOpen(_)
+            PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
-                | PartialElement::InlineSpanOpen(_)
+                | PartialElement::InlineSpanOpen(..)
                 | PartialElement::InlineSpanClose(_)
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
@@ -2519,9 +2547,9 @@ fn inline_scope_controls_are_self_contained(element: &Element<'_>) -> bool {
 
 fn partial_scope_class(partial: &PartialElement<'_>) -> Option<(usize, bool)> {
     match partial {
-        PartialElement::InlineSizeOpen(_) => Some((0, true)),
+        PartialElement::InlineSizeOpen(..) => Some((0, true)),
         PartialElement::InlineSizeClose(_) => Some((0, false)),
-        PartialElement::InlineSpanOpen(_) => Some((1, true)),
+        PartialElement::InlineSpanOpen(..) => Some((1, true)),
         PartialElement::InlineSpanClose(_) => Some((1, false)),
         PartialElement::InlineFormatOpen(kind) => {
             Some((2 + format_class_index(*kind), true))
@@ -2684,9 +2712,9 @@ fn visit_children<'t>(element: &Element<'t>, visit: &mut dyn FnMut(&[Element<'t>
             PartialElement::Tab(tab) => visit(&tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner
-            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_)
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
@@ -2751,9 +2779,9 @@ fn visit_children_mut<'t>(
             PartialElement::Tab(tab) => visit(&mut tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&mut ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner
-            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
-            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanOpen(..)
             | PartialElement::InlineSpanClose(_)
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
@@ -2891,7 +2919,7 @@ mod tests {
             ListItem::Elements {
                 attributes: AttributeMap::new(),
                 elements: vec![
-                    Element::Partial(PartialElement::InlineSizeOpen(cow!("170%"))),
+                    Element::Partial(PartialElement::InlineSizeOpen(cow!("170%"), cow!(""))),
                     text!("partial body"),
                     Element::Partial(PartialElement::InlineSizeClose(cow!("[[/size]]"))),
                 ],
@@ -2938,7 +2966,7 @@ mod tests {
         for _ in 0..(MAX_ACTIVE_INLINE_SCOPES + 1) {
             elements.push(Element::Partial(PartialElement::InlineSizeOpen(cow!(
                 "font-size: larger;"
-            ))));
+            ), cow!(""))));
         }
         elements.push(text!("bounded"));
         for _ in 0..(MAX_ACTIVE_INLINE_SCOPES + 1) {
@@ -2960,7 +2988,7 @@ mod tests {
         let mut elements = vec![Element::Container(Container::new(
             ContainerType::Paragraph,
             vec![
-                Element::Partial(PartialElement::InlineSizeOpen(cow!("font-size:0%;"))),
+                Element::Partial(PartialElement::InlineSizeOpen(cow!("font-size:0%;"), cow!(""))),
                 text!("literal"),
                 text!(" "),
                 Element::Partial(PartialElement::InlineSizeClose(cow!("[[/size]]"))),
@@ -2995,10 +3023,10 @@ mod tests {
         for kind in &kinds {
             match kind {
                 ScopeKind::Size => elements.push(Element::Partial(
-                    PartialElement::InlineSizeOpen(cow!("font-size: larger;")),
+                    PartialElement::InlineSizeOpen(cow!("font-size: larger;"), cow!("")),
                 )),
                 ScopeKind::Span => elements.push(Element::Partial(
-                    PartialElement::InlineSpanOpen(AttributeMap::new()),
+                    PartialElement::InlineSpanOpen(AttributeMap::new(), cow!(""), false),
                 )),
                 ScopeKind::Format(_) | ScopeKind::Color | ScopeKind::Anchor => unreachable!(),
             }
@@ -3032,7 +3060,7 @@ mod tests {
         for _ in 0..(MAX_ACTIVE_INLINE_SCOPES + 1) {
             elements.push(Element::Partial(PartialElement::InlineSizeOpen(cow!(
                 "font-size: larger;"
-            ))));
+            ), cow!(""))));
         }
         elements.push(text!("unmatched"));
 

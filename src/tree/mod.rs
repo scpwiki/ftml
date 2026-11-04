@@ -398,9 +398,9 @@ fn collect_page_references(
                     collect_page_references(&ruby_text.elements, references, seen);
                 }
                 PartialElement::WikidotEmptyInlineOwner
-                | PartialElement::InlineSizeOpen(_)
+                | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
-                | PartialElement::InlineSpanOpen(_)
+                | PartialElement::InlineSpanOpen(..)
                 | PartialElement::InlineSpanClose(_)
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
@@ -497,9 +497,9 @@ fn collect_user_references(
                     collect_user_references(&ruby_text.elements, references, seen);
                 }
                 PartialElement::WikidotEmptyInlineOwner
-                | PartialElement::InlineSizeOpen(_)
+                | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
-                | PartialElement::InlineSpanOpen(_)
+                | PartialElement::InlineSpanOpen(..)
                 | PartialElement::InlineSpanClose(_)
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)

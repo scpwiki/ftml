@@ -151,9 +151,9 @@ fn tree_stack_depth_reaches_threshold<'a>(
                     push_tree_elements(stack, &ruby.elements, child_depth)
                 }
                 PartialElement::WikidotEmptyInlineOwner
-                | PartialElement::InlineSizeOpen(_)
+                | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
-                | PartialElement::InlineSpanOpen(_)
+                | PartialElement::InlineSpanOpen(..)
                 | PartialElement::InlineSpanClose(_)
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
