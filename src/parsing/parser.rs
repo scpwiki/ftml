@@ -183,6 +183,8 @@ pub struct Parser<'r, 't> {
     underline_fast_path_visits: Rc<Cell<usize>>,
     #[cfg(test)]
     block_end_scan_token_visits: Rc<Cell<usize>>,
+    #[cfg(test)]
+    segment_scan_token_visits: Rc<Cell<usize>>,
 
     accepts_partial: AcceptsPartial,
     accepts_partial_depth: u16,
@@ -249,6 +251,8 @@ impl<'r, 't> Parser<'r, 't> {
             underline_fast_path_visits: Rc::new(Cell::new(0)),
             #[cfg(test)]
             block_end_scan_token_visits: Rc::new(Cell::new(0)),
+            #[cfg(test)]
+            segment_scan_token_visits: Rc::new(Cell::new(0)),
             accepts_partial: AcceptsPartial::None,
             accepts_partial_depth: 0,
             in_footnote: false,
@@ -1046,6 +1050,22 @@ impl<'r, 't> Parser<'r, 't> {
     pub(crate) fn increment_block_end_scan_token_visits(&self) {
         self.block_end_scan_token_visits
             .set(self.block_end_scan_token_visits.get() + 1);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn segment_scan_token_visits(&self) -> usize {
+        self.segment_scan_token_visits.get()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn increment_segment_scan_token_visits(&self) {
+        self.add_segment_scan_token_visits(1);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn add_segment_scan_token_visits(&self, count: usize) {
+        self.segment_scan_token_visits
+            .set(self.segment_scan_token_visits.get() + count);
     }
 
     #[cfg(test)]

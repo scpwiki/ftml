@@ -42,6 +42,8 @@ pub(crate) use self::comment::{
 pub use self::consume::{collect_consume, collect_consume_before, collect_consume_keep};
 pub use self::container::collect_container;
 pub use self::generic::collect;
+#[cfg(test)]
+pub(crate) use self::iftags::iftags_segment;
 pub(crate) use self::iftags::{
     complete_fused_bracket_close, consume_iftags_segment, consume_iftags_segment_fused,
     iftags_segment_fused,
