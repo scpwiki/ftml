@@ -122,6 +122,10 @@ fn try_consume_fn<'r, 't>(
         return ok!(false; Elements::None);
     }
 
+    if parser.wikidot_footnote_zone_blocks(parser.current().span.start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let mut depths = Vec::new();
     let mut escaped_rows = Vec::new();
     let mut escaped_elements = Vec::new();

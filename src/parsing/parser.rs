@@ -129,6 +129,7 @@ pub(super) struct BlockScanCache {
     // Designated `[[/iftags]]` byte offset for the Wikidot pairing gather
     // currently in progress (#792); see `Parser::wikidot_iftags_body_end`.
     wikidot_iftags_body_end: Cell<Option<usize>>,
+    wikidot_footnote_zone_until: Cell<Option<usize>>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
 }
@@ -288,6 +289,31 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_iftags_body_end
             .set(value);
+    }
+
+    #[inline]
+    pub(crate) fn wikidot_footnote_zone_until(&self) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_footnote_zone_until
+            .get()
+    }
+
+    #[inline]
+    pub(crate) fn set_wikidot_footnote_zone_until(&self, value: Option<usize>) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_footnote_zone_until
+            .set(value);
+    }
+
+    pub(crate) fn wikidot_footnote_zone_blocks(&self, offset: usize) -> bool {
+        self.settings().layout.legacy()
+            && self.in_footnote()
+            && matches!(
+                self.wikidot_footnote_zone_until(),
+                Some(until) if offset < until
+            )
     }
 
     #[inline]

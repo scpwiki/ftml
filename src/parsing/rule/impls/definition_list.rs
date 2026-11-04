@@ -73,6 +73,10 @@ fn parse_definition_list<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create a definition list");
 
+    if parser.wikidot_footnote_zone_blocks(parser.current().span.start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let mut items = Vec::new();
     let mut errors = Vec::new();
     let mut paragraph_safe = false;

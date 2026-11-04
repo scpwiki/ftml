@@ -400,6 +400,10 @@ fn try_consume_fn<'r, 't>(
         return ok!(text!(literal));
     }
 
+    if parser.wikidot_footnote_zone_blocks(parser.current().span.start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let mut rows = Vec::new();
     let mut errors = Vec::new();
     let mut paragraph_break = false;

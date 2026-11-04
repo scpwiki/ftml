@@ -68,6 +68,14 @@ fn parse_tabview<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    if parser.wikidot_footnote_zone_blocks(opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    if parser.settings().layout.legacy() && parser.in_wikidot_bibliography_body() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let parser = &mut ParserWrap::new(parser, AcceptsPartial::Tab);
 
     debug!("Parsing tabview block (name '{name}', in-head {in_head})");

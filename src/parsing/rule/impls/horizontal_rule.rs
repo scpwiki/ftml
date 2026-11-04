@@ -32,6 +32,9 @@ fn try_consume_fn<'r, 't>(
     debug!("Consuming token to create a horizontal rule");
     let source = parser.full_text().inner().as_bytes();
     let start = parser.current().span.start;
+    if parser.wikidot_footnote_zone_blocks(start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let physical_line_start =
         start == 0 || matches!(source.get(start - 1), Some(b'\n' | b'\r'));
     if !physical_line_start && !parser.in_native_blockquote_line() {
