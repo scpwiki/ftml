@@ -129,28 +129,6 @@ fn wikidot_next_line_opens_div(source: &str, mut position: usize) -> bool {
         )
 }
 
-fn wikidot_div_end_blocks_after(parser: &Parser<'_, '_>, limit: usize) -> usize {
-    let mut scan = parser.clone();
-    let mut count = 0;
-    while scan.current().token != Token::InputEnd {
-        if scan.current().token == Token::LeftBlockEnd
-            && scan.look_ahead(0).is_some_and(|token| {
-                token.token == Token::Identifier
-                    && token.slice.eq_ignore_ascii_case("div")
-            })
-        {
-            count += 1;
-            if count > limit {
-                break;
-            }
-        }
-        if scan.step().is_err() {
-            break;
-        }
-    }
-    count
-}
-
 fn try_recover_wikidot_div_literal<'r, 't>(
     parser: &mut Parser<'r, 't>,
     owner_start: usize,
@@ -586,16 +564,14 @@ fn parse_fn<'r, 't>(
         && !parser.discarding_hidden_body()
         && parser.native_blockquote_depth().is_none()
         && parser.accepts_partial() != AcceptsPartial::ListItem
+        && parser.wikidot_div_opener_is_excess(opener_start)
     {
-        let depth = parser.wikidot_div_body_depth();
-        if wikidot_div_end_blocks_after(parser, depth) <= depth {
-            let head_end = parser.current().span.start;
-            let literal_end = source[..head_end].trim_end_matches(['\r', '\n']).len();
-            let literal = text!(&source[opener_start..literal_end]);
-            let elements = Elements::Multiple(vec![literal, Element::LineBreak]);
-            let paragraph_safe = elements.paragraph_safe();
-            return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
-        }
+        let head_end = parser.current().span.start;
+        let literal_end = source[..head_end].trim_end_matches(['\r', '\n']).len();
+        let literal = text!(&source[opener_start..literal_end]);
+        let elements = Elements::Multiple(vec![literal, Element::LineBreak]);
+        let paragraph_safe = elements.paragraph_safe();
+        return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
     }
 
     let wrap_paragraphs = !flag_score;
@@ -967,6 +943,49 @@ mod tests {
             render_preprocessed_wikidot(source),
             "<div><p>[[div]]<br>\nx</p></div>",
         );
+    }
+
+    #[test]
+    fn wikidot_div_excess_opener_after_blank_line_stays_literal() {
+        let source = "[[div]]\na\n\n[[div]]\nb\n[[/div]]\n";
+        assert_eq!(
+            render_preprocessed_wikidot(source),
+            "<div><p>a</p><p>[[div]]<br>\nb</p></div>",
+        );
+    }
+
+    #[test]
+    fn wikidot_div_surplus_close_stays_in_its_own_stream_region() {
+        let source = "[[div]]\nx\n[[/div]]\n[[/div]]\n[[div]]\n[[div]]\ny\n[[/div]]\n";
+        assert_eq!(
+            render_preprocessed_wikidot_allowing_errors(source),
+            "<div><p>x</p></div><br>\n[[/div]]<div><p>[[div]]<br>\ny</p></div>",
+        );
+    }
+
+    #[test]
+    fn wikidot_div_deficit_opener_inside_open_region_stays_literal() {
+        let source = "[[div]]\n[[div]]\nx\n[[/div]]\n[[div]]\ny\n[[/div]]\n";
+        assert_eq!(
+            render_preprocessed_wikidot(source),
+            "<div><div><p>x</p></div><p>[[div]]<br>\ny</p></div>",
+        );
+    }
+
+    #[test]
+    fn wikidot_div_crossed_center_close_keeps_following_div() {
+        let source = concat!(
+            "[[=]]\n",
+            "[[collapsible]]\n",
+            "[[/=]]\n",
+            "[[div]]\n",
+            "INNER\n",
+            "[[/div]]\n",
+            "[[/collapsible]]\n",
+        );
+        let html = render_preprocessed_wikidot(source);
+        assert!(html.contains("<div><p>INNER</p></div>"), "{html}");
+        assert!(!html.contains("[[div]]"), "{html}");
     }
 
     #[test]

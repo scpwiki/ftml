@@ -1,6 +1,7 @@
 use super::Parser;
-use crate::parsing::Token;
 use crate::parsing::condition::SplitDelimiter;
+use crate::parsing::{ExtractedToken, Token};
+use std::collections::BTreeMap;
 
 const COLLAPSIBLE: u16 = 1 << 0;
 const QUOTE_BOUNDARY_CLOSES_BODY: u16 = 1 << 1;
@@ -60,8 +61,12 @@ impl Parser<'_, '_> {
     }
 
     #[inline]
-    pub(crate) fn wikidot_div_body_depth(&self) -> usize {
-        usize::from(self.wikidot.div_body_depth)
+    pub(crate) fn wikidot_div_opener_is_excess(&self, opener_start: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_div_stream_marks
+            .get(&opener_start)
+            .is_some_and(|&(balance_before, ends_after)| ends_after <= balance_before)
     }
 
     #[inline]
@@ -338,4 +343,66 @@ fn simple_table_closer_bit(token: Token) -> u16 {
         Token::Color => 1 << 7,
         _ => 0,
     }
+}
+
+pub(super) fn compute_wikidot_div_stream_marks(
+    tokens: &[ExtractedToken<'_>],
+) -> BTreeMap<usize, (u32, u32)> {
+    fn block_name<'a>(tokens: &[ExtractedToken<'a>], index: usize) -> Option<&'a str> {
+        tokens
+            .get(index + 1)
+            .and_then(|token| (token.token == Token::Identifier).then_some(token.slice))
+    }
+
+    let mut marks = BTreeMap::new();
+    let mut balance: u32 = 0;
+    let mut region: Vec<(usize, u32, u32)> = Vec::new();
+    let mut region_ends: u32 = 0;
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        if token.token == Token::LeftBlock {
+            match block_name(tokens, index) {
+                Some(name)
+                    if name.eq_ignore_ascii_case("code")
+                        || name.eq_ignore_ascii_case("html") =>
+                {
+                    let mut scan = index + 1;
+                    while scan < tokens.len() {
+                        if tokens[scan].token == Token::LeftBlockEnd
+                            && block_name(tokens, scan)
+                                .is_some_and(|end| end.eq_ignore_ascii_case(name))
+                        {
+                            break;
+                        }
+                        scan += 1;
+                    }
+                    index = scan;
+                }
+                Some(name) if name.eq_ignore_ascii_case("div") => {
+                    region.push((token.span.start, balance, region_ends));
+                    balance += 1;
+                }
+                _ => {}
+            }
+        } else if token.token == Token::LeftBlockEnd
+            && balance > 0
+            && block_name(tokens, index)
+                .is_some_and(|name| name.eq_ignore_ascii_case("div"))
+        {
+            region_ends += 1;
+            balance -= 1;
+            if balance == 0 {
+                for (span, balance_before, ends_before) in region.drain(..) {
+                    marks.insert(span, (balance_before, region_ends - ends_before));
+                }
+                region_ends = 0;
+            }
+        }
+        index += 1;
+    }
+    for (span, balance_before, ends_before) in region {
+        marks.insert(span, (balance_before, region_ends - ends_before));
+    }
+    marks
 }

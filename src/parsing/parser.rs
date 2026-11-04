@@ -124,6 +124,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_tabview_failures: BTreeMap<(usize, bool), ParseError>,
     wikidot_collapsible_failures: BTreeMap<usize, ParseError>,
     wikidot_div_bounded_span: BTreeMap<usize, bool>,
+    wikidot_div_stream_marks: BTreeMap<usize, (u32, u32)>,
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
@@ -252,7 +253,14 @@ impl<'r, 't> Parser<'r, 't> {
             footnotes: make_shared_vec(),
             bibliographies: Rc::new(RefCell::new(BibliographyList::new())),
             quote_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
-            block_end_scan_cache: Rc::new(RefCell::new(BlockScanCache::default())),
+            block_end_scan_cache: Rc::new(RefCell::new(BlockScanCache {
+                wikidot_div_stream_marks: if settings.layout.legacy() {
+                    wikidot_state::compute_wikidot_div_stream_marks(tokenization.tokens())
+                } else {
+                    BTreeMap::new()
+                },
+                ..Default::default()
+            })),
             two_block_end_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
             single_link_label_owner_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
             wikidot_code_candidate_cache: Rc::new(RefCell::new(None)),
