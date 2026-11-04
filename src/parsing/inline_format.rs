@@ -1290,6 +1290,7 @@ enum PairRole<'t> {
 enum ProjItem<'a> {
     Text(&'a str),
     PartialLike,
+    ScopeClose,
     Content,
     Barrier,
     EdgeOpen(InlineFormatKind),
@@ -1789,6 +1790,8 @@ fn project_marker_sequence<'a, 't>(
                     }
                     PartialElement::InlineColorOpen(..) => ProjItem::ColorEventOpen,
                     PartialElement::InlineColorClose => ProjItem::ColorEventClose,
+                    PartialElement::InlineSpanClose(_)
+                    | PartialElement::InlineSizeClose(_) => ProjItem::ScopeClose,
                     _ => ProjItem::PartialLike,
                 }),
                 _ if element_contains_link(element) => {
@@ -2026,7 +2029,7 @@ fn proj_ends_with_pad(item: &ProjItem<'_>) -> bool {
 fn projection_has_content(items: &[ProjItem<'_>]) -> bool {
     items.iter().any(|item| match item {
         ProjItem::Text(value) => !value.trim().is_empty(),
-        ProjItem::Content | ProjItem::LinkContent => true,
+        ProjItem::Content | ProjItem::LinkContent | ProjItem::ScopeClose => true,
         ProjItem::PartialLike
         | ProjItem::Barrier
         | ProjItem::EdgeOpen(_)

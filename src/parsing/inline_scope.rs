@@ -625,6 +625,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes<'t>(elements: &mut Vec<Element<'t
         &mut active,
         &mut trim_next_break,
     );
+    drop_empty_inline_scopes(elements);
 }
 
 pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
@@ -646,6 +647,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
         false,
     );
     eject_segment_trailing_space(elements);
+    drop_empty_inline_scopes(elements);
 }
 
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
@@ -1341,6 +1343,21 @@ fn lower_sequence<'t>(
             let empty = !resolved
                 .is_some_and(|position| active.scope_has_content(position))
                 && run.is_empty();
+            let empty_id_attributes = if empty && !scored {
+                resolved.and_then(|position| {
+                    match &active.scopes[position].wrapper {
+                        ScopeWrapper::Container {
+                            ctype: ContainerType::Span,
+                            attributes,
+                        } if attributes.get().contains_key("id") => {
+                            Some(attributes.clone())
+                        }
+                        _ => None,
+                    }
+                })
+            } else {
+                None
+            };
             let trailing_space =
                 !scored && matches!(run.last(), Some(Element::Text(text)) if text == " ");
             let next_starts_with_space = matches!(
@@ -1401,6 +1418,13 @@ fn lower_sequence<'t>(
                 *trim_next_break = true;
             }
             preserve_space_before_footnote |= preserve_empty_owner_space;
+            if let Some(attributes) = empty_id_attributes {
+                output.push(Element::Container(Container::new(
+                    ContainerType::Span,
+                    Vec::new(),
+                    attributes,
+                )));
+            }
             continue;
         }
         if let Element::Partial(PartialElement::InlineAnchorOpen(mut attributes, target)) =
@@ -1994,6 +2018,62 @@ fn scope_wrapper_is_empty(element: &Element<'_>) -> bool {
         Element::Color { elements, .. } => elements.is_empty(),
         Element::Anchor { elements, .. } => elements.is_empty(),
         _ => false,
+    }
+}
+
+fn empty_inline_scope_vanishes(element: &Element<'_>) -> bool {
+    match element {
+        Element::Container(container) => {
+            is_inline_scope_ctype(container.ctype())
+                && container.elements().is_empty()
+                && !(container.ctype() == ContainerType::Span
+                    && container.attributes().get().contains_key("id"))
+        }
+        Element::Color { elements, .. } => elements.is_empty(),
+        _ => false,
+    }
+}
+
+fn drop_empty_inline_scopes(elements: &mut Vec<Element>) {
+    for element in elements.iter_mut() {
+        visit_children_mut(element, &mut |children| {
+            drop_empty_inline_scopes(children)
+        });
+    }
+    let mut index = 0;
+    while index < elements.len() {
+        if empty_inline_scope_vanishes(&elements[index]) {
+            elements.remove(index);
+            merge_space_across_vanished(elements, index);
+        } else {
+            index += 1;
+        }
+    }
+}
+
+fn merge_space_across_vanished(elements: &mut Vec<Element>, index: usize) {
+    if index == 0 || index >= elements.len() {
+        return;
+    }
+    let previous_ends_space = matches!(
+        &elements[index - 1],
+        Element::Text(text) if text.ends_with(' ')
+    );
+    let next_starts_space = matches!(
+        &elements[index],
+        Element::Text(text) if text.starts_with(' ')
+    );
+    if !previous_ends_space || !next_starts_space {
+        return;
+    }
+    let Element::Text(text) = &mut elements[index] else {
+        return;
+    };
+    let stripped: String = text.chars().skip(1).collect();
+    if stripped.is_empty() {
+        elements.remove(index);
+    } else {
+        *text = Cow::Owned(stripped);
     }
 }
 
