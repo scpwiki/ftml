@@ -335,10 +335,10 @@ impl<'t> Arguments<'t> {
                 map.insert_wikidot_relative_href(cow!("#invalid-url"));
             } else if wikidot_anchor_href_is_verbatim(href) {
                 let value = normalize_wikidot_html_attribute_value(href);
-                if value.contains(' ') {
-                    map.insert_wikidot_relative_href(Cow::Owned(
-                        value.replace(' ', "%20"),
-                    ));
+                let spaced = value.replace(' ', "%20");
+                let encoded = crate::url::percent_encode_non_ascii(&spaced);
+                if encoded != value {
+                    map.insert_wikidot_relative_href(Cow::Owned(encoded.into_owned()));
                 }
             } else {
                 map.insert_wikidot_relative_href(normalize_wikidot_unsafe_anchor_href(

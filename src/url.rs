@@ -203,12 +203,14 @@ pub fn normalize_href<'a>(url: &'a str, extra: Option<&'a str>) -> Cow<'a, str> 
         },
         HrefKind::Anchor => match extra {
             Some(extra) => {
-                trace!("Leaving safe URL with extra as-is: {url}{extra}");
-                Cow::Owned(format!("{url}{extra}"))
+                trace!("Encoding a safe URL with extra: {url}{extra}");
+                Cow::Owned(
+                    percent_encode_non_ascii(&format!("{url}{extra}")).into_owned(),
+                )
             }
             None => {
-                trace!("Leaving safe URL as-is: {url}");
-                Cow::Borrowed(url)
+                trace!("Encoding a safe URL: {url}");
+                percent_encode_non_ascii(url)
             }
         },
         HrefKind::AbsolutePath => match extra {
@@ -235,7 +237,7 @@ pub fn normalize_href<'a>(url: &'a str, extra: Option<&'a str>) -> Cow<'a, str> 
     }
 }
 
-fn percent_encode_non_ascii(value: &str) -> Cow<'_, str> {
+pub(crate) fn percent_encode_non_ascii(value: &str) -> Cow<'_, str> {
     if value.is_ascii() {
         return Cow::Borrowed(value);
     }
