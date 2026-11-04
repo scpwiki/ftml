@@ -30,7 +30,7 @@ pub const BLOCK_GALLERY: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -40,13 +40,6 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_GALLERY, name);
 
     let source = parser.full_text().inner();
-    let name_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .expect("parsed gallery name belongs to the source");
-    let opener_start = source[..name_start]
-        .rfind("[[")
-        .expect("parsed gallery name follows its opener");
-    debug_assert_eq!(_opener_start, opener_start);
     if !gallery_owns_physical_line(
         source,
         opener_start,

@@ -447,7 +447,7 @@ fn skip_trailing_head_space<'r, 't>(
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -456,13 +456,6 @@ fn parse_fn<'r, 't>(
     assert!(!flag_star, "Div doesn't allow star flag");
     assert_block_name(&BLOCK_DIV, name);
     let source = parser.full_text().inner();
-    let name_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .expect("parsed div name belongs to the source");
-    let owner_start = source[..name_start]
-        .rfind("[[")
-        .expect("parsed div name follows its opener");
-    debug_assert_eq!(_opener_start, owner_start);
 
     let head = parser.get_head_map_with_body_start_wikidot(&BLOCK_DIV, in_head)?;
     let (mut arguments, mut body_start) = head;
@@ -471,14 +464,14 @@ fn parse_fn<'r, 't>(
     }
     let cacheable_wikijump_failure = !parser.settings().layout.legacy();
     if cacheable_wikijump_failure
-        && parser.block_end_scan_outcome((WIKIJUMP_DIV_FAILURE_CACHE, owner_start, false))
+        && parser.block_end_scan_outcome((WIKIJUMP_DIV_FAILURE_CACHE, opener_start, false))
             == Some(false)
     {
         return Err(parser.make_end_of_input_err());
     }
     if parser.settings().layout.legacy()
         && flag_score
-        && !parser.wikidot_alias_has_compatible_close(&BLOCK_DIV, owner_start)
+        && !parser.wikidot_alias_has_compatible_close(&BLOCK_DIV, opener_start)
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -489,7 +482,7 @@ fn parse_fn<'r, 't>(
     {
         let literal_end = delimiter.current().span.start;
         parser.update(&delimiter);
-        return ok!(true; text!(&source[owner_start..literal_end]));
+        return ok!(true; text!(&source[opener_start..literal_end]));
     }
     let head_started_physical_line =
         wikidot_div_head_started_physical_line(parser, body_start);
@@ -512,7 +505,7 @@ fn parse_fn<'r, 't>(
     }
     if let Some(recovered) = try_recover_wikidot_div_literal(
         parser,
-        owner_start,
+        opener_start,
         arguments.is_empty(),
         body_start,
         flag_score,
@@ -563,15 +556,15 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy()
         && !head_started_physical_line
         && !follows_inline_structural_close
-        && (parser.has_runtime_literal_in_range(owner_start..parser.current().span.start)
+        && (parser.has_runtime_literal_in_range(opener_start..parser.current().span.start)
             || parser.body_has_delayed_input(&BLOCK_DIV))
     {
         let _ = parser.get_body_text(&BLOCK_DIV)?;
         let owner_end = parser.current().span.start;
-        let generated = parser.generated_in_range(owner_start..owner_end);
+        let generated = parser.generated_in_range(opener_start..owner_end);
         return success_elements(Element::Delayed(DelayedElement::shell(
             source,
-            owner_start..owner_end,
+            opener_start..owner_end,
             &generated,
         )));
     }
@@ -588,7 +581,7 @@ fn parse_fn<'r, 't>(
         if wikidot_div_end_blocks_after(parser, depth) <= depth {
             let head_end = parser.current().span.start;
             let literal_end = source[..head_end].trim_end_matches(['\r', '\n']).len();
-            let literal = text!(&source[owner_start..literal_end]);
+            let literal = text!(&source[opener_start..literal_end]);
             let elements = Elements::Multiple(vec![literal, Element::LineBreak]);
             let paragraph_safe = elements.paragraph_safe();
             return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
@@ -621,7 +614,7 @@ fn parse_fn<'r, 't>(
             if cacheable_wikijump_failure && error.kind() == ParseErrorKind::EndOfInput {
                 parser.cache_block_end_scan_outcomes(
                     WIKIJUMP_DIV_FAILURE_CACHE,
-                    &[(owner_start, false)],
+                    &[(opener_start, false)],
                     false,
                 );
             }

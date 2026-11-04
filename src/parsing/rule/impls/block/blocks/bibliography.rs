@@ -34,7 +34,7 @@ pub const BLOCK_BIBLIOGRAPHY: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -57,13 +57,6 @@ fn parse_fn<'r, 't>(
     let nested_wikidot_opener =
         wikidot_candidate && parser.in_wikidot_bibliography_body();
     let source = parser.full_text().inner();
-    let name_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .expect("parsed bibliography name belongs to the source");
-    let opener_start = source[..name_start]
-        .rfind("[[")
-        .expect("parsed bibliography name follows its opener");
-    debug_assert_eq!(_opener_start, opener_start);
 
     let (mut arguments, _) =
         parser.get_head_map_with_body_start_wikidot(&BLOCK_BIBLIOGRAPHY, in_head)?;

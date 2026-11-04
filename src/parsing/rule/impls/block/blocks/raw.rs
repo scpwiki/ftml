@@ -34,7 +34,7 @@ pub const BLOCK_RAW: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -51,13 +51,6 @@ fn parse_fn<'r, 't>(
 
     if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
         let source = parser.full_text().inner();
-        let name_start = (name.as_ptr() as usize)
-            .checked_sub(source.as_ptr() as usize)
-            .expect("parsed raw name belongs to the source");
-        let owner_start = source[..name_start]
-            .rfind("[[")
-            .expect("parsed raw name follows its opener");
-        debug_assert_eq!(_opener_start, owner_start);
         let mut owner = parser.clone();
         if in_head {
             while !matches!(owner.current().token, Token::RightBlock | Token::InputEnd) {
@@ -70,7 +63,7 @@ fn parse_fn<'r, 't>(
         }
         let _ = owner.get_body_text(&BLOCK_RAW)?;
         let owner_end = owner.current().span.start;
-        let generated = owner.generated_in_range(owner_start..owner_end);
+        let generated = owner.generated_in_range(opener_start..owner_end);
         if generated.is_empty() {
             let has_runtime = std::iter::once(parser.current())
                 .chain(parser.remaining())
@@ -78,7 +71,7 @@ fn parse_fn<'r, 't>(
                 .any(|token| token.token == Token::RuntimeText);
             if !has_runtime
                 && let Some(elements) = wikidot_literal_with_empty_scored_spans_elided(
-                    &source[owner_start..owner_end],
+                    &source[opener_start..owner_end],
                 )
             {
                 parser.update(&owner);
@@ -89,7 +82,7 @@ fn parse_fn<'r, 't>(
         parser.update(&owner);
         return success_elements(Element::Delayed(DelayedElement::shell(
             source,
-            owner_start..owner_end,
+            opener_start..owner_end,
             &generated,
         )));
     }

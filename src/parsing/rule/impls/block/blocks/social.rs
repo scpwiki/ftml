@@ -26,7 +26,7 @@ pub const BLOCK_SOCIAL: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -41,22 +41,12 @@ fn parse_fn<'r, 't>(
     }
 
     let source = parser.full_text().inner();
-    let name_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .expect("parsed social name belongs to source");
-    let opener_start = source[..name_start]
-        .rfind("[[")
-        .expect("parsed social name follows its opener");
-    debug_assert_eq!(_opener_start, opener_start);
-    debug_assert_eq!(
-        name_start,
-        _opener_start
-            + 2
-            + source[_opener_start + 2..]
-                .bytes()
-                .take_while(|byte| matches!(byte, b' ' | b'\t'))
-                .count()
-    );
+    let name_start = opener_start
+        + 2
+        + source[opener_start + 2..]
+            .bytes()
+            .take_while(|byte| matches!(byte, b' ' | b'\t'))
+            .count();
 
     if in_head && matches!(parser.current().token, Token::RightBlock | Token::RightLink) {
         let name_end = name_start + name.len();

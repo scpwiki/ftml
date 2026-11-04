@@ -40,7 +40,7 @@ macro_rules! make_align_block {
         fn parse_fn<'r, 't>(
             parser: &mut Parser<'r, 't>,
             name: &str,
-            _opener_start: usize,
+            opener_start: usize,
             flag_star: bool,
             flag_score: bool,
             in_head: bool,
@@ -49,7 +49,7 @@ macro_rules! make_align_block {
                 (&$block_const, Alignment::$align),
                 parser,
                 name,
-                _opener_start,
+                opener_start,
                 flag_star,
                 flag_score,
                 in_head,
@@ -62,7 +62,7 @@ pub fn parse_alignment_block<'r, 't>(
     (block_rule, alignment): (&BlockRule, Alignment),
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -77,15 +77,8 @@ pub fn parse_alignment_block<'r, 't>(
     assert_block_name(block_rule, name);
 
     let source = parser.full_text().inner();
-    let name_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .expect("parsed alignment name belongs to the source");
-    let owner_start = source[..name_start]
-        .rfind("[[")
-        .expect("parsed alignment name follows its opener");
-    debug_assert_eq!(_opener_start, owner_start);
     let escaped_owner = parser.settings().layout.legacy()
-        && source[..owner_start]
+        && source[..opener_start]
             .bytes()
             .rev()
             .take_while(|byte| *byte == b'\\')
@@ -101,13 +94,13 @@ pub fn parse_alignment_block<'r, 't>(
     if escaped_owner {
         let _ = parser.get_body_text(block_rule)?;
         let owner_end = parser.current().span.start;
-        let generated = parser.generated_in_range(owner_start..owner_end);
+        let generated = parser.generated_in_range(opener_start..owner_end);
         return if generated.is_empty() {
-            ok!(true; literal_elements(&source[owner_start..owner_end]))
+            ok!(true; literal_elements(&source[opener_start..owner_end]))
         } else {
             ok!(true; Element::Delayed(DelayedElement::shell(
                 source,
-                owner_start..owner_end,
+                opener_start..owner_end,
                 &generated,
             )))
         };
