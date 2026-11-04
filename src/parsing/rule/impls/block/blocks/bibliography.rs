@@ -89,6 +89,10 @@ fn parse_fn<'r, 't>(
     // Validate before body parsing so an EOF candidate cannot commit delayed
     // metadata or an invented bibliography container.
     if wikidot_candidate && !parser.has_body_end_block(&BLOCK_BIBLIOGRAPHY) {
+        let opener_text = &source[opener_start..opener_end];
+        if opener_text[2..].contains("[[") || opener_text.contains("[!--") {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
         let body_start = parser.current().span.start;
         let mutable_state = parser.get_mutable_state();
         let snapshot = parser.clone();

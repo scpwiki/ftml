@@ -1,0 +1,27 @@
+{
+    "elements": [
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "Title",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

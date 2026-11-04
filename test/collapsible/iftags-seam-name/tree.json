@@ -1,0 +1,30 @@
+{
+    "elements": [
+        {
+            "element": "collapsible",
+            "data": {
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "attributes": {},
+                "start-open": false,
+                "show-text": null,
+                "hide-text": null,
+                "show-top": true,
+                "show-bottom": false
+            }
+        }
+    ]
+}

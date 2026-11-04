@@ -218,8 +218,11 @@ fn protected_span_end(
 }
 
 /// Blocks whose names are never read through the resolved head-word
-/// reader: raw-verbatim bodies, self-pairing gate blocks, and the
-/// module block, whose heads live scans and pairs verbatim.
+/// reader for comment elision: raw-verbatim bodies, self-pairing gate
+/// blocks, and the module block, whose heads live scans and pairs
+/// verbatim. Math is listed for its raw body and because live does
+/// not elide comments in its name; its name still resolves through
+/// an iftags segment (see `head_seam_forms_block`).
 pub(crate) fn head_word_never_resolves(block: &BlockRule) -> bool {
     matches!(
         block.name,
@@ -238,13 +241,38 @@ pub(crate) fn head_word_never_resolves(block: &BlockRule) -> bool {
 /// selects the block, but live does not dispatch every block through
 /// a seam: the never-resolved blocks never form through one, and the
 /// Wikidot layout admits only the blocks saved-page evidence has
-/// confirmed (footnote so far; the allowlist grows one block per
-/// saved-page row). The Wikijump layout admits everything else.
+/// confirmed (the allowlist grows one block per saved-page row). The
+/// Wikijump layout admits everything else. Math is the split case:
+/// live resolves its name through a segment while its body stays
+/// raw, so the Wikidot layout admits the name and the Wikijump
+/// layout keeps refusing it.
 pub(crate) fn head_seam_forms_block(block: &BlockRule, layout: Layout) -> bool {
+    if block.name == "block-math" {
+        return layout.legacy();
+    }
     if head_word_never_resolves(block) {
         return false;
     }
-    !layout.legacy() || block.name == "block-footnote"
+    !layout.legacy()
+        || matches!(
+            block.name,
+            "block-footnote"
+                | "block-table"
+                | "block-table-row"
+                | "block-table-cell-regular"
+                | "block-table-cell-header"
+                | "block-span"
+                | "block-size"
+                | "block-collapsible"
+                | "block-tabview"
+                | "block-tab"
+                | "block-iframe"
+                | "block-image"
+                | "block-bibliography"
+                | "block-list-unordered"
+                | "block-list-ordered"
+                | "block-list-item"
+        )
 }
 
 fn raw_block_span_end(
@@ -1106,6 +1134,7 @@ where
                 && !fused_close
                 && !parser.discarding_hidden_body()
                 && block_rule.name.starts_with("block-list-")
+                && matches!(name, Cow::Borrowed(_))
             {
                 let end = parser.current().span.start;
                 let source = &parser.full_text().inner()[end_start..end];

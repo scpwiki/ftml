@@ -233,19 +233,47 @@ fn is_cell_closer(source: &str) -> bool {
     source.eq_ignore_ascii_case("[[/cell]]") || source.eq_ignore_ascii_case("[[/hcell]]")
 }
 
-fn closing_block_name(source: &str) -> Option<&str> {
-    let (_, closer) = source.rsplit_once("[[/")?;
-    let end = closer
-        .find(|character: char| character == ']' || character.is_ascii_whitespace())
-        .unwrap_or(closer.len());
-    Some(&closer[..end])
+fn explicit_closer_name<'r: 't, 't>(
+    probe: &Parser<'r, 't>,
+    end: usize,
+) -> Option<String> {
+    let mut probe = (*probe).clone();
+    loop {
+        if probe.current().token == Token::LeftBlockEnd {
+            let mut close = probe.clone();
+            if let Ok(name) = close.get_end_block() {
+                let close_end = close.current().span.start;
+                let gap_is_blank = close_end <= end
+                    && probe.full_text().inner()[close_end..end]
+                        .bytes()
+                        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'));
+                if gap_is_blank {
+                    return Some(name.into_owned());
+                }
+            }
+        }
+        if probe.current().token == Token::InputEnd || probe.step().is_err() {
+            return None;
+        }
+    }
 }
 
-fn has_explicit_closer(source: &str, accepted: &[&str]) -> bool {
-    closing_block_name(source).is_some_and(|name| {
-        accepted
+fn has_explicit_closer<'r: 't, 't>(
+    probe: &Parser<'r, 't>,
+    end: usize,
+    accepted: &[&str],
+) -> bool {
+    if let Some(name) = explicit_closer_name(probe, end) {
+        return accepted
             .iter()
-            .any(|accepted| name.eq_ignore_ascii_case(accepted))
+            .any(|accepted| name.eq_ignore_ascii_case(accepted));
+    }
+    let source = &probe.full_text().inner()[..end];
+    accepted.iter().any(|name| {
+        let close = format!("[[/{name}]]]");
+        source
+            .get(source.len().saturating_sub(close.len())..)
+            .is_some_and(|tail| tail.eq_ignore_ascii_case(&close))
     })
 }
 
@@ -293,16 +321,16 @@ fn cache_table_end_of_input_error(
     }
 }
 
-fn legacy_opener_start(parser: &Parser<'_, '_>) -> Option<usize> {
+fn legacy_opener_start(parser: &Parser<'_, '_>, opener_start: usize) -> Option<usize> {
     if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
         return None;
     }
 
-    parser.full_text().inner()[..parser.current().span.start].rfind("[[")
+    Some(opener_start)
 }
 
-fn legacy_block_name_is_spaced(parser: &Parser<'_, '_>) -> bool {
-    let Some(opener_start) = legacy_opener_start(parser) else {
+fn legacy_block_name_is_spaced(parser: &Parser<'_, '_>, opener_start: usize) -> bool {
+    let Some(opener_start) = legacy_opener_start(parser, opener_start) else {
         return false;
     };
     parser.full_text().inner()[opener_start + 2..]
@@ -311,8 +339,11 @@ fn legacy_block_name_is_spaced(parser: &Parser<'_, '_>) -> bool {
         .is_some_and(|byte| matches!(byte, b' ' | b'\t'))
 }
 
-fn legacy_table_follows_heading_marker(parser: &Parser<'_, '_>) -> bool {
-    let Some(opener_start) = legacy_opener_start(parser) else {
+fn legacy_table_follows_heading_marker(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> bool {
+    let Some(opener_start) = legacy_opener_start(parser, opener_start) else {
         return false;
     };
     let source = parser.full_text().inner();
@@ -399,14 +430,15 @@ fn parse_table<'r, 't>(
     {
         return Err(error);
     }
-    if legacy_block_name_is_spaced(parser) || legacy_table_follows_heading_marker(parser)
+    if legacy_block_name_is_spaced(parser, opener_start)
+        || legacy_table_follows_heading_marker(parser, opener_start)
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     let parser = &mut ParserWrap::new(parser, AcceptsPartial::TableRow);
     let block = (&BLOCK_TABLE, "table block");
     let legacy = parser.settings().layout.legacy();
-    let source_start = parser.current().span.start;
+    let probe = (**parser).clone();
     if legacy && !parser.has_body_end_block(&BLOCK_TABLE) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -427,12 +459,7 @@ fn parse_table<'r, 't>(
         }
     };
     let source_end = parser.current().span.start;
-    if legacy
-        && !has_explicit_closer(
-            &parser.full_text().inner()[source_start..source_end],
-            &["table"],
-        )
-    {
+    if legacy && !has_explicit_closer(&probe, source_end, &["table"]) {
         if let Some(owner_start) = owner_start {
             parser.cache_underclosed_block_failure(BLOCK_TABLE.name, owner_start);
         }
@@ -511,13 +538,13 @@ fn parse_row<'r, 't>(
     {
         return Err(error);
     }
-    if legacy_block_name_is_spaced(parser) {
+    if legacy_block_name_is_spaced(parser, opener_start) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     let parser = &mut ParserWrap::new(parser, AcceptsPartial::TableCell);
     let block = (&BLOCK_TABLE_ROW, "table row");
     let legacy = parser.settings().layout.legacy();
-    let source_start = parser.current().span.start;
+    let probe = (**parser).clone();
     if legacy && !parser.has_body_end_block(&BLOCK_TABLE_ROW) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -543,12 +570,7 @@ fn parse_row<'r, 't>(
         }
     };
     let source_end = parser.current().span.start;
-    if legacy
-        && !has_explicit_closer(
-            &parser.full_text().inner()[source_start..source_end],
-            &["row"],
-        )
-    {
+    if legacy && !has_explicit_closer(&probe, source_end, &["row"]) {
         if let Some(owner_start) = owner_start {
             parser.cache_underclosed_block_failure(BLOCK_TABLE_ROW.name, owner_start);
         }
@@ -591,7 +613,7 @@ fn parse_cell_regular<'r, 't>(
     if let Some(error) = cached_underclosed_table_error(parser, cache_rule, owner_start) {
         return Err(error);
     }
-    if legacy_block_name_is_spaced(parser) {
+    if legacy_block_name_is_spaced(parser, opener_start) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     let block = if legacy {
@@ -600,6 +622,7 @@ fn parse_cell_regular<'r, 't>(
         (&BLOCK_TABLE_CELL_REGULAR, "table cell (regular)")
     };
     let source_start = parser.current().span.start;
+    let probe = parser.clone();
     if legacy && !parser.has_body_end_block(&BLOCK_TABLE_CELL_BODY) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -621,7 +644,7 @@ fn parse_cell_regular<'r, 't>(
     };
     let source_end = parser.current().span.start;
     let source = &parser.full_text().inner()[source_start..source_end];
-    if legacy && !has_explicit_closer(source, &["cell", "hcell"]) {
+    if legacy && !has_explicit_closer(&probe, source_end, &["cell", "hcell"]) {
         if let Some(owner_start) = owner_start {
             parser
                 .cache_underclosed_block_failure(BLOCK_TABLE_CELL_BODY.name, owner_start);
@@ -629,7 +652,7 @@ fn parse_cell_regular<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     let preserve_single_paragraph = legacy && source.contains("\n\n");
-    let header = legacy && cell_closer_is_header(source);
+    let header = legacy && cell_closer_is_header(&probe, source_end);
 
     parse_cell(
         parsed.elements,
@@ -656,12 +679,13 @@ fn parse_cell_header<'r, 't>(
     if let Some(error) = cached_underclosed_table_error(parser, cache_rule, owner_start) {
         return Err(error);
     }
-    if legacy_block_name_is_spaced(parser) {
+    if legacy_block_name_is_spaced(parser, opener_start) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     let parser = &mut ParserWrap::new(parser, AcceptsPartial::TableCell);
     let block = (&BLOCK_TABLE_CELL_BODY, "table cell (header)");
     let source_start = parser.current().span.start;
+    let probe = (**parser).clone();
     if legacy && !parser.has_body_end_block(&BLOCK_TABLE_CELL_BODY) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -683,7 +707,7 @@ fn parse_cell_header<'r, 't>(
     };
     let source_end = parser.current().span.start;
     let source = &parser.full_text().inner()[source_start..source_end];
-    if legacy && !has_explicit_closer(source, &["cell", "hcell"]) {
+    if legacy && !has_explicit_closer(&probe, source_end, &["cell", "hcell"]) {
         if let Some(owner_start) = owner_start {
             parser
                 .cache_underclosed_block_failure(BLOCK_TABLE_CELL_BODY.name, owner_start);
@@ -691,7 +715,7 @@ fn parse_cell_header<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     let preserve_single_paragraph = legacy && source.contains("\n\n");
-    let header = cell_closer_is_header(source);
+    let header = cell_closer_is_header(&probe, source_end);
 
     parse_cell(
         parsed.elements,
@@ -704,8 +728,8 @@ fn parse_cell_header<'r, 't>(
     )
 }
 
-fn cell_closer_is_header(source: &str) -> bool {
-    closing_block_name(source) == Some("hcell")
+fn cell_closer_is_header<'r: 't, 't>(probe: &Parser<'r, 't>, end: usize) -> bool {
+    explicit_closer_name(probe, end).as_deref() == Some("hcell")
 }
 
 fn parse_cell<'r, 't>(
