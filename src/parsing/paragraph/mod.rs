@@ -297,7 +297,7 @@ where
                     };
                     let mut elements = elements.into_iter();
                     let last_index = counts.len() - 1;
-                    for (index, (count, segment_safe)) in counts.iter().enumerate() {
+                    for (index, (count, segment_safe, _)) in counts.iter().enumerate() {
                         if index > 0 {
                             stack.end_paragraph_at_break();
                         }
@@ -576,13 +576,13 @@ fn finish_hidden_boundary(
 /// pushed normally; well-formed batches always validate.
 fn paragraph_split_batch<'t>(
     elements: &Elements<'t>,
-    counts: Option<Vec<(usize, bool)>>,
-) -> Option<Vec<(usize, bool)>> {
+    counts: Option<Vec<ParagraphSplitEntry>>,
+) -> Option<Vec<ParagraphSplitEntry>> {
     let counts = counts?;
     if counts.len() < 2 {
         return None;
     }
-    if counts.iter().map(|(count, _)| count).sum::<usize>() != elements.len() {
+    if counts.iter().map(|(count, _, _)| count).sum::<usize>() != elements.len() {
         return None;
     }
     Some(counts)

@@ -19,12 +19,12 @@
  */
 
 use super::prelude::*;
-use crate::parsing::ParseSuccess;
 use crate::parsing::collect::collect_consume_keep_split;
+use crate::parsing::{ParagraphSplitEntry, ParagraphSplitKind, ParseSuccess};
 
-type SplitEscapeLayout<'t> = (Vec<Element<'t>>, Vec<(usize, bool)>, bool);
+type SplitEscapeLayout<'t> = (Vec<Element<'t>>, Vec<ParagraphSplitEntry>, bool);
 use crate::parsing::{Token, strip_whitespace};
-use crate::tree::DefinitionListItem;
+use crate::tree::{DefinitionListItem, ListType};
 
 pub const RULE_DEFINITION_LIST: Rule = Rule {
     name: "definition-list",
@@ -112,13 +112,88 @@ fn parse_definition_list<'r, 't>(
         let mut elements = vec![Element::DefinitionList(items)];
         elements.extend(flat);
         let mut result = ParseSuccess::new(Elements::Multiple(elements), errors, false);
-        let mut full = vec![(1, false)];
+        let mut full = vec![(1, false, ParagraphSplitKind::Paragraph)];
         full.extend(entries);
         result.paragraph_split = Some(full);
         Ok(result)
     } else {
         ok!(Element::DefinitionList(items))
     }
+}
+
+fn split_escape_layout<'t>(
+    escape: crate::parsing::collect::CollectSplitEscape<'t>,
+) -> SplitEscapeLayout<'t> {
+    let first_item = escape
+        .segments
+        .iter()
+        .position(|(_, _, kind)| matches!(kind, ParagraphSplitKind::Item(_)));
+    let Some(first_item) = first_item else {
+        return escape.into_layout();
+    };
+    let skippable = escape.segments[..first_item]
+        .iter()
+        .all(|(elements, _, _)| {
+            elements
+                .iter()
+                .all(|element| matches!(element, Element::LineBreak))
+        });
+    if !skippable {
+        return escape.into_layout();
+    }
+    let item_count = escape.segments[first_item..]
+        .iter()
+        .take_while(|(_, _, kind)| matches!(kind, ParagraphSplitKind::Item(_)))
+        .count();
+    let mut segments = escape.segments.into_iter();
+    let dropped: Vec<(Vec<Element<'t>>, bool, ParagraphSplitKind)> =
+        segments.by_ref().take(first_item).collect();
+    let mut item_meta: Vec<(bool, ParagraphSplitKind)> = Vec::new();
+    let mut depths: Vec<(usize, ListType, Vec<Element<'t>>)> = Vec::new();
+    for (mut elements, safe, kind) in segments.by_ref().take(item_count) {
+        let ParagraphSplitKind::Item(item_type) = kind else {
+            unreachable!("claimed segments are items");
+        };
+        while matches!(elements.last(), Some(Element::LineBreak)) {
+            elements.pop();
+        }
+        item_meta.push((safe, kind));
+        depths.push((0, item_type, elements));
+    }
+    let rest_segments: Vec<(Vec<Element<'t>>, bool, ParagraphSplitKind)> =
+        segments.collect();
+    let list_elements: Vec<Element<'t>> =
+        crate::parsing::process_depths(ListType::Generic, depths.clone())
+            .into_iter()
+            .filter_map(|(ltype, depth_list)| {
+                super::build_list_element(ltype, depth_list)
+            })
+            .collect();
+    if list_elements.is_empty() {
+        let mut rebuilt: Vec<(Vec<Element<'t>>, bool, ParagraphSplitKind)> =
+            Vec::with_capacity(first_item + item_count + rest_segments.len());
+        rebuilt.extend(dropped);
+        for ((_, item_type, elements), (safe, _)) in depths.into_iter().zip(item_meta) {
+            rebuilt.push((elements, safe, ParagraphSplitKind::Item(item_type)));
+        }
+        rebuilt.extend(rest_segments);
+        return crate::parsing::collect::CollectSplitEscape { segments: rebuilt }
+            .into_layout();
+    }
+    let (mut flat, entries, safe) = if rest_segments.is_empty() {
+        (Vec::new(), Vec::new(), true)
+    } else {
+        crate::parsing::collect::CollectSplitEscape {
+            segments: rest_segments,
+        }
+        .into_layout()
+    };
+    let list_count = list_elements.len();
+    let mut elements = list_elements;
+    elements.append(&mut flat);
+    let mut full_entries = vec![(list_count, false, ParagraphSplitKind::Paragraph)];
+    full_entries.extend(entries);
+    (elements, full_entries, safe)
 }
 
 fn scan_item<'r, 't>(
@@ -166,7 +241,7 @@ where
             let (value_elements, last, value_escape) =
                 collect_value(parser, &mut errors, &mut paragraph_safe)?;
             if let Some(value_escape) = value_escape {
-                *escape = Some(value_escape.into_layout());
+                *escape = Some(split_escape_layout(value_escape));
             }
             Some((key_elements, key_string, value_elements, last))
         }

@@ -20,6 +20,8 @@
 
 use super::generic::collect_before;
 use super::prelude::*;
+use crate::parsing::{ParagraphSplitEntry, ParagraphSplitKind};
+use crate::tree::PartialElement;
 
 /// Convenience wrapper around `collect()` to consume each token iteration.
 ///
@@ -107,16 +109,18 @@ pub fn collect_consume_keep<'r, 't>(
 }
 
 pub struct CollectSplitEscape<'t> {
-    pub segments: Vec<(Vec<Element<'t>>, bool)>,
+    pub segments: Vec<(Vec<Element<'t>>, bool, ParagraphSplitKind)>,
 }
 
 impl<'t> CollectSplitEscape<'t> {
-    pub fn into_layout(self) -> (Vec<Element<'t>>, Vec<(usize, bool)>, bool) {
+    pub fn into_layout(self) -> (Vec<Element<'t>>, Vec<ParagraphSplitEntry>, bool) {
         let mut flat = Vec::new();
         let mut entries = Vec::new();
         let mut safe = true;
         let last_index = self.segments.len() - 1;
-        for (index, (segment, segment_safe)) in self.segments.into_iter().enumerate() {
+        for (index, (segment, segment_safe, kind)) in
+            self.segments.into_iter().enumerate()
+        {
             safe &= segment_safe;
             let mut count = segment.len();
             let ends_with_break = matches!(segment.last(), Some(Element::LineBreak),);
@@ -125,7 +129,7 @@ impl<'t> CollectSplitEscape<'t> {
                 flat.push(Element::LineBreak);
                 count += 1;
             }
-            entries.push((count, segment_safe));
+            entries.push((count, segment_safe, kind));
         }
         (flat, entries, safe)
     }
@@ -156,10 +160,12 @@ pub fn collect_consume_keep_split<'r, 't>(
     ),
 > {
     let mut item_elements = Vec::new();
-    let mut escape: Option<Vec<(Vec<Element<'t>>, bool)>> = None;
+    let mut escape: Option<Vec<(Vec<Element<'t>>, bool, ParagraphSplitKind)>> = None;
 
     let mut comment_line_break_pending = false;
+    let mut inline_scope_depth = 0_usize;
     let collection = collect(parser, rule, closes, invalids, kind, |parser| {
+        parser.set_gate_items_allowed(inline_scope_depth == 0);
         let drop_line_break = comment_line_break_pending;
         comment_line_break_pending = false;
         let comment_line = parser.settings().layout.legacy()
@@ -186,10 +192,23 @@ pub fn collect_consume_keep_split<'r, 't>(
             paragraph_split,
             ..
         } = success;
+        for element in elements.as_ref() {
+            match element {
+                Element::Partial(PartialElement::InlineSpanOpen(_))
+                | Element::Partial(PartialElement::InlineSizeOpen(_)) => {
+                    inline_scope_depth += 1;
+                }
+                Element::Partial(PartialElement::InlineSpanClose(_))
+                | Element::Partial(PartialElement::InlineSizeClose(_)) => {
+                    inline_scope_depth = inline_scope_depth.saturating_sub(1);
+                }
+                _ => {}
+            }
+        }
         let single_line_break = matches!(elements, Elements::Single(Element::LineBreak));
         match &mut escape {
             Some(segments) => {
-                let (tail, tail_safe) =
+                let (tail, tail_safe, _) =
                     segments.last_mut().expect("escape has a last segment");
                 *tail_safe &= step_safe;
                 if !(drop_line_break
@@ -202,7 +221,7 @@ pub fn collect_consume_keep_split<'r, 't>(
             None => {
                 let split = paragraph_split.filter(|split| {
                     split.len() >= 2
-                        && split.iter().map(|(count, _)| count).sum::<usize>()
+                        && split.iter().map(|(count, _, _)| count).sum::<usize>()
                             == elements.len()
                 });
                 match split {
@@ -210,18 +229,18 @@ pub fn collect_consume_keep_split<'r, 't>(
                         let flat: Vec<Element<'t>> = elements.as_ref().to_vec();
                         let mut iter = flat.into_iter();
                         let mut segments = Vec::new();
-                        for (index, (count, segment_safe)) in
+                        for (index, (count, segment_safe, kind)) in
                             split.into_iter().enumerate()
                         {
                             let mut segment: Vec<Element<'t>> =
                                 iter.by_ref().take(count).collect();
                             if index == 0 {
-                                if matches!(segment.last(), Some(Element::LineBreak)) {
+                                while matches!(segment.last(), Some(Element::LineBreak)) {
                                     segment.pop();
                                 }
                                 item_elements.append(&mut segment);
                             } else {
-                                segments.push((segment, segment_safe));
+                                segments.push((segment, segment_safe, kind));
                             }
                         }
                         escape = Some(segments);
@@ -241,7 +260,11 @@ pub fn collect_consume_keep_split<'r, 't>(
                                 let mut iter = flat.into_iter();
                                 item_elements.extend(iter.by_ref().take(index));
                                 let rest: Vec<Element<'t>> = iter.skip(1).collect();
-                                escape = Some(vec![(rest, step_safe)]);
+                                escape = Some(vec![(
+                                    rest,
+                                    step_safe,
+                                    ParagraphSplitKind::Paragraph,
+                                )]);
                             }
                             None => {
                                 if !(drop_line_break
@@ -265,7 +288,7 @@ pub fn collect_consume_keep_split<'r, 't>(
     if parser.settings().layout.legacy() {
         collapse_adjacent_ascii_spaces(&mut item_elements);
         if let Some(segments) = &mut escape {
-            for (segment, _) in segments.iter_mut() {
+            for (segment, _, _) in segments.iter_mut() {
                 collapse_adjacent_ascii_spaces(segment);
             }
         }

@@ -48,8 +48,9 @@ mod wikidot_text;
 
 mod prelude {
     pub use crate::parsing::{
-        ExtractedToken, ParseError, ParseErrorKind, ParseResult, ParseSuccess, Token,
-        success_elements, success_elements_with_paragraph_safety, success_value,
+        ExtractedToken, ParagraphSplitEntry, ParseError, ParseErrorKind, ParseResult,
+        ParseSuccess, Token, success_elements, success_elements_with_paragraph_safety,
+        success_value,
     };
     pub use crate::settings::WikitextSettings;
     pub use crate::text::FullText;
@@ -79,8 +80,8 @@ pub(crate) use self::inline_format::wikidot_dash_run_elements;
 pub use self::outcome::ParseOutcome;
 pub(crate) use self::parser::DEEP_MAX_RECURSION_DEPTH;
 pub use self::result::{
-    ParseResult, ParseSuccess, success_elements, success_elements_with_paragraph_safety,
-    success_value,
+    ParagraphSplitEntry, ParagraphSplitKind, ParseResult, ParseSuccess, success_elements,
+    success_elements_with_paragraph_safety, success_value,
 };
 pub(crate) use self::rule::impls::decode_semicolon_entities;
 pub use self::token::{ExtractedToken, Token};

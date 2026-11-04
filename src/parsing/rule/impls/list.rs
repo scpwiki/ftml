@@ -24,7 +24,10 @@ use super::line_owner::{
 };
 use super::prelude::*;
 use crate::parsing::collect::collect_consume_keep_split;
-use crate::parsing::{DepthItem, DepthList, ParseSuccess, process_depths};
+use crate::parsing::{
+    DepthItem, DepthList, ParagraphSplitEntry, ParagraphSplitKind, ParseSuccess,
+    process_depths,
+};
 use crate::tree::{AttributeMap, ListItem, ListType};
 
 const MAX_LIST_DEPTH: usize = 128;
@@ -44,8 +47,13 @@ enum ListItemStep<'t> {
     Split {
         control: Option<(usize, ListType, Vec<Element<'t>>)>,
         escaped: Vec<Element<'t>>,
-        escaped_split: Option<Vec<(usize, bool)>>,
+        escaped_split: Option<Vec<ParagraphSplitEntry>>,
         escaped_safe: bool,
+    },
+    SplitItems {
+        control: Option<(usize, ListType, Vec<Element<'t>>)>,
+        items: Vec<(usize, ListType, Vec<Element<'t>>)>,
+        trailing: Option<(Vec<Element<'t>>, Vec<ParagraphSplitEntry>, bool)>,
     },
 }
 
@@ -78,7 +86,7 @@ fn try_consume_fn<'r, 't>(
     let mut depths = Vec::new();
     let mut errors = Vec::new();
     let mut escaped_elements = Vec::new();
-    let mut gate_escape: Option<(Vec<(usize, bool)>, bool)> = None;
+    let mut gate_escape: Option<(Vec<ParagraphSplitEntry>, bool)> = None;
 
     let mut paragraph_safe = false;
 
@@ -113,6 +121,21 @@ fn try_consume_fn<'r, 't>(
                     gate_escape = escaped_split.map(|split| (split, escaped_safe));
                 }
                 ended = true;
+            }
+            ListItemStep::SplitItems {
+                control,
+                items,
+                trailing,
+            } => {
+                if let Some(control) = control {
+                    depths.push(control);
+                }
+                depths.extend(items);
+                if let Some((escaped, split, safe)) = trailing {
+                    escaped_elements.extend(escaped);
+                    gate_escape = Some((split, safe));
+                    ended = true;
+                }
             }
         }
     }
@@ -168,7 +191,7 @@ fn try_consume_fn<'r, 't>(
     let mut result = ParseSuccess::new(elements.into(), errors, paragraph_safe);
     if let Some((entries, escape_safe)) = gate_escape {
         if list_count > 0 {
-            let mut full = vec![(list_count, false)];
+            let mut full = vec![(list_count, false, ParagraphSplitKind::Paragraph)];
             full.extend(entries);
             result.paragraph_split = Some(full);
         } else if entries.len() >= 2 {
@@ -290,11 +313,61 @@ where
         } else {
             Some((depth, list_type, elements))
         };
-        return Ok(ListItemStep::Split {
+        let mut offset = 0_usize;
+        let mut skip = 0_usize;
+        for (count, _, kind) in entries.iter() {
+            if matches!(kind, ParagraphSplitKind::Item(_)) {
+                break;
+            }
+            let slice = &flat[offset..offset + count];
+            if slice
+                .iter()
+                .all(|element| matches!(element, Element::LineBreak))
+            {
+                skip += 1;
+                offset += *count;
+            } else {
+                break;
+            }
+        }
+        let item_count = entries
+            .iter()
+            .skip(skip)
+            .take_while(|(_, _, kind)| matches!(kind, ParagraphSplitKind::Item(_)))
+            .count();
+        if item_count == 0 {
+            return Ok(ListItemStep::Split {
+                control,
+                escaped: flat,
+                escaped_split: Some(entries),
+                escaped_safe: escape_safe,
+            });
+        }
+        let mut rest = flat.into_iter().skip(offset);
+        let mut items = Vec::new();
+        for (count, _, kind) in entries.iter().skip(skip).take(item_count) {
+            let &ParagraphSplitKind::Item(item_type) = kind else {
+                unreachable!("leading entries are items");
+            };
+            let mut item_elements: Vec<Element<'t>> =
+                rest.by_ref().take(*count).collect();
+            while matches!(item_elements.last(), Some(Element::LineBreak)) {
+                item_elements.pop();
+            }
+            items.push((depth, item_type, item_elements));
+        }
+        let rest_flat: Vec<Element<'t>> = rest.collect();
+        let rest_entries: Vec<ParagraphSplitEntry> =
+            entries.into_iter().skip(skip + item_count).collect();
+        let trailing = if rest_entries.is_empty() {
+            None
+        } else {
+            Some((rest_flat, rest_entries, escape_safe))
+        };
+        return Ok(ListItemStep::SplitItems {
             control,
-            escaped: flat,
-            escaped_split: Some(entries),
-            escaped_safe: escape_safe,
+            items,
+            trailing,
         });
     }
     if parser.settings().layout.legacy()
@@ -373,6 +446,55 @@ fn parse_list_depth<'r, 't>(
     Ok(Some(depth))
 }
 
+pub(crate) fn list_item_marker_here(parser: &Parser) -> Option<ListType> {
+    let list_type = get_list_type(parser.current().token)?;
+    let mut step = parser.clone();
+    step.step().ok()?;
+    if step.current().token != Token::Whitespace || step.current().slice.len() != 1 {
+        return None;
+    }
+    Some(list_type)
+}
+
+pub(crate) fn collect_gate_body_list_line<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<
+    'r,
+    't,
+    (
+        Vec<Element<'t>>,
+        bool,
+        Option<crate::parsing::collect::CollectSplitEscape<'t>>,
+    ),
+> {
+    parser.step()?;
+    parser.step()?;
+    let close_conditions = [
+        ParseCondition::current(Token::LineBreak),
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::current(Token::InputEnd),
+        ParseCondition::current(Token::BulletItem),
+        ParseCondition::current(Token::NumberedItem),
+    ];
+    let restore_line = if parser.settings().layout.legacy() {
+        let previous = parser.in_wikidot_single_line_content();
+        parser.set_in_wikidot_single_line_content(true);
+        Some(previous)
+    } else {
+        None
+    };
+    let result =
+        collect_consume_keep_split(parser, RULE_LIST, &close_conditions, &[], None);
+    if let Some(previous) = restore_line {
+        parser.set_in_wikidot_single_line_content(previous);
+    }
+    let result = result?;
+    Ok(result.map(|(elements, last, escape)| {
+        let ends_run = matches!(last.token, Token::ParagraphBreak | Token::InputEnd);
+        (elements, ends_run, escape)
+    }))
+}
+
 fn collect_list_item_elements<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<
@@ -388,6 +510,8 @@ fn collect_list_item_elements<'r, 't>(
         ParseCondition::current(Token::LineBreak),
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::InputEnd),
+        ParseCondition::current(Token::BulletItem),
+        ParseCondition::current(Token::NumberedItem),
     ];
 
     let restore_line = if parser.settings().layout.legacy() {
@@ -409,7 +533,7 @@ fn collect_list_item_elements<'r, 't>(
     }))
 }
 
-fn build_list_element(
+pub(crate) fn build_list_element(
     top_ltype: ListType,
     list: DepthList<ListType, Vec<Element>>,
 ) -> Option<Element> {

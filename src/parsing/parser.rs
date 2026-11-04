@@ -129,6 +129,7 @@ pub(super) struct BlockScanCache {
     // Designated `[[/iftags]]` byte offset for the Wikidot pairing gather
     // currently in progress (#792); see `Parser::wikidot_iftags_body_end`.
     wikidot_iftags_body_end: Cell<Option<usize>>,
+    gate_items_allowed: Cell<bool>,
     wikidot_footnote_zone_until: Cell<Option<usize>>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
@@ -288,6 +289,19 @@ impl<'r, 't> Parser<'r, 't> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_iftags_body_end
+            .set(value);
+    }
+
+    #[inline]
+    pub(crate) fn gate_items_allowed(&self) -> bool {
+        self.block_end_scan_cache.borrow().gate_items_allowed.get()
+    }
+
+    #[inline]
+    pub(crate) fn set_gate_items_allowed(&self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .gate_items_allowed
             .set(value);
     }
 

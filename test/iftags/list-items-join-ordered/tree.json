@@ -1,0 +1,46 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "numbered",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "A"
+                            },
+                            {
+                                "element": "list",
+                                "data": {
+                                    "type": "numbered",
+                                    "attributes": {},
+                                    "items": [
+                                        {
+                                            "item-type": "elements",
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "B"
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": " "
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
