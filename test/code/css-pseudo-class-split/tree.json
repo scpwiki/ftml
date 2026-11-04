@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "a:hover { color: red; }\nspan:first-of-type { margin: 0; }",
+                "language": "css",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "a:hover { color: red; }\nspan:first-of-type { margin: 0; }",
+            "language": "css",
+            "name": null
+        }
+    ]
+}

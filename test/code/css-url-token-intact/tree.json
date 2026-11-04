@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "a { background: url(/files/deleted:component/x.png); }",
+                "language": "css",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "a { background: url(/files/deleted:component/x.png); }",
+            "language": "css",
+            "name": null
+        }
+    ]
+}
