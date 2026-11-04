@@ -392,16 +392,24 @@ fn finish_gallery<'r, 't>(
         arguments,
         GallerySelection::CurrentPageFiles,
     ));
-    if residual_opener_bracket {
+    let channel_residual = parser
+        .fused_name_residual()
+        .is_some_and(|position| position > opener_start && position <= head_end);
+    if residual_opener_bracket || channel_residual {
         if parser
             .fused_name_residual()
             .is_some_and(|position| position > opener_start && position <= head_end + 1)
         {
             parser.clear_fused_name_residual();
         }
+        let bracket_end = if residual_opener_bracket {
+            head_end + 1
+        } else {
+            head_end
+        };
         let mut elements = vec![gallery, text!("]")];
-        if matches!(source.as_bytes().get(head_end + 1), Some(b'\r' | b'\n'))
-            && !gallery_following_line_blank(source, head_end + 1)
+        if matches!(source.as_bytes().get(bracket_end), Some(b'\r' | b'\n'))
+            && !gallery_following_line_blank(source, bracket_end)
         {
             elements.push(Element::LineBreak);
             if entries_consumed {
@@ -416,7 +424,7 @@ fn finish_gallery<'r, 't>(
                 return Ok(success);
             }
             parser.mark_wikidot_mixed_paragraph_ownership();
-        } else if wikidot && gallery_line_continues(source, head_end + 1) {
+        } else if wikidot && gallery_line_continues(source, bracket_end) {
             parser.mark_wikidot_mixed_paragraph_ownership();
         }
         ok!(Elements::Multiple(elements))
