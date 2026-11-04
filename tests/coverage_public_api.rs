@@ -317,7 +317,8 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
     assert!(output.body.contains("wj-equation-number"));
     assert!(output.body.contains("Footnote item not found"));
     assert!(output.body.contains("Footnote body"));
-    assert!(output.body.contains("Bibliography item not found"));
+    assert!(output.body.contains("Bibliography item <em>"));
+    assert!(output.body.contains("</em> not found."));
     assert!(output.body.contains("Reference body"));
     assert!(output.body.contains("Bibliography block not found"));
     assert!(output.body.contains("colored"));

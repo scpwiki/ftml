@@ -541,7 +541,8 @@ fn handle_fallbacks_cover_rendering_helpers() {
         ("footnote-block-title", "Footnotes"),
         ("bibliography-reference", "Reference"),
         ("bibliography-block-title", "Bibliography"),
-        ("bibliography-cite-not-found", "Bibliography item not found"),
+        ("bibliography-cite-not-found-pre", "Bibliography item "),
+        ("bibliography-cite-not-found-post", " not found."),
         (
             "bibliography-block-not-found",
             "Bibliography block not found",
@@ -612,10 +613,8 @@ fn handle_localizes_all_render_messages_to_japanese() {
         ("footnote-block-title", "脚注"),
         ("bibliography-reference", "参照"),
         ("bibliography-block-title", "参考文献"),
-        (
-            "bibliography-cite-not-found",
-            "参考文献項目が見つかりません",
-        ),
+        ("bibliography-cite-not-found-pre", "参考文献項目 "),
+        ("bibliography-cite-not-found-post", " が見つかりません"),
         (
             "bibliography-block-not-found",
             "参考文献ブロックが見つかりません",
