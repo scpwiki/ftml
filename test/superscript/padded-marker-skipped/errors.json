@@ -1,0 +1,38 @@
+[
+    {
+        "token": "whitespace",
+        "rule": "superscript",
+        "span": [
+            3,
+            4
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "superscript",
+        "rule": "superscript",
+        "span": [
+            8,
+            10
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            8,
+            10
+        ],
+        "kind": "no-rules-match"
+    }
+]

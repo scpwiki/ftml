@@ -1,0 +1,62 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "**"
+                    },
+                    {
+                        "element": "text",
+                        "data": "T1"
+                    },
+                    {
+                        "element": "text",
+                        "data": "//"
+                    },
+                    {
+                        "element": "text",
+                        "data": "T2"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "monospace",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "T3"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "**"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "//"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "x"
+                    }
+                ]
+            }
+        }
+    ]
+}
