@@ -1,0 +1,4 @@
+[https://example.com [[div]]A[[/div]]]
+[https://example.com [[div class="c"]]A[[/div]]]
+[https://example.com/ [[span class="c"]]Y]
+[https://example.com/ [[code]]x = 1[[/code]]]

@@ -138,6 +138,14 @@ fn try_consume_link<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    if parser.settings().layout.legacy()
+        && target.is_none()
+        && !leading_space
+        && url.starts_with('#')
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     match last.token {
         Token::RightLink => build_same(
             parser,

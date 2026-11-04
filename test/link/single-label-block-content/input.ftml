@@ -1,0 +1,4 @@
+[https://example.com/ [[span class="c"]]Y[[/span]] end]
+[https://example.com [[image foo.gif]]]
+[https://example.com/ [[size 120%]]big[[/size]]]
+[https://example.com/ [[a href="https://x.test"]]txt[[/a]] more]
