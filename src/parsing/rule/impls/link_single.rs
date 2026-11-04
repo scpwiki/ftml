@@ -725,6 +725,12 @@ fn wikidot_link_disposition(url: &str) -> WikidotLinkDisposition {
         || url.starts_with("gopher://")
         || url.starts_with("news://")
         || url.starts_with("mms://")
+        || url.starts_with("ssh://")
+        || url.starts_with("git://")
+        || url.starts_with("sftp://")
+        || url.starts_with("svn://")
+        || url.starts_with("telnet://")
+        || url.starts_with("cvs://")
         || url.starts_with("mailto:")
     {
         return WikidotLinkDisposition::Link;

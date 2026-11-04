@@ -88,7 +88,7 @@ pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
         Token::TableColumnCenter => &[RULE_TABLE],
         Token::TableColumnTitle => &[RULE_TABLE],
 
-        Token::Identifier if matches!(current.slice, "gopher" | "news" | "mms") => {
+        Token::Identifier if identifier_may_start_wikidot_url(current.slice) => {
             &[RULE_WIKIDOT_SCHEME_URL, RULE_TEXT]
         }
         Token::Identifier => &[RULE_TEXT],

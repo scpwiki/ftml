@@ -55,6 +55,7 @@ pub fn is_url(url: &str) -> bool {
             url.starts_with("chrome-extension://")
                 || url.starts_with("chrome://")
                 || url.starts_with("content://")
+                || url.starts_with("cvs://")
         }
         Some(b'd') => url.starts_with("dns:"),
         Some(b'f') => {
@@ -71,7 +72,12 @@ pub fn is_url(url: &str) -> bool {
         }
         Some(b'm') => url.starts_with("mailto:"),
         Some(b'r') => url.starts_with("resource://") || url.starts_with("rtmp://"),
-        Some(b's') => url.starts_with("sftp://"),
+        Some(b's') => {
+            url.starts_with("sftp://")
+                || url.starts_with("ssh://")
+                || url.starts_with("svn://")
+        }
+        Some(b't') => url.starts_with("telnet://"),
         _ => false,
     }
 }

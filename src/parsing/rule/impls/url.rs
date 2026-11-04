@@ -36,7 +36,17 @@ pub const RULE_WIKIDOT_SCHEME_URL: Rule = Rule {
     try_consume_fn: wikidot_scheme_url,
 };
 
-const WIKIDOT_ONLY_AUTOLINK_SCHEMES: [&str; 3] = ["gopher://", "news://", "mms://"];
+const WIKIDOT_ONLY_AUTOLINK_SCHEMES: [&str; 9] = [
+    "gopher://",
+    "news://",
+    "mms://",
+    "ssh://",
+    "git://",
+    "sftp://",
+    "svn://",
+    "telnet://",
+    "cvs://",
+];
 
 pub(crate) fn is_wikidot_only_autolink_url(url: &str) -> bool {
     WIKIDOT_ONLY_AUTOLINK_SCHEMES
@@ -107,16 +117,89 @@ fn wikidot_scheme_url<'r, 't>(
     }
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
-    if !starts_wikidot_only_scheme_url(source, start) {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
-    }
     let end = parser.current().span.end;
+    if starts_wikidot_only_scheme_url(source, start) {
+        let comments = Vec::new();
+        parser.step()?;
+
+        return ok!(wikidot_url_elements_rest(
+            parser, source, start, start, end, false, comments
+        )?);
+    }
+
+    let Some(url_start) = glued_scheme_url_start(source, start, end) else {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    };
     let comments = Vec::new();
     parser.step()?;
 
-    ok!(wikidot_url_elements_rest(
-        parser, source, start, start, end, false, comments
-    )?)
+    let rest = wikidot_url_elements_rest(
+        parser, source, start, url_start, end, false, comments,
+    )?;
+    let mut elements = vec![text!(&source[start..url_start])];
+    match rest {
+        Elements::None => {}
+        Elements::Single(element) => elements.push(element),
+        Elements::Multiple(mut rest) => elements.append(&mut rest),
+    }
+    ok!(Elements::Multiple(elements))
+}
+
+const GLUED_SCHEME_NAMES: [(&str, &str); 13] = [
+    ("https", "https://"),
+    ("http", "http://"),
+    ("ftp", "ftp://"),
+    ("mailto", "mailto:"),
+    ("gopher", "gopher://"),
+    ("news", "news://"),
+    ("mms", "mms://"),
+    ("ssh", "ssh://"),
+    ("git", "git://"),
+    ("sftp", "sftp://"),
+    ("svn", "svn://"),
+    ("telnet", "telnet://"),
+    ("cvs", "cvs://"),
+];
+
+pub(crate) fn identifier_may_start_wikidot_url(slice: &str) -> bool {
+    GLUED_SCHEME_NAMES.iter().any(|(name, _)| {
+        slice == *name
+            || slice.strip_suffix(name).is_some_and(|prefix| {
+                prefix
+                    .bytes()
+                    .last()
+                    .is_some_and(|byte| byte.is_ascii_digit())
+            })
+    })
+}
+
+pub(crate) fn glued_scheme_url_start(
+    source: &str,
+    start: usize,
+    end: usize,
+) -> Option<usize> {
+    let text = &source[start..end];
+    let mut best = None;
+    for (name, prefix) in GLUED_SCHEME_NAMES {
+        let Some(head) = text.strip_suffix(name) else {
+            continue;
+        };
+        if !head
+            .bytes()
+            .last()
+            .is_some_and(|byte| byte.is_ascii_digit())
+        {
+            continue;
+        }
+        let url_start = end - name.len();
+        if !source[url_start..].starts_with(prefix) {
+            continue;
+        }
+        if best.is_none_or(|current| url_start < current) {
+            best = Some(url_start);
+        }
+    }
+    best
 }
 
 fn wikidot_url_elements_rest<'r, 't>(
@@ -208,8 +291,24 @@ where
     let mut trailing = Vec::new();
     if at_sentence_boundary {
         while let Some(last) = url.chars().next_back() {
-            if !matches!(last, ',' | '*' | '-' | '}')
-                && (last.is_ascii() || last.is_whitespace())
+            if !matches!(
+                last,
+                ',' | '*'
+                    | '-'
+                    | '}'
+                    | '{'
+                    | '.'
+                    | ';'
+                    | ':'
+                    | '!'
+                    | ')'
+                    | ']'
+                    | '>'
+                    | '^'
+                    | '`'
+                    | '|'
+                    | '#'
+            ) && (last.is_ascii() || last.is_whitespace())
             {
                 break;
             }
@@ -218,11 +317,6 @@ where
         }
     }
     let trailing: String = trailing.iter().rev().collect();
-
-    let split_terminal_period = url.ends_with('.') && at_sentence_boundary;
-    if split_terminal_period {
-        url = without_last_character(url);
-    }
 
     let link = Element::Link {
         ltype: LinkType::Direct,
@@ -233,9 +327,6 @@ where
     let mut elements = vec![link];
     if !trailing.is_empty() {
         elements.push(Element::Text(Cow::Owned(trailing)));
-    }
-    if split_terminal_period {
-        elements.push(text!("."));
     }
     if let Some(suffix) = suffix {
         elements.push(text!(suffix));
@@ -272,11 +363,9 @@ fn wikidot_automatic_url_end(source: &str, mut end: usize, limit: usize) -> usiz
     let bytes = source.as_bytes();
     while end < limit {
         let character = source[end..].chars().next().unwrap();
-        if matches!(
-            bytes[end],
-            b'\n' | b'\r' | b' ' | b'\t' | b'"' | b'\'' | b'['
-        ) || matches!(bytes[end], 0x00..=0x08 | 0x0b..=0x0c | 0x0e..=0x1a | 0x1c..=0x1f)
-            || source[end..].starts_with("@@")
+        if matches!(bytes[end], b'\n' | b'\r' | b' ' | b'\t' | b'"' | b'\'')
+            || matches!(bytes[end], 0x00..=0x08 | 0x0b..=0x0c | 0x0e..=0x1a | 0x1c..=0x1f)
+            || source[end..].starts_with("[[")
             || source[end..].starts_with("]]")
             || source[end..].starts_with("||")
         {
