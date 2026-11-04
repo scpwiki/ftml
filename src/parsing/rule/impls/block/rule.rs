@@ -20,6 +20,7 @@
 
 use super::super::prelude::*;
 use super::mapping::{get_block_rule_with_name, get_block_rule_with_name_for_layout};
+use super::parser::{head_seam_forms_block, head_word_never_resolves};
 use super::{
     BlockRule,
     blocks::{
@@ -30,6 +31,7 @@ use super::{
 use crate::parsing::inline_scope::WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE;
 use crate::settings::WikitextMode;
 use crate::tree::PartialElement;
+use std::borrow::Cow;
 
 pub const RULE_BLOCK: Rule = Rule {
     name: "block",
@@ -63,6 +65,30 @@ fn block_star<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
     parse_block(parser, true)
 }
 
+#[allow(clippy::ptr_arg)]
+fn block_for_head_word<'r, 't>(
+    parser: &Parser<'r, 't>,
+    name: &Cow<'t, str>,
+    segment: bool,
+) -> Option<&'static BlockRule> {
+    let block = if parser.discarding_hidden_body() {
+        get_block_rule_with_name(name)
+    } else {
+        get_block_rule_with_name_for_layout(name, parser.settings().layout)
+    }?;
+    let actionable = match name {
+        Cow::Borrowed(_) => true,
+        Cow::Owned(_) => {
+            if segment {
+                head_seam_forms_block(block, parser.settings().layout)
+            } else {
+                !head_word_never_resolves(block)
+            }
+        }
+    };
+    actionable.then_some(block)
+}
+
 fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     let current = parser.step()?;
     let flag_star = current.token == Token::LeftBlockStar;
@@ -72,13 +98,9 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
             return Ok(false);
         }
 
-        let (name, _) = parser.get_block_name(false)?;
+        let (name, _, segment) = parser.get_block_name(false)?;
 
-        let block = if parser.discarding_hidden_body() {
-            get_block_rule_with_name(name)
-        } else {
-            get_block_rule_with_name_for_layout(name, parser.settings().layout)
-        };
+        let block = block_for_head_word(parser, &name, segment);
         match block {
             Some(block_rule) => Ok(block_rule.accepts_newlines_outside_body
                 && block_rule_enabled(parser, block_rule)
@@ -214,25 +236,31 @@ where
                         .get(.."[[gallery]]]".len())
                         .is_some_and(|opener| opener.eq_ignore_ascii_case("[[gallery]]]"))
             });
-    let (name, in_head) = if residual_block_opener {
-        parser.get_wikidot_block_name_with_residual_opener()?
+    let (name, in_head, segment) = if residual_block_opener {
+        let (name, in_head) = parser.get_wikidot_block_name_with_residual_opener()?;
+        (Cow::Borrowed(name), in_head, false)
     } else {
         parser.get_block_name(flag_star)?
     };
 
-    let (name, flag_score) = match name.strip_suffix('_') {
-        Some(name) => (name, true),
-        None => (name, false),
+    let flag_score = name.ends_with('_');
+    let lookup_name: Cow<'t, str> = if flag_score {
+        match name {
+            Cow::Borrowed(name) => Cow::Borrowed(name.strip_suffix('_').unwrap_or(name)),
+            Cow::Owned(mut name) => {
+                name.pop();
+                Cow::Owned(name)
+            }
+        }
+    } else {
+        name
     };
-    if flag_score && name.ends_with('_') {
+    if flag_score && lookup_name.ends_with('_') {
         return Err(parser.make_err(ParseErrorKind::NoSuchBlock));
     }
+    let name: &str = &lookup_name;
 
-    let block = match if parser.discarding_hidden_body() {
-        get_block_rule_with_name(name)
-    } else {
-        get_block_rule_with_name_for_layout(name, parser.settings().layout)
-    } {
+    let block = match block_for_head_word(parser, &lookup_name, segment) {
         Some(block) => block,
         None => return Err(parser.make_err(ParseErrorKind::NoSuchBlock)),
     };

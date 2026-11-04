@@ -144,17 +144,79 @@ pub(super) fn validate_reachable_close_strict(
 
 pub(super) fn block_name_at(tokens: &[ExtractedToken<'_>], index: usize) -> String {
     let mut name = String::new();
-    for tok in &tokens[index + 1..] {
+    let mut pos = index + 1;
+    while let Some(tok) = tokens.get(pos) {
         match tok.token {
             Token::Whitespace
             | Token::LineBreak
             | Token::ParagraphBreak
             | Token::RightBlock => break,
-            Token::LeftBlockStar => continue,
+            Token::LeftBlockStar => {}
+            Token::LeftBlock => match segment_close_at(tokens, pos) {
+                Some(next) => {
+                    pos = next;
+                    continue;
+                }
+                None => name.push_str(tok.slice),
+            },
             _ => name.push_str(tok.slice),
         }
+        pos += 1;
     }
     name.strip_suffix('_').unwrap_or(&name).to_ascii_lowercase()
+}
+
+fn segment_head_at(tokens: &[ExtractedToken<'_>], pos: usize) -> Option<usize> {
+    let mut inner = pos + 1;
+    if tokens
+        .get(inner)
+        .is_some_and(|tok| tok.token == Token::Whitespace)
+    {
+        inner += 1;
+    }
+    let tok = tokens.get(inner)?;
+    if tok.token == Token::Identifier
+        && (tok.slice.eq_ignore_ascii_case("iftags")
+            || tok.slice.eq_ignore_ascii_case("ifcategory"))
+    {
+        Some(inner + 1)
+    } else {
+        None
+    }
+}
+
+fn segment_close_at(tokens: &[ExtractedToken<'_>], start: usize) -> Option<usize> {
+    segment_head_at(tokens, start)?;
+    let mut depth = 1usize;
+    let mut pos = start + 1;
+    while let Some(tok) = tokens.get(pos) {
+        match tok.token {
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                return None;
+            }
+            Token::LeftBlock => {
+                if segment_head_at(tokens, pos).is_some() {
+                    depth += 1;
+                }
+            }
+            Token::LeftBlockEnd => {
+                if let Some(after_name) = segment_head_at(tokens, pos) {
+                    depth -= 1;
+                    if depth == 0 {
+                        return match tokens.get(after_name).map(|tok| tok.token) {
+                            Some(Token::RightBlock) | Some(Token::RightLink) => {
+                                Some(after_name + 1)
+                            }
+                            _ => None,
+                        };
+                    }
+                }
+            }
+            _ => {}
+        }
+        pos += 1;
+    }
+    None
 }
 
 pub(super) fn is_block_name(name: &str) -> bool {

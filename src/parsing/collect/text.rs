@@ -121,7 +121,9 @@ pub fn collect_text_resolved<'p, 'r, 't>(
 where
     'r: 't,
 {
-    collect_text_resolved_impl(parser, rule, closes, invalids, kind, false)
+    let (text, last, _) =
+        collect_text_resolved_impl(parser, rule, closes, invalids, kind, false)?;
+    Ok((text, last))
 }
 
 /// Fused-closer form of `collect_text_resolved()` for block-head
@@ -144,6 +146,26 @@ pub fn collect_text_resolved_fused<'p, 'r, 't>(
 where
     'r: 't,
 {
+    let (text, last, _) =
+        collect_text_resolved_impl(parser, rule, closes, invalids, kind, true)?;
+    Ok((text, last))
+}
+
+/// Like `collect_text_resolved_fused()`, but also reports whether any
+/// iftags segment was consumed while collecting. Callers that dispatch
+/// on the collected text (block names) need this: the head-seam policy
+/// judges a name resolved through a segment differently from one
+/// resolved through comment elision alone.
+pub fn collect_text_resolved_fused_tracked<'p, 'r, 't>(
+    parser: &'p mut Parser<'r, 't>,
+    rule: Rule,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>, bool), ParseError>
+where
+    'r: 't,
+{
     collect_text_resolved_impl(parser, rule, closes, invalids, kind, true)
 }
 
@@ -154,7 +176,7 @@ fn collect_text_resolved_impl<'p, 'r, 't>(
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
     allow_fused_closer: bool,
-) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>), ParseError>
+) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>, bool), ParseError>
 where
     'r: 't,
 {
@@ -162,6 +184,7 @@ where
     let start = parser.current().span.start;
     let mut copied_until = start;
     let mut output = None::<String>;
+    let mut segment_consumed = false;
     // After a fused segment, the source offset at which a `]`
     // token must start for it to complete the head's close with
     // the fused token's leftover bracket, and the offset the
@@ -182,7 +205,7 @@ where
                 };
 
                 parser.step()?;
-                return Ok((text, current));
+                return Ok((text, current, segment_consumed));
             }
         }
 
@@ -214,7 +237,7 @@ where
                 parser.step()?;
             }
 
-            return Ok((text, last));
+            return Ok((text, last, segment_consumed));
         }
 
         if parser.evaluate_any(invalids) {
@@ -259,6 +282,7 @@ where
                 consume_iftags_segment(parser)?
             })
             .expect("segment presence was just checked");
+            segment_consumed = true;
 
             {
                 let output = output.get_or_insert_with(String::new);
@@ -298,7 +322,11 @@ where
                         ParseCondition::TokenPair(..) => None,
                     });
                     if let Some(last) = fused {
-                        return Ok((Cow::Owned(output.take().unwrap()), last));
+                        return Ok((
+                            Cow::Owned(output.take().unwrap()),
+                            last,
+                            segment_consumed,
+                        ));
                     }
 
                     // The run overshoots the close (extra authored
@@ -325,7 +353,11 @@ where
                             )
                         })
                     {
-                        return Ok((Cow::Owned(output.take().unwrap()), straddle));
+                        return Ok((
+                            Cow::Owned(output.take().unwrap()),
+                            straddle,
+                            segment_consumed,
+                        ));
                     }
                 }
             }

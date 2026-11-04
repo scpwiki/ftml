@@ -120,7 +120,7 @@ impl<'r, 't> Parser<'r, 't> {
 
         let mut probe = self.clone();
         if let Ok(name) = probe.get_end_block()
-            && considered.iter().any(|boundary| boundary.accepts(name))
+            && considered.iter().any(|boundary| boundary.accepts(&name))
         {
             return true;
         }

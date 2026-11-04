@@ -429,7 +429,7 @@ where
             }
             Token::LeftBlock => {
                 let mut opener = scan.clone();
-                if let Ok((name, in_head)) = opener.get_block_name(false) {
+                if let Ok((name, in_head, segment)) = opener.get_block_name(false) {
                     let mut head_complete = !in_head;
                     if in_head {
                         loop {
@@ -458,18 +458,22 @@ where
                         }
                     }
                     if head_complete {
-                        if name.eq_ignore_ascii_case("image")
-                            || name.eq_ignore_ascii_case("user")
+                        let actionable = opener.head_word_is_actionable(&name, segment);
+                        if actionable
+                            && (name.eq_ignore_ascii_case("image")
+                                || name.eq_ignore_ascii_case("user"))
                         {
                             parser.cache_single_link_label_owner_scan_outcomes(
                                 &traversed, true,
                             );
                             return true;
                         }
-                        span_open |= name.eq_ignore_ascii_case("span");
-                        footnote_open |= name.eq_ignore_ascii_case("footnote");
-                        size_open |= name.eq_ignore_ascii_case("size");
-                        a_open |= name.eq_ignore_ascii_case("a");
+                        if actionable {
+                            span_open |= name.eq_ignore_ascii_case("span");
+                            footnote_open |= name.eq_ignore_ascii_case("footnote");
+                            size_open |= name.eq_ignore_ascii_case("size");
+                            a_open |= name.eq_ignore_ascii_case("a");
+                        }
                         scan.update(&opener);
                         continue;
                     }

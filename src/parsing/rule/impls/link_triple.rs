@@ -674,13 +674,14 @@ where
     'r: 't,
 {
     let mut block = parser.clone();
-    let Ok((name, _)) = block.get_block_name(false) else {
+    let Ok((name, _, segment)) = block.get_block_name(false) else {
         return false;
     };
 
     ["span", "size", "image", "footnote", "iframe"]
         .iter()
         .any(|owner| name.eq_ignore_ascii_case(owner))
+        && block.head_word_is_actionable(&name, segment)
 }
 
 fn wikidot_target(

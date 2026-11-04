@@ -333,7 +333,7 @@ where
     {
         let mut close = parser.clone();
         if let Ok(name) = close.get_end_block() {
-            let name = name.strip_suffix('_').unwrap_or(name);
+            let name = name.strip_suffix('_').unwrap_or(&name);
             if parser.take_wikidot_crossed_close(name) {
                 parser.update(&close);
                 return Ok(Some(Elements::None));
@@ -480,19 +480,20 @@ where
         scan.get_end_block().is_ok()
     } else {
         match scan.get_block_name(false) {
-            Ok((name, _)) => {
-                second_opener_name = Some(name);
+            Ok((name, _, segment)) => {
+                second_opener_name = Some((name, segment));
                 true
             }
             Err(_) => false,
         }
     };
-    if let Some(name) = second_opener_name {
-        let name = name.strip_suffix('_').unwrap_or(name);
+    if let Some((name, segment)) = second_opener_name {
+        let view = name.strip_suffix('_').unwrap_or(&name);
         if matches!(
-            name.to_ascii_lowercase().as_str(),
+            view.to_ascii_lowercase().as_str(),
             "footnote" | "span" | "size" | "a"
-        ) {
+        ) && scan.head_word_view_is_actionable(&name, segment, view)
+        {
             return Ok(None);
         }
     }

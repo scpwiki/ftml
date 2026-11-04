@@ -97,7 +97,7 @@ impl<'r, 't> Parser<'r, 't> {
             return false;
         };
         let score_close = raw_name.ends_with('_');
-        let name = raw_name.strip_suffix('_').unwrap_or(raw_name);
+        let name = raw_name.strip_suffix('_').unwrap_or(&raw_name);
 
         boundaries.iter().rev().any(|boundary| {
             let names = boundary.accepts_names;

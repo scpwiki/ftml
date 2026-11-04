@@ -360,9 +360,10 @@ where
             }
         } else if scan.current().token == Token::LeftBlock {
             let mut head = scan.clone();
-            let is_row = head
-                .get_block_name(false)
-                .is_ok_and(|(name, _)| name.eq_ignore_ascii_case("row"));
+            let is_row = head.get_block_name(false).is_ok_and(|(name, _, segment)| {
+                name.eq_ignore_ascii_case("row")
+                    && head.head_word_is_actionable(&name, segment)
+            });
 
             if is_row {
                 let mut candidate = scan.clone();

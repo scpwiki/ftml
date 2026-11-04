@@ -20,9 +20,11 @@
 
 use super::BlockRule;
 use super::arguments::Arguments;
+use crate::layout::Layout;
 use crate::parsing::collect::{
     CommentElidedText, collect_comment_elided_keep, collect_text, collect_text_keep,
-    collect_text_resolved_fused, consume_iftags_segment, consume_valid_comment,
+    collect_text_resolved_fused, collect_text_resolved_fused_tracked,
+    consume_iftags_segment, consume_valid_comment,
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -213,6 +215,36 @@ fn protected_span_end(
         Token::LeftBlock => raw_block_span_end(source, tokens, start),
         _ => None,
     }
+}
+
+/// Blocks whose names are never read through the resolved head-word
+/// reader: raw-verbatim bodies, self-pairing gate blocks, and the
+/// module block, whose heads live scans and pairs verbatim.
+pub(crate) fn head_word_never_resolves(block: &BlockRule) -> bool {
+    matches!(
+        block.name,
+        "block-code"
+            | "block-raw"
+            | "block-html"
+            | "block-math"
+            | "block-module"
+            | "block-iftags"
+            | "block-ifcategory"
+    )
+}
+
+/// Whether a block whose head word was resolved through an iftags
+/// segment may form under the head-seam policy. The resolved name
+/// selects the block, but live does not dispatch every block through
+/// a seam: the never-resolved blocks never form through one, and the
+/// Wikidot layout admits only the blocks saved-page evidence has
+/// confirmed (footnote so far; the allowlist grows one block per
+/// saved-page row). The Wikijump layout admits everything else.
+pub(crate) fn head_seam_forms_block(block: &BlockRule, layout: Layout) -> bool {
+    if head_word_never_resolves(block) {
+        return false;
+    }
+    !layout.legacy() || block.name == "block-footnote"
 }
 
 fn raw_block_span_end(
@@ -620,7 +652,7 @@ where
     pub fn get_block_name(
         &mut self,
         flag_star: bool,
-    ) -> Result<(&'t str, bool), ParseError> {
+    ) -> Result<(Cow<'t, str>, bool, bool), ParseError> {
         if flag_star {
             self.get_optional_token(Token::LeftBlockStar)?;
         } else {
@@ -629,7 +661,52 @@ where
 
         self.get_optional_space()?;
 
-        self.get_head_word_raw(ParseErrorKind::BlockMissingName)
+        self.get_head_word_tracked(ParseErrorKind::BlockMissingName)
+    }
+
+    /// Whether a head word read by `get_block_name` / `get_end_block`
+    /// may be acted on: an unseamed word always may; a word resolved
+    /// through comment elision alone may unless its block never
+    /// resolves; a word resolved through an iftags segment only
+    /// where the head-seam policy admits its block.
+    #[allow(clippy::ptr_arg)]
+    pub(crate) fn head_word_is_actionable(
+        &self,
+        name: &Cow<'t, str>,
+        segment: bool,
+    ) -> bool {
+        self.head_word_view_is_actionable(name, segment, name)
+    }
+
+    /// Like `head_word_is_actionable`, but judges a view of the word
+    /// (for example with a trailing score marker stripped) while the
+    /// word itself decides whether it was resolved through a segment.
+    #[allow(clippy::ptr_arg)]
+    pub(crate) fn head_word_view_is_actionable(
+        &self,
+        name: &Cow<'t, str>,
+        segment: bool,
+        view: &str,
+    ) -> bool {
+        if matches!(name, Cow::Borrowed(_)) {
+            return true;
+        }
+        let block = if self.discarding_hidden_body() {
+            super::mapping::get_block_rule_with_name(view)
+        } else {
+            super::mapping::get_block_rule_with_name_for_layout(
+                view,
+                self.settings().layout,
+            )
+        };
+        let Some(block) = block else {
+            return false;
+        };
+        if segment {
+            head_seam_forms_block(block, self.settings().layout)
+        } else {
+            !head_word_never_resolves(block)
+        }
     }
 
     fn get_head_word_raw(
@@ -660,7 +737,23 @@ where
         &mut self,
         kind: ParseErrorKind,
     ) -> Result<(Cow<'t, str>, bool), ParseError> {
-        if !self.settings().layout.legacy() {
+        let (name, in_head, _) = self.get_head_word_impl(kind, true)?;
+        Ok((name, in_head))
+    }
+
+    fn get_head_word_tracked(
+        &mut self,
+        kind: ParseErrorKind,
+    ) -> Result<(Cow<'t, str>, bool, bool), ParseError> {
+        self.get_head_word_impl(kind, false)
+    }
+
+    fn get_head_word_impl(
+        &mut self,
+        kind: ParseErrorKind,
+        skip_leading_comments: bool,
+    ) -> Result<(Cow<'t, str>, bool, bool), ParseError> {
+        if skip_leading_comments && !self.settings().layout.legacy() {
             while self.current().token == Token::LeftComment {
                 let mut probe = self.clone();
                 if consume_valid_comment(&mut probe).is_err() {
@@ -679,8 +772,13 @@ where
             ParseCondition::current(Token::RightBlock),
         ];
         let rule = self.rule();
-        let (name, last) =
-            collect_text_resolved_fused(self, rule, &end_conditions, &[], Some(kind))?;
+        let (name, last, segment_consumed) = collect_text_resolved_fused_tracked(
+            self,
+            rule,
+            &end_conditions,
+            &[],
+            Some(kind),
+        )?;
         let legacy = self.settings().layout.legacy();
         fn trim_head_word(name: &str, legacy: bool) -> &str {
             if legacy {
@@ -700,7 +798,7 @@ where
         }
         let in_head = !matches!(last.token, Token::RightBlock | Token::RightBracket);
 
-        Ok((name, in_head))
+        Ok((name, in_head, segment_consumed))
     }
 
     pub(crate) fn get_wikidot_block_name_with_residual_opener(
@@ -769,11 +867,15 @@ where
         ))
     }
 
-    pub fn get_end_block(&mut self) -> Result<&'t str, ParseError> {
+    pub fn get_end_block(&mut self) -> Result<Cow<'t, str>, ParseError> {
         self.get_token(Token::LeftBlockEnd, ParseErrorKind::BlockExpectedEnd)?;
         self.get_optional_space()?;
 
-        let (name, in_head) = self.get_block_name(false)?;
+        let (name, in_head, segment) = self.get_block_name(false)?;
+        if matches!(name, Cow::Owned(_)) && !self.head_word_is_actionable(&name, segment)
+        {
+            return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+        }
         if in_head {
             if self.settings().layout.legacy()
                 && self.current().token == Token::Whitespace
@@ -986,7 +1088,9 @@ where
                 )
                 && parser.wikidot_fused_end_block_ahead(block_rule);
             let name = if fused_close {
-                parser.get_wikidot_fused_end_block(block_rule)?
+                parser
+                    .get_wikidot_fused_end_block(block_rule)
+                    .map(Cow::Borrowed)?
             } else {
                 parser.get_end_block()?
             };
@@ -1012,7 +1116,7 @@ where
             }
 
             let score_close = name.ends_with('_');
-            let name = name.strip_suffix('_').unwrap_or(name);
+            let name = name.strip_suffix('_').unwrap_or(&name);
             if parser.settings().layout.legacy()
                 && score_close
                 && block_rule.name == "block-iftags"
@@ -1111,7 +1215,7 @@ where
         if !source.eq_ignore_ascii_case(&format!("[[/{raw_name}]]")) {
             return false;
         }
-        let name = raw_name.strip_suffix('_').unwrap_or(raw_name);
+        let name = raw_name.strip_suffix('_').unwrap_or(&raw_name);
         let terminates = if block_rule.name == "block-list-item" {
             name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
         } else {
@@ -1138,7 +1242,7 @@ where
                 Token::LeftBlockEnd => {
                     let mut end = probe.clone();
                     if let Ok(name) = end.get_end_block() {
-                        let name = name.strip_suffix('_').unwrap_or(name);
+                        let name = name.strip_suffix('_').unwrap_or(&name);
                         if name.eq_ignore_ascii_case("ul")
                             || name.eq_ignore_ascii_case("ol")
                         {
@@ -1386,7 +1490,7 @@ where
                 if absolute_depth == required_depth
                     && let Ok(name) = end.get_end_block()
                 {
-                    let name = name.strip_suffix('_').unwrap_or(name);
+                    let name = name.strip_suffix('_').unwrap_or(&name);
                     if block_rule_accepts_end_name(
                         block_rule,
                         name,
@@ -2496,13 +2600,13 @@ where
                     let close_end = close.current().span.start;
                     if !wikidot_alias_close_is_exact(
                         &scan.full_text().inner()[close_start..close_end],
-                        name,
+                        &name,
                     ) {
                         scan.update(&close);
                         continue;
                     }
                     let scored_close = name.ends_with('_');
-                    let base_name = name.strip_suffix('_').unwrap_or(name);
+                    let base_name = name.strip_suffix('_').unwrap_or(&name);
                     if block_rule_accepts_end_name(block_rule, base_name, true) {
                         if scored_close {
                             if owners.last().is_some_and(|(_, scored)| *scored) {
@@ -2553,13 +2657,15 @@ where
                         .and_then(|source| source.get(.."[[span_]]]".len()))
                         .is_some_and(|source| source.eq_ignore_ascii_case("[[span_]]]"));
                 let parsed_name = if scored_span_residual_opener {
-                    opener.get_wikidot_block_name_with_residual_opener()
+                    opener
+                        .get_wikidot_block_name_with_residual_opener()
+                        .map(|(name, in_head)| (Cow::Borrowed(name), in_head, false))
                 } else {
                     opener.get_block_name(false)
                 };
-                if let Ok((name, in_head)) = parsed_name {
+                if let Ok((name, in_head, segment)) = parsed_name {
                     let scored = name.ends_with('_');
-                    let base_name = name.strip_suffix('_').unwrap_or(name);
+                    let base_name = name.strip_suffix('_').unwrap_or(&name);
                     let scored_span_empty_spaced_head =
                         block_rule.name == "block-span" && scored && in_head && {
                             let mut head = opener.clone();
@@ -2570,6 +2676,7 @@ where
                         .accepts_names
                         .iter()
                         .any(|accepted| base_name.eq_ignore_ascii_case(accepted))
+                        && opener.head_word_view_is_actionable(&name, segment, base_name)
                         && !scored_span_empty_spaced_head
                         && (scored_span_residual_opener
                             || opener.get_optional_space().is_ok()
@@ -2677,7 +2784,7 @@ where
                 Token::LeftBlockEnd => {
                     let mut end = parser.clone();
                     if let Ok(name) = end.get_end_block() {
-                        let name = name.strip_suffix('_').unwrap_or(name);
+                        let name = name.strip_suffix('_').unwrap_or(&name);
                         if block_rule_accepts_end_name(
                             block_rule,
                             name,
@@ -2747,7 +2854,7 @@ where
             {
                 first_candidate = false;
                 let mut end = parser.clone();
-                let matching_close = end.get_end_block().is_ok_and(|name| block_rule_accepts_end_name(block_rule, name.strip_suffix('_').unwrap_or(name), self.settings().layout.legacy()));
+                let matching_close = end.get_end_block().is_ok_and(|name| block_rule_accepts_end_name(block_rule, name.strip_suffix('_').unwrap_or(&name), self.settings().layout.legacy()));
                 let valid_close = if matching_close
                     && absolute_depth == required_depth
                     && allow_inline_close

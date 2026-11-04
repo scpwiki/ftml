@@ -38,10 +38,12 @@ fn table_block_head_crosses_line<'r: 't, 't>(parser: &Parser<'r, 't>) -> bool {
         return false;
     }
     let mut probe = parser.clone();
-    let Ok((name, _)) = probe.get_block_name(false) else {
+    let Ok((name, _, segment)) = probe.get_block_name(false) else {
         return false;
     };
-    if !name.eq_ignore_ascii_case("table") {
+    if !name.eq_ignore_ascii_case("table")
+        || !probe.head_word_is_actionable(&name, segment)
+    {
         return false;
     }
     !parser.has_body_end_block_on_line(&BLOCK_TABLE)

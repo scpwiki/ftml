@@ -71,10 +71,13 @@ where
     let mut candidate = parser.clone();
     let opener_start = candidate.current().span.start;
     let parsed: Result<Option<Element<'t>>, ParseError> = (|| {
-        let (name, in_head) = candidate.get_block_name(false)?;
-        let Some((block_rule, _, close_name)) = alignment_rule(name) else {
+        let (name, in_head, segment) = candidate.get_block_name(false)?;
+        let Some((block_rule, _, close_name)) = alignment_rule(&name) else {
             return Ok(None);
         };
+        if !candidate.head_word_is_actionable(&name, segment) {
+            return Ok(None);
+        }
         candidate.set_block(block_rule);
         let body_start = candidate.get_head_none_with_body_start(block_rule, in_head)?;
         if body_start != BlockBodyStart::NextPhysicalLine {
@@ -151,7 +154,10 @@ fn parse_lost_owner_block<'r, 't>(
 where
     'r: 't,
 {
-    let (name, in_head) = parser.get_block_name(false)?;
+    let (name, in_head, segment) = parser.get_block_name(false)?;
+    if !parser.head_word_is_actionable(&name, segment) {
+        return Ok(None);
+    }
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {
         parser.set_block(&BLOCK_DIV);
         let (_, body_start) =
@@ -159,9 +165,9 @@ where
         (BlockHead::Div, "div", body_start)
     } else if name.eq_ignore_ascii_case("collapsible") {
         parser.set_block(&BLOCK_COLLAPSIBLE);
-        let (head, body_start) = parse_collapsible_head(parser, name, in_head)?;
+        let (head, body_start) = parse_collapsible_head(parser, &name, in_head)?;
         (BlockHead::Collapsible(head), "collapsible", body_start)
-    } else if let Some((block_rule, alignment, close_name)) = alignment_rule(name) {
+    } else if let Some((block_rule, alignment, close_name)) = alignment_rule(&name) {
         parser.set_block(block_rule);
         let body_start = parser.get_head_none_with_body_start(block_rule, in_head)?;
         (BlockHead::Align(alignment), close_name, body_start)
@@ -656,7 +662,7 @@ mod tests {
         let tokenization = crate::tokenize(source);
         let mut parser = Parser::new(&tokenization, &page_info, &settings);
         parser.step().unwrap();
-        let (name, in_head) = parser.get_block_name(false).unwrap();
+        let (name, in_head, _) = parser.get_block_name(false).unwrap();
         assert!(name.eq_ignore_ascii_case("div"));
         parser.set_block(&BLOCK_DIV);
         let (_, body_start) = parser

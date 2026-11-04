@@ -416,9 +416,10 @@ where
     }
 
     let mut probe = parser.clone();
-    probe.get_block_name(false).is_ok_and(|(name, _)| {
-        let name = name.strip_suffix('_').unwrap_or(name);
-        name.eq_ignore_ascii_case("ol") || name.eq_ignore_ascii_case("ul")
+    probe.get_block_name(false).is_ok_and(|(name, _, segment)| {
+        let view = name.strip_suffix('_').unwrap_or(&name);
+        (view.eq_ignore_ascii_case("ol") || view.eq_ignore_ascii_case("ul"))
+            && probe.head_word_view_is_actionable(&name, segment, view)
     })
 }
 

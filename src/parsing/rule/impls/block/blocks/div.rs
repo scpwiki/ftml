@@ -210,7 +210,13 @@ where
             {
                 span.get_block_name(false)
                     .ok()
-                    .map(|(name, in_head)| (name.eq_ignore_ascii_case("span"), in_head))
+                    .map(|(name, in_head, segment)| {
+                        (
+                            name.eq_ignore_ascii_case("span")
+                                && span.head_word_is_actionable(&name, segment),
+                            in_head,
+                        )
+                    })
                     .is_some_and(|(is_span, in_head)| {
                         is_span
                             && {

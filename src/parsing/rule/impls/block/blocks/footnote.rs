@@ -129,7 +129,7 @@ fn parse_footnote_ref<'r, 't>(
 fn parse_footnote_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -169,7 +169,7 @@ fn parse_footnote_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    let line_prefix = footnote_block_line_prefix(parser);
+    let line_prefix = footnote_block_line_prefix(parser, opener_start);
 
     parser.set_footnote_block();
 
@@ -188,9 +188,12 @@ impl FootnoteBlockLinePrefix {
     }
 }
 
-fn footnote_block_line_prefix(parser: &Parser<'_, '_>) -> FootnoteBlockLinePrefix {
+fn footnote_block_line_prefix(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> FootnoteBlockLinePrefix {
     if parser.settings().layout.legacy()
-        && wikidot_footnote_block_has_inline_prefix(parser)
+        && wikidot_footnote_block_has_inline_prefix(parser, opener_start)
     {
         FootnoteBlockLinePrefix::InlineProse
     } else {
@@ -198,13 +201,16 @@ fn footnote_block_line_prefix(parser: &Parser<'_, '_>) -> FootnoteBlockLinePrefi
     }
 }
 
-fn wikidot_footnote_block_has_inline_prefix(parser: &Parser<'_, '_>) -> bool {
+fn wikidot_footnote_block_has_inline_prefix(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> bool {
     let source = parser.full_text().inner();
-    let head = parser.current().span.start;
-    let opener = source[..head].rfind("[[").unwrap_or(head);
-    let line_start = source[..opener].rfind('\n').map_or(0, |index| index + 1);
+    let line_start = source[..opener_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
 
-    source[line_start..opener]
+    source[line_start..opener_start]
         .chars()
         .any(|character| !matches!(character, ' ' | '\t' | '\0'))
 }
