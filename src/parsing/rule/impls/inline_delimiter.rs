@@ -146,6 +146,9 @@ fn end_block_fails(
     name: &str,
     mode: ReachableCloseMode,
 ) -> bool {
+    if parser.discarding_hidden_body() && parser.hidden_body_boundary_accepts(name) {
+        return true;
+    }
     match mode {
         ReachableCloseMode::Standard => {
             parser.body_end_boundary_accepts(name)

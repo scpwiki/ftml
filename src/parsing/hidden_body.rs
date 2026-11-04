@@ -55,6 +55,15 @@ impl<'r, 't> Parser<'r, 't> {
             .expect("hidden body boundary stack underflow");
     }
 
+    pub(crate) fn hidden_body_boundary_accepts(&self, name: &str) -> bool {
+        self.hidden_body_boundaries.iter().any(|boundary| {
+            boundary
+                .accepts_names
+                .iter()
+                .any(|accepted| accepted.eq_ignore_ascii_case(name))
+        })
+    }
+
     pub(crate) fn at_hidden_body_boundary(&self) -> bool
     where
         'r: 't,

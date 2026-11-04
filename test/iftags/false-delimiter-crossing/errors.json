@@ -1,0 +1,20 @@
+[
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            31,
+            33
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            31,
+            33
+        ],
+        "kind": "no-rules-match"
+    }
+]

@@ -1777,9 +1777,14 @@ where
             block_rule_end_names(block_rule, fork.settings().layout.legacy()),
             block_rule.accepts_newlines_outside_body,
         );
+        fork.push_body_end_boundary(
+            block_rule_end_names(block_rule, fork.settings().layout.legacy()),
+            block_rule.name == "block-footnote",
+        );
 
         let discard_result =
             fork.consume_body_no_paragraphs(block_rule, false, false, |_| {});
+        fork.pop_body_end_boundary();
         fork.pop_hidden_body_boundary();
 
         let outcome = if discard_result.is_err() {
