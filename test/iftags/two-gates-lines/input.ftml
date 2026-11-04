@@ -1,0 +1,7 @@
+[[iftags -zzz]]
+first body
+[[/iftags]]
+[[iftags -zzz]]
+second body
+[[/iftags]]
+after

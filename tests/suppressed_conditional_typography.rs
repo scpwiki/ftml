@@ -94,7 +94,7 @@ fn true_and_false_iftags_apply_only_post_resolution_lexical_edits() {
         (
             "true-empty-double-quotes",
             "`[[iftags -missing]]\n[[/iftags]]`quoted'[[iftags -missing]]\n[[/iftags]]'",
-            "“quoted”",
+            "`\n`quoted'\n'",
         ),
         (
             "false-angle-quotes",
@@ -114,7 +114,7 @@ fn true_and_false_iftags_apply_only_post_resolution_lexical_edits() {
         Layout::Wikidot,
     )
     .0;
-    assert_eq!(visible, "left-visible-right");
+    assert_eq!(visible, "left-\nvisible\n-right");
     assert!(!visible.contains('—'));
 }
 

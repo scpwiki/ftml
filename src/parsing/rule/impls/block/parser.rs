@@ -1976,22 +1976,25 @@ where
     pub(crate) fn get_body_element_segments_iftags(
         &mut self,
         block_rule: &BlockRule,
-    ) -> ParseResult<'r, 't, (Vec<Vec<Element<'t>>>, Vec<bool>)> {
+    ) -> ParseResult<'r, 't, ((Vec<Vec<Element<'t>>>, Vec<bool>), bool)> {
         let mut segments: Vec<Vec<Element<'t>>> = vec![Vec::new()];
         let mut segment_safe: Vec<bool> = vec![true];
         let mut all_errors = Vec::new();
         let mut paragraph_safe = true;
         let mut first = true;
+        let mut trailing = false;
 
         loop {
             if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
                 return Err(self.make_err(ParseErrorKind::EndOfInput));
             }
 
+            let before_end_token = self.current().token;
             if self
                 .verify_end_block(first, block_rule, false, false)
                 .is_some()
             {
+                trailing = before_end_token == Token::LineBreak;
                 break;
             }
 
@@ -2132,7 +2135,7 @@ where
         }
 
         Ok(crate::parsing::ParseSuccess::new(
-            (segments, segment_safe),
+            ((segments, segment_safe), trailing),
             all_errors,
             paragraph_safe,
         ))

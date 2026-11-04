@@ -22,6 +22,7 @@ use super::prelude::*;
 use crate::data::PageInfo;
 use crate::delayed::DelayedElement;
 use crate::parsing::ElementCondition;
+use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use std::borrow::Cow;
 
 pub const BLOCK_IFTAGS: BlockRule = BlockRule {
@@ -282,7 +283,7 @@ fn result_is_invisible(result: &ParseResult<'_, '_, Elements<'_>>) -> bool {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -401,18 +402,31 @@ fn parse_fn<'r, 't>(
             Err(error) => Err(error),
         }
     } else if designated_end.is_some() && parser.native_blockquote_depth().is_none() {
-        // Live Wikidot splices a kept body into the text before
-        // paragraph formation, so paragraph breaks inside the body are
-        // real breaks. Gather the body in segments and lay the flat
-        // batch out by segment: the paragraph gather re-establishes
-        // the breaks from the split layout, while receivers that
-        // flatten the batch see a synthetic line break at each split
-        // point, reproducing the unsplit render. A body that crossed
-        // no break produces exactly the batch the unsplit gather
-        // produced.
+        let head_line_break = body_start == BlockBodyStart::NextPhysicalLine
+            && parser.current().token != Token::ParagraphBreak;
+        let source_bytes = parser.full_text().inner().as_bytes();
+        let at_line_start = opener_start == 0 || source_bytes[opener_start - 1] == b'\n';
+        let lead_paragraph_break = head_line_break && at_line_start && {
+            let mut line_end = opener_start.saturating_sub(1);
+            if line_end > 0 && source_bytes[line_end - 1] == b'\r' {
+                line_end -= 1;
+            }
+            let mut line_start = line_end;
+            while line_start > 0 && source_bytes[line_start - 1] != b'\n' {
+                line_start -= 1;
+            }
+            source_bytes[line_start..line_end]
+                .iter()
+                .any(|byte| !matches!(byte, b' ' | b'\t'))
+        };
+        let lead_line_break = head_line_break && !at_line_start;
         match parser.get_body_element_segments_iftags(&BLOCK_IFTAGS) {
             Ok(body) => {
-                let ((segments, segment_safe), errors, paragraph_safe) = body.into();
+                let (
+                    ((mut segments, mut segment_safe), trailing),
+                    errors,
+                    paragraph_safe,
+                ) = body.into();
 
                 trace!(
                     "IfTags parsed {} conditions and {} body segments",
@@ -421,7 +435,49 @@ fn parse_fn<'r, 't>(
                 );
 
                 trace!("Conditions passed, including elements");
-                if segments.len() == 1 {
+                let fused_close =
+                    parser.wikidot_body_closed_with_fused_close(&BLOCK_IFTAGS);
+                let mut trail_elements: Vec<Element<'t>> = Vec::new();
+                let mut trail_paragraph_break = false;
+                if trailing {
+                    if fused_close {
+                        trail_elements.push(Element::LineBreak);
+                    } else {
+                        match parser.current().token {
+                            Token::LineBreak
+                                if !parser.current().slice.starts_with('\\') =>
+                            {
+                                parser.step()?;
+                                trail_paragraph_break = true;
+                            }
+                            Token::ParagraphBreak
+                            | Token::InputEnd
+                            | Token::LeftBlockEnd => {}
+                            _ => {
+                                trail_elements.push(Element::LineBreak);
+                            }
+                        }
+                    }
+                }
+
+                if !trail_paragraph_break
+                    && segments.last().is_some_and(|segment| segment.is_empty())
+                    && parser.current().token == Token::LineBreak
+                    && !parser.current().slice.starts_with('\\')
+                {
+                    parser.step()?;
+                }
+
+                if lead_paragraph_break {
+                    segments.insert(0, Vec::new());
+                    segment_safe.insert(0, true);
+                }
+                if trail_paragraph_break {
+                    segments.push(Vec::new());
+                    segment_safe.push(true);
+                }
+
+                if segments.len() == 1 && !lead_line_break && trail_elements.is_empty() {
                     let elements =
                         segments.into_iter().next().expect("single segment present");
                     let mut bounded = Vec::with_capacity(elements.len() + 2);
@@ -434,10 +490,16 @@ fn parse_fn<'r, 't>(
                     let mut batch = Vec::new();
                     let mut counts = Vec::with_capacity(segments.len());
                     batch.push(Element::Delayed(DelayedElement::typography_boundary()));
+                    if lead_line_break {
+                        batch.push(Element::LineBreak);
+                    }
                     for (index, segment) in segments.into_iter().enumerate() {
                         let mut count = segment.len();
                         if index == 0 {
                             count += 1;
+                            if lead_line_break {
+                                count += 1;
+                            }
                         }
                         batch.extend(segment);
                         if index < last_index {
@@ -446,9 +508,11 @@ fn parse_fn<'r, 't>(
                         }
                         if index == last_index {
                             count += 1;
+                            count += trail_elements.len();
                         }
                         counts.push((count, segment_safe[index]));
                     }
+                    batch.extend(trail_elements);
                     batch.push(Element::Delayed(DelayedElement::typography_boundary()));
                     let mut success = crate::parsing::ParseSuccess::new(
                         Elements::Multiple(batch),
