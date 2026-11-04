@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::iftags::consume_iftags_segment;
+use super::iftags::{consume_iftags_segment, consume_iftags_segment_fused};
 use super::prelude::*;
 use std::borrow::Cow;
 
@@ -109,10 +109,45 @@ where
 /// `collect_text_keep()` would return.
 pub fn collect_text_resolved<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
+    rule: Rule,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>), ParseError>
+where
+    'r: 't,
+{
+    collect_text_resolved_impl(parser, rule, closes, invalids, kind, false)
+}
+
+/// Fused-closer form of `collect_text_resolved()` for block-head
+/// values. A segment whose closer `]]` directly abuts the head's
+/// own closing brackets is fused by the scanner into one
+/// `RightLink` token; this form still resolves the segment and
+/// then treats the fused token's leftover bracket plus a directly
+/// following `]` as the head's `]]` close, provided `closes` is
+/// the usual single `RightBlock` condition. Every other input
+/// behaves exactly like `collect_text_resolved()`.
+pub fn collect_text_resolved_fused<'p, 'r, 't>(
+    parser: &'p mut Parser<'r, 't>,
+    rule: Rule,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>), ParseError>
+where
+    'r: 't,
+{
+    collect_text_resolved_impl(parser, rule, closes, invalids, kind, true)
+}
+
+fn collect_text_resolved_impl<'p, 'r, 't>(
+    parser: &'p mut Parser<'r, 't>,
     _rule: Rule,
     closes: &[ParseCondition],
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
+    allow_fused_closer: bool,
 ) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>), ParseError>
 where
     'r: 't,
@@ -121,8 +156,30 @@ where
     let start = parser.current().span.start;
     let mut copied_until = start;
     let mut output = None::<String>;
+    // After a fused segment, the source offset at which a `]`
+    // token must start for it to complete the head's close with
+    // the fused token's leftover bracket, and the offset the
+    // collected text ends at (the segment's end).
+    let mut fused_close = None::<(usize, usize)>;
 
     loop {
+        if let Some((bracket_start, segment_end)) = fused_close.take() {
+            let current = parser.current();
+            if current.token == Token::RightBracket && current.span.start == bracket_start
+            {
+                let text = match output {
+                    Some(mut output) => {
+                        output.push_str(&source[copied_until..segment_end]);
+                        Cow::Owned(output)
+                    }
+                    None => Cow::Borrowed(&source[start..segment_end]),
+                };
+
+                parser.step()?;
+                return Ok((text, current));
+            }
+        }
+
         if matches!(
             parser.current().token,
             Token::GeneratedPageLink | Token::GeneratedTagLinks
@@ -157,7 +214,11 @@ where
         }
 
         if parser.current().token == Token::LeftBlock
-            && let Some(segment) = consume_iftags_segment(parser)?
+            && let Some(segment) = (if allow_fused_closer {
+                consume_iftags_segment_fused(parser)?
+            } else {
+                consume_iftags_segment(parser)?
+            })
         {
             let output = output.get_or_insert_with(String::new);
             output.push_str(&source[copied_until..segment.range.start]);
@@ -165,6 +226,9 @@ where
                 output.push_str(&source[segment.body.clone()]);
             }
             copied_until = segment.range.end;
+            if segment.fused_closer {
+                fused_close = Some((segment.range.end + 1, segment.range.end));
+            }
             continue;
         }
 

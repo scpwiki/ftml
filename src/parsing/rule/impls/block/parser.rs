@@ -22,7 +22,7 @@ use super::BlockRule;
 use super::arguments::Arguments;
 use crate::parsing::collect::{
     CommentElidedText, collect_comment_elided_keep, collect_text, collect_text_keep,
-    collect_text_resolved, consume_iftags_segment, consume_valid_comment,
+    collect_text_resolved_fused, consume_iftags_segment, consume_valid_comment,
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -2269,7 +2269,7 @@ where
                 ParseCondition::current(Token::LineBreak),
             ];
             let rule = self.rule();
-            let (slice, _) = collect_text_resolved(
+            let (slice, _) = collect_text_resolved_fused(
                 self,
                 rule,
                 &end_conditions,
