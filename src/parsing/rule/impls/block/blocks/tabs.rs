@@ -18,8 +18,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::super::mapping::get_block_rule_with_name_for_layout;
 use super::prelude::*;
 use crate::parsing::ParserWrap;
+use crate::parsing::collect::{
+    consume_iftags_segment_fused, consume_valid_comment, iftags_segment_fused,
+};
+use crate::parsing::consume::consume;
 use crate::tree::{AcceptsPartial, PartialElement, Tab};
 
 pub const BLOCK_TABVIEW: BlockRule = BlockRule {
@@ -125,6 +130,513 @@ fn parse_tabview<'r, 't>(
     success_elements_with_paragraph_safety(false, tabview, errors)
 }
 
+fn tab_label_finish<'t>(
+    source: &'t str,
+    start: usize,
+    output: Option<String>,
+    copied_until: usize,
+    end: usize,
+    saw_unit: bool,
+) -> std::borrow::Cow<'t, str> {
+    if saw_unit {
+        return std::borrow::Cow::Borrowed("");
+    }
+    match output {
+        Some(mut output) => {
+            if end >= copied_until {
+                output.push_str(&source[copied_until..end]);
+            }
+            std::borrow::Cow::Owned(output)
+        }
+        None => std::borrow::Cow::Borrowed(&source[start..end]),
+    }
+}
+
+fn tab_title_unit_end<'r, 't>(
+    parser: &Parser<'r, 't>,
+    probe: &Parser<'r, 't>,
+    closer_name: Option<&str>,
+) -> bool {
+    if probe.current().token == Token::InputEnd {
+        return false;
+    }
+    let start = parser.current().span.start;
+    let end = probe.current().span.start;
+    let layout = parser.settings().layout;
+    let mut terminator = false;
+    let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
+        std::iter::once(parser.current())
+            .chain(parser.remaining())
+            .take_while(|token| token.span.start < end)
+            .collect();
+    let _ = start;
+    for (index, token) in tokens.iter().enumerate() {
+        match token.token {
+            Token::LineBreak | Token::ParagraphBreak => return false,
+            Token::RightBlock | Token::RightLink => {
+                if closer_name.is_none() {
+                    terminator = true;
+                }
+            }
+            Token::LeftBlockEnd => {
+                let name = tokens.get(index + 1).map_or("", |next| next.slice);
+                if name.eq_ignore_ascii_case("tab")
+                    || name.eq_ignore_ascii_case("tabview")
+                    || name.eq_ignore_ascii_case("tabs")
+                {
+                    return false;
+                }
+                if let Some(closer) = closer_name
+                    && name.eq_ignore_ascii_case(closer)
+                {
+                    terminator = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    let _ = layout;
+    terminator
+}
+
+fn tab_title_unit_fused_end<'r, 't>(
+    parser: &Parser<'r, 't>,
+    probe: &Parser<'r, 't>,
+) -> bool {
+    let current = probe.current();
+    if current.token != Token::RightBracket {
+        return false;
+    }
+    let end = current.span.start;
+    let last = std::iter::once(parser.current())
+        .chain(parser.remaining())
+        .take_while(|token| token.span.start < end)
+        .last();
+    matches!(last, Some(token) if token.token == Token::RightLink && token.span.end == end)
+}
+
+fn tab_title_block_unit<'r, 't>(parser: &Parser<'r, 't>) -> Option<(Parser<'r, 't>, bool)>
+where
+    'r: 't,
+{
+    let mut name_probe = parser.clone();
+    let (name, _, _) = name_probe.get_block_name(false).ok()?;
+    let rule = get_block_rule_with_name_for_layout(&name, parser.settings().layout)?;
+    let (closer_name, head_only) = match rule.name {
+        "block-span" => (Some("span"), false),
+        "block-size" => (Some("size"), false),
+        "block-collapsible" => (Some("collapsible"), false),
+        "block-anchor" => (Some("a"), false),
+        "block-user" => (None, true),
+        "block-date" => (None, true),
+        "block-equation-ref" => (None, true),
+        _ => return None,
+    };
+    let mut probe = parser.clone();
+    let success = match consume(&mut probe) {
+        Ok(success) => success,
+        Err(_) => {
+            if head_only {
+                return tab_title_head_only_fused_unit(parser);
+            }
+            let closer = closer_name?;
+            return tab_title_scoped_block_unit(parser, rule.name, closer);
+        }
+    };
+    if matches!(success.item, Elements::None) {
+        return None;
+    }
+    let fused_end = tab_title_unit_fused_end(parser, &probe);
+    if head_only {
+        if tab_title_unit_end(parser, &probe, None) {
+            return Some((probe, fused_end));
+        }
+        return tab_title_head_only_fused_unit(parser);
+    }
+    if tab_title_unit_end(parser, &probe, closer_name) {
+        return Some((probe, fused_end));
+    }
+    let closer = closer_name?;
+    tab_title_scoped_block_unit(parser, rule.name, closer)
+}
+
+fn tab_title_token_block_name(
+    tokens: &[&crate::parsing::ExtractedToken],
+    index: usize,
+    layout: crate::layout::Layout,
+) -> Option<&'static str> {
+    let mut cursor = index + 1;
+    if tokens.get(cursor).map(|token| token.token) == Some(Token::Whitespace) {
+        cursor += 1;
+    }
+    let raw = tokens.get(cursor)?.slice;
+    let name = raw.strip_suffix('_').unwrap_or(raw);
+    get_block_rule_with_name_for_layout(name, layout).map(|rule| rule.name)
+}
+
+fn tab_title_scoped_block_unit<'r, 't>(
+    parser: &Parser<'r, 't>,
+    rule_name: &'static str,
+    _closer_name: &str,
+) -> Option<(Parser<'r, 't>, bool)>
+where
+    'r: 't,
+{
+    let layout = parser.settings().layout;
+    let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
+        std::iter::once(parser.current())
+            .chain(parser.remaining())
+            .collect();
+    if tab_title_token_block_name(&tokens, 0, layout) != Some(rule_name) {
+        return None;
+    }
+    let mut depth = 0_usize;
+    let mut end_close = None;
+    let mut index = 0_usize;
+    while index < tokens.len() {
+        let token = tokens[index];
+        match token.token {
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                return None;
+            }
+            Token::LeftBlock | Token::LeftBlockStar => {
+                if tab_title_token_block_name(&tokens, index, layout) == Some(rule_name) {
+                    depth += 1;
+                }
+            }
+            Token::LeftBlockEnd => {
+                let name = tab_title_token_block_name(&tokens, index, layout);
+                if matches!(name, Some("block-tab") | Some("block-tabview")) {
+                    return None;
+                }
+                if name == Some(rule_name) {
+                    if depth <= 1 {
+                        let mut close_index = index + 1;
+                        let close = loop {
+                            let close_token = tokens.get(close_index)?;
+                            match close_token.token {
+                                Token::RightBlock | Token::RightLink => {
+                                    break *close_token;
+                                }
+                                Token::LineBreak
+                                | Token::ParagraphBreak
+                                | Token::InputEnd => {
+                                    return None;
+                                }
+                                _ => {
+                                    close_index += 1;
+                                }
+                            }
+                        };
+                        end_close = Some(close);
+                        break;
+                    }
+                    depth -= 1;
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    let close = end_close?;
+    let start = parser.current().span.start;
+    let slice = &parser.full_text().inner()[start..close.span.start + 2];
+    let tokenization = crate::tokenize(slice);
+    let outcome =
+        crate::parsing::parse(&tokenization, parser.page_info(), parser.settings());
+    let (tree, _) = outcome.into();
+    if !tab_title_single_construct(&tree.elements) {
+        return None;
+    }
+    let mut probe = parser.clone();
+    while probe.current().span.start < close.span.end {
+        probe.step().ok()?;
+    }
+    let fused_end = tab_title_unit_fused_end(parser, &probe);
+    Some((probe, fused_end))
+}
+
+fn tab_title_single_construct(elements: &[Element]) -> bool {
+    match elements {
+        [Element::Container(container)]
+            if container.ctype() == crate::tree::ContainerType::Paragraph =>
+        {
+            tab_title_single_construct(container.elements())
+        }
+        [element] => !matches!(element, Element::Text(_)),
+        _ => false,
+    }
+}
+
+fn tab_title_head_only_fused_unit<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> Option<(Parser<'r, 't>, bool)>
+where
+    'r: 't,
+{
+    let start = parser.current().span.start;
+    let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
+        std::iter::once(parser.current())
+            .chain(parser.remaining())
+            .collect();
+    let mut close = None;
+    for token in &tokens {
+        match token.token {
+            Token::RightBlock | Token::RightLink => {
+                close = Some(*token);
+                break;
+            }
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                return None;
+            }
+            _ => {}
+        }
+    }
+    let close = close?;
+    let slice = &parser.full_text().inner()[start..close.span.start + 2];
+    let tokenization = crate::tokenize(slice);
+    let outcome =
+        crate::parsing::parse(&tokenization, parser.page_info(), parser.settings());
+    let (tree, _) = outcome.into();
+    if !tab_title_single_construct(&tree.elements) {
+        return None;
+    }
+    let mut probe = parser.clone();
+    while probe.current().span.start < close.span.end {
+        probe.step().ok()?;
+    }
+    let fused_end = tab_title_unit_fused_end(parser, &probe);
+    Some((probe, fused_end))
+}
+
+fn tab_title_link_unit<'r, 't>(parser: &Parser<'r, 't>) -> Option<(Parser<'r, 't>, bool)>
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    let success = consume(&mut probe).ok()?;
+    if matches!(success.item, Elements::None) {
+        return None;
+    }
+    let end = probe.current().span.start;
+    let mut terminator = false;
+    for token in std::iter::once(parser.current())
+        .chain(parser.remaining())
+        .take_while(|token| token.span.start < end)
+    {
+        match token.token {
+            Token::LineBreak | Token::ParagraphBreak => return None,
+            Token::RightLink => terminator = true,
+            Token::LeftBlockEnd => {
+                return None;
+            }
+            _ => {}
+        }
+    }
+    let fused_end = tab_title_unit_fused_end(parser, &probe);
+    terminator.then_some((probe, fused_end))
+}
+
+fn collect_tab_label<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>), ParseError>
+where
+    'r: 't,
+{
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start;
+    let mut copied_until = start;
+    let mut output = None::<String>;
+    let mut saw_unit = false;
+    let mut link_unit_end = None::<usize>;
+
+    loop {
+        let current = parser.current();
+        let pending_link_end = link_unit_end.take();
+        match current.token {
+            Token::GeneratedPageLink | Token::GeneratedTagLinks => {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            Token::InputEnd => {
+                return Err(parser.make_err(ParseErrorKind::EndOfInput));
+            }
+            Token::LineBreak | Token::ParagraphBreak => {
+                return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
+            }
+            Token::RightBlock => {
+                let text = tab_label_finish(
+                    source,
+                    start,
+                    output,
+                    copied_until,
+                    current.span.start,
+                    saw_unit,
+                );
+                parser.step()?;
+                return Ok((text, None));
+            }
+            Token::RightLink => {
+                let text = tab_label_finish(
+                    source,
+                    start,
+                    output,
+                    copied_until,
+                    current.span.start,
+                    saw_unit,
+                );
+                let leftover = &source[current.span.start + 2..current.span.end];
+                parser.step()?;
+                return Ok((text, Some(leftover)));
+            }
+            Token::LeftComment => {
+                let range = consume_valid_comment(parser)?;
+                let output = output.get_or_insert_with(String::new);
+                output.push_str(&source[copied_until..range.start]);
+                copied_until = range.end;
+            }
+            Token::LeftBlock => {
+                if iftags_segment_fused(parser).is_some() {
+                    let segment = consume_iftags_segment_fused(parser)?
+                        .expect("segment presence was just checked");
+                    {
+                        let output = output.get_or_insert_with(String::new);
+                        output.push_str(&source[copied_until..segment.range.start]);
+                        if segment.include_body {
+                            output.push_str(&source[segment.body.clone()]);
+                        }
+                    }
+                    copied_until = segment.range.end;
+                    if segment.fused_closer {
+                        let next = parser.current();
+                        if next.token == Token::RightBracket
+                            && next.span.start == segment.range.end + 1
+                        {
+                            let text = tab_label_finish(
+                                source,
+                                start,
+                                output,
+                                copied_until,
+                                segment.range.end,
+                                saw_unit,
+                            );
+                            parser.step()?;
+                            return Ok((text, None));
+                        }
+                    }
+                    continue;
+                }
+                if let Some((unit, fused_end)) = tab_title_block_unit(parser) {
+                    saw_unit = true;
+                    output = Some(String::new());
+                    parser.update(&unit);
+                    copied_until = parser.current().span.start;
+                    if fused_end {
+                        parser.step()?;
+                        return Ok((std::borrow::Cow::Borrowed(""), None));
+                    }
+                    continue;
+                }
+                return finish_tab_label_at_construct(
+                    parser,
+                    source,
+                    start,
+                    output,
+                    copied_until,
+                    saw_unit,
+                );
+            }
+            Token::RightBracket => {
+                if pending_link_end == Some(current.span.start)
+                    && let Some(next) = parser.remaining().first()
+                    && next.token == Token::RightBracket
+                    && next.span.start == current.span.end
+                {
+                    parser.step()?;
+                    parser.step()?;
+                    return Ok((std::borrow::Cow::Borrowed(""), None));
+                }
+                parser.step()?;
+            }
+            Token::LeftLink => {
+                if let Some((unit, _fused_end)) = tab_title_link_unit(parser) {
+                    saw_unit = true;
+                    output = Some(String::new());
+                    parser.update(&unit);
+                    copied_until = parser.current().span.start;
+                    link_unit_end = Some(copied_until);
+                    continue;
+                }
+                return finish_tab_label_at_construct(
+                    parser,
+                    source,
+                    start,
+                    output,
+                    copied_until,
+                    saw_unit,
+                );
+            }
+            _ => {
+                parser.step()?;
+            }
+        }
+    }
+}
+
+fn finish_tab_label_at_construct<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    source: &'t str,
+    start: usize,
+    output: Option<String>,
+    copied_until: usize,
+    saw_unit: bool,
+) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>), ParseError> {
+    let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
+        std::iter::once(parser.current())
+            .chain(parser.remaining())
+            .collect();
+    for token in &tokens {
+        match token.token {
+            Token::RightBlock => {
+                let text = tab_label_finish(
+                    source,
+                    start,
+                    output,
+                    copied_until,
+                    token.span.start,
+                    saw_unit,
+                );
+                while parser.current().span.start < token.span.end {
+                    parser.step()?;
+                }
+                return Ok((text, None));
+            }
+            Token::RightLink => {
+                let text = tab_label_finish(
+                    source,
+                    start,
+                    output,
+                    copied_until,
+                    token.span.start,
+                    saw_unit,
+                );
+                let leftover = &source[token.span.start + 2..token.span.end];
+                while parser.current().span.start < token.span.end {
+                    parser.step()?;
+                }
+                return Ok((text, Some(leftover)));
+            }
+            Token::LineBreak | Token::ParagraphBreak => {
+                return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
+            }
+            Token::InputEnd => {
+                return Err(parser.make_err(ParseErrorKind::EndOfInput));
+            }
+            _ => {}
+        }
+    }
+    Err(parser.make_err(ParseErrorKind::EndOfInput))
+}
+
 fn parse_tab<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -138,19 +650,31 @@ fn parse_tab<'r, 't>(
     assert!(!flag_score, "Tab doesn't allow score flag");
     assert_block_name(&BLOCK_TAB, name);
 
-    let label =
-        parser.get_head_value_resolved(&BLOCK_TAB, in_head, |parser, value| {
-            if parser.settings().layout.legacy() {
-                Ok(value.unwrap_or(std::borrow::Cow::Borrowed("untitled")))
-            } else {
-                match value {
-                    Some(value) => Ok(value),
-                    None => Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
-                }
-            }
-        })?;
+    let (label, leftover) = if in_head {
+        let (label, leftover) = collect_tab_label(parser)?;
+        if leftover.is_none() && parser.current().token == Token::LineBreak {
+            parser.step()?;
+        }
+        (Some(label), leftover)
+    } else {
+        (None, None)
+    };
 
-    let (elements, errors, _) = parser.get_body_elements(&BLOCK_TAB, true)?.into();
+    let label = if parser.settings().layout.legacy() {
+        label.unwrap_or(std::borrow::Cow::Borrowed("untitled"))
+    } else {
+        match label {
+            Some(value) => value,
+            None => {
+                return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
+            }
+        }
+    };
+
+    let (mut elements, errors, _) = parser.get_body_elements(&BLOCK_TAB, true)?.into();
+    if let Some(leftover) = leftover {
+        elements.insert(0, Element::Text(std::borrow::Cow::Borrowed(leftover)));
+    }
 
     let element = Element::Partial(PartialElement::Tab(Tab { label, elements }));
 

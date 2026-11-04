@@ -45,25 +45,42 @@ impl<'t> ElementCondition<'t> {
     /// The specification is a space separated list of strings, prefixed with
     /// either `+` or `-` or nothing.
     pub fn parse(raw_spec: &'t str) -> Vec<ElementCondition<'t>> {
-        fn get_spec(value: &str) -> (ElementConditionType, &str) {
-            if let Some(value) = value.strip_prefix('+') {
-                return (ElementConditionType::Required, value);
-            }
-
-            if let Some(value) = value.strip_prefix('-') {
-                return (ElementConditionType::Prohibited, value);
-            }
-
-            (ElementConditionType::Present, value)
-        }
-
         let mut conditions = Vec::new();
         for spec in raw_spec.split(' ').filter(|s| !s.is_empty()) {
-            let (ctype, value) = get_spec(spec);
+            let (ctype, value) = Self::split_spec(spec);
             conditions.push(Self::new(ctype, value));
         }
 
         conditions
+    }
+
+    fn split_spec(value: &str) -> (ElementConditionType, &str) {
+        if let Some(value) = value.strip_prefix('+') {
+            return (ElementConditionType::Required, value);
+        }
+
+        if let Some(value) = value.strip_prefix('-') {
+            return (ElementConditionType::Prohibited, value);
+        }
+
+        (ElementConditionType::Present, value)
+    }
+
+    pub fn parse_cow(spec: Cow<'t, str>) -> Vec<ElementCondition<'t>> {
+        match spec {
+            Cow::Borrowed(spec) => Self::parse(spec),
+            Cow::Owned(spec) => spec
+                .split(' ')
+                .filter(|s| !s.is_empty())
+                .map(|part| {
+                    let (ctype, value) = Self::split_spec(part);
+                    ElementCondition {
+                        ctype,
+                        value: Cow::Owned(value.to_owned()),
+                    }
+                })
+                .collect(),
+        }
     }
 
     /// Determines if this condition is satisfied.

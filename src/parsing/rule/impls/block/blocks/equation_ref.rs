@@ -46,9 +46,13 @@ fn parse_fn<'r, 't>(
     }
 
     let block = &BLOCK_EQUATION_REF;
-    let name = parser.get_head_value(block, in_head, require_trimmed_block_argument)?;
+    let name = parser.get_head_value_resolved(
+        block,
+        in_head,
+        require_trimmed_block_argument_resolved,
+    )?;
 
-    success_elements(Element::EquationReference(std::borrow::Cow::Borrowed(name)))
+    success_elements(Element::EquationReference(name))
 }
 
 #[cfg(test)]

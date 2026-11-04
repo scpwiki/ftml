@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use std::borrow::Cow;
 use std::num::NonZeroU32;
 
 pub const BLOCK_LINES: BlockRule = BlockRule {
@@ -43,15 +44,15 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Lines doesn't allow score flag");
     assert_block_name(&BLOCK_LINES, name);
 
-    let count = parser.get_head_value(&BLOCK_LINES, in_head, parse_count)?;
+    let count = parser.get_head_value_resolved(&BLOCK_LINES, in_head, parse_count)?;
     ok!(Element::LineBreaks(count))
 }
 
 fn parse_count<'t>(
     parser: &Parser<'_, 't>,
-    argument: Option<&'t str>,
+    argument: Option<Cow<'t, str>>,
 ) -> Result<NonZeroU32, ParseError> {
-    let argument = match argument {
+    let argument = match argument.as_deref() {
         Some(arg) => arg.trim(),
         None => return Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
     };

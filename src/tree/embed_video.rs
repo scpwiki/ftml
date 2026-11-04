@@ -160,6 +160,14 @@ impl<'t> EmbedVideo<'t> {
         }
     }
 
+    pub(crate) fn new_cow(source: Cow<'t, str>, payload: &'t str) -> Self {
+        Self {
+            source_sha256: SourceSha256::digest(&source),
+            source,
+            payload: Cow::Borrowed(payload),
+        }
+    }
+
     /// Returns the exact authored block, including its opener and closer.
     pub fn source(&self) -> &str {
         &self.source

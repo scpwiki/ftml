@@ -1,0 +1,28 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "size",
+                            "attributes": {
+                                "style": "font-size: 150%;"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

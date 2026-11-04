@@ -45,16 +45,20 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_TARGET, name);
 
     let block = &BLOCK_TARGET;
-    let name = parser.get_head_value(block, in_head, require_trimmed_block_argument)?;
+    let name = parser.get_head_value_resolved(
+        block,
+        in_head,
+        require_trimmed_block_argument_resolved,
+    )?;
 
     if name.is_empty() || name.contains(' ') {
         return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
     }
 
     let name = if parser.settings().isolate_user_ids {
-        Cow::Owned(isolate_ids(name))
+        Cow::Owned(isolate_ids(&name))
     } else {
-        Cow::Borrowed(name)
+        name
     };
 
     success_elements(Element::AnchorName(name))

@@ -1,0 +1,22 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "standalone-button",
+                        "data": {
+                            "action": {
+                                "type": "edit"
+                            },
+                            "label": "edit"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

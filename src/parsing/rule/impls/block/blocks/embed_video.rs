@@ -13,6 +13,7 @@
 use super::prelude::*;
 use crate::parsing::parser::QuoteScanOutcome;
 use crate::tree::EmbedVideo;
+use std::borrow::Cow;
 
 pub const BLOCK_EMBED_VIDEO: BlockRule = BlockRule {
     name: "block-embedvideo",
@@ -26,7 +27,7 @@ pub const BLOCK_EMBED_VIDEO: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -60,16 +61,18 @@ fn parse_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
     }
-    let opener_start = if head_end >= normal_length
+    let (opener_start, seamed_opener) = if head_end >= normal_length
         && source[head_end - normal_length..head_end]
             .eq_ignore_ascii_case("[[embedvideo]]")
     {
-        head_end - normal_length
+        (head_end - normal_length, false)
     } else if head_end >= extra_length
         && source[head_end - extra_length..head_end]
             .eq_ignore_ascii_case("[[embedvideo]]]")
     {
-        head_end - extra_length
+        (head_end - extra_length, false)
+    } else if seamed_opener(source, opener_start, head_end) {
+        (opener_start, true)
     } else {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     };
@@ -87,7 +90,15 @@ fn parse_fn<'r, 't>(
     if preceding_backslashes % 2 == 1 {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    let payload_start = opener_start + normal_length;
+    let payload_start = if seamed_opener {
+        if source[..head_end].ends_with("]]]") {
+            head_end - 1
+        } else {
+            head_end
+        }
+    } else {
+        opener_start + normal_length
+    };
 
     let opener_quote_depth = quote_depth(source, opener_start);
     let mut close = parser.clone();
@@ -132,7 +143,23 @@ fn parse_fn<'r, 't>(
                 let payload = &source[payload_start..body_end];
                 parser.update(&after_close);
 
-                let embed_video = Element::EmbedVideo(EmbedVideo::new(owner, payload));
+                let embed_video = if seamed_opener {
+                    let mut resolved = String::with_capacity(owner.len());
+                    resolved.push_str("[[embedvideo]]");
+                    resolved.push_str(payload);
+                    let closer = &source[body_end..owner_end];
+                    if closer.eq_ignore_ascii_case("[[/embedvideo]]") {
+                        resolved.push_str(closer);
+                    } else {
+                        resolved.push_str("[[/embedvideo]]");
+                    }
+                    Element::EmbedVideo(EmbedVideo::new_cow(
+                        Cow::Owned(resolved),
+                        payload,
+                    ))
+                } else {
+                    Element::EmbedVideo(EmbedVideo::new(owner, payload))
+                };
                 return if residual_close_bracket {
                     ok!(Elements::Multiple(vec![embed_video, text!("]")]))
                 } else {
@@ -153,6 +180,16 @@ fn parse_fn<'r, 't>(
         }
         close.step().expect("input always ends with InputEnd");
     }
+}
+
+fn seamed_opener(source: &str, opener_start: usize, head_end: usize) -> bool {
+    let Some(region) = source.get(opener_start..head_end) else {
+        return false;
+    };
+    region.len() > "[[embedvideo]]".len()
+        && region.starts_with("[[")
+        && region.ends_with("]]")
+        && (region[2..].contains("[!--") || region[2..].contains("[["))
 }
 
 fn quote_depth(source: &str, position: usize) -> usize {

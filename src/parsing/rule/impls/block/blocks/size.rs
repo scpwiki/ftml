@@ -34,9 +34,9 @@ pub const BLOCK_SIZE: BlockRule = BlockRule {
 
 fn parse_size_argument<'r, 't>(
     parser: &Parser<'r, 't>,
-    value: Option<&str>,
+    value: Option<Cow<'t, str>>,
 ) -> Result<String, ParseError> {
-    match value {
+    match value.as_deref() {
         Some(size)
             if parser.settings().layout.legacy()
                 && wikidot_size_value(size).is_none() =>
@@ -111,7 +111,8 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Size doesn't allow score flag");
     assert_block_name(&BLOCK_SIZE, name);
 
-    let size = parser.get_head_value(&BLOCK_SIZE, in_head, parse_size_argument)?;
+    let size =
+        parser.get_head_value_resolved(&BLOCK_SIZE, in_head, parse_size_argument)?;
 
     if parser.settings().layout.legacy() {
         if !parser.has_body_end_block(&BLOCK_SIZE) {

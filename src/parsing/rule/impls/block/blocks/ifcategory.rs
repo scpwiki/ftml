@@ -34,13 +34,13 @@ pub const BLOCK_IFCATEGORY: BlockRule = BlockRule {
 
 fn parse_conditions<'r, 't>(
     parser: &Parser<'r, 't>,
-    spec: Option<&'t str>,
+    spec: Option<std::borrow::Cow<'t, str>>,
 ) -> Result<Vec<ElementCondition<'t>>, ParseError> {
-    let Some(spec) = spec.map(str::trim).filter(|spec| !spec.is_empty()) else {
+    let Some(spec) = spec.map(trim_cow).filter(|spec| !spec.is_empty()) else {
         return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
     };
 
-    let mut conditions = ElementCondition::parse(spec);
+    let mut conditions = ElementCondition::parse_cow(spec);
     conditions.iter_mut().for_each(|condition| {
         if condition.ctype == ElementConditionType::Required {
             condition.ctype = ElementConditionType::Present;
@@ -69,7 +69,7 @@ fn parse_fn<'r, 't>(
     }
 
     let rule = &BLOCK_IFCATEGORY;
-    let conditions = parser.get_head_value(rule, in_head, parse_conditions)?;
+    let conditions = parser.get_head_value_resolved(rule, in_head, parse_conditions)?;
     if parser.settings().layout.legacy()
         && !parser.discarding_hidden_body()
         && !parser.has_body_end_block(&BLOCK_IFCATEGORY)

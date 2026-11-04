@@ -12,7 +12,11 @@
 
 use super::prelude::*;
 use crate::delayed::DelayedElement;
+use crate::parsing::collect::{
+    collect_text_resolved_head, consume_valid_comment, iftags_segment_fused,
+};
 use crate::tree::SocialButtons;
+use std::borrow::Cow;
 
 pub const BLOCK_SOCIAL: BlockRule = BlockRule {
     name: "block-social",
@@ -60,18 +64,64 @@ fn parse_fn<'r, 't>(
     }
 
     let start = parser.current().span.start;
+    let mut head_probe = parser.clone();
+    let mut saw_seam = false;
+    let mut fused_bracket_close = false;
     loop {
         let current = parser.current();
-        let trailing_bracket = match current.token {
-            Token::RightBlock => false,
-            Token::RightLink if current.slice == "]]]" => true,
-            Token::LineBreak | Token::ParagraphBreak => {
-                return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
-            }
-            Token::InputEnd => return Err(parser.make_err(ParseErrorKind::EndOfInput)),
-            _ => {
-                parser.step()?;
+        if current.token == Token::LeftComment {
+            let mut probe = parser.clone();
+            if let Ok(range) = consume_valid_comment(&mut probe) {
+                saw_seam = true;
+                while parser.current().span.start < range.end
+                    && parser.current().token != Token::InputEnd
+                {
+                    parser.step()?;
+                }
                 continue;
+            }
+        }
+        if current.token == Token::LeftBlock
+            && let Some(segment) = iftags_segment_fused(parser)
+        {
+            saw_seam = true;
+            while parser.current().span.end <= segment.range.end
+                && parser.current().token != Token::InputEnd
+            {
+                parser.step()?;
+            }
+            if segment.fused_closer {
+                let completes = {
+                    let current = parser.current();
+                    current.span.start < segment.range.end
+                        && current.span.end > segment.range.end
+                        && matches!(parser.remaining().first(), Some(next) if next.token == Token::RightBracket && next.span.start == segment.range.end + 1)
+                };
+                if completes {
+                    parser.step()?;
+                    fused_bracket_close = true;
+                }
+            }
+            continue;
+        }
+        let fused_bracket_close = std::mem::take(&mut fused_bracket_close)
+            && current.token == Token::RightBracket;
+        let trailing_bracket = if fused_bracket_close {
+            false
+        } else {
+            match current.token {
+                Token::RightBlock => false,
+                Token::RightLink if current.slice == "]]]" => true,
+                Token::LineBreak | Token::ParagraphBreak => {
+                    return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
+                }
+                Token::InputEnd => {
+                    return Err(parser.make_err(ParseErrorKind::EndOfInput));
+                }
+                _ => {
+                    parser.step()?;
+                    continue;
+                }
             }
         };
 
@@ -90,7 +140,13 @@ fn parse_fn<'r, 't>(
             )));
         }
         let head = &parser.full_text().inner()[start..current.span.start];
-        let social = Element::SocialButtons(SocialButtons::parse(head));
+        let head = if saw_seam {
+            collect_text_resolved_head(&mut head_probe, parser.rule(), current.span.start)
+                .unwrap_or(Cow::Borrowed(head))
+        } else {
+            Cow::Borrowed(head)
+        };
+        let social = Element::SocialButtons(SocialButtons::parse(&head));
         parser.step()?;
         return if trailing_bracket {
             ok!(Elements::Multiple(vec![social, text!("]")]))

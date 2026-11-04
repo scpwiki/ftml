@@ -1,0 +1,21 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor-name",
+                        "data": "foo"
+                    },
+                    {
+                        "element": "text",
+                        "data": "x"
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -136,6 +136,37 @@ where
 /// completes the head's `]]` close, and for a link target or label
 /// the bracket tokens that follow complete its `]` or `]]]` run.
 /// Every other input behaves exactly like `collect_text_resolved()`.
+/// Resolved head text for a bespoke head scan that has already
+/// located the head's closing token itself (the standalone-button
+/// and social scans). Collects from the parser's current position
+/// with the standard block-head conditions and returns the text
+/// only when collection terminates at the expected closing token,
+/// so a disagreement with the caller's own scan falls back to the
+/// raw head instead of changing the head's extent.
+pub fn collect_text_resolved_head<'p, 'r, 't>(
+    parser: &'p mut Parser<'r, 't>,
+    rule: Rule,
+    closing_start: usize,
+) -> Option<Cow<'t, str>>
+where
+    'r: 't,
+{
+    let end_conditions = [ParseCondition::current(Token::RightBlock)];
+    let reject_conditions = [
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::current(Token::LineBreak),
+    ];
+    let (text, last) = collect_text_resolved_fused(
+        parser,
+        rule,
+        &end_conditions,
+        &reject_conditions,
+        Some(ParseErrorKind::BlockMalformedArguments),
+    )
+    .ok()?;
+    (last.span.start == closing_start).then_some(text)
+}
+
 pub fn collect_text_resolved_fused<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
     rule: Rule,

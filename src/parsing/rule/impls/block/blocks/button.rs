@@ -11,6 +11,9 @@
  */
 
 use super::prelude::*;
+use crate::parsing::collect::{
+    collect_text_resolved_head, consume_valid_comment, iftags_segment_fused,
+};
 use crate::parsing::discard_wikidot_controls;
 use crate::parsing::rule::impls::block::parser::parse_wikidot_attributes;
 use crate::tree::{
@@ -56,29 +59,86 @@ fn parse_fn<'r, 't>(
     }
 
     let start = parser.current().span.start;
+    let mut head_probe = parser.clone();
+    let mut saw_seam = false;
+    let mut fused_bracket_close = false;
     let mut has_generated_input = false;
     loop {
         let current = parser.current();
-        let trailing_bracket = match current.token {
-            Token::RightBlock => false,
-            Token::RightLink if current.slice == "]]]" => true,
-            Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks => {
-                has_generated_input = true;
-                parser.step()?;
+        if current.token == Token::LeftComment {
+            let mut probe = parser.clone();
+            if let Ok(range) = consume_valid_comment(&mut probe) {
+                saw_seam = true;
+                while parser.current().span.start < range.end
+                    && parser.current().token != Token::InputEnd
+                {
+                    parser.step()?;
+                }
                 continue;
             }
-            Token::LineBreak | Token::ParagraphBreak => {
-                let head = &parser.full_text().inner()[start..current.span.start];
-                if parser.settings().layout.legacy() && head_prefix_is_set_tags(head) {
+        }
+        if current.token == Token::LeftBlock
+            && let Some(segment) = iftags_segment_fused(parser)
+        {
+            saw_seam = true;
+            while parser.current().span.end <= segment.range.end
+                && parser.current().token != Token::InputEnd
+            {
+                if matches!(
+                    parser.current().token,
+                    Token::RuntimeText
+                        | Token::GeneratedPageLink
+                        | Token::GeneratedTagLinks
+                ) {
+                    has_generated_input = true;
+                }
+                parser.step()?;
+            }
+            if segment.fused_closer {
+                let completes = {
+                    let current = parser.current();
+                    current.span.start < segment.range.end
+                        && current.span.end > segment.range.end
+                        && matches!(parser.remaining().first(), Some(next) if next.token == Token::RightBracket && next.span.start == segment.range.end + 1)
+                };
+                if completes {
+                    parser.step()?;
+                    fused_bracket_close = true;
+                }
+            }
+            continue;
+        }
+        let fused_bracket_close = std::mem::take(&mut fused_bracket_close)
+            && current.token == Token::RightBracket;
+        let trailing_bracket = if fused_bracket_close {
+            false
+        } else {
+            match current.token {
+                Token::RightBlock => false,
+                Token::RightLink if current.slice == "]]]" => true,
+                Token::RuntimeText
+                | Token::GeneratedPageLink
+                | Token::GeneratedTagLinks => {
+                    has_generated_input = true;
                     parser.step()?;
                     continue;
                 }
-                return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
-            }
-            Token::InputEnd => return Err(parser.make_err(ParseErrorKind::EndOfInput)),
-            _ => {
-                parser.step()?;
-                continue;
+                Token::LineBreak | Token::ParagraphBreak => {
+                    let head = &parser.full_text().inner()[start..current.span.start];
+                    if parser.settings().layout.legacy() && head_prefix_is_set_tags(head)
+                    {
+                        parser.step()?;
+                        continue;
+                    }
+                    return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
+                }
+                Token::InputEnd => {
+                    return Err(parser.make_err(ParseErrorKind::EndOfInput));
+                }
+                _ => {
+                    parser.step()?;
+                    continue;
+                }
             }
         };
 
@@ -87,11 +147,37 @@ fn parse_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
         }
 
-        let element = match parse_button_head(head, parser.settings().layout.legacy()) {
-            Some(ParsedButton::Active(button)) => Element::StandaloneButton(button),
-            Some(ParsedButton::Unknown(action)) => unknown_button_error(action),
-            Some(ParsedButton::MissingSetTagsText) => missing_set_tags_text_error(),
-            None => return Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
+        let head = if saw_seam {
+            collect_text_resolved_head(&mut head_probe, parser.rule(), current.span.start)
+                .unwrap_or(Cow::Borrowed(head))
+        } else {
+            Cow::Borrowed(head)
+        };
+
+        let legacy = parser.settings().layout.legacy();
+        let element = match head {
+            Cow::Borrowed(head) => match parse_button_head(head, legacy) {
+                Some(ParsedButton::Active(button)) => Element::StandaloneButton(button),
+                Some(ParsedButton::Unknown(action)) => {
+                    unknown_button_error(Cow::Borrowed(action))
+                }
+                Some(ParsedButton::MissingSetTagsText) => missing_set_tags_text_error(),
+                None => {
+                    return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
+                }
+            },
+            Cow::Owned(head) => match parse_button_head(&head, legacy) {
+                Some(ParsedButton::Active(button)) => {
+                    Element::StandaloneButton(button.to_owned())
+                }
+                Some(ParsedButton::Unknown(action)) => {
+                    unknown_button_error(Cow::Owned(action.to_owned()))
+                }
+                Some(ParsedButton::MissingSetTagsText) => missing_set_tags_text_error(),
+                None => {
+                    return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
+                }
+            },
         };
         parser.step()?;
 
@@ -257,10 +343,10 @@ fn trim_wikidot_space(value: &str) -> &str {
     value.trim_matches(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n' | '\0' | '\u{000b}'))
 }
 
-fn unknown_button_error<'t>(action: &'t str) -> Element<'t> {
+fn unknown_button_error<'t>(action: Cow<'t, str>) -> Element<'t> {
     let emphasized = Element::Container(Container::new(
         ContainerType::Italics,
-        vec![text!(action)],
+        vec![Element::Text(action)],
         AttributeMap::new(),
     ));
     error_block(vec![emphasized, text!(" is not a valid button type")])

@@ -21,6 +21,7 @@
 use super::prelude::*;
 use crate::parsing::{ParserWrap, strip_whitespace};
 use crate::tree::{AcceptsPartial, AttributeMap, PartialElement, RubyText};
+use std::borrow::Cow;
 use std::mem;
 
 pub const BLOCK_RUBY: BlockRule = BlockRule {
@@ -75,12 +76,28 @@ fn ruby_container<'t>(
 
 fn parse_shortcut_head<'r, 't>(
     parser: &Parser<'r, 't>,
-    value: Option<&'t str>,
-) -> Result<(&'t str, &'t str), ParseError> {
+    value: Option<Cow<'t, str>>,
+) -> Result<(Cow<'t, str>, Cow<'t, str>), ParseError> {
     let Some(value) = value else {
         return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
     };
 
+    match value {
+        Cow::Borrowed(value) => {
+            let (base, ruby) = split_shortcut_head(parser, value)?;
+            Ok((Cow::Borrowed(base), Cow::Borrowed(ruby)))
+        }
+        Cow::Owned(value) => {
+            let (base, ruby) = split_shortcut_head(parser, &value)?;
+            Ok((Cow::Owned(base.to_owned()), Cow::Owned(ruby.to_owned())))
+        }
+    }
+}
+
+fn split_shortcut_head<'a>(
+    parser: &Parser<'_, '_>,
+    value: &'a str,
+) -> Result<(&'a str, &'a str), ParseError> {
     let parts = value.split('|').collect::<Vec<_>>();
     match parts.as_slice() {
         [base, ruby] => {
@@ -185,18 +202,18 @@ fn parse_shortcut<'r, 't>(
     assert_block_name(&BLOCK_RB, name);
 
     let rule = &BLOCK_RB;
-    let head = parser.get_head_value(rule, in_head, parse_shortcut_head)?;
+    let head = parser.get_head_value_resolved(rule, in_head, parse_shortcut_head)?;
     let (base_text, ruby_text) = head;
 
     let ruby_text = Element::Container(Container::new(
         ContainerType::RubyText,
-        vec![text!(ruby_text)],
+        vec![Element::Text(ruby_text)],
         AttributeMap::new(),
     ));
 
     let ruby = Element::Container(Container::new(
         ContainerType::Ruby,
-        vec![text!(base_text), ruby_text],
+        vec![Element::Text(base_text), ruby_text],
         AttributeMap::new(),
     ));
 

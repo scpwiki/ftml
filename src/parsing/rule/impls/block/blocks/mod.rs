@@ -49,27 +49,36 @@ mod prelude {
         assert_generic_name(block_rule.accepts_names, actual_name, "block")
     }
 
-    pub fn require_block_argument<'r, 't>(
+    pub fn require_block_argument_resolved<'r, 't>(
         parser: &Parser<'r, 't>,
-        value: Option<&'t str>,
-    ) -> Result<&'t str, ParseError> {
+        value: Option<std::borrow::Cow<'t, str>>,
+    ) -> Result<std::borrow::Cow<'t, str>, ParseError> {
         match value {
             Some(value) => Ok(value),
             None => Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
         }
     }
 
-    pub fn require_trimmed_block_argument<'r, 't>(
+    pub fn require_trimmed_block_argument_resolved<'r, 't>(
         parser: &Parser<'r, 't>,
-        value: Option<&'t str>,
-    ) -> Result<&'t str, ParseError> {
-        require_block_argument(parser, value).map(|value| {
+        value: Option<std::borrow::Cow<'t, str>>,
+    ) -> Result<std::borrow::Cow<'t, str>, ParseError> {
+        require_block_argument_resolved(parser, value).map(|value| {
             if parser.settings().layout.legacy() {
-                value.trim_matches([' ', '\t', '\r', '\n'])
+                crate::parsing::trim_wikidot_ascii_cow(value)
             } else {
-                value.trim()
+                trim_cow(value)
             }
         })
+    }
+
+    pub fn trim_cow(value: std::borrow::Cow<'_, str>) -> std::borrow::Cow<'_, str> {
+        match value {
+            std::borrow::Cow::Borrowed(value) => std::borrow::Cow::Borrowed(value.trim()),
+            std::borrow::Cow::Owned(value) => {
+                std::borrow::Cow::Owned(value.trim().to_owned())
+            }
+        }
     }
 }
 

@@ -1,0 +1,28 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": "eq1",
+                "latex-source": "x^2"
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "equation-reference",
+                        "data": "eq1"
+                    }
+                ]
+            }
+        }
+    ]
+}

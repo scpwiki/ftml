@@ -44,23 +44,25 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Char doesn't allow score flag");
     assert_block_name(&BLOCK_CHAR, name);
 
-    let string = parser.get_head_value(&BLOCK_CHAR, in_head, parse_entity)?;
+    let string = parser.get_head_value_resolved(&BLOCK_CHAR, in_head, parse_entity)?;
 
     ok!(Element::Text(string))
 }
 
 fn parse_entity<'t>(
     parser: &Parser<'_, 't>,
-    argument: Option<&'t str>,
+    argument: Option<Cow<'t, str>>,
 ) -> Result<Cow<'t, str>, ParseError> {
-    let argument = match argument {
-        Some(arg) => strip_entity(arg),
-        None => return Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
-    };
-
-    match find_entity(argument) {
-        Some(string) => Ok(string),
-        None => Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
+    match argument {
+        Some(Cow::Borrowed(arg)) => match find_entity(strip_entity(arg)) {
+            Some(string) => Ok(string),
+            None => Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
+        },
+        Some(Cow::Owned(arg)) => match find_entity(strip_entity(&arg)) {
+            Some(string) => Ok(Cow::Owned(string.into_owned())),
+            None => Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
+        },
+        None => Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
     }
 }
 
@@ -88,7 +90,7 @@ fn parse_entity_rejects_unknown_entity() {
     let tokenization = crate::tokenize("[[char not-an-entity]]");
     let parser = Parser::new(&tokenization, &page_info, &settings);
 
-    let error = parse_entity(&parser, Some("not-an-entity"))
+    let error = parse_entity(&parser, Some(Cow::Borrowed("not-an-entity")))
         .expect_err("unknown entity should fail");
     assert_eq!(error.kind(), ParseErrorKind::BlockMalformedArguments);
 }
