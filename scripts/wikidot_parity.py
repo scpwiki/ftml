@@ -11,15 +11,19 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
+try:
+    from corpus_cases import load_corpus_cases
+except ImportError:
+    from scripts.corpus_cases import load_corpus_cases
 
+
+ROOT = Path(__file__).resolve().parents[1]
 LIVE_CASE_SCHEMA = "wikijump_syntax_differential.live_case.v1"
 CASE_SCHEMA = "wikijump_syntax_differential.syntax_case.v1"
 REFERENCE_SCHEMA = "wikijump_syntax_differential.wikidot_reference.v1"
 VERDICT_SCHEMA = "wikijump_syntax_differential.verdict.v1"
 COMPARISON_SCHEMA = "wikijump_syntax_differential.syntax_comparison.v1"
 BINDINGS_SCHEMA = "ftml.wikidot_parity.bindings.v1"
-PREVIEW_CLASSES = {"saved-page-batch", "page-preview-isolated"}
-EXECUTION_CLASSES = PREVIEW_CLASSES | {"wikijump-runtime", "not-applicable"}
 CHECKS = ("dom_tree", "dom_signature", "visible_text")
 STATUSES = {"match", "mismatch"}
 DISPOSITIONS = {
@@ -94,22 +98,19 @@ def unique(values, label):
     return result
 
 
-def load_cases(path):
-    cases = records(path)
+def load_cases(root):
+    cases = {}
+    for case in load_corpus_cases(Path(root)).values():
+        cases[case["case_id"]] = {
+            "schema": LIVE_CASE_SCHEMA,
+            "case_id": case["case_id"],
+            "source": case["source"],
+            "source_sha256": case["source_sha256"],
+            "source_origin": {"repository": "Rokurolize/ftml", "path": case["path"]},
+        }
     if not cases:
-        fail(f"{path}: no live cases")
-    for case in cases:
-        if (not isinstance(case, dict) or case.get("schema") != LIVE_CASE_SCHEMA or
-                not isinstance(case.get("source"), str) or
-                case.get("execution_class") not in EXECUTION_CLASSES or
-                case.get("source_sha256") != sha256(case.get("source", ""))):
-            fail(f"{path}: invalid live case")
-    return unique(cases, path)
-
-
-def preview_case_ids(cases):
-    return {case_id for case_id, case in cases.items()
-            if case["execution_class"] in PREVIEW_CLASSES}
+        fail(f"{root}: no corpus cases")
+    return cases
 
 
 def projected_case(case):
@@ -123,9 +124,8 @@ def projected_case(case):
     }
 
 
-def load_references(paths, cases, exact=False):
+def load_references(paths, cases):
     values = [value for path in paths for value in records(path)]
-    preview = preview_case_ids(cases)
     current = []
     for reference in values:
         syntax_case = reference.get("syntax_case") if isinstance(reference, dict) else None
@@ -150,13 +150,10 @@ def load_references(paths, cases, exact=False):
         validate_provenance(reference, case_id)
         if syntax_case["source"] != case["source"]:
             continue
-        if case_id not in preview or syntax_case != projected_case(case):
+        if syntax_case != projected_case(case):
             fail(f"invalid current reference for {case_id}")
         current.append(dict(reference, case_id=case_id))
-    references = unique(current, "references")
-    if exact and references.keys() != preview:
-        fail("references do not account for every preview-compatible case exactly")
-    return references
+    return unique(current, "references")
 
 
 def projected_checks(comparison, case_id):
@@ -239,17 +236,17 @@ def load_bindings(path, cases, references):
             not isinstance(values[0].get("bindings"), list)):
         fail(f"{path}: invalid bindings schema")
     bindings = unique(values[0]["bindings"], path)
-    preview = preview_case_ids(cases)
     for case_id, binding in bindings.items():
+        case = cases.get(case_id)
         reference = references.get(case_id)
         expected_fields = {"case_id", "source_sha256", "wikidot_html_sha256",
                            "ftml_html_sha256", "checks", "status"}
         if binding.get("status") == "mismatch":
             expected_fields |= {"disposition", "reason"}
         checks = binding.get("checks")
-        if (case_id not in preview or set(binding) != expected_fields or
+        if (case is None or set(binding) != expected_fields or
                 binding.get("status") not in STATUSES or
-                binding.get("source_sha256") != cases[case_id]["source_sha256"] or
+                binding.get("source_sha256") != case["source_sha256"] or
                 not is_sha256(binding.get("wikidot_html_sha256")) or
                 not is_sha256(binding.get("ftml_html_sha256")) or
                 not isinstance(checks, dict) or set(checks) != set(CHECKS) or
@@ -278,8 +275,7 @@ def snapshot_ids(cases, root):
     if not root.is_dir():
         return None
     found = set()
-    for case_id in preview_case_ids(cases):
-        case = cases[case_id]
+    for case_id, case in cases.items():
         origin = case.get("source_origin", {})
         source_path = origin.get("path") if isinstance(origin, dict) else None
         if not isinstance(source_path, str):
@@ -425,7 +421,6 @@ def missing_alias_pairs(root, cases):
 
 def print_report(cases, references, bindings, root):
     ids = set(cases)
-    preview = preview_case_ids(cases)
     missing_facets = missing_block_facets(root, cases)
     categories = {
         "missing-block-name": configured_block_names(root) - observed_block_names(cases),
@@ -433,12 +428,8 @@ def print_report(cases, references, bindings, root):
         "missing-head-shape": missing_block_head_facets(root, cases),
         "missing-alias-pair": missing_alias_pairs(root, cases),
         "mismatch": {case_id for case_id, value in bindings.items() if value["status"] == "mismatch"},
-        "runtime": {case_id for case_id, case in cases.items()
-                    if case["execution_class"] == "wikijump-runtime"},
-        "not-applicable": {case_id for case_id, case in cases.items()
-                           if case["execution_class"] == "not-applicable"},
-        "missing-reference": preview - references.keys(),
-        "missing-binding": preview - bindings.keys(),
+        "missing-reference": ids - references.keys(),
+        "missing-binding": ids - bindings.keys(),
     }
     snapshots = snapshot_ids(cases, root)
     if snapshots is not None:
@@ -453,21 +444,20 @@ def parser():
     value = argparse.ArgumentParser()
     commands = value.add_subparsers(dest="command", required=True)
     bind = commands.add_parser("bind")
-    bind.add_argument("--cases", required=True)
+    bind.add_argument("--repo", type=Path, default=ROOT)
     bind.add_argument("--references", action="append", required=True)
     bind.add_argument("--verdict", action="append", required=True)
     report = commands.add_parser("report")
-    report.add_argument("--cases", required=True)
     report.add_argument("--references", action="append", required=True)
     report.add_argument("--bindings", required=True)
-    report.add_argument("--repo", type=Path, default=Path.cwd())
+    report.add_argument("--repo", type=Path, default=ROOT)
     return value
 
 
 def main(argv=None):
     args = parser().parse_args(argv)
-    cases = load_cases(args.cases)
-    references = load_references(args.references, cases, exact=args.command == "bind")
+    cases = load_cases(args.repo)
+    references = load_references(args.references, cases)
     if args.command == "bind":
         print(json.dumps(make_bindings(references, load_verdicts(args.verdict, references)),
                          sort_keys=True, separators=(",", ":")))

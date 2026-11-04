@@ -9,11 +9,15 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+try:
+    from corpus_cases import load_corpus_cases
+except ImportError:
+    from scripts.corpus_cases import load_corpus_cases
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = ROOT / "tests/fixtures/wikidot-parity"
 CONTRACTS = ARTIFACT_DIR / "comparison-normalization-contracts.json"
-CASES = ARTIFACT_DIR / "cases.jsonl"
 BINDINGS = ARTIFACT_DIR / "bindings.json"
 INPUT_SCHEMA = "wikijump_syntax_differential.syntax_case.v1"
 
@@ -30,7 +34,7 @@ def current_normalization_inputs() -> list[dict]:
     contracts = json.loads(CONTRACTS.read_text(encoding="utf-8"))["contracts"]
     contract_by_id = {contract["case_id"]: contract for contract in contracts}
     contract_ids = list(contract_by_id)
-    cases = {case["case_id"]: case for case in read_jsonl(CASES)}
+    cases = load_corpus_cases(ROOT)
     bindings = {
         binding["case_id"]: binding
         for binding in json.loads(BINDINGS.read_text(encoding="utf-8"))["bindings"]

@@ -4,32 +4,24 @@ import argparse
 import json
 from pathlib import Path
 
+try:
+    from corpus_cases import load_corpus_cases
+except ImportError:
+    from scripts.corpus_cases import load_corpus_cases
+
 ROOT = Path(__file__).resolve().parents[1]
-CASES = ROOT / "tests/fixtures/wikidot-parity/cases.jsonl"
 BINDINGS = ROOT / "tests/fixtures/wikidot-parity/bindings.json"
 SYNTAX_CASE_SCHEMA = "wikijump_syntax_differential.syntax_case.v1"
-PREVIEW_CLASSES = {"saved-page-batch", "page-preview-isolated"}
 
 
-def load_candidates(cases_path: Path = CASES, bindings_path: Path = BINDINGS) -> list[dict]:
-    bindings = {
-        row["case_id"]: row
-        for row in json.loads(bindings_path.read_text(encoding="utf-8"))["bindings"]
-    }
+def load_candidates(bindings_path: Path = BINDINGS, root: Path = ROOT) -> list[dict]:
+    bindings = json.loads(bindings_path.read_text(encoding="utf-8"))["bindings"]
+    cases = load_corpus_cases(root)
     candidates = []
-    # JSONL is LF-delimited. str.splitlines() would also split valid U+2028 and
-    # U+2029 characters embedded inside a JSON string and corrupt that record.
-    for line in cases_path.read_text(encoding="utf-8").split("\n"):
-        if not line.strip():
-            continue
-        case = json.loads(line)
-        binding = bindings.get(case["case_id"])
-        if (
-            case["execution_class"] in PREVIEW_CLASSES
-            and binding is not None
-            and binding["status"] == "match"
-        ):
-            candidates.append(case)
+    for binding in bindings:
+        case = cases.get(binding["case_id"])
+        if binding["status"] == "match" and case is not None:
+            candidates.append({"case_id": binding["case_id"], "source": case["source"]})
     candidates.sort(key=lambda case: case["case_id"])
     return candidates
 
