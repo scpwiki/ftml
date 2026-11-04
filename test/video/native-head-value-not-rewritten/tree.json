@@ -1,0 +1,26 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "video",
+                        "data": {
+                            "source": {
+                                "type": "file1",
+                                "data": {
+                                    "file": "aa...bb.mp4"
+                                }
+                            },
+                            "alignment": null,
+                            "attributes": {}
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

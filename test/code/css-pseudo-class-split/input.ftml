@@ -1,0 +1,4 @@
+[[code type="css"]]
+a:hover { color: red; }
+span:first-of-type { margin: 0; }
+[[/code]]

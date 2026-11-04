@@ -144,7 +144,7 @@ email = @{
 
 url = @{
     (((("http" ~ "s"?) | "ftp") ~ "://") | "mailto:") ~
-    (!(NEWLINE | " " | "\t" | "\"" | "'" | "|" | "[" | "]" | ">@" | "@@" | discarded_control) ~ ANY)+
+    (!(NEWLINE | " " | "\t" | "\"" | "'" | "|" | "[" | "]" | ">@" | "@@" | ("@" ~ "<" ~ (!(">" ~ "@") ~ !NEWLINE ~ ANY)* ~ ">" ~ "@") | discarded_control) ~ ANY)+
 }
 
 url_star = @{ "*" ~ url }
@@ -173,7 +173,7 @@ comment_close = _{
 }
 dash_single = @{ "-" }
 url_char = _{
-    !(NEWLINE | " " | "\t" | "\"" | "'" | "|" | "[" | "]" | ">@" | "@@" | discarded_control) ~ ANY
+    !(NEWLINE | " " | "\t" | "\"" | "'" | "|" | "[" | "]" | ">@" | "@@" | ("@" ~ "<" ~ (!(">" ~ "@") ~ !NEWLINE ~ ANY)* ~ ">" ~ "@") | discarded_control) ~ ANY
 }
 url_dash_body = _{ (!("--" ~ "]") ~ url_char)* ~ "--" }
 url_dash_close = @{ ((("http" ~ "s"?) | "ftp") ~ "://" | "mailto:") ~ url_dash_body }

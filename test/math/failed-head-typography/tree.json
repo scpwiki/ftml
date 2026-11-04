@@ -1,0 +1,11 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": "aa...bb",
+                "latex-source": "x...y"
+            }
+        }
+    ]
+}

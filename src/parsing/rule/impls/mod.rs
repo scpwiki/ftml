@@ -94,6 +94,7 @@ pub use self::delayed::{RULE_DELAYED, RULE_DELAYED_CONDITIONAL};
 pub use self::double_angle::RULE_DOUBLE_ANGLE;
 pub use self::email::RULE_EMAIL;
 pub use self::entity::RULE_ENTITY;
+pub(crate) use self::block::blocks::wikidot_math_name;
 pub(crate) use self::entity::decode_semicolon_entities;
 pub use self::fallback::RULE_FALLBACK;
 pub use self::header::RULE_HEADER;

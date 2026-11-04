@@ -470,6 +470,12 @@ fn try_consume_fn<'r, 't>(
                     {
                         parser.step()?;
                     }
+                    if let Some(leftover) = &split_match.leftover {
+                        let text = &parser.full_text().inner()[leftover.clone()];
+                        if !text.is_empty() {
+                            elements.push(text!(text));
+                        }
+                    }
                     pending_inline_closers &= !bit;
                     swallowed_split = true;
                     break;

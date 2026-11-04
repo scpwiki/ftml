@@ -353,8 +353,27 @@ fn scan_url(bytes: &[u8], start: usize) -> Option<usize> {
     };
 
     let mut end = body_start;
+    let mut raw_alt_checked = false;
     while end < bytes.len() {
         let character = char_at(bytes, end)?;
+        if !raw_alt_checked && has(bytes, end, b"@<") {
+            raw_alt_checked = true;
+            let mut probe = end + 2;
+            let mut closed = false;
+            while probe < bytes.len() {
+                if matches!(bytes[probe], b'\n' | b'\r') {
+                    break;
+                }
+                if has(bytes, probe, b">@") {
+                    closed = true;
+                    break;
+                }
+                probe += 1;
+            }
+            if closed {
+                break;
+            }
+        }
         if matches!(
             bytes[end],
             b'\n' | b'\r' | b' ' | b'\t' | b'"' | b'\'' | b'|' | b'[' | b']'
