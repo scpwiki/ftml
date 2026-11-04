@@ -649,12 +649,25 @@ fn parse_fn<'r, 't>(
     }
     let element =
         Element::Container(Container::new(ContainerType::Div, elements, attributes));
+    let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_DIV);
 
     if parser.take_wikidot_crossed_ol_tail_sentinel()? {
-        return ok!(false; vec![element, wikidot_crossed_ol_tail()], errors);
+        let mut output = vec![element];
+        if fused_close {
+            output.push(text!("]"));
+        }
+        output.push(wikidot_crossed_ol_tail());
+        return ok!(false; output, errors);
     }
     if parser.take_wikidot_crossed_list_break_sentinel()? {
-        ok!(false; vec![element, Element::LineBreak], errors)
+        let mut output = vec![element];
+        if fused_close {
+            output.push(text!("]"));
+        }
+        output.push(Element::LineBreak);
+        ok!(false; output, errors)
+    } else if fused_close {
+        ok!(false; vec![element, text!("]")], errors)
     } else {
         ok!(element, errors)
     }

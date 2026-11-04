@@ -180,6 +180,11 @@ fn build_same<'r, 't>(
         Cow::Borrowed(url) => Cow::Borrowed(same_link_label(parser, url)),
         Cow::Owned(url) => Cow::Owned(same_link_label(parser, &url).to_owned()),
     };
+    let label = if parser.settings().layout.legacy() && url.starts_with('#') {
+        Cow::Borrowed("")
+    } else {
+        label
+    };
     let label = if parser.settings().layout.legacy()
         && target.is_some()
         && !is_url(&url)
@@ -784,6 +789,10 @@ fn parse_link_location<'r, 't>(
     }
 
     if is_url(&url) && !authored_url_prefix_is_url {
+        return Some((LinkLocation::Page(PageRef::page_only(&url)), LinkType::Page));
+    }
+
+    if url.starts_with('#') {
         return Some((LinkLocation::Page(PageRef::page_only(&url)), LinkType::Page));
     }
 
