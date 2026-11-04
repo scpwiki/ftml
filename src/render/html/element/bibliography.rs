@@ -149,14 +149,21 @@ fn render_missing_bibcite(
         return;
     }
 
-    let message = ctx
+    let message_pre = ctx
         .handle()
-        .get_message(ctx.language(), "bibliography-cite-not-found");
+        .get_message(ctx.language(), "bibliography-cite-not-found-pre");
+    let message_post = ctx
+        .handle()
+        .get_message(ctx.language(), "bibliography-cite-not-found-post");
 
     ctx.html()
         .span()
         .attr(attr!("class" => "wj-error-inline"))
-        .inner(|ctx| ctx.push_escaped(message));
+        .inner(|ctx| {
+            ctx.push_escaped(message_pre);
+            ctx.html().em().contents(label);
+            ctx.push_escaped(message_post);
+        });
 }
 
 fn render_wikidot_bibliography(
@@ -321,7 +328,11 @@ mod tests {
 
         let output = HtmlOutput::from(ctx);
         assert!(output.body.contains(r#"<span class="wj-error-inline">"#));
-        assert!(output.body.contains("Bibliography item not found"));
+        assert!(
+            output
+                .body
+                .contains("Bibliography item <em>missing</em> not found.")
+        );
         assert!(
             output.body.contains(
                 r#"<div class="wj-bibliography-title title">Works Cited</div>"#

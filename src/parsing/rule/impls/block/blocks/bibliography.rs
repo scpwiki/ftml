@@ -95,6 +95,8 @@ fn parse_fn<'r, 't>(
     // metadata or an invented bibliography container.
     if wikidot_candidate && !parser.has_body_end_block(&BLOCK_BIBLIOGRAPHY) {
         let body_start = parser.current().span.start;
+        let mutable_state = parser.get_mutable_state();
+        let snapshot = parser.clone();
         parser.enter_wikidot_bibliography_body();
         let body = parser.get_body_elements(&BLOCK_BIBLIOGRAPHY, false);
         parser.leave_wikidot_bibliography_body();
@@ -104,8 +106,13 @@ fn parse_fn<'r, 't>(
         if &source[opener_end..body_start] == "\n" {
             literal.push(Element::LineBreak);
         }
-        literal.append(&mut body_elements);
-        return ok!(literal, errors);
+        if body_elements.iter().all(|element| element.paragraph_safe()) {
+            literal.append(&mut body_elements);
+            return ok!(literal, errors);
+        }
+        parser.update(&snapshot);
+        parser.reset_mutable_state(mutable_state);
+        return success_elements_with_paragraph_safety(false, literal, Vec::new());
     }
 
     // Get body content. Wikidot accepts non-definition content and renders it
