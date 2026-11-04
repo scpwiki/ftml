@@ -58,6 +58,15 @@ impl<'r, 't> Parser<'r, 't> {
             .clone()
     }
 
+    pub(crate) fn body_end_boundary_accepts(&self, name: &str) -> bool {
+        self.body_end_boundaries().iter().any(|boundary| {
+            boundary
+                .accepts_names
+                .iter()
+                .any(|accepted| accepted.eq_ignore_ascii_case(name))
+        })
+    }
+
     pub(crate) fn at_body_end_boundary(&self) -> bool
     where
         'r: 't,

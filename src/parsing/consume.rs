@@ -25,7 +25,7 @@ use super::rule::{
     get_rules_for_token,
     impls::{
         RULE_FALLBACK, glued_scheme_url_start, starts_own_line_rule,
-        starts_wikidot_only_scheme_url, url_elements,
+        starts_wikidot_only_scheme_url, try_consume_wikidot_end_block_link, url_elements,
     },
 };
 use crate::tree::{LinkLabel, LinkLocation, LinkType, PartialElement};
@@ -942,6 +942,11 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     if let Some(elements) = try_consume_wikidot_parser_function_anchor_fallback(parser)? {
+        parser.depth_decrement();
+        return ok!(elements);
+    }
+
+    if let Some(elements) = try_consume_wikidot_end_block_link(parser)? {
         parser.depth_decrement();
         return ok!(elements);
     }

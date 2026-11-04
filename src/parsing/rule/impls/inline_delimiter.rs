@@ -85,7 +85,16 @@ pub(super) fn validate_reachable_close(
                 if !is_block_name(&name) {
                 } else if let Some(pos) = open_blocks.iter().rposition(|n| *n == name) {
                     open_blocks.truncate(pos);
-                } else {
+                } else if parser.body_end_boundary_accepts(&name)
+                    || (name == "span"
+                        && (parser.in_wikidot_span_body()
+                            || parser.in_wikidot_literal_alias_body()))
+                    || (name == "div"
+                        && (parser.in_wikidot_div_body()
+                            || parser.in_wikidot_literal_alias_body()))
+                    || (name == "center" && parser.in_wikidot_center_body())
+                    || (name == "bibliography" && parser.in_wikidot_bibliography_body())
+                {
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
             }

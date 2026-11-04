@@ -23,10 +23,11 @@ use super::math::wikidot_math_candidate_is_complete;
 use super::prelude::*;
 use crate::delayed::{DelayedElement, GeneratedKind};
 use crate::parsing::collect::{
-    collect_comment_elided_keep, collect_text_resolved_fused,
-    consume_iftags_segment_fused, consume_valid_comment, iftags_segment_fused,
+    collect_comment_elided_keep, collect_comment_elided_keep_from,
+    collect_text_resolved_fused, consume_iftags_segment_fused, consume_valid_comment,
+    iftags_segment_fused,
 };
-use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
+use crate::parsing::{ParseSuccess, discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use crate::url::is_url;
 use std::borrow::Cow;
@@ -199,6 +200,176 @@ where
     }
 
     let (url, authored_prefix_has_link_authority) = collect_wikidot_target(parser)?;
+    wikidot_link_from_target(parser, target, url, authored_prefix_has_link_authority)
+}
+
+pub fn try_consume_wikidot_end_block_link<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<Elements<'t>>, ParseError>
+where
+    'r: 't,
+{
+    if parser.current().token != Token::LeftBlockEnd || parser.at_body_end_boundary() {
+        return Ok(None);
+    }
+    if end_block_name_at(parser.remaining(), 0)
+        .is_some_and(|name| end_block_scope_blocked(parser, &name))
+    {
+        return Ok(None);
+    }
+    let start = parser.current().span.start;
+    let tokens = parser.remaining();
+    let mut region_end = parser.full_text().inner().len();
+    {
+        let text = parser.full_text().inner();
+        let bytes = text.as_bytes();
+        let mut i = start + 2;
+        while i < bytes.len() {
+            if bytes[i..].starts_with(b"[!--") {
+                match text[i..].find("--]") {
+                    Some(offset) => i += offset + 3,
+                    None => {
+                        i = bytes.len();
+                    }
+                }
+            } else if bytes[i].is_ascii_whitespace() {
+                region_end = i;
+                break;
+            } else {
+                i += 1;
+            }
+            if i >= bytes.len() {
+                region_end = bytes.len();
+            }
+        }
+    }
+    let head_claimed = tokens
+        .iter()
+        .take_while(|token| token.span.start < region_end)
+        .enumerate()
+        .any(|(index, token)| {
+            if token.token != Token::LeftBlock || token.span.start <= start {
+                return false;
+            }
+            let mut probe = parser.clone();
+            for _ in 0..=index {
+                if probe.step().is_err() {
+                    return false;
+                }
+            }
+            match super::RULE_BLOCK.try_consume(&mut probe) {
+                Ok(success) => {
+                    let (elements, _, _) = success.into();
+                    elements
+                        .into_iter()
+                        .any(|element| !matches!(element, crate::tree::Element::Text(_)))
+                }
+                Err(_) => false,
+            }
+        });
+    if head_claimed {
+        return Ok(None);
+    }
+    let mut attempt = parser.clone();
+    let Ok((success, _target_end)) = link_end_block(&mut attempt) else {
+        return Ok(None);
+    };
+    let (elements, _, _) = success.into();
+    let end = attempt.current().span.start;
+    let crossed = tokens
+        .iter()
+        .take_while(|token| token.span.start < end)
+        .enumerate()
+        .any(|(index, token)| {
+            token.token == Token::LeftBlockEnd
+                && token.span.start > start
+                && end_block_name_at(tokens, index)
+                    .is_some_and(|name| end_block_scope_blocked(parser, &name))
+        });
+    if crossed {
+        return Ok(None);
+    }
+    parser.update(&attempt);
+    Ok(Some(elements))
+}
+
+fn end_block_scope_blocked(parser: &Parser<'_, '_>, name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    parser.body_end_boundary_accepts(&name)
+        || (name == "span"
+            && (parser.in_wikidot_span_body() || parser.in_wikidot_literal_alias_body()))
+        || (name == "div"
+            && (parser.in_wikidot_div_body() || parser.in_wikidot_literal_alias_body()))
+        || (name == "center" && parser.in_wikidot_center_body())
+        || (name == "bibliography" && parser.in_wikidot_bibliography_body())
+}
+
+fn end_block_name_at(tokens: &[ExtractedToken<'_>], index: usize) -> Option<String> {
+    let mut name = String::new();
+    for token in &tokens[index + 1..] {
+        match token.token {
+            Token::RightBlock => {
+                return if name.is_empty() { None } else { Some(name) };
+            }
+            Token::Whitespace | Token::LineBreak | Token::ParagraphBreak => {
+                return None;
+            }
+            _ => name.push_str(token.slice),
+        }
+    }
+    None
+}
+
+fn link_end_block<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<(ParseSuccess<'r, 't, Elements<'t>>, usize), ParseError> {
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if parser.current().token != Token::LeftBlockEnd {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if single_link_raw_forbids_link(parser)? {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    let target_start = parser.current().span.start + 2;
+    let (url, authored_prefix_has_link_authority, target_end) =
+        collect_wikidot_target_from(parser, target_start)?;
+    let wide_separator = parser
+        .full_text()
+        .inner()
+        .get(target_end..)
+        .is_some_and(|rest| rest.chars().take(2).filter(|c| *c == ' ').count() == 2);
+    let parsed =
+        wikidot_link_from_target(parser, None, url, authored_prefix_has_link_authority)?;
+
+    Ok((
+        parsed.map(move |elements| {
+            let mut elements = match elements {
+                Elements::Multiple(elements) => elements,
+                Elements::Single(element) => vec![element],
+                Elements::None => Vec::new(),
+            };
+            elements.insert(0, text!("["));
+            if wide_separator {
+                elements.insert(1, text!(" "));
+            }
+            Elements::Multiple(elements)
+        }),
+        target_end,
+    ))
+}
+
+fn wikidot_link_from_target<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    target: Option<AnchorTarget>,
+    url: Cow<'t, str>,
+    authored_prefix_has_link_authority: bool,
+) -> ParseResult<'r, 't, Elements<'t>>
+where
+    'r: 't,
+{
     let disposition = wikidot_link_disposition(&url);
     let disposition = if disposition == WikidotLinkDisposition::Link
         && !authored_prefix_has_link_authority
@@ -260,15 +431,43 @@ fn collect_wikidot_target<'r, 't>(
 where
     'r: 't,
 {
+    let (target, authored_prefix_has_link_authority, _) =
+        collect_wikidot_target_inner(parser, None)?;
+    Ok((target, authored_prefix_has_link_authority))
+}
+
+fn collect_wikidot_target_from<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    start: usize,
+) -> Result<(Cow<'t, str>, bool, usize), ParseError>
+where
+    'r: 't,
+{
+    collect_wikidot_target_inner(parser, Some(start))
+}
+
+fn collect_wikidot_target_inner<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    start: Option<usize>,
+) -> Result<(Cow<'t, str>, bool, usize), ParseError>
+where
+    'r: 't,
+{
     let closes = [ParseCondition::current(Token::Whitespace)];
     let invalids = [
         ParseCondition::current(Token::LineBreak),
         ParseCondition::current(Token::ParagraphBreak),
     ];
-    let (target, _) = collect_comment_elided_keep(parser, &closes, &invalids, None)?;
+    let (target, _) = match start {
+        Some(start) => {
+            collect_comment_elided_keep_from(parser, start, &closes, &invalids, None)?
+        }
+        None => collect_comment_elided_keep(parser, &closes, &invalids, None)?,
+    };
     if target.span().len() > MAX_WIKIDOT_SINGLE_LINK_TARGET_BYTES {
         return Err(parser.make_err(ParseErrorKind::InvalidUrl));
     }
+    let target_end = target.span().end;
     let authored_prefix_has_link_authority = target.comment_ranges().is_empty()
         || wikidot_link_disposition(target.prefix_before_first_comment())
             == WikidotLinkDisposition::Link;
@@ -276,7 +475,7 @@ where
     if target.len() > MAX_WIKIDOT_SINGLE_LINK_TARGET_BYTES {
         return Err(parser.make_err(ParseErrorKind::InvalidUrl));
     }
-    Ok((target, authored_prefix_has_link_authority))
+    Ok((target, authored_prefix_has_link_authority, target_end))
 }
 
 fn collect_wikidot_label<'r, 't>(

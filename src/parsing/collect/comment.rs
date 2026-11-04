@@ -168,6 +168,19 @@ where
     'r: 't,
 {
     let start = parser.current().span.start;
+    collect_comment_elided_keep_from(parser, start, closes, invalids, kind)
+}
+
+pub(crate) fn collect_comment_elided_keep_from<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    start: usize,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+) -> Result<(CommentElidedText<'t>, &'r ExtractedToken<'t>), ParseError>
+where
+    'r: 't,
+{
     let mut comments = Vec::new();
 
     loop {

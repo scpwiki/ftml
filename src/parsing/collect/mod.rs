@@ -37,7 +37,8 @@ mod iftags;
 mod text;
 
 pub(crate) use self::comment::{
-    CommentElidedText, collect_comment_elided_keep, consume_valid_comment,
+    CommentElidedText, collect_comment_elided_keep, collect_comment_elided_keep_from,
+    consume_valid_comment,
 };
 pub use self::consume::{
     CollectSplitEscape, collect_consume, collect_consume_before, collect_consume_keep,

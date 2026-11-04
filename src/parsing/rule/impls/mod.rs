@@ -103,7 +103,9 @@ pub(crate) use self::line_break::{
     line_break_skipped_for_own_line_block, starts_own_line_rule,
 };
 pub use self::link_anchor::RULE_LINK_ANCHOR;
-pub use self::link_single::{RULE_LINK_SINGLE, RULE_LINK_SINGLE_NEW_TAB};
+pub use self::link_single::{
+    RULE_LINK_SINGLE, RULE_LINK_SINGLE_NEW_TAB, try_consume_wikidot_end_block_link,
+};
 pub use self::link_triple::{RULE_LINK_TRIPLE, RULE_LINK_TRIPLE_NEW_TAB};
 pub use self::list::RULE_LIST;
 pub use self::math::RULE_MATH;

@@ -247,9 +247,9 @@ fn wikidot_literal_anchor_rollback_is_bounded() {
     let started = Instant::now();
     let (_, html) = render(&source);
     assert!(started.elapsed() < Duration::from_secs(3));
+    assert_eq!(html.matches("[[anchor class=&quot;x&quot;]]").count(), 1);
     assert_eq!(
-        html.matches("[[anchor class=&quot;x&quot;]]").count(),
-        2_000
+        html.matches("<a href=\"/anchor]][[anchor\">").count(),
+        1_999
     );
-    assert!(!html.contains("<a href"));
 }
