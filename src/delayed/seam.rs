@@ -228,6 +228,7 @@ fn flush_group<'t>(
         .map(SeamEdit::Text)
         .collect::<Vec<_>>();
     collect_dash_edits(&source, &seams, &mut edits, preceded_by_url);
+    collect_space_edits(&source, &seams, &mut edits);
     edits.sort_unstable_by_key(|edit| {
         let range = edit.range();
         (range.start, range.end)
@@ -343,6 +344,28 @@ fn collect_dash_edits(
                 run_len: range.len(),
                 range,
             });
+        }
+    }
+}
+
+fn collect_space_edits(source: &str, seams: &[usize], edits: &mut Vec<SeamEdit>) {
+    let bytes = source.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b' ' {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while bytes.get(index) == Some(&b' ') {
+            index += 1;
+        }
+        let range = start..index;
+        if range.len() >= 2 && range_crosses_seam(&range, seams) {
+            edits.push(SeamEdit::Text(WikidotSeamEdit {
+                range,
+                replacement: " ",
+            }));
         }
     }
 }
