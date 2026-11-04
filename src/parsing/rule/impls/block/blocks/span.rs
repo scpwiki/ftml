@@ -119,11 +119,6 @@ fn parse_fn<'r, 't>(
     if speculative_failure_cache.replays_cached_failure(parser) {
         return Err(parser.make_end_of_input_err());
     }
-    let scored_empty_spaced_head =
-        parser.settings().layout.legacy() && flag_score && in_head && {
-            let mut head = parser.clone();
-            head.get_optional_space().is_ok() && head.current().token == Token::RightBlock
-        };
     let generated = parser.generated_until_right_block();
     let arguments = parser.get_head_map_wikidot(&BLOCK_SPAN, in_head)?;
     let head_source = if wikidot_head_source(parser, opener_start).is_empty() {
@@ -138,9 +133,6 @@ fn parse_fn<'r, 't>(
             parser.current().token,
             Token::LineBreak | Token::ParagraphBreak
         );
-    if scored_empty_spaced_head {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
-    }
     if parser.settings().layout.legacy()
         && flag_score
         && !parser.wikidot_alias_has_compatible_close(&BLOCK_SPAN, opener_start)

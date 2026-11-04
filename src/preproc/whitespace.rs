@@ -544,6 +544,11 @@ fn append_replaced_tabs(output: &mut String, input: &str, width: usize) {
 }
 
 fn append_wikidot_block_head_tabs(output: &mut String, head: &str) {
+    if wikidot_lone_tab_argument_region(head) {
+        append_replaced_tabs(output, head, 2);
+        return;
+    }
+
     if wikidot_user_block_head(head) {
         append_replaced_tabs(output, head, 1);
         return;
@@ -582,6 +587,19 @@ fn append_wikidot_block_head_tabs(output: &mut String, head: &str) {
             output.push(ch);
         }
     }
+}
+
+fn wikidot_lone_tab_argument_region(head: &str) -> bool {
+    let Some(field) = head
+        .strip_prefix("[[")
+        .and_then(|field| field.strip_suffix("]]"))
+    else {
+        return false;
+    };
+    let name_end = field
+        .find(|character: char| character.is_ascii_whitespace() || character == ']')
+        .unwrap_or(field.len());
+    &field[name_end..] == "\t"
 }
 
 fn wikidot_user_block_head(head: &str) -> bool {

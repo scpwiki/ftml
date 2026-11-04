@@ -47,6 +47,13 @@ pub(crate) enum BlockBodyStart {
     NextPhysicalLine,
 }
 
+#[derive(Debug)]
+pub(crate) enum WikidotHeadSpaceRegion {
+    SingleSeparator,
+    WhitespaceOnly,
+    Other,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GateHeadClose {
     Block,
@@ -4265,6 +4272,78 @@ where
             }
         };
         Ok((value, body_start, close))
+    }
+
+    pub(crate) fn wikidot_head_space_region(
+        &self,
+        opener_start: usize,
+        flag_star: bool,
+    ) -> WikidotHeadSpaceRegion {
+        if flag_star {
+            return WikidotHeadSpaceRegion::Other;
+        }
+        let source = self.full_text().inner();
+        let bytes = source.as_bytes();
+        let mut word_end = opener_start + 2;
+        while let Some(&byte) = bytes.get(word_end) {
+            if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b']' | b'[') {
+                break;
+            }
+            word_end += 1;
+        }
+        let mut probe = self.clone();
+        let head_end = loop {
+            match probe.current().token {
+                Token::Whitespace | Token::LineBreak | Token::ParagraphBreak => {
+                    if probe.step().is_err() {
+                        return WikidotHeadSpaceRegion::Other;
+                    }
+                }
+                Token::LeftComment => {
+                    let mut candidate = probe.clone();
+                    if consume_valid_comment(&mut candidate).is_err() {
+                        return WikidotHeadSpaceRegion::Other;
+                    }
+                    probe.update(&candidate);
+                }
+                Token::RightBlock => break probe.current().span.start,
+                _ => return WikidotHeadSpaceRegion::Other,
+            }
+        };
+        if head_end < word_end {
+            return WikidotHeadSpaceRegion::Other;
+        }
+        let mut region = String::new();
+        let mut rest = &source[word_end..head_end];
+        loop {
+            match rest.find("[!--") {
+                None => {
+                    region.push_str(rest);
+                    break;
+                }
+                Some(open) => {
+                    region.push_str(&rest[..open]);
+                    let after = &rest[open + 4..];
+                    match after.find("--]") {
+                        Some(close) => {
+                            rest = &after[close + 3..];
+                        }
+                        None => return WikidotHeadSpaceRegion::Other,
+                    }
+                }
+            }
+        }
+        if region == " " || region == "\n" {
+            WikidotHeadSpaceRegion::SingleSeparator
+        } else if !region.is_empty()
+            && region
+                .chars()
+                .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r'))
+        {
+            WikidotHeadSpaceRegion::WhitespaceOnly
+        } else {
+            WikidotHeadSpaceRegion::Other
+        }
     }
 
     pub fn get_head_none(

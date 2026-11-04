@@ -20,7 +20,9 @@
 
 use super::super::prelude::*;
 use super::mapping::{get_block_rule_with_name, get_block_rule_with_name_for_layout};
-use super::parser::{head_seam_forms_block, head_word_never_resolves};
+use super::parser::{
+    WikidotHeadSpaceRegion, head_seam_forms_block, head_word_never_resolves,
+};
 use super::{
     BlockRule,
     blocks::{
@@ -224,6 +226,46 @@ fn block_rule_enabled(parser: &Parser<'_, '_>, block_rule: &BlockRule) -> bool {
         || parser.settings().layout.legacy()
 }
 
+fn wikidot_space_only_head_fails<'r, 't>(
+    parser: &Parser<'r, 't>,
+    block_name: &str,
+    opener_start: usize,
+    flag_star: bool,
+) -> bool
+where
+    'r: 't,
+{
+    let single_separator = matches!(
+        block_name,
+        "block-span"
+            | "block-anchor"
+            | "block-list-unordered"
+            | "block-list-ordered"
+            | "block-list-item"
+            | "block-bibliography"
+            | "block-user"
+            | "block-footnote-block"
+            | "block-ruby"
+    );
+    let any_whitespace = matches!(
+        block_name,
+        "block-footnote"
+            | "block-note"
+            | "block-align-left"
+            | "block-align-right"
+            | "block-align-center"
+            | "block-align-justify"
+    );
+    if !single_separator && !any_whitespace {
+        return false;
+    }
+    match parser.wikidot_head_space_region(opener_start, flag_star) {
+        WikidotHeadSpaceRegion::SingleSeparator => true,
+        WikidotHeadSpaceRegion::WhitespaceOnly => any_whitespace,
+        WikidotHeadSpaceRegion::Other => false,
+    }
+}
+
 fn parse_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
     flag_star: bool,
@@ -399,6 +441,18 @@ where
         && !parser.discarding_hidden_body()
         && block.name == "block-user"
         && spaced_name
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    if parser.settings().layout.legacy()
+        && in_head
+        && wikidot_space_only_head_fails(
+            parser,
+            block.name,
+            block_opener_start,
+            flag_star,
+        )
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
