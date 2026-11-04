@@ -243,6 +243,8 @@ where
         parser.get_block_name(flag_star)?
     };
 
+    parser.set_head_had_segment(segment);
+
     let flag_score = name.ends_with('_');
     let lookup_name: Cow<'t, str> = if flag_score {
         match name {
@@ -262,9 +264,43 @@ where
 
     let block = match block_for_head_word(parser, &lookup_name, segment) {
         Some(block) => block,
-        None => return Err(parser.make_err(ParseErrorKind::NoSuchBlock)),
+        None => {
+            if parser
+                .fused_name_residual()
+                .is_some_and(|position| position > opener_start)
+            {
+                parser.clear_fused_name_residual();
+            }
+            return Err(parser.make_err(ParseErrorKind::NoSuchBlock));
+        }
     };
     if !block_rule_enabled(parser, block) {
+        if parser
+            .fused_name_residual()
+            .is_some_and(|position| position > opener_start)
+        {
+            parser.clear_fused_name_residual();
+        }
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if parser.settings().layout.legacy()
+        && matches!(
+            block.name,
+            "block-math"
+                | "block-div"
+                | "block-table"
+                | "block-tabview"
+                | "block-note"
+                | "block-align-left"
+                | "block-align-right"
+                | "block-align-center"
+                | "block-align-justify"
+        )
+        && parser.fused_name_residual().is_some_and(|position| {
+            position > opener_start && position <= parser.current().span.start
+        })
+    {
+        parser.clear_fused_name_residual();
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if parser.settings().layout.legacy()
@@ -352,7 +388,7 @@ where
         return Err(error);
     }
 
-    let result = (block.parse_fn)(
+    let mut result = (block.parse_fn)(
         parser,
         name,
         block_opener_start,
@@ -360,6 +396,56 @@ where
         flag_score,
         in_head,
     );
+    if result.is_ok()
+        && matches!(
+            block.name,
+            "block-math"
+                | "block-div"
+                | "block-table"
+                | "block-tabview"
+                | "block-note"
+                | "block-align-left"
+                | "block-align-right"
+                | "block-align-center"
+                | "block-align-justify"
+        )
+        && let Some(position) = parser.fused_name_residual()
+        && position > opener_start
+    {
+        let source = parser.full_text().inner();
+        let line_start = source[..opener_start]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        if position >= line_start && !source[line_start..position].contains('\n') {
+            parser.clear_fused_name_residual();
+            result = Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+    }
+    if result.is_ok()
+        && let Some(position) = parser.fused_name_residual()
+        && position > opener_start
+        && position <= parser.current().span.start
+    {
+        parser.clear_fused_name_residual();
+        result = result.map(|parsed| {
+            parsed.map(|elements| {
+                let mut elements = match elements {
+                    Elements::Multiple(elements) => elements,
+                    Elements::Single(element) => vec![element],
+                    Elements::None => Vec::new(),
+                };
+                elements.push(text!("]"));
+                Elements::Multiple(elements)
+            })
+        });
+    }
+    if result.is_err()
+        && parser
+            .fused_name_residual()
+            .is_some_and(|position| position > opener_start)
+    {
+        parser.clear_fused_name_residual();
+    }
     if let Err(error) = &result {
         memoization.record_failure(parser, block, opener_start, error);
     }

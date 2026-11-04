@@ -122,7 +122,7 @@ where
     'r: 't,
 {
     let (text, last, _) =
-        collect_text_resolved_impl(parser, rule, closes, invalids, kind, false)?;
+        collect_text_resolved_impl(parser, rule, closes, invalids, kind, false, false)?;
     Ok((text, last))
 }
 
@@ -173,12 +173,20 @@ pub fn collect_text_resolved_fused<'p, 'r, 't>(
     closes: &[ParseCondition],
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
+    allow_fused_name_close: bool,
 ) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>), ParseError>
 where
     'r: 't,
 {
-    let (text, last, _) =
-        collect_text_resolved_impl(parser, rule, closes, invalids, kind, true)?;
+    let (text, last, _) = collect_text_resolved_impl(
+        parser,
+        rule,
+        closes,
+        invalids,
+        kind,
+        true,
+        allow_fused_name_close,
+    )?;
     Ok((text, last))
 }
 
@@ -197,7 +205,7 @@ pub fn collect_text_resolved_fused_tracked<'p, 'r, 't>(
 where
     'r: 't,
 {
-    collect_text_resolved_impl(parser, rule, closes, invalids, kind, true)
+    collect_text_resolved_impl(parser, rule, closes, invalids, kind, true, true)
 }
 
 fn collect_text_resolved_impl<'p, 'r, 't>(
@@ -207,6 +215,7 @@ fn collect_text_resolved_impl<'p, 'r, 't>(
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
     allow_fused_closer: bool,
+    allow_fused_name_close: bool,
 ) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>, bool), ParseError>
 where
     'r: 't,
@@ -273,6 +282,34 @@ where
 
         if parser.evaluate_any(invalids) {
             return Err(parser.make_err(kind.unwrap_or(ParseErrorKind::RuleFailed)));
+        }
+
+        if allow_fused_name_close
+            && parser.settings().layout.legacy()
+            && parser.current().token == Token::RightLink
+            && (segment_consumed || output.is_some())
+            && closes.iter().any(|close| {
+                matches!(close, ParseCondition::CurrentToken(Token::RightBlock))
+            })
+            && !closes.iter().any(|close| {
+                matches!(close, ParseCondition::CurrentToken(Token::RightLink))
+            })
+        {
+            let last = parser.current();
+            let end = last.span.start;
+            let text = match output {
+                Some(mut output) => {
+                    if end >= copied_until {
+                        output.push_str(&source[copied_until..end]);
+                    }
+                    Cow::Owned(output)
+                }
+                None => Cow::Borrowed(&source[start..end]),
+            };
+
+            parser.note_fused_name_residual(last.span.end);
+            parser.step()?;
+            return Ok((text, last, segment_consumed));
         }
 
         if parser.current().token == Token::InputEnd {

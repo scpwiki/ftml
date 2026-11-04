@@ -141,8 +141,14 @@ fn try_consume_link<'r, 't>(
             authored_url_prefix_is_url,
         )
     } else {
-        let (url, last) =
-            collect_text_resolved_fused(parser, rule, &url_close, url_invalid, None)?;
+        let (url, last) = collect_text_resolved_fused(
+            parser,
+            rule,
+            &url_close,
+            url_invalid,
+            None,
+            false,
+        )?;
         let authored = is_url(url.trim_start());
         (url, last, authored)
     };
@@ -288,9 +294,15 @@ fn build_separate<'r, 't>(
         if native_label_raw_forbids_link(parser)? {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
-        let label =
-            collect_text_resolved_fused(parser, rule, &label_close, label_invalid, None)?
-                .0;
+        let label = collect_text_resolved_fused(
+            parser,
+            rule,
+            &label_close,
+            label_invalid,
+            None,
+            false,
+        )?
+        .0;
         if label.contains("[!--") {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }

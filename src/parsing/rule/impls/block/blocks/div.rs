@@ -129,6 +129,19 @@ fn wikidot_next_line_opens_div(source: &str, mut position: usize) -> bool {
         )
 }
 
+fn wikidot_div_line_has_segment(parser: &Parser<'_, '_>, owner_start: usize) -> bool {
+    let source = parser.full_text().inner();
+    let line_start = source[..owner_start]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    let line_end = source[owner_start..]
+        .find('\n')
+        .map_or(source.len(), |offset| owner_start + offset);
+    let line = source[line_start..line_end].to_ascii_lowercase();
+    line.matches("[[iftags").count() > usize::from(parser.head_had_segment())
+        || line.contains("[[ifcategory")
+}
+
 fn try_recover_wikidot_div_literal<'r, 't>(
     parser: &mut Parser<'r, 't>,
     owner_start: usize,
@@ -142,6 +155,9 @@ where
     'r: 't,
 {
     if !parser.settings().layout.legacy() {
+        return Ok(None);
+    }
+    if parser.head_had_segment() && body_start == BlockBodyStart::Inline {
         return Ok(None);
     }
     let inline_scored_line_literal = wikidot_div_is_inline_scored_line_literal(
@@ -159,6 +175,7 @@ where
         && body_start == BlockBodyStart::Inline
         && parser.has_body_end_block_on_line(&BLOCK_DIV)
         && (!flag_score || inline_scored_line_literal)
+        && !wikidot_div_line_has_segment(parser, owner_start)
     {
         let line_start = source[..owner_start]
             .rfind('\n')
@@ -488,6 +505,17 @@ fn parse_fn<'r, 't>(
         // the failed owner does not make the bytes between its markers opaque.
         // Roll the block attempt back so ordinary downstream inline grammar
         // can still own bold/link/footnote/span/math syntax in that residual.
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if parser.settings().layout.legacy()
+        && parser.settings().mode != WikitextMode::List
+        && !parser.in_wikidot_div_body()
+        && !parser.in_native_blockquote_line()
+        && !flag_score
+        && body_start == BlockBodyStart::Inline
+        && parser.head_had_segment()
+        && parser.has_body_end_block_on_line(&BLOCK_DIV)
+    {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if let Some(recovered) = try_recover_wikidot_div_literal(

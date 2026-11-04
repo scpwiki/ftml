@@ -123,7 +123,7 @@ fn try_consume_link<'r, 't>(
         ParseCondition::current(Token::LineBreak),
     ];
     let (url, _) =
-        collect_text_resolved_fused(parser, rule, &url_close, &url_invalid, None)?;
+        collect_text_resolved_fused(parser, rule, &url_close, &url_invalid, None, false)?;
 
     // Old Wikidot interwiki form, `[prefix:Page Label]`. It resolves through the
     // same prefix table as the modern `[[[!prefix:Page|Label]]]` form. Real URLs
@@ -142,6 +142,7 @@ fn try_consume_link<'r, 't>(
             &label_close,
             &label_invalid,
             None,
+            false,
         )?;
         return success_elements(Element::Link {
             ltype: LinkType::Interwiki,
@@ -175,8 +176,14 @@ fn try_consume_link<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
-    let (label, _) =
-        collect_text_resolved_fused(parser, rule, &label_close, &label_invalid, None)?;
+    let (label, _) = collect_text_resolved_fused(
+        parser,
+        rule,
+        &label_close,
+        &label_invalid,
+        None,
+        false,
+    )?;
 
     let element = Element::Link {
         ltype: LinkType::Direct,
