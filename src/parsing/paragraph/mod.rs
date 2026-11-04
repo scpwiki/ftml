@@ -285,7 +285,11 @@ where
                     // returns its elements laid out by segment;
                     // re-establish the breaks between the segments so
                     // they land in separate paragraphs, exactly as if
-                    // the block had not consumed the break tokens.
+                    // the block had not consumed the break tokens. Each
+                    // segment is pushed with the paragraph safety its
+                    // own content reported, so a block-level segment
+                    // does not strip the paragraphs from the text
+                    // segments around it.
                     let elements = match elements {
                         Elements::Multiple(elements) => elements,
                         Elements::Single(element) => vec![element],
@@ -293,7 +297,7 @@ where
                     };
                     let mut elements = elements.into_iter();
                     let last_index = counts.len() - 1;
-                    for (index, count) in counts.iter().enumerate() {
+                    for (index, (count, segment_safe)) in counts.iter().enumerate() {
                         if index > 0 {
                             stack.end_paragraph_at_break();
                         }
@@ -310,7 +314,7 @@ where
                             slice.pop();
                         }
                         for element in slice {
-                            push_element(&mut stack, element, paragraph_safe);
+                            push_element(&mut stack, element, *segment_safe);
                         }
                     }
                 } else if mixed_paragraph_ownership {
@@ -571,13 +575,13 @@ fn finish_hidden_boundary(
 /// pushed normally; well-formed batches always validate.
 fn paragraph_split_batch<'t>(
     elements: &Elements<'t>,
-    counts: Option<Vec<usize>>,
-) -> Option<Vec<usize>> {
+    counts: Option<Vec<(usize, bool)>>,
+) -> Option<Vec<(usize, bool)>> {
     let counts = counts?;
     if counts.len() < 2 {
         return None;
     }
-    if counts.iter().sum::<usize>() != elements.len() {
+    if counts.iter().map(|(count, _)| count).sum::<usize>() != elements.len() {
         return None;
     }
     Some(counts)

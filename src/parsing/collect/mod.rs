@@ -39,7 +39,10 @@ mod text;
 pub(crate) use self::comment::{
     CommentElidedText, collect_comment_elided_keep, consume_valid_comment,
 };
-pub use self::consume::{collect_consume, collect_consume_before, collect_consume_keep};
+pub use self::consume::{
+    CollectSplitEscape, collect_consume, collect_consume_before, collect_consume_keep,
+    collect_consume_keep_split,
+};
 pub use self::container::collect_container;
 pub use self::generic::collect;
 pub(crate) use self::iftags::{

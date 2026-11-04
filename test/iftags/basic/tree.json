@@ -57,8 +57,17 @@
             }
         },
         {
-            "element": "text",
-            "data": "Cherry"
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Cherry"
+                    }
+                ]
+            }
         },
         {
             "element": "style",

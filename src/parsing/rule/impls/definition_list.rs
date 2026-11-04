@@ -19,6 +19,10 @@
  */
 
 use super::prelude::*;
+use crate::parsing::ParseSuccess;
+use crate::parsing::collect::collect_consume_keep_split;
+
+type SplitEscapeLayout<'t> = (Vec<Element<'t>>, Vec<(usize, bool)>, bool);
 use crate::parsing::{Token, strip_whitespace};
 use crate::tree::DefinitionListItem;
 
@@ -72,9 +76,10 @@ fn parse_definition_list<'r, 't>(
     let mut items = Vec::new();
     let mut errors = Vec::new();
     let mut paragraph_safe = false;
+    let mut escape: Option<SplitEscapeLayout<'t>> = None;
 
     loop {
-        let next = match scan_item(parser) {
+        let next = match scan_item(parser, &mut escape) {
             Ok(success) => success.chain(&mut errors, &mut paragraph_safe),
             Err(error) => {
                 if !items.is_empty() && in_wikidot_bibliography_body(parser) {
@@ -86,8 +91,9 @@ fn parse_definition_list<'r, 't>(
         match next {
             Some((item, _)) => {
                 items.push(item);
-                if !starts_definition_item(parser)
-                    && !starts_wikidot_bibliography_item(parser)
+                if escape.is_some()
+                    || (!starts_definition_item(parser)
+                        && !starts_wikidot_bibliography_item(parser))
                 {
                     break;
                 }
@@ -98,6 +104,14 @@ fn parse_definition_list<'r, 't>(
 
     if items.is_empty() {
         ok!(false; Elements::None, errors)
+    } else if let Some((flat, entries, _escape_safe)) = escape {
+        let mut elements = vec![Element::DefinitionList(items)];
+        elements.extend(flat);
+        let mut result = ParseSuccess::new(Elements::Multiple(elements), errors, false);
+        let mut full = vec![(1, false)];
+        full.extend(entries);
+        result.paragraph_split = Some(full);
+        Ok(result)
     } else {
         ok!(Element::DefinitionList(items))
     }
@@ -105,6 +119,7 @@ fn parse_definition_list<'r, 't>(
 
 fn scan_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
+    escape: &mut Option<SplitEscapeLayout<'t>>,
 ) -> ParseResult<'r, 't, Option<(DefinitionListItem<'t>, bool)>>
 where
     'r: 't,
@@ -144,8 +159,11 @@ where
             key_elements,
             key_string,
         }) => {
-            let (value_elements, last) =
+            let (value_elements, last, value_escape) =
                 collect_value(parser, &mut errors, &mut paragraph_safe)?;
+            if let Some(value_escape) = value_escape {
+                *escape = Some(value_escape.into_layout());
+            }
             Some((key_elements, key_string, value_elements, last))
         }
         Ok(KeyScan::Residue) => None,
@@ -181,7 +199,7 @@ fn parse_item<'r, 't>(
     let mut errors = Vec::new();
     let mut paragraph_safe = false;
 
-    let item = scan_item(parser)?.chain(&mut errors, &mut paragraph_safe);
+    let item = scan_item(parser, &mut None)?.chain(&mut errors, &mut paragraph_safe);
     match item {
         Some(pair) => ok!(false; pair, errors),
         None => Err(parser.make_err(ParseErrorKind::RuleFailed)),
@@ -596,7 +614,14 @@ fn collect_value<'r, 't>(
     parser: &mut Parser<'r, 't>,
     errors: &mut Vec<ParseError>,
     paragraph_safe: &mut bool,
-) -> Result<(Vec<Element<'t>>, &'r ExtractedToken<'t>), ParseError>
+) -> Result<
+    (
+        Vec<Element<'t>>,
+        &'r ExtractedToken<'t>,
+        Option<crate::parsing::collect::CollectSplitEscape<'t>>,
+    ),
+    ParseError,
+>
 where
     'r: 't,
 {
@@ -607,15 +632,15 @@ where
     ];
     let rule = RULE_DEFINITION_LIST;
 
-    let collected = collect_consume_keep(parser, rule, &close, &[], None)?;
-    let (mut value_elements, last) = collected.chain(errors, paragraph_safe);
+    let collected = collect_consume_keep_split(parser, rule, &close, &[], None)?;
+    let (mut value_elements, last, escape) = collected.chain(errors, paragraph_safe);
 
     if parser.settings().layout.legacy() {
         strip_wikidot_ascii_padding(&mut value_elements);
     } else {
         strip_whitespace(&mut value_elements);
     }
-    Ok((value_elements, last))
+    Ok((value_elements, last, escape))
 }
 
 fn strip_wikidot_ascii_padding(elements: &mut Vec<Element<'_>>) {

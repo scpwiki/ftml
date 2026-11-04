@@ -1,0 +1,37 @@
+{
+    "elements": [
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "term",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "term"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "A"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "B"
+                    }
+                ]
+            }
+        }
+    ]
+}

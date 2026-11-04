@@ -535,26 +535,42 @@ fn trim_segment_trailing_blanks(segment: &mut Vec<Element>) {
 /// element batch (defensive; well-formed batches always match).
 fn distribute_paragraph_split<'t>(
     segments: &mut Vec<Vec<Element<'t>>>,
+    mut segment_safe: Option<&mut Vec<bool>>,
     elements: Vec<Element<'t>>,
-    counts: &[usize],
+    counts: &[(usize, bool)],
 ) {
-    if counts.iter().sum::<usize>() != elements.len() {
+    if counts.iter().map(|(count, _)| count).sum::<usize>() != elements.len() {
         segments
             .last_mut()
             .expect("segments always has a current segment")
             .extend(elements);
+        if let Some(segment_safe) = segment_safe.as_deref_mut()
+            && let Some(current) = segment_safe.last_mut()
+        {
+            for (_, safe) in counts {
+                *current &= safe;
+            }
+        }
         return;
     }
 
     let mut elements = elements.into_iter();
-    for (index, count) in counts.iter().enumerate() {
+    for (index, (count, safe)) in counts.iter().enumerate() {
         if index > 0 {
             segments.push(Vec::new());
+            if let Some(segment_safe) = segment_safe.as_deref_mut() {
+                segment_safe.push(true);
+            }
         }
         segments
             .last_mut()
             .expect("segments always has a current segment")
             .extend(elements.by_ref().take(*count));
+        if let Some(segment_safe) = segment_safe.as_deref_mut()
+            && let Some(current) = segment_safe.last_mut()
+        {
+            *current &= safe;
+        }
     }
 }
 
@@ -1917,7 +1933,12 @@ where
                     };
                     match paragraph_split {
                         Some(counts) => {
-                            distribute_paragraph_split(&mut segments, elements, &counts);
+                            distribute_paragraph_split(
+                                &mut segments,
+                                None,
+                                elements,
+                                &counts,
+                            );
                         }
                         None => {
                             segments
@@ -1955,8 +1976,9 @@ where
     pub(crate) fn get_body_element_segments_iftags(
         &mut self,
         block_rule: &BlockRule,
-    ) -> ParseResult<'r, 't, Vec<Vec<Element<'t>>>> {
+    ) -> ParseResult<'r, 't, (Vec<Vec<Element<'t>>>, Vec<bool>)> {
         let mut segments: Vec<Vec<Element<'t>>> = vec![Vec::new()];
+        let mut segment_safe: Vec<bool> = vec![true];
         let mut all_errors = Vec::new();
         let mut paragraph_safe = true;
         let mut first = true;
@@ -2002,10 +2024,13 @@ where
                 self.step()?;
                 first = false;
                 segments.push(Vec::new());
+                segment_safe.push(true);
                 continue;
             }
 
             first = false;
+            let before = self.remaining();
+            let before_token = self.current().token;
             match consume(self) {
                 Ok(consumed) => {
                     self.take_wikidot_mixed_paragraph_ownership();
@@ -2023,16 +2048,71 @@ where
                         Elements::Single(element) => vec![element],
                         Elements::None => Vec::new(),
                     };
+                    // A consume that absorbed the paragraph break at
+                    // its tail without reporting a split layout (the
+                    // wikidot div-literal recovery walks the physical
+                    // line, break included) still ends the segment at
+                    // that break: the content after it belongs to the
+                    // next segment, as if the break token had been
+                    // gathered here.
+                    let steps = before.len() - self.remaining().len();
+                    let absorbed_trailing_break = paragraph_split.is_none()
+                        && match steps {
+                            0 => false,
+                            1 => before_token == Token::ParagraphBreak,
+                            _ => before[steps - 2].token == Token::ParagraphBreak,
+                        };
                     match paragraph_split {
                         Some(counts) => {
-                            distribute_paragraph_split(&mut segments, elements, &counts);
+                            distribute_paragraph_split(
+                                &mut segments,
+                                Some(&mut segment_safe),
+                                elements,
+                                &counts,
+                            );
                         }
                         None => {
+                            if let Some(current) = segment_safe.last_mut() {
+                                *current &= safe;
+                            }
                             segments
                                 .last_mut()
                                 .expect("segments always has a current segment")
                                 .extend(elements);
+                            // A wikidot div-literal recovery inside a
+                            // multi-segment body produced a literal line
+                            // as this segment's only element: on the
+                            // plain path the paragraph stack wraps such
+                            // a line as its own paragraph, so let the
+                            // segment form one too. The newline the
+                            // recovery borrowed from the preceding break
+                            // belongs to the break, which the split
+                            // already represents. Single-segment bodies
+                            // keep the mark for the receiver, whose own
+                            // literal handling covers them.
+                            if segments.len() > 1
+                                && self.take_wikidot_div_literal_recovered()
+                                && !segment_safe.last().copied().unwrap_or(true)
+                            {
+                                let segment = segments
+                                    .last_mut()
+                                    .expect("segments always has a current segment");
+                                if segment.len() == 1
+                                    && let Some(Element::Text(text)) = segment.first_mut()
+                                {
+                                    if let Some(stripped) = text.strip_prefix('\n') {
+                                        *text = Cow::Owned(stripped.to_owned());
+                                    }
+                                    if let Some(current) = segment_safe.last_mut() {
+                                        *current = true;
+                                    }
+                                }
+                            }
                         }
+                    }
+                    if absorbed_trailing_break {
+                        segments.push(Vec::new());
+                        segment_safe.push(true);
                     }
                 }
                 Err(error) => return Err(error),
@@ -2052,7 +2132,7 @@ where
         }
 
         Ok(crate::parsing::ParseSuccess::new(
-            segments,
+            (segments, segment_safe),
             all_errors,
             paragraph_safe,
         ))
@@ -2071,7 +2151,8 @@ where
         segments: Vec<Vec<Element<'t>>>,
         ctype: ContainerType,
         attributes: AttributeMap<'t>,
-    ) -> (Elements<'t>, Option<Vec<usize>>) {
+        paragraph_safe: bool,
+    ) -> (Elements<'t>, Option<Vec<(usize, bool)>>) {
         if segments.len() == 1 {
             let elements = segments.into_iter().next().expect("single segment present");
             let container = Container::new(ctype, elements, attributes);
@@ -2096,9 +2177,9 @@ where
             }
 
             if segment.is_empty() {
-                counts.push(0);
+                counts.push((0, paragraph_safe));
             } else {
-                counts.push(1);
+                counts.push((1, paragraph_safe));
                 containers.push(Element::Container(Container::new(
                     ctype,
                     segment,
@@ -2140,7 +2221,7 @@ where
         let body = self.get_body_element_segments(block_rule)?;
         let (segments, errors, paragraph_safe) = body.into();
         let (elements, paragraph_split) =
-            self.wrap_body_segments(segments, ctype, attributes);
+            self.wrap_body_segments(segments, ctype, attributes, paragraph_safe);
         let mut success =
             crate::parsing::ParseSuccess::new(elements, errors, paragraph_safe);
         success.paragraph_split = paragraph_split;

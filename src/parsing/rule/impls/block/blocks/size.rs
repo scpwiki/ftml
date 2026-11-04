@@ -128,8 +128,12 @@ fn parse_fn<'r, 't>(
     let mut attributes = AttributeMap::new();
     attributes.insert("style", Cow::Owned(size));
 
-    let (elements, paragraph_split) =
-        parser.wrap_body_segments(segments, ContainerType::Size, attributes);
+    let (elements, paragraph_split) = parser.wrap_body_segments(
+        segments,
+        ContainerType::Size,
+        attributes,
+        paragraph_safe,
+    );
 
     let mut result =
         success_elements_with_paragraph_safety(paragraph_safe, elements, errors);
