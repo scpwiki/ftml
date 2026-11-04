@@ -1,0 +1,164 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "superscript",
+        "span": [
+            33,
+            35
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "superscript",
+        "span": [
+            116,
+            118
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            86,
+            88
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "superscript",
+        "span": [
+            152,
+            154
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            122,
+            124
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "superscript",
+        "span": [
+            188,
+            190
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            158,
+            160
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "superscript",
+        "span": [
+            224,
+            226
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            194,
+            196
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "whitespace",
+        "rule": "superscript",
+        "span": [
+            233,
+            234
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            230,
+            232
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "whitespace",
+        "rule": "superscript",
+        "span": [
+            302,
+            303
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            273,
+            275
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "superscript",
+        "span": [
+            351,
+            353
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            318,
+            320
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "superscript",
+        "span": [
+            386,
+            386
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            357,
+            359
+        ],
+        "kind": "no-rules-match"
+    }
+]

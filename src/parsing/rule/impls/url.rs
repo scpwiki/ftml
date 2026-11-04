@@ -747,4 +747,34 @@ mod tests {
             assert!(html.contains(expected), "{expected} missing from {html}");
         }
     }
+
+    #[test]
+    fn wikidot_superscript_subscript_close_over_urls_like_live() {
+        use crate::render::Render;
+
+        let source = "sup ^^http://example.com/s^^ end\n\nsub ,,http://example.com/s,, end\n\ninternal ,,http://example.com/a,,b,, end\n\nrun ^^http://example.com/s^^^ end\n\nsplit ^^note http://example.com/s^^ tail^^ end\n\nperiod ^^http://example.com/s^^. end\n\nbefore ^^http://example.com/s.^^ end\n\nnoclose ^^http://example.com/s^^tail end\n\nmismatch ^^http://example.com/s,, end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        for expected in [
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a></sup>",
+            "<sub><a href=\"http://example.com/s\">http://example.com/s</a></sub>",
+            "<sub><a href=\"http://example.com/a,,b\">http://example.com/a,,b</a></sub>",
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a></sup>^",
+            "<sup>note <a href=\"http://example.com/s\">http://example.com/s</a></sup> tail^^",
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a></sup>.",
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a>.</sup>",
+            "^^<a href=\"http://example.com/s^^tail\">http://example.com/s^^tail</a>",
+            "^^<a href=\"http://example.com/s\">http://example.com/s</a>,,",
+        ] {
+            assert!(html.contains(expected), "{expected} missing from {html}");
+        }
+    }
 }
