@@ -1,0 +1,4 @@
+x[[iftags -zzz]]
+plain body
+[[/iftags]]
+after
