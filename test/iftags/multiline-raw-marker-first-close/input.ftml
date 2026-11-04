@@ -1,0 +1,6 @@
+[[iftags +zzz]]
+@@x
+[[/iftags]]
+y@@B
+[[/iftags]]
+after
