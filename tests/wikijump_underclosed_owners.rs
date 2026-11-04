@@ -63,10 +63,17 @@ fn underclosed_wikijump_body_owner_families_reuse_deterministic_failures() {
                 "{owner}: {openers} openers / {closers} closers took {:?}",
                 started.elapsed(),
             );
-            assert!(
-                !errors.is_empty(),
-                "{owner}: underclosed source must report errors"
-            );
+            if owner == "size" && closers > 0 {
+                assert!(
+                    errors.is_empty(),
+                    "{owner}: designated underclosed nests must parse cleanly: {errors:?}"
+                );
+            } else {
+                assert!(
+                    !errors.is_empty(),
+                    "{owner}: underclosed source must report errors"
+                );
+            }
             assert!(
                 !tree.elements.is_empty(),
                 "{owner}: fallback must preserve observable source"

@@ -27,6 +27,20 @@ use super::prelude::*;
 /// this function implements it here to avoid code duplication.
 ///
 /// This call always sets `step_on_final` to `true`.
+fn delimiter_inert_block_head<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    rule: Rule,
+) -> Option<Element<'t>> {
+    if parser.settings().layout.legacy() || !matches!(rule.name(), "bold" | "italics") {
+        return None;
+    }
+    let name = parser.block_head_name_here()?;
+    if !matches!(name.as_str(), "div" | "blockquote" | "code") {
+        return None;
+    }
+    parser.take_block_head_text().ok()?
+}
+
 pub fn collect_consume<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -60,7 +74,12 @@ pub fn collect_consume_keep<'r, 't>(
         let comment_line = parser.settings().layout.legacy()
             && parser.current().token == Token::LeftComment
             && parser.start_of_line();
-        let success = consume(parser)?;
+        let success = match delimiter_inert_block_head(parser, rule) {
+            Some(element) => {
+                ParseSuccess::new(Elements::Single(element), Vec::new(), true)
+            }
+            None => consume(parser)?,
+        };
         if comment_line
             && matches!(
                 parser.current().token,
