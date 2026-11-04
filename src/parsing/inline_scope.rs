@@ -3683,6 +3683,35 @@ fn wikidot_frame_attributes<'a>(pairs: &[(&'a str, &'a str)]) -> AttributeMap<'a
 struct WikidotFrameBuild<'t> {
     attributes: AttributeMap<'t>,
     children: Vec<Element<'t>>,
+    scored_div: bool,
+}
+
+fn unwrap_scored_frame_edges<'t>(children: &mut Vec<Element<'t>>) {
+    if children.is_empty() {
+        return;
+    }
+    // Mirror legacy scored-div normalization (edge paragraphs unwrap, middle
+    // ones stay); the flat path already carries real breaks, so no newline
+    // separators are added.
+    let unwrap_at = |children: &mut Vec<Element<'t>>, index: usize| {
+        let is_paragraph = matches!(
+            children.get(index),
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Paragraph
+        );
+        if is_paragraph {
+            let inner = match &mut children[index] {
+                Element::Container(container) => mem::take(container.elements_mut()),
+                _ => unreachable!("checked above"),
+            };
+            children.splice(index..=index, inner);
+        }
+    };
+    let last = children.len() - 1;
+    unwrap_at(children, last);
+    if last > 0 {
+        unwrap_at(children, 0);
+    }
 }
 
 struct WikidotCollapsibleClose<'t> {
@@ -3750,16 +3779,22 @@ impl<'t> WikidotFrameAssembly<'t> {
 
     fn open_shell(&mut self, shell: WikidotBlockShell<'t>) {
         match shell {
-            WikidotBlockShell::Div { attributes, .. } => {
+            WikidotBlockShell::Div {
+                attributes,
+                scored,
+                ..
+            } => {
                 self.stack.push(WikidotFrameBuild {
                     attributes,
                     children: Vec::new(),
+                    scored_div: scored,
                 });
             }
             WikidotBlockShell::Note { .. } => {
                 self.stack.push(WikidotFrameBuild {
                     attributes: wikidot_frame_attributes(&[("class", "wiki-note")]),
                     children: Vec::new(),
+                    scored_div: false,
                 });
             }
             WikidotBlockShell::Align { alignment, .. } => {
@@ -3769,6 +3804,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                         alignment.wd_html_style(),
                     )]),
                     children: Vec::new(),
+                    scored_div: false,
                 });
             }
             WikidotBlockShell::Collapsible {
@@ -3792,6 +3828,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                         "collapsible-block",
                     )]),
                     children: Vec::new(),
+                    scored_div: false,
                 });
                 let folded_hidden = start_open;
                 self.push_shell_link(
@@ -3810,6 +3847,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                 self.stack.push(WikidotFrameBuild {
                     attributes: unfolded_attributes,
                     children: Vec::new(),
+                    scored_div: false,
                 });
                 if show_top {
                     self.push_shell_link(
@@ -3825,6 +3863,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                         "collapsible-block-content",
                     )]),
                     children: Vec::new(),
+                    scored_div: false,
                 });
             }
         }
@@ -3927,6 +3966,9 @@ impl<'t> WikidotFrameAssembly<'t> {
         let Some(mut frame) = self.stack.pop() else {
             return;
         };
+        if frame.scored_div {
+            unwrap_scored_frame_edges(&mut frame.children);
+        }
         while matches!(frame.children.last(), Some(Element::LineBreak)) {
             frame.children.pop();
         }
@@ -3941,6 +3983,9 @@ impl<'t> WikidotFrameAssembly<'t> {
     fn finish(mut self) -> Vec<Element<'t>> {
         while let Some(frame) = self.stack.pop() {
             let mut frame = frame;
+            if frame.scored_div {
+                unwrap_scored_frame_edges(&mut frame.children);
+            }
             if !self.at_root {
                 while matches!(frame.children.last(), Some(Element::LineBreak)) {
                     frame.children.pop();
