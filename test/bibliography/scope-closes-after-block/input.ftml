@@ -1,0 +1,6 @@
+((bibcite key1))
+
+[[bibliography]]
+: key1 : aa [[span]]bb
+[[/bibliography]]
+post[[/span]] tail

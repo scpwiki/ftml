@@ -317,11 +317,11 @@ fn inline_explicit_block_with_multiple_references_stays_outside_paragraphs() {
     assert_eq!(html.matches("class=\"footnotes-footer\"").count(), 1);
     assert_eq!(html.matches("class=\"footnote-footer\"").count(), 2);
     assert!(
-        html.starts_with(&format!("<p>start{REFERENCE_1}-</p>{FOOTER_START}")),
+        html.starts_with(&format!("start{REFERENCE_1}-<br>\n{FOOTER_START}")),
         "{html}",
     );
     assert!(
-        html.ends_with(&format!("</div><p>-middle{REFERENCE_2}</p>")),
+        html.ends_with(&format!("</div><br>\n-middle{REFERENCE_2}")),
         "{html}"
     );
     assert!(

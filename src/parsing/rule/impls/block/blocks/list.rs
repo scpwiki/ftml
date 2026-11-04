@@ -265,6 +265,7 @@ fn parse_list_block_impl<'r, 't>(
         ltype: list_type,
         items,
         attributes,
+        wikidot_explicit_block: parser.settings().layout.legacy(),
     };
     if parser.settings().layout.legacy()
         && !nested
@@ -570,6 +571,7 @@ mod tests {
                         ltype,
                         attributes,
                         items,
+                        ..
                     },
                     Element::LineBreak,
                 ] = tree.as_slice()
@@ -682,6 +684,7 @@ mod tests {
                     ltype,
                     attributes,
                     items,
+                    ..
                 } = element
                 else {
                     panic!("expected nested list element, got {element:?}");

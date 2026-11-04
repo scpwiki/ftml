@@ -282,13 +282,25 @@ where
                 for bibliography in bibliographies.slice_mut() {
                     inline_format::normalize_wikidot_bibliography(bibliography);
                 }
-                inline_scope::lower_wikidot_inline_size_scopes(&mut elements);
+                let lowered_bibliographies = inline_scope::
+                    lower_wikidot_inline_size_scopes_with_bibliographies(
+                        &mut elements,
+                        Some(&mut bibliographies),
+                    );
                 heading::normalize_wikidot_headings(&mut elements);
                 for footnote in &mut footnotes {
                     inline_scope::lower_wikidot_inline_size_scopes_inline(footnote);
                 }
-                for bibliography in bibliographies.slice_mut() {
-                    inline_scope::lower_wikidot_bibliography_scopes(bibliography);
+                for (index, bibliography) in
+                    bibliographies.slice_mut().iter_mut().enumerate()
+                {
+                    if !lowered_bibliographies
+                        .get(index)
+                        .copied()
+                        .unwrap_or(false)
+                    {
+                        inline_scope::lower_wikidot_bibliography_scopes(bibliography);
+                    }
                 }
             }
             debug!(
@@ -646,6 +658,7 @@ fn build_toc_list_element(
         ltype: ListType::Bullet,
         items,
         attributes,
+        wikidot_explicit_block: false,
     }
 }
 

@@ -572,6 +572,7 @@ mod deep_stack_tests {
             element = Element::List {
                 ltype: ListType::Bullet,
                 attributes: AttributeMap::new(),
+                wikidot_explicit_block: false,
                 items: vec![ListItem::SubList {
                     element: Box::new(element),
                 }],

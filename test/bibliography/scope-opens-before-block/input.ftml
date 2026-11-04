@@ -1,0 +1,8 @@
+[[size 150%]]pre
+
+((bibcite key1)) ((bibcite key2))
+
+[[bibliography]]
+: key1 : aa[[/size]] bb
+: key2 : cc
+[[/bibliography]]

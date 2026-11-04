@@ -62,6 +62,7 @@ pub struct Bibliography<'t> {
     entries: Vec<(Cow<'t, str>, Vec<Element<'t>>)>,
     label_index: HashMap<String, IndexedReference>,
     reopened_wrappers: Vec<Vec<BibliographyScopeWrapper<'t>>>,
+    title_wrappers: Vec<BibliographyScopeWrapper<'t>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +111,7 @@ impl<'t> Bibliography<'t> {
             entries,
             label_index: HashMap::new(),
             reopened_wrappers: Vec::new(),
+            title_wrappers: Vec::new(),
         };
         bibliography.rebuild_label_index();
         bibliography
@@ -200,6 +202,17 @@ impl<'t> Bibliography<'t> {
         self.reopened_wrappers = wrappers;
     }
 
+    pub fn title_wrappers(&self) -> &[BibliographyScopeWrapper<'t>] {
+        &self.title_wrappers
+    }
+
+    pub(crate) fn set_title_wrappers(
+        &mut self,
+        wrappers: Vec<BibliographyScopeWrapper<'t>>,
+    ) {
+        self.title_wrappers = wrappers;
+    }
+
     #[inline]
     pub fn slice(&self) -> &[(Cow<'t, str>, Vec<Element<'t>>)] {
         &self.entries
@@ -228,6 +241,11 @@ impl<'t> Bibliography<'t> {
                     .map(BibliographyScopeWrapper::to_owned)
                     .collect()
             })
+            .collect();
+        bibliography.title_wrappers = self
+            .title_wrappers
+            .iter()
+            .map(BibliographyScopeWrapper::to_owned)
             .collect();
         bibliography
     }

@@ -22,10 +22,11 @@ use crate::data::PageRef;
 use crate::delayed::DelayedElement;
 use crate::tree::clone::*;
 use crate::tree::{
-    Alignment, AnchorTarget, AttributeMap, ClearFloat, CodeBlock, Container, DateItem,
-    DefinitionListItem, Embed, EmbedVideo, FileSource, FloatAlignment, Gallery,
-    ImageSource, LinkLabel, LinkLocation, LinkType, ListItem, ListType, Module,
-    PartialElement, SocialButtons, StandaloneButton, TabViewItem, Table, VariableMap,
+    Alignment, AnchorTarget, AttributeMap, BibliographyScopeWrapper, ClearFloat,
+    CodeBlock, Container, DateItem, DefinitionListItem, Embed, EmbedVideo, FileSource,
+    FloatAlignment, Gallery, ImageSource, LinkLabel, LinkLocation, LinkType, ListItem,
+    ListType, Module, PartialElement, SocialButtons, StandaloneButton, TabViewItem,
+    Table, VariableMap,
 };
 use crate::tree::{
     element_requires_bounded_tree_stack, on_bounded_tree_stack, run_on_bounded_tree_stack,
@@ -152,6 +153,8 @@ pub enum Element<'t> {
         ltype: ListType,
         attributes: AttributeMap<'t>,
         items: Vec<ListItem<'t>>,
+        #[serde(skip)]
+        wikidot_explicit_block: bool,
     },
 
     DefinitionList(Vec<DefinitionListItem<'t>>),
@@ -216,6 +219,12 @@ pub enum Element<'t> {
     FootnoteBlock {
         title: Option<Cow<'t, str>>,
         hide: bool,
+        #[serde(skip)]
+        wikidot_wrappers: Vec<BibliographyScopeWrapper<'t>>,
+        #[serde(skip)]
+        wikidot_inline_suffix: bool,
+        #[serde(skip)]
+        wikidot_inline_prefix: bool,
     },
 
     /// A citation of a bibliography element, invoked via `((bibcite ...))`.
@@ -595,10 +604,12 @@ impl Element<'_> {
                 ltype,
                 attributes,
                 items,
+                wikidot_explicit_block,
             } => Element::List {
                 ltype: *ltype,
                 attributes: attributes.to_owned(),
                 items: list_items_to_owned(items),
+                wikidot_explicit_block: *wikidot_explicit_block,
             },
             Element::Image {
                 source,
@@ -683,9 +694,21 @@ impl Element<'_> {
                 attributes: attributes.to_owned(),
             },
             Element::Footnote(index) => Element::Footnote(*index),
-            Element::FootnoteBlock { title, hide } => Element::FootnoteBlock {
+            Element::FootnoteBlock {
+                title,
+                hide,
+                wikidot_wrappers,
+                wikidot_inline_suffix,
+                wikidot_inline_prefix,
+            } => Element::FootnoteBlock {
                 title: option_string_to_owned(title),
                 hide: *hide,
+                wikidot_wrappers: wikidot_wrappers
+                    .iter()
+                    .map(BibliographyScopeWrapper::to_owned)
+                    .collect(),
+                wikidot_inline_suffix: *wikidot_inline_suffix,
+                wikidot_inline_prefix: *wikidot_inline_prefix,
             },
             Element::BibliographyCite {
                 label,

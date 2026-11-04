@@ -350,6 +350,7 @@ fn text_render_skips_non_textual_elements_and_expands_include_variables() {
             Element::List {
                 ltype: ListType::Bullet,
                 attributes: AttributeMap::new(),
+                wikidot_explicit_block: false,
                 items: vec![
                     ListItem::Elements {
                         attributes: AttributeMap::new(),
@@ -378,6 +379,9 @@ fn text_render_skips_non_textual_elements_and_expands_include_variables() {
             Element::FootnoteBlock {
                 title: Some(cow!("Notes")),
                 hide: false,
+                wikidot_wrappers: Vec::new(),
+                wikidot_inline_suffix: false,
+                wikidot_inline_prefix: false,
             },
             Element::BibliographyCite {
                 label: cow!("ref"),

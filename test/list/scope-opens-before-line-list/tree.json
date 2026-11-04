@@ -1,0 +1,49 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "span",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "A1"
+                    },
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "B2"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "C3"
+                    }
+                ]
+            }
+        }
+    ]
+}

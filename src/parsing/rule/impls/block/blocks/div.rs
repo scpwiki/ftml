@@ -858,6 +858,7 @@ fn wikidot_crossed_ol_tail<'t>() -> Element<'t> {
             attributes: item_attributes,
         }],
         attributes: AttributeMap::new(),
+        wikidot_explicit_block: false,
     }
 }
 

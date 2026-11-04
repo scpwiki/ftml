@@ -20,7 +20,7 @@
 
 use super::prelude::*;
 use crate::render::text::TextRender;
-use crate::tree::ContainerType;
+use crate::tree::{BibliographyScopeWrapper, ContainerType, HtmlTag};
 use std::num::NonZeroUsize;
 
 pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
@@ -132,7 +132,11 @@ fn render_tooltip_text(ctx: &mut HtmlContext, text: &str) {
     }
 }
 
-pub fn render_footnote_block(ctx: &mut HtmlContext, title: Option<&str>) {
+pub fn render_footnote_block(
+    ctx: &mut HtmlContext,
+    title: Option<&str>,
+    wrappers: &[BibliographyScopeWrapper<'_>],
+) {
     debug!(
         "Rendering footnote block (title {})",
         title.unwrap_or("<default>"),
@@ -155,10 +159,21 @@ pub fn render_footnote_block(ctx: &mut HtmlContext, title: Option<&str>) {
             .div()
             .attr(attr!("class" => "footnotes-footer"))
             .inner(|ctx| {
-                ctx.html()
-                    .div()
-                    .attr(attr!("class" => "title"))
-                    .contents(title);
+                if wrappers.is_empty() {
+                    ctx.html()
+                        .div()
+                        .attr(attr!("class" => "title"))
+                        .contents(title);
+                } else {
+                    ctx.html()
+                        .div()
+                        .attr(attr!("class" => "title"))
+                        .inner(|ctx| {
+                            render_wikidot_wrapped(ctx, wrappers, &mut |ctx| {
+                                ctx.push_escaped(title);
+                            });
+                        });
+                }
                 for (index, contents) in ctx.footnotes().iter().enumerate() {
                     let index = index + 1;
                     let id = index.to_string();
@@ -173,18 +188,25 @@ pub fn render_footnote_block(ctx: &mut HtmlContext, title: Option<&str>) {
                             "id" => &footnote_id,
                         ))
                         .inner(|ctx| {
-                            ctx.html()
-                                .a()
-                                .attr(attr!(
-                                    "href" => "javascript:;",
-                                    "onclick" => &onclick,
-                                ))
-                                .contents(&id);
-                            ctx.push_raw('.');
-                            if !contents.is_empty() {
-                                ctx.push_raw(' ');
+                            let mut body = |ctx: &mut HtmlContext| {
+                                ctx.html()
+                                    .a()
+                                    .attr(attr!(
+                                        "href" => "javascript:;",
+                                        "onclick" => &onclick,
+                                    ))
+                                    .contents(&id);
+                                ctx.push_raw('.');
+                                if !contents.is_empty() {
+                                    ctx.push_raw(' ');
+                                }
+                                render_wikidot_footnote_contents(ctx, contents);
+                            };
+                            if wrappers.is_empty() {
+                                body(ctx);
+                            } else {
+                                render_wikidot_wrapped(ctx, wrappers, &mut body);
                             }
-                            render_wikidot_footnote_contents(ctx, contents);
                         });
                 }
             });
@@ -247,5 +269,50 @@ fn render_wikidot_footnote_contents(ctx: &mut HtmlContext, contents: &[Element])
             ctx.push_raw('\n');
         }
         render_element(ctx, element);
+    }
+}
+
+fn render_wikidot_wrapped(
+    ctx: &mut HtmlContext,
+    wrappers: &[BibliographyScopeWrapper<'_>],
+    inner: &mut dyn FnMut(&mut HtmlContext),
+) {
+    let Some((wrapper, rest)) = wrappers.split_first() else {
+        inner(ctx);
+        return;
+    };
+
+    match wrapper {
+        BibliographyScopeWrapper::Color { color, background } => {
+            let property = if *background {
+                "background-color"
+            } else {
+                "color"
+            };
+            let style = format!("{property}: {color}");
+            ctx.html()
+                .span()
+                .attr(attr!("style" => &style))
+                .inner(|ctx| render_wikidot_wrapped(ctx, rest, inner));
+        }
+        BibliographyScopeWrapper::Container { ctype, attributes } => {
+            let tag_spec = ctype.html_tag(ctx.layout(), ctx);
+            let mut tag = ctx.html().tag(tag_spec.tag());
+            match &tag_spec {
+                HtmlTag::Tag(_) => {
+                    tag.attr(attr!(;; attributes));
+                }
+                HtmlTag::TagAndClass { class, .. } => {
+                    tag.attr(attr!("class" => class;; attributes));
+                }
+                HtmlTag::TagAndStyle { style, .. } => {
+                    tag.attr(attr!("style" => style;; attributes));
+                }
+                HtmlTag::TagAndId { id, .. } => {
+                    tag.attr(attr!("id" => id;; attributes));
+                }
+            }
+            tag.inner(|ctx| render_wikidot_wrapped(ctx, rest, inner));
+        }
     }
 }

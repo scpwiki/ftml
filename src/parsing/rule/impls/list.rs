@@ -569,6 +569,7 @@ pub(crate) fn build_list_element(
         ltype: top_ltype,
         items,
         attributes,
+        wikidot_explicit_block: false,
     })
 }
 

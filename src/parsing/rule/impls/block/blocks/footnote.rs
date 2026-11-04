@@ -167,11 +167,20 @@ fn parse_footnote_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    let line_prefix = footnote_block_line_prefix(parser, opener_start);
+    let inline_suffix = footnote_block_has_inline_suffix(parser);
+    let inline_prefix =
+        footnote_block_line_prefix(parser, opener_start).is_inline_prose();
+    let inline_prose = inline_prefix || inline_suffix;
 
     parser.set_footnote_block();
 
-    ok!(line_prefix.is_inline_prose(); Element::FootnoteBlock { title, hide })
+    ok!(inline_prose; Element::FootnoteBlock {
+        title,
+        hide,
+        wikidot_wrappers: Vec::new(),
+        wikidot_inline_suffix: inline_suffix,
+        wikidot_inline_prefix: inline_prefix,
+    })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -197,6 +206,40 @@ fn footnote_block_line_prefix(
     } else {
         FootnoteBlockLinePrefix::OwnLine
     }
+}
+
+fn footnote_block_has_inline_suffix(parser: &Parser<'_, '_>) -> bool {
+    if !parser.settings().layout.legacy() {
+        return false;
+    }
+
+    let current = parser.current();
+    if matches!(
+        current.token,
+        Token::InputEnd | Token::LineBreak | Token::ParagraphBreak
+    ) {
+        return false;
+    }
+
+    let source = parser.full_text().inner();
+    let whitespace_run = source[..current.span.start]
+        .bytes()
+        .rev()
+        .take_while(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+        .collect::<Vec<_>>();
+    if whitespace_run.contains(&b'\n') {
+        return false;
+    }
+    if matches!(current.token, Token::Whitespace) {
+        return match source[current.span.start..]
+            .chars()
+            .find(|character| !matches!(character, ' ' | '\t'))
+        {
+            Some(character) => !matches!(character, '\n' | '\r'),
+            None => false,
+        };
+    }
+    true
 }
 
 fn wikidot_footnote_block_has_inline_prefix(

@@ -865,6 +865,7 @@ fn insert_native_list_item<'t>(
             ltype,
             items: Vec::new(),
             attributes: AttributeMap::new(),
+            wikidot_explicit_block: false,
         });
     }
     let Some(sublist) = last_elements.last_mut() else {

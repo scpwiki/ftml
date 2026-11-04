@@ -1,0 +1,8 @@
+[[span]]pre [[size 150%]]x
+
+((bibcite key1))
+
+[[bibliography]]
+: key1 : aa[[/size]] bb[[/span]] cc
+[[/bibliography]]
+tail

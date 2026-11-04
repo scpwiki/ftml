@@ -237,6 +237,9 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
             Element::FootnoteBlock {
                 title: None,
                 hide: false,
+                wikidot_wrappers: Vec::new(),
+                wikidot_inline_suffix: false,
+                wikidot_inline_prefix: false,
             },
             Element::BibliographyCite {
                 label: Cow::Borrowed("missing"),
@@ -284,10 +287,12 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
             Element::List {
                 ltype: ListType::Bullet,
                 attributes: list_attributes,
+                wikidot_explicit_block: false,
                 items: vec![ListItem::SubList {
                     element: Box::new(Element::List {
                         ltype: ListType::Numbered,
                         attributes: AttributeMap::new(),
+                        wikidot_explicit_block: false,
                         items: vec![ListItem::Elements {
                             attributes: AttributeMap::new(),
                             elements: vec![Element::Text(Cow::Borrowed("nested"))],

@@ -239,6 +239,7 @@ fn isolate_user_ids() {
                 }),
                 elements: vec![text!("X")],
             }],
+            wikidot_explicit_block: false,
         }],
     );
     test!(
@@ -254,6 +255,7 @@ fn isolate_user_ids() {
                 }),
                 elements: vec![text!("X")],
             }],
+            wikidot_explicit_block: false,
         }],
     );
 
@@ -270,6 +272,7 @@ fn isolate_user_ids() {
                 }),
                 elements: vec![text!("X")],
             }],
+            wikidot_explicit_block: false,
         }],
     );
     test!(
@@ -285,6 +288,7 @@ fn isolate_user_ids() {
                 }),
                 elements: vec![text!("X")],
             }],
+            wikidot_explicit_block: false,
         }],
     );
 

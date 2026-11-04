@@ -355,10 +355,22 @@ fn render_wikidot_bibliography(
         .div()
         .attr(attr!("class" => "bibitems"))
         .inner(|ctx| {
-            ctx.html()
-                .div()
-                .attr(attr!("class" => "title"))
-                .contents(title);
+            let title_wrappers = bibliography.title_wrappers();
+            if title_wrappers.is_empty() {
+                ctx.html()
+                    .div()
+                    .attr(attr!("class" => "title"))
+                    .contents(title);
+            } else {
+                let wrapped = [bibliography_wrap_chain(
+                    title_wrappers,
+                    vec![Element::Text(Cow::Borrowed(title))],
+                )];
+                ctx.html()
+                    .div()
+                    .attr(attr!("class" => "title"))
+                    .inner(|ctx| render_elements(ctx, &wrapped));
+            }
 
             let mut entry_index = 0;
             for (position, (label, elements)) in bibliography.slice().iter().enumerate() {

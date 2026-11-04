@@ -3,7 +3,7 @@ use crate::parsing::rule::impls::{
 };
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, Container, ContainerType, Element,
-    InlineFormatKind, LinkLabel, LinkLocation, ListItem, PartialElement,
+    InlineFormatKind, LinkLabel, LinkLocation, ListItem, PartialElement, TableType,
 };
 use std::borrow::Cow;
 use std::mem;
@@ -196,19 +196,63 @@ fn normalize_sequence_scoped<'t>(
 }
 
 fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
-    for element in elements.iter_mut() {
-        if is_segment_container(element) {
-            normalize_segment_container(element);
+    let mut index = 0;
+    while index < elements.len() {
+        if is_segment_container(&elements[index]) {
+            if !normalize_segment_container_with_run(elements, index) {
+                normalize_segment_container(&mut elements[index]);
+            }
         } else if matches!(
-            element,
+            &elements[index],
             Element::Container(container)
                 if container.ctype() == ContainerType::Monospace
         ) {
-            visit_children_mut(element, normalize_sequence_inside_monospace);
+            visit_children_mut(
+                &mut elements[index],
+                normalize_sequence_inside_monospace,
+            );
         } else {
-            visit_children_mut(element, normalize_sequence);
+            visit_children_mut(&mut elements[index], normalize_sequence);
         }
+        index += 1;
     }
+}
+
+fn normalize_segment_container_with_run<'t>(
+    elements: &mut Vec<Element<'t>>,
+    index: usize,
+) -> bool {
+    let joinable = match &elements[index] {
+        Element::Table(table) => table.table_type == TableType::Simple,
+        Element::DefinitionList(_) => true,
+        _ => false,
+    };
+    if !joinable {
+        return false;
+    }
+
+    let mut run_start = index;
+    while run_start > 0 {
+        let candidate = &elements[run_start - 1];
+        if matches!(candidate, Element::LineBreaks(_)) || !candidate.paragraph_safe() {
+            break;
+        }
+        run_start -= 1;
+    }
+    if run_start == index {
+        return false;
+    }
+
+    let mut rest = elements.split_off(run_start);
+    let mut after = rest.split_off(index - run_start + 1);
+    let mut container = rest.split_off(index - run_start);
+    let mut segments: Vec<&mut Vec<Element<'t>>> = vec![&mut rest];
+    segments.extend(segment_vecs_mut(&mut container[0]));
+    normalize_segments(&mut segments);
+    rest.append(&mut container);
+    rest.append(&mut after);
+    elements.append(&mut rest);
+    true
 }
 
 fn is_segment_container(element: &Element<'_>) -> bool {
@@ -1471,9 +1515,11 @@ fn apply_marker_stream_list<'t>(
             ltype,
             attributes,
             items,
+            wikidot_explicit_block,
         } => Element::List {
             ltype,
             attributes,
+            wikidot_explicit_block,
             items: items
                 .into_iter()
                 .map(|item| match item {
@@ -2006,7 +2052,8 @@ fn pairing_barrier(element: &Element<'_>) -> bool {
         | Element::DefinitionList(_)
         | Element::Include { .. }
         | Element::HorizontalRule
-        | Element::TableOfContents { .. } => true,
+        | Element::TableOfContents { .. }
+        | Element::FootnoteBlock { .. } => true,
         Element::Partial(partial) => matches!(
             partial,
             PartialElement::ListItem(_)
@@ -3516,6 +3563,10 @@ fn next_valid_dash_closes(elements: &[Element<'_>]) -> Vec<Option<usize>> {
     let mut next = None;
     for index in (0..elements.len()).rev() {
         result[index] = next;
+        if matches!(elements[index], Element::FootnoteBlock { .. }) {
+            next = None;
+            continue;
+        }
         let valid_close = dash_run_len(&elements[index])
             .is_some_and(|length| length >= 2)
             && index

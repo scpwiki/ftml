@@ -206,6 +206,7 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             ltype,
             items,
             attributes,
+            ..
         } => render_list(ctx, *ltype, items, attributes),
         Element::DefinitionList(items) => render_definition_list(ctx, items),
         Element::RadioButton {
@@ -247,9 +248,14 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             render_table_of_contents(ctx, *align, attributes)
         }
         Element::Footnote(index) => render_footnote(ctx, *index),
-        Element::FootnoteBlock { title, hide } => {
+        Element::FootnoteBlock {
+            title,
+            hide,
+            wikidot_wrappers,
+            ..
+        } => {
             if (ctx.layout().legacy() || !*hide) && !ctx.footnotes().is_empty() {
-                render_footnote_block(ctx, ref_cow!(title));
+                render_footnote_block(ctx, ref_cow!(title), wikidot_wrappers);
             }
         }
         Element::BibliographyCite {

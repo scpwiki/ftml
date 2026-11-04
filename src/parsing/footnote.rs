@@ -38,8 +38,14 @@ pub(crate) fn normalize_wikidot_blocks(
             continue;
         }
 
-        let ElementFrame { parent, output, .. } =
-            stack.pop().expect("normalization stack was not empty");
+        let ElementFrame {
+            parent,
+            mut output,
+            ..
+        } = stack.pop().expect("normalization stack was not empty");
+        if !footnotes_empty {
+            normalize_block_sequence(&mut output);
+        }
         let Some(mut parent) = parent else {
             *elements = output;
             break;
@@ -72,36 +78,217 @@ impl<'t> ElementFrame<'t> {
 
 fn normalize_paragraph<'t>(
     output: &mut Vec<Element<'t>>,
-    mut container: Container<'t>,
+    container: Container<'t>,
     footnotes_empty: bool,
 ) {
     if footnotes_empty {
+        let mut container = container;
         remove_empty_inline_blocks(container.elements_mut());
-        output.push(Element::Container(container));
-        return;
-    }
-
-    if !container
-        .elements()
-        .iter()
-        .any(|element| matches!(element, Element::FootnoteBlock { .. }))
-    {
         output.push(Element::Container(container));
         return;
     }
 
     let attributes = container.attributes().clone();
     let children: Vec<Element<'t>> = container.into();
-    let mut paragraph = Vec::new();
+    let children = dissolve_footnote_block_containers(children);
+    if !children
+        .iter()
+        .any(|element| matches!(element, Element::FootnoteBlock { .. }))
+    {
+        output.push(Element::Container(Container::new(
+            ContainerType::Paragraph,
+            children,
+            attributes,
+        )));
+        return;
+    }
+
+    let mut fragment = Vec::new();
+    let mut after_suffix_inline = false;
     for child in children {
-        if matches!(child, Element::FootnoteBlock { .. }) {
-            push_paragraph(output, &mut paragraph, &attributes);
+        if let Element::FootnoteBlock {
+            wikidot_inline_suffix,
+            wikidot_inline_prefix,
+            ..
+        } = child
+        {
+            push_before_fragment(
+                output,
+                &mut fragment,
+                &attributes,
+                wikidot_inline_prefix,
+            );
             output.push(child);
+            after_suffix_inline = wikidot_inline_suffix;
         } else {
-            paragraph.push(child);
+            fragment.push(child);
         }
     }
-    push_paragraph(output, &mut paragraph, &attributes);
+    push_after_fragment(output, &mut fragment, &attributes, after_suffix_inline);
+}
+
+fn push_before_fragment<'t>(
+    output: &mut Vec<Element<'t>>,
+    fragment: &mut Vec<Element<'t>>,
+    attributes: &AttributeMap<'t>,
+    prefix_inline: bool,
+) {
+    if fragment.is_empty() {
+        return;
+    }
+
+    if !prefix_inline {
+        if matches!(fragment.last(), Some(Element::LineBreak)) {
+            fragment.pop();
+        }
+        push_paragraph(output, fragment, attributes);
+        return;
+    }
+
+    output.append(fragment);
+    output.push(Element::LineBreak);
+}
+
+fn push_after_fragment<'t>(
+    output: &mut Vec<Element<'t>>,
+    fragment: &mut Vec<Element<'t>>,
+    attributes: &AttributeMap<'t>,
+    suffix_inline: bool,
+) {
+    if fragment.is_empty() {
+        return;
+    }
+
+    if !suffix_inline {
+        if matches!(fragment.first(), Some(Element::LineBreak)) {
+            fragment.remove(0);
+        }
+        push_paragraph(output, fragment, attributes);
+        return;
+    }
+
+    output.push(Element::LineBreak);
+    output.append(fragment);
+}
+
+fn subtree_contains_footnote_block(element: &Element<'_>) -> bool {
+    let mut stack = vec![element];
+    while let Some(element) = stack.pop() {
+        match element {
+            Element::FootnoteBlock { .. } => return true,
+            Element::Container(container) => stack.extend(container.elements().iter()),
+            Element::Color { elements, .. } => stack.extend(elements.iter()),
+            _ => {}
+        }
+    }
+    false
+}
+
+fn delimiter_markers(ctype: ContainerType) -> Option<(&'static str, &'static str)> {
+    match ctype {
+        ContainerType::Bold => Some(("**", "**")),
+        ContainerType::Italics => Some(("//", "//")),
+        ContainerType::Underline => Some(("__", "__")),
+        ContainerType::Superscript => Some(("^^", "^^")),
+        ContainerType::Subscript => Some((",,", ",,")),
+        ContainerType::Strikethrough => Some(("--", "--")),
+        ContainerType::Monospace => Some(("{{", "}}")),
+        _ => None,
+    }
+}
+
+enum DissolveStep<'t> {
+    Process(Element<'t>),
+    PushText(Cow<'t, str>),
+    FinishContainer(ContainerType, AttributeMap<'t>),
+}
+
+fn dissolve_footnote_block_containers<'t>(
+    elements: Vec<Element<'t>>,
+) -> Vec<Element<'t>> {
+    let mut out_stack: Vec<Vec<Element<'t>>> = vec![Vec::with_capacity(elements.len())];
+    let mut steps: Vec<DissolveStep<'t>> = elements
+        .into_iter()
+        .rev()
+        .map(DissolveStep::Process)
+        .collect();
+    while let Some(step) = steps.pop() {
+        match step {
+            DissolveStep::PushText(text) => {
+                out_stack
+                    .last_mut()
+                    .expect("dissolve output stack was empty")
+                    .push(Element::Text(text));
+            }
+            DissolveStep::FinishContainer(ctype, attributes) => {
+                let children = out_stack.pop().expect("dissolve child output missing");
+                out_stack
+                    .last_mut()
+                    .expect("dissolve output stack was empty")
+                    .push(Element::Container(Container::new(
+                        ctype, children, attributes,
+                    )));
+            }
+            DissolveStep::Process(element) => {
+                if !subtree_contains_footnote_block(&element) {
+                    out_stack
+                        .last_mut()
+                        .expect("dissolve output stack was empty")
+                        .push(element);
+                    continue;
+                }
+
+                match element {
+                    Element::Container(container) => {
+                        match delimiter_markers(container.ctype()) {
+                            Some((open, close)) => {
+                                let children: Vec<Element<'t>> = container.into();
+                                steps.push(DissolveStep::PushText(Cow::Borrowed(close)));
+                                steps.extend(
+                                    children.into_iter().rev().map(DissolveStep::Process),
+                                );
+                                steps.push(DissolveStep::PushText(Cow::Borrowed(open)));
+                            }
+                            None => {
+                                let (ctype, attributes) = (
+                                    container.ctype(),
+                                    container.attributes().clone(),
+                                );
+                                let children: Vec<Element<'t>> = container.into();
+                                steps.push(DissolveStep::FinishContainer(ctype, attributes));
+                                out_stack.push(Vec::new());
+                                steps.extend(
+                                    children.into_iter().rev().map(DissolveStep::Process),
+                                );
+                            }
+                        }
+                    }
+                    Element::Color {
+                        color,
+                        background,
+                        elements: children,
+                    } => {
+                        let open = if background {
+                            format!("##|{color}|")
+                        } else {
+                            format!("##{color}|")
+                        };
+                        steps.push(DissolveStep::PushText(Cow::Borrowed("##")));
+                        steps.extend(children.into_iter().rev().map(DissolveStep::Process));
+                        steps.push(DissolveStep::PushText(Cow::Owned(open)));
+                    }
+                    element => {
+                        out_stack
+                            .last_mut()
+                            .expect("dissolve output stack was empty")
+                            .push(element);
+                    }
+                }
+            }
+        }
+    }
+    debug_assert_eq!(out_stack.len(), 1);
+    out_stack.pop().expect("dissolve output missing")
 }
 
 fn push_paragraph<'t>(
@@ -117,6 +304,43 @@ fn push_paragraph<'t>(
         std::mem::take(paragraph),
         attributes.clone(),
     )));
+}
+
+fn normalize_block_sequence(elements: &mut Vec<Element<'_>>) {
+    if !elements.iter().any(subtree_contains_footnote_block) {
+        return;
+    }
+
+    let dissolved = dissolve_footnote_block_containers(std::mem::take(elements));
+    let mut output = Vec::with_capacity(dissolved.len());
+    let mut iter = dissolved.into_iter().peekable();
+    while let Some(element) = iter.next() {
+        let Element::FootnoteBlock {
+            wikidot_inline_prefix,
+            wikidot_inline_suffix,
+            ..
+        } = element
+        else {
+            output.push(element);
+            continue;
+        };
+
+        if wikidot_inline_prefix
+            && !output.is_empty()
+            && !matches!(output.last(), Some(Element::LineBreak))
+        {
+            output.push(Element::LineBreak);
+        }
+        output.push(element);
+        if wikidot_inline_suffix
+            && iter
+                .peek()
+                .is_some_and(|next| !matches!(next, Element::LineBreak))
+        {
+            output.push(Element::LineBreak);
+        }
+    }
+    *elements = output;
 }
 
 fn remove_empty_inline_blocks(elements: &mut Vec<Element<'_>>) {
@@ -168,6 +392,9 @@ mod tests {
                 Element::FootnoteBlock {
                     title: None,
                     hide: false,
+                    wikidot_wrappers: Vec::new(),
+                    wikidot_inline_suffix: false,
+                    wikidot_inline_prefix: false,
                 },
                 Element::Text(Cow::Borrowed("after")),
             ],
