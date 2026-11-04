@@ -29,9 +29,9 @@
 // Top-level rule
 include = {
     SOI ~ // Because we slice from the start of an include block using regex
-    "[[" ~ space? ~ ^"include" ~ space ~
+    "[[" ~ space? ~ ^"include" ~ whitespace ~
     page_ref ~
-    (space ~ stray_open_brackets? ~ argument_tail)? ~
+    (whitespace ~ stray_open_brackets? ~ argument_tail)? ~
     include_end
 }
 
@@ -65,5 +65,6 @@ page_name = _{ (!(" " | "\n" | "\t" | "[" | "|" | "]" | "\"" | "'") ~ ANY)+ }
 
 comment = _{ "[!--" ~ (!("--]") ~ ANY)* ~ "--]" }
 space = _{ (" " | "\n" | "\t" | comment)+ }
+whitespace = _{ (" " | "\n" | "\t")+ }
 
 // vim: set fdm=marker foldlevel=0:

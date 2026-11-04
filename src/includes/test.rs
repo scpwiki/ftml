@@ -113,6 +113,16 @@ fn includes() {
     test!("[[include PAGE ]]", vec![PageRef::page_only("PAGE")]);
     test!("[[ include PAGE ]]", vec![PageRef::page_only("PAGE")]);
 
+    test!("[[include pa[!--x--]ge]]", vec![]);
+    test!("[[include [!--x--]page]]", vec![]);
+    test!("[[include page[!--x--]]]", vec![]);
+    test!("[[include page[!--x--] | a=b]]", vec![]);
+    test!(
+        "[[include page [!--x--] | a=b]]",
+        vec![PageRef::page_only("page")],
+    );
+    test!("[[include pa[[iftags +x]]ge[[/iftags]]]]", vec![]);
+
     test!("[[include apple a =1]]", vec![PageRef::page_only("apple")]);
     test!("[[include apple a= 1]]", vec![PageRef::page_only("apple")]);
     test!("[[include apple a = 1]]", vec![PageRef::page_only("apple")]);
