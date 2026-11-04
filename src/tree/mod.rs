@@ -405,7 +405,9 @@ fn collect_page_references(
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
                 | PartialElement::InlineColorOpen(..)
-                | PartialElement::InlineColorClose => {}
+                | PartialElement::InlineColorClose
+                | PartialElement::InlineAnchorOpen(..)
+                | PartialElement::InlineAnchorClose(_) => {}
             },
             _ => {}
         }
@@ -502,7 +504,9 @@ fn collect_user_references(
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
                 | PartialElement::InlineColorOpen(..)
-                | PartialElement::InlineColorClose => {}
+                | PartialElement::InlineColorClose
+                | PartialElement::InlineAnchorOpen(..)
+                | PartialElement::InlineAnchorClose(_) => {}
             },
             _ => {}
         }

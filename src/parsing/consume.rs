@@ -417,6 +417,20 @@ where
         Element::Partial(PartialElement::InlineSizeClose(close_source_cow.clone()))
     } else if normalized.eq_ignore_ascii_case("span") {
         Element::Partial(PartialElement::InlineSpanClose(close_source_cow.clone()))
+    } else if normalized.eq_ignore_ascii_case("a") {
+        if !scored_close
+            && !parser.in_wikidot_anchor_body()
+            && !parser.in_wikidot_literal_alias_body()
+        {
+            return Ok(None);
+        }
+        if scored_close {
+            Element::Text(close_source_cow.clone())
+        } else {
+            Element::Partial(PartialElement::InlineAnchorClose(
+                close_source_cow.clone(),
+            ))
+        }
     } else if !parser.discarding_hidden_body()
         && parser.rule().name() == "block-table-row"
         && (normalized.eq_ignore_ascii_case("cell")
@@ -433,6 +447,9 @@ where
     parser.update(&close);
     if !scored_close && normalized.eq_ignore_ascii_case("span") {
         parser.leave_wikidot_span_body(closes_scored_span);
+    }
+    if !scored_close && normalized.eq_ignore_ascii_case("a") {
+        parser.leave_wikidot_anchor_body();
     }
     let fused_residual = resolved_close && parser.fused_name_residual() == Some(end) && {
         parser.clear_fused_name_residual();

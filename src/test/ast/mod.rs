@@ -343,7 +343,9 @@ fn exercise_partial_element_helpers(partial: &PartialElement<'_>) -> usize {
         | PartialElement::InlineFormatOpen(_)
         | PartialElement::InlineFormatClose(_)
         | PartialElement::InlineColorOpen(..)
-        | PartialElement::InlineColorClose => 0,
+        | PartialElement::InlineColorClose
+        | PartialElement::InlineAnchorOpen(..)
+        | PartialElement::InlineAnchorClose(_) => 0,
         PartialElement::ListItem(item) => exercise_list_item_helpers(item),
         PartialElement::TableRow(row) => row
             .cells

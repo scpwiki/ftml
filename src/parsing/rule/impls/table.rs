@@ -102,6 +102,7 @@ fn push_cell<'t>(
 struct PendingInlineScopes {
     spans: usize,
     sizes: usize,
+    anchors: usize,
 }
 
 fn clip_wikidot_inline_scopes_at_cell_boundary<'t>(
@@ -110,6 +111,7 @@ fn clip_wikidot_inline_scopes_at_cell_boundary<'t>(
 ) {
     let mut spans = 0usize;
     let mut sizes = 0usize;
+    let mut anchors = 0usize;
     elements.retain(|element| match element {
         Element::Partial(PartialElement::InlineSpanOpen(_)) => {
             spans += 1;
@@ -135,6 +137,18 @@ fn clip_wikidot_inline_scopes_at_cell_boundary<'t>(
             sizes -= 1;
             true
         }
+        Element::Partial(PartialElement::InlineAnchorOpen(..)) => {
+            anchors += 1;
+            true
+        }
+        Element::Partial(PartialElement::InlineAnchorClose(_)) if pending.anchors > 0 => {
+            pending.anchors -= 1;
+            false
+        }
+        Element::Partial(PartialElement::InlineAnchorClose(_)) if anchors > 0 => {
+            anchors -= 1;
+            true
+        }
         _ => true,
     });
     for _ in 0..spans {
@@ -147,24 +161,37 @@ fn clip_wikidot_inline_scopes_at_cell_boundary<'t>(
             Cow::Borrowed(""),
         )));
     }
+    for _ in 0..anchors {
+        elements.push(Element::Partial(PartialElement::InlineAnchorClose(
+            Cow::Borrowed(""),
+        )));
+    }
     pending.spans += spans;
     pending.sizes += sizes;
+    pending.anchors += anchors;
     let mut nested_spans = 0usize;
     let mut nested_sizes = 0usize;
+    let mut nested_anchors = 0usize;
     for element in elements.iter_mut() {
         if let Element::Container(container) = element {
-            let (spans, sizes) = close_nested_inline_scopes(container.elements_mut());
+            let (spans, sizes, anchors) =
+                close_nested_inline_scopes(container.elements_mut());
             nested_spans += spans;
             nested_sizes += sizes;
+            nested_anchors += anchors;
         }
     }
     pending.spans += nested_spans;
     pending.sizes += nested_sizes;
+    pending.anchors += nested_anchors;
 }
 
-fn close_wikidot_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, usize) {
+fn close_wikidot_inline_scopes<'t>(
+    elements: &mut Vec<Element<'t>>,
+) -> (usize, usize, usize) {
     let mut spans = 0usize;
     let mut sizes = 0usize;
+    let mut anchors = 0usize;
     for element in elements.iter() {
         match element {
             Element::Partial(PartialElement::InlineSpanOpen(_)) => spans += 1,
@@ -174,6 +201,10 @@ fn close_wikidot_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, u
             Element::Partial(PartialElement::InlineSizeOpen(_)) => sizes += 1,
             Element::Partial(PartialElement::InlineSizeClose(_)) => {
                 sizes = sizes.saturating_sub(1)
+            }
+            Element::Partial(PartialElement::InlineAnchorOpen(..)) => anchors += 1,
+            Element::Partial(PartialElement::InlineAnchorClose(_)) => {
+                anchors = anchors.saturating_sub(1)
             }
             _ => {}
         }
@@ -188,7 +219,12 @@ fn close_wikidot_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, u
             Cow::Borrowed(""),
         )));
     }
-    (spans, sizes)
+    for _ in 0..anchors {
+        elements.push(Element::Partial(PartialElement::InlineAnchorClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    (spans, sizes, anchors)
 }
 
 fn swallow_early_closed_scopes<'t>(
@@ -196,6 +232,7 @@ fn swallow_early_closed_scopes<'t>(
     start: usize,
     spans: &mut usize,
     sizes: &mut usize,
+    anchors: &mut usize,
 ) {
     let mut index = start;
     while index < elements.len() {
@@ -208,6 +245,10 @@ fn swallow_early_closed_scopes<'t>(
                 *sizes -= 1;
                 true
             }
+            Element::Partial(PartialElement::InlineAnchorClose(_)) if *anchors > 0 => {
+                *anchors -= 1;
+                true
+            }
             _ => false,
         };
         if drop {
@@ -218,18 +259,24 @@ fn swallow_early_closed_scopes<'t>(
     }
 }
 
-fn close_nested_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, usize) {
+fn close_nested_inline_scopes<'t>(
+    elements: &mut Vec<Element<'t>>,
+) -> (usize, usize, usize) {
     let mut closed_spans = 0usize;
     let mut closed_sizes = 0usize;
+    let mut closed_anchors = 0usize;
     for element in elements.iter_mut() {
         if let Element::Container(container) = element {
-            let (spans, sizes) = close_nested_inline_scopes(container.elements_mut());
+            let (spans, sizes, anchors) =
+                close_nested_inline_scopes(container.elements_mut());
             closed_spans += spans;
             closed_sizes += sizes;
+            closed_anchors += anchors;
         }
     }
     let mut spans = 0usize;
     let mut sizes = 0usize;
+    let mut anchors = 0usize;
     for element in elements.iter() {
         match element {
             Element::Partial(PartialElement::InlineSpanOpen(_)) => spans += 1,
@@ -239,6 +286,10 @@ fn close_nested_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, us
             Element::Partial(PartialElement::InlineSizeOpen(_)) => sizes += 1,
             Element::Partial(PartialElement::InlineSizeClose(_)) => {
                 sizes = sizes.saturating_sub(1)
+            }
+            Element::Partial(PartialElement::InlineAnchorOpen(..)) => anchors += 1,
+            Element::Partial(PartialElement::InlineAnchorClose(_)) => {
+                anchors = anchors.saturating_sub(1)
             }
             _ => {}
         }
@@ -253,7 +304,16 @@ fn close_nested_inline_scopes<'t>(elements: &mut Vec<Element<'t>>) -> (usize, us
             Cow::Borrowed(""),
         )));
     }
-    (closed_spans + spans, closed_sizes + sizes)
+    for _ in 0..anchors {
+        elements.push(Element::Partial(PartialElement::InlineAnchorClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    (
+        closed_spans + spans,
+        closed_sizes + sizes,
+        closed_anchors + anchors,
+    )
 }
 
 fn append_cell_elements<'t>(all_elements: &mut Vec<Element<'t>>, elements: Elements<'t>) {
@@ -427,6 +487,7 @@ fn try_consume_fn<'r, 't>(
             let mut elements = Vec::new();
             let mut early_closed_spans = 0usize;
             let mut early_closed_sizes = 0usize;
+            let mut early_closed_anchors = 0usize;
             let cell_start = match parse_cell_start(parser)? {
                 Some(cell_start) => cell_start,
                 None => return finish_table_or_fail(parser, rows, errors),
@@ -439,9 +500,11 @@ fn try_consume_fn<'r, 't>(
                 let current_closer =
                     Parser::wikidot_simple_table_closer_bit(parser.current().token);
                 if pending_inline_closers & current_closer != 0 {
-                    let (spans, sizes) = close_wikidot_inline_scopes(&mut elements);
+                    let (spans, sizes, anchors) =
+                        close_wikidot_inline_scopes(&mut elements);
                     early_closed_spans += spans;
                     early_closed_sizes += sizes;
+                    early_closed_anchors += anchors;
                     parser.step()?;
                     pending_inline_closers &= !current_closer;
                     continue;
@@ -462,9 +525,11 @@ fn try_consume_fn<'r, 't>(
                     ) else {
                         continue;
                     };
-                    let (spans, sizes) = close_wikidot_inline_scopes(&mut elements);
+                    let (spans, sizes, anchors) =
+                        close_wikidot_inline_scopes(&mut elements);
                     early_closed_spans += spans;
                     early_closed_sizes += sizes;
+                    early_closed_anchors += anchors;
                     while parser.current().span.start < split_match.consume_end
                         && parser.current().token != Token::InputEnd
                     {
@@ -692,6 +757,7 @@ fn try_consume_fn<'r, 't>(
                             elements_before,
                             &mut early_closed_spans,
                             &mut early_closed_sizes,
+                            &mut early_closed_anchors,
                         );
                     }
                 }

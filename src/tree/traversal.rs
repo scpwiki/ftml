@@ -158,7 +158,9 @@ fn tree_stack_depth_reaches_threshold<'a>(
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
                 | PartialElement::InlineColorOpen(..)
-                | PartialElement::InlineColorClose => {}
+                | PartialElement::InlineColorClose
+                | PartialElement::InlineAnchorOpen(..)
+                | PartialElement::InlineAnchorClose(_) => {}
             },
             _ => {}
         }

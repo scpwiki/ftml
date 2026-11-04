@@ -271,7 +271,9 @@ fn render_partial(ctx: &mut TextContext, partial: &PartialElement) {
         | PartialElement::InlineFormatOpen(_)
         | PartialElement::InlineFormatClose(_)
         | PartialElement::InlineColorOpen(..)
-        | PartialElement::InlineColorClose => {}
+        | PartialElement::InlineColorClose
+        | PartialElement::InlineAnchorOpen(..)
+        | PartialElement::InlineAnchorClose(_) => {}
         PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
             if elements.is_empty() {
                 return;

@@ -19,8 +19,11 @@
  */
 
 use super::prelude::*;
+use crate::parsing::inline_scope::{
+    WIKIDOT_SCORE_ANCHOR_ATTRIBUTE, WIKIDOT_SCORE_ANCHOR_UNWRAPPED_ATTRIBUTE,
+};
 use crate::parsing::strip_newlines;
-use crate::tree::AnchorTarget;
+use crate::tree::{AnchorTarget, PartialElement};
 
 pub const BLOCK_ANCHOR: BlockRule = BlockRule {
     name: "block-anchor",
@@ -60,6 +63,23 @@ fn parse_fn<'r, 't>(
     } else {
         None
     };
+
+    if parser.settings().layout.legacy() && name.eq_ignore_ascii_case("a") {
+        let mut attributes = attributes;
+        if flag_score {
+            attributes.insert(WIKIDOT_SCORE_ANCHOR_ATTRIBUTE, cow!(""));
+            let starts_next_physical_line = matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            );
+            if starts_next_physical_line || arguments.has_empty_key() {
+                attributes.insert(WIKIDOT_SCORE_ANCHOR_UNWRAPPED_ATTRIBUTE, cow!(""));
+            }
+        }
+        parser.enter_wikidot_anchor_body();
+        let anchor = Element::Partial(PartialElement::InlineAnchorOpen(attributes, target));
+        return ok!(anchor);
+    }
 
     let legacy = parser.settings().layout.legacy();
     let source = parser.full_text().inner();

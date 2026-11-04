@@ -155,6 +155,9 @@ fn end_block_fails(
                 || (name == "span"
                     && (parser.in_wikidot_span_body()
                         || parser.in_wikidot_literal_alias_body()))
+                || (name == "a"
+                    && (parser.in_wikidot_anchor_body()
+                        || parser.in_wikidot_literal_alias_body()))
                 || (name == "div"
                     && (parser.in_wikidot_div_body()
                         || parser.in_wikidot_literal_alias_body()))

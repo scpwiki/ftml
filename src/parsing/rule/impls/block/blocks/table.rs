@@ -489,6 +489,9 @@ fn parse_table<'r, 't>(
         }
         return Err(parser.make_err(ParseErrorKind::TableContainsNonRow));
     }
+    if legacy {
+        clip_wikidot_table_anchor_scopes(&mut rows);
+    }
     let attributes = parsed.attributes;
 
     let table_type = TableType::Advanced;
@@ -591,6 +594,75 @@ fn parse_row<'r, 't>(
         elements.push(element);
         ok!(false; Elements::Multiple(elements), errors)
     }
+}
+
+
+fn clip_wikidot_table_anchor_scopes(rows: &mut [TableRow<'_>]) {
+    let mut pending = 0usize;
+    for row in rows.iter_mut() {
+        for cell in row.cells.iter_mut() {
+            clip_wikidot_table_anchor_cell(&mut cell.elements, &mut pending);
+        }
+    }
+}
+
+fn clip_wikidot_table_anchor_cell<'t>(
+    elements: &mut Vec<Element<'t>>,
+    pending: &mut usize,
+) {
+    let mut anchors = 0usize;
+    elements.retain(|element| match element {
+        Element::Partial(PartialElement::InlineAnchorOpen(..)) => {
+            anchors += 1;
+            true
+        }
+        Element::Partial(PartialElement::InlineAnchorClose(_)) if *pending > 0 => {
+            *pending -= 1;
+            false
+        }
+        Element::Partial(PartialElement::InlineAnchorClose(_)) if anchors > 0 => {
+            anchors -= 1;
+            true
+        }
+        _ => true,
+    });
+    let mut nested_anchors = 0usize;
+    for element in elements.iter_mut() {
+        if let Element::Container(container) = element {
+            nested_anchors += close_nested_anchor_scopes(container.elements_mut());
+        }
+    }
+    for _ in 0..anchors {
+        elements.push(Element::Partial(PartialElement::InlineAnchorClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    *pending += anchors + nested_anchors;
+}
+
+fn close_nested_anchor_scopes<'t>(elements: &mut Vec<Element<'t>>) -> usize {
+    let mut closed = 0usize;
+    for element in elements.iter_mut() {
+        if let Element::Container(container) = element {
+            closed += close_nested_anchor_scopes(container.elements_mut());
+        }
+    }
+    let mut anchors = 0usize;
+    for element in elements.iter() {
+        match element {
+            Element::Partial(PartialElement::InlineAnchorOpen(..)) => anchors += 1,
+            Element::Partial(PartialElement::InlineAnchorClose(_)) => {
+                anchors = anchors.saturating_sub(1)
+            }
+            _ => {}
+        }
+    }
+    for _ in 0..anchors {
+        elements.push(Element::Partial(PartialElement::InlineAnchorClose(
+            Cow::Borrowed(""),
+        )));
+    }
+    closed + anchors
 }
 
 fn parse_cell_regular<'r, 't>(

@@ -174,7 +174,9 @@ where
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
             | PartialElement::InlineColorOpen(..)
-            | PartialElement::InlineColorClose => {}
+            | PartialElement::InlineColorClose
+            | PartialElement::InlineAnchorOpen(..)
+            | PartialElement::InlineAnchorClose(_) => {}
         },
         _ => {}
     }

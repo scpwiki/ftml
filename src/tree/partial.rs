@@ -18,7 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell, TableRow};
+use super::{
+    AnchorTarget, AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell, TableRow,
+};
 use crate::parsing::ParseErrorKind;
 use std::borrow::Cow;
 
@@ -94,6 +96,10 @@ pub enum PartialElement<'t> {
 
     InlineColorClose,
 
+    InlineAnchorOpen(AttributeMap<'t>, Option<AnchorTarget>),
+
+    InlineAnchorClose(Cow<'t, str>),
+
     ListItem(ListItem<'t>),
 
     TableRow(TableRow<'t>),
@@ -117,6 +123,8 @@ impl PartialElement<'_> {
             PartialElement::InlineFormatClose(_) => "InlineFormatClose",
             PartialElement::InlineColorOpen(..) => "InlineColorOpen",
             PartialElement::InlineColorClose => "InlineColorClose",
+            PartialElement::InlineAnchorOpen(..) => "InlineAnchorOpen",
+            PartialElement::InlineAnchorClose(_) => "InlineAnchorClose",
             PartialElement::ListItem(_) => "ListItem",
             PartialElement::TableRow(_) => "TableRow",
             PartialElement::TableCell(_) => "TableCell",
@@ -136,7 +144,9 @@ impl PartialElement<'_> {
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
             | PartialElement::InlineColorOpen(..)
-            | PartialElement::InlineColorClose => ParseErrorKind::NoRulesMatch,
+            | PartialElement::InlineColorClose
+            | PartialElement::InlineAnchorOpen(..)
+            | PartialElement::InlineAnchorClose(_) => ParseErrorKind::NoRulesMatch,
             PartialElement::ListItem(_) => ParseErrorKind::ListItemOutsideList,
             PartialElement::TableRow(_) => ParseErrorKind::TableRowOutsideTable,
             PartialElement::TableCell(_) => ParseErrorKind::TableCellOutsideTable,
@@ -175,6 +185,12 @@ impl PartialElement<'_> {
                 )
             }
             PartialElement::InlineColorClose => PartialElement::InlineColorClose,
+            PartialElement::InlineAnchorOpen(attributes, target) => {
+                PartialElement::InlineAnchorOpen(attributes.to_owned(), *target)
+            }
+            PartialElement::InlineAnchorClose(source) => {
+                PartialElement::InlineAnchorClose(Cow::Owned(source.to_string()))
+            }
             PartialElement::ListItem(list_item) => {
                 PartialElement::ListItem(list_item.to_owned())
             }
@@ -207,6 +223,8 @@ impl PartialElement<'_> {
                 | PartialElement::InlineFormatClose(_)
                 | PartialElement::InlineColorOpen(..)
                 | PartialElement::InlineColorClose
+                | PartialElement::InlineAnchorOpen(..)
+                | PartialElement::InlineAnchorClose(_)
         )
     }
 }
@@ -305,6 +323,8 @@ mod tests {
             PartialElement::InlineFormatClose(InlineFormatKind::Monospace),
             PartialElement::InlineColorOpen(cow!("red"), false),
             PartialElement::InlineColorClose,
+            PartialElement::InlineAnchorOpen(AttributeMap::new(), None),
+            PartialElement::InlineAnchorClose(cow!("[[/a]]")),
         ] {
             assert!(partial.is_inline_format_control());
             assert_eq!(partial.to_owned(), partial);

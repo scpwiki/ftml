@@ -902,7 +902,9 @@ fn resolve_elements(
                 | PartialElement::InlineFormatOpen(_)
                 | PartialElement::InlineFormatClose(_)
                 | PartialElement::InlineColorOpen(..)
-                | PartialElement::InlineColorClose => {}
+                | PartialElement::InlineColorClose
+                | PartialElement::InlineAnchorOpen(..)
+                | PartialElement::InlineAnchorClose(_) => {}
             },
             _ => {}
         }
@@ -976,7 +978,9 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
             | PartialElement::InlineColorOpen(..)
-            | PartialElement::InlineColorClose => false,
+            | PartialElement::InlineColorClose
+            | PartialElement::InlineAnchorOpen(..)
+            | PartialElement::InlineAnchorClose(_) => false,
         },
         Element::Module(_)
         | Element::ContentSeparator
