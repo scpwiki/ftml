@@ -573,7 +573,9 @@ fn transliterate_triple_target(url: &str) -> Option<String> {
     let mut transliterated = String::with_capacity(url.len());
 
     for character in url.nfkd() {
-        if character.is_ascii() {
+        if is_format_character(character) {
+            transliterated.push(' ');
+        } else if character.is_ascii() {
             transliterated.push(character);
         } else if is_transliteration_combining_mark(character) {
             continue;
@@ -596,6 +598,11 @@ fn transliterate_triple_anchor(anchor: &str) -> String {
     let mut transliterated = String::with_capacity(anchor.len());
 
     for character in anchor.chars() {
+        if is_format_character(character) {
+            transliterated.push(character);
+            continue;
+        }
+
         if character.is_ascii() {
             transliterated.push(character);
             continue;
@@ -608,6 +615,35 @@ fn transliterate_triple_anchor(anchor: &str) -> String {
     }
 
     transliterated
+}
+
+/// Unicode format characters (general category Cf). Live Wikidot's page
+/// slug rule treats them as separators, the way it treats spaces, while
+/// anchors keep them as authored characters.
+fn is_format_character(character: char) -> bool {
+    matches!(
+        character,
+        '\u{ad}'
+            | '\u{600}'..='\u{605}'
+            | '\u{61c}'
+            | '\u{6dd}'
+            | '\u{70f}'
+            | '\u{8e2}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{110bd}'
+            | '\u{110cd}'
+            | '\u{13430}'..='\u{1343f}'
+            | '\u{1bca0}'..='\u{1bca3}'
+            | '\u{1d173}'..='\u{1d17a}'
+            | '\u{e0001}'
+            | '\u{e0020}'..='\u{e007f}'
+    )
 }
 
 fn is_transliteration_combining_mark(character: char) -> bool {
@@ -882,6 +918,14 @@ fn test_transliterate_triple_target() {
     test!("日本語", None);
     test!("документ日本語", None);
     test!("ß", None);
+
+    test!("pa\u{200b}ge", Some("pa ge"));
+    test!("\u{200b}page", Some(" page"));
+    test!("page\u{200b}", Some("page "));
+    test!("pa\u{200c}ge", Some("pa ge"));
+    test!("pa\u{feff}ge", Some("pa ge"));
+    test!("pa\u{ad}ge", Some("pa ge"));
+    test!("pa\u{2060}ge", Some("pa ge"));
 }
 
 #[test]
@@ -906,6 +950,7 @@ fn test_transliterate_triple_anchor() {
     test!("日本語セクション", "日本語セクション");
     test!("Section日本", "Section日本");
     test!("ß", "ß");
+    test!("frag\u{200b}ment", "frag\u{200b}ment");
 }
 
 #[cfg(test)]
