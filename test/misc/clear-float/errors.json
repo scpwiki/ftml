@@ -1,10 +1,10 @@
 [
     {
-        "token": "paragraph-break",
+        "token": "double-tilde",
         "rule": "strikethrough-tilde",
         "span": [
-            80,
-            82
+            77,
+            79
         ],
         "kind": "rule-failed"
     },
@@ -18,11 +18,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "double-tilde",
         "rule": "strikethrough-tilde",
         "span": [
-            103,
-            105
+            101,
+            103
         ],
         "kind": "rule-failed"
     },

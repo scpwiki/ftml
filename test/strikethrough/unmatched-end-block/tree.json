@@ -1,0 +1,50 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "div"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "y"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
