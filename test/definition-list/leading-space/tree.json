@@ -1,0 +1,39 @@
+{
+    "elements": [
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "A",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "A"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "1"
+                        }
+                    ]
+                },
+                {
+                    "key_string": "B",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "B"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "2"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
