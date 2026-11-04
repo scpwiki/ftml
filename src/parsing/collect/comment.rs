@@ -380,6 +380,38 @@ pub(crate) fn comment_closer_token_count_at(
     }
 }
 
+pub(crate) fn elide_comments_from_literal<'t>(text: &'t str) -> Cow<'t, str> {
+    if !text.contains("[!--") {
+        return Cow::Borrowed(text);
+    }
+    let tokenization = crate::tokenize(text);
+    let tokens = tokenization.tokens();
+    let mut ranges = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        let comment_end = if tokens[index].token == Token::LeftComment {
+            TokenWindow::from_slice(&tokens[index..])
+                .and_then(comment_bridge_end)
+                .map(|count| tokens[index + count - 1].span.end)
+        } else {
+            None
+        };
+        if let Some(end) = comment_end {
+            ranges.push(tokens[index].span.start..end);
+            index += 1;
+            while index < tokens.len() && tokens[index].span.start < end {
+                index += 1;
+            }
+        } else {
+            index += 1;
+        }
+    }
+    if ranges.is_empty() {
+        return Cow::Borrowed(text);
+    }
+    elide_ranges(text, &ranges, 0..text.len())
+}
+
 pub(crate) fn comment_bridge_end(window: TokenWindow<'_, '_>) -> Option<usize> {
     let mut index = 1;
     loop {

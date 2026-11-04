@@ -21,7 +21,7 @@
 use super::BLOCK_SPAN;
 use super::prelude::*;
 use crate::delayed::DelayedElement;
-use crate::parsing::collect::consume_valid_comment;
+use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal};
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::settings::WikitextMode;
 use crate::tree::{AcceptsPartial, AttributeMap, ListItem, ListType};
@@ -240,7 +240,9 @@ where
         };
         if !flag_score && starts_with_bounded_span {
             let literal_end = parser.current().span.start;
-            let literal = text!(&source[owner_start..literal_end]);
+            let literal = Element::Text(elide_comments_from_literal(
+                &source[owner_start..literal_end],
+            ));
             let elements = if line_started_after_physical_newline {
                 Elements::Multiple(vec![Element::LineBreak, literal])
             } else {
@@ -270,7 +272,10 @@ where
             parser.mark_wikidot_div_literal_recovered();
         }
         return Ok(Some(ParseSuccess::new(
-            text!(&source[literal_start..literal_end]).into(),
+            Element::Text(elide_comments_from_literal(
+                &source[literal_start..literal_end],
+            ))
+            .into(),
             Vec::new(),
             paragraph_safe,
         )));
@@ -306,12 +311,17 @@ where
             }
             parser.update(&close);
             return Ok(Some(ParseSuccess::new(
-                text!(&source[line_start - 1..body_end]).into(),
+                Element::Text(elide_comments_from_literal(
+                    &source[line_start - 1..body_end],
+                ))
+                .into(),
                 Vec::new(),
                 false,
             )));
         }
-        let literal = text!(&source[opener_start..literal_end]);
+        let literal = Element::Text(elide_comments_from_literal(
+            &source[opener_start..literal_end],
+        ));
         let elements = if body_start == BlockBodyStart::NextPhysicalLine {
             Elements::Multiple(vec![literal, Element::LineBreak])
         } else {
@@ -487,7 +497,9 @@ fn parse_fn<'r, 't>(
     {
         let literal_end = delimiter.current().span.start;
         parser.update(&delimiter);
-        return ok!(true; text!(&source[opener_start..literal_end]));
+        return ok!(true; Element::Text(elide_comments_from_literal(
+            &source[opener_start..literal_end],
+        )));
     }
     let head_started_physical_line =
         wikidot_div_head_started_physical_line(parser, body_start);
@@ -593,7 +605,9 @@ fn parse_fn<'r, 't>(
     {
         let head_end = parser.current().span.start;
         let literal_end = source[..head_end].trim_end_matches(['\r', '\n']).len();
-        let literal = text!(&source[opener_start..literal_end]);
+        let literal = Element::Text(elide_comments_from_literal(
+            &source[opener_start..literal_end],
+        ));
         let elements = Elements::Multiple(vec![literal, Element::LineBreak]);
         let paragraph_safe = elements.paragraph_safe();
         return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
