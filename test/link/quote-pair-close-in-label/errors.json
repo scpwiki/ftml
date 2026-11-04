@@ -1,0 +1,20 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "subscript",
+        "span": [
+            108,
+            110
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            73,
+            75
+        ],
+        "kind": "no-rules-match"
+    }
+]

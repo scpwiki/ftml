@@ -1,0 +1,7 @@
+[[user aa...bb]]
+
+[[user aa``bb''cc]]
+
+[[user aa<<bb>>cc]]
+
+[[*user aa...bb]]

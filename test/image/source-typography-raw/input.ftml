@@ -1,0 +1,5 @@
+[[image aa...bb.png]]
+
+[[=image aa...bb.png]]
+
+[[image aa<<bb>>cc.png]]

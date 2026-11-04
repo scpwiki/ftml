@@ -1,0 +1,8 @@
+((bibcite key1)) ((bibcite key2)) ((bibcite key3)) ((bibcite key4))
+
+[[bibliography]]
+: key1 : aa [[size 150%]]bb[[/size]] cc
+: key2 : [[size 75%]]aa bb[[/size]] cc
+: key3 : aa [[span]]bb[[/span]] cc
+: key4 : aa [[span]]bb [[size 150%]]cc[[/size]] dd[[/span]] ee
+[[/bibliography]]
