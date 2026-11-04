@@ -1,0 +1,20 @@
+[
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "no-rules-match"
+    }
+]

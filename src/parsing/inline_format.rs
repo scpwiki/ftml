@@ -238,6 +238,7 @@ fn normalize_sequence_passes<'t>(
         // waiting for a link close, so the link-close repair must not
         // re-pair braces inside it.
         if !inside_monospace {
+            changed |= repair_trapped_opener_pass(elements);
             changed |= repair_monospace_split_close_pass(elements);
             changed |= repair_monospace_link_close_pass(elements);
         }
@@ -490,6 +491,105 @@ fn repair_same_family_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
 struct CrossTarget {
     inner_index: usize,
     marker_index: usize,
+}
+
+fn repair_trapped_opener_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut changed = false;
+    let mut index = 0;
+    while index < elements.len() {
+        if !trapped_opener_at(elements, index) {
+            index += 1;
+            continue;
+        }
+        let element = elements.remove(index);
+        let (_, children) =
+            FormatShell::into_parts(element).expect("formatter index has a shell");
+        let mut replacement = Vec::with_capacity(children.len() + 2);
+        replacement.push(Element::Partial(PartialElement::InlineFormatOpen(
+            InlineFormatKind::Strikethrough,
+        )));
+        replacement.extend(children);
+        replacement.push(Element::Partial(PartialElement::InlineFormatClose(
+            InlineFormatKind::Strikethrough,
+        )));
+        elements.splice(index..index, replacement);
+        changed = true;
+        index += 1;
+    }
+    changed
+}
+
+fn trapped_opener_at(elements: &[Element<'_>], index: usize) -> bool {
+    let Some(FormatShell::Container {
+        kind: FormatKind::Strike,
+        attributes,
+        ..
+    }) = FormatShell::from_element(&elements[index])
+    else {
+        return false;
+    };
+    if !attributes.get().is_empty() {
+        return false;
+    }
+    let Some(children) = formatter_children(&elements[index]) else {
+        return false;
+    };
+    if children
+        .iter()
+        .any(|child| pairing_barrier(child) || element_contains_link(child))
+    {
+        return false;
+    }
+    let candidates = outer_candidates(children);
+    let Some(kind) =
+        candidates
+            .iter()
+            .enumerate()
+            .find_map(|(child_index, candidate)| {
+                let candidate = candidate.as_ref()?;
+                let kind = candidate.shell.kind();
+                (kind != FormatKind::Strike
+                    && trapped_candidate_orphaned(children, child_index, candidate))
+                .then_some(kind)
+            })
+    else {
+        return false;
+    };
+    let close_marker = kind.close_marker();
+    for element in &elements[index + 1..] {
+        if is_exact_text(element, close_marker) {
+            return true;
+        }
+        if pairing_barrier(element) {
+            return false;
+        }
+    }
+    false
+}
+
+fn trapped_candidate_orphaned(
+    children: &[Element<'_>],
+    index: usize,
+    candidate: &OuterCandidate<'_>,
+) -> bool {
+    let kind = candidate.shell.kind();
+    let rest = &children[index + candidate.opener_len..];
+    match kind {
+        FormatKind::Color => !rest.iter().any(|element| is_exact_text(element, "##")),
+        FormatKind::Subscript | FormatKind::Superscript => {
+            let marker = kind.close_marker();
+            !rest.iter().enumerate().any(|(offset, element)| {
+                is_exact_text(element, marker)
+                    && !element_ends_with_ascii_space(
+                        &children[index + candidate.opener_len + offset - 1],
+                    )
+            })
+        }
+        _ => {
+            let marker = kind.close_marker();
+            !rest.iter().any(|element| is_exact_text(element, marker))
+        }
+    }
 }
 
 fn repair_crossed_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
@@ -3007,9 +3107,12 @@ fn next_crossed_indices(
             if outer_kind == inner_shell.kind() {
                 continue;
             }
-            if let Some(marker_index) =
+            let close_index = if outer_kind == FormatKind::Strike {
+                find_valid_dash_close(children)
+            } else {
                 find_text_marker(children, outer_kind.close_marker())
-            {
+            };
+            if let Some(marker_index) = close_index {
                 next[outer_kind.index()] = Some(CrossTarget {
                     inner_index: index,
                     marker_index,
@@ -3201,6 +3304,20 @@ fn strike_shell<'t>() -> FormatShell<'t> {
         ctype: ContainerType::Strikethrough,
         attributes: AttributeMap::new(),
     }
+}
+
+fn find_valid_dash_close(children: &[Element<'_>]) -> Option<usize> {
+    children.iter().enumerate().find_map(|(index, element)| {
+        if !is_exact_text(element, "--") {
+            return None;
+        }
+        let padded = index > 0 && element_ends_with_pad(&children[index - 1]);
+        (!padded).then_some(index)
+    })
+}
+
+fn element_ends_with_pad(element: &Element<'_>) -> bool {
+    matches!(element, Element::Text(value) if value.ends_with(' ') || value.ends_with('\t'))
 }
 
 fn find_text_marker(elements: &[Element<'_>], marker: &str) -> Option<usize> {

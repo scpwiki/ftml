@@ -1,0 +1,29 @@
+[
+    {
+        "token": "input-end",
+        "rule": "monospace",
+        "span": [
+            15,
+            15
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-monospace",
+        "rule": "fallback",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-monospace",
+        "rule": "fallback",
+        "span": [
+            9,
+            11
+        ],
+        "kind": "no-rules-match"
+    }
+]
