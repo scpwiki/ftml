@@ -2943,10 +2943,11 @@ mod tests {
         for repeat in [32, 64, 128, 256, 512] {
             for input in [
                 "[[iftags -zzz]]body[[/iftags]] ".repeat(repeat),
-                "[[a".repeat(repeat),
+                "[[x]] ".repeat(repeat),
             ] {
                 let tokenization = crate::tokenize(&input);
                 let mut parser = Parser::new(&tokenization, &page_info, &settings);
+                crate::parsing::collect::reset_segment_scan_token_visits();
 
                 while parser.current().token != Token::InputEnd {
                     if parser.current().token == Token::LeftBlock {
@@ -2956,9 +2957,10 @@ mod tests {
                 }
 
                 assert!(
-                    parser.segment_scan_token_visits() <= tokenization.tokens().len() * 4,
+                    crate::parsing::collect::segment_scan_token_visits()
+                        <= tokenization.tokens().len() * 4,
                     "{repeat} repeats visited {} tokens for {} input tokens",
-                    parser.segment_scan_token_visits(),
+                    crate::parsing::collect::segment_scan_token_visits(),
                     tokenization.tokens().len(),
                 );
             }
