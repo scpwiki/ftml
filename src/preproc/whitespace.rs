@@ -283,6 +283,10 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
         preserve_adjacent_wikidot_tab_link_spacing(text);
     }
 
+    if wikidot_compatibility {
+        preserve_wikidot_quote_tab_separator(text);
+    }
+
     replace_tabs(text, &mut buffer, wikidot_compatibility);
 
     if !wikidot_compatibility && text.contains('\0') {
@@ -625,6 +629,29 @@ fn replace_tabs(text: &mut String, buffer: &mut String, wikidot_compatibility: b
     }
     append_replaced_tabs(buffer, &text[cursor..], 1);
     std::mem::swap(text, buffer);
+}
+
+fn preserve_wikidot_quote_tab_separator(text: &mut String) {
+    if !text.contains('\t') {
+        return;
+    }
+
+    let mut output = String::with_capacity(text.len() + 8);
+    for line in text.split_inclusive('\n') {
+        let bytes = line.as_bytes();
+        let mut markers = 0;
+        while bytes.get(markers) == Some(&b'>') {
+            markers += 1;
+        }
+        if markers > 0 && bytes.get(markers) == Some(&b'\t') {
+            output.push_str(&line[..markers]);
+            output.push(' ');
+            output.push_str(&line[markers..]);
+        } else {
+            output.push_str(line);
+        }
+    }
+    *text = output;
 }
 
 fn preserve_document_leading_indentation_barrier(text: &mut String) {
