@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::block::blocks::BLOCK_TABLE;
 use super::prelude::*;
 use crate::tree::{Alignment, PartialElement, Table, TableCell, TableRow, TableType};
 use std::borrow::Cow;
@@ -30,6 +31,20 @@ struct TableCellStart<'t> {
     header: bool,
     column_span: NonZeroU32,
     literal_prefix: Option<&'t str>,
+}
+
+fn table_block_head_crosses_line<'r: 't, 't>(parser: &Parser<'r, 't>) -> bool {
+    if parser.current().token != Token::LeftBlock {
+        return false;
+    }
+    let mut probe = parser.clone();
+    let Ok((name, _)) = probe.get_block_name(false) else {
+        return false;
+    };
+    if !name.eq_ignore_ascii_case("table") {
+        return false;
+    }
+    !parser.has_body_end_block_on_line(&BLOCK_TABLE)
 }
 
 pub const RULE_TABLE: Rule = Rule {
@@ -509,9 +524,7 @@ fn try_consume_fn<'r, 't>(
                     // but never closes it, then discards the incomplete cell
                     // contents and renders one empty cell.
                     (Token::LineBreak | Token::ParagraphBreak | Token::InputEnd, _)
-                        if parser.settings().layout.legacy()
-                            && rows.is_empty()
-                            && cells.is_empty() =>
+                        if cells.is_empty() =>
                     {
                         if parser.current().token == Token::LineBreak
                             && parser
@@ -576,13 +589,20 @@ fn try_consume_fn<'r, 't>(
                         let wikidot = parser.settings().layout.legacy();
                         let comment =
                             wikidot && parser.current().token == Token::LeftComment;
-                        if wikidot {
-                            parser.set_in_wikidot_simple_table_cell(true);
-                        }
-                        let consumed = consume(parser);
-                        if wikidot {
-                            parser.set_in_wikidot_simple_table_cell(false);
-                        }
+                        let consumed = if table_block_head_crosses_line(parser) {
+                            let literal = parser.current().slice;
+                            parser.step()?;
+                            ok!(text!(literal))
+                        } else {
+                            if wikidot {
+                                parser.set_in_wikidot_simple_table_cell(true);
+                            }
+                            let consumed = consume(parser);
+                            if wikidot {
+                                parser.set_in_wikidot_simple_table_cell(false);
+                            }
+                            consumed
+                        };
                         let consumed = consumed?;
                         if wikidot {
                             pending_inline_closers |=

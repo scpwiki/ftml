@@ -1,0 +1,7 @@
+|| outer A1 ||
+|| [[table]]
+[[row]]
+[[cell]]X[[/cell]]
+[[/row]]
+[[/table]]
+|| outer C3 ||

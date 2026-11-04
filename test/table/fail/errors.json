@@ -1,23 +1,5 @@
 [
     {
-        "token": "paragraph-break",
-        "rule": "table",
-        "span": [
-            25,
-            27
-        ],
-        "kind": "rule-failed"
-    },
-    {
-        "token": "table-column",
-        "rule": "fallback",
-        "span": [
-            11,
-            13
-        ],
-        "kind": "no-rules-match"
-    },
-    {
         "token": "table-column",
         "rule": "page",
         "span": [
@@ -32,24 +14,6 @@
         "span": [
             72,
             74
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "paragraph-break",
-        "rule": "table",
-        "span": [
-            89,
-            91
-        ],
-        "kind": "rule-failed"
-    },
-    {
-        "token": "table-column-right",
-        "rule": "fallback",
-        "span": [
-            76,
-            79
         ],
         "kind": "no-rules-match"
     },
