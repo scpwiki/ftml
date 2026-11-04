@@ -1,0 +1,158 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Cite"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "a",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "and"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "b",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Middle"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 1,
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "a",
+                [
+                    {
+                        "element": "text",
+                        "data": "Entry"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "A"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ]
+        ],
+        [
+            [
+                "b",
+                [
+                    {
+                        "element": "text",
+                        "data": "Entry"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "B"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ]
+        ]
+    ]
+}

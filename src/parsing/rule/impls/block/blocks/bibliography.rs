@@ -45,6 +45,12 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy() && name != "bibliography" {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser.has_bibliography()
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let wikidot_candidate =
         parser.settings().layout.legacy() && !parser.discarding_hidden_body();
     let nested_wikidot_opener =

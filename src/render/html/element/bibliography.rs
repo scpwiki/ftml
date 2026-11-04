@@ -164,9 +164,6 @@ fn render_wikidot_bibliography(
     title: &str,
     bibliography: &Bibliography,
 ) {
-    if bibliography.slice().is_empty() {
-        return;
-    }
     ctx.html()
         .div()
         .attr(attr!("class" => "bibitems"))

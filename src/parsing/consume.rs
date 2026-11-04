@@ -145,7 +145,10 @@ where
     let marker_end = start + relative_marker_end + 2;
     let name = source[start + "[[/".len()..start + relative_marker_end]
         .trim_matches([' ', '\t']);
-    if !matches!(name.to_ascii_lowercase().as_str(), "div" | "span") {
+    if !matches!(
+        name.to_ascii_lowercase().as_str(),
+        "div" | "span" | "footnote"
+    ) {
         return Ok(None);
     }
     if line_has_unmatched_wikidot_owner_opener(source, start, name) {
@@ -153,6 +156,8 @@ where
     }
     if (name.eq_ignore_ascii_case("span") && parser.rule().name() == "block-span")
         || (name.eq_ignore_ascii_case("div") && parser.rule().name() == "block-div")
+        || (name.eq_ignore_ascii_case("footnote")
+            && parser.rule().name() == "block-footnote")
     {
         return Ok(None);
     }
@@ -180,6 +185,9 @@ where
     };
     let close = label_start + relative_close;
     let raw_label = &source[label_start..close];
+    if wikidot_label_region_has_owner_opener(&source[label_start..close]) {
+        return Ok(None);
+    }
     let label = raw_label.trim_matches([' ', '\t']);
     if label.is_empty() {
         return Ok(None);
@@ -227,6 +235,28 @@ where
         elements.push(text!(residual_closer));
     }
     Ok(Some(Elements::Multiple(elements)))
+}
+
+fn wikidot_label_region_has_owner_opener(region: &str) -> bool {
+    let bytes = region.as_bytes();
+    let mut offset = 0;
+    while let Some(found) = region[offset..].find("[[") {
+        let name_start = offset + found + 2;
+        let name_end = bytes[name_start..]
+            .iter()
+            .position(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_'))
+            .map_or(bytes.len(), |pos| name_start + pos);
+        let name = &region[name_start..name_end];
+        let name = name.strip_suffix('_').unwrap_or(name);
+        if matches!(
+            name.to_ascii_lowercase().as_str(),
+            "footnote" | "span" | "size" | "a"
+        ) {
+            return true;
+        }
+        offset = name_start;
+    }
+    false
 }
 
 fn line_has_unmatched_wikidot_owner_opener(
@@ -444,11 +474,27 @@ where
     }
     let second_start = scan.current().span.start;
     let second_is_close = scan.current().token == Token::LeftBlockEnd;
+    let mut second_opener_name = None;
     let second_valid = if second_is_close {
         scan.get_end_block().is_ok()
     } else {
-        scan.get_block_name(false).is_ok()
+        match scan.get_block_name(false) {
+            Ok((name, _)) => {
+                second_opener_name = Some(name);
+                true
+            }
+            Err(_) => false,
+        }
     };
+    if let Some(name) = second_opener_name {
+        let name = name.strip_suffix('_').unwrap_or(name);
+        if matches!(
+            name.to_ascii_lowercase().as_str(),
+            "footnote" | "span" | "size" | "a"
+        ) {
+            return Ok(None);
+        }
+    }
     if !second_valid
         || second_is_close
             && !matches!(
