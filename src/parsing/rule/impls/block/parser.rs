@@ -3749,21 +3749,31 @@ where
         F: FnOnce(&Self, Option<Cow<'t, str>>) -> Result<T, ParseError>,
     {
         let argument = if in_head {
-            let end_conditions = [ParseCondition::current(Token::RightBlock)];
+            let end_conditions = [
+                ParseCondition::current(Token::RightBlock),
+                ParseCondition::current(Token::RightLink),
+            ];
             let reject_conditions = [
                 ParseCondition::current(Token::ParagraphBreak),
                 ParseCondition::current(Token::LineBreak),
             ];
             let rule = self.rule();
             let fused_name_close = self.head_had_segment();
-            let (slice, _) = collect_text_resolved_fused(
+            let (slice, last, segment_consumed) = collect_text_resolved_fused_tracked(
                 self,
                 rule,
                 &end_conditions,
                 &reject_conditions,
                 Some(ParseErrorKind::BlockMalformedArguments),
-                fused_name_close,
             )?;
+            if last.token == Token::RightLink {
+                if !(self.settings().layout.legacy()
+                    && (fused_name_close || segment_consumed))
+                {
+                    return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
+                }
+                self.note_fused_name_residual(last.span.end);
+            }
 
             Some(slice)
         } else {

@@ -100,8 +100,15 @@ pub fn collect_text_resolved<'p, 'r, 't>(
 where
     'r: 't,
 {
-    let (text, last, _) =
-        collect_text_resolved_impl(parser, rule, closes, invalids, kind, false, false)?;
+    let (text, last, _) = collect_text_resolved_impl(
+        parser,
+        rule,
+        closes,
+        invalids,
+        kind,
+        false,
+        FusedNameClose::Never,
+    )?;
     Ok((text, last))
 }
 
@@ -148,6 +155,11 @@ pub fn collect_text_resolved_fused<'p, 'r, 't>(
 where
     'r: 't,
 {
+    let fused_name_close = if allow_fused_name_close {
+        FusedNameClose::Asserted
+    } else {
+        FusedNameClose::Never
+    };
     let (text, last, _) = collect_text_resolved_impl(
         parser,
         rule,
@@ -155,7 +167,7 @@ where
         invalids,
         kind,
         true,
-        allow_fused_name_close,
+        fused_name_close,
     )?;
     Ok((text, last))
 }
@@ -170,7 +182,32 @@ pub fn collect_text_resolved_fused_tracked<'p, 'r, 't>(
 where
     'r: 't,
 {
-    collect_text_resolved_impl(parser, rule, closes, invalids, kind, true, true)
+    collect_text_resolved_impl(
+        parser,
+        rule,
+        closes,
+        invalids,
+        kind,
+        true,
+        FusedNameClose::OnSegment,
+    )
+}
+
+/// Whether a fused `]]]` may terminate a resolved collect as the
+/// head's close, its leftover bracket becoming a residual.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FusedNameClose {
+    /// The fused token is ordinary text to this collect.
+    Never,
+    /// Only when this collect itself consumed a segment or spliced
+    /// text: the block-name collect's own witness that the name it
+    /// read was seamed.
+    OnSegment,
+    /// The caller has already established that the head contained a
+    /// segment (the head channels, gated on the name collect's
+    /// segment), so a plain field or value still ends at the fused
+    /// token.
+    Asserted,
 }
 
 fn collect_text_resolved_impl<'p, 'r, 't>(
@@ -180,7 +217,7 @@ fn collect_text_resolved_impl<'p, 'r, 't>(
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
     allow_fused_closer: bool,
-    allow_fused_name_close: bool,
+    fused_name_close: FusedNameClose,
 ) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>, bool), ParseError>
 where
     'r: 't,
@@ -241,10 +278,12 @@ where
             return Err(parser.make_err(kind.unwrap_or(ParseErrorKind::RuleFailed)));
         }
 
-        if allow_fused_name_close
+        if fused_name_close != FusedNameClose::Never
             && parser.settings().layout.legacy()
             && parser.current().token == Token::RightLink
-            && (segment_consumed || output.is_some())
+            && (fused_name_close == FusedNameClose::Asserted
+                || segment_consumed
+                || output.is_some())
             && closes.iter().any(|close| {
                 matches!(close, ParseCondition::CurrentToken(Token::RightBlock))
             })
