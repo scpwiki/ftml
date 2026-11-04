@@ -2175,19 +2175,13 @@ fn color_head_at<'t>(
         return None;
     }
     let mut color = String::new();
-    let mut background = false;
     for (offset, item) in projection[start + 1..].iter().enumerate() {
         let ProjItem::Text(value) = item else {
             return None;
         };
         if *value == "|" {
-            if color.trim().is_empty() && !background {
-                background = true;
-                color.clear();
-                continue;
-            }
             let color = normalize_wikidot_color(&color)?.into_owned();
-            return Some((Cow::Owned(color), background, offset + 2));
+            return Some((Cow::Owned(color), false, offset + 2));
         }
         color.push_str(value);
     }
@@ -3148,18 +3142,15 @@ fn outer_candidate<'t>(
         return None;
     }
     let mut color = String::new();
-    let mut background = false;
     for (offset, element) in elements[start + 1..].iter().enumerate() {
         let value = text(element)?;
         if value == "|" {
-            if color.trim().is_empty() && !background {
-                background = true;
-                color.clear();
-                continue;
-            }
             let color = normalize_wikidot_color(&color)?.into_owned().into();
             return Some(OuterCandidate {
-                shell: FormatShell::Color { color, background },
+                shell: FormatShell::Color {
+                    color,
+                    background: false,
+                },
                 opener_len: offset + 2,
                 literal_marker: "##",
             });

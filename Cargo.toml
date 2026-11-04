@@ -29,8 +29,6 @@ test-support = []
 
 [dependencies]
 cfg-if = "1"
-cssparser = "0.37"
-cssparser-color = "0.5"
 enum-map = "3"
 entities = "1"
 icu_calendar = "2.2"

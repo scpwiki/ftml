@@ -161,7 +161,11 @@ pub fn render_color(
         "color"
     };
     let style = if ctx.layout().legacy() {
-        format!("{property}: {color}")
+        if color.is_empty() {
+            format!("{property}:")
+        } else {
+            format!("{property}: {color}")
+        }
     } else {
         format!("{property}: {color};")
     };
