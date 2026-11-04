@@ -121,15 +121,31 @@ fn assert_false_iftags_unclosed_child_renders_trailing(
     assert!(tree.code_blocks.is_empty(), "{layout:?}: {hidden}");
 }
 
-fn assert_wikidot_comment_close_ends_gate(raw_body: &str) {
+fn assert_comment_close_ends_gate(raw_body: &str, layout: Layout) {
+    // Pairing outcome, live-verified on a saved page (2026-11-04): the
+    // pairing search sees into comments, so a false gate pairs with a
+    // closer inside a comment and the text after that closer is
+    // outside the gate in both layouts (the pairing model is shared):
+    // the comment's remainder renders as text and the html block
+    // after it registers. Raw-bodied blocks stay opaque to the
+    // search; only the comment is not raw.
     let input = format!(
         "[[iftags +missing]]\n{raw_body}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
     );
-    let (tree, _) = parse_with_errors(&input, Layout::Wikidot);
-    let text = render_text(&tree, Layout::Wikidot);
+    let (tree, _) = parse_with_errors(&input, layout);
+    let text = render_text(&tree, layout);
     assert!(text.contains("raw-comment"), "{raw_body}: {text}");
+    assert!(text.contains("[[/iftags]]"), "{raw_body}: {text}");
     assert!(text.contains("visible"), "{raw_body}: {text}");
-    assert_eq!(tree.html_blocks, ["\n<b>guarded</b>\n"]);
+    if layout == Layout::Wikidot {
+        assert_eq!(tree.html_blocks, ["\n<b>guarded</b>\n"]);
+    } else {
+        assert_eq!(tree.html_blocks.len(), 1, "{raw_body}: {tree:#?}");
+        assert!(
+            tree.html_blocks[0].contains("<b>guarded</b>"),
+            "{raw_body}: {tree:#?}"
+        );
+    }
     assert!(tree.code_blocks.is_empty(), "{raw_body}: {tree:#?}");
 }
 
@@ -915,18 +931,8 @@ fn false_iftags_raw_body_end_markers_stay_hidden() {
 
     for layout in [Layout::Wikijump, Layout::Wikidot] {
         for raw_body in raw_bodies {
-            if raw_body.starts_with("[!-- ") && layout == Layout::Wikidot {
-                assert_wikidot_comment_close_ends_gate(raw_body);
-                continue;
-            }
             if raw_body.starts_with("[!-- ") {
-                let input = format!(
-                    "[[iftags +missing]]\n{raw_body}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
-                );
-                let tree = parse(&input, layout);
-                assert!(tree.elements.is_empty(), "{raw_body}: {tree:#?}");
-                assert!(tree.html_blocks.is_empty(), "{raw_body}: {tree:#?}");
-                assert!(tree.code_blocks.is_empty(), "{raw_body}: {tree:#?}");
+                assert_comment_close_ends_gate(raw_body, layout);
                 continue;
             }
             assert_false_iftags_guarded(raw_body, layout);
@@ -1034,7 +1040,7 @@ fn wikidot_false_iftags_closed_raw_stays_guarded() {
 
 #[test]
 fn wikidot_false_iftags_comment_close_ends_the_gate() {
-    assert_wikidot_comment_close_ends_gate("[!-- [[/iftags]] raw-comment --]");
+    assert_comment_close_ends_gate("[!-- [[/iftags]] raw-comment --]", Layout::Wikidot);
 }
 
 #[test]

@@ -44,6 +44,22 @@ fn try_consume_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
         }
 
+        // Live Wikidot pairs an iftags gate with a closer inside a
+        // comment: the pairing search sees into comments even though
+        // raw-bodied blocks stay opaque to it. While a hidden gate
+        // body is discarded, stop the comment at the designated end so
+        // the discard ends there and the comment's remainder past the
+        // closer is ordinary following content. (In a kept body the
+        // comment is consumed whole, as the spliced text completes it
+        // there.)
+        if parser.discarding_hidden_body()
+            && parser
+                .wikidot_iftags_body_end()
+                .is_some_and(|designated| parser.at_designated_iftags_end(designated))
+        {
+            return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
+        }
+
         let token = parser.current().token;
         if let Some(slot) = parser.current_generated().cloned() {
             generated.push(slot);

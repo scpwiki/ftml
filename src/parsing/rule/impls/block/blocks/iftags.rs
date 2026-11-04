@@ -97,7 +97,7 @@ fn literal_span_gate<'r, 't>(
 
     let (pairing_end, _) = parser.wikidot_iftags_pairing_end();
     let designated = parser.wikidot_iftags_body_end();
-    let mut line_breaks: Vec<(usize, usize)> = Vec::new();
+    let mut line_breaks: Vec<(usize, usize, bool)> = Vec::new();
     match (pairing_end, designated) {
         // This gate's pairing reaches or passes the enclosing span's end:
         // consume up to (not including) the designated closer.
@@ -137,15 +137,28 @@ fn literal_span_gate<'r, 't>(
     }
 
     let end = parser.current().span.start;
-    ok!(true; literal_unit_elements(text, start, end, &line_breaks), Vec::new())
+    let (elements, paragraph_split) =
+        literal_unit_elements(text, start, end, &line_breaks);
+    let mut success = crate::parsing::ParseSuccess::new(elements, Vec::new(), true);
+    success.paragraph_split = paragraph_split;
+    Ok(success)
 }
 
 /// Record the current token's span if it is a line or paragraph break,
 /// so a literal gate unit can reproduce the breaks its text contains.
-fn record_line_break(parser: &Parser<'_, '_>, line_breaks: &mut Vec<(usize, usize)>) {
+/// The flag marks paragraph breaks, which split the enclosing gather
+/// like any other kept body's breaks.
+fn record_line_break(
+    parser: &Parser<'_, '_>,
+    line_breaks: &mut Vec<(usize, usize, bool)>,
+) {
     let token = parser.current();
     if matches!(token.token, Token::LineBreak | Token::ParagraphBreak) {
-        line_breaks.push((token.span.start, token.span.end));
+        line_breaks.push((
+            token.span.start,
+            token.span.end,
+            token.token == Token::ParagraphBreak,
+        ));
     }
 }
 
@@ -154,34 +167,75 @@ fn record_line_break(parser: &Parser<'_, '_>, line_breaks: &mut Vec<(usize, usiz
 /// paragraph break (a paragraph break flattens to one line break, as
 /// elsewhere in a segment body). Live Wikidot resolves the enclosing
 /// segment at the text level, so breaks inside the unit render as
-/// breaks, not as raw newlines inside one text run.
+/// breaks, not as raw newlines inside one text run. Where the unit
+/// held paragraph breaks, the returned split layout lets the enclosing
+/// gather re-establish them as real paragraph breaks; the flattened
+/// batch is unchanged.
 fn literal_unit_elements<'t>(
     source: &'t str,
     start: usize,
     end: usize,
-    line_breaks: &[(usize, usize)],
-) -> Elements<'t> {
+    line_breaks: &[(usize, usize, bool)],
+) -> (Elements<'t>, Option<Vec<usize>>) {
     if line_breaks.is_empty() {
-        return Elements::Single(Element::Text(Cow::Borrowed(&source[start..end])));
+        return (
+            Elements::Single(Element::Text(Cow::Borrowed(&source[start..end]))),
+            None,
+        );
     }
 
     let mut elements = Vec::with_capacity(line_breaks.len() * 2 + 1);
+    let mut counts: Vec<usize> = Vec::new();
+    let mut segment_count = 0_usize;
+    let mut segment_split = false;
+    // Whether the element batch currently ends with the separator of a
+    // paragraph break whose segment was just closed: further breaks in
+    // the same run shed into that break instead of opening content.
+    let mut at_break_run_end = false;
     let mut chunk_start = start;
-    for &(break_start, break_end) in line_breaks {
+    for &(break_start, break_end, paragraph) in line_breaks {
         if break_start > chunk_start {
             elements.push(Element::Text(Cow::Borrowed(
                 &source[chunk_start..break_start],
             )));
+            segment_count += 1;
+            at_break_run_end = false;
         }
-        if !matches!(elements.last(), Some(Element::LineBreak)) {
+        if paragraph {
+            if at_break_run_end {
+                // A further paragraph break in the same run closes an
+                // empty segment, matching how a body gather segments
+                // consecutive breaks.
+                counts.push(0);
+            } else {
+                if !matches!(elements.last(), Some(Element::LineBreak)) {
+                    elements.push(Element::LineBreak);
+                    segment_count += 1;
+                }
+                counts.push(segment_count);
+                segment_count = 0;
+                at_break_run_end = true;
+            }
+            segment_split = true;
+        } else if !matches!(elements.last(), Some(Element::LineBreak)) {
             elements.push(Element::LineBreak);
+            segment_count += 1;
+            at_break_run_end = false;
         }
         chunk_start = break_end;
     }
     if chunk_start < end {
         elements.push(Element::Text(Cow::Borrowed(&source[chunk_start..end])));
+        segment_count += 1;
     }
-    Elements::Multiple(elements)
+    counts.push(segment_count);
+
+    let paragraph_split = if segment_split && counts.len() >= 2 {
+        Some(counts)
+    } else {
+        None
+    };
+    (Elements::Multiple(elements), paragraph_split)
 }
 
 /// Whether the block opener recovered from the parser's position sits
@@ -345,6 +399,67 @@ fn parse_fn<'r, 't>(
             }
             Err(error) => Err(error),
         }
+    } else if designated_end.is_some() && parser.native_blockquote_depth().is_none() {
+        // Live Wikidot splices a kept body into the text before
+        // paragraph formation, so paragraph breaks inside the body are
+        // real breaks. Gather the body in segments and lay the flat
+        // batch out by segment: the paragraph gather re-establishes
+        // the breaks from the split layout, while receivers that
+        // flatten the batch see a synthetic line break at each split
+        // point, reproducing the unsplit render. A body that crossed
+        // no break produces exactly the batch the unsplit gather
+        // produced.
+        match parser.get_body_element_segments_iftags(&BLOCK_IFTAGS) {
+            Ok(body) => {
+                let (segments, errors, paragraph_safe) = body.into();
+
+                trace!(
+                    "IfTags parsed {} conditions and {} body segments",
+                    conditions.len(),
+                    segments.len(),
+                );
+
+                trace!("Conditions passed, including elements");
+                if segments.len() == 1 {
+                    let elements =
+                        segments.into_iter().next().expect("single segment present");
+                    let mut bounded = Vec::with_capacity(elements.len() + 2);
+                    bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
+                    bounded.extend(elements);
+                    bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
+                    ok!(paragraph_safe; Elements::Multiple(bounded), errors)
+                } else {
+                    let last_index = segments.len() - 1;
+                    let mut batch = Vec::new();
+                    let mut counts = Vec::with_capacity(segments.len());
+                    batch.push(Element::Delayed(DelayedElement::typography_boundary()));
+                    for (index, segment) in segments.into_iter().enumerate() {
+                        let mut count = segment.len();
+                        if index == 0 {
+                            count += 1;
+                        }
+                        batch.extend(segment);
+                        if index < last_index {
+                            batch.push(Element::LineBreak);
+                            count += 1;
+                        }
+                        if index == last_index {
+                            count += 1;
+                        }
+                        counts.push(count);
+                    }
+                    batch.push(Element::Delayed(DelayedElement::typography_boundary()));
+                    let mut success = crate::parsing::ParseSuccess::new(
+                        Elements::Multiple(batch),
+                        errors,
+                        paragraph_safe,
+                    );
+                    success.paragraph_split = Some(counts);
+                    Ok(success)
+                }
+            }
+            Err(error) => Err(error),
+        }
     } else {
         match parser.get_body_elements_with_literal_quote_context(
             &BLOCK_IFTAGS,
@@ -369,6 +484,37 @@ fn parse_fn<'r, 't>(
             }
             Err(error) => Err(error),
         }
+    };
+
+    // A fused close leaves its third bracket behind as following
+    // text: the end-block verification consumed the whole `]]]` token,
+    // so append the residual bracket to the gate's result, in the
+    // final segment when the body split.
+    let result = if parser.wikidot_body_closed_with_fused_close(&BLOCK_IFTAGS) {
+        match result {
+            Ok(mut success) => {
+                if let Some(counts) = &mut success.paragraph_split
+                    && let Some(last) = counts.last_mut()
+                {
+                    *last += 1;
+                }
+                success.item = match success.item {
+                    Elements::Multiple(mut elements) => {
+                        elements.push(Element::Text(Cow::Borrowed("]")));
+                        Elements::Multiple(elements)
+                    }
+                    Elements::Single(element) => Elements::Multiple(vec![
+                        element,
+                        Element::Text(Cow::Borrowed("]")),
+                    ]),
+                    Elements::None => Elements::Single(Element::Text(Cow::Borrowed("]"))),
+                };
+                Ok(success)
+            }
+            Err(error) => Err(error),
+        }
+    } else {
+        result
     };
 
     if designated_end.is_some() {

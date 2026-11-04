@@ -72,17 +72,19 @@ where
     pub paragraph_safe: bool,
 
     /// Paragraph-split slot layout for an element batch produced by an
-    /// inline container block whose body crossed one or more paragraph
-    /// breaks (wikijump layout only). Each entry corresponds to one body
-    /// segment in order; `true` means the segment produced a container
-    /// element in `item`. The immediate receiver of the result (a
-    /// paragraph gather or a segmented body collection) reads this and
-    /// ends the current paragraph between consecutive segments, mirroring
-    /// how the segments would have been separated had the block not
-    /// consumed the breaks. Receivers that flatten results (`chain`,
-    /// `map`, the tuple conversion) drop the layout, which is the
-    /// correct behavior for content absorbed into another element.
-    pub paragraph_split: Option<Vec<bool>>,
+    /// block whose body crossed one or more paragraph breaks. Each
+    /// entry corresponds to one body segment in order and counts the
+    /// elements of `item` that belong to that segment (an inline
+    /// container contributes 0 or 1 per segment: nothing, or its one
+    /// container for that segment). The immediate receiver of the
+    /// result (a paragraph gather or a segmented body collection)
+    /// reads this and ends the current paragraph between consecutive
+    /// segments, mirroring how the segments would have been separated
+    /// had the block not consumed the breaks. Receivers that flatten
+    /// results (`chain`, `map`, the tuple conversion) drop the layout,
+    /// which is the correct behavior for content absorbed into another
+    /// element.
+    pub paragraph_split: Option<Vec<usize>>,
 
     #[doc(hidden)]
     _ref_marker: PhantomData<&'r ()>,

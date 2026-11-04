@@ -121,13 +121,13 @@ fn cross_paragraph_pairing() {
         render(&format!(
             "x[[iftags {T}]]abc\n\n[[iftags {T}]]def[[/iftags]]"
         )),
-        format!("xabc\n[[iftags {T}]]def"),
+        format!("xabc\n\n[[iftags {T}]]def"),
     );
     assert_eq!(
         render(&format!(
             "x[[iftags {T}]]abc\n\n[[iftags {F}]]def[[/iftags]]ghi"
         )),
-        format!("xabc\n[[iftags {F}]]defghi"),
+        format!("xabc\n\n[[iftags {F}]]defghi"),
     );
 }
 

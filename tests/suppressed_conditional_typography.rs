@@ -238,7 +238,7 @@ fn wikijump_layout_keeps_its_dom_while_resolving_both_conditional_variants() {
 }
 
 #[test]
-fn wikijump_keeps_a_block_owned_trailing_break_before_final_suppression() {
+fn wikijump_kept_body_trailing_break_forms_no_element_before_final_suppression() {
     let source = concat!(
         "[[iftags -missing]]\n",
         "[[module css]]\n",
@@ -251,8 +251,8 @@ fn wikijump_keeps_a_block_owned_trailing_break_before_final_suppression() {
     );
     let (_, tree) = parse(source, Layout::Wikijump);
 
-    assert!(matches!(
-        tree.elements.as_slice(),
-        [Element::Style(_), Element::LineBreak]
-    ));
+    // The kept body's trailing break is a paragraph break: it ends
+    // the body without leaving an element, and the suppressed gate
+    // after it still contributes nothing.
+    assert!(matches!(tree.elements.as_slice(), [Element::Style(_)]));
 }
