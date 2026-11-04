@@ -525,6 +525,30 @@ fn transliterate_triple_target(url: &str) -> Option<String> {
     Some(transliterated)
 }
 
+/// Transliterate a triple-link anchor character by character.
+///
+/// Unlike page targets, anchors keep characters that have no
+/// transliteration (such as CJK): the render layer percent-encodes them,
+/// matching live (`page#café` links to `/page#cafe`, while
+/// `page#日本語セクション` links to `/page#%E6%97%A5...`).
+fn transliterate_triple_anchor(anchor: &str) -> String {
+    let mut transliterated = String::with_capacity(anchor.len());
+
+    for character in anchor.chars() {
+        if character.is_ascii() {
+            transliterated.push(character);
+            continue;
+        }
+
+        match transliterate_triple_target(character.encode_utf8(&mut [0; 4])) {
+            Some(transliteration) => transliterated.push_str(&transliteration),
+            None => transliterated.push(character),
+        }
+    }
+
+    transliterated
+}
+
 fn is_transliteration_combining_mark(character: char) -> bool {
     matches!(
         character,
@@ -664,11 +688,30 @@ fn parse_link_location<'r, 't>(
         // Live Wikidot transliterates non-ASCII page targets instead of
         // dropping them (wikijump#3295): `[[[документ]]]` links to
         // `/dokument` and `[[[café]]]` to `/cafe`, while the display label
-        // keeps the original text. Targets with no transliteration (e.g. CJK,
-        // pinned by live evidence to an empty slug) keep the fallback below.
-        match transliterate_triple_target(&url) {
-            Some(transliterated) if !transliterated.is_empty() => {
-                url = Cow::Owned(transliterated);
+        // keeps the original text. Page targets with no transliteration
+        // (e.g. CJK, pinned by live evidence to an empty slug) keep the
+        // fallback below.
+        //
+        // Only the page portion goes through that all-or-nothing
+        // transliteration. An anchor is not a slug: live percent-encodes a
+        // non-ASCII anchor as UTF-8 (`page#日本語セクション` links to
+        // `/page#%E6%97%A5...`), so a CJK anchor must not discard the whole
+        // target the way an untransliterable page name does.
+        let (page_part, anchor_part) = match url.split_once('#') {
+            Some((page, anchor)) => (page, Some(anchor)),
+            None => (url.as_ref(), None),
+        };
+        match transliterate_triple_target(page_part) {
+            Some(transliterated)
+                if !transliterated.is_empty() || page_part.is_empty() =>
+            {
+                url = Cow::Owned(match anchor_part {
+                    Some(anchor) => format!(
+                        "{transliterated}#{}",
+                        transliterate_triple_anchor(anchor),
+                    ),
+                    None => transliterated,
+                });
             }
             _ => {
                 return Some((
@@ -778,6 +821,30 @@ fn test_transliterate_triple_target() {
     test!("日本語", None);
     test!("документ日本語", None);
     test!("ß", None);
+}
+
+#[test]
+fn test_transliterate_triple_anchor() {
+    macro_rules! test {
+        ($input:expr, $expected:expr $(,)?) => {
+            assert_eq!(
+                transliterate_triple_anchor($input),
+                $expected,
+                "Transliterated triple-link anchor doesn't match expected",
+            )
+        };
+    }
+
+    // Characters with a transliteration are transliterated, as before.
+    test!("café", "cafe");
+    test!("документ", "dokument");
+    test!("Section Title", "Section Title");
+
+    // Characters with no transliteration are kept, not dropped:
+    // the render layer percent-encodes them, like live.
+    test!("日本語セクション", "日本語セクション");
+    test!("Section日本", "Section日本");
+    test!("ß", "ß");
 }
 
 #[cfg(test)]
