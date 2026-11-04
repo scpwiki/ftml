@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::comment::consume_valid_comment;
 use super::iftags::{
     bracket_close_text, complete_fused_bracket_close, consume_iftags_segment,
     consume_iftags_segment_fused, iftags_segment, iftags_segment_fused,
@@ -222,6 +223,14 @@ where
 
         if parser.current().token == Token::InputEnd {
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
+        }
+
+        if parser.current().token == Token::LeftComment {
+            let range = consume_valid_comment(parser)?;
+            let output = output.get_or_insert_with(String::new);
+            output.push_str(&source[copied_until..range.start]);
+            copied_until = range.end;
+            continue;
         }
 
         if parser.current().token == Token::LeftBlock

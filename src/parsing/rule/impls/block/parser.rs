@@ -2632,6 +2632,14 @@ where
                     self.step()?;
                 }
 
+                if self.current().token == Token::LeftComment {
+                    let mut candidate = self.clone();
+                    if consume_valid_comment(&mut candidate).is_ok() {
+                        self.update(&candidate);
+                        continue;
+                    }
+                }
+
                 let start = self.current();
                 let mut args_finished = false;
                 let mut key_elisions: Vec<std::ops::Range<usize>> = Vec::new();
@@ -2645,6 +2653,14 @@ where
                     {
                         key_elisions.extend(segment.elisions());
                         continue;
+                    }
+                    if current.token == Token::LeftComment {
+                        let mut candidate = self.clone();
+                        if let Ok(range) = consume_valid_comment(&mut candidate) {
+                            key_elisions.push(range);
+                            self.update(&candidate);
+                            continue;
+                        }
                     }
                     match current.token {
                         Token::RightBlock => {
@@ -2909,6 +2925,45 @@ where
         // single bracket; the head still ended there.
         let head_ended = matches!(last.token, Token::RightBlock | Token::RightBracket);
         let arguments = self.get_head_map_wikidot(block_rule, !head_ended)?;
+        Ok((field, arguments))
+    }
+
+    pub(crate) fn get_head_field_map(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+    ) -> Result<(Cow<'t, str>, Arguments<'t>), ParseError> {
+        if !in_head {
+            return Err(self.make_err(ParseErrorKind::BlockMissingName));
+        }
+
+        while self.current().token == Token::LeftComment {
+            let mut probe = self.clone();
+            if consume_valid_comment(&mut probe).is_err() {
+                break;
+            }
+            self.update(&probe);
+            if self.current().token == Token::Whitespace {
+                self.step()?;
+            }
+        }
+
+        let end_conditions = [
+            ParseCondition::current(Token::Whitespace),
+            ParseCondition::current(Token::LineBreak),
+            ParseCondition::current(Token::ParagraphBreak),
+            ParseCondition::current(Token::RightBlock),
+        ];
+        let rule = self.rule();
+        let (field, last) = collect_text_resolved_fused(
+            self,
+            rule,
+            &end_conditions,
+            &[],
+            Some(ParseErrorKind::BlockMissingName),
+        )?;
+        let (arguments, _) = self
+            .get_head_map_with_body_start(block_rule, last.token != Token::RightBlock)?;
         Ok((field, arguments))
     }
 

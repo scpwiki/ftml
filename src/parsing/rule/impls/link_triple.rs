@@ -288,7 +288,13 @@ fn build_separate<'r, 't>(
         if native_label_raw_forbids_link(parser)? {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
-        collect_text_resolved_fused(parser, rule, &label_close, label_invalid, None)?.0
+        let label =
+            collect_text_resolved_fused(parser, rule, &label_close, label_invalid, None)?
+                .0;
+        if label.contains("[!--") {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+        label
     };
 
     let label = if legacy {

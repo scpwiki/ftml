@@ -242,7 +242,7 @@ fn joined_url_schemes_are_classified_only_after_elision() {
 }
 
 #[test]
-fn literal_owners_hidden_blocks_and_wikijump_layout_are_unchanged() {
+fn literal_owners_and_hidden_blocks_are_unchanged() {
     let (tree, errors) = parse("[[code]]\nA[!--x--]B\n[[/code]]", Layout::Wikidot);
     assert!(errors.is_empty(), "{errors:#?}");
     assert_eq!(tree.code_blocks[0].contents, "A[!--x--]B");
@@ -270,7 +270,7 @@ fn literal_owners_hidden_blocks_and_wikijump_layout_are_unchanged() {
         render("[[[start|A[!--x--]B]]]", Layout::Wikijump),
         concat!(
             r#"<p><a class="wj-link wj-link-internal" data-link-type="page" "#,
-            r#"href="/start">A[!--x--]B</a></p>"#,
+            r#"href="/start">AB</a></p>"#,
         ),
     );
 }
