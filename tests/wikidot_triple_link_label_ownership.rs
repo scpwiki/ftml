@@ -228,10 +228,11 @@ fn block_recovery_stays_fail_closed_after_outer_rollback() {
 #[test]
 fn inline_include_scanning_does_not_gain_execution_authority() {
     let source = "[[[start|A[[include component:example]]B]]]";
-    let (expanded, pages) = ftml::include(source, &settings(), DebugIncluder, || {
-        unreachable!("inline include must not be collected")
-    })
-    .unwrap();
+    let (expanded, pages) =
+        ftml::include(source, &settings(), DebugIncluder::first_missing(), || {
+            unreachable!("inline include must not be collected")
+        })
+        .unwrap();
 
     assert_eq!(expanded, source);
     assert!(pages.is_empty());

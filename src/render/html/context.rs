@@ -386,12 +386,6 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         self.page_existence.page_title(site, page)
     }
 
-    #[allow(dead_code)]
-    #[inline]
-    pub fn add_include(&mut self, page: PageRef) {
-        self.backlinks.included_pages.push(page.to_owned());
-    }
-
     #[inline]
     pub fn buffer(&mut self) -> &mut String {
         &mut self.body
@@ -524,21 +518,6 @@ mod tests {
             .expect("description metadata should be present");
 
         assert_eq!(description.value, "A page for the age - Alternate");
-    }
-
-    #[test]
-    fn html_context_add_include_records_backlink() {
-        let info = PageInfo::dummy();
-        let mut ctx = context(&info);
-        let page_ref = PageRef::page_only("component:box");
-
-        ctx.add_include(page_ref.clone());
-
-        let output = HtmlOutput::from(ctx);
-        assert_eq!(output.backlinks.included_pages, vec![page_ref]);
-        assert!(output.backlinks.internal_links.is_empty());
-        assert!(output.backlinks.external_links.is_empty());
-        assert!(output.styles.is_empty());
     }
 
     #[test]

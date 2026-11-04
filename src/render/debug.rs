@@ -41,6 +41,7 @@ impl Render for DebugRender {
 #[test]
 fn debug_render() {
     use crate::layout::Layout;
+    use crate::settings::WikitextMode;
     use crate::tree::BibliographyList;
 
     let page_info = PageInfo::dummy();

@@ -30,7 +30,25 @@ use std::fmt::{self, Display};
 ///
 /// Useful for testing includes.
 #[derive(Debug)]
-pub struct DebugIncluder;
+pub struct DebugIncluder {
+    first_missing: bool,
+}
+
+impl DebugIncluder {
+    #[inline]
+    pub fn all_present() -> Self {
+        DebugIncluder {
+            first_missing: false,
+        }
+    }
+
+    #[inline]
+    pub fn first_missing() -> Self {
+        DebugIncluder {
+            first_missing: true,
+        }
+    }
+}
 
 impl<'t> Includer<'t> for DebugIncluder {
     type Error = Infallible;
@@ -40,12 +58,10 @@ impl<'t> Includer<'t> for DebugIncluder {
         &mut self,
         includes: &[IncludeRef<'t>],
     ) -> Result<Vec<FetchedPage<'t>>, Infallible> {
-        let mut first = true;
         let mut pages = Vec::new();
 
-        for include in includes {
-            let content = if first && includes.len() > 1 {
-                first = false;
+        for (index, include) in includes.iter().enumerate() {
+            let content = if self.first_missing && index == 0 && includes.len() > 1 {
                 None
             } else {
                 let content = format!(

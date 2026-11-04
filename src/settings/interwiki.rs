@@ -82,28 +82,21 @@ impl InterwikiSettings {
     /// - There is nothing after the colon
     /// - The interwiki prefix is not found
     pub fn build(&self, link: &str) -> Option<String> {
-        match link.find(':') {
-            Some(0) | None => None,
+        let (prefix, path) = link.split_once(':')?;
 
-            Some(idx) => {
-                let (prefix, rest) = link.split_at(idx);
-                let path = &rest[1..];
-
-                if path.is_empty() {
-                    return None;
-                }
-
-                self.prefixes.get(prefix).map(|template| {
-                    let mut url = template.replace("$$", path);
-
-                    while let Some(idx) = url.find(' ') {
-                        url.replace_range(idx..idx + 1, "%20");
-                    }
-
-                    url
-                })
-            }
+        if prefix.is_empty() || path.is_empty() {
+            return None;
         }
+
+        self.prefixes.get(prefix).map(|template| {
+            let mut url = template.replace("$$", path);
+
+            while let Some(idx) = url.find(' ') {
+                url.replace_range(idx..idx + 1, "%20");
+            }
+
+            url
+        })
     }
 }
 

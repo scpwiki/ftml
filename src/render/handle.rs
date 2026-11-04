@@ -98,7 +98,7 @@ impl Handle {
             return None;
         }
 
-        let mut info = UserInfo::dummy();
+        let mut info = UserInfo::fallback();
         info.user_name = Cow::Owned(name.to_owned());
         info.user_profile_url = Cow::Owned(format!("/user:info/{name}"));
         Some(info)

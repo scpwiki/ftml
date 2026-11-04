@@ -32,11 +32,15 @@ fn expand_parse_render_with_layout(
     layout: Layout,
 ) -> (String, String, Vec<ParseError>, Vec<PageRef>) {
     let settings = page_settings(layout);
-    let (mut text, pages) =
-        ftml::include(input, &settings, DebugIncluder, || -> Infallible {
+    let (mut text, pages) = ftml::include(
+        input,
+        &settings,
+        DebugIncluder::first_missing(),
+        || -> Infallible {
             unreachable!("DebugIncluder returns one page for every include request")
-        })
-        .expect("DebugIncluder cannot fail");
+        },
+    )
+    .expect("DebugIncluder cannot fail");
     ftml::preprocess_for_layout(&mut text, settings.layout);
 
     let tokenization = ftml::tokenize(&text);

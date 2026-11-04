@@ -158,6 +158,24 @@ where
     );
     replacements.sort_unstable_by_key(|(range, _)| range.start);
 
+    substitute_replacements(input, replacements, &mut includer, invalid_return)
+}
+
+type IncludeReplacement<'t> = (
+    std::ops::Range<usize>,
+    Option<(IncludeRef<'t>, FetchedPage<'t>)>,
+);
+
+fn substitute_replacements<'t, I, E, F>(
+    input: &str,
+    replacements: Vec<IncludeReplacement<'t>>,
+    includer: &mut I,
+    invalid_return: F,
+) -> Result<(String, Vec<PageRef>), E>
+where
+    I: Includer<'t, Error = E>,
+    F: FnOnce() -> E,
+{
     let mut output = String::from(input);
     let mut pages = Vec::new();
 
