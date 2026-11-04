@@ -2896,6 +2896,36 @@ mod tests {
     }
 
     #[test]
+    fn segment_scan_operation_count_scales_with_input_tokens() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+
+        for repeat in [32, 64, 128, 256, 512] {
+            for input in [
+                "[[iftags -zzz]]body[[/iftags]] ".repeat(repeat),
+                "[[a".repeat(repeat),
+            ] {
+                let tokenization = crate::tokenize(&input);
+                let mut parser = Parser::new(&tokenization, &page_info, &settings);
+
+                while parser.current().token != Token::InputEnd {
+                    if parser.current().token == Token::LeftBlock {
+                        let _ = crate::parsing::collect::iftags_segment(&parser);
+                    }
+                    parser.step().expect("input end must remain available");
+                }
+
+                assert!(
+                    parser.segment_scan_token_visits() <= tokenization.tokens().len() * 4,
+                    "{repeat} repeats visited {} tokens for {} input tokens",
+                    parser.segment_scan_token_visits(),
+                    tokenization.tokens().len(),
+                );
+            }
+        }
+    }
+
+    #[test]
     fn block_end_scan_propagates_cached_suffix_outcomes() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
