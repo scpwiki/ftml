@@ -524,6 +524,17 @@ where
         && wikidot_flat_reclose_vanishes(parser, &close, kind, start)
     {
         parser.update(&close);
+        // The re-close line leaves no trace: eat trailing spaces and one
+        // following line break so only the preceding closer line's break
+        // survives (live renders a single break here).
+        while parser.current().token == Token::Whitespace {
+            if parser.step().is_err() {
+                break;
+            }
+        }
+        if parser.current().token == Token::LineBreak {
+            let _ = parser.step();
+        }
         let fused_residual =
             resolved_close && parser.fused_name_residual() == Some(end) && {
                 parser.clear_fused_name_residual();
