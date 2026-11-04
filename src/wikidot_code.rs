@@ -54,7 +54,12 @@ fn candidate_at_inner(
     opener_start: usize,
     require_line_owner: bool,
 ) -> Option<WikidotCodeCandidate> {
-    let body_start = code_opener_end(source, opener_start, require_line_owner)?;
+    let mut ownership = LineOwnership::new();
+    let body_start = code_opener_end_checked(
+        source,
+        opener_start,
+        require_line_owner.then(|| ownership.at(source, opener_start)),
+    )?;
     let mut cursor = body_start;
     let mut nested_depth = 0usize;
     let mut end_blocks_to_skip = 0usize;
@@ -80,7 +85,11 @@ fn candidate_at_inner(
             });
         }
 
-        if let Some(nested_body_start) = code_opener_end(source, marker_start, true) {
+        if let Some(nested_body_start) = code_opener_end_checked(
+            source,
+            marker_start,
+            Some(ownership.at(source, marker_start)),
+        ) {
             nested_depth += 1;
             cursor = nested_body_start;
             continue;
@@ -102,6 +111,7 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
 
     let mut output = BTreeMap::new();
     let mut stack = Vec::<OpenCode>::new();
+    let mut ownership = LineOwnership::new();
     let mut cursor = 0usize;
     while let Some(relative_marker) = source[cursor..].find("[[") {
         let marker_start = cursor + relative_marker;
@@ -132,7 +142,11 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
             continue;
         }
 
-        if let Some(body_start) = code_opener_end(source, marker_start, true) {
+        if let Some(body_start) = code_opener_end_checked(
+            source,
+            marker_start,
+            Some(ownership.at(source, marker_start)),
+        ) {
             stack.push(OpenCode {
                 opener_start: marker_start,
                 body_start,
@@ -205,16 +219,14 @@ pub(crate) fn active_body_ranges(source: &str) -> Vec<Range<usize>> {
     ranges
 }
 
-fn code_opener_end(
+fn code_opener_end_checked(
     source: &str,
     opener_start: usize,
-    require_line_owner: bool,
+    line_ownership: Option<bool>,
 ) -> Option<usize> {
     let suffix = source.get(opener_start..)?;
     let head_start = opener_start + "[[".len();
-    if !suffix.starts_with("[[")
-        || (require_line_owner && !has_physical_line_ownership(source, opener_start))
-    {
+    if !suffix.starts_with("[[") || line_ownership == Some(false) {
         return None;
     }
 
@@ -287,6 +299,41 @@ fn code_closer_terminates(source: &str, closer_end: usize) -> bool {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static LINE_OWNERSHIP_SCANNED_BYTES: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+struct LineOwnership {
+    scanned_upto: usize,
+    clean: bool,
+}
+
+impl LineOwnership {
+    fn new() -> Self {
+        LineOwnership {
+            scanned_upto: 0,
+            clean: true,
+        }
+    }
+
+    fn at(&mut self, source: &str, position: usize) -> bool {
+        #[cfg(test)]
+        LINE_OWNERSHIP_SCANNED_BYTES
+            .with(|scanned| scanned.set(scanned.get() + position - self.scanned_upto));
+        for byte in &source.as_bytes()[self.scanned_upto..position] {
+            match byte {
+                b'\n' => self.clean = true,
+                b' ' | b'\t' | b'\0' => {}
+                _ => self.clean = false,
+            }
+        }
+        self.scanned_upto = position;
+        self.clean
+    }
+}
+
 fn has_physical_line_ownership(source: &str, opener_start: usize) -> bool {
     let line_start = source[..opener_start]
         .rfind('\n')
@@ -345,6 +392,20 @@ fn marker_at(source: &str, marker_start: usize) -> Option<(bool, &str, usize)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn candidates_line_ownership_scans_source_once() {
+        let source = "[[span]]".repeat(512);
+        LINE_OWNERSHIP_SCANNED_BYTES.with(|scanned| scanned.set(0));
+        let found = candidates(&source);
+        assert!(found.is_empty());
+        let scanned = LINE_OWNERSHIP_SCANNED_BYTES.with(|scanned| scanned.get());
+        assert!(
+            scanned <= source.len(),
+            "scanned {scanned} bytes for {} source bytes",
+            source.len(),
+        );
+    }
+
     use super::*;
 
     #[test]

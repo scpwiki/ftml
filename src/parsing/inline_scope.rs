@@ -3,7 +3,7 @@ use crate::tree::{
     Container, ContainerType, Element, InlineFormatKind, ListItem, PartialElement,
 };
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::mem;
 
 const MAX_ACTIVE_INLINE_SCOPES: usize = 101;
@@ -929,11 +929,11 @@ enum ScopeClass {
 
 #[derive(Default)]
 struct PendingScopes {
-    sizes: Vec<PendingScope>,
-    spans: Vec<PendingScope>,
-    formats: [Vec<PendingScope>; 7],
-    colors: Vec<PendingScope>,
-    anchors: Vec<PendingScope>,
+    sizes: VecDeque<PendingScope>,
+    spans: VecDeque<PendingScope>,
+    formats: [VecDeque<PendingScope>; 7],
+    colors: VecDeque<PendingScope>,
+    anchors: VecDeque<PendingScope>,
     active_count: usize,
     pairs: BTreeMap<usize, usize>,
     weak: Vec<WeakPair>,
@@ -946,7 +946,7 @@ struct WeakPair {
 }
 
 impl PendingScopes {
-    fn stack_mut(&mut self, class: ScopeClass) -> &mut Vec<PendingScope> {
+    fn stack_mut(&mut self, class: ScopeClass) -> &mut VecDeque<PendingScope> {
         match class {
             ScopeClass::Size => &mut self.sizes,
             ScopeClass::Span => &mut self.spans,
@@ -961,7 +961,7 @@ impl PendingScopes {
         if accepted {
             self.active_count += 1;
         }
-        self.stack_mut(class).push(PendingScope {
+        self.stack_mut(class).push_back(PendingScope {
             ordinal: *ordinal,
             accepted,
         });
@@ -982,9 +982,9 @@ impl PendingScopes {
             && matches!(class, ScopeClass::Span | ScopeClass::Size)
             && !stack.is_empty()
         {
-            Some(stack.remove(0))
+            stack.pop_front()
         } else {
-            stack.pop()
+            stack.pop_back()
         };
         if let Some(open) = popped {
             if open.accepted {

@@ -242,7 +242,19 @@ where
     'r: 't,
 {
     let mut scan = parser.clone();
+    let mut traversed_token_starts = Vec::new();
     loop {
+        let token_start = scan.current().span.start;
+        if let Some(outcome) = parser.wikidot_composite_span_close_outcome(token_start) {
+            parser.cache_wikidot_composite_span_close_outcomes(
+                &traversed_token_starts,
+                outcome,
+            );
+            return outcome;
+        }
+        traversed_token_starts.push(token_start);
+        #[cfg(test)]
+        parser.increment_composite_span_close_scan_token_visits();
         if scan.skip_discarded_iftags_segment(true) {
             continue;
         }
@@ -255,13 +267,27 @@ where
                 if close.get_wikidot_end_block_with_residual().is_ok_and(
                     |(name, residual)| residual && name.eq_ignore_ascii_case("span"),
                 ) {
+                    parser.cache_wikidot_composite_span_close_outcomes(
+                        &traversed_token_starts,
+                        true,
+                    );
                     return true;
                 }
             }
-            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return false,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                parser.cache_wikidot_composite_span_close_outcomes(
+                    &traversed_token_starts,
+                    false,
+                );
+                return false;
+            }
             _ => {}
         }
         if scan.step().is_err() {
+            parser.cache_wikidot_composite_span_close_outcomes(
+                &traversed_token_starts,
+                false,
+            );
             return false;
         }
     }
@@ -360,9 +386,67 @@ mod tests {
     use super::*;
     use crate::data::PageInfo;
     use crate::layout::Layout;
+    use crate::parsing::Parser;
+    use crate::parsing::token::Token;
     use crate::render::Render;
     use crate::render::html::HtmlRender;
     use crate::settings::{WikitextMode, WikitextSettings};
+
+    #[test]
+    fn composite_span_close_scan_visits_scale_with_input_tokens() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+
+        for depth in [32, 64, 128, 256, 512] {
+            let input = "[[span]]".repeat(depth);
+            let tokenization = crate::tokenize(&input);
+            let mut parser = Parser::new(&tokenization, &page_info, &settings);
+            while parser.current().token != Token::InputEnd {
+                if parser.current().token == Token::LeftBlock {
+                    assert!(!has_wikidot_composite_span_close_on_line(&parser));
+                }
+                parser.step().expect("input end must remain available");
+            }
+            assert!(
+                parser.composite_span_close_scan_token_visits()
+                    <= tokenization.tokens().len() * 2,
+                "{depth} unclosed openers visited {} tokens for {} input tokens",
+                parser.composite_span_close_scan_token_visits(),
+                tokenization.tokens().len(),
+            );
+        }
+    }
+
+    #[test]
+    fn wikidot_span_close_after_deep_nesting_stays_structural() {
+        let mut source = "[[span]]".repeat(300);
+        source.push_str("x");
+        source.push_str(&"[[/span]]".repeat(260));
+        source.push_str("[[/span]] label ]");
+        source.push_str(&"[[/span]]".repeat(40));
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(html.contains("[[/span]] label ]"), "{html}");
+        assert!(!html.contains("<a href=\"/span"), "{html}");
+    }
+
+    #[test]
+    fn wikidot_span_unmatched_close_after_full_nesting_becomes_link() {
+        let mut source = "[[span]]".repeat(300);
+        source.push_str("x");
+        source.push_str(&"[[/span]]".repeat(300));
+        source.push_str(" [[/span]] label ]");
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(html.contains("<a href=\"/span]]\">label</a>"), "{html}");
+        assert!(!html.contains("[[/span</a>"), "{html}");
+    }
 
     #[test]
     #[test]

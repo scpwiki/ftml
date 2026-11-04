@@ -19,13 +19,13 @@ const DIV_LITERAL_RECOVERED: u16 = 1 << 10;
 pub(super) struct WikidotState {
     div_body_depth: u16,
     scored_div_body_depth: u16,
-    scored_span_body_depth: u8,
-    span_body_depth: u8,
-    anchor_body_depth: u8,
+    scored_span_body_depth: u32,
+    span_body_depth: u32,
+    anchor_body_depth: u32,
     bibliography_body_depth: u16,
     literal_triple_link_depth: u16,
     simple_table_crossed_closers: u16,
-    center_body_depth: u8,
+    center_body_depth: u32,
     flags: u16,
 }
 
