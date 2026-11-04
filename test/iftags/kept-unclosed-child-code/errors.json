@@ -1,12 +1,12 @@
 [
     {
-        "token": "input-end",
+        "token": "left-block-end",
         "rule": "block-code",
         "span": [
-            46,
-            46
+            29,
+            32
         ],
-        "kind": "end-of-input"
+        "kind": "block-expected-end"
     },
     {
         "token": "left-block",

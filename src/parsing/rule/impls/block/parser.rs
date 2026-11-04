@@ -149,49 +149,77 @@ fn iftags_end_head_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<u
     }
 }
 
-/// Token index just past a region the Wikidot iftags pairing walk cannot
-/// see into, starting at `start`: a raw-bodied block span (`[[code]]`,
-/// `[[html]]`, `[[raw]]`, `[[math]]`, `[[module]]`, through the first end
-/// head of the same name) or a raw span (`@@...@@`, `@<...>@`). `None` when
-/// no such region starts here (including an unterminated block or `@@`,
-/// which are literal text, not regions).
-fn protected_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+fn span_token_at_line_start(
+    source: &str,
+    tokens: &[&ExtractedToken<'_>],
+    index: usize,
+) -> bool {
+    let start = tokens[index].span.start;
+    start == 0 || matches!(source.as_bytes()[start - 1], b'\n' | b'\r')
+}
+
+fn span_closer_ends_construct(tokens: &[&ExtractedToken<'_>], index: usize) -> bool {
+    match tokens.get(index) {
+        None => true,
+        Some(token) => matches!(
+            token.token,
+            Token::Whitespace
+                | Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::InputEnd
+        ),
+    }
+}
+
+fn span_token_ends_line(tokens: &[&ExtractedToken<'_>], index: usize) -> bool {
+    match tokens.get(index) {
+        None => true,
+        Some(token) => match token.token {
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => true,
+            Token::Whitespace => span_token_ends_line(tokens, index + 1),
+            _ => false,
+        },
+    }
+}
+
+fn protected_span_end(
+    source: &str,
+    tokens: &[&ExtractedToken<'_>],
+    start: usize,
+) -> Option<usize> {
     match tokens.get(start)?.token {
         Token::Raw => {
             let mut i = start + 1;
             while i < tokens.len() {
-                if tokens[i].token == Token::Raw {
-                    return Some(i + 1);
+                match tokens[i].token {
+                    Token::Raw => return Some(i + 1),
+                    Token::LineBreak | Token::ParagraphBreak => return None,
+                    _ => i += 1,
                 }
-                i += 1;
             }
             None
         }
         Token::LeftRaw => {
             let mut i = start + 1;
             while i < tokens.len() {
-                if tokens[i].token == Token::RightRaw {
-                    return Some(i + 1);
+                match tokens[i].token {
+                    Token::RightRaw => return Some(i + 1),
+                    Token::LineBreak | Token::ParagraphBreak => return None,
+                    _ => i += 1,
                 }
-                i += 1;
             }
             None
         }
-        Token::LeftBlock => raw_block_span_end(tokens, start),
+        Token::LeftBlock => raw_block_span_end(source, tokens, start),
         _ => None,
     }
 }
 
-// Blocks whose bodies are raw text for the pairing scan: an `[[/iftags]]`
-// inside one is body content, never a pairing candidate. Live Wikidot
-// steps over code blocks (probe p13b); the rest of the set matches the
-// opacity FTML's hidden-body security behavior has always given these
-// constructs, so their end markers stay hidden inside a false gate.
-const IFTAGS_OPAQUE_BLOCKS: [&str; 5] = ["code", "html", "math", "module", "raw"];
-
-/// If a raw-bodied block head starts at `start`, the token index just past
-/// its first end head. An unterminated block is not a span.
-fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+fn raw_block_span_end(
+    source: &str,
+    tokens: &[&ExtractedToken<'_>],
+    start: usize,
+) -> Option<usize> {
     if tokens.get(start)?.token != Token::LeftBlock {
         return None;
     }
@@ -200,14 +228,16 @@ fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<us
         i += 1;
     }
     let ident = tokens.get(i)?;
-    if ident.token != Token::Identifier
-        || !IFTAGS_OPAQUE_BLOCKS
-            .iter()
-            .any(|name| ident.slice.eq_ignore_ascii_case(name))
-    {
+    if ident.token != Token::Identifier {
         return None;
     }
     let name = ident.slice;
+    let line_owned =
+        name.eq_ignore_ascii_case("code") || name.eq_ignore_ascii_case("html");
+    let whole_line = name.eq_ignore_ascii_case("module");
+    if !line_owned && !whole_line {
+        return None;
+    }
     i += 1;
     loop {
         match tokens.get(i)?.token {
@@ -215,7 +245,8 @@ fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<us
                 i += 1;
                 break;
             }
-            Token::LeftBlock
+            Token::LineBreak
+            | Token::LeftBlock
             | Token::LeftBlockEnd
             | Token::InputEnd
             | Token::ParagraphBreak => {
@@ -224,9 +255,22 @@ fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<us
             _ => i += 1,
         }
     }
+    if !span_token_at_line_start(source, tokens, start) {
+        return None;
+    }
+    if whole_line && !span_token_ends_line(tokens, i) {
+        return None;
+    }
     while i < tokens.len() {
         if let Some(end) = named_block_end_head_end(tokens, i, name) {
-            return Some(end);
+            let qualifies = if whole_line {
+                span_token_at_line_start(source, tokens, i)
+            } else {
+                span_closer_ends_construct(tokens, end)
+            };
+            if qualifies {
+                return Some(end);
+            }
         }
         i += 1;
     }
@@ -1135,6 +1179,13 @@ where
                 && self.at_wikidot_nested_math_opener()
             {
                 nested_wikidot_math += 1;
+            }
+
+            if let Some(designated) = self.wikidot_iftags_body_end()
+                && self.current().token == Token::LeftBlockEnd
+                && self.current().span.start == designated
+            {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
             if self.discarding_hidden_body()
@@ -2221,6 +2272,7 @@ where
             }
         }
 
+        let source = self.full_text().inner();
         let n = tokens.len();
         // ends[i] = token indices of `[[/iftags]]` heads (their LeftBlockEnd
         // token) that a body starting at token i can end at, in the walk's
@@ -2251,7 +2303,7 @@ where
                     }
                 }
             }
-            let step_to = protected_span_end(&tokens, i).unwrap_or(i + 1);
+            let step_to = protected_span_end(source, &tokens, i).unwrap_or(i + 1);
             for end in ends[step_to].clone() {
                 push(&mut out, end);
             }
@@ -2268,7 +2320,7 @@ where
                 nested = true;
                 break;
             }
-            i = protected_span_end(&tokens, i).unwrap_or(i + 1);
+            i = protected_span_end(source, &tokens, i).unwrap_or(i + 1);
         }
         (Some(tokens[closer].span.start), nested)
     }
