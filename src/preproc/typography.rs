@@ -130,6 +130,14 @@ fn replace_within_paragraphs(
     buffer: &mut String,
 ) {
     let literal_regions = LiteralRegionIndex::for_typography(text);
+    let Replacer::RegexSurround { regex, .. } = replacer else {
+        unreachable!("Wikidot quote replacement requires a surround replacer");
+    };
+    let protected_ranges = if regex.find_iter(text).next().is_some() {
+        typography_protected_ranges(text)
+    } else {
+        Vec::new()
+    };
     let mut output = String::with_capacity(text.len());
     let mut paragraph_start = 0;
     for paragraph in text.split_inclusive("\n\n") {
@@ -141,6 +149,7 @@ fn replace_within_paragraphs(
             buffer,
             paragraph_start,
             &literal_regions,
+            &protected_ranges,
         );
         output.push_str(&paragraph);
         paragraph_start += source_len;
@@ -150,6 +159,11 @@ fn replace_within_paragraphs(
 
 fn replace_low_quotes_within_paragraphs(text: &mut String, buffer: &mut String) {
     let literal_regions = LiteralRegionIndex::for_typography(text);
+    let protected_ranges = if LOW_DOUBLE_QUOTES.regex().find_iter(text).next().is_some() {
+        typography_protected_ranges(text)
+    } else {
+        Vec::new()
+    };
     let mut output = String::with_capacity(text.len());
     let mut paragraph_start = 0;
     for paragraph in text.split_inclusive("\n\n") {
@@ -170,6 +184,7 @@ fn replace_low_quotes_within_paragraphs(text: &mut String, buffer: &mut String) 
             buffer,
             paragraph_start + protected_end,
             &literal_regions,
+            &protected_ranges,
         );
         output.push_str(&suffix);
         paragraph_start += paragraph.len();
@@ -183,6 +198,7 @@ fn replace_surround_outside_closed_iftags(
     buffer: &mut String,
     source_offset: usize,
     literal_regions: &LiteralRegionIndex,
+    protected_ranges: &[Range<usize>],
 ) {
     let Replacer::RegexSurround { regex, begin, end } = replacer else {
         unreachable!("Wikidot quote replacement requires a surround replacer");
@@ -192,7 +208,9 @@ fn replace_surround_outside_closed_iftags(
     buffer.reserve(text.len());
     for captures in regex.captures_iter(text.as_str()) {
         let full = captures.get(0).unwrap();
-        if literal_regions.contains(source_offset + full.start()) {
+        if literal_regions.contains(source_offset + full.start())
+            || ranges_contain(protected_ranges, source_offset + full.start())
+        {
             continue;
         }
         if contains_closed_conditional(
@@ -291,7 +309,60 @@ fn wikidot_local_link_separator_ranges(text: &str) -> Vec<Range<usize>> {
     ranges
 }
 
-fn wikidot_typography_protected_ranges(text: &str) -> Vec<Range<usize>> {
+fn ranges_contain(ranges: &[Range<usize>], offset: usize) -> bool {
+    let insertion = ranges.partition_point(|range| range.start <= offset);
+    insertion > 0 && offset < ranges[insertion - 1].end
+}
+
+fn wikidot_head_value_ranges(text: &str) -> Vec<Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(relative_open) = text[cursor..].find("[[") {
+        let open = cursor + relative_open;
+        let Some(relative_close) = text[open + 2..].find("]]") else {
+            break;
+        };
+        let head_end = open + 2 + relative_close;
+        let head = &text[open + 2..head_end];
+        let lead = head.len() - head.trim_start().len();
+        let trimmed = &head[lead..];
+        if trimmed.starts_with('#') {
+            ranges.push(open + 2 + lead + 1..head_end);
+        } else {
+            let name_len = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+            if trimmed[..name_len].eq_ignore_ascii_case("tab") {
+                ranges.push(open + 2 + lead + name_len..head_end);
+            }
+        }
+        cursor = head_end + 2;
+        if cursor >= text.len() {
+            break;
+        }
+    }
+
+    let mut cursor = 0usize;
+    while let Some(relative_open) = text[cursor..].find("[#") {
+        let open = cursor + relative_open;
+        if open > 0 && text.as_bytes()[open - 1] == b'[' {
+            cursor = open + 2;
+            continue;
+        }
+        let name_start = open + 2;
+        let name_end = text[name_start..]
+            .find(|character: char| character.is_whitespace() || character == ']')
+            .map_or(text.len(), |relative| name_start + relative);
+        if name_end > name_start {
+            ranges.push(name_start..name_end);
+        }
+        cursor = name_end.max(open + 2);
+        if cursor >= text.len() {
+            break;
+        }
+    }
+    ranges
+}
+
+fn typography_protected_ranges(text: &str) -> Vec<Range<usize>> {
     let mut ranges = wikidot_angle_quote_protected_ranges(text);
     ranges.extend(wikidot_inline_math_ranges(text));
     ranges.extend(wikidot_block_attribute_ranges(text));
@@ -440,25 +511,32 @@ pub fn substitute(text: &mut String) {
     replace_native_quotes(&NATIVE_DOUBLE_QUOTES, text, &mut buffer);
     replace_native_quotes(&NATIVE_LOW_DOUBLE_QUOTES, text, &mut buffer);
     replace_native_quotes(&NATIVE_SINGLE_QUOTES, text, &mut buffer);
-    replace_ellipsis_outside_ranges(
-        text,
-        &mut buffer,
-        LiteralRegionIndex::for_typography(text).ranges(),
-    );
+    let protected_ranges = if text.contains("...") || text.contains(". . .") {
+        typography_protected_ranges(text)
+    } else {
+        Vec::new()
+    };
+    replace_ellipsis_outside_ranges(text, &mut buffer, &protected_ranges);
 }
 
 fn replace_native_quotes(replacer: &Replacer, text: &mut String, buffer: &mut String) {
     let Replacer::RegexSurround { regex, begin, end } = replacer else {
         unreachable!("native quote replacement requires a surround replacer");
     };
+    if !regex.is_match(text.as_str()) {
+        return;
+    }
     let mut last_copied = 0;
     let literal_regions = LiteralRegionIndex::for_typography(text);
+    let protected_ranges = typography_protected_ranges(text);
     buffer.clear();
     buffer.reserve(text.len());
     for captures in regex.captures_iter(text.as_str()) {
         let full = captures.get(0).unwrap();
         if literal_regions.contains(full.start())
             || literal_regions.contains(full.end() - 1)
+            || ranges_contain(&protected_ranges, full.start())
+            || ranges_contain(&protected_ranges, full.end() - 1)
         {
             continue;
         }
@@ -531,9 +609,9 @@ fn substitute_wikidot_impl(text: &mut String, defer_conditionals: bool) {
     }
 
     let digit_spaces = digit_space_positions(text);
-    let mut protected_ranges = wikidot_typography_protected_ranges(text);
+    let mut protected_ranges = typography_protected_ranges(text);
     if replace_number_spaces(text, &protected_ranges, &digit_spaces) {
-        protected_ranges = wikidot_typography_protected_ranges(text);
+        protected_ranges = typography_protected_ranges(text);
     }
     replace_unit_spaces(text, &protected_ranges);
 
@@ -692,7 +770,7 @@ fn replace_angle_quotes_in_segment_deferring(
 }
 
 fn replace_wikidot_ellipsis_deferring(text: &mut String, buffer: &mut String) {
-    let mut protected_ranges = wikidot_typography_protected_ranges(text);
+    let mut protected_ranges = typography_protected_ranges(text);
     protected_ranges.extend(
         conditional_deferral_spans(text)
             .into_iter()
@@ -992,6 +1070,7 @@ fn replace_right_angle_quotes(text: &mut String, buffer: &mut String) {
 fn wikidot_angle_quote_protected_ranges(text: &str) -> Vec<Range<usize>> {
     let mut ranges = LiteralRegionIndex::for_typography(text).ranges().to_vec();
     ranges.extend(wikidot_block_attribute_ranges(text));
+    ranges.extend(wikidot_head_value_ranges(text));
     let tokenization = crate::tokenize(text);
     let tokens = tokenization.tokens();
 
@@ -1113,7 +1192,7 @@ fn block_name_after<'t>(
 }
 
 fn replace_wikidot_ellipsis_outside_literals(text: &mut String, buffer: &mut String) {
-    let protected_ranges = wikidot_typography_protected_ranges(text);
+    let protected_ranges = typography_protected_ranges(text);
     replace_ellipsis_outside_ranges(text, buffer, &protected_ranges);
 }
 
