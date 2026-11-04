@@ -19,6 +19,7 @@
  */
 
 use super::RULE_PAGE;
+use super::body_end::BodyEndBoundary;
 use super::condition::ParseCondition;
 use super::hidden_body::HiddenBodyBoundary;
 use super::prelude::*;
@@ -111,7 +112,7 @@ thread_local! {
 }
 
 #[derive(Debug, Default)]
-struct BlockScanCache {
+pub(super) struct BlockScanCache {
     peak_depth: Cell<usize>,
     rule_attempt_failures: HashMap<RuleAttemptKey, (ParseError, usize)>,
     rule_attempt_failure_positions: Vec<bool>,
@@ -129,6 +130,7 @@ struct BlockScanCache {
     // currently in progress (#792); see `Parser::wikidot_iftags_body_end`.
     wikidot_iftags_body_end: Cell<Option<usize>>,
     inline_container_body_names: Vec<&'static str>,
+    pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
 }
 
 fn token_starts_line(token: Token) -> bool {
@@ -173,7 +175,7 @@ pub struct Parser<'r, 't> {
     bibliographies: Rc<RefCell<BibliographyList<'t>>>,
 
     quote_scan_cache: Rc<RefCell<BTreeMap<QuoteScanKey, QuoteScanOutcome>>>,
-    block_end_scan_cache: Rc<RefCell<BlockScanCache>>,
+    pub(super) block_end_scan_cache: Rc<RefCell<BlockScanCache>>,
     two_block_end_scan_cache: Rc<RefCell<BTreeMap<ContextualBlockEndScanKey, u8>>>,
     single_link_label_owner_scan_cache: Rc<RefCell<BTreeMap<usize, bool>>>,
     wikidot_code_candidate_cache:

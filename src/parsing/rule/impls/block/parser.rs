@@ -1364,6 +1364,11 @@ where
             );
         }
 
+        self.push_body_end_boundary(
+            block_rule_end_names(block_rule, self.settings().layout.legacy()),
+            block_rule.name == "block-footnote",
+        );
+
         let result = if as_paragraphs {
             self.get_body_elements_paragraphs(
                 block_rule,
@@ -1377,6 +1382,8 @@ where
                 allow_inline_quote_close,
             )
         };
+
+        self.pop_body_end_boundary();
 
         if track_boundary {
             self.pop_hidden_body_boundary();
@@ -1610,6 +1617,13 @@ where
             }
 
             if result.is_none()
+                && !parser.discarding_hidden_body()
+                && parser.at_ancestor_body_end_boundary()
+            {
+                return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if result.is_none()
                 && parser.terminate_at_wikidot_list_close(block_rule, first_iteration)
             {
                 return Ok(true);
@@ -1691,8 +1705,16 @@ where
         }
 
         let body_names_len = self.push_inline_container_body(block_rule.name);
+
+        self.push_body_end_boundary(
+            block_rule_end_names(block_rule, self.settings().layout.legacy()),
+            block_rule.name == "block-footnote",
+        );
+
         let result = self.get_body_element_segments_internal(block_rule);
         self.restore_inline_container_body(body_names_len);
+
+        self.pop_body_end_boundary();
 
         if track_boundary {
             self.pop_hidden_body_boundary();
@@ -1787,6 +1809,10 @@ where
             }
 
             if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if !self.discarding_hidden_body() && self.at_ancestor_body_end_boundary() {
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
@@ -2101,6 +2127,10 @@ where
                 && self.current().span.start > designated
             {
                 return Ok(());
+            }
+
+            if !self.discarding_hidden_body() && self.at_ancestor_body_end_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
             let wikidot_input_end = self.current().token == Token::InputEnd

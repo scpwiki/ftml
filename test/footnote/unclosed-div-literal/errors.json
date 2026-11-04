@@ -1,0 +1,29 @@
+[
+    {
+        "token": "left-block-end",
+        "rule": "block-div",
+        "span": [
+            23,
+            26
+        ],
+        "kind": "block-expected-end"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            15,
+            17
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            20,
+            22
+        ],
+        "kind": "no-rules-match"
+    }
+]

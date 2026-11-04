@@ -1,0 +1,3 @@
+A[[footnote]]intro
+* item one
+* item two[[/footnote]] B[[footnote]]plain[[/footnote]]

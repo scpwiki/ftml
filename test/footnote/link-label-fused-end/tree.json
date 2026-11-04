@@ -1,0 +1,107 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "See"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "["
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://example.com",
+                            "label": "url",
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "the"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "label"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "labnote"
+            },
+            {
+                "element": "text",
+                "data": "[[/"
+            },
+            {
+                "element": "text",
+                "data": "footnote"
+            },
+            {
+                "element": "text",
+                "data": "]]]"
+            },
+            {
+                "element": "text",
+                "data": " "
+            },
+            {
+                "element": "text",
+                "data": "and"
+            },
+            {
+                "element": "text",
+                "data": " "
+            },
+            {
+                "element": "text",
+                "data": "text"
+            },
+            {
+                "element": "text",
+                "data": "[["
+            },
+            {
+                "element": "text",
+                "data": "footnote"
+            },
+            {
+                "element": "text",
+                "data": "]]"
+            },
+            {
+                "element": "text",
+                "data": "plain"
+            }
+        ]
+    ],
+    "needs-footnote-block": true
+}

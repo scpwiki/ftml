@@ -486,6 +486,10 @@ fn collect_native_blockquote_line<'r, 't>(
             return ok!(paragraph_safe; elements, errors);
         }
 
+        if !parser.discarding_hidden_body() && parser.at_body_end_boundary() {
+            return ok!(paragraph_safe; elements, errors);
+        }
+
         let consumed = consume(parser)?.chain(&mut errors, &mut paragraph_safe);
         elements.extend(consumed);
 
