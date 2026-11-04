@@ -1298,33 +1298,26 @@ impl<'r, 't> Parser<'r, 't> {
     ) {
         let level = usize::from(heading.value()) - 1;
 
-        let name = if elements_contain_delayed(name_elements) {
-            // The heading contains delayed elements. Ones that resolve
-            // statically (iftags suppression seams, typography boundaries)
-            // carry no generated content, so render the name from the
-            // statically resolved elements instead of dropping it. Anything
-            // still delayed afterwards is a generated value whose label is
-            // bound once the values are known (see the label binding in
-            // delayed::toc), so it keeps the empty placeholder.
-            let mut resolved = name_elements.to_vec();
-            resolve_static_suppressions(&mut resolved, self.settings.layout.legacy());
-            if elements_contain_delayed(&resolved) {
-                String::new()
-            } else {
-                TextRender.render_partial_title(
-                    &resolved,
-                    self.page_info,
-                    self.settings,
-                    0,
-                )
-            }
+        // Render the name from the statically resolved elements: ones
+        // that resolve statically (iftags suppression seams, typography
+        // boundaries) carry no generated content. The Wikidot inline
+        // normalization is applied as well, since it is what lowers dash
+        // runs in the heading text, which the as-parsed elements still
+        // carry raw. Anything still delayed afterwards is a generated
+        // value whose label is bound once the values are known (see the
+        // label binding in delayed::toc), so it keeps the empty
+        // placeholder.
+        let mut resolved = name_elements.to_vec();
+        resolve_static_suppressions(&mut resolved, self.settings.layout.legacy());
+        if self.settings.layout.legacy() {
+            crate::parsing::inline_format::normalize_wikidot_inline_formats(
+                &mut resolved,
+            );
+        }
+        let name = if elements_contain_delayed(&resolved) {
+            String::new()
         } else {
-            TextRender.render_partial_title(
-                name_elements,
-                self.page_info,
-                self.settings,
-                0,
-            )
+            TextRender.render_partial_title(&resolved, self.page_info, self.settings, 0)
         };
 
         self.table_of_contents.borrow_mut().push((level, name));

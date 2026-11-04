@@ -231,6 +231,11 @@ where
                 for footnote in &mut footnotes {
                     inline_format::normalize_wikidot_inline_formats(footnote);
                 }
+                for bibliography in bibliographies.slice_mut() {
+                    for (_, elements) in bibliography.slice_mut() {
+                        inline_format::normalize_wikidot_inline_formats(elements);
+                    }
+                }
                 inline_scope::lower_wikidot_inline_size_scopes(&mut elements);
                 heading::normalize_wikidot_headings(&mut elements);
                 for footnote in &mut footnotes {

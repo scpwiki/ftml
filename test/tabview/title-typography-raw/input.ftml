@@ -1,0 +1,8 @@
+[[tabview]]
+[[tab aa -- bb ... cc ``qq'']]
+body
+[[/tab]]
+[[tab dd << ee >> ff]]
+body2
+[[/tab]]
+[[/tabview]]
