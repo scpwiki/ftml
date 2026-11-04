@@ -1,0 +1,39 @@
+{
+    "elements": [
+        {
+            "element": "gallery",
+            "data": {
+                "source": "[[gallery size=\"sm[[iftags -zzz]][[/iftags]]all\"]]\n: https://example.com/a.png\n: https://example.com/b.png\n[[/gallery]]",
+                "arguments": [
+                    {
+                        "source": "size=\"sm[[iftags -zzz]][[/iftags]]all\"",
+                        "name": "size",
+                        "value": "sm[[iftags -zzz]][[/iftags]]all"
+                    }
+                ],
+                "selection": {
+                    "type": "explicit",
+                    "entries": [
+                        {
+                            "source": ": https://example.com/a.png",
+                            "image": {
+                                "type": "http-url",
+                                "source": "https://example.com/a.png"
+                            },
+                            "arguments": []
+                        },
+                        {
+                            "source": ": https://example.com/b.png",
+                            "image": {
+                                "type": "http-url",
+                                "source": "https://example.com/b.png"
+                            },
+                            "arguments": []
+                        }
+                    ]
+                },
+                "source-sha256": "205511b58fdcdc55e1766acd72ae30b797401f9c168abe0f3298cc9953c25390"
+            }
+        }
+    ]
+}

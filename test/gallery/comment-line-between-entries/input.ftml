@@ -1,0 +1,5 @@
+[[gallery]]
+: https://example.com/a.png
+[!-- note --]
+: https://example.com/b.png
+[[/gallery]]

@@ -1,0 +1,63 @@
+{
+    "elements": [
+        {
+            "element": "text",
+            "data": "[["
+        },
+        {
+            "element": "text",
+            "data": "gallery"
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "size"
+        },
+        {
+            "element": "text",
+            "data": "="
+        },
+        {
+            "element": "text",
+            "data": "\""
+        },
+        {
+            "element": "text",
+            "data": "small"
+        },
+        {
+            "element": "text",
+            "data": "\""
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "]"
+        },
+        {
+            "element": "text",
+            "data": "]"
+        },
+        {
+            "element": "line-break"
+        },
+        {
+            "element": "text",
+            "data": "[[/"
+        },
+        {
+            "element": "text",
+            "data": "gallery"
+        },
+        {
+            "element": "text",
+            "data": "]]"
+        }
+    ]
+}
