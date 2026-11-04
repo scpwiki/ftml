@@ -178,22 +178,44 @@ pub(crate) fn normalize_wikidot_inline_formats(elements: &mut Vec<Element<'_>>) 
 }
 
 fn normalize_sequence<'t>(elements: &mut Vec<Element<'t>>) {
+    normalize_sequence_scoped(elements, false);
+}
+
+fn normalize_sequence_inside_monospace<'t>(elements: &mut Vec<Element<'t>>) {
+    normalize_sequence_scoped(elements, true);
+}
+
+fn normalize_sequence_scoped<'t>(
+    elements: &mut Vec<Element<'t>>,
+    inside_monospace: bool,
+) {
     for _ in 0..MAX_NORMALIZATION_PASSES {
-        let changed = repair_fifo_triples_pass(elements)
+        let mut changed = repair_fifo_triples_pass(elements)
             | repair_same_family_pass(elements)
             | repair_crossed_pass(elements)
             | repair_raw_strike_pairs_pass(elements)
-            | repair_span_crossed_bold_pairs_pass(elements)
-            | repair_monospace_link_close_pass(elements)
-            | repair_wikidot_scheme_star_pass(elements)
-            | split_strike_runs_pass(elements);
+            | repair_span_crossed_bold_pairs_pass(elements);
+        // A monospace container's children are already owned content:
+        // literal brace text there is content, never an unclosed opener
+        // waiting for a link close, so the link-close repair must not
+        // re-pair braces inside it.
+        if !inside_monospace {
+            changed |= repair_monospace_link_close_pass(elements);
+        }
+        changed |=
+            repair_wikidot_scheme_star_pass(elements) | split_strike_runs_pass(elements);
         if !changed {
             break;
         }
     }
 
     for element in elements.iter_mut() {
-        visit_children_mut(element, normalize_sequence);
+        if matches!(element, Element::Container(container) if container.ctype() == ContainerType::Monospace)
+        {
+            visit_children_mut(element, normalize_sequence_inside_monospace);
+        } else {
+            visit_children_mut(element, normalize_sequence);
+        }
     }
 
     lower_dash_runs(elements);
@@ -475,6 +497,12 @@ fn repair_raw_strike_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     changed
 }
 
+fn element_contains_link(element: &Element<'_>) -> bool {
+    matches!(element, Element::Link { .. })
+        || formatter_children(element)
+            .is_some_and(|children| children.iter().any(element_contains_link))
+}
+
 fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     let mut input = take_elements(elements);
     let mut output = Vec::with_capacity(input.len());
@@ -487,7 +515,16 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
             .is_some_and(|element| is_exact_text(element, "{{"));
         let close = is_opener
             .then(|| monospace_link_close(&input, index))
-            .flatten();
+            .flatten()
+            .filter(|(close, _)| {
+                // This repair exists to close a monospace span that the
+                // base parser left open over a URL (issue #833). Brace
+                // text around anything else is already owned content.
+                input[index + 1..*close]
+                    .iter()
+                    .filter_map(|element| element.as_ref())
+                    .any(element_contains_link)
+            });
         let Some((close, run)) = close else {
             output.push(take_element(&mut input, index));
             index += 1;
@@ -562,8 +599,10 @@ fn repair_wikidot_scheme_star_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool 
         let has_star =
             matches!(&elements[index - 1], Element::Text(value) if value.ends_with('*'));
         if is_scheme_link && has_star {
-            if let Element::Text(value) = &mut elements[index - 1] {
-                *value = Cow::Owned(value[..value.len() - 1].to_owned());
+            if let Element::Text(value) = &mut elements[index - 1]
+                && let Some(stripped) = value.strip_suffix('*')
+            {
+                *value = Cow::Owned(stripped.to_owned());
             }
             if matches!(&elements[index - 1], Element::Text(value) if value.is_empty()) {
                 elements.remove(index - 1);

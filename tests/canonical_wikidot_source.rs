@@ -96,7 +96,7 @@ fn wikidot_aodaisho_nested_ruby_keeps_the_size_scope_outermost() {
             r#"<p> <span style="font-size:175%;"><strong><em>"#,
             r#"<span class="ruby">일본열도 뱀의 손"#,
             r#"<span class="rt">Japanese Sarpent&#39;s Hand</span>"#,
-            "</span></em></strong></span> </p>",
+            "</span></em></strong></span></p>",
         ),
     );
 }

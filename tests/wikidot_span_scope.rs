@@ -56,7 +56,7 @@ fn span_formats_headings_inside_centered_div_like_wikidot() {
             "<div class=\"span-scope-outer\"><div style=\"text-align: center;\">",
             "<h1 id=\"toc0\"><span style=\"color: rgb(191, 0, 0);\"><span>SPAN_SCOPE_YEAR</span></span></h1>",
             "<h2 id=\"toc1\"><span style=\"color: rgb(191, 0, 0);\"><span>SPAN_SCOPE_DATE</span></span></h2>",
-            "<p><span style=\"color: rgb(191, 0, 0); font-size: 120%;\">SPAN_SCOPE_TIME</span> </p>",
+            "<p><span style=\"color: rgb(191, 0, 0); font-size: 120%;\">SPAN_SCOPE_TIME</span></p>",
             "</div></div>",
         ),
     );
