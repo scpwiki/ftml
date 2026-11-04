@@ -43,16 +43,12 @@ fn parse_fn<'r, 't>(
 
     let arguments = parser.get_head_map(&BLOCK_DEL, in_head)?;
 
-    let body = parser.get_body_elements(&BLOCK_DEL, false)?;
-    let (elements, errors, paragraph_safe) = body.into();
-
-    let element = Element::Container(Container::new(
+    let attributes = arguments.to_attribute_map(parser.settings());
+    parser.get_body_elements_inline_container(
+        &BLOCK_DEL,
         ContainerType::Deletion,
-        elements,
-        arguments.to_attribute_map(parser.settings()),
-    ));
-
-    ok!(paragraph_safe; element, errors)
+        attributes,
+    )
 }
 
 #[cfg(test)]

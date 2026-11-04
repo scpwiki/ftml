@@ -58,10 +58,27 @@
                                 {
                                     "element": "text",
                                     "data": "Pineapple"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "mark",
+                            "attributes": {
+                                "class": "multiline"
+                            },
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "mango"

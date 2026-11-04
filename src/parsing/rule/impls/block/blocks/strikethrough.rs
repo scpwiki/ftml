@@ -43,15 +43,10 @@ fn parse_fn<'r, 't>(
 
     let arguments = parser.get_head_map(&BLOCK_STRIKETHROUGH, in_head)?;
 
-    let (elements, errors, paragraph_safe) = parser
-        .get_body_elements(&BLOCK_STRIKETHROUGH, false)?
-        .into();
-
-    let element = Element::Container(Container::new(
+    let attributes = arguments.to_attribute_map(parser.settings());
+    parser.get_body_elements_inline_container(
+        &BLOCK_STRIKETHROUGH,
         ContainerType::Strikethrough,
-        elements,
-        arguments.to_attribute_map(parser.settings()),
-    ));
-
-    ok!(paragraph_safe; element, errors)
+        attributes,
+    )
 }

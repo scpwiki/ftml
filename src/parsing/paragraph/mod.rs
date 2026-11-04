@@ -208,6 +208,8 @@ where
             let mixed_paragraph_ownership =
                 parser.take_wikidot_mixed_paragraph_ownership();
             let div_literal_recovered = parser.take_wikidot_div_literal_recovered();
+            let mut consumed = consumed;
+            let paragraph_split = consumed.paragraph_split.take();
             let (elements, mut errors, paragraph_safe) = consumed.into();
             let mut elements = elements;
             let literal_list_item = stack.wikidot_list_break_follows_list()
@@ -271,7 +273,30 @@ where
                 {
                     stack.mark_wikidot_empty_list_break();
                 }
-                if mixed_paragraph_ownership {
+                if let Some(slots) = paragraph_split_batch(&elements, paragraph_split) {
+                    // An inline container whose body crossed paragraph
+                    // breaks returns one container per body segment;
+                    // re-establish the breaks between them so the
+                    // segments land in separate paragraphs, exactly as
+                    // if the block had not consumed the break tokens.
+                    let elements = match elements {
+                        Elements::Multiple(elements) => elements,
+                        Elements::Single(element) => vec![element],
+                        Elements::None => Vec::new(),
+                    };
+                    let mut elements = elements.into_iter();
+                    for (index, present) in slots.iter().enumerate() {
+                        if index > 0 {
+                            stack.end_paragraph_at_break();
+                        }
+                        if *present {
+                            let element = elements
+                                .next()
+                                .expect("split batch checked against slots");
+                            push_element(&mut stack, element, paragraph_safe);
+                        }
+                    }
+                } else if mixed_paragraph_ownership {
                     let Elements::Multiple(mut elements) = elements else {
                         unreachable!(
                             "mixed paragraph ownership requires multiple elements"
@@ -523,6 +548,27 @@ fn finish_hidden_boundary(
     }
 }
 
+/// Validates a recorded paragraph-split slot layout against the element
+/// batch it was recorded for, returning the layout when it is well-formed
+/// (at least two segments, and exactly one batch element per present
+/// segment). A malformed layout is dropped and the batch is pushed
+/// normally; well-formed batches produced by inline container blocks
+/// always validate.
+fn paragraph_split_batch<'t>(
+    elements: &Elements<'t>,
+    slots: Option<Vec<bool>>,
+) -> Option<Vec<bool>> {
+    let slots = slots?;
+    if slots.len() < 2 {
+        return None;
+    }
+    let present = slots.iter().filter(|slot| **slot).count();
+    if present != elements.len() {
+        return None;
+    }
+    Some(slots)
+}
+
 fn push_elements<'t>(
     stack: &mut ParagraphStack<'t>,
     elements: Elements<'t>,
@@ -647,6 +693,84 @@ mod tests {
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         assert!(errors.is_empty(), "{errors:?}");
         HtmlRender.render(&tree, &page_info, &settings).body
+    }
+
+    fn render_wikijump(source: &str) -> String {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
+        let tokenization = crate::tokenize(source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        assert!(errors.is_empty(), "{errors:?}");
+        HtmlRender.render(&tree, &page_info, &settings).body
+    }
+
+    #[test]
+    fn wikijump_inline_containers_split_at_paragraph_breaks() {
+        // Live Wikidot closes and reopens a [[span]] at a paragraph break,
+        // preserving the authored paragraphs (PagePreview capture,
+        // 2026-11-04). The wikijump layout previously flattened the break
+        // into a line break inside one container, merging the paragraphs.
+        for (source, expected) in [
+            (
+                "Para [[span]]A1 one\n\npara two B2[[/span]] C3",
+                "<p>Para <span>A1 one</span></p><p><span>para two B2</span> C3</p>",
+            ),
+            (
+                "Para [[span class=\"x\"]]A1 one\n\npara two B2[[/span]] C3",
+                concat!(
+                    "<p>Para <span class=\"x\">A1 one</span></p>",
+                    "<p><span class=\"x\">para two B2</span> C3</p>",
+                ),
+            ),
+            (
+                "Para [[size 150%]]A1 one\n\npara two B2[[/size]] C3",
+                concat!(
+                    "<p>Para <span style=\"font-size: 150%;\">A1 one</span></p>",
+                    "<p><span style=\"font-size: 150%;\">para two B2</span> C3</p>",
+                ),
+            ),
+            (
+                "Para [[b]]A1 one\n\npara two B2[[/b]] C3",
+                "<p>Para <strong>A1 one</strong></p><p><strong>para two B2</strong> C3</p>",
+            ),
+            (
+                "Para [[i]]A1 one\n\npara two B2[[/i]] C3",
+                "<p>Para <em>A1 one</em></p><p><em>para two B2</em> C3</p>",
+            ),
+            (
+                "[[span]]A\n\nB\n\nC[[/span]]",
+                "<p><span>A</span></p><p><span>B</span></p><p><span>C</span></p>",
+            ),
+            (
+                "[[span]]A [[span]]B\n\nC[[/span]] D[[/span]]",
+                concat!(
+                    "<p><span>A <span>B</span></span></p>",
+                    "<p><span><span>C</span> D</span></p>",
+                ),
+            ),
+            (
+                "x [[span]]\n\nA[[/span]] y",
+                "<p>x</p><p><span>A</span> y</p>",
+            ),
+            (
+                "x [[span]]A\n\n[[/span]] y",
+                "<p>x <span>A</span></p><p> y</p>",
+            ),
+            ("x [[span]]\n\n[[/span]] y", "<p>x</p><p> y</p>"),
+            (
+                "[[div]]Para [[span]]A1\n\nB2[[/span]] C3[[/div]]",
+                "<div><p>Para <span>A1</span></p><p><span>B2</span> C3</p></div>",
+            ),
+        ] {
+            assert_eq!(render_wikijump(source), expected, "{source}");
+        }
+
+        // A single newline is not a paragraph break: the container and
+        // the paragraph stay whole.
+        assert_eq!(
+            render_wikijump("Para [[span]]A1 one\npara two B2[[/span]] C3"),
+            "<p>Para <span>A1 one<br>para two B2</span> C3</p>",
+        );
     }
 
     #[test]

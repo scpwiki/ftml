@@ -31,7 +31,7 @@ use crate::parsing::{
     ExtractedToken, ParseError, ParseErrorKind, ParseResult, Parser, Token,
     gather_paragraphs,
 };
-use crate::tree::{Element, Elements};
+use crate::tree::{AttributeMap, Container, ContainerType, Element, Elements};
 use regex::Regex;
 use std::borrow::Cow;
 use std::sync::LazyLock;
@@ -392,6 +392,69 @@ fn wikidot_attribute_key<'t>(
         .get(fragment_start..range.end.min(span.len()))
         .expect("Wikidot attribute key range must stay on UTF-8 boundaries");
     wikidot_trim_argument_fragment(fragment)
+}
+
+/// Whether an element is blank content that a paragraph break absorbs
+/// at a segment edge: a line break, or text holding only spaces and tabs.
+fn segment_edge_blank(element: &Element) -> bool {
+    match element {
+        Element::LineBreak => true,
+        Element::Text(text) => text.chars().all(|ch| matches!(ch, ' ' | '\t')),
+        _ => false,
+    }
+}
+
+fn trim_segment_leading_blanks(segment: &mut Vec<Element>) {
+    let count = segment
+        .iter()
+        .take_while(|element| segment_edge_blank(element))
+        .count();
+    segment.drain(..count);
+}
+
+fn trim_segment_trailing_blanks(segment: &mut Vec<Element>) {
+    while segment.last().is_some_and(segment_edge_blank) {
+        segment.pop();
+    }
+}
+
+/// Distributes the elements of a nested block result that itself split
+/// at paragraph breaks into the segment list being collected: the first
+/// segment's container joins the current segment, and each subsequent
+/// segment starts a new segment here, so a nested inline container
+/// splits its ancestors' bodies at the same breaks. Falls back to
+/// appending every element to the current segment if the slot layout
+/// does not match the element batch (defensive; well-formed batches
+/// always match).
+fn distribute_paragraph_split<'t>(
+    segments: &mut Vec<Vec<Element<'t>>>,
+    elements: Vec<Element<'t>>,
+    slots: &[bool],
+) {
+    let present = slots.iter().filter(|slot| **slot).count();
+    if present != elements.len() {
+        segments
+            .last_mut()
+            .expect("segments always has a current segment")
+            .extend(elements);
+        return;
+    }
+
+    let mut elements = elements.into_iter();
+    for (index, slot) in slots.iter().enumerate() {
+        if index > 0 {
+            segments.push(Vec::new());
+        }
+        if *slot {
+            let element = elements
+                .next()
+                .expect("slot count checked against element batch");
+            segments
+                .last_mut()
+                .expect("segments always has a current segment")
+                .push(element);
+        }
+    }
 }
 
 impl<'r, 't> Parser<'r, 't>
@@ -1463,6 +1526,214 @@ where
         )?;
 
         ok!(paragraph_safe; all_elements, all_errors)
+    }
+
+    /// Collects a block body like `get_body_elements_no_paragraphs`, but
+    /// splits the collected elements into segments at each top-level
+    /// paragraph break within the body.
+    ///
+    /// Inline container blocks consume their whole body in one call, so a
+    /// paragraph break inside the body would otherwise be flattened into
+    /// a line break element, merging the authored paragraphs on either
+    /// side of the block. Splitting the body here lets the caller wrap
+    /// each segment in its own container (see `wrap_body_segments`) so the
+    /// paragraph gather can re-establish the breaks between them.
+    ///
+    /// Wikijump layout only: legacy-layout callers must use the unsplit
+    /// collection, whose behavior this method does not reproduce.
+    pub(crate) fn get_body_element_segments(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> ParseResult<'r, 't, Vec<Vec<Element<'t>>>> {
+        let track_boundary = self.discarding_hidden_body();
+        if track_boundary {
+            self.push_hidden_body_boundary(
+                block_rule_end_names(block_rule, self.settings().layout.legacy()),
+                block_rule.accepts_newlines_outside_body,
+            );
+        }
+
+        let result = self.get_body_element_segments_internal(block_rule);
+
+        if track_boundary {
+            self.pop_hidden_body_boundary();
+        }
+
+        result
+    }
+
+    fn get_body_element_segments_internal(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> ParseResult<'r, 't, Vec<Vec<Element<'t>>>> {
+        debug_assert!(
+            !self.settings().layout.legacy(),
+            "paragraph-split body segments are a wikijump-layout mechanism",
+        );
+
+        let mut segments: Vec<Vec<Element<'t>>> = vec![Vec::new()];
+        let mut all_errors = Vec::new();
+        let mut paragraph_safe = true;
+        let mut first = true;
+
+        loop {
+            if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                return Err(self.make_err(ParseErrorKind::EndOfInput));
+            }
+
+            let result = self.verify_end_block(first, block_rule, false, false);
+            if result.is_some() {
+                break;
+            }
+
+            if self.terminate_at_wikidot_list_close(block_rule, first) {
+                break;
+            }
+
+            if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if self.current().token == Token::ParagraphBreak {
+                // A paragraph break at the body's top level ends the
+                // current segment instead of becoming a line break.
+                self.step()?;
+                first = false;
+                segments.push(Vec::new());
+                continue;
+            }
+
+            first = false;
+            match consume(self) {
+                Ok(consumed) => {
+                    let crate::parsing::ParseSuccess {
+                        item,
+                        errors,
+                        paragraph_safe: safe,
+                        paragraph_split,
+                        ..
+                    } = consumed;
+                    all_errors.extend(errors);
+                    paragraph_safe &= safe;
+                    let elements = match item {
+                        Elements::Multiple(elements) => elements,
+                        Elements::Single(element) => vec![element],
+                        Elements::None => Vec::new(),
+                    };
+                    match paragraph_split {
+                        Some(slots) => {
+                            distribute_paragraph_split(&mut segments, elements, &slots);
+                        }
+                        None => {
+                            segments
+                                .last_mut()
+                                .expect("segments always has a current segment")
+                                .extend(elements);
+                        }
+                    }
+                }
+                Err(_error)
+                    if self.discarding_hidden_body()
+                        && !self.settings().layout.legacy()
+                        && self.at_hidden_body_boundary() => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        Ok(crate::parsing::ParseSuccess::new(
+            segments,
+            all_errors,
+            paragraph_safe,
+        ))
+    }
+
+    /// Wraps body segments collected by `get_body_element_segments` into
+    /// one inline container per non-empty segment, returning the segment
+    /// layout (see `ParseSuccess::paragraph_split`) alongside the wrapped
+    /// elements so the caller can attach it to its parse result.
+    ///
+    /// A body that did not cross a paragraph break (a single segment)
+    /// produces exactly the container the unsplit collection produced,
+    /// including for an empty body, and returns no layout.
+    pub(crate) fn wrap_body_segments(
+        &mut self,
+        segments: Vec<Vec<Element<'t>>>,
+        ctype: ContainerType,
+        attributes: AttributeMap<'t>,
+    ) -> (Elements<'t>, Option<Vec<bool>>) {
+        if segments.len() == 1 {
+            let elements = segments.into_iter().next().expect("single segment present");
+            let container = Container::new(ctype, elements, attributes);
+            return (Elements::Single(Element::Container(container)), None);
+        }
+
+        let last_index = segments.len() - 1;
+        let mut slots = Vec::with_capacity(segments.len());
+        let mut containers = Vec::new();
+        for (index, mut segment) in segments.into_iter().enumerate() {
+            // Content blank at a segment edge adjacent to a paragraph
+            // break belongs to the break, not to either segment: just as
+            // a paragraph's own edges shed leading and trailing line
+            // breaks and whitespace, a segment sheds them where it meets
+            // a break. Edges at the body's own start and end keep their
+            // content, as before.
+            if index > 0 {
+                trim_segment_leading_blanks(&mut segment);
+            }
+            if index < last_index {
+                trim_segment_trailing_blanks(&mut segment);
+            }
+
+            if segment.is_empty() {
+                slots.push(false);
+            } else {
+                slots.push(true);
+                containers.push(Element::Container(Container::new(
+                    ctype,
+                    segment,
+                    attributes.clone(),
+                )));
+            }
+        }
+
+        let elements = match containers.len() {
+            0 => Elements::None,
+            1 => Elements::Single(
+                containers
+                    .into_iter()
+                    .next()
+                    .expect("single container present"),
+            ),
+            _ => Elements::Multiple(containers),
+        };
+        (elements, Some(slots))
+    }
+
+    /// Collects the body of an inline container block and wraps it,
+    /// splitting at paragraph breaks as described on
+    /// `get_body_element_segments`. In the legacy layout this is exactly
+    /// the unsplit collection and wrap the block rules used before.
+    pub fn get_body_elements_inline_container(
+        &mut self,
+        block_rule: &BlockRule,
+        ctype: ContainerType,
+        attributes: AttributeMap<'t>,
+    ) -> ParseResult<'r, 't, Elements<'t>> {
+        if self.settings().layout.legacy() {
+            let body = self.get_body_elements(block_rule, false)?;
+            let (elements, errors, paragraph_safe) = body.into();
+            let element = Element::Container(Container::new(ctype, elements, attributes));
+            return ok!(paragraph_safe; element, errors);
+        }
+
+        let body = self.get_body_element_segments(block_rule)?;
+        let (segments, errors, paragraph_safe) = body.into();
+        let (elements, paragraph_split) =
+            self.wrap_body_segments(segments, ctype, attributes);
+        let mut success =
+            crate::parsing::ParseSuccess::new(elements, errors, paragraph_safe);
+        success.paragraph_split = paragraph_split;
+        Ok(success)
     }
 
     fn consume_body_no_paragraphs<F>(

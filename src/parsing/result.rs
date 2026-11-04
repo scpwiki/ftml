@@ -71,6 +71,19 @@ where
     pub errors: Vec<ParseError>,
     pub paragraph_safe: bool,
 
+    /// Paragraph-split slot layout for an element batch produced by an
+    /// inline container block whose body crossed one or more paragraph
+    /// breaks (wikijump layout only). Each entry corresponds to one body
+    /// segment in order; `true` means the segment produced a container
+    /// element in `item`. The immediate receiver of the result (a
+    /// paragraph gather or a segmented body collection) reads this and
+    /// ends the current paragraph between consecutive segments, mirroring
+    /// how the segments would have been separated had the block not
+    /// consumed the breaks. Receivers that flatten results (`chain`,
+    /// `map`, the tuple conversion) drop the layout, which is the
+    /// correct behavior for content absorbed into another element.
+    pub paragraph_split: Option<Vec<bool>>,
+
     #[doc(hidden)]
     _ref_marker: PhantomData<&'r ()>,
     #[doc(hidden)]
@@ -84,6 +97,7 @@ impl<T> ParseSuccess<'_, '_, T> {
             item,
             errors,
             paragraph_safe,
+            paragraph_split: None,
             _ref_marker: PhantomData,
             _text_marker: PhantomData,
         }
@@ -121,6 +135,9 @@ impl<'r, 't, T> ParseSuccess<'r, 't, T> {
             item: new_item,
             errors,
             paragraph_safe,
+            // Mapping a result absorbs its elements into a new item, so
+            // any paragraph-split layout no longer describes it.
+            paragraph_split: None,
             _ref_marker: PhantomData,
             _text_marker: PhantomData,
         }

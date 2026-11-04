@@ -203,8 +203,8 @@ fn parse_fn<'r, 't>(
         };
     }
 
-    let body = parser.get_body_elements(&BLOCK_SPAN, false);
-    let (mut elements, errors, paragraph_safe) = match body {
+    let body = parser.get_body_element_segments(&BLOCK_SPAN);
+    let (mut segments, errors, paragraph_safe) = match body {
         Ok(body) => body.into(),
         Err(error) => {
             speculative_failure_cache.record_failure(parser, &error);
@@ -213,16 +213,23 @@ fn parse_fn<'r, 't>(
     };
 
     if flag_score {
-        strip_newlines(&mut elements);
+        for segment in &mut segments {
+            strip_newlines(segment);
+        }
     }
 
-    let element = Element::Container(Container::new(
+    let (elements, paragraph_split) = parser.wrap_body_segments(
+        segments,
         ContainerType::Span,
-        elements,
         arguments.to_attribute_map(parser.settings()),
-    ));
+    );
 
-    success_elements_with_paragraph_safety(paragraph_safe, element, errors)
+    let mut result =
+        success_elements_with_paragraph_safety(paragraph_safe, elements, errors);
+    if let Ok(success) = result.as_mut() {
+        success.paragraph_split = paragraph_split;
+    }
+    result
 }
 
 fn has_wikidot_composite_span_close_on_line<'r, 't>(parser: &Parser<'r, 't>) -> bool

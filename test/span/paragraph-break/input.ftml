@@ -1,0 +1,13 @@
+Para [[span]]A1 one
+
+para two B2[[/span]] C3
+
+Para [[span class="crossing"]]first
+
+second[[/span]] end
+
+[[span]]one
+
+two
+
+three[[/span]]
