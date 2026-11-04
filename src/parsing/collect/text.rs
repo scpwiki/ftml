@@ -18,7 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::iftags::{consume_iftags_segment, consume_iftags_segment_fused};
+use super::iftags::{
+    bracket_close_text, complete_fused_bracket_close, consume_iftags_segment,
+    consume_iftags_segment_fused, iftags_segment, iftags_segment_fused,
+};
 use super::prelude::*;
 use std::borrow::Cow;
 
@@ -121,13 +124,15 @@ where
 }
 
 /// Fused-closer form of `collect_text_resolved()` for block-head
-/// values. A segment whose closer `]]` directly abuts the head's
-/// own closing brackets is fused by the scanner into one
-/// `RightLink` token; this form still resolves the segment and
-/// then treats the fused token's leftover bracket plus a directly
-/// following `]` as the head's `]]` close, provided `closes` is
-/// the usual single `RightBlock` condition. Every other input
-/// behaves exactly like `collect_text_resolved()`.
+/// values and link fields. A segment whose closer `]]` directly
+/// abuts the field's own closing brackets is fused by the scanner
+/// into one `RightLink` token; this form still resolves the
+/// segment and then completes the field's closing run from the
+/// fused token's leftover bracket: for a block-head value (the
+/// usual single `RightBlock` condition) a directly following `]`
+/// completes the head's `]]` close, and for a link target or label
+/// the bracket tokens that follow complete its `]` or `]]]` run.
+/// Every other input behaves exactly like `collect_text_resolved()`.
 pub fn collect_text_resolved_fused<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
     rule: Rule,
@@ -192,7 +197,13 @@ where
             let end = last.span.start;
             let text = match output {
                 Some(mut output) => {
-                    output.push_str(&source[copied_until..end]);
+                    // The closing token can start inside the last
+                    // resolved segment (a fused trailing edge whose
+                    // bracket run overshoots this close): the
+                    // collected text is already complete then.
+                    if end >= copied_until {
+                        output.push_str(&source[copied_until..end]);
+                    }
                     Cow::Owned(output)
                 }
                 None => Cow::Borrowed(&source[start..end]),
@@ -215,19 +226,98 @@ where
 
         if parser.current().token == Token::LeftBlock
             && let Some(segment) = (if allow_fused_closer {
+                iftags_segment_fused(parser)
+            } else {
+                iftags_segment(parser)
+            })
+        {
+            // The token a fused segment ends inside, captured before
+            // consumption moves past it: a caller matching on the
+            // terminating token may need it below.
+            let straddle = if segment.fused_closer {
+                std::iter::once(parser.current())
+                    .chain(parser.remaining())
+                    .find(|token| {
+                        token.span.start < segment.range.end
+                            && token.span.end > segment.range.end
+                    })
+            } else {
+                None
+            };
+            let segment = (if allow_fused_closer {
                 consume_iftags_segment_fused(parser)?
             } else {
                 consume_iftags_segment(parser)?
             })
-        {
-            let output = output.get_or_insert_with(String::new);
-            output.push_str(&source[copied_until..segment.range.start]);
-            if segment.include_body {
-                output.push_str(&source[segment.body.clone()]);
+            .expect("segment presence was just checked");
+
+            {
+                let output = output.get_or_insert_with(String::new);
+                output.push_str(&source[copied_until..segment.range.start]);
+                if segment.include_body {
+                    output.push_str(&source[segment.body.clone()]);
+                }
             }
             copied_until = segment.range.end;
             if segment.fused_closer {
-                fused_close = Some((segment.range.end + 1, segment.range.end));
+                // A block-head value closes with a single `]]`: the
+                // fused token's leftover bracket plus a directly
+                // following `]` complete it (checked at loop top).
+                let head_close =
+                    matches!(closes, [ParseCondition::CurrentToken(Token::RightBlock)]);
+                if head_close {
+                    fused_close = Some((segment.range.end + 1, segment.range.end));
+                } else if let Some(straddle) = straddle {
+                    // Other fields (link targets and labels): the
+                    // leftover bracket begins the field's own
+                    // closing run; complete it from the bracket
+                    // tokens that follow.
+                    let fused = closes.iter().find_map(|close| match close {
+                        ParseCondition::CurrentToken(token) => {
+                            let close_text = bracket_close_text(*token)?;
+                            if close_text.len() == 1 {
+                                return Some(straddle);
+                            }
+                            let last = complete_fused_bracket_close(parser, close_text)?;
+                            Some(if *token == straddle.token {
+                                straddle
+                            } else {
+                                last
+                            })
+                        }
+                        ParseCondition::TokenPair(..) => None,
+                    });
+                    if let Some(last) = fused {
+                        return Ok((Cow::Owned(output.take().unwrap()), last));
+                    }
+
+                    // The run overshoots the close (extra authored
+                    // brackets) but nothing but brackets remains:
+                    // the field ends at the fused token, and the
+                    // leftover brackets render as following text.
+                    let only_brackets_left = std::iter::once(parser.current())
+                        .chain(parser.remaining())
+                        .all(|token| {
+                            matches!(
+                                token.token,
+                                Token::RightBracket
+                                    | Token::RightBlock
+                                    | Token::RightLink
+                                    | Token::InputEnd
+                            )
+                        });
+                    if only_brackets_left
+                        && closes.iter().any(|close| {
+                            matches!(
+                                close,
+                                ParseCondition::CurrentToken(token)
+                                    if *token == straddle.token
+                            )
+                        })
+                    {
+                        return Ok((Cow::Owned(output.take().unwrap()), straddle));
+                    }
+                }
             }
             continue;
         }

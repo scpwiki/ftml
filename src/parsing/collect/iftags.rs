@@ -308,3 +308,49 @@ where
     }
     Ok(Some(segment))
 }
+
+/// The source text of a closing bracket token, when the token is
+/// one: `]` for `RightBracket`, `]]` for `RightBlock`, `]]]` for
+/// `RightLink`.
+pub(crate) fn bracket_close_text(token: Token) -> Option<&'static str> {
+    match token {
+        Token::RightBracket => Some("]"),
+        Token::RightBlock => Some("]]"),
+        Token::RightLink => Some("]]]"),
+        _ => None,
+    }
+}
+
+/// Completes a closing bracket run whose first bracket was the
+/// leftover char of a fused segment closer (see
+/// `iftags_segment_fused`): the parser sits just past the fused
+/// `RightLink` token, and the bracket tokens that follow complete
+/// the run when they spell the rest of `close_text` exactly.
+///
+/// Returns the run's final token and advances the parser past the
+/// whole run. Returns `None`, leaving the parser untouched, when
+/// the following tokens do not spell the run exactly (including a
+/// run that would end inside a larger bracket token). Callers use
+/// this for closing runs of two or more brackets; a one-bracket
+/// close is already complete in the fused token's leftover char.
+pub(crate) fn complete_fused_bracket_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    close_text: &str,
+) -> Option<&'r ExtractedToken<'t>> {
+    debug_assert!(close_text.len() >= 2);
+    let mut probe = parser.clone();
+    let mut last = parser.current();
+    let mut matched = 1;
+    while matched < close_text.len() {
+        let token = probe.current();
+        let text = bracket_close_text(token.token)?;
+        if !close_text[matched..].starts_with(text) {
+            return None;
+        }
+        matched += text.len();
+        last = token;
+        probe.step().ok()?;
+    }
+    parser.update(&probe);
+    Some(last)
+}

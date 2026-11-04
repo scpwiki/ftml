@@ -23,8 +23,8 @@ use super::math::wikidot_math_candidate_is_complete;
 use super::prelude::*;
 use crate::delayed::{DelayedElement, GeneratedKind};
 use crate::parsing::collect::{
-    collect_comment_elided_keep, collect_text_resolved, consume_iftags_segment,
-    consume_valid_comment,
+    collect_comment_elided_keep, collect_text_resolved_fused,
+    consume_iftags_segment_fused, consume_valid_comment,
 };
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
@@ -117,7 +117,8 @@ fn try_consume_link<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
-    let (url, _) = collect_text_resolved(parser, rule, &url_close, &url_invalid, None)?;
+    let (url, _) =
+        collect_text_resolved_fused(parser, rule, &url_close, &url_invalid, None)?;
 
     // Old Wikidot interwiki form, `[prefix:Page Label]`. It resolves through the
     // same prefix table as the modern `[[[!prefix:Page|Label]]]` form. Real URLs
@@ -130,8 +131,13 @@ fn try_consume_link<'r, 't>(
             ParseCondition::current(Token::ParagraphBreak),
             ParseCondition::current(Token::LineBreak),
         ];
-        let (label, _) =
-            collect_text_resolved(parser, rule, &label_close, &label_invalid, None)?;
+        let (label, _) = collect_text_resolved_fused(
+            parser,
+            rule,
+            &label_close,
+            &label_invalid,
+            None,
+        )?;
         return success_elements(Element::Link {
             ltype: LinkType::Interwiki,
             link: LinkLocation::Url(Cow::Owned(expanded)),
@@ -165,7 +171,7 @@ fn try_consume_link<'r, 't>(
         ParseCondition::current(Token::LineBreak),
     ];
     let (label, _) =
-        collect_text_resolved(parser, rule, &label_close, &label_invalid, None)?;
+        collect_text_resolved_fused(parser, rule, &label_close, &label_invalid, None)?;
 
     let element = Element::Link {
         ltype: LinkType::Direct,
@@ -317,16 +323,29 @@ where
                 parser.update(&comment);
                 copied_until = parser.current().span.start;
             }
-            Token::LeftBlock => match consume_iftags_segment(parser)? {
+            Token::LeftBlock => match consume_iftags_segment_fused(parser)? {
                 Some(segment) => {
-                    let output = without_comments.get_or_insert_with(|| {
-                        String::with_capacity(segment.range.start - start)
-                    });
-                    output.push_str(&source[copied_until..segment.range.start]);
-                    if segment.include_body {
-                        output.push_str(&source[segment.body.clone()]);
+                    {
+                        let output = without_comments.get_or_insert_with(|| {
+                            String::with_capacity(segment.range.start - start)
+                        });
+                        output.push_str(&source[copied_until..segment.range.start]);
+                        if segment.include_body {
+                            output.push_str(&source[segment.body.clone()]);
+                        }
                     }
                     copied_until = segment.range.end;
+
+                    if segment.fused_closer {
+                        // The segment ended inside a fused bracket
+                        // token whose leftover bracket is the link's
+                        // own closing bracket; the token is already
+                        // consumed and nothing of it is residual.
+                        return Ok(WikidotLabel {
+                            text: Cow::Owned(without_comments.take().unwrap()),
+                            residual_closer: "",
+                        });
+                    }
                 }
                 None => {
                     parser.step()?;

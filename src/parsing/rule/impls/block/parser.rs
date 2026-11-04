@@ -2572,8 +2572,11 @@ where
             &invalids,
             Some(ParseErrorKind::recoverable_local_failure()),
         )?;
-        let arguments =
-            self.get_head_map_wikidot(block_rule, last.token != Token::RightBlock)?;
+        // A trailing-edge iftags segment can fuse the head
+        // closing into a bracket run whose final token is a
+        // single bracket; the head still ended there.
+        let head_ended = matches!(last.token, Token::RightBlock | Token::RightBracket);
+        let arguments = self.get_head_map_wikidot(block_rule, !head_ended)?;
         Ok((field, arguments))
     }
 

@@ -62,7 +62,7 @@ fn try_consume_fn<'r, 't>(
         ]
     };
     let (name, closer) =
-        collect_text_resolved(parser, RULE_ANCHOR, &close, &invalid, None)?;
+        collect_text_resolved_fused(parser, RULE_ANCHOR, &close, &invalid, None)?;
     let residual_closer = closer.token == Token::RightLink;
     let valid_wikidot_name = name
         .chars()

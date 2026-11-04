@@ -1,0 +1,4 @@
+[[# apple[[iftags -zzz]][[/iftags]]]] After
+[# foo bar[[iftags -zzz]][[/iftags]]]
+[# foo bar[[iftags -zzz]]X[[/iftags]]]
+[# foo bar[[iftags +zzz]]X[[/iftags]]]
