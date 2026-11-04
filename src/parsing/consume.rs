@@ -928,7 +928,14 @@ fn try_consume_past_wikidot_designated_iftags_end<'r, 't>(
     let mut probe = parser.clone();
     let fused = step_over_wikidot_designated_end(&mut probe)?;
     step_over_wikidot_designated_end(parser)?;
-    Some(match consume(parser) {
+    Some(consume_past_iftags_end(parser, fused))
+}
+
+fn consume_past_iftags_end<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    fused: bool,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    match consume(parser) {
         Ok(mut success) => {
             if fused {
                 let mut elements = vec![Element::Text(Cow::Borrowed("]"))];
@@ -954,7 +961,26 @@ fn try_consume_past_wikidot_designated_iftags_end<'r, 't>(
                 Err(error)
             }
         }
-    })
+    }
+}
+
+fn try_consume_pending_iftags_end_swallow<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if parser.discarding_hidden_body() {
+        return None;
+    }
+    if parser.current().token != Token::LeftBlockEnd {
+        return None;
+    }
+    let position = parser.current().span.start;
+    let mut probe = parser.clone();
+    let fused = step_over_wikidot_designated_end(&mut probe)?;
+    if !parser.take_pending_iftags_end_swallow(position) {
+        return None;
+    }
+    step_over_wikidot_designated_end(parser)?;
+    Some(consume_past_iftags_end(parser, fused))
 }
 
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
@@ -963,6 +989,10 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     if let Some(result) = try_consume_past_wikidot_designated_iftags_end(parser) {
+        return result;
+    }
+
+    if let Some(result) = try_consume_pending_iftags_end_swallow(parser) {
         return result;
     }
 

@@ -1,0 +1,4 @@
+aaaa
+[[collapsible show="+ s" hide="- h"]]
+ab[[iftags +_current]][[/collapsible]]cd[[/iftags]]
+zzzz

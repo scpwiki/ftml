@@ -1342,28 +1342,111 @@ where
         true
     }
 
-    pub(crate) fn has_wikidot_list_close_ahead(&self) -> bool {
-        let mut probe = self.clone();
+    pub(crate) fn compute_wikidot_li_pairing(&self) {
+        use std::collections::{BTreeSet, VecDeque};
+
+        let mut scan = self.clone();
+        let mut depth = 0usize;
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        let mut paired: BTreeSet<usize> = BTreeSet::new();
         loop {
-            match probe.current().token {
-                Token::InputEnd => return false,
-                Token::LeftBlockEnd => {
-                    let mut end = probe.clone();
-                    if let Ok(name) = end.get_end_block() {
+            if scan.current().token == Token::InputEnd
+                || scan.at_hard_body_end_boundary()
+            {
+                break;
+            }
+            if scan.skip_discarded_iftags_segment(false) {
+                continue;
+            }
+            match scan.current().token {
+                Token::LeftBlock => {
+                    let start = scan.current().span.start;
+                    let mut probe = scan.clone();
+                    if let Ok((name, _, _)) = probe.get_block_name(false) {
                         let name = name.strip_suffix('_').unwrap_or(&name);
                         if name.eq_ignore_ascii_case("ul")
                             || name.eq_ignore_ascii_case("ol")
                         {
-                            return true;
+                            depth += 1;
+                        } else if name.eq_ignore_ascii_case("li") {
+                            queue.push_back(start);
+                        }
+                    }
+                    if scan.step().is_err() {
+                        break;
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    let mut probe = scan.clone();
+                    match probe.get_end_block() {
+                        Ok(name) => {
+                            let name = name.strip_suffix('_').unwrap_or(&name);
+                            if name.eq_ignore_ascii_case("ul")
+                                || name.eq_ignore_ascii_case("ol")
+                            {
+                                if depth == 0 {
+                                    break;
+                                }
+                                depth -= 1;
+                                scan.update(&probe);
+                            } else if name.eq_ignore_ascii_case("li") {
+                                if let Some(head) = queue.pop_front() {
+                                    paired.insert(head);
+                                }
+                                scan.update(&probe);
+                            } else if scan.step().is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => {
+                            let mut name_probe = scan.clone();
+                            let recovered = if name_probe.step().is_ok() {
+                                let token = name_probe.current();
+                                Some(
+                                    scan.full_text().inner()
+                                        [token.span.start..token.span.end]
+                                        .to_owned(),
+                                )
+                            } else {
+                                None
+                            };
+                            match recovered.as_deref() {
+                                Some(raw) => {
+                                    let name =
+                                        raw.strip_suffix(char::from(95u8)).unwrap_or(raw);
+                                    if name.eq_ignore_ascii_case("ul")
+                                        || name.eq_ignore_ascii_case("ol")
+                                    {
+                                        if depth == 0 {
+                                            break;
+                                        }
+                                        depth -= 1;
+                                    } else if name.eq_ignore_ascii_case("li") {
+                                        if let Some(head) = queue.pop_front() {
+                                            paired.insert(head);
+                                        }
+                                    }
+                                    if scan.step().is_err() {
+                                        break;
+                                    }
+                                }
+                                None => {
+                                    if scan.step().is_err() {
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-                _ => {}
-            }
-            if probe.step().is_err() {
-                return false;
+                _ => {
+                    if scan.step().is_err() {
+                        break;
+                    }
+                }
             }
         }
+        self.set_wikidot_li_paired_heads(paired);
     }
 
     fn get_body_generic<F>(
@@ -1487,6 +1570,10 @@ where
         &mut self,
         block_rule: &BlockRule,
     ) -> Result<Cow<'t, str>, ParseError> {
+        if self.settings().layout.legacy() && block_rule.name == "block-math" {
+            return self.get_math_body_text(block_rule);
+        }
+
         if let Some(required_depth) = self.native_blockquote_depth()
             && (self.quote_body_needs_prefix()
                 || self.current().token == Token::LineBreak)
@@ -1497,6 +1584,104 @@ where
         let (start, end) = self.get_body_generic(block_rule, |_| Ok(()))?;
         let slice = self.full_text().slice_partial(start, end);
         Ok(Cow::Borrowed(slice))
+    }
+
+    fn get_math_body_text(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<Cow<'t, str>, ParseError> {
+        let walk_start = self.clone();
+        let (start, end) = self.get_body_generic(block_rule, |_| Ok(()))?;
+        let body_start = start.span.start;
+        let body_end = end.span.start;
+        let mut removals: Vec<(usize, usize)> = Vec::new();
+        let mut walk = walk_start;
+        loop {
+            let token = walk.current();
+            if token.token == Token::InputEnd || token.span.start >= body_end {
+                break;
+            }
+            if token.token == Token::LeftBlock {
+                let head_start = token.span.start;
+                let mut probe = walk.clone();
+                if probe.skip_discarded_iftags_segment(false) {
+                    let segment_end = probe.current().span.start;
+                    if body_end >= head_start && body_end < segment_end {
+                        return Err(self.make_err(ParseErrorKind::RuleFailed));
+                    }
+                    removals.push((head_start, segment_end));
+                    walk.update(&probe);
+                    continue;
+                }
+                let mut head_probe = walk.clone();
+                let is_iftags = match head_probe.get_block_name(false) {
+                    Ok((name, _, _)) => name.eq_ignore_ascii_case("iftags"),
+                    Err(_) => false,
+                };
+                if is_iftags {
+                    let mut past_head = walk.clone();
+                    let mut head_end = None;
+                    loop {
+                        let current = past_head.current();
+                        if past_head.step().is_err() {
+                            break;
+                        }
+                        if current.token == Token::RightBlock {
+                            head_end = Some(past_head.current().span.start);
+                            break;
+                        }
+                    }
+                    if let Some(head_end) = head_end {
+                        let (pairing, _) = past_head.wikidot_iftags_pairing_end();
+                        if let Some(designated) = pairing {
+                            removals.push((head_start, head_end));
+                            if designated < body_end {
+                                let mut end_probe = past_head.clone();
+                                let mut end_span_end = None;
+                                while end_probe.current().span.start < designated {
+                                    if end_probe.step().is_err() {
+                                        break;
+                                    }
+                                }
+                                if end_probe.current().span.start == designated {
+                                    let mut close = end_probe.clone();
+                                    if close.get_end_block().is_ok() {
+                                        end_span_end =
+                                            Some(close.current().span.start);
+                                    }
+                                }
+                                if let Some(end_span_end) = end_span_end {
+                                    removals.push((designated, end_span_end));
+                                }
+                            } else if designated > body_end {
+                                self.push_pending_iftags_end_swallow(designated);
+                            }
+                        }
+                    }
+                }
+            }
+            if walk.step().is_err() {
+                break;
+            }
+        }
+        if removals.is_empty() {
+            let slice = self.full_text().slice_partial(start, end);
+            return Ok(Cow::Borrowed(slice));
+        }
+        removals.sort();
+        let source = self.full_text().inner();
+        let mut out = String::new();
+        let mut cursor = body_start;
+        for (span_start, span_end) in removals {
+            if span_start > cursor {
+                out.push_str(&source[cursor..span_start]);
+            }
+            cursor = cursor.max(span_end);
+        }
+        if cursor < body_end {
+            out.push_str(&source[cursor..body_end]);
+        }
+        Ok(Cow::Owned(out))
     }
 
     pub(crate) fn get_body_text_after_skipping_end_blocks(
@@ -2250,6 +2435,15 @@ where
 
             if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if !self.discarding_hidden_body() && self.at_body_end_boundary() {
+                if let Some(last) = segments.last_mut() {
+                    while matches!(last.last(), Some(Element::LineBreak)) {
+                        last.pop();
+                    }
+                }
+                break;
             }
 
             if let Some(designated) = self.wikidot_iftags_body_end()

@@ -1,0 +1,4 @@
+aaaa
+[[div]]
+ab[[iftags +_current]][[/div]]cd[[/iftags]]
+zzzz

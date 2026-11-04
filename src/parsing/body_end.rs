@@ -58,6 +58,27 @@ impl<'r, 't> Parser<'r, 't> {
             .clone()
     }
 
+    pub(crate) fn wikidot_li_inside_item_body(&self) -> bool {
+        for boundary in self.body_end_boundaries().iter().rev() {
+            if boundary.confined {
+                continue;
+            }
+            let accepts = |want: &str| {
+                boundary
+                    .accepts_names
+                    .iter()
+                    .any(|accepted| accepted.eq_ignore_ascii_case(want))
+            };
+            if accepts("li") {
+                return true;
+            }
+            if accepts("ul") || accepts("ol") {
+                return false;
+            }
+        }
+        false
+    }
+
     pub(crate) fn body_end_boundary_accepts(&self, name: &str) -> bool {
         self.body_end_boundaries().iter().any(|boundary| {
             boundary
