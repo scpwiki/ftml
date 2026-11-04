@@ -55,10 +55,17 @@ pub(super) fn append_wikidot_line_close_space(
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(super) enum ReachableCloseMode {
+    Standard,
+    BlockBarrier,
+}
+
 pub(super) fn validate_reachable_close(
     parser: &Parser<'_, '_>,
     token: Token,
     split: Option<SplitDelimiter>,
+    mode: ReachableCloseMode,
 ) -> Result<(), ParseError> {
     let tokens = parser.remaining();
     let mut paragraph_error = None;
@@ -78,7 +85,10 @@ pub(super) fn validate_reachable_close(
             if let Some(error) = paragraph_error {
                 return Err(error);
             }
-            if index > 0 && tokens[index - 1].token == Token::Whitespace {
+            if mode == ReachableCloseMode::Standard
+                && index > 0
+                && tokens[index - 1].token == Token::Whitespace
+            {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
             return Ok(());
@@ -108,16 +118,7 @@ pub(super) fn validate_reachable_close(
                 if !is_block_name(&name) {
                 } else if let Some(pos) = open_blocks.iter().rposition(|n| *n == name) {
                     open_blocks.truncate(pos);
-                } else if parser.body_end_boundary_accepts(&name)
-                    || (name == "span"
-                        && (parser.in_wikidot_span_body()
-                            || parser.in_wikidot_literal_alias_body()))
-                    || (name == "div"
-                        && (parser.in_wikidot_div_body()
-                            || parser.in_wikidot_literal_alias_body()))
-                    || (name == "center" && parser.in_wikidot_center_body())
-                    || (name == "bibliography" && parser.in_wikidot_bibliography_body())
-                {
+                } else if end_block_fails(parser, &name, mode) {
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
             }
@@ -125,7 +126,10 @@ pub(super) fn validate_reachable_close(
                 if let Some(error) = paragraph_error {
                     return Err(error);
                 }
-                if index > 0 && tokens[index - 1].token == Token::Whitespace {
+                if mode == ReachableCloseMode::Standard
+                    && index > 0
+                    && tokens[index - 1].token == Token::Whitespace
+                {
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
                 return Ok(());
@@ -135,6 +139,36 @@ pub(super) fn validate_reachable_close(
         index += 1;
     }
     Err(parser.make_err(ParseErrorKind::EndOfInput))
+}
+
+fn end_block_fails(
+    parser: &Parser<'_, '_>,
+    name: &str,
+    mode: ReachableCloseMode,
+) -> bool {
+    match mode {
+        ReachableCloseMode::Standard => {
+            parser.body_end_boundary_accepts(name)
+                || (name == "span"
+                    && (parser.in_wikidot_span_body()
+                        || parser.in_wikidot_literal_alias_body()))
+                || (name == "div"
+                    && (parser.in_wikidot_div_body()
+                        || parser.in_wikidot_literal_alias_body()))
+                || (name == "center" && parser.in_wikidot_center_body())
+                || (name == "bibliography" && parser.in_wikidot_bibliography_body())
+        }
+        ReachableCloseMode::BlockBarrier => {
+            matches!(
+                name,
+                "div" | "collapsible" | "footnote" | "center" | "bibliography"
+            ) && (parser.body_end_boundary_accepts(name)
+                || (name == "div" && parser.in_wikidot_div_body())
+                || (name == "center" && parser.in_wikidot_center_body())
+                || (name == "bibliography" && parser.in_wikidot_bibliography_body())
+                || (name == "collapsible" && parser.in_wikidot_collapsible()))
+        }
+    }
 }
 
 pub(super) fn block_name_at(tokens: &[ExtractedToken<'_>], index: usize) -> String {

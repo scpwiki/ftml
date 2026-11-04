@@ -1,0 +1,20 @@
+[
+    {
+        "token": "superscript",
+        "rule": "superscript",
+        "span": [
+            11,
+            13
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            11,
+            13
+        ],
+        "kind": "no-rules-match"
+    }
+]

@@ -1,10 +1,10 @@
 [
     {
-        "token": "paragraph-break",
+        "token": "subscript",
         "rule": "subscript",
         "span": [
-            33,
-            35
+            4,
+            6
         ],
         "kind": "rule-failed"
     },
@@ -18,11 +18,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "subscript",
         "rule": "subscript",
         "span": [
-            71,
-            73
+            39,
+            41
         ],
         "kind": "rule-failed"
     },
@@ -36,11 +36,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "subscript",
         "rule": "subscript",
         "span": [
-            107,
-            109
+            77,
+            79
         ],
         "kind": "rule-failed"
     },
@@ -54,11 +54,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "subscript",
         "rule": "subscript",
         "span": [
-            143,
-            145
+            113,
+            115
         ],
         "kind": "rule-failed"
     },
@@ -90,11 +90,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "input-end",
+        "token": "subscript",
         "rule": "subscript",
         "span": [
-            270,
-            270
+            241,
+            243
         ],
         "kind": "end-of-input"
     },

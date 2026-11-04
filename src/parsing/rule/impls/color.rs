@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::inline_delimiter::{ReachableCloseMode, validate_reachable_close};
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::tree::Container;
@@ -130,6 +131,14 @@ fn try_consume_fn<'r, 't>(
     }
 
     let table_owned = legacy && parser.in_wikidot_simple_table_cell();
+    if !table_owned {
+        validate_reachable_close(
+            parser,
+            Token::Color,
+            None,
+            ReachableCloseMode::BlockBarrier,
+        )?;
+    }
     let close = if table_owned {
         &[
             ParseCondition::current(Token::Color),

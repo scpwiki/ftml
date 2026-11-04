@@ -1,10 +1,10 @@
 [
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            34,
-            36
+            4,
+            6
         ],
         "kind": "rule-failed"
     },
@@ -18,11 +18,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            70,
-            72
+            40,
+            42
         ],
         "kind": "rule-failed"
     },
@@ -36,11 +36,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            111,
-            113
+            76,
+            78
         ],
         "kind": "rule-failed"
     },
@@ -54,11 +54,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            147,
-            149
+            117,
+            119
         ],
         "kind": "rule-failed"
     },
@@ -72,11 +72,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            184,
-            186
+            153,
+            155
         ],
         "kind": "rule-failed"
     },
@@ -90,11 +90,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            222,
-            224
+            190,
+            192
         ],
         "kind": "rule-failed"
     },
@@ -108,11 +108,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            259,
-            261
+            228,
+            230
         ],
         "kind": "rule-failed"
     },
@@ -126,11 +126,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            294,
-            296
+            265,
+            267
         ],
         "kind": "rule-failed"
     },
@@ -144,11 +144,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            360,
-            362
+            300,
+            302
         ],
         "kind": "rule-failed"
     },
@@ -162,11 +162,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            360,
-            362
+            330,
+            332
         ],
         "kind": "rule-failed"
     },
@@ -180,11 +180,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "input-end",
+        "token": "left-monospace",
         "rule": "monospace",
         "span": [
-            400,
-            400
+            366,
+            368
         ],
         "kind": "end-of-input"
     },

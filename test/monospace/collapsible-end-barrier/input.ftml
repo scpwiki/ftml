@@ -1,0 +1,5 @@
+[[collapsible show="+ show" hide="- hide"]]
+A1 {{
+B2 [[/collapsible]]
+C3 }}
+D4

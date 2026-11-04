@@ -18,7 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::inline_delimiter::{assert_unpadded_open, validate_reachable_close};
+use super::inline_delimiter::{
+    ReachableCloseMode, assert_unpadded_open, validate_reachable_close,
+};
 use super::prelude::*;
 
 pub const RULE_STRIKETHROUGH_DASH: Rule = Rule {
@@ -52,7 +54,7 @@ fn try_consume_strikethrough<'r, 't>(
     token: Token,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create a strikethrough (token {})", token.name());
-    validate_reachable_close(parser, token, None)?;
+    validate_reachable_close(parser, token, None, ReachableCloseMode::Standard)?;
     if token == Token::DoubleDash {
         assert_unpadded_open(parser, token)?;
     } else {

@@ -1,0 +1,38 @@
+[
+    {
+        "token": "line-break",
+        "rule": "color",
+        "span": [
+            53,
+            54
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            47,
+            49
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "line-break",
+        "rule": "color",
+        "span": [
+            79,
+            80
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            77,
+            79
+        ],
+        "kind": "no-rules-match"
+    }
+]

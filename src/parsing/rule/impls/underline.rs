@@ -18,7 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::inline_delimiter::{assert_unpadded_open, validate_reachable_close};
+use super::inline_delimiter::{
+    ReachableCloseMode, assert_unpadded_open, validate_reachable_close,
+};
 use super::prelude::*;
 
 pub const RULE_UNDERLINE: Rule = Rule {
@@ -31,7 +33,12 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create underline container");
-    validate_reachable_close(parser, Token::Underline, None)?;
+    validate_reachable_close(
+        parser,
+        Token::Underline,
+        None,
+        ReachableCloseMode::Standard,
+    )?;
     assert_unpadded_open(parser, Token::Underline)?;
     let close = [ParseCondition::current(Token::Underline)];
     let invalid = [

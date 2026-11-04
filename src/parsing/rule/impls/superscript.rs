@@ -18,7 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::inline_delimiter::{append_wikidot_line_close_space, assert_unpadded_open};
+use super::inline_delimiter::{
+    ReachableCloseMode, append_wikidot_line_close_space, assert_unpadded_open,
+    validate_reachable_close,
+};
 use super::prelude::*;
 
 pub const RULE_SUPERSCRIPT: Rule = Rule {
@@ -31,6 +34,12 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create superscript container");
+    validate_reachable_close(
+        parser,
+        Token::Superscript,
+        None,
+        ReachableCloseMode::BlockBarrier,
+    )?;
     assert_unpadded_open(parser, Token::Superscript)?;
     let close = [ParseCondition::current(Token::Superscript)];
     let invalid = [
