@@ -1,0 +1,11 @@
+Title[[footnote
+
+tabnote[[/footnote]]]]
+Tab body text
+
+Second
+
+More
+
+
+After

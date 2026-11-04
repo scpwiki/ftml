@@ -1,0 +1,10 @@
+[[tabview]]
+[[tab Title[[footnote]]tabnote[[/footnote]]]]
+Tab body text[[footnote]]tabbody[[/footnote]]
+[[/tab]]
+[[tab Second]]
+More[[footnote]]second[[/footnote]]
+[[/tab]]
+[[/tabview]]
+
+After[[footnote]]post[[/footnote]]

@@ -1,0 +1,20 @@
+[
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            42,
+            45
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            53,
+            56
+        ],
+        "kind": "no-rules-match"
+    }
+]

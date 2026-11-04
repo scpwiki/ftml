@@ -1,0 +1,130 @@
+{
+    "elements": [
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "Title[[footnote",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "tabnote"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "footnote"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]]"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]"
+                                    },
+                                    {
+                                        "element": "line-break"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "Tab"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": " "
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "body"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": " "
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "text"
+                                    },
+                                    {
+                                        "element": "footnote",
+                                        "data": 1
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "label": "Second",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "More"
+                                    },
+                                    {
+                                        "element": "footnote",
+                                        "data": 2
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "After"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 3
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "tabbody"
+            }
+        ],
+        [
+            {
+                "element": "text",
+                "data": "second"
+            }
+        ],
+        [
+            {
+                "element": "text",
+                "data": "post"
+            }
+        ]
+    ],
+    "needs-footnote-block": true
+}
