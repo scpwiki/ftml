@@ -585,19 +585,20 @@ impl<'t> ActiveScopes<'t> {
     fn bibliography_wrappers(&self) -> Vec<BibliographyScopeWrapper<'t>> {
         self.active_positions()
             .into_iter()
-            .map(|position| match &self.scopes[position].wrapper {
+            .filter_map(|position| match &self.scopes[position].wrapper {
                 ScopeWrapper::Container { ctype, attributes } => {
-                    BibliographyScopeWrapper::Container {
+                    Some(BibliographyScopeWrapper::Container {
                         ctype: *ctype,
                         attributes: attributes.clone(),
-                    }
+                    })
                 }
                 ScopeWrapper::Color { color, background } => {
-                    BibliographyScopeWrapper::Color {
+                    Some(BibliographyScopeWrapper::Color {
                         color: color.clone(),
                         background: *background,
-                    }
+                    })
                 }
+                ScopeWrapper::Anchor { .. } => None,
             })
             .collect()
     }
@@ -1088,8 +1089,8 @@ fn collect_valid_pairs(
             Element::Partial(PartialElement::InlineAnchorOpen(..)) => {
                 pending.open(ScopeClass::Anchor, ordinal);
             }
-            Element::Partial(PartialElement::InlineAnchorClose(_)) => {
-                pending.close(ScopeClass::Anchor, ordinal, valid);
+            Element::Partial(PartialElement::InlineAnchorClose(source)) => {
+                pending.close(ScopeClass::Anchor, ordinal, valid, source.is_empty());
             }
             _ => {
                 let mut visit = |children: &[Element<'_>]| {
@@ -1816,6 +1817,7 @@ fn scope_kind_of_wrapper(wrapper: &ScopeWrapper<'_>) -> ScopeKind {
             ),
         },
         ScopeWrapper::Color { .. } => ScopeKind::Color,
+        ScopeWrapper::Anchor { .. } => ScopeKind::Anchor,
     }
 }
 
