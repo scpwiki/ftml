@@ -1,0 +1,13 @@
+See {{note https://example.com/a}} tail}} end
+
+See {{note https://example.com/a}}. tail}} end
+
+See {{note https://example.com/a.}} tail}} end
+
+See {{note https://example.com/a}}} tail}} end
+
+See {{note https://example.com/a}} mid {{https://example.com/b}} end}} end
+
+See {{note https://example.com/a}}!}} tail}} end
+
+See {{note https://example.com/a}} }} end

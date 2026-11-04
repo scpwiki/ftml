@@ -887,4 +887,32 @@ mod tests {
             assert!(html.contains(expected), "{expected} missing from {html}");
         }
     }
+
+    #[test]
+    fn wikidot_monospace_close_over_url_sheds_like_live() {
+        use crate::render::Render;
+
+        let source = "shed {{https://example.com/a}}. end\n\nsplit {{note https://example.com/a}} tail}} end\n\nbefore {{https://example.com/a.}} end\n\nrun {{https://example.com/a}}}} end\n\ndouble {{https://example.com/a}}!}} end\n\nspaced {{note https://example.com/a}} }} end\n\nnoclose {{https://example.com/a}. end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        for expected in [
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a></tt>.",
+            "<tt>note <a href=\"https://example.com/a\">https://example.com/a</a></tt> tail}}",
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a>.</tt>",
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a>}}</tt>",
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a></tt>!}}",
+            "<tt>note <a href=\"https://example.com/a\">https://example.com/a</a></tt> }}",
+            "{{<a href=\"https://example.com/a\">https://example.com/a</a>}.",
+        ] {
+            assert!(html.contains(expected), "{expected} missing from {html}");
+        }
+    }
 }

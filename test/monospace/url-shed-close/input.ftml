@@ -1,0 +1,19 @@
+See {{https://example.com/a}}. end
+
+See {{https://example.com/a.}} end
+
+See {{note https://example.com/a}}. end
+
+See {{https://example.com/a}}} end
+
+See {{https://example.com/a}}}} end
+
+See {{https://example.com/a}}!}} end
+
+See {{https://example.com/a}.}} end
+
+See {{https://example.com/a}. end
+
+See {{https://example.com/a}} and {{https://example.com/b}}. end
+
+See {{https://example.com/a}}あ}} end
