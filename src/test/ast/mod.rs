@@ -28,11 +28,27 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-const SKIP_TESTS: &[&str] = &[];
-
-const ONLY_TESTS: &[&str] = &[];
-
 const UPDATE_TESTS: bool = false;
+
+fn env_test_patterns(variable: &str) -> Vec<String> {
+    env::var(variable)
+        .map(|value| {
+            value
+                .split(',')
+                .map(|pattern| pattern.trim().to_owned())
+                .filter(|pattern| !pattern.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn skip_tests() -> Vec<String> {
+    env_test_patterns("FTML_SKIP_TESTS")
+}
+
+fn only_tests() -> Vec<String> {
+    env_test_patterns("FTML_ONLY_TESTS")
+}
 
 static TEST_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -143,6 +159,9 @@ fn env_update_tests() -> bool {
 
 #[test]
 fn ast() {
+    let skip_tests = skip_tests();
+    let only_tests = only_tests();
+
     if UPDATE_TESTS || env_update_tests() {
         let tests = TestUniverse::load_permissive(&TEST_DIRECTORY);
 
@@ -158,7 +177,7 @@ fn ast() {
         println!("Carefully inspect the diff and only save changes that are correct.");
         println!();
 
-        tests.update(&TEST_DIRECTORY, SKIP_TESTS, ONLY_TESTS);
+        tests.update(&TEST_DIRECTORY, &skip_tests, &only_tests);
 
         println!();
         println!("Failing test, you must unset update mode to let CI pass");
@@ -170,23 +189,21 @@ fn ast() {
 
     let tests = test_universe();
 
-    #[allow(clippy::const_is_empty)]
-    if !SKIP_TESTS.is_empty() {
+    if !skip_tests.is_empty() {
         println!("=========");
         println!(" WARNING ");
         println!("=========");
         println!();
         println!("Tests matching the following are being SKIPPED:");
 
-        for test in SKIP_TESTS {
+        for test in &skip_tests {
             println!("- {}", test);
         }
 
         println!();
     }
 
-    #[allow(clippy::const_is_empty)]
-    if !ONLY_TESTS.is_empty() {
+    if !only_tests.is_empty() {
         println!("=========");
         println!(" WARNING ");
         println!("=========");
@@ -194,14 +211,14 @@ fn ast() {
         println!("Only tests matching the following will being run.");
         println!("All others are being SKIPPED!");
 
-        for test in ONLY_TESTS {
+        for test in &only_tests {
             println!("> {}", test);
         }
 
         println!();
     }
 
-    let stats = tests.run(SKIP_TESTS, ONLY_TESTS);
+    let stats = tests.run(&skip_tests, &only_tests);
     stats.print();
     stats.assert_success();
 }

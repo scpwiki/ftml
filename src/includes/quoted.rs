@@ -32,6 +32,38 @@ struct OffsetSegment {
     original_start: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum QuotedIncludeParse {
+    CandidateEnd,
+    WholeRegion,
+}
+
+impl QuotedIncludeParse {
+    fn end_bound(self, input: &str, candidate_end: usize) -> usize {
+        match self {
+            QuotedIncludeParse::CandidateEnd => candidate_end,
+            QuotedIncludeParse::WholeRegion => input.len(),
+        }
+    }
+
+    fn run(
+        self,
+        input: &str,
+        line_start: usize,
+        marker_start: usize,
+        quote_depth: usize,
+        candidate_end: usize,
+    ) -> Option<ParsedQuotedInclude> {
+        normalize_and_parse(
+            input,
+            line_start,
+            marker_start,
+            quote_depth,
+            self.end_bound(input, candidate_end),
+        )
+    }
+}
+
 pub(super) fn parse_quoted_include(
     input: &str,
     line_start: usize,
@@ -42,19 +74,14 @@ pub(super) fn parse_quoted_include(
     debug_assert!(marker_start > line_start);
     debug_assert!(quote_depth > 0);
 
-    let parsed =
-        normalize_and_parse(input, line_start, marker_start, quote_depth, candidate_end)
-            .or_else(|| {
-                normalize_and_parse(
-                    input,
-                    line_start,
-                    marker_start,
-                    quote_depth,
-                    input.len(),
-                )
-            })?;
-
-    Some(parsed)
+    [
+        QuotedIncludeParse::CandidateEnd,
+        QuotedIncludeParse::WholeRegion,
+    ]
+    .into_iter()
+    .find_map(|strategy| {
+        strategy.run(input, line_start, marker_start, quote_depth, candidate_end)
+    })
 }
 
 fn normalize_and_parse(

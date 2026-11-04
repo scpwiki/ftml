@@ -40,6 +40,7 @@ impl Render for NullRender {
 #[test]
 fn null() {
     use crate::layout::Layout;
+    use crate::settings::WikitextMode;
     use crate::tree::BibliographyList;
 
     let page_info = PageInfo::dummy();

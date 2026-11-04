@@ -93,7 +93,7 @@ pub(crate) const WIKIDOT_GENERATED_EMPTY_CLASS_MARKER: &str =
 use std::borrow::Cow;
 use std::collections::HashSet;
 
-#[derive(Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct SyntaxTree<'t> {
     /// The list of elements that compose this tree.
@@ -135,6 +135,20 @@ pub struct SyntaxTree<'t> {
     #[serde(skip)]
     pub wikitext_len: usize,
 }
+
+impl PartialEq for SyntaxTree<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.elements == other.elements
+            && self.table_of_contents == other.table_of_contents
+            && self.html_blocks == other.html_blocks
+            && self.code_blocks == other.code_blocks
+            && self.footnotes == other.footnotes
+            && self.needs_footnote_block == other.needs_footnote_block
+            && self.bibliographies == other.bibliographies
+    }
+}
+
+impl Eq for SyntaxTree<'_> {}
 
 impl serde::Serialize for SyntaxTree<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

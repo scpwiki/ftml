@@ -25,6 +25,7 @@ html     = ["lightningcss"]
 # Adds LaTeX -> MathML support for rendering.
 mathml   = ["html", "latex2mathml"]
 test-source-recorder = []
+test-support = []
 
 [dependencies]
 cfg-if = "1"

@@ -76,7 +76,12 @@ fn includes() {
     macro_rules! test {
         ($text:expr, $expected:expr $(,)?) => {{
             let mut text = str!($text);
-            let result = include(&mut text, &settings, DebugIncluder, || panic!());
+            let result = include(
+                &mut text,
+                &settings,
+                DebugIncluder::first_missing(),
+                || panic!(),
+            );
             let (output, actual) = result.expect("Fetching pages failed");
             let expected = $expected;
 
@@ -555,8 +560,13 @@ fn include_swallowed_by_multiline_argument_does_not_overlap() {
                 [[include :scp-wiki:more-by:someone]]\n\
                 trailing text after the block\n";
 
-    let (output, pages) = include(text, &settings, DebugIncluder, || unreachable!())
-        .expect("include failed");
+    let (output, pages) = include(
+        text,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("include failed");
 
     assert_eq!(pages, vec![PageRef::page_only("component:info")]);
     assert!(
@@ -579,8 +589,13 @@ fn tight_quoted_multiline_include_is_consumed_without_resolving_its_target() {
         "after\n",
     );
 
-    let (output, pages) = include(input, &settings, DebugIncluder, || unreachable!())
-        .expect("tight quoted include should be consumed");
+    let (output, pages) = include(
+        input,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("tight quoted include should be consumed");
 
     assert!(pages.is_empty());
     assert_eq!(output, "before\n\nafter\n");
@@ -590,15 +605,25 @@ fn tight_quoted_multiline_include_is_consumed_without_resolving_its_target() {
 fn spaced_quoted_include_markers_remain_literal_like_wikidot() {
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let nested = "  > > [[include component:box |name=x]]\n";
-    let (output, pages) = include(nested, &settings, DebugIncluder, || unreachable!())
-        .expect("spaced quoted include should remain literal");
+    let (output, pages) = include(
+        nested,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("spaced quoted include should remain literal");
 
     assert!(pages.is_empty());
     assert_eq!(output, nested);
 
     let escaped = "> [[include component:box\n|name=unquoted]]\n";
-    let (output, pages) = include(escaped, &settings, DebugIncluder, || unreachable!())
-        .expect("malformed quoted include should remain literal");
+    let (output, pages) = include(
+        escaped,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("malformed quoted include should remain literal");
     assert!(pages.is_empty());
     assert_eq!(output, escaped);
 }
@@ -608,8 +633,13 @@ fn spaced_quoted_include_with_crlf_remains_literal() {
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let input = "> [[include component:box |name=x]]\r\n";
 
-    let (output, pages) = include(input, &settings, DebugIncluder, || unreachable!())
-        .expect("spaced quoted CRLF include should remain literal");
+    let (output, pages) = include(
+        input,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("spaced quoted CRLF include should remain literal");
 
     assert!(pages.is_empty());
     assert_eq!(output, input);
@@ -625,8 +655,13 @@ fn svg_animation_spaced_self_include_examples_remain_literal() {
         "> [[include :scp-wiki:svg-animation |gocLogo=true|width=100%]]\n",
     );
 
-    let (output, pages) = include(input, &settings, DebugIncluder, || unreachable!())
-        .expect("spaced self-include examples should remain literal");
+    let (output, pages) = include(
+        input,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("spaced self-include examples should remain literal");
 
     assert!(pages.is_empty());
     assert_eq!(output, input);
@@ -643,8 +678,13 @@ fn quoted_include_scanner_handles_many_one_line_includes_in_bounded_time() {
     }
 
     let started = std::time::Instant::now();
-    let (output, pages) = include(&input, &settings, DebugIncluder, || unreachable!())
-        .expect("tight quoted includes should be consumed");
+    let (output, pages) = include(
+        &input,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("tight quoted includes should be consumed");
 
     assert!(pages.is_empty());
     assert_eq!(output, "\n".repeat(INCLUDE_LINES));
@@ -674,8 +714,13 @@ fn include_tolerates_stray_open_brackets_before_arguments() {
                 \n\
                 ]]\n";
 
-    let (output, pages) = include(text, &settings, DebugIncluder, || unreachable!())
-        .expect("include failed");
+    let (output, pages) = include(
+        text,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("include failed");
 
     assert_eq!(
         pages,
@@ -705,8 +750,13 @@ fn include_without_stray_brackets_is_unchanged() {
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let text = "[[include component:info\nitem-number= PLAIN\n|clearance= 1\n]]\n";
 
-    let (output, pages) = include(text, &settings, DebugIncluder, || unreachable!())
-        .expect("include failed");
+    let (output, pages) = include(
+        text,
+        &settings,
+        DebugIncluder::first_missing(),
+        || unreachable!(),
+    )
+    .expect("include failed");
 
     assert_eq!(pages, vec![PageRef::page_only("component:info")]);
     for expected in ["item-number", "PLAIN", "clearance"] {

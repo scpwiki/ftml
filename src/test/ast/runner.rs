@@ -44,7 +44,7 @@ macro_rules! settings {
 }
 
 impl TestUniverse {
-    pub fn run(&self, skip_tests: &[&str], only_tests: &[&str]) -> TestStats {
+    pub fn run(&self, skip_tests: &[String], only_tests: &[String]) -> TestStats {
         let mut stats = TestStats::new();
         for (test_name, test) in &self.tests {
             if only_tests.is_empty() || test_applies(test_name, only_tests) {
@@ -60,7 +60,7 @@ impl TestUniverse {
         stats
     }
 
-    pub fn update(&self, test_dir: &Path, skip_tests: &[&str], only_tests: &[&str]) {
+    pub fn update(&self, test_dir: &Path, skip_tests: &[String], only_tests: &[String]) {
         let mut path = PathBuf::from(test_dir);
         for (test_name, test) in &self.tests {
             if (only_tests.is_empty() || test_applies(test_name, only_tests))
@@ -111,8 +111,7 @@ impl Test {
         crate::preprocess(&mut text);
         let tokens = crate::tokenize(&text);
         let result = crate::parse(&tokens, &page_info, &parse_settings);
-        let (mut tree, actual_errors) = result.into();
-        tree.wikitext_len = 0;
+        let (tree, actual_errors) = result.into();
 
         let mut result = TestResult::Pass;
 
@@ -199,8 +198,7 @@ impl Test {
         crate::preprocess(&mut text);
         let tokens = crate::tokenize(&text);
         let result = crate::parse(&tokens, &page_info, &parse_settings);
-        let (mut tree, errors) = result.into();
-        tree.wikitext_len = 0;
+        let (tree, errors) = result.into();
 
         macro_rules! update {
             ($write_func:ident, $object:expr, $filename:expr $(,)?) => {{
@@ -272,13 +270,13 @@ impl Test {
     }
 }
 
-fn test_applies(test_name: &str, patterns: &[&str]) -> bool {
-    for &pattern in patterns {
+fn test_applies(test_name: &str, patterns: &[String]) -> bool {
+    for pattern in patterns {
         if pattern == test_name {
             return true;
         }
 
-        if pattern.ends_with('/') && test_name.starts_with(pattern) {
+        if pattern.ends_with('/') && test_name.starts_with(pattern.as_str()) {
             return true;
         }
     }

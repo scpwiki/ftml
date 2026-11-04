@@ -22,6 +22,7 @@ const REFERENCE_FILES: &[&str] = &[
 ];
 
 const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
+    "tests--fixtures--parity-gaps--comment-anchor-label-owner",
     "tests--fixtures--parity-gaps--comment-close-exact",
     "tests--fixtures--parity-gaps--comment-close-extended",
     "tests--fixtures--parity-gaps--comment-nonadjacent-close",
@@ -54,6 +55,10 @@ const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
     "tests--fixtures--parity-gaps--comment-parserfn-condition-owner",
     "tests--fixtures--parity-gaps--comment-parserfn-true-branch-owner",
     "tests--fixtures--parity-gaps--comment-parserfn-opener-owner",
+    "tests--fixtures--parity-gaps--comment-footnote-prefix-owner",
+    "tests--fixtures--parity-gaps--comment-line-owner-code-prefix",
+    "tests--fixtures--parity-gaps--comment-math-close-join",
+    "tests--fixtures--parity-gaps--comment-separator-join",
     "tests--fixtures--parity-gaps--comment-variable-token",
     "tests--fixtures--parity-gaps--comment-variable-name-owner",
     "tests--fixtures--parity-gaps--comment-autourl-joined",
@@ -132,6 +137,53 @@ const REVIEWED_BRANCH_WITNESSES: &[&str] = &[
     "tests--fixtures--parity-gaps--content-separator-span-crossing",
     "tests--fixtures--parity-gaps--content-separator-escaped",
 ];
+
+const REVIEWED_BRANCH_FAMILIES: &[&str] = &[
+    "comment-anchor",
+    "comment-attribute",
+    "comment-autourl",
+    "comment-block",
+    "comment-close",
+    "comment-code",
+    "comment-crlf",
+    "comment-date",
+    "comment-delimiter",
+    "comment-email",
+    "comment-footnote",
+    "comment-hidden",
+    "comment-html",
+    "comment-iframe",
+    "comment-image",
+    "comment-join",
+    "comment-line",
+    "comment-link",
+    "comment-list",
+    "comment-math",
+    "comment-nested",
+    "comment-nonadjacent",
+    "comment-parserfn",
+    "comment-prefix",
+    "comment-raw",
+    "comment-separator",
+    "comment-single",
+    "comment-span",
+    "comment-split",
+    "comment-style",
+    "comment-table",
+    "comment-triple",
+    "comment-unclosed",
+    "comment-unmatched",
+    "comment-variable",
+    "content-separator",
+];
+
+fn branch_family(case_id: &str) -> &str {
+    let slug = case_id.rsplit("--").next().unwrap_or(case_id);
+    match slug.match_indices('-').nth(1) {
+        Some((index, _)) => &slug[..index],
+        None => slug,
+    }
+}
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -228,8 +280,33 @@ fn high_risk_comment_and_separator_branches_have_reviewed_live_evidence() {
     }
     for case_id in REVIEWED_BRANCH_WITNESSES {
         assert!(
+            campaign_ids.contains(case_id),
+            "reviewed branch witness is not a campaign case: {case_id}"
+        );
+        assert!(
             current_refs.contains_key(*case_id),
             "reviewed parser/preprocessor branch lost its live witness: {case_id}"
+        );
+    }
+    for case_id in &campaign_ids {
+        let family = branch_family(case_id);
+        assert!(
+            REVIEWED_BRANCH_FAMILIES.contains(&family),
+            "campaign case belongs to an unreviewed branch family: {case_id} ({family})"
+        );
+    }
+    for family in REVIEWED_BRANCH_FAMILIES {
+        assert!(
+            campaign_ids
+                .iter()
+                .any(|case_id| branch_family(case_id) == *family),
+            "reviewed branch family has no campaign cases: {family}"
+        );
+        assert!(
+            REVIEWED_BRANCH_WITNESSES
+                .iter()
+                .any(|case_id| branch_family(case_id) == *family),
+            "reviewed branch family has no live witness: {family}"
         );
     }
 

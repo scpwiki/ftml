@@ -751,11 +751,13 @@ fn empty_page_includes_are_rejected() {
 fn malformed_include_prefixes_are_skipped_once() {
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
     let input = "[[include :scp-wiki:]]\n[[include component:ok]]";
-    let (output, pages) =
-        ftml::include(input, &settings, DebugIncluder, || -> Infallible {
-            unreachable!("debug includer should match include requests")
-        })
-        .expect("include preprocessing should not fail");
+    let (output, pages) = ftml::include(
+        input,
+        &settings,
+        DebugIncluder::first_missing(),
+        || -> Infallible { unreachable!("debug includer should match include requests") },
+    )
+    .expect("include preprocessing should not fail");
 
     assert!(output.contains("[[include :scp-wiki:]]"));
     assert!(output.contains("<INCLUDED-PAGE component:ok {}>"));
