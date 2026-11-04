@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "",
+                    "key": [],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "value"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
