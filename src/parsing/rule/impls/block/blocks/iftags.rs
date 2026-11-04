@@ -97,6 +97,7 @@ fn literal_span_gate<'r, 't>(
 
     let (pairing_end, _) = parser.wikidot_iftags_pairing_end();
     let designated = parser.wikidot_iftags_body_end();
+    let mut line_breaks: Vec<(usize, usize)> = Vec::new();
     match (pairing_end, designated) {
         // This gate's pairing reaches or passes the enclosing span's end:
         // consume up to (not including) the designated closer.
@@ -104,6 +105,7 @@ fn literal_span_gate<'r, 't>(
             while parser.current().span.start < d
                 && parser.current().token != Token::InputEnd
             {
+                record_line_break(parser, &mut line_breaks);
                 parser.step()?;
             }
         }
@@ -114,9 +116,11 @@ fn literal_span_gate<'r, 't>(
                 while parser.current().token != Token::RightBlock
                     && parser.current().token != Token::InputEnd
                 {
+                    record_line_break(parser, &mut line_breaks);
                     parser.step()?;
                 }
                 if parser.current().token == Token::RightBlock {
+                    record_line_break(parser, &mut line_breaks);
                     parser.step()?;
                 }
                 break;
@@ -124,6 +128,7 @@ fn literal_span_gate<'r, 't>(
             if token.span.start > pe || token.token == Token::InputEnd {
                 break;
             }
+            record_line_break(parser, &mut line_breaks);
             parser.step()?;
         },
         // Unpairable here: the head alone is the literal unit; the rest of
@@ -132,7 +137,51 @@ fn literal_span_gate<'r, 't>(
     }
 
     let end = parser.current().span.start;
-    ok!(true; Element::Text(Cow::Borrowed(&text[start..end])), Vec::new())
+    ok!(true; literal_unit_elements(text, start, end, &line_breaks), Vec::new())
+}
+
+/// Record the current token's span if it is a line or paragraph break,
+/// so a literal gate unit can reproduce the breaks its text contains.
+fn record_line_break(parser: &Parser<'_, '_>, line_breaks: &mut Vec<(usize, usize)>) {
+    let token = parser.current();
+    if matches!(token.token, Token::LineBreak | Token::ParagraphBreak) {
+        line_breaks.push((token.span.start, token.span.end));
+    }
+}
+
+/// Build the elements for a literal gate unit: its source text, with a
+/// line-break element wherever the consumed tokens held a line or
+/// paragraph break (a paragraph break flattens to one line break, as
+/// elsewhere in a segment body). Live Wikidot resolves the enclosing
+/// segment at the text level, so breaks inside the unit render as
+/// breaks, not as raw newlines inside one text run.
+fn literal_unit_elements<'t>(
+    source: &'t str,
+    start: usize,
+    end: usize,
+    line_breaks: &[(usize, usize)],
+) -> Elements<'t> {
+    if line_breaks.is_empty() {
+        return Elements::Single(Element::Text(Cow::Borrowed(&source[start..end])));
+    }
+
+    let mut elements = Vec::with_capacity(line_breaks.len() * 2 + 1);
+    let mut chunk_start = start;
+    for &(break_start, break_end) in line_breaks {
+        if break_start > chunk_start {
+            elements.push(Element::Text(Cow::Borrowed(
+                &source[chunk_start..break_start],
+            )));
+        }
+        if !matches!(elements.last(), Some(Element::LineBreak)) {
+            elements.push(Element::LineBreak);
+        }
+        chunk_start = break_end;
+    }
+    if chunk_start < end {
+        elements.push(Element::Text(Cow::Borrowed(&source[chunk_start..end])));
+    }
+    Elements::Multiple(elements)
 }
 
 /// Whether the block opener recovered from the parser's position sits
@@ -190,11 +239,11 @@ fn parse_fn<'r, 't>(
 
     let opener_at_line_start = opener_starts_line(parser, name);
 
-    // Inside a matched Wikidot iftags span, iftags tags are literal text:
+    // Inside a matched iftags span, iftags tags are literal text:
     // the enclosing span's pairing was decided at the text level and its
     // body is never rescanned (ftml #792). Consume this gate's own paired
     // unit as literal text, without evaluating its condition.
-    if parser.settings().layout.legacy() && parser.in_wikidot_iftags_span() {
+    if parser.in_wikidot_iftags_span() {
         return literal_span_gate(parser, name);
     }
 
@@ -216,32 +265,43 @@ fn parse_fn<'r, 't>(
         check_iftags(parser.page_info(), &conditions)
     };
 
-    // Wikidot pairing (#792): in a visible context, the opener pairs with
+    // IfTags pairing (#792): in a visible context, the opener pairs with
     // the closer the pairing search chooses, not the closer proper nesting
     // would pick; the gather below is restricted to that designated closer
-    // and nested iftags gates are literal inside the span. An unpairable opener
-    // renders literally, as before. Gates parsed while a hidden body is
-    // discarded, gates inside blockquote bodies, and false gates whose only
-    // closers sit inside regions the search cannot see into all keep the
-    // legacy guards and gathers (hidden bodies discard one gate at a time,
-    // fail-closed).
+    // and nested iftags gates are literal inside the span. An unpairable
+    // opener renders literally, as before. Gates parsed while a hidden body
+    // is discarded, gates inside blockquote bodies, and false gates whose
+    // only closers sit inside regions the search cannot see into all keep
+    // the guards and gathers below (hidden bodies discard one gate at a
+    // time, fail-closed).
     //
-    // The wikijump layout takes the missing-closer guard as well (below):
-    // a gate with no closer is not a gate at all, so the rule fails and
-    // the opener renders literally, matching live Wikidot, which renders
-    // both unclosed forms as plain text. Without the guard, the wikijump
+    // The pairing model is live Wikidot's in both layouts: saved pages
+    // never evaluate a nested gate, in either the kept-body or the
+    // discarded-body direction (saved-page probes, 2026-11-04). Proper
+    // nesting in the wikijump layout evaluated nested gates and, for a
+    // false outer gate whose only closer belonged to a nested gate,
+    // discarded text past the designated closer as well.
+    //
+    // Both layouts also take the missing-closer guard: a gate with no
+    // closer is not a gate at all, so the rule fails and the opener
+    // renders literally, matching live Wikidot, which renders both
+    // unclosed forms as plain text. Without the guard, the wikijump
     // false-condition path discarded elements to the end of the input
     // and reported success, silently swallowing the rest of the document.
     let legacy = parser.settings().layout.legacy();
     let mut designated_end = None;
-    if legacy && !parser.discarding_hidden_body() && !parser.in_quote_body() {
+    if !parser.discarding_hidden_body() && !parser.in_quote_body() {
         let (pairing, _) = parser.wikidot_iftags_pairing_end();
         match pairing {
             Some(end) => {
                 designated_end = Some(end);
             }
             None => {
-                if include_body || !parser.has_body_end_block(&BLOCK_IFTAGS) {
+                if legacy {
+                    if include_body || !parser.has_body_end_block(&BLOCK_IFTAGS) {
+                        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                    }
+                } else if !parser.has_body_end_block(&BLOCK_IFTAGS) {
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
             }

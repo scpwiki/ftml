@@ -892,10 +892,10 @@ fn false_iftags_raw_body_end_markers_stay_hidden() {
 
     for layout in [Layout::Wikijump, Layout::Wikidot] {
         for raw_body in raw_bodies {
-            if layout == Layout::Wikidot
-                && (raw_body.starts_with("[[raw]]")
-                    || raw_body.starts_with("[[math]]\n\\text{")
-                    || raw_body.starts_with("[!-- "))
+            if raw_body.starts_with("[!-- ")
+                || (layout == Layout::Wikidot
+                    && (raw_body.starts_with("[[raw]]")
+                        || raw_body.starts_with("[[math]]\n\\text{")))
             {
                 let input = format!(
                     "[[iftags +missing]]\n{raw_body}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
@@ -972,7 +972,6 @@ fn false_iftags_malformed_hidden_structures_fail_closed() {
         "[[module CSS]]\n[[/iftags]]\n.unclosed { color: red; }",
         "[[module ListPages]]\n[[/iftags]]\nunclosed module",
         "[[code @=\"bad\"]]\n[[/iftags]]\n[[html]]\n<b>malformed head</b>\n[[/html]]",
-        "[[iftags +missing]]\ninner unclosed\n[[/iftags]]\n[[html]]\n<b>unclosed nested</b>\n[[/html]]",
     ];
 
     for hidden in malformed {
@@ -1026,6 +1025,27 @@ fn wikidot_false_iftags_single_nested_close_ends_the_outer_gate() {
 
     assert_eq!(render_text(&tree, Layout::Wikidot), "");
     assert_eq!(tree.html_blocks, ["\n<b>unclosed nested</b>\n"]);
+}
+
+#[test]
+fn native_false_iftags_single_nested_close_ends_the_outer_gate() {
+    // Pairing outcome, live-verified on a saved page (2026-11-04): the
+    // single nested closer ends the outer gate in the native layout as
+    // it does in the legacy one, so the html block after it is outside
+    // the gate. Only the gate's own body text stays hidden.
+    let input = concat!(
+        "[[iftags +missing]]\n",
+        "[[iftags +missing]]\n",
+        "inner unclosed\n",
+        "[[/iftags]]\n",
+        "[[html]]\n",
+        "<b>unclosed nested</b>\n",
+        "[[/html]]",
+    );
+    let (tree, _) = parse_with_errors(input, Layout::Wikijump);
+
+    assert_eq!(render_text(&tree, Layout::Wikijump), "");
+    assert_eq!(tree.html_blocks, ["<b>unclosed nested</b>"]);
 }
 
 #[test]
