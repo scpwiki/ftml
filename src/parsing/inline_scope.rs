@@ -2394,7 +2394,7 @@ fn vanished_list_item(item: &ListItem) -> bool {
         } => attributes.get().is_empty() && all_whitespace_text(elements),
         ListItem::SubList { .. } => false,
     }
-||||||| parent of e8c512ab7 (Wikidot inline scopes: live/pending/dead state, anchor partial stream, empty div vanish (L8.1))
+}
 
 fn emptied_block_vanishes(element: &Element<'_>) -> bool {
     matches!(
