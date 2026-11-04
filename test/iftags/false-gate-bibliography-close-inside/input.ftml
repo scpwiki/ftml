@@ -1,0 +1,4 @@
+[[bibliography]]
+: key : a[[iftags +zzz]]b
+[[/bibliography]]
+c[[/iftags]]d
