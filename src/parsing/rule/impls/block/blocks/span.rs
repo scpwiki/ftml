@@ -114,7 +114,8 @@ fn parse_fn<'r, 't>(
     assert!(!flag_star, "Span doesn't allow star flag");
     assert_block_name(&BLOCK_SPAN, name);
 
-    let speculative_failure_cache = SpeculativeSpanFailureCache::new(parser, opener_start);
+    let speculative_failure_cache =
+        SpeculativeSpanFailureCache::new(parser, opener_start);
     if speculative_failure_cache.replays_cached_failure(parser) {
         return Err(parser.make_end_of_input_err());
     }

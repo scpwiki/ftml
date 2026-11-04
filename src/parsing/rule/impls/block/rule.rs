@@ -324,8 +324,14 @@ where
         return Err(error);
     }
 
-    let result =
-        (block.parse_fn)(parser, name, block_opener_start, flag_star, flag_score, in_head);
+    let result = (block.parse_fn)(
+        parser,
+        name,
+        block_opener_start,
+        flag_star,
+        flag_score,
+        in_head,
+    );
     if let Err(error) = &result {
         memoization.record_failure(parser, block, opener_start, error);
     }

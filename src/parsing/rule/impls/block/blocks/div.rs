@@ -464,8 +464,11 @@ fn parse_fn<'r, 't>(
     }
     let cacheable_wikijump_failure = !parser.settings().layout.legacy();
     if cacheable_wikijump_failure
-        && parser.block_end_scan_outcome((WIKIJUMP_DIV_FAILURE_CACHE, opener_start, false))
-            == Some(false)
+        && parser.block_end_scan_outcome((
+            WIKIJUMP_DIV_FAILURE_CACHE,
+            opener_start,
+            false,
+        )) == Some(false)
     {
         return Err(parser.make_end_of_input_err());
     }
@@ -556,7 +559,8 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy()
         && !head_started_physical_line
         && !follows_inline_structural_close
-        && (parser.has_runtime_literal_in_range(opener_start..parser.current().span.start)
+        && (parser
+            .has_runtime_literal_in_range(opener_start..parser.current().span.start)
             || parser.body_has_delayed_input(&BLOCK_DIV))
     {
         let _ = parser.get_body_text(&BLOCK_DIV)?;

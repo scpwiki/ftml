@@ -3474,7 +3474,10 @@ mod tests {
             .map_err(|error| error.kind())
     }
 
-    fn head_word_raw(input: &str, layout: Layout) -> Result<(String, bool), ParseErrorKind> {
+    fn head_word_raw(
+        input: &str,
+        layout: Layout,
+    ) -> Result<(String, bool), ParseErrorKind> {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
         let tokenization = crate::tokenize(input);
