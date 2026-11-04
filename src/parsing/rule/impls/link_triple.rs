@@ -21,8 +21,9 @@
 use super::prelude::*;
 use crate::data::PageRef;
 use crate::parsing::collect::{
-    collect_comment_elided_keep, collect_text_resolved, consume_iftags_segment,
-    consume_valid_comment, iftags_segment,
+    collect_comment_elided_keep, collect_text_resolved_fused,
+    complete_fused_bracket_close, consume_iftags_segment_fused, consume_valid_comment,
+    iftags_segment_fused,
 };
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
@@ -110,7 +111,7 @@ fn try_consume_link<'r, 't>(
         )
     } else {
         let (url, last) =
-            collect_text_resolved(parser, rule, &url_close, url_invalid, None)?;
+            collect_text_resolved_fused(parser, rule, &url_close, url_invalid, None)?;
         let authored = is_url(url.trim_start());
         (url, last, authored)
     };
@@ -240,7 +241,7 @@ fn build_separate<'r, 't>(
             }
         }
     } else {
-        collect_text_resolved(parser, rule, &label_close, label_invalid, None)?.0
+        collect_text_resolved_fused(parser, rule, &label_close, label_invalid, None)?.0
     };
 
     let label = if legacy {
@@ -338,7 +339,13 @@ where
                 }
                 return match visible_label {
                     Some(mut label) => {
-                        label.push_str(&source[segment_start..end]);
+                        // The closing token can start inside the
+                        // last resolved segment (a fused trailing
+                        // edge whose bracket run overshoots this
+                        // close): the label is already complete.
+                        if end >= segment_start {
+                            label.push_str(&source[segment_start..end]);
+                        }
                         Ok(WikidotLabelCandidate::Label(Cow::Owned(label)))
                     }
                     None => Ok(WikidotLabelCandidate::Label(Cow::Borrowed(
@@ -437,8 +444,8 @@ where
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
 
-            Token::LeftBlock if iftags_segment(parser).is_some() => {
-                let segment = consume_iftags_segment(parser)?
+            Token::LeftBlock if iftags_segment_fused(parser).is_some() => {
+                let segment = consume_iftags_segment_fused(parser)?
                     .expect("iftags segment presence was just checked");
                 let label = visible_label.get_or_insert_with(String::new);
                 label.push_str(&source[segment_start..segment.range.start]);
@@ -446,6 +453,52 @@ where
                     label.push_str(&source[segment.body.clone()]);
                 }
                 segment_start = segment.range.end;
+
+                // A segment at the label's trailing edge ends inside
+                // the fused `]]]` token: the run it starts is this
+                // label's own closing run.
+                if segment.fused_closer {
+                    match complete_fused_bracket_close(parser, "]]]") {
+                        Some(last) => {
+                            if preserve_source {
+                                return Ok(WikidotLabelCandidate::PreserveSource(
+                                    Cow::Borrowed(&source[source_start..last.span.end]),
+                                ));
+                            }
+                            return Ok(WikidotLabelCandidate::Label(Cow::Owned(
+                                visible_label.unwrap_or_default(),
+                            )));
+                        }
+                        None if preserve_source => {
+                            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                        }
+                        None => {
+                            // The bracket run overshoots the close
+                            // (extra authored brackets) but nothing
+                            // but brackets remains: the label is
+                            // complete; the leftover brackets render
+                            // as following text. Otherwise the run's
+                            // first bracket was label text and the
+                            // collection continues below.
+                            let only_brackets_left = std::iter::once(parser.current())
+                                .chain(parser.remaining())
+                                .all(|token| {
+                                    matches!(
+                                        token.token,
+                                        Token::RightBracket
+                                            | Token::RightBlock
+                                            | Token::RightLink
+                                            | Token::InputEnd
+                                    )
+                                });
+                            if only_brackets_left {
+                                return Ok(WikidotLabelCandidate::Label(Cow::Owned(
+                                    visible_label.unwrap_or_default(),
+                                )));
+                            }
+                        }
+                    }
+                }
             }
 
             Token::LeftBlock => {

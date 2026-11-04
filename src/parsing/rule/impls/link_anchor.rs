@@ -22,7 +22,9 @@ use super::RULE_COMMENT;
 use super::prelude::*;
 use crate::id_prefix::isolate_ids;
 use crate::parsing::ParseSuccess;
-use crate::parsing::collect::{collect_text_resolved, consume_iftags_segment};
+use crate::parsing::collect::{
+    collect_text_resolved_fused, consume_iftags_segment, consume_iftags_segment_fused,
+};
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use std::borrow::Cow;
@@ -76,7 +78,14 @@ where
     let url = if parser.settings().layout.legacy() {
         collect_wikidot_anchor_name(parser)?
     } else {
-        collect_text_resolved(parser, RULE_LINK_ANCHOR, &url_close, &url_invalid, None)?.0
+        collect_text_resolved_fused(
+            parser,
+            RULE_LINK_ANCHOR,
+            &url_close,
+            &url_invalid,
+            None,
+        )?
+        .0
     };
 
     if parser.settings().layout.legacy()
@@ -249,16 +258,29 @@ where
                 parser.update(&comment_parser);
                 copied_until = parser.current().span.start;
             }
-            Token::LeftBlock => match consume_iftags_segment(parser)? {
+            Token::LeftBlock => match consume_iftags_segment_fused(parser)? {
                 Some(segment) => {
-                    let output = without_comments.get_or_insert_with(|| {
-                        String::with_capacity(segment.range.start - start)
-                    });
-                    output.push_str(&source[copied_until..segment.range.start]);
-                    if segment.include_body {
-                        output.push_str(&source[segment.body.clone()]);
+                    {
+                        let output = without_comments.get_or_insert_with(|| {
+                            String::with_capacity(segment.range.start - start)
+                        });
+                        output.push_str(&source[copied_until..segment.range.start]);
+                        if segment.include_body {
+                            output.push_str(&source[segment.body.clone()]);
+                        }
                     }
                     copied_until = segment.range.end;
+
+                    if segment.fused_closer {
+                        // The segment ended inside a fused bracket
+                        // token whose leftover bracket is the link's
+                        // own closing bracket; the token is already
+                        // consumed.
+                        return Ok(WikidotAnchorLabel {
+                            text: Cow::Owned(without_comments.take().unwrap()),
+                            delayed,
+                        });
+                    }
                 }
                 None => {
                     parser.step()?;
@@ -293,7 +315,7 @@ fn collect_anchor_text<'r, 't>(
 where
     'r: 't,
 {
-    Ok(collect_text_resolved(parser, RULE_LINK_ANCHOR, close, invalid, None)?.0)
+    Ok(collect_text_resolved_fused(parser, RULE_LINK_ANCHOR, close, invalid, None)?.0)
 }
 
 #[cfg(test)]

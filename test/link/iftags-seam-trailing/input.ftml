@@ -1,0 +1,8 @@
+[https://example.com/ hello[[iftags -zzz]][[/iftags]]]
+[https://example.com/ hello[[iftags -zzz]]WORLD[[/iftags]]]
+[https://example.com/ hello[[iftags +zzz]]WORLD[[/iftags]]]
+[https://example.com/ hello[[iftags +zzz]][[/iftags]]]
+[[[some-page|label[[iftags -zzz]][[/iftags]]]]]
+[[[some-page|label[[iftags -zzz]]X[[/iftags]]]]]
+[[[some-page|label[[iftags +zzz]]X[[/iftags]]]]]
+[[[page[[iftags -zzz]][[/iftags]]]]]

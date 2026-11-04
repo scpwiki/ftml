@@ -10,7 +10,10 @@
  * (at your option) any later version.
  */
 
-use super::iftags::consume_iftags_segment;
+use super::iftags::{
+    bracket_close_text, complete_fused_bracket_close, consume_iftags_segment_fused,
+    iftags_segment_fused,
+};
 use super::prelude::*;
 use crate::parsing::rule::impls::comment_closer_token_count;
 use std::borrow::Cow;
@@ -179,7 +182,16 @@ where
 
         if parser.evaluate_any(closes) {
             let last = parser.current();
-            let end = last.span.start;
+            // A resolved segment at the field's trailing edge can
+            // end inside the closing token, its closer fused with
+            // the field's own closing bracket: the field then ends
+            // at the segment's end, not at the token's start.
+            let end = comments
+                .iter()
+                .map(|range: &Range<usize>| range.end)
+                .max()
+                .unwrap_or_default()
+                .max(last.span.start);
             let field =
                 CommentElidedText::new(parser.full_text().inner(), start..end, comments);
             if last.token != Token::InputEnd {
@@ -198,13 +210,102 @@ where
         if parser.current().token == Token::LeftComment {
             comments.push(consume_valid_comment(parser)?);
         } else if parser.current().token == Token::LeftBlock
-            && let Some(segment) = consume_iftags_segment(parser)?
+            && let Some(segment) = iftags_segment_fused(parser)
         {
+            // The token a fused segment ends inside, captured before
+            // consumption moves past it: a caller matching on the
+            // terminating token may need it below.
+            let straddle = if segment.fused_closer {
+                std::iter::once(parser.current())
+                    .chain(parser.remaining())
+                    .find(|token| {
+                        token.span.start < segment.range.end
+                            && token.span.end > segment.range.end
+                    })
+            } else {
+                None
+            };
+            let segment = consume_iftags_segment_fused(parser)?
+                .expect("segment presence was just checked");
+
             // An iftags segment inside the field resolves where the
             // block rule cannot run: its elision ranges join the
             // comments so the materialized text keeps only the body
             // when the conditions hold, and nothing when they do not.
             comments.extend(segment.elisions());
+
+            // A segment at the field's trailing edge ends inside a
+            // fused bracket token: the token's leftover bracket,
+            // extended by any bracket tokens after it, is this
+            // field's closing run when it spells one of the closing
+            // tokens exactly.
+            if let Some(straddle) = straddle {
+                let fused = closes.iter().find_map(|close| match close {
+                    ParseCondition::CurrentToken(token) => {
+                        let close_text = bracket_close_text(*token)?;
+                        if close_text.len() == 1 {
+                            return Some(straddle);
+                        }
+                        let last = complete_fused_bracket_close(parser, close_text)?;
+                        Some(if *token == straddle.token {
+                            straddle
+                        } else {
+                            last
+                        })
+                    }
+                    ParseCondition::TokenPair(..) => None,
+                });
+                if let Some(last) = fused {
+                    let end = comments
+                        .iter()
+                        .map(|range: &Range<usize>| range.end)
+                        .max()
+                        .unwrap_or_default();
+                    let field = CommentElidedText::new(
+                        parser.full_text().inner(),
+                        start..end,
+                        comments,
+                    );
+                    return Ok((field, last));
+                }
+
+                // The run overshoots the close (extra authored
+                // brackets) but nothing but brackets remains: the
+                // field ends at the fused token, and the leftover
+                // brackets render as following text.
+                let only_brackets_left = std::iter::once(parser.current())
+                    .chain(parser.remaining())
+                    .all(|token| {
+                        matches!(
+                            token.token,
+                            Token::RightBracket
+                                | Token::RightBlock
+                                | Token::RightLink
+                                | Token::InputEnd
+                        )
+                    });
+                if only_brackets_left
+                    && closes.iter().any(|close| {
+                        matches!(
+                            close,
+                            ParseCondition::CurrentToken(token)
+                                if *token == straddle.token
+                        )
+                    })
+                {
+                    let end = comments
+                        .iter()
+                        .map(|range: &Range<usize>| range.end)
+                        .max()
+                        .unwrap_or_default();
+                    let field = CommentElidedText::new(
+                        parser.full_text().inner(),
+                        start..end,
+                        comments,
+                    );
+                    return Ok((field, straddle));
+                }
+            }
         } else {
             parser.step()?;
         }
