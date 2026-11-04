@@ -1,0 +1,83 @@
+[
+    {
+        "token": "line-break",
+        "rule": "link-anchor",
+        "span": [
+            10,
+            11
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-bracket-anchor",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            7,
+            10
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "line-break",
+        "rule": "link-anchor",
+        "span": [
+            20,
+            21
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-bracket-anchor",
+        "rule": "fallback",
+        "span": [
+            11,
+            13
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "link-anchor",
+        "span": [
+            44,
+            44
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-bracket-anchor",
+        "rule": "fallback",
+        "span": [
+            33,
+            35
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            40,
+            43
+        ],
+        "kind": "no-rules-match"
+    }
+]

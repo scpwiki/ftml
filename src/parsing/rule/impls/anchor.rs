@@ -39,6 +39,32 @@ fn try_consume_fn<'r, 't>(
 
     parser.get_token(Token::Whitespace, ParseErrorKind::RuleFailed)?;
 
+    try_consume_anchor_body(parser, source_start, nested_in_literal_triple_link)
+}
+
+pub(super) fn try_consume_wikidot_triple_anchor<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    source_start: usize,
+) -> ParseResult<'r, 't, Elements<'t>>
+where
+    'r: 't,
+{
+    if parser.current().token != Token::NumberedItem || parser.current().slice != "#" {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    parser.step()?;
+    parser.get_token(Token::Whitespace, ParseErrorKind::RuleFailed)?;
+    try_consume_anchor_body(parser, source_start, true)
+}
+
+fn try_consume_anchor_body<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    source_start: usize,
+    nested_in_literal_triple_link: bool,
+) -> ParseResult<'r, 't, Elements<'t>>
+where
+    'r: 't,
+{
     // Gather name for anchor
     // The scanner assigns a three-bracket run to `RightLink`. Wikidot gives
     // the first two brackets to a valid named anchor and leaves the third as

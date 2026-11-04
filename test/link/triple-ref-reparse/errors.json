@@ -1,0 +1,29 @@
+[
+    {
+        "token": "line-break",
+        "rule": "link-triple",
+        "span": [
+            86,
+            87
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-link",
+        "rule": "fallback",
+        "span": [
+            75,
+            78
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            84,
+            86
+        ],
+        "kind": "no-rules-match"
+    }
+]

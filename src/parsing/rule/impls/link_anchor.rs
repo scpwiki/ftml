@@ -34,6 +34,7 @@ use wikidot_normalize::normalize;
 struct WikidotAnchorLabel<'t> {
     text: Cow<'t, str>,
     delayed: Vec<Element<'t>>,
+    residual_brackets: usize,
 }
 
 pub const RULE_LINK_ANCHOR: Rule = Rule {
@@ -60,6 +61,19 @@ where
     }
     parser.step()?;
     try_consume_anchor(parser, Some(AnchorTarget::NewTab))
+}
+
+pub(super) fn try_consume_wikidot_bracket_anchor<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Elements<'t>>
+where
+    'r: 't,
+{
+    if parser.current().token != Token::NumberedItem || parser.current().slice != "#" {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    parser.step()?;
+    try_consume_anchor(parser, None)
 }
 
 fn try_consume_anchor<'r, 't>(
@@ -121,12 +135,14 @@ where
     let WikidotAnchorLabel {
         text: label,
         delayed,
+        residual_brackets,
     } = if parser.settings().layout.legacy() {
         collect_wikidot_anchor_label(parser)?
     } else {
         WikidotAnchorLabel {
             text: collect_anchor_text(parser, &label_close, &label_invalid)?,
             delayed: Vec::new(),
+            residual_brackets: 0,
         }
     };
 
@@ -145,8 +161,11 @@ where
         label: LinkLabel::Text(label),
         target,
     };
-    let mut output = Vec::with_capacity(1 + delayed.len());
+    let mut output = Vec::with_capacity(2 + delayed.len());
     output.push(element);
+    if residual_brackets > 0 {
+        output.push(Element::Text(Cow::Owned("]".repeat(residual_brackets))));
+    }
     output.extend(delayed);
     let elements: Elements = output.into();
     let paragraph_safe = elements.paragraph_safe();
@@ -234,8 +253,9 @@ where
 
     loop {
         match parser.current().token {
-            Token::RightBracket => {
+            Token::RightBracket | Token::RightBlock | Token::RightLink => {
                 let end = parser.current().span.start;
+                let residual_brackets = parser.current().slice.len() - 1;
                 if let Some(output) = without_comments.as_mut() {
                     output.push_str(&source[copied_until..end]);
                 }
@@ -246,6 +266,7 @@ where
                         None => Cow::Borrowed(&source[start..end]),
                     },
                     delayed,
+                    residual_brackets,
                 });
             }
             Token::LeftComment => {
@@ -281,6 +302,7 @@ where
                         return Ok(WikidotAnchorLabel {
                             text: Cow::Owned(without_comments.take().unwrap()),
                             delayed,
+                            residual_brackets: 0,
                         });
                     }
                 }
