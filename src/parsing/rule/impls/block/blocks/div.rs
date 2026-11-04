@@ -441,7 +441,10 @@ where
 
     // Scan-paired multiline heads form (like their top-level siblings);
     // only unpaired mid-line heads (and single-line ones) recover literal.
+    // Inside scored (literal-alias) bodies recovery still wins: those are
+    // error-recovery contexts where mid-line heads stay literal.
     let paired_multiline_head = body_start == BlockBodyStart::NextPhysicalLine
+        && !parser.in_wikidot_literal_alias_body()
         && parser
             .wikidot_block_pair_at_head_byte(owner_start)
             .is_some();
