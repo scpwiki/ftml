@@ -34,8 +34,8 @@ pub mod blocks;
 
 pub use self::arguments::Arguments;
 pub(crate) use self::parser::BlockBodyStart;
-pub use self::rule::{RULE_BLOCK, RULE_BLOCK_SKIP_NEWLINE, RULE_BLOCK_STAR};
 pub(crate) use self::rule::head_word_names_known_block;
+pub use self::rule::{RULE_BLOCK, RULE_BLOCK_SKIP_NEWLINE, RULE_BLOCK_STAR};
 
 #[derive(Clone)]
 pub struct BlockRule {

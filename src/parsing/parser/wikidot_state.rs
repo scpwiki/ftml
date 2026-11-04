@@ -391,9 +391,9 @@ fn div_stream_skip_comment(tokens: &[ExtractedToken<'_>], index: usize) -> Optio
             .count();
         if trailing_hyphens >= 2
             && trailing_hyphens < token.slice.len()
-            && tokens
-                .get(index + 1)
-                .is_some_and(|next| next.token == Token::RightBracket && next.slice == "]")
+            && tokens.get(index + 1).is_some_and(|next| {
+                next.token == Token::RightBracket && next.slice == "]"
+            })
         {
             return Some(index + 2);
         }

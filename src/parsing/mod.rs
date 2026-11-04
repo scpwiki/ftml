@@ -382,12 +382,11 @@ fn repair_bracket_run_tokenization<'t>(
             });
         if comment_head {
             let start = tokens[index].span.start;
-            let token_at =
-                |token: Token, span: std::ops::Range<usize>| ExtractedToken {
-                    token,
-                    slice: &source[span.clone()],
-                    span,
-                };
+            let token_at = |token: Token, span: std::ops::Range<usize>| ExtractedToken {
+                token,
+                slice: &source[span.clone()],
+                span,
+            };
             let mut candidate = tokens.clone();
             candidate.splice(
                 index..index + 3,
@@ -396,15 +395,19 @@ fn repair_bracket_run_tokenization<'t>(
                     token_at(Token::LeftComment, start + 2..start + 6),
                 ],
             );
-            if bracket_run_block_parses(&candidate, index, tokenization, page_info, settings)
-                || bracket_run_comment_head_resolves(
-                    &candidate,
-                    index,
-                    tokenization,
-                    page_info,
-                    settings,
-                )
-            {
+            if bracket_run_block_parses(
+                &candidate,
+                index,
+                tokenization,
+                page_info,
+                settings,
+            ) || bracket_run_comment_head_resolves(
+                &candidate,
+                index,
+                tokenization,
+                page_info,
+                settings,
+            ) {
                 tokens = candidate;
                 repaired = true;
                 index += 2;

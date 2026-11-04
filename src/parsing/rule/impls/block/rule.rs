@@ -98,9 +98,7 @@ where
     };
     let lookup_name: Cow<'t, str> = if name.ends_with('_') {
         match name {
-            Cow::Borrowed(name) => {
-                Cow::Borrowed(name.strip_suffix('_').unwrap_or(name))
-            }
+            Cow::Borrowed(name) => Cow::Borrowed(name.strip_suffix('_').unwrap_or(name)),
             Cow::Owned(mut name) => {
                 name.pop();
                 Cow::Owned(name)
