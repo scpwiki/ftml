@@ -21,6 +21,7 @@
 #[macro_use]
 mod macros;
 
+mod body_end;
 mod boolean;
 mod check_step;
 mod collect;
@@ -240,6 +241,11 @@ where
                 heading::normalize_wikidot_headings(&mut elements);
                 for footnote in &mut footnotes {
                     inline_scope::lower_wikidot_inline_size_scopes_inline(footnote);
+                }
+                for bibliography in bibliographies.slice_mut() {
+                    for (_, elements) in bibliography.slice_mut() {
+                        inline_scope::lower_wikidot_inline_size_scopes_inline(elements);
+                    }
                 }
             }
             debug!(

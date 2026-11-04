@@ -35,7 +35,8 @@ pub const BLOCK_HTML: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -50,13 +51,7 @@ fn parse_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
         let source = parser.full_text().inner();
-        let name_start = (name.as_ptr() as usize)
-            .checked_sub(source.as_ptr() as usize)
-            .expect("parsed HTML block name belongs to the source");
-        let owner_start = source[..name_start]
-            .rfind("[[")
-            .expect("parsed HTML block name follows its opener");
-        if owner_start > 0 && !source[..owner_start].ends_with('\n') {
+        if opener_start > 0 && !source[..opener_start].ends_with('\n') {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
     }
@@ -68,16 +63,10 @@ fn parse_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
         let source = parser.full_text().inner();
-        let name_start = (name.as_ptr() as usize)
-            .checked_sub(source.as_ptr() as usize)
-            .expect("parsed HTML block name belongs to the source");
-        let owner_start = source[..name_start]
-            .rfind("[[")
-            .expect("parsed HTML block name follows its opener");
         let mut owner = parser.clone();
         let _ = owner.get_body_text(&BLOCK_HTML)?;
         let owner_end = owner.current().span.start;
-        let generated = owner.generated_in_range(owner_start..owner_end);
+        let generated = owner.generated_in_range(opener_start..owner_end);
         let has_runtime = std::iter::once(parser.current())
             .chain(parser.remaining())
             .take_while(|token| token.span.start < owner_end)
@@ -85,7 +74,7 @@ fn parse_fn<'r, 't>(
         if generated.is_empty()
             && !has_runtime
             && authored_gallery_line_offset(
-                &source[owner_start..owner_end],
+                &source[opener_start..owner_end],
                 parser.settings().layout.legacy(),
             )
             .is_some()
@@ -94,14 +83,14 @@ fn parse_fn<'r, 't>(
         }
         let mut elements = if generated.is_empty() && !has_runtime {
             wikidot_literal_with_empty_scored_spans_elided(
-                &source[owner_start..owner_end],
+                &source[opener_start..owner_end],
             )
-            .unwrap_or_else(|| literal_elements(&source[owner_start..owner_end]))
+            .unwrap_or_else(|| literal_elements(&source[opener_start..owner_end]))
         } else {
-            literal_elements(&source[owner_start..owner_end])
+            literal_elements(&source[opener_start..owner_end])
         };
         parser.update(&owner);
-        if source[..owner_start].ends_with('\n')
+        if source[..opener_start].ends_with('\n')
             && let Elements::Multiple(elements) = &mut elements
         {
             elements.insert(0, Element::LineBreak);

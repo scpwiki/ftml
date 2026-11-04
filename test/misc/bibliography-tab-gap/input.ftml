@@ -1,0 +1,7 @@
+((bibcite alpha)) ((bibcite bell)) ((bibcite cyd))
+
+[[bibliography]]
+: alpha : Alpha text.
+: bell	: Bell text.
+:cyd	: Cyd text.
+[[/bibliography]]

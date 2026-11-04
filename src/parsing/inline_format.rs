@@ -194,12 +194,15 @@ fn normalize_sequence_scoped<'t>(
             | repair_same_family_pass(elements)
             | repair_crossed_pass(elements)
             | repair_raw_strike_pairs_pass(elements)
-            | repair_span_crossed_bold_pairs_pass(elements);
+            | repair_span_crossed_bold_pairs_pass(elements)
+            | repair_script_split_close_pass(elements)
+            | repair_script_pairs_pass(elements);
         // A monospace container's children are already owned content:
         // literal brace text there is content, never an unclosed opener
         // waiting for a link close, so the link-close repair must not
         // re-pair braces inside it.
         if !inside_monospace {
+            changed |= repair_monospace_split_close_pass(elements);
             changed |= repair_monospace_link_close_pass(elements);
         }
         changed |=
@@ -497,10 +500,271 @@ fn repair_raw_strike_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     changed
 }
 
-fn element_contains_link(element: &Element<'_>) -> bool {
+pub(crate) fn element_contains_link(element: &Element<'_>) -> bool {
     matches!(element, Element::Link { .. })
         || formatter_children(element)
             .is_some_and(|children| children.iter().any(element_contains_link))
+}
+
+fn is_shed_text(value: &str) -> bool {
+    !value.is_empty()
+        && value.chars().all(|c| {
+            matches!(
+                c,
+                ',' | '*'
+                    | '-'
+                    | '}'
+                    | '{'
+                    | '.'
+                    | ';'
+                    | ':'
+                    | '!'
+                    | ')'
+                    | ']'
+                    | '>'
+                    | '^'
+                    | '`'
+                    | '|'
+                    | '#'
+            )
+        })
+}
+
+fn shed_text_pair_split<'a>(value: &'a str, marker: &str) -> Option<(&'a str, &'a str)> {
+    if !is_shed_text(value) {
+        return None;
+    }
+    let start = value.find(marker)?;
+    Some((&value[..start], &value[start + marker.len()..]))
+}
+
+pub(crate) fn monospace_close_split(value: &str) -> Option<(&str, &str)> {
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'}' {
+            index += 1;
+            continue;
+        }
+        let run_end = index
+            + bytes[index..]
+                .iter()
+                .take_while(|byte| **byte == b'}')
+                .count();
+        if run_end - index >= 2 {
+            let before = &value[..index];
+            if before.is_empty() || is_shed_text(before) {
+                return Some((&value[..run_end - 2], &value[run_end..]));
+            }
+            return None;
+        }
+        index = run_end;
+    }
+    None
+}
+
+fn script_shell<'t>(kind: FormatKind) -> FormatShell<'t> {
+    let ctype = match kind {
+        FormatKind::Superscript => ContainerType::Superscript,
+        FormatKind::Subscript => ContainerType::Subscript,
+        _ => unreachable!("script shell requested for non-script kind"),
+    };
+    FormatShell::Container {
+        kind,
+        ctype,
+        attributes: AttributeMap::new(),
+    }
+}
+
+fn repair_script_split_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut output = Vec::with_capacity(elements.len());
+    let mut changed = false;
+
+    for element in mem::take(elements) {
+        let kind = match &element {
+            Element::Container(container) => match container.ctype() {
+                ContainerType::Superscript => FormatKind::Superscript,
+                ContainerType::Subscript => FormatKind::Subscript,
+                _ => {
+                    output.push(element);
+                    continue;
+                }
+            },
+            _ => {
+                output.push(element);
+                continue;
+            }
+        };
+        let (shell, mut children) =
+            FormatShell::into_parts(element).expect("formatter index has a shell");
+        match script_split_close(&children, kind) {
+            Some((child_index, prefix, suffix)) => {
+                let mut tail: Vec<Element<'t>> =
+                    children.drain(child_index + 1..).collect();
+                children.truncate(child_index);
+                if !prefix.is_empty() {
+                    children.push(Element::Text(Cow::Owned(prefix)));
+                }
+                output.push(shell.build(children));
+                if !suffix.is_empty() {
+                    output.push(Element::Text(Cow::Owned(suffix)));
+                }
+                output.append(&mut tail);
+                output.push(Element::Text(kind.close_marker().into()));
+                changed = true;
+            }
+            None => output.push(shell.build(children)),
+        }
+    }
+
+    *elements = output;
+    changed
+}
+
+fn script_split_close(
+    children: &[Element<'_>],
+    kind: FormatKind,
+) -> Option<(usize, String, String)> {
+    let marker = kind.close_marker();
+    (1..children.len()).find_map(|child_index| {
+        let Element::Text(value) = &children[child_index] else {
+            return None;
+        };
+        let (prefix, suffix) = shed_text_pair_split(value.as_ref(), marker)?;
+        if prefix.is_empty() && element_ends_with_ascii_space(&children[child_index - 1])
+        {
+            return None;
+        }
+        if !children[..child_index].iter().any(element_contains_link) {
+            return None;
+        }
+        Some((child_index, prefix.to_string(), suffix.to_string()))
+    })
+}
+
+fn repair_script_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+
+    while index < input.len() {
+        let kind = match input[index].as_ref() {
+            Some(element) if is_exact_text(element, "^^") => FormatKind::Superscript,
+            Some(element) if is_exact_text(element, ",,") => FormatKind::Subscript,
+            _ => {
+                output.push(take_element(&mut input, index));
+                index += 1;
+                continue;
+            }
+        };
+        let Some((close, prefix, suffix)) = script_pair_close(&input, index, kind) else {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        };
+        discard_range(&mut input, index..index + 1);
+        let mut contents = take_range(&mut input, index + 1..close);
+        if !prefix.is_empty() {
+            contents.push(Element::Text(Cow::Owned(prefix)));
+        }
+        discard_range(&mut input, close..close + 1);
+        output.push(script_shell(kind).build(contents));
+        if !suffix.is_empty() {
+            output.push(Element::Text(Cow::Owned(suffix)));
+        }
+        index = close + 1;
+        changed = true;
+    }
+
+    *elements = output;
+    changed
+}
+
+fn script_pair_close(
+    input: &[Option<Element<'_>>],
+    index: usize,
+    kind: FormatKind,
+) -> Option<(usize, String, String)> {
+    let next = input.get(index + 1)?.as_ref()?;
+    if element_starts_with_ascii_space(next) {
+        return None;
+    }
+    let marker = kind.close_marker();
+    (index + 1..input.len()).find_map(|close_index| {
+        let element = input[close_index].as_ref()?;
+        let Element::Text(value) = element else {
+            return None;
+        };
+        let (prefix, suffix) = shed_text_pair_split(value.as_ref(), marker)?;
+        if prefix.is_empty()
+            && input[close_index - 1]
+                .as_ref()
+                .is_some_and(|previous| element_ends_with_ascii_space(previous))
+        {
+            return None;
+        }
+        if close_index == index + 1 && prefix.is_empty() {
+            return None;
+        }
+        Some((close_index, prefix.to_string(), suffix.to_string()))
+    })
+}
+
+fn repair_monospace_split_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut output = Vec::with_capacity(elements.len());
+    let mut changed = false;
+
+    for element in mem::take(elements) {
+        let is_monospace = matches!(
+            &element,
+            Element::Container(container) if container.ctype() == ContainerType::Monospace
+        );
+        if !is_monospace {
+            output.push(element);
+            continue;
+        }
+        let (shell, mut children) =
+            FormatShell::into_parts(element).expect("formatter index has a shell");
+        match monospace_split_close(&children) {
+            Some((child_index, prefix, suffix)) => {
+                let mut tail: Vec<Element<'t>> =
+                    children.drain(child_index + 1..).collect();
+                children.truncate(child_index);
+                if !prefix.is_empty() {
+                    children.push(Element::Text(Cow::Owned(prefix)));
+                }
+                output.push(shell.build(children));
+                if !suffix.is_empty() {
+                    output.push(Element::Text(Cow::Owned(suffix)));
+                }
+                output.append(&mut tail);
+                output.push(Element::Text(FormatKind::Monospace.close_marker().into()));
+                changed = true;
+            }
+            None => output.push(shell.build(children)),
+        }
+    }
+
+    *elements = output;
+    changed
+}
+
+fn monospace_split_close(children: &[Element<'_>]) -> Option<(usize, String, String)> {
+    (1..children.len().saturating_sub(1)).find_map(|child_index| {
+        let Element::Text(value) = &children[child_index] else {
+            return None;
+        };
+        let (prefix, suffix) = monospace_close_split(value.as_ref())?;
+        if prefix.is_empty() && element_ends_with_ascii_space(&children[child_index - 1])
+        {
+            return None;
+        }
+        if !children[..child_index].iter().any(element_contains_link) {
+            return None;
+        }
+        Some((child_index, prefix.to_string(), suffix.to_string()))
+    })
 }
 
 fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
@@ -516,7 +780,7 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
         let close = is_opener
             .then(|| monospace_link_close(&input, index))
             .flatten()
-            .filter(|(close, _)| {
+            .filter(|(close, _, _)| {
                 // This repair exists to close a monospace span that the
                 // base parser left open over a URL (issue #833). Brace
                 // text around anything else is already owned content.
@@ -525,7 +789,7 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
                     .filter_map(|element| element.as_ref())
                     .any(element_contains_link)
             });
-        let Some((close, run)) = close else {
+        let Some((close, prefix, suffix)) = close else {
             output.push(take_element(&mut input, index));
             index += 1;
             continue;
@@ -534,8 +798,8 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
         let mut contents = take_range(&mut input, index + 1..close);
         let padding = take_leading_monospace_padding(&mut contents);
         discard_range(&mut input, close..close + 1);
-        if run > 2 {
-            contents.push(Element::Text(Cow::Owned("}".repeat(run - 2))));
+        if !prefix.is_empty() {
+            contents.push(Element::Text(Cow::Owned(prefix)));
         }
         if let Some(padding) = padding
             && !output
@@ -546,6 +810,9 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
             output.push(padding);
         }
         output.push(monospace_shell().build(contents));
+        if !suffix.is_empty() {
+            output.push(Element::Text(Cow::Owned(suffix)));
+        }
         index = close + 1;
         changed = true;
     }
@@ -557,18 +824,12 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
 fn monospace_link_close(
     input: &[Option<Element<'_>>],
     opener: usize,
-) -> Option<(usize, usize)> {
+) -> Option<(usize, String, String)> {
     ((opener + 1)..input.len()).find_map(|index| {
-        input[index]
-            .as_ref()
-            .and_then(|element| brace_run_len(element))
-            .map(|run| (index, run))
+        let element = input[index].as_ref()?;
+        let (prefix, suffix) = monospace_close_split(text(element)?)?;
+        Some((index, prefix.to_string(), suffix.to_string()))
     })
-}
-
-fn brace_run_len(element: &Element<'_>) -> Option<usize> {
-    let value = text(element)?;
-    (value.len() >= 2 && value.bytes().all(|byte| byte == b'}')).then_some(value.len())
 }
 
 fn take_leading_monospace_padding<'t>(

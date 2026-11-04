@@ -1,0 +1,238 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "smith2020",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "smith-2020",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "alpha_2",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "b.ell",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "2b",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "smith2020",
+                [
+                    {
+                        "element": "text",
+                        "data": "Smith"
+                    },
+                    {
+                        "element": "text",
+                        "data": ","
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "J"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "A"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "Paper"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "2020"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ],
+            [
+                "smith-2020",
+                [
+                    {
+                        "element": "text",
+                        "data": "Never"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "registered"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ],
+            [
+                "alpha_2",
+                [
+                    {
+                        "element": "text",
+                        "data": "Never"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "registered"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ],
+            [
+                "b.ell",
+                [
+                    {
+                        "element": "text",
+                        "data": "Never"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "registered"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ],
+            [
+                "2b",
+                [
+                    {
+                        "element": "text",
+                        "data": "Or"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "not"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "to"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "be"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ]
+        ]
+    ]
+}

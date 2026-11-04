@@ -48,7 +48,8 @@ pub const BLOCK_DATE: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -79,7 +80,7 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    let mut date = parse_date(value)
+    let mut date = parse_date(&value)
         .map_err(|_| parser.make_err(ParseErrorKind::BlockMalformedArguments))?;
 
     if let Some(arg) = arg_timezone {

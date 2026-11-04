@@ -1,0 +1,3 @@
+A[[footnote]]intro
+|| a || b[[/footnote]] || c ||
+[[/footnote]] B[[footnote]]plain[[/footnote]]

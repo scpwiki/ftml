@@ -1,0 +1,6 @@
+[[div]]
+* item one
+* item two[[/div]] tail
+[[/div]]
+
+After

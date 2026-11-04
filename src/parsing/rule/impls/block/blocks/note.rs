@@ -31,7 +31,8 @@ pub const BLOCK_NOTE: BlockRule = BlockRule {
 
 fn parse_note_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

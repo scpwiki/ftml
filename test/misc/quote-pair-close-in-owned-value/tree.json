@@ -1,0 +1,177 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "`"
+                    },
+                    {
+                        "element": "text",
+                        "data": "`"
+                    },
+                    {
+                        "element": "text",
+                        "data": "aa"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "title": "bb''"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "cc"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "text",
+            "data": "`"
+        },
+        {
+            "element": "text",
+            "data": "`"
+        },
+        {
+            "element": "text",
+            "data": "aa"
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "file1",
+                        "data": {
+                            "file": "bb''.png"
+                        }
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "cc"
+        },
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "file1",
+                        "data": {
+                            "file": "``bb.png"
+                        }
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "cc"
+        },
+        {
+            "element": "text",
+            "data": "'"
+        },
+        {
+            "element": "text",
+            "data": "'"
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "dd"
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "`"
+                    },
+                    {
+                        "element": "text",
+                        "data": "`"
+                    },
+                    {
+                        "element": "text",
+                        "data": "pre"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "anchor-name",
+                        "data": "bb''cc"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "dd"
+                    }
+                ]
+            }
+        }
+    ]
+}

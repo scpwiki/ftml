@@ -33,7 +33,8 @@ pub const BLOCK_INCLUDE_ELEMENTS: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -47,7 +48,7 @@ fn parse_fn<'r, 't>(
     let head = parser.get_head_name_map(&BLOCK_INCLUDE_ELEMENTS, in_head)?;
     let (page_name, variables) = head;
 
-    let page_ref = match PageRef::parse_include(page_name) {
+    let page_ref = match PageRef::parse_include(&page_name) {
         Ok(page_ref) => page_ref,
         Err(_) => return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
     };

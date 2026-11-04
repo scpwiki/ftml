@@ -42,6 +42,8 @@ fn parse_fn<'r, 't>(
     success_value(element.into(), Vec::new(), false)
 }
 
+// Module subnames are collected raw; this offset recovery is exempt from the block opener contract.
+#[allow(clippy::disallowed_methods)]
 fn parse_with_wikidot_boundary<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,

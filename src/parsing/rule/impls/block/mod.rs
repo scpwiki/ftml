@@ -84,9 +84,10 @@ impl Debug for BlockRule {
     }
 }
 
-pub type BlockParseFn = for<'r, 't> fn(
+pub type BlockParseFn = for<'r, 't, 'n> fn(
     &mut Parser<'r, 't>,
-    &'t str,
+    &'n str,
+    usize,
     bool,
     bool,
     bool,

@@ -149,49 +149,77 @@ fn iftags_end_head_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<u
     }
 }
 
-/// Token index just past a region the Wikidot iftags pairing walk cannot
-/// see into, starting at `start`: a raw-bodied block span (`[[code]]`,
-/// `[[html]]`, `[[raw]]`, `[[math]]`, `[[module]]`, through the first end
-/// head of the same name) or a raw span (`@@...@@`, `@<...>@`). `None` when
-/// no such region starts here (including an unterminated block or `@@`,
-/// which are literal text, not regions).
-fn protected_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+fn span_token_at_line_start(
+    source: &str,
+    tokens: &[&ExtractedToken<'_>],
+    index: usize,
+) -> bool {
+    let start = tokens[index].span.start;
+    start == 0 || matches!(source.as_bytes()[start - 1], b'\n' | b'\r')
+}
+
+fn span_closer_ends_construct(tokens: &[&ExtractedToken<'_>], index: usize) -> bool {
+    match tokens.get(index) {
+        None => true,
+        Some(token) => matches!(
+            token.token,
+            Token::Whitespace
+                | Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::InputEnd
+        ),
+    }
+}
+
+fn span_token_ends_line(tokens: &[&ExtractedToken<'_>], index: usize) -> bool {
+    match tokens.get(index) {
+        None => true,
+        Some(token) => match token.token {
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => true,
+            Token::Whitespace => span_token_ends_line(tokens, index + 1),
+            _ => false,
+        },
+    }
+}
+
+fn protected_span_end(
+    source: &str,
+    tokens: &[&ExtractedToken<'_>],
+    start: usize,
+) -> Option<usize> {
     match tokens.get(start)?.token {
         Token::Raw => {
             let mut i = start + 1;
             while i < tokens.len() {
-                if tokens[i].token == Token::Raw {
-                    return Some(i + 1);
+                match tokens[i].token {
+                    Token::Raw => return Some(i + 1),
+                    Token::LineBreak | Token::ParagraphBreak => return None,
+                    _ => i += 1,
                 }
-                i += 1;
             }
             None
         }
         Token::LeftRaw => {
             let mut i = start + 1;
             while i < tokens.len() {
-                if tokens[i].token == Token::RightRaw {
-                    return Some(i + 1);
+                match tokens[i].token {
+                    Token::RightRaw => return Some(i + 1),
+                    Token::LineBreak | Token::ParagraphBreak => return None,
+                    _ => i += 1,
                 }
-                i += 1;
             }
             None
         }
-        Token::LeftBlock => raw_block_span_end(tokens, start),
+        Token::LeftBlock => raw_block_span_end(source, tokens, start),
         _ => None,
     }
 }
 
-// Blocks whose bodies are raw text for the pairing scan: an `[[/iftags]]`
-// inside one is body content, never a pairing candidate. Live Wikidot
-// steps over code blocks (probe p13b); the rest of the set matches the
-// opacity FTML's hidden-body security behavior has always given these
-// constructs, so their end markers stay hidden inside a false gate.
-const IFTAGS_OPAQUE_BLOCKS: [&str; 5] = ["code", "html", "math", "module", "raw"];
-
-/// If a raw-bodied block head starts at `start`, the token index just past
-/// its first end head. An unterminated block is not a span.
-fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
+fn raw_block_span_end(
+    source: &str,
+    tokens: &[&ExtractedToken<'_>],
+    start: usize,
+) -> Option<usize> {
     if tokens.get(start)?.token != Token::LeftBlock {
         return None;
     }
@@ -200,14 +228,16 @@ fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<us
         i += 1;
     }
     let ident = tokens.get(i)?;
-    if ident.token != Token::Identifier
-        || !IFTAGS_OPAQUE_BLOCKS
-            .iter()
-            .any(|name| ident.slice.eq_ignore_ascii_case(name))
-    {
+    if ident.token != Token::Identifier {
         return None;
     }
     let name = ident.slice;
+    let line_owned =
+        name.eq_ignore_ascii_case("code") || name.eq_ignore_ascii_case("html");
+    let whole_line = name.eq_ignore_ascii_case("module");
+    if !line_owned && !whole_line {
+        return None;
+    }
     i += 1;
     loop {
         match tokens.get(i)?.token {
@@ -215,7 +245,8 @@ fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<us
                 i += 1;
                 break;
             }
-            Token::LeftBlock
+            Token::LineBreak
+            | Token::LeftBlock
             | Token::LeftBlockEnd
             | Token::InputEnd
             | Token::ParagraphBreak => {
@@ -224,9 +255,22 @@ fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<us
             _ => i += 1,
         }
     }
+    if !span_token_at_line_start(source, tokens, start) {
+        return None;
+    }
+    if whole_line && !span_token_ends_line(tokens, i) {
+        return None;
+    }
     while i < tokens.len() {
         if let Some(end) = named_block_end_head_end(tokens, i, name) {
-            return Some(end);
+            let qualifies = if whole_line {
+                span_token_at_line_start(source, tokens, i)
+            } else {
+                span_closer_ends_construct(tokens, end)
+            };
+            if qualifies {
+                return Some(end);
+            }
         }
         i += 1;
     }
@@ -585,10 +629,10 @@ where
 
         self.get_optional_space()?;
 
-        self.get_block_name_internal(ParseErrorKind::BlockMissingName)
+        self.get_head_word_raw(ParseErrorKind::BlockMissingName)
     }
 
-    fn get_block_name_internal(
+    fn get_head_word_raw(
         &mut self,
         kind: ParseErrorKind,
     ) -> Result<(&'t str, bool), ParseError> {
@@ -610,6 +654,53 @@ where
 
             (name, in_head)
         })
+    }
+
+    pub fn get_head_word(
+        &mut self,
+        kind: ParseErrorKind,
+    ) -> Result<(Cow<'t, str>, bool), ParseError> {
+        if !self.settings().layout.legacy() {
+            while self.current().token == Token::LeftComment {
+                let mut probe = self.clone();
+                if consume_valid_comment(&mut probe).is_err() {
+                    break;
+                }
+                self.update(&probe);
+                if self.current().token == Token::Whitespace {
+                    self.step()?;
+                }
+            }
+        }
+        let end_conditions = [
+            ParseCondition::current(Token::Whitespace),
+            ParseCondition::current(Token::LineBreak),
+            ParseCondition::current(Token::ParagraphBreak),
+            ParseCondition::current(Token::RightBlock),
+        ];
+        let rule = self.rule();
+        let (name, last) =
+            collect_text_resolved_fused(self, rule, &end_conditions, &[], Some(kind))?;
+        let legacy = self.settings().layout.legacy();
+        fn trim_head_word(name: &str, legacy: bool) -> &str {
+            if legacy {
+                name.trim_matches([' ', '\t', '\r', '\n'])
+            } else {
+                name.trim()
+            }
+        }
+        let name = match name {
+            Cow::Borrowed(name) => Cow::Borrowed(trim_head_word(name, legacy)),
+            Cow::Owned(name) => Cow::Owned(trim_head_word(&name, legacy).to_owned()),
+        };
+        if matches!(name, Cow::Owned(_))
+            && (name.contains(char::is_whitespace) || name.contains("]]"))
+        {
+            return Err(self.make_err(ParseErrorKind::RuleFailed));
+        }
+        let in_head = !matches!(last.token, Token::RightBlock | Token::RightBracket);
+
+        Ok((name, in_head))
     }
 
     pub(crate) fn get_wikidot_block_name_with_residual_opener(
@@ -1106,6 +1197,13 @@ where
                 nested_wikidot_math += 1;
             }
 
+            if let Some(designated) = self.wikidot_iftags_body_end()
+                && self.current().token == Token::LeftBlockEnd
+                && self.current().span.start == designated
+            {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
             if self.discarding_hidden_body()
                 && self.at_hidden_body_boundary()
                 && (!self.has_body_end_block(block_rule)
@@ -1347,6 +1445,11 @@ where
             );
         }
 
+        self.push_body_end_boundary(
+            block_rule_end_names(block_rule, self.settings().layout.legacy()),
+            block_rule.name == "block-footnote",
+        );
+
         let result = if as_paragraphs {
             self.get_body_elements_paragraphs(
                 block_rule,
@@ -1360,6 +1463,8 @@ where
                 allow_inline_quote_close,
             )
         };
+
+        self.pop_body_end_boundary();
 
         if track_boundary {
             self.pop_hidden_body_boundary();
@@ -1593,6 +1698,13 @@ where
             }
 
             if result.is_none()
+                && !parser.discarding_hidden_body()
+                && parser.at_ancestor_body_end_boundary()
+            {
+                return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if result.is_none()
                 && parser.terminate_at_wikidot_list_close(block_rule, first_iteration)
             {
                 return Ok(true);
@@ -1674,8 +1786,16 @@ where
         }
 
         let body_names_len = self.push_inline_container_body(block_rule.name);
+
+        self.push_body_end_boundary(
+            block_rule_end_names(block_rule, self.settings().layout.legacy()),
+            block_rule.name == "block-footnote",
+        );
+
         let result = self.get_body_element_segments_internal(block_rule);
         self.restore_inline_container_body(body_names_len);
+
+        self.pop_body_end_boundary();
 
         if track_boundary {
             self.pop_hidden_body_boundary();
@@ -1770,6 +1890,10 @@ where
             }
 
             if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if !self.discarding_hidden_body() && self.at_ancestor_body_end_boundary() {
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
@@ -2151,6 +2275,10 @@ where
                 return Ok(());
             }
 
+            if !self.discarding_hidden_body() && self.at_ancestor_body_end_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
             let wikidot_input_end = self.current().token == Token::InputEnd
                 && self.settings().layout.legacy()
                 && !self.discarding_hidden_body();
@@ -2225,6 +2353,7 @@ where
             }
         }
 
+        let source = self.full_text().inner();
         let n = tokens.len();
         // ends[i] = token indices of `[[/iftags]]` heads (their LeftBlockEnd
         // token) that a body starting at token i can end at, in the walk's
@@ -2255,7 +2384,7 @@ where
                     }
                 }
             }
-            let step_to = protected_span_end(&tokens, i).unwrap_or(i + 1);
+            let step_to = protected_span_end(source, &tokens, i).unwrap_or(i + 1);
             for end in ends[step_to].clone() {
                 push(&mut out, end);
             }
@@ -2272,7 +2401,7 @@ where
                 nested = true;
                 break;
             }
-            i = protected_span_end(&tokens, i).unwrap_or(i + 1);
+            i = protected_span_end(source, &tokens, i).unwrap_or(i + 1);
         }
         (Some(tokens[closer].span.start), nested)
     }
@@ -2680,6 +2809,14 @@ where
                     self.step()?;
                 }
 
+                if self.current().token == Token::LeftComment {
+                    let mut candidate = self.clone();
+                    if consume_valid_comment(&mut candidate).is_ok() {
+                        self.update(&candidate);
+                        continue;
+                    }
+                }
+
                 let start = self.current();
                 let mut args_finished = false;
                 let mut key_elisions: Vec<std::ops::Range<usize>> = Vec::new();
@@ -2693,6 +2830,14 @@ where
                     {
                         key_elisions.extend(segment.elisions());
                         continue;
+                    }
+                    if current.token == Token::LeftComment {
+                        let mut candidate = self.clone();
+                        if let Ok(range) = consume_valid_comment(&mut candidate) {
+                            key_elisions.push(range);
+                            self.update(&candidate);
+                            continue;
+                        }
                     }
                     match current.token {
                         Token::RightBlock => {
@@ -2853,9 +2998,17 @@ where
         &mut self,
         block_rule: &BlockRule,
         in_head: bool,
-    ) -> Result<(&'t str, Arguments<'t>), ParseError> {
-        self.get_head_name_map_with_body_start(block_rule, in_head)
-            .map(|(name, arguments, _)| (name, arguments))
+    ) -> Result<(Cow<'t, str>, Arguments<'t>), ParseError> {
+        if !in_head {
+            return Err(self.make_err(ParseErrorKind::BlockMissingName));
+        }
+
+        let missing_name = ParseErrorKind::ModuleMissingName;
+        let (subname, in_head) = self.get_head_word(missing_name)?;
+
+        let (arguments, _) = self.get_head_map_with_body_start(block_rule, in_head)?;
+
+        Ok((subname, arguments))
     }
 
     pub(crate) fn get_head_name_map_with_body_start(
@@ -2868,7 +3021,7 @@ where
         }
 
         let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_block_name_internal(missing_name)?;
+        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
 
         let (arguments, body_start) =
             self.get_head_map_with_body_start(block_rule, in_head)?;
@@ -2898,7 +3051,7 @@ where
         }
 
         let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_block_name_internal(missing_name)?;
+        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
         let (arguments, body_start) =
             self.get_head_map_with_body_start_wikidot(block_rule, in_head)?;
         Ok((subname, arguments, body_start))
@@ -2910,7 +3063,7 @@ where
         &mut self,
         block_rule: &BlockRule,
         in_head: bool,
-    ) -> Result<(&'t str, Arguments<'t>), ParseError> {
+    ) -> Result<(Cow<'t, str>, Arguments<'t>), ParseError> {
         if !self.settings().layout.legacy() {
             return self.get_head_name_map(block_rule, in_head);
         }
@@ -2919,7 +3072,7 @@ where
         }
 
         let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_block_name_internal(missing_name)?;
+        let (subname, in_head) = self.get_head_word(missing_name)?;
         let arguments = self.get_head_map_wikidot(block_rule, in_head)?;
 
         Ok((subname, arguments))
@@ -2960,6 +3113,45 @@ where
         Ok((field, arguments))
     }
 
+    pub(crate) fn get_head_field_map(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+    ) -> Result<(Cow<'t, str>, Arguments<'t>), ParseError> {
+        if !in_head {
+            return Err(self.make_err(ParseErrorKind::BlockMissingName));
+        }
+
+        while self.current().token == Token::LeftComment {
+            let mut probe = self.clone();
+            if consume_valid_comment(&mut probe).is_err() {
+                break;
+            }
+            self.update(&probe);
+            if self.current().token == Token::Whitespace {
+                self.step()?;
+            }
+        }
+
+        let end_conditions = [
+            ParseCondition::current(Token::Whitespace),
+            ParseCondition::current(Token::LineBreak),
+            ParseCondition::current(Token::ParagraphBreak),
+            ParseCondition::current(Token::RightBlock),
+        ];
+        let rule = self.rule();
+        let (field, last) = collect_text_resolved_fused(
+            self,
+            rule,
+            &end_conditions,
+            &[],
+            Some(ParseErrorKind::BlockMissingName),
+        )?;
+        let (arguments, _) = self
+            .get_head_map_with_body_start(block_rule, last.token != Token::RightBlock)?;
+        Ok((field, arguments))
+    }
+
     pub fn get_head_value<F, T>(
         &mut self,
         block_rule: &BlockRule,
@@ -2985,6 +3177,19 @@ where
     where
         F: FnOnce(&Self, Option<Cow<'t, str>>) -> Result<T, ParseError>,
     {
+        self.get_head_value_resolved_with_body_start(block_rule, in_head, convert)
+            .map(|(value, _)| value)
+    }
+
+    pub(crate) fn get_head_value_resolved_with_body_start<F, T>(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+        convert: F,
+    ) -> Result<(T, BlockBodyStart), ParseError>
+    where
+        F: FnOnce(&Self, Option<Cow<'t, str>>) -> Result<T, ParseError>,
+    {
         let argument = if in_head {
             let end_conditions = [ParseCondition::current(Token::RightBlock)];
             let reject_conditions = [
@@ -3006,8 +3211,8 @@ where
         };
 
         let value = convert(self, argument)?;
-        self.get_head_block_with_body_start(block_rule, false)?;
-        Ok(value)
+        let body_start = self.get_head_block_with_body_start(block_rule, false)?;
+        Ok((value, body_start))
     }
 
     pub(crate) fn get_head_value_with_body_start<F, T>(
@@ -3498,5 +3703,96 @@ mod tests {
 
         assert_eq!(start.slice, "[[/");
         assert_eq!(end.slice, "[[/");
+    }
+
+    fn head_word(
+        input: &str,
+        layout: Layout,
+    ) -> Result<(String, bool, bool), ParseErrorKind> {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
+        let tokenization = crate::tokenize(input);
+        let mut parser = Parser::new(&tokenization, &page_info, &settings);
+        parser.step().map_err(|error| error.kind())?;
+        parser
+            .get_optional_token(Token::LeftBlock)
+            .map_err(|error| error.kind())?;
+        parser.get_optional_space().map_err(|error| error.kind())?;
+        parser
+            .get_head_word(ParseErrorKind::BlockMissingName)
+            .map(|(name, in_head)| {
+                let owned = matches!(name, Cow::Owned(_));
+                (name.into_owned(), owned, in_head)
+            })
+            .map_err(|error| error.kind())
+    }
+
+    fn head_word_raw(
+        input: &str,
+        layout: Layout,
+    ) -> Result<(String, bool), ParseErrorKind> {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
+        let tokenization = crate::tokenize(input);
+        let mut parser = Parser::new(&tokenization, &page_info, &settings);
+        parser.step().map_err(|error| error.kind())?;
+        parser
+            .get_optional_token(Token::LeftBlock)
+            .map_err(|error| error.kind())?;
+        parser.get_optional_space().map_err(|error| error.kind())?;
+        parser
+            .get_head_word_raw(ParseErrorKind::BlockMissingName)
+            .map(|(name, in_head)| (name.to_owned(), in_head))
+            .map_err(|error| error.kind())
+    }
+
+    #[test]
+    fn head_word_without_segment_stays_borrowed() {
+        for layout in [Layout::Wikidot, Layout::Wikijump] {
+            assert_eq!(
+                head_word("[[footnote]]", layout),
+                Ok(("footnote".to_owned(), false, false)),
+            );
+            assert_eq!(
+                head_word("[[span class=\"c\"]]", layout),
+                Ok(("span".to_owned(), false, true)),
+            );
+            assert_eq!(
+                head_word_raw("[[footnote]]", layout),
+                Ok(("footnote".to_owned(), false)),
+            );
+            assert_eq!(
+                head_word_raw("[[span class=\"c\"]]", layout),
+                Ok(("span".to_owned(), true)),
+            );
+        }
+    }
+
+    #[test]
+    fn head_word_resolves_iftags_segments() {
+        assert_eq!(
+            head_word("[[foot[[iftags -zzz]]x[[/iftags]]note]]", Layout::Wikidot),
+            Ok(("footxnote".to_owned(), true, false)),
+        );
+        assert_eq!(
+            head_word("[[foot[[iftags +zzz]]x[[/iftags]]note]]", Layout::Wikidot),
+            Ok(("footnote".to_owned(), true, false)),
+        );
+    }
+
+    #[test]
+    fn head_word_rejects_kept_body_with_whitespace() {
+        assert_eq!(
+            head_word("[[foot[[iftags -zzz]]a b[[/iftags]]note]]", Layout::Wikidot),
+            Err(ParseErrorKind::RuleFailed),
+        );
+    }
+
+    #[test]
+    fn head_word_fused_segment_close_ends_the_head() {
+        assert_eq!(
+            head_word("[[foot[[iftags -zzz]]note[[/iftags]]]]", Layout::Wikidot),
+            Ok(("footnote".to_owned(), true, false)),
+        );
     }
 }

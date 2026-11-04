@@ -1,0 +1,110 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "subscript",
+        "span": [
+            33,
+            35
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "subscript",
+        "span": [
+            71,
+            73
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            39,
+            41
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "subscript",
+        "span": [
+            107,
+            109
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            77,
+            79
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "subscript",
+        "span": [
+            143,
+            145
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            113,
+            115
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "whitespace",
+        "rule": "subscript",
+        "span": [
+            178,
+            179
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            149,
+            151
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "subscript",
+        "span": [
+            270,
+            270
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            241,
+            243
+        ],
+        "kind": "no-rules-match"
+    }
+]

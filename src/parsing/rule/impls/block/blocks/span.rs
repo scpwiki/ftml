@@ -104,7 +104,8 @@ impl SpeculativeSpanFailureCache {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -113,14 +114,8 @@ fn parse_fn<'r, 't>(
     assert!(!flag_star, "Span doesn't allow star flag");
     assert_block_name(&BLOCK_SPAN, name);
 
-    let source = parser.full_text().inner();
-    let name_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .expect("parsed span name belongs to the source");
-    let owner_start = source[..name_start]
-        .rfind("[[")
-        .expect("parsed span name follows its opener");
-    let speculative_failure_cache = SpeculativeSpanFailureCache::new(parser, owner_start);
+    let speculative_failure_cache =
+        SpeculativeSpanFailureCache::new(parser, opener_start);
     if speculative_failure_cache.replays_cached_failure(parser) {
         return Err(parser.make_end_of_input_err());
     }
@@ -141,7 +136,7 @@ fn parse_fn<'r, 't>(
     }
     if parser.settings().layout.legacy()
         && flag_score
-        && !parser.wikidot_alias_has_compatible_close(&BLOCK_SPAN, owner_start)
+        && !parser.wikidot_alias_has_compatible_close(&BLOCK_SPAN, opener_start)
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }

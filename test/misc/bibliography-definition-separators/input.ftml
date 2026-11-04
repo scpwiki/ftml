@@ -1,0 +1,13 @@
+((bibcite a)) ((bibcite b)) ((bibcite c)) ((bibcite d)) ((bibcite e)) ((bibcite g)) ((bibcite h)) ((bibcite i))
+
+[[bibliography]]
+: a: Alpha.
+: b :Bravo.
+: c:  Charlie.
+: d :	Delta.
+: i  : India.
+: e :
+
+: g: Golf.
+: h :Hotel.
+[[/bibliography]]

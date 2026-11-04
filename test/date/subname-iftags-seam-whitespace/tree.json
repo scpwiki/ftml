@@ -1,0 +1,49 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "date"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "12"
+                    },
+                    {
+                        "element": "text",
+                        "data": "3"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "45"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]"
+                    }
+                ]
+            }
+        }
+    ]
+}

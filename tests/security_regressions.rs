@@ -149,6 +149,30 @@ fn assert_comment_close_ends_gate(raw_body: &str, layout: Layout) {
     assert!(tree.code_blocks.is_empty(), "{raw_body}: {tree:#?}");
 }
 
+fn assert_first_close_ends_gate(
+    raw_body: &str,
+    text_markers: &[&str],
+    html_blocks: usize,
+    layout: Layout,
+) {
+    let input = format!(
+        "[[iftags +missing]]\n{raw_body}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
+    );
+    let (tree, _) = parse_with_errors(&input, layout);
+    let text = render_text(&tree, layout);
+    for marker in text_markers {
+        assert!(text.contains(marker), "{raw_body}: {text}");
+    }
+    assert_eq!(tree.html_blocks.len(), html_blocks, "{raw_body}: {tree:#?}");
+    assert!(
+        tree.html_blocks
+            .iter()
+            .any(|block| block.contains("<b>guarded</b>")),
+        "{raw_body}: {tree:#?}"
+    );
+    assert!(tree.code_blocks.is_empty(), "{raw_body}: {tree:#?}");
+}
+
 fn render_iframe_with_url_and_attributes(
     url: &'static str,
     attributes: AttributeMap,
@@ -919,8 +943,6 @@ fn false_iftags_raw_body_end_markers_stay_hidden() {
     let raw_bodies = [
         "[[code]]\n[[/iftags]]\n[[html]]\n<b>raw-code</b>\n[[/html]]\n[[/code]]",
         "[[html]]\n[[/iftags]]\n<b>raw-html</b>\n[[/html]]",
-        "[[raw]]\n[[/iftags]]\n[[html]]raw-raw[[/html]]\n[[/raw]]",
-        "[[math]]\n\\text{[[/iftags]] raw-math}\n[[/math]]",
         "[[module CSS]]\n/* [[/iftags]] raw-module-css */\n[[/module]]",
         "[[module ListPages]]\n[[/iftags]] raw-module-list-pages\n[[/module]]",
         "@@[[/iftags]] raw-inline@@",
@@ -1031,11 +1053,31 @@ fn wikidot_false_iftags_unclosed_raw_child_stops_at_the_gate_close() {
 }
 
 #[test]
-fn wikidot_false_iftags_closed_raw_stays_guarded() {
-    assert_false_iftags_guarded(
+fn wikidot_false_iftags_closed_raw_pairs_at_the_first_close() {
+    assert_first_close_ends_gate(
         "[[raw]]\n[[/iftags]]\n[[html]]raw-raw[[/html]]\n[[/raw]]",
+        &["[[/raw]]", "[[/iftags]]", "visible"],
+        2,
         Layout::Wikidot,
     );
+}
+
+#[test]
+fn false_iftags_raw_and_math_children_pair_at_the_first_close() {
+    for layout in [Layout::Wikidot, Layout::Wikijump] {
+        assert_first_close_ends_gate(
+            "[[raw]]\n[[/iftags]]\n[[html]]raw-raw[[/html]]\n[[/raw]]",
+            &["[[/raw]]", "[[/iftags]]", "visible"],
+            2,
+            layout,
+        );
+        assert_first_close_ends_gate(
+            "[[math]]\n\\text{[[/iftags]] raw-math}\n[[/math]]",
+            &["raw-math}", "[[/math]]", "[[/iftags]]", "visible"],
+            1,
+            layout,
+        );
+    }
 }
 
 #[test]

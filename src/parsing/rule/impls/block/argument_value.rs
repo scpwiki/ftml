@@ -19,7 +19,9 @@
  */
 
 use super::BlockRule;
-use crate::parsing::collect::{CommentElidedText, consume_iftags_segment};
+use crate::parsing::collect::{
+    CommentElidedText, consume_iftags_segment, consume_valid_comment,
+};
 use crate::parsing::string::parse_string;
 use crate::parsing::{ParseError, ParseErrorKind, Parser, Token};
 use std::borrow::Cow;
@@ -83,6 +85,14 @@ where
                 elisions.extend(segment.elisions());
                 continue;
             }
+            if self.current().token == Token::LeftComment {
+                let mut candidate = self.clone();
+                if let Ok(range) = consume_valid_comment(&mut candidate) {
+                    elisions.push(range);
+                    self.update(&candidate);
+                    continue;
+                }
+            }
             self.step()?;
         }
 
@@ -110,6 +120,15 @@ where
             {
                 elisions.extend(segment.elisions());
                 continue;
+            }
+
+            if self.current().token == Token::LeftComment {
+                let mut candidate = self.clone();
+                if let Ok(range) = consume_valid_comment(&mut candidate) {
+                    elisions.push(range);
+                    self.update(&candidate);
+                    continue;
+                }
             }
 
             if self.current().token == Token::DoubleQuote
@@ -150,7 +169,10 @@ where
     }
 }
 
-fn quote_ends_block_argument(parser: &Parser<'_, '_>) -> bool {
+fn quote_ends_block_argument<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
     let Some(next) = parser.look_ahead(0) else {
         return true;
     };
@@ -160,26 +182,41 @@ fn quote_ends_block_argument(parser: &Parser<'_, '_>) -> bool {
         | Token::LineBreak
         | Token::ParagraphBreak
         | Token::InputEnd => true,
-        Token::Whitespace => {
+        Token::Whitespace | Token::LeftComment => {
+            let mut probe = parser.clone();
+            if probe.step().is_err() {
+                return true;
+            }
             let mut saw_key = false;
-            for token in parser.remaining().iter().skip(1) {
-                match token.token {
-                    Token::Whitespace => continue,
+            loop {
+                match probe.current().token {
+                    Token::Whitespace => {
+                        if probe.step().is_err() {
+                            return false;
+                        }
+                    }
+                    Token::LeftComment => {
+                        if consume_valid_comment(&mut probe).is_err() {
+                            return false;
+                        }
+                    }
                     Token::RightBlock => return true,
                     Token::Equals => return saw_key,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
                         return false;
                     }
-                    _ if token.slice.chars().all(|ch| {
+                    _ if probe.current().slice.chars().all(|ch| {
                         ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-')
                     }) =>
                     {
                         saw_key = true;
+                        if probe.step().is_err() {
+                            return false;
+                        }
                     }
                     _ => return false,
                 }
             }
-            false
         }
         _ => false,
     }

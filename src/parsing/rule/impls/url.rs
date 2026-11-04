@@ -76,19 +76,123 @@ where
     let source = parser.full_text().inner();
     let start = token.span.start;
     let starred = token.token == Token::UrlStar;
-    let url = &source[start + usize::from(starred)..token.span.end];
+    let url_start = start + usize::from(starred);
+    let mut advanced = false;
+    let url = if parser.look_ahead(0).is_some_and(|next| {
+        next.token == Token::LeftComment && next.span.start == token.span.end
+    }) {
+        match strict_url_past_comments(parser, source, url_start, token.span.end) {
+            Some((url, probe)) => {
+                parser.update(&probe);
+                advanced = true;
+                url
+            }
+            None => Cow::Borrowed(&source[url_start..token.span.end]),
+        }
+    } else {
+        Cow::Borrowed(&source[url_start..token.span.end])
+    };
+
     let link = Element::Link {
         ltype: LinkType::Direct,
-        link: LinkLocation::Url(cow!(url)),
+        link: LinkLocation::Url(url),
         label: LinkLabel::Url,
         target: None,
     };
 
-    parser.step()?;
+    if !advanced {
+        parser.step()?;
+    }
     if starred {
         return Ok(Elements::Multiple(vec![text!("*"), link]));
     }
     Ok(Elements::Single(link))
+}
+
+fn strict_url_past_comments<'r, 't>(
+    parser: &Parser<'r, 't>,
+    source: &'t str,
+    url_start: usize,
+    first_end: usize,
+) -> Option<(Cow<'t, str>, Parser<'r, 't>)>
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    probe.step().ok()?;
+
+    let mut comments = Vec::new();
+    let mut end = first_end;
+    let mut scan_pos = first_end;
+    let mut last_char = source[..first_end].chars().next_back();
+
+    loop {
+        let current = probe.current();
+        if probe.current_generated().is_some() {
+            break;
+        }
+        if current.token == Token::LeftComment && current.span.start == scan_pos {
+            match consume_valid_comment(&mut probe) {
+                Ok(range) => {
+                    scan_pos = range.end;
+                    comments.push(range);
+                    continue;
+                }
+                Err(_) => break,
+            }
+        }
+        if current.span.start != scan_pos
+            || current.token == Token::InputEnd
+            || !strict_url_token_continues(source, current.span.clone(), last_char)
+        {
+            break;
+        }
+        end = current.span.end;
+        scan_pos = end;
+        last_char = current.slice.chars().next_back();
+        probe.step().ok()?;
+    }
+
+    if comments.is_empty() || end == first_end {
+        return None;
+    }
+    let field = CommentElidedText::new(source, url_start..end, comments);
+    Some((field.into_cow(), probe))
+}
+
+fn strict_url_token_continues(
+    source: &str,
+    span: std::ops::Range<usize>,
+    last_char: Option<char>,
+) -> bool {
+    let first = source[span.clone()].chars().next();
+    if matches!(
+        (last_char, first),
+        (Some('>'), Some('@')) | (Some('@'), Some('@'))
+    ) {
+        return false;
+    }
+    let bytes = source.as_bytes();
+    let mut pos = span.start;
+    while pos < span.end {
+        let byte = bytes[pos];
+        let character = source[pos..]
+            .chars()
+            .next()
+            .expect("token slice is valid UTF-8");
+        if matches!(
+            byte,
+            b'\n' | b'\r' | b' ' | b'\t' | b'"' | b'\'' | b'|' | b'[' | b']'
+        ) || character.is_whitespace()
+            || matches!(byte, 0x00..=0x08 | 0x0b..=0x0c | 0x0e..=0x1a | 0x1c..=0x1f)
+            || source[pos..].starts_with(">@")
+            || source[pos..].starts_with("@@")
+        {
+            return false;
+        }
+        pos += character.len_utf8();
+    }
+    true
 }
 
 fn wikidot_url_elements<'r, 't>(
@@ -239,6 +343,12 @@ where
         }
         if parser.current().token == Token::InputEnd {
             break;
+        }
+        if matches!(parser.current().token, Token::Raw | Token::LeftRaw) {
+            let mut raw_probe = parser.clone();
+            if super::raw::RULE_RAW.try_consume(&mut raw_probe).is_ok() {
+                break;
+            }
         }
 
         let token = parser.current();
@@ -743,6 +853,64 @@ mod tests {
             "<a href=\"http://example.com/a\">http://example.com/a</a>-",
             "\u{2014}<a href=\"http://example.com/s--tail\">http://example.com/s--tail</a>",
             "{{<a href=\"http://example.com/m}}tail\">http://example.com/m}}tail</a>",
+        ] {
+            assert!(html.contains(expected), "{expected} missing from {html}");
+        }
+    }
+
+    #[test]
+    fn wikidot_superscript_subscript_close_over_urls_like_live() {
+        use crate::render::Render;
+
+        let source = "sup ^^http://example.com/s^^ end\n\nsub ,,http://example.com/s,, end\n\ninternal ,,http://example.com/a,,b,, end\n\nrun ^^http://example.com/s^^^ end\n\nsplit ^^note http://example.com/s^^ tail^^ end\n\nperiod ^^http://example.com/s^^. end\n\nbefore ^^http://example.com/s.^^ end\n\nnoclose ^^http://example.com/s^^tail end\n\nmismatch ^^http://example.com/s,, end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        for expected in [
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a></sup>",
+            "<sub><a href=\"http://example.com/s\">http://example.com/s</a></sub>",
+            "<sub><a href=\"http://example.com/a,,b\">http://example.com/a,,b</a></sub>",
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a></sup>^",
+            "<sup>note <a href=\"http://example.com/s\">http://example.com/s</a></sup> tail^^",
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a></sup>.",
+            "<sup><a href=\"http://example.com/s\">http://example.com/s</a>.</sup>",
+            "^^<a href=\"http://example.com/s^^tail\">http://example.com/s^^tail</a>",
+            "^^<a href=\"http://example.com/s\">http://example.com/s</a>,,",
+        ] {
+            assert!(html.contains(expected), "{expected} missing from {html}");
+        }
+    }
+
+    #[test]
+    fn wikidot_monospace_close_over_url_sheds_like_live() {
+        use crate::render::Render;
+
+        let source = "shed {{https://example.com/a}}. end\n\nsplit {{note https://example.com/a}} tail}} end\n\nbefore {{https://example.com/a.}} end\n\nrun {{https://example.com/a}}}} end\n\ndouble {{https://example.com/a}}!}} end\n\nspaced {{note https://example.com/a}} }} end\n\nnoclose {{https://example.com/a}. end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        for expected in [
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a></tt>.",
+            "<tt>note <a href=\"https://example.com/a\">https://example.com/a</a></tt> tail}}",
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a>.</tt>",
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a>}}</tt>",
+            "<tt><a href=\"https://example.com/a\">https://example.com/a</a></tt>!}}",
+            "<tt>note <a href=\"https://example.com/a\">https://example.com/a</a></tt> }}",
+            "{{<a href=\"https://example.com/a\">https://example.com/a</a>}.",
         ] {
             assert!(html.contains(expected), "{expected} missing from {html}");
         }

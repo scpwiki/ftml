@@ -149,6 +149,17 @@ where
             return ok!(paragraph_safe; last, errors);
         }
 
+        if !parser.discarding_hidden_body() {
+            let at_boundary = match _rule.name() {
+                "header" => parser.at_hard_body_end_boundary(),
+                "list" | "definition-list" => parser.at_body_end_boundary(),
+                _ => false,
+            };
+            if at_boundary {
+                return ok!(paragraph_safe; parser.current(), errors);
+            }
+        }
+
         // A simple-table cell delimiter outranks ordinary inline formatting
         // in Wikidot layout. Commit the live part of the inline owner, leave
         // the table token for the row parser, and remember only the matching

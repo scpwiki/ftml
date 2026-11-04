@@ -1,0 +1,9 @@
+((bibcite alpha)) ((bibcite omega))
+
+[[bibliography]]
+: bad-first : Bad first.
+: alpha : Alpha text.
+: bad-label : **bold** bad.
+: omega : Omega text.
+trailing prose
+[[/bibliography]]

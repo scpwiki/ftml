@@ -19,7 +19,9 @@
  */
 
 use super::prelude::*;
+use crate::parsing::inline_format::{element_contains_link, monospace_close_split};
 use crate::tree::Container;
+use std::borrow::Cow;
 
 pub const RULE_MONOSPACE: Rule = Rule {
     name: "monospace",
@@ -50,6 +52,43 @@ fn try_consume_fn<'r, 't>(
     let invalid = [ParseCondition::current(Token::ParagraphBreak)];
     let collected = collect_consume_keep(parser, RULE_MONOSPACE, &close, &invalid, None)?;
     let ((mut elements, terminator), errors, paragraph_safe) = collected.into();
+
+    if parser.settings().layout.legacy() && terminator.token == Token::RightMonospace {
+        if let Some((shed_index, prefix, suffix, trailing_space)) =
+            wikidot_shed_close(&elements)
+        {
+            let mut container_elements: Vec<Element<'t>> =
+                elements.drain(..shed_index).collect();
+            if !prefix.is_empty() {
+                container_elements.push(Element::Text(Cow::Owned(prefix)));
+            }
+            let container = Element::Container(Container::new(
+                ContainerType::Monospace,
+                container_elements,
+                AttributeMap::new(),
+            ));
+            let mut output = Vec::with_capacity(4);
+            let leading_separator = leading_padding
+                && parser
+                    .full_text()
+                    .inner()
+                    .as_bytes()
+                    .get(opening_start.wrapping_sub(1))
+                    .is_some_and(|byte| !byte.is_ascii_whitespace());
+            if leading_separator {
+                output.push(text!(" "));
+            }
+            output.push(container);
+            if !suffix.is_empty() {
+                output.push(Element::Text(Cow::Owned(suffix)));
+            }
+            if trailing_space {
+                output.push(text!(" "));
+            }
+            output.push(text!("}}"));
+            return ok!(paragraph_safe; output, errors);
+        }
+    }
 
     let trailing_padding = if parser.current().token == Token::RightMonospace {
         elements.push(text!("}}"));
@@ -147,6 +186,29 @@ fn try_consume_fn<'r, 't>(
         output.push(text!(" "));
     }
     ok!(paragraph_safe; output, errors)
+}
+
+fn wikidot_shed_close(elements: &[Element<'_>]) -> Option<(usize, String, String, bool)> {
+    let (shed_index, trailing_space) = match elements.last() {
+        Some(Element::Text(value)) if value.as_ref() == " " => {
+            (elements.len().checked_sub(2)?, true)
+        }
+        Some(_) => (elements.len() - 1, false),
+        None => return None,
+    };
+    let Element::Text(value) = &elements[shed_index] else {
+        return None;
+    };
+    let (prefix, suffix) = monospace_close_split(value.as_ref())?;
+    if !elements[..shed_index].iter().any(element_contains_link) {
+        return None;
+    }
+    Some((
+        shed_index,
+        prefix.to_string(),
+        suffix.to_string(),
+        trailing_space,
+    ))
 }
 
 fn is_wikidot_edge_padding(token: &ExtractedToken<'_>) -> bool {

@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::comment::consume_valid_comment;
 use super::iftags::{
     bracket_close_text, complete_fused_bracket_close, consume_iftags_segment,
     consume_iftags_segment_fused, iftags_segment, iftags_segment_fused,
@@ -224,6 +225,14 @@ where
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
         }
 
+        if parser.current().token == Token::LeftComment {
+            let range = consume_valid_comment(parser)?;
+            let output = output.get_or_insert_with(String::new);
+            output.push_str(&source[copied_until..range.start]);
+            copied_until = range.end;
+            continue;
+        }
+
         if parser.current().token == Token::LeftBlock
             && let Some(segment) = (if allow_fused_closer {
                 iftags_segment_fused(parser)
@@ -263,8 +272,9 @@ where
                 // A block-head value closes with a single `]]`: the
                 // fused token's leftover bracket plus a directly
                 // following `]` complete it (checked at loop top).
-                let head_close =
-                    matches!(closes, [ParseCondition::CurrentToken(Token::RightBlock)]);
+                let head_close = closes.iter().any(|close| {
+                    matches!(close, ParseCondition::CurrentToken(Token::RightBlock))
+                });
                 if head_close {
                     fused_close = Some((segment.range.end + 1, segment.range.end));
                 } else if let Some(straddle) = straddle {

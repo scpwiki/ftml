@@ -40,7 +40,8 @@ pub const BLOCK_IMAGE: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -83,8 +84,9 @@ fn parse_fn<'r, 't>(
                 arguments,
             )
         } else {
-            let (source, arguments) = parser.get_head_name_map(&BLOCK_IMAGE, in_head)?;
-            (Cow::Borrowed(source), is_url(source), arguments)
+            let (source, arguments) = parser.get_head_field_map(&BLOCK_IMAGE, in_head)?;
+            let source_prefix_is_url = is_url(&source);
+            (source, source_prefix_is_url, arguments)
         };
     let (link, target) = if parser.settings().layout.legacy() {
         match arguments.get("link") {
