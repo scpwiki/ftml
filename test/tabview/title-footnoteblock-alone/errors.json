@@ -1,0 +1,110 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-tabview",
+        "span": [
+            64,
+            64
+        ],
+        "kind": "tab-view-contains-non-tab"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            9,
+            11
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block",
+        "rule": "block-tab",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            12,
+            14
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "identifier",
+        "rule": "block",
+        "span": [
+            38,
+            42
+        ],
+        "kind": "no-such-block"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            33,
+            36
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            43,
+            46
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            49,
+            51
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            52,
+            55
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            62,
+            64
+        ],
+        "kind": "no-rules-match"
+    }
+]

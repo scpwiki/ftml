@@ -437,6 +437,193 @@ where
     terminator.then_some((probe, fused_end))
 }
 
+fn advance_parser_to<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    target: &Parser<'r, 't>,
+) -> Result<(), ParseError> {
+    let end = target.current().span.start;
+    while parser.current().span.start < end {
+        parser.step()?;
+    }
+    Ok(())
+}
+
+enum TabTitleFootnote<'r, 't> {
+    NotFootnote,
+    Break,
+    Unit(Parser<'r, 't>, bool),
+    Elided(Parser<'r, 't>, bool),
+}
+
+fn tab_title_footnote_construct<'r, 't>(
+    parser: &Parser<'r, 't>,
+    title_has_content: bool,
+) -> TabTitleFootnote<'r, 't>
+where
+    'r: 't,
+{
+    let layout = parser.settings().layout;
+    let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
+        std::iter::once(parser.current())
+            .chain(parser.remaining())
+            .collect();
+    match tab_title_token_block_name(&tokens, 0, layout) {
+        Some("block-footnote") => {
+            if !tab_title_footnote_closes(&tokens, layout) {
+                return TabTitleFootnote::NotFootnote;
+            }
+            let footnote_count = parser.footnote_count();
+            let mut probe = parser.clone();
+            let consumed = match consume(&mut probe) {
+                Ok(success) => {
+                    success
+                        .item
+                        .as_ref()
+                        .iter()
+                        .any(|element| matches!(element, Element::Footnote(_)))
+                        && probe.footnote_count() == footnote_count + 1
+                }
+                Err(_) => false,
+            };
+            if !consumed {
+                probe.truncate_footnotes(footnote_count);
+                return TabTitleFootnote::NotFootnote;
+            }
+            let end = probe.current().span.start;
+            let crossed_break = std::iter::once(parser.current())
+                .chain(parser.remaining())
+                .take_while(|token| token.span.start < end)
+                .any(|token| {
+                    matches!(token.token, Token::LineBreak | Token::ParagraphBreak)
+                });
+            if crossed_break {
+                probe.truncate_footnotes(footnote_count);
+                return TabTitleFootnote::NotFootnote;
+            }
+            if !title_has_content {
+                probe.truncate_footnotes(footnote_count);
+                return TabTitleFootnote::Break;
+            }
+            let fused_end = tab_title_unit_fused_end(parser, &probe);
+            TabTitleFootnote::Unit(probe, fused_end)
+        }
+        Some("block-footnote-block") => {
+            match tab_title_footnoteblock_probe(parser, &tokens) {
+                Some(probe) => {
+                    let fused_end = tab_title_unit_fused_end(parser, &probe);
+                    TabTitleFootnote::Elided(probe, fused_end)
+                }
+                None => TabTitleFootnote::NotFootnote,
+            }
+        }
+        _ => TabTitleFootnote::NotFootnote,
+    }
+}
+
+fn tab_title_footnoteblock_probe<'r, 't>(
+    parser: &Parser<'r, 't>,
+    tokens: &[&crate::parsing::ExtractedToken<'t>],
+) -> Option<Parser<'r, 't>>
+where
+    'r: 't,
+{
+    let mut close = None;
+    for token in tokens.iter().skip(1) {
+        match token.token {
+            Token::RightBlock | Token::RightLink => {
+                close = Some(*token);
+                break;
+            }
+            Token::LeftBlock
+            | Token::LeftBlockEnd
+            | Token::LineBreak
+            | Token::ParagraphBreak
+            | Token::InputEnd => {
+                return None;
+            }
+            _ => {}
+        }
+    }
+    let close = close?;
+    let start = parser.current().span.start;
+    let slice = &parser.full_text().inner()[start..close.span.start + 2];
+    let tokenization = crate::tokenize(slice);
+    let outcome =
+        crate::parsing::parse(&tokenization, parser.page_info(), parser.settings());
+    let (tree, _) = outcome.into();
+    if !tab_title_single_footnoteblock(&tree.elements) {
+        return None;
+    }
+    let mut probe = parser.clone();
+    while probe.current().span.start < close.span.end {
+        probe.step().ok()?;
+    }
+    Some(probe)
+}
+
+fn tab_title_single_footnoteblock(elements: &[Element]) -> bool {
+    match elements {
+        [Element::Container(container)]
+            if container.ctype() == crate::tree::ContainerType::Paragraph =>
+        {
+            tab_title_single_footnoteblock(container.elements())
+        }
+        [Element::FootnoteBlock { .. }] => true,
+        _ => false,
+    }
+}
+
+fn tab_title_remainder_empty<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    loop {
+        match probe.current().token {
+            Token::RightBlock | Token::RightLink => return true,
+            Token::LeftComment => {
+                if consume_valid_comment(&mut probe).is_err() {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+}
+
+fn tab_title_footnote_closes(
+    tokens: &[&crate::parsing::ExtractedToken],
+    layout: crate::layout::Layout,
+) -> bool {
+    let mut depth = 0_usize;
+    for (index, token) in tokens.iter().enumerate() {
+        match token.token {
+            Token::LeftBlock => match tab_title_token_block_name(tokens, index, layout) {
+                Some("block-footnote") => depth += 1,
+                Some("block-tab") | Some("block-tabview") => return false,
+                _ => {}
+            },
+            Token::LeftBlockEnd => {
+                match tab_title_token_block_name(tokens, index, layout) {
+                    Some("block-footnote") => {
+                        if depth <= 1 {
+                            return true;
+                        }
+                        depth -= 1;
+                    }
+                    Some("block-tab") | Some("block-tabview") => return false,
+                    _ => {}
+                }
+            }
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                return false;
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 fn collect_tab_label<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>), ParseError>
@@ -449,6 +636,7 @@ where
     let mut output = None::<String>;
     let mut saw_unit = false;
     let mut link_unit_end = None::<usize>;
+    let mut elided_footnoteblock = false;
 
     loop {
         let current = parser.current();
@@ -472,6 +660,9 @@ where
                     current.span.start,
                     saw_unit,
                 );
+                if elided_footnoteblock && !saw_unit && text.is_empty() {
+                    return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                }
                 parser.step()?;
                 return Ok((text, None));
             }
@@ -484,6 +675,9 @@ where
                     current.span.start,
                     saw_unit,
                 );
+                if elided_footnoteblock && !saw_unit && text.is_empty() {
+                    return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                }
                 let leftover = &source[current.span.start + 2..current.span.end];
                 parser.step()?;
                 return Ok((text, Some(leftover)));
@@ -495,6 +689,65 @@ where
                 copied_until = range.end;
             }
             Token::LeftBlock => {
+                let title_has_content = saw_unit
+                    || output
+                        .as_deref()
+                        .is_some_and(|text| text.chars().any(|c| !c.is_whitespace()))
+                    || source[copied_until..current.span.start]
+                        .chars()
+                        .any(|c| !c.is_whitespace());
+                match tab_title_footnote_construct(parser, title_has_content) {
+                    TabTitleFootnote::Break => {
+                        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                    }
+                    TabTitleFootnote::Unit(unit, fused_end) => {
+                        saw_unit = true;
+                        output = Some(String::new());
+                        advance_parser_to(parser, &unit)?;
+                        copied_until = parser.current().span.start;
+                        if fused_end {
+                            parser.step()?;
+                            return Ok((std::borrow::Cow::Borrowed(""), None));
+                        }
+                        continue;
+                    }
+                    TabTitleFootnote::Elided(elided, fused_end) => {
+                        let title_so_far_empty = !saw_unit
+                            && output.as_deref().is_none_or(|text| text.is_empty())
+                            && copied_until == start
+                            && current.span.start == start;
+                        if title_so_far_empty
+                            && (fused_end || tab_title_remainder_empty(&elided))
+                        {
+                            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                        }
+                        let construct_start = current.span.start;
+                        advance_parser_to(parser, &elided)?;
+                        let out_text = output.get_or_insert_with(String::new);
+                        out_text.push_str(&source[copied_until..construct_start]);
+                        copied_until = parser.current().span.start;
+                        if title_so_far_empty {
+                            elided_footnoteblock = true;
+                        }
+                        if fused_end {
+                            let text = tab_label_finish(
+                                source,
+                                start,
+                                output,
+                                copied_until,
+                                parser.current().span.start,
+                                saw_unit,
+                            );
+                            if elided_footnoteblock && !saw_unit && text.is_empty() {
+                                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                            }
+                            parser.step()?;
+                            return Ok((text, None));
+                        }
+                        continue;
+                    }
+                    TabTitleFootnote::NotFootnote => {}
+                }
                 if iftags_segment_fused(parser).is_some() {
                     let segment = consume_iftags_segment_fused(parser)?
                         .expect("segment presence was just checked");

@@ -1,0 +1,4 @@
+A [[footnote
+
+x[[/footnote]]]]
+Body
