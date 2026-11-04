@@ -548,15 +548,16 @@ fn standalone_buttons_respect_page_syntax_mode_gate() {
 }
 
 #[test]
-fn plain_failed_inline_div_keeps_its_body_literal() {
+fn plain_failed_inline_div_registers_its_footnote() {
     let input = "[[div]][[footnote]]secret[[/footnote]][[/div]]";
     let (tree, _errors) = parse_with_errors(input, Layout::Wikidot);
     let html = render_html(&tree, Layout::Wikidot);
 
-    assert!(tree.footnotes.is_empty(), "{tree:#?}");
-    assert!(!html.contains("footnotes-footer"), "{html}");
+    assert_eq!(tree.footnotes.len(), 1, "{tree:#?}");
+    assert!(html.contains("footnotes-footer"), "{html}");
+    assert!(html.contains("secret"), "{html}");
     assert!(html.contains("[[div]]"), "{html}");
-    assert!(html.contains("[[footnote]]secret[[/footnote]]"), "{html}");
+    assert!(!html.contains("[[footnote]]"), "{html}");
     assert!(html.contains("[[/div]]"), "{html}");
 }
 

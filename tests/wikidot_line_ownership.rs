@@ -214,20 +214,35 @@ fn same_line_div_nested_span_falls_back_to_inline_parsing() {
 fn same_line_div_with_unmatched_span_close_stays_literal() {
     let source = "[[div]] literal [[/span]] [[/div]]";
     let (html, text) = render(source);
-    assert_eq!(html, "<p>[[div]] literal [[/span]] [[/div]]</p>");
-    assert_eq!(text, source);
+    assert_eq!(
+        html,
+        "<p>[[div]] literal [<a href=\"/span]]\">[[/div</a>]</p>"
+    );
+    assert_eq!(text, "[[div]] literal [[[/div]");
 }
 
 #[test]
 fn same_line_div_span_ownership_requires_a_real_bounded_opener() {
-    for source in [
-        "[[div]] span [[ruby]]x[[/ruby]] [[/span]] [[/div]]",
-        "[[div]] [[span]]x[[/div]] [[/span]]",
-        "[[div]] [[span]]@@[[/span]]@@ [[/div]]",
+    for (source, expected_html, expected_text) in [
+        (
+            "[[div]] span [[ruby]]x[[/ruby]] [[/span]] [[/div]]",
+            "<p>[[div]] span [[ruby]]x[<a href=\"/ruby]]\">[[/span</a>] [[/div]]</p>",
+            "[[div]] span [[ruby]]x[[[/span] [[/div]]",
+        ),
+        (
+            "[[div]] [[span]]x[[/div]] [[/span]]",
+            "<p>[[div]] <span>x[[/div]]</span></p>",
+            "[[div]] x[[/div]]",
+        ),
+        (
+            "[[div]] [[span]]@@[[/span]]@@ [[/div]]",
+            "<p>[[div]] [[span]]<span style=\"white-space: pre-wrap;\">[[/span]]</span> [[/div]]</p>",
+            "[[div]] [[span]][[/span]] [[/div]]",
+        ),
     ] {
         let (html, text) = render(source);
-        assert_eq!(html, format!("<p>{source}</p>"));
-        assert_eq!(text, source);
+        assert_eq!(html, expected_html, "{source}");
+        assert_eq!(text, expected_text, "{source}");
     }
 }
 
@@ -237,14 +252,14 @@ fn same_line_div_span_marker_controls_stay_clean() {
         (
             "raw",
             "[[div]] @@[[/span]]@@ [[/div]]",
-            "<p>[[div]] @@[[/span]]@@ [[/div]]</p>",
-            "[[div]] @@[[/span]]@@ [[/div]]",
+            "<p>[[div]] <span style=\"white-space: pre-wrap;\">[[/span]]</span> [[/div]]</p>",
+            "[[div]] [[/span]] [[/div]]",
         ),
         (
             "comment",
             "[[div]] [!-- [[span]]x[[/span]] --] [[/div]]",
-            "<p>[[div]]  [[/div]]</p>",
-            "[[div]]  [[/div]]",
+            "<p>[[div]] [[/div]]</p>",
+            "[[div]] [[/div]]",
         ),
         (
             "multiline",

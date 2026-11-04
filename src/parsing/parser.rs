@@ -140,6 +140,7 @@ pub(super) struct BlockScanCache<'t> {
     head_had_segment: Cell<bool>,
     wikidot_tab_quote_ejection: Cell<bool>,
     wikidot_body_soft_ended: Cell<bool>,
+    colon_line_vanished: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,

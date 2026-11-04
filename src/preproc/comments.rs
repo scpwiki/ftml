@@ -13,6 +13,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
     let mut copied_until = 0usize;
     let mut scan = 0usize;
     let mut removed = false;
+    let mut seams: Vec<usize> = Vec::new();
     let mut break_drops: Vec<std::ops::Range<usize>> = Vec::new();
 
     while let Some(relative_open) = text[scan..].find("[!--") {
@@ -44,6 +45,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
             continue;
         }
         push_copied_range(&mut output, text, copied_until..open, &break_drops);
+        seams.push(output.len());
         if comment_elision_needs_raw_barrier(text, open, close) {
             output.push('\0');
         }
@@ -54,7 +56,35 @@ pub(super) fn substitute_wikidot(text: &mut String) {
 
     if removed || !break_drops.is_empty() {
         push_copied_range(&mut output, text, copied_until..text.len(), &break_drops);
+        collapse_comment_seams(&mut output, &seams);
         *text = output;
+    }
+}
+
+fn collapse_comment_seams(output: &mut String, seams: &[usize]) {
+    if seams.is_empty() {
+        return;
+    }
+    let bytes = output.as_bytes();
+    let mut ranges = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if matches!(bytes[index], b' ' | b'\t') {
+            let start = index;
+            while index < bytes.len() && matches!(bytes[index], b' ' | b'\t') {
+                index += 1;
+            }
+            if index - start > 1
+                && seams.iter().any(|&seam| start <= seam && seam <= index)
+            {
+                ranges.push(start..index);
+            }
+        } else {
+            index += 1;
+        }
+    }
+    for range in ranges.into_iter().rev() {
+        output.replace_range(range, " ");
     }
 }
 
