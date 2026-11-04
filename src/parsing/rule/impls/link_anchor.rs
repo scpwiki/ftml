@@ -89,7 +89,9 @@ where
     };
 
     if parser.settings().layout.legacy()
-        && !url.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        && !url.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'%')
+        })
     {
         return Err(parser.make_err(ParseErrorKind::InvalidUrl));
     }
@@ -336,5 +338,48 @@ mod tests {
 
         assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(html, r##"<p><a href="#Patrick">Jump</a></p>"##);
+    }
+
+    #[test]
+    fn wikidot_anchor_links_accept_the_live_name_characters() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let render = |source: &str| {
+            let tokenization = crate::tokenize(source);
+            let (tree, errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            assert!(errors.is_empty(), "{errors:#?}");
+            HtmlRender.render(&tree, &page_info, &settings).body
+        };
+
+        assert_eq!(
+            render("[#my-anchor Label]"),
+            "<p><a href=\"#my-anchor\">Label</a></p>",
+        );
+        assert_eq!(
+            render("[#my_anchor Label]"),
+            "<p><a href=\"#my_anchor\">Label</a></p>",
+        );
+        assert_eq!(render("[#a%b Label]"), "<p><a href=\"#a%b\">Label</a></p>",);
+        assert_eq!(
+            render("[#my-anchor Label text]"),
+            "<p><a href=\"#my-anchor\">Label text</a></p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_anchor_links_reject_names_outside_the_live_characters() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let render = |source: &str| {
+            let tokenization = crate::tokenize(source);
+            let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+            HtmlRender.render(&tree, &page_info, &settings).body
+        };
+
+        assert_eq!(render("[#my.anchor Label]"), "<p>[#my.anchor Label]</p>");
+        assert_eq!(render("[#a:b Label]"), "<p>[#a:b Label]</p>");
+        assert_eq!(render("[#a+b Label]"), "<p>[#a+b Label]</p>");
+        assert_eq!(render("[#my-anchor]"), "<p>[#my-anchor]</p>");
     }
 }

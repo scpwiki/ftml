@@ -1,0 +1,20 @@
+[
+    {
+        "token": "right-bracket",
+        "rule": "link-anchor",
+        "span": [
+            56,
+            57
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-bracket-anchor",
+        "rule": "fallback",
+        "span": [
+            45,
+            47
+        ],
+        "kind": "no-rules-match"
+    }
+]

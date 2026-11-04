@@ -1,0 +1,75 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "anchor",
+                            "link": "#my-anchor",
+                            "label": {
+                                "text": "Label"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "anchor",
+                            "link": "#a:b",
+                            "label": {
+                                "text": "Label"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "anchor",
+                            "link": "#a-b",
+                            "label": {
+                                "text": "Label"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[#"
+                    },
+                    {
+                        "element": "text",
+                        "data": "my"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "anchor"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]"
+                    }
+                ]
+            }
+        }
+    ]
+}

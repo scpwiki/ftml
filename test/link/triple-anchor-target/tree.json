@@ -1,0 +1,38 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "#my-anchor",
+                            "label": {
+                                "text": "Label"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "#my-anchor",
+                            "label": {
+                                "slug": "#my-anchor"
+                            },
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

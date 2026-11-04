@@ -399,6 +399,8 @@ where
     let mut triple_link_open = false;
     let mut span_open = false;
     let mut footnote_open = false;
+    let mut size_open = false;
+    let mut a_open = false;
     loop {
         traversed.push(scan.current().span.start);
         match scan.current().token {
@@ -419,11 +421,50 @@ where
             }
             Token::LeftBlock => {
                 let mut opener = scan.clone();
-                if let Ok((name, _)) = opener.get_block_name(false) {
-                    span_open |= name.eq_ignore_ascii_case("span");
-                    footnote_open |= name.eq_ignore_ascii_case("footnote");
-                    scan.update(&opener);
-                    continue;
+                if let Ok((name, in_head)) = opener.get_block_name(false) {
+                    let mut head_complete = !in_head;
+                    if in_head {
+                        loop {
+                            match opener.current().token {
+                                Token::RightBlock => {
+                                    let _ = opener.step();
+                                    head_complete = true;
+                                    break;
+                                }
+                                Token::RightLink if opener.current().slice == "]]]" => {
+                                    let _ = opener.step();
+                                    head_complete = true;
+                                    break;
+                                }
+                                Token::RightBracket
+                                | Token::RightLink
+                                | Token::LineBreak
+                                | Token::ParagraphBreak
+                                | Token::InputEnd => break,
+                                _ => {
+                                    if opener.step().is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if head_complete {
+                        if name.eq_ignore_ascii_case("image")
+                            || name.eq_ignore_ascii_case("user")
+                        {
+                            parser.cache_single_link_label_owner_scan_outcomes(
+                                &traversed, true,
+                            );
+                            return true;
+                        }
+                        span_open |= name.eq_ignore_ascii_case("span");
+                        footnote_open |= name.eq_ignore_ascii_case("footnote");
+                        size_open |= name.eq_ignore_ascii_case("size");
+                        a_open |= name.eq_ignore_ascii_case("a");
+                        scan.update(&opener);
+                        continue;
+                    }
                 }
             }
             Token::LeftBlockEnd => {
@@ -431,6 +472,18 @@ where
                 if let Ok((name, residual)) = close.get_wikidot_end_block_with_residual()
                 {
                     if span_open && name.eq_ignore_ascii_case("span") {
+                        parser.cache_single_link_label_owner_scan_outcomes(
+                            &traversed, true,
+                        );
+                        return true;
+                    }
+                    if size_open && name.eq_ignore_ascii_case("size") {
+                        parser.cache_single_link_label_owner_scan_outcomes(
+                            &traversed, true,
+                        );
+                        return true;
+                    }
+                    if a_open && name.eq_ignore_ascii_case("a") {
                         parser.cache_single_link_label_owner_scan_outcomes(
                             &traversed, true,
                         );
@@ -819,5 +872,56 @@ mod tests {
         assert!(html.contains("[data:text/html,alert(2) XSS]"), "{html}");
         assert!(!html.contains("href=\"javascript:"), "{html}");
         assert!(!html.contains("href=\"data:"), "{html}");
+    }
+
+    #[test]
+    fn wikidot_single_link_labels_with_complete_blocks_do_not_form() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let render = |source: &str| {
+            let tokenization = crate::tokenize(source);
+            let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+            HtmlRender.render(&tree, &page_info, &settings).body
+        };
+
+        let html = render("[https://example.com/ [[span class=\"c\"]]Y[[/span]] end]");
+        assert_eq!(
+            html,
+            "<p>[<a href=\"https://example.com/\">https://example.com/</a> <span class=\"c\">Y</span> end]</p>",
+        );
+
+        for (source, corrupt) in [
+            (
+                "[https://example.com [[image foo.gif]]]",
+                "[[image foo.gif</a>",
+            ),
+            (
+                "[https://example.com/ [[size 120%]]big[[/size]]]",
+                "[[size 120%</a>",
+            ),
+            (
+                "[https://example.com/ [[user SomeUser]]]",
+                "[[user SomeUser</a>",
+            ),
+        ] {
+            let html = render(source);
+            assert!(!html.contains(corrupt), "{source} => {html}");
+            assert!(
+                html.contains("[<a href=\"https://example.com"),
+                "{source} => {html}"
+            );
+        }
+
+        let html = render("[https://example.com [[div]]A[[/div]]]");
+        assert_eq!(
+            html,
+            "<p><a href=\"https://example.com\">[[div</a>]A[[/div]]]</p>",
+        );
+
+        let html = render("[https://example.com/ [[span class=\"c\"]]Y]");
+        assert_eq!(
+            html,
+            "<p><a href=\"https://example.com/\">[[span class=&quot;c&quot;</a>]Y]</p>",
+        );
     }
 }

@@ -66,7 +66,7 @@ fn try_consume_fn<'r, 't>(
     let residual_closer = closer.token == Token::RightLink;
     let valid_wikidot_name = name
         .chars()
-        .all(|character| character.is_ascii_alphanumeric() || "-_.".contains(character));
+        .all(|character| character.is_ascii_alphanumeric() || "-_.%".contains(character));
     if residual_closer
         && (!parser.settings().layout.legacy()
             || name.is_empty()
@@ -159,6 +159,18 @@ mod tests {
 
         assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(html, "<p><a name=\"a_b-c.d\"></a></p>");
+    }
+
+    #[test]
+    fn wikidot_named_anchor_with_percent_keeps_the_live_name() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("[[# a%b]]");
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert_eq!(html, "<p><a name=\"a%b\"></a></p>");
     }
 
     #[test]

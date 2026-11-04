@@ -1,0 +1,208 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "["
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://example.com",
+                            "label": "url",
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "div"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "A"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "div"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "["
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://example.com",
+                            "label": "url",
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "div"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "class"
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "c"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "A"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "div"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://example.com/",
+                            "label": {
+                                "text": "[[span class=\"c\"]]Y"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "["
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://example.com/",
+                            "label": "url",
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "code"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "x"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "1"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "code"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]]"
+                    }
+                ]
+            }
+        }
+    ]
+}
