@@ -286,6 +286,7 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
     if wikidot_compatibility {
         preserve_wikidot_quote_tab_separator(text);
         preserve_wikidot_bibliography_tab_gap(text);
+        preserve_wikidot_bibliography_tab_prefix(text);
     }
 
     replace_tabs(text, &mut buffer, wikidot_compatibility);
@@ -702,6 +703,144 @@ fn preserve_wikidot_bibliography_tab_gap(text: &mut String) {
     }
     output.push_str(&text[cursor..]);
     *text = output;
+}
+
+fn preserve_wikidot_bibliography_tab_prefix(text: &mut String) {
+    if !text.contains('\t') {
+        return;
+    }
+
+    let literal_regions = LiteralRegionIndex::new(text);
+    let mut protected_ranges = literal_regions.ranges().to_vec();
+    protected_ranges.extend(wikidot_comment_ranges(text));
+    let protected_ranges = merge_protected_ranges(protected_ranges);
+
+    let Some((first_body_line, closer_line)) =
+        wikidot_bibliography_region(text, &protected_ranges)
+    else {
+        return;
+    };
+
+    let bytes = text.as_bytes();
+    let mut insertions = Vec::new();
+    let mut line_start = 0usize;
+    for line in text.split_inclusive('\n') {
+        if line_start >= first_body_line
+            && line_start <= closer_line
+            && bytes.get(line_start) == Some(&b':')
+            && bytes.get(line_start + 1) == Some(&b'\t')
+        {
+            let mut index = line_start + 2;
+            let label_start = index;
+            while bytes.get(index).is_some_and(u8::is_ascii_alphanumeric) {
+                index += 1;
+            }
+            let after_separator = if index == label_start {
+                None
+            } else if bytes.get(index) == Some(&b':') {
+                Some(index + 1)
+            } else if matches!(
+                bytes.get(index),
+                Some(&b' ') | Some(&b'\n') | Some(&b'\t')
+            ) && bytes.get(index + 1) == Some(&b':')
+            {
+                Some(index + 2)
+            } else {
+                None
+            };
+            let valid = after_separator.is_some_and(|after| {
+                after == bytes.len()
+                    || matches!(
+                        bytes.get(after),
+                        Some(&b' ') | Some(&b'\t') | Some(&b'\n')
+                    )
+            });
+            if valid && !index_in_ranges(&protected_ranges, line_start + 1) {
+                insertions.push(line_start + 1);
+            }
+        }
+        line_start += line.len();
+    }
+    if insertions.is_empty() {
+        return;
+    }
+
+    let mut output = String::with_capacity(text.len() + insertions.len());
+    let mut cursor = 0usize;
+    for insertion in insertions {
+        output.push_str(&text[cursor..insertion]);
+        output.push(' ');
+        cursor = insertion;
+    }
+    output.push_str(&text[cursor..]);
+    *text = output;
+}
+
+fn wikidot_bibliography_region(
+    text: &str,
+    protected_ranges: &[std::ops::Range<usize>],
+) -> Option<(usize, usize)> {
+    let bytes = text.as_bytes();
+    let mut line_start = 0usize;
+    while line_start < bytes.len() {
+        let line_end = text[line_start..]
+            .find('\n')
+            .map_or(bytes.len(), |offset| line_start + offset);
+        if let Some(head_end) =
+            wikidot_bibliography_opener_end(bytes, line_start, line_end)
+            && !index_in_ranges(protected_ranges, line_start)
+        {
+            let mut search_from = head_end;
+            while let Some(offset) = text[search_from..].find("[[/bibliography]]") {
+                let closer = search_from + offset;
+                if !index_in_ranges(protected_ranges, closer) {
+                    let closer_line =
+                        text[..closer].rfind('\n').map_or(0, |newline| newline + 1);
+                    let first_body_line = if line_end < bytes.len() {
+                        line_end + 1
+                    } else {
+                        bytes.len()
+                    };
+                    return Some((first_body_line, closer_line));
+                }
+                search_from = closer + 1;
+            }
+        }
+        if line_end == bytes.len() {
+            break;
+        }
+        line_start = line_end + 1;
+    }
+    None
+}
+
+fn wikidot_bibliography_opener_end(
+    bytes: &[u8],
+    line_start: usize,
+    line_end: usize,
+) -> Option<usize> {
+    let name_start = line_start + 2;
+    if bytes.get(line_start) != Some(&b'[')
+        || bytes.get(line_start + 1) != Some(&b'[')
+        || !bytes
+            .get(name_start..name_start + 12)
+            .is_some_and(|name| name == b"bibliography")
+    {
+        return None;
+    }
+    let after_name = name_start + 12;
+    if bytes.get(after_name) == Some(&b']') && bytes.get(after_name + 1) == Some(&b']') {
+        return Some(after_name + 2);
+    }
+    if matches!(bytes.get(after_name), Some(&b' ') | Some(&b'\t')) {
+        let head = &bytes[after_name..line_end];
+        let close = head
+            .windows(2)
+            .position(|pair| pair == b"]]")
+            .map(|offset| after_name + offset + 2);
+        return close;
+    }
+    None
 }
 
 fn preserve_document_leading_indentation_barrier(text: &mut String) {

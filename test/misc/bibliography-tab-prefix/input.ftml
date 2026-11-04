@@ -1,0 +1,6 @@
+((bibcite alpha)) ((bibcite bell))
+
+[[bibliography]]
+: alpha : Alpha text.
+:	bell : Bell text.
+[[/bibliography]]

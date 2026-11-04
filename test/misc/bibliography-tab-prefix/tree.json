@@ -1,0 +1,87 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "alpha",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "bell",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "alpha",
+                [
+                    {
+                        "element": "text",
+                        "data": "Alpha"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ],
+            [
+                "bell",
+                [
+                    {
+                        "element": "text",
+                        "data": "Bell"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    }
+                ]
+            ]
+        ]
+    ]
+}
