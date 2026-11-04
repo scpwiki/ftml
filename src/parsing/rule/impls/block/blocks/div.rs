@@ -53,10 +53,69 @@ fn wikidot_div_head_started_physical_line(
     let line_start = source[..head_line_end]
         .rfind('\n')
         .map_or(0, |offset| offset + 1);
-    source[line_start..head_line_end]
-        .trim_start_matches([' ', '\t'])
-        .get(..5)
-        .is_some_and(|head| head.eq_ignore_ascii_case("[[div"))
+    wikidot_line_head_resolves_to_div(&source[line_start..head_line_end])
+}
+
+fn wikidot_line_head_resolves_to_div(line: &str) -> bool {
+    let mut rest = line.trim_start_matches([' ', '\t']);
+    if !rest.starts_with("[[") {
+        return false;
+    }
+    rest = &rest[2..];
+    let mut name = String::new();
+    loop {
+        if let Some(after) = rest.strip_prefix("[!--") {
+            let Some(end) = after.find("--]") else {
+                return false;
+            };
+            rest = &after[end + 3..];
+            continue;
+        }
+        if rest.starts_with("[[") {
+            let inner = &rest[2..];
+            let keyword = ["iftags", "ifcategory"].into_iter().find(|kw| {
+                inner.len() > kw.len()
+                    && inner[..kw.len()].eq_ignore_ascii_case(kw)
+                    && !matches!(inner.as_bytes()[kw.len()], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.')
+            });
+            let Some(keyword) = keyword else {
+                return false;
+            };
+            let closer = if keyword == "iftags" {
+                "[[/iftags]]"
+            } else {
+                "[[/ifcategory]]"
+            };
+            let Some(head_end) = inner.find("]]") else {
+                return false;
+            };
+            let after_head = &inner[head_end + 2..];
+            let Some(close_pos) = find_ascii_case_insensitive(after_head, closer) else {
+                return false;
+            };
+            rest = &after_head[close_pos + closer.len()..];
+            continue;
+        }
+        let mut chars = rest.chars();
+        match chars.next() {
+            Some(ch) if ch.is_alphanumeric() || matches!(ch, '-' | '.') => {
+                name.push(ch);
+                rest = chars.as_str();
+            }
+            _ => break,
+        }
+    }
+    name.eq_ignore_ascii_case("div")
+}
+
+fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
+    let hay = haystack.as_bytes();
+    let needle = needle.as_bytes();
+    if needle.is_empty() || hay.len() < needle.len() {
+        return None;
+    }
+    hay.windows(needle.len())
+        .position(|window| window.eq_ignore_ascii_case(needle))
 }
 
 fn wikidot_div_follows_inline_structural_close(
@@ -367,9 +426,16 @@ where
         let line_start = source[..literal_end]
             .rfind('\n')
             .map_or(0, |offset| offset + 1);
-        let opener_start = source[line_start..literal_end]
-            .rfind("[[")
-            .map_or(line_start, |offset| line_start + offset);
+        let opener_start = if owner_start >= line_start
+            && owner_start <= literal_end
+            && source[owner_start..].starts_with("[[")
+        {
+            owner_start
+        } else {
+            source[line_start..literal_end]
+                .rfind("[[")
+                .map_or(line_start, |offset| line_start + offset)
+        };
         if inline_scored_line_literal {
             let body_start = parser.current().span.start;
             let mut body = parser.clone();
