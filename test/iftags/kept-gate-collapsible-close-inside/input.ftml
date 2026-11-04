@@ -1,0 +1,4 @@
+[[collapsible]]
+a[[iftags -zzz]]b
+[[/collapsible]]
+c[[/iftags]]d

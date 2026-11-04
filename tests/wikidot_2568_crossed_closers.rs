@@ -206,7 +206,8 @@ fn a2_list_close_terminates_open_item() {
         "[[/ul]]\n",
         "after\n",
     ));
-    assert!(!html.contains("[[li]]"), "html: {html}");
+    assert!(html.contains("[[li]]"), "html: {html}");
+    assert!(html.contains("list-style: none"), "html: {html}");
     assert!(!html.contains("[[ul]]"), "html: {html}");
     assert!(html.contains("<li"), "html: {html}");
     assert!(html.contains("foo"), "html: {html}");

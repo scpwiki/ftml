@@ -916,6 +916,17 @@ fn parse_fn<'r, 't>(
         result
     };
 
+    if let Some(designated) = designated_end
+        && result.is_ok()
+        && parser.native_blockquote_depth().is_none()
+        && !parser.discarding_hidden_body()
+        && parser.current().token == Token::LeftBlockEnd
+        && parser.current().span.start < designated
+        && parser.at_body_end_boundary()
+    {
+        parser.push_pending_iftags_end_swallow(designated);
+    }
+
     if designated_end.is_some() {
         parser.set_wikidot_iftags_body_end(previous_body_end);
         parser.set_in_wikidot_iftags_span(previous_span);

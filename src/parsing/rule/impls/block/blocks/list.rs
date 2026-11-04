@@ -103,6 +103,30 @@ fn parse_list_block<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    let depth = parser.wikidot_li_pairing_depth();
+    parser.set_wikidot_li_pairing_depth(depth + 1);
+    let result = parse_list_block_impl(
+        (block_rule, list_type),
+        parser,
+        name,
+        _opener_start,
+        flag_star,
+        flag_score,
+        in_head,
+    );
+    parser.set_wikidot_li_pairing_depth(depth);
+    result
+}
+
+fn parse_list_block_impl<'r, 't>(
+    (block_rule, list_type): (&BlockRule, ListType),
+    parser: &mut Parser<'r, 't>,
+    name: &str,
+    _opener_start: usize,
+    flag_star: bool,
+    flag_score: bool,
+    in_head: bool,
+) -> ParseResult<'r, 't, Elements<'t>> {
     let rule_name = block_rule.name;
     debug!(
         "{name}/{rule_name}/{} head={in_head} score={flag_score}",
@@ -118,6 +142,9 @@ fn parse_list_block<'r, 't>(
 
     let arguments = parser.get_head_map_wikidot(block_rule, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
+    if wikidot && parser.wikidot_li_pairing_depth() == 1 {
+        parser.compute_wikidot_li_pairing();
+    }
     if parser.settings().layout.legacy() && !parser.has_body_end_block(block_rule) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -392,7 +419,7 @@ fn join_lines<'t>(lines: Vec<Vec<Element<'t>>>) -> Vec<Element<'t>> {
 fn parse_list_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -408,10 +435,14 @@ fn parse_list_item<'r, 't>(
     let arguments = parser.get_head_map_wikidot(&BLOCK_LI, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
     let body_start = parser.current().span.start;
-    if wikidot
-        && !parser.has_body_end_block(&BLOCK_LI)
-        && !parser.has_wikidot_list_close_ahead()
-    {
+    if wikidot && parser.wikidot_li_inside_item_body() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if wikidot && parser.wikidot_li_pairing_depth() > 0 {
+        if !parser.wikidot_li_head_paired(opener_start) {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+    } else if wikidot && !parser.has_body_end_block(&BLOCK_LI) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 

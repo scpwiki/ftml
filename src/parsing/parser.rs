@@ -129,6 +129,9 @@ pub(super) struct BlockScanCache<'t> {
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
     wikidot_iftags_body_end: Cell<Option<usize>>,
+    pending_iftags_end_swallows: Vec<usize>,
+    wikidot_li_paired_heads: std::collections::BTreeSet<usize>,
+    wikidot_li_pairing_depth: Cell<usize>,
     gate_items_allowed: Cell<bool>,
     title_footnote_fused_end: Cell<bool>,
     degraded_title_records: Vec<usize>,
@@ -299,6 +302,56 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_iftags_body_end
             .set(value);
+    }
+
+    pub(crate) fn push_pending_iftags_end_swallow(&self, position: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .pending_iftags_end_swallows
+            .push(position);
+    }
+
+    pub(crate) fn take_pending_iftags_end_swallow(&self, position: usize) -> bool {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        match cache
+            .pending_iftags_end_swallows
+            .iter()
+            .position(|pending| *pending == position)
+        {
+            Some(index) => {
+                cache.pending_iftags_end_swallows.remove(index);
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub(crate) fn set_wikidot_li_paired_heads(
+        &self,
+        heads: std::collections::BTreeSet<usize>,
+    ) {
+        self.block_end_scan_cache.borrow_mut().wikidot_li_paired_heads = heads;
+    }
+
+    pub(crate) fn wikidot_li_head_paired(&self, position: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_paired_heads
+            .contains(&position)
+    }
+
+    pub(crate) fn wikidot_li_pairing_depth(&self) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_pairing_depth
+            .get()
+    }
+
+    pub(crate) fn set_wikidot_li_pairing_depth(&self, depth: usize) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_pairing_depth
+            .set(depth);
     }
 
     pub(crate) fn fused_name_residual(&self) -> Option<usize> {

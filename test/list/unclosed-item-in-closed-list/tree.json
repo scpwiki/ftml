@@ -1,0 +1,37 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {
+                            "style": "list-style: none"
+                        },
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "[["
+                            },
+                            {
+                                "element": "text",
+                                "data": "li"
+                            },
+                            {
+                                "element": "text",
+                                "data": "]]"
+                            },
+                            {
+                                "element": "text",
+                                "data": "ab"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

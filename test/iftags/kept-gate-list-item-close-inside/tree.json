@@ -1,0 +1,43 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "a"
+                            },
+                            {
+                                "element": "text",
+                                "data": "b"
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {
+                            "style": "list-style: none"
+                        },
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "c"
+                            },
+                            {
+                                "element": "text",
+                                "data": "d"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

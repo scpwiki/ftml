@@ -1,0 +1,4 @@
+[[footnote]]
+a[[iftags -zzz]]b
+[[/footnote]]
+c[[/iftags]]d
