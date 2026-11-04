@@ -39,7 +39,8 @@ macro_rules! make_align_block {
 
         fn parse_fn<'r, 't>(
             parser: &mut Parser<'r, 't>,
-            name: &'t str,
+            name: &str,
+            _opener_start: usize,
             flag_star: bool,
             flag_score: bool,
             in_head: bool,
@@ -48,6 +49,7 @@ macro_rules! make_align_block {
                 (&$block_const, Alignment::$align),
                 parser,
                 name,
+                _opener_start,
                 flag_star,
                 flag_score,
                 in_head,
@@ -59,7 +61,8 @@ macro_rules! make_align_block {
 pub fn parse_alignment_block<'r, 't>(
     (block_rule, alignment): (&BlockRule, Alignment),
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

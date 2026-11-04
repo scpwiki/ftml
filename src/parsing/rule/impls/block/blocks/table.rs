@@ -388,7 +388,8 @@ where
 
 fn parse_table<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -499,7 +500,8 @@ fn parse_table<'r, 't>(
 
 fn parse_row<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -574,7 +576,8 @@ fn parse_row<'r, 't>(
 
 fn parse_cell_regular<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -642,7 +645,8 @@ fn parse_cell_regular<'r, 't>(
 
 fn parse_cell_header<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

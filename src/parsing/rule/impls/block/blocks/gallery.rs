@@ -29,7 +29,8 @@ pub const BLOCK_GALLERY: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

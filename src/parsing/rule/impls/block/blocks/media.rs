@@ -41,7 +41,8 @@ pub const BLOCK_VIDEO: BlockRule = BlockRule {
 
 fn parse_audio<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -51,7 +52,8 @@ fn parse_audio<'r, 't>(
 
 fn parse_video<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -61,7 +63,7 @@ fn parse_video<'r, 't>(
 
 fn parse_audio_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
     flags: (bool, bool, bool),
 ) -> ParseResult<'r, 't, Elements<'t>> {
     parse_media_block(parser, &BLOCK_AUDIO, name, flags, build_audio)
@@ -69,7 +71,7 @@ fn parse_audio_block<'r, 't>(
 
 fn parse_video_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
     flags: (bool, bool, bool),
 ) -> ParseResult<'r, 't, Elements<'t>> {
     parse_media_block(parser, &BLOCK_VIDEO, name, flags, build_video)
@@ -102,7 +104,7 @@ fn build_video<'t>(
 fn parse_media_block<'r, 't, F>(
     parser: &mut Parser<'r, 't>,
     block_rule: &BlockRule,
-    name: &'t str,
+    name: &str,
     flags: (bool, bool, bool),
     build_element: F,
 ) -> ParseResult<'r, 't, Elements<'t>>

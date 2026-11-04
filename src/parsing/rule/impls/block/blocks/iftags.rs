@@ -54,7 +54,7 @@ fn parse_conditions<'r, 't>(
 /// never evaluated and the consumed range renders verbatim.
 fn literal_span_gate<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     // The block machinery has already consumed `[[` and the name, so the
     // head's start is recovered by scanning the source back from the
@@ -281,7 +281,8 @@ fn result_is_invisible(result: &ParseResult<'_, '_, Elements<'_>>) -> bool {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

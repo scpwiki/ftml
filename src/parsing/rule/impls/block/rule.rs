@@ -120,6 +120,7 @@ fn parse_wikidot_scored_span_residual<'r, 't>(
 where
     'r: 't,
 {
+    let opener_start = parser.current().span.start;
     parser.set_rule(RULE_BLOCK);
     parser.get_optional_space()?;
     let (name, in_head) = parser.get_wikidot_block_name_with_residual_opener()?;
@@ -132,7 +133,7 @@ where
     parser.set_block(&BLOCK_SPAN);
     parser.get_optional_space()?;
 
-    (BLOCK_SPAN.parse_fn)(parser, name, false, true, false).map(|parsed| {
+    (BLOCK_SPAN.parse_fn)(parser, name, opener_start, false, true, false).map(|parsed| {
         parsed.map(|elements| {
             let mut elements = match elements {
                 Elements::Multiple(elements) => elements,
@@ -319,7 +320,8 @@ where
         return Err(error);
     }
 
-    let result = (block.parse_fn)(parser, name, flag_star, flag_score, in_head);
+    let result =
+        (block.parse_fn)(parser, name, opener_start, flag_star, flag_score, in_head);
     if let Err(error) = &result {
         memoization.record_failure(parser, block, opener_start, error);
     }

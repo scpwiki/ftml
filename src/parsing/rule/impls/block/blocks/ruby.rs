@@ -98,7 +98,8 @@ fn parse_shortcut_head<'r, 't>(
 
 fn parse_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -142,7 +143,8 @@ fn assert_no_partials_after_conversion(elements: &[Element]) {
 
 fn parse_text<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -171,7 +173,8 @@ fn parse_text<'r, 't>(
 
 fn parse_shortcut<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

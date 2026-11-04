@@ -40,7 +40,8 @@ pub const BLOCK_LATER: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     _flag_star: bool,
     _flag_score: bool,
     in_head: bool,
