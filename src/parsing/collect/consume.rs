@@ -106,6 +106,179 @@ pub fn collect_consume_keep<'r, 't>(
     Ok(ParseSuccess::new(item, errors, paragraph_safe))
 }
 
+pub struct CollectSplitEscape<'t> {
+    pub segments: Vec<(Vec<Element<'t>>, bool)>,
+}
+
+impl<'t> CollectSplitEscape<'t> {
+    pub fn into_layout(self) -> (Vec<Element<'t>>, Vec<(usize, bool)>, bool) {
+        let mut flat = Vec::new();
+        let mut entries = Vec::new();
+        let mut safe = true;
+        let last_index = self.segments.len() - 1;
+        for (index, (segment, segment_safe)) in self.segments.into_iter().enumerate() {
+            safe &= segment_safe;
+            let mut count = segment.len();
+            let ends_with_break = matches!(segment.last(), Some(Element::LineBreak),);
+            flat.extend(segment);
+            if index < last_index && !ends_with_break {
+                flat.push(Element::LineBreak);
+                count += 1;
+            }
+            entries.push((count, segment_safe));
+        }
+        (flat, entries, safe)
+    }
+}
+
+/// Like `collect_consume_keep()`, but watches for the first consumed
+/// unit that crosses a paragraph break: a unit carrying a paragraph
+/// split layout contributes only its first segment to the collected
+/// elements, and the remaining segments are returned as an escape; a
+/// unit whose flat elements contain a line break with real content
+/// after it (a kept gate body whose segments were flattened into one
+/// by line-scoped body gathers) escapes at that break instead.
+/// Everything consumed after the escape point joins the last escaped
+/// segment.
+pub fn collect_consume_keep_split<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    rule: Rule,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+) -> ParseResult<
+    'r,
+    't,
+    (
+        Vec<Element<'t>>,
+        &'r ExtractedToken<'t>,
+        Option<CollectSplitEscape<'t>>,
+    ),
+> {
+    let mut item_elements = Vec::new();
+    let mut escape: Option<Vec<(Vec<Element<'t>>, bool)>> = None;
+
+    let mut comment_line_break_pending = false;
+    let collection = collect(parser, rule, closes, invalids, kind, |parser| {
+        let drop_line_break = comment_line_break_pending;
+        comment_line_break_pending = false;
+        let comment_line = parser.settings().layout.legacy()
+            && parser.current().token == Token::LeftComment
+            && parser.start_of_line();
+        let success = match delimiter_inert_block_head(parser, rule) {
+            Some(element) => {
+                ParseSuccess::new(Elements::Single(element), Vec::new(), true)
+            }
+            None => consume(parser)?,
+        };
+        if comment_line
+            && matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            )
+        {
+            comment_line_break_pending = true;
+        }
+        let ParseSuccess {
+            item: elements,
+            errors,
+            paragraph_safe: step_safe,
+            paragraph_split,
+            ..
+        } = success;
+        let single_line_break = matches!(elements, Elements::Single(Element::LineBreak));
+        match &mut escape {
+            Some(segments) => {
+                let (tail, tail_safe) =
+                    segments.last_mut().expect("escape has a last segment");
+                *tail_safe &= step_safe;
+                if !(drop_line_break
+                    && single_line_break
+                    && matches!(tail.last(), Some(Element::LineBreak)))
+                {
+                    append_elements(tail, elements);
+                }
+            }
+            None => {
+                let split = paragraph_split.filter(|split| {
+                    split.len() >= 2
+                        && split.iter().map(|(count, _)| count).sum::<usize>()
+                            == elements.len()
+                });
+                match split {
+                    Some(split) => {
+                        let flat: Vec<Element<'t>> = elements.as_ref().to_vec();
+                        let mut iter = flat.into_iter();
+                        let mut segments = Vec::new();
+                        for (index, (count, segment_safe)) in
+                            split.into_iter().enumerate()
+                        {
+                            let mut segment: Vec<Element<'t>> =
+                                iter.by_ref().take(count).collect();
+                            if index == 0 {
+                                if matches!(segment.last(), Some(Element::LineBreak)) {
+                                    segment.pop();
+                                }
+                                item_elements.append(&mut segment);
+                            } else {
+                                segments.push((segment, segment_safe));
+                            }
+                        }
+                        escape = Some(segments);
+                    }
+                    None => {
+                        let flat: Vec<Element<'t>> = elements.as_ref().to_vec();
+                        let break_at = flat
+                            .iter()
+                            .position(|element| matches!(element, Element::LineBreak))
+                            .filter(|&index| {
+                                flat[index + 1..].iter().any(|element| {
+                                    !matches!(element, Element::Delayed(_))
+                                })
+                            });
+                        match break_at {
+                            Some(index) => {
+                                let mut iter = flat.into_iter();
+                                item_elements.extend(iter.by_ref().take(index));
+                                let rest: Vec<Element<'t>> = iter.skip(1).collect();
+                                escape = Some(vec![(rest, step_safe)]);
+                            }
+                            None => {
+                                if !(drop_line_break
+                                    && single_line_break
+                                    && matches!(
+                                        item_elements.last(),
+                                        Some(Element::LineBreak)
+                                    ))
+                                {
+                                    item_elements.extend(flat);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(ParseSuccess::new((), errors, step_safe))
+    })?;
+    let (last, errors, paragraph_safe) = collection.into();
+    if parser.settings().layout.legacy() {
+        collapse_adjacent_ascii_spaces(&mut item_elements);
+        if let Some(segments) = &mut escape {
+            for (segment, _) in segments.iter_mut() {
+                collapse_adjacent_ascii_spaces(segment);
+            }
+        }
+    }
+
+    let item = (
+        item_elements,
+        last,
+        escape.map(|segments| CollectSplitEscape { segments }),
+    );
+    Ok(ParseSuccess::new(item, errors, paragraph_safe))
+}
+
 /// Collect elements up to a closing condition without consuming its token.
 pub fn collect_consume_before<'r, 't>(
     parser: &mut Parser<'r, 't>,

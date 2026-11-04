@@ -176,7 +176,7 @@ fn literal_unit_elements<'t>(
     start: usize,
     end: usize,
     line_breaks: &[(usize, usize, bool)],
-) -> (Elements<'t>, Option<Vec<usize>>) {
+) -> (Elements<'t>, Option<Vec<(usize, bool)>>) {
     if line_breaks.is_empty() {
         return (
             Elements::Single(Element::Text(Cow::Borrowed(&source[start..end]))),
@@ -185,7 +185,7 @@ fn literal_unit_elements<'t>(
     }
 
     let mut elements = Vec::with_capacity(line_breaks.len() * 2 + 1);
-    let mut counts: Vec<usize> = Vec::new();
+    let mut counts: Vec<(usize, bool)> = Vec::new();
     let mut segment_count = 0_usize;
     let mut segment_split = false;
     // Whether the element batch currently ends with the separator of a
@@ -206,13 +206,13 @@ fn literal_unit_elements<'t>(
                 // A further paragraph break in the same run closes an
                 // empty segment, matching how a body gather segments
                 // consecutive breaks.
-                counts.push(0);
+                counts.push((0, true));
             } else {
                 if !matches!(elements.last(), Some(Element::LineBreak)) {
                     elements.push(Element::LineBreak);
                     segment_count += 1;
                 }
-                counts.push(segment_count);
+                counts.push((segment_count, true));
                 segment_count = 0;
                 at_break_run_end = true;
             }
@@ -228,7 +228,7 @@ fn literal_unit_elements<'t>(
         elements.push(Element::Text(Cow::Borrowed(&source[chunk_start..end])));
         segment_count += 1;
     }
-    counts.push(segment_count);
+    counts.push((segment_count, true));
 
     let paragraph_split = if segment_split && counts.len() >= 2 {
         Some(counts)
@@ -411,7 +411,7 @@ fn parse_fn<'r, 't>(
         // produced.
         match parser.get_body_element_segments_iftags(&BLOCK_IFTAGS) {
             Ok(body) => {
-                let (segments, errors, paragraph_safe) = body.into();
+                let ((segments, segment_safe), errors, paragraph_safe) = body.into();
 
                 trace!(
                     "IfTags parsed {} conditions and {} body segments",
@@ -446,7 +446,7 @@ fn parse_fn<'r, 't>(
                         if index == last_index {
                             count += 1;
                         }
-                        counts.push(count);
+                        counts.push((count, segment_safe[index]));
                     }
                     batch.push(Element::Delayed(DelayedElement::typography_boundary()));
                     let mut success = crate::parsing::ParseSuccess::new(
@@ -496,7 +496,7 @@ fn parse_fn<'r, 't>(
                 if let Some(counts) = &mut success.paragraph_split
                     && let Some(last) = counts.last_mut()
                 {
-                    *last += 1;
+                    last.0 += 1;
                 }
                 success.item = match success.item {
                     Elements::Multiple(mut elements) => {

@@ -222,6 +222,7 @@ fn parse_fn<'r, 't>(
         segments,
         ContainerType::Span,
         arguments.to_attribute_map(parser.settings()),
+        paragraph_safe,
     );
 
     let mut result =

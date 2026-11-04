@@ -831,6 +831,73 @@ where
     Ok(Some(element.into()))
 }
 
+fn step_over_wikidot_designated_end<'r, 't>(parser: &mut Parser<'r, 't>) -> Option<bool> {
+    if parser.current().token != Token::LeftBlockEnd {
+        return None;
+    }
+    parser.step().ok()?;
+    loop {
+        match parser.current().token {
+            Token::RightBlock => {
+                parser.step().ok()?;
+                return Some(false);
+            }
+            Token::RightLink => {
+                parser.step().ok()?;
+                return Some(true);
+            }
+            Token::InputEnd | Token::ParagraphBreak => return None,
+            _ => {
+                parser.step().ok()?;
+            }
+        }
+    }
+}
+
+fn try_consume_past_wikidot_designated_iftags_end<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if parser.discarding_hidden_body() {
+        return None;
+    }
+    let designated = parser.wikidot_iftags_body_end()?;
+    if parser.current().token != Token::LeftBlockEnd
+        || parser.current().span.start != designated
+    {
+        return None;
+    }
+    let mut probe = parser.clone();
+    let fused = step_over_wikidot_designated_end(&mut probe)?;
+    step_over_wikidot_designated_end(parser)?;
+    Some(match consume(parser) {
+        Ok(mut success) => {
+            if fused {
+                let mut elements = vec![Element::Text(Cow::Borrowed("]"))];
+                elements.extend(success.item.as_ref().iter().cloned());
+                success.item = Elements::Multiple(elements);
+                if let Some(split) = &mut success.paragraph_split
+                    && let Some(first) = split.first_mut()
+                {
+                    first.0 += 1;
+                }
+            }
+            Ok(success)
+        }
+        Err(error) => {
+            if error.kind() == ParseErrorKind::EndOfInput {
+                let item = if fused {
+                    Elements::Single(Element::Text(Cow::Borrowed("]")))
+                } else {
+                    Elements::None
+                };
+                Ok(ParseSuccess::new(item, Vec::new(), true))
+            } else {
+                Err(error)
+            }
+        }
+    })
+}
+
 /// Main function that consumes tokens to produce a single element, then returns.
 ///
 /// It will use the fallback if all rules, fail, so the only failure case is if
@@ -838,6 +905,10 @@ where
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     if parser.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
         return Err(parser.make_err(ParseErrorKind::EndOfInput));
+    }
+
+    if let Some(result) = try_consume_past_wikidot_designated_iftags_end(parser) {
+        return result;
     }
 
     if parser.settings().layout.legacy()

@@ -1,0 +1,76 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "A"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "header": {
+                        "level": 1,
+                        "has-toc": true
+                    }
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Head"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "C"
+                    }
+                ]
+            }
+        }
+    ],
+    "table-of-contents": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc0",
+                                    "label": {
+                                        "text": "Head"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
