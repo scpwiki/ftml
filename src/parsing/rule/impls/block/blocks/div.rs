@@ -22,6 +22,7 @@ use super::BLOCK_SPAN;
 use super::prelude::*;
 use crate::delayed::DelayedElement;
 use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal};
+use crate::parsing::consume::consume;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::settings::WikitextMode;
 use crate::tree::{AcceptsPartial, AttributeMap, ListItem, ListType};
@@ -250,8 +251,11 @@ where
             };
             return Ok(Some(ParseSuccess::new(elements, Vec::new(), true)));
         }
-        let _ = parser.get_body_text(&BLOCK_DIV)?;
-        let owner_end = parser.current().span.start;
+        let body_start = parser.current().span.start;
+        let mut probe = parser.clone();
+        let body_text = probe.get_body_text(&BLOCK_DIV)?;
+        let owner_end = probe.current().span.start;
+        let closer_start = body_start + body_text.len();
         let literal_start = if line_started_after_physical_newline {
             line_start - 1
         } else {
@@ -271,14 +275,80 @@ where
         if !paragraph_safe {
             parser.mark_wikidot_div_literal_recovered();
         }
-        return Ok(Some(ParseSuccess::new(
-            Element::Text(elide_comments_from_literal(
-                &source[literal_start..literal_end],
-            ))
-            .into(),
-            Vec::new(),
-            paragraph_safe,
-        )));
+        let mut elements = vec![Element::Text(elide_comments_from_literal(
+            &source[literal_start..body_start],
+        ))];
+        let mut errors = Vec::new();
+        let mut degraded_from = None;
+        while parser.current().span.start < closer_start {
+            let before = parser.current().span.start;
+            let checkpoint = parser.clone();
+            match consume(parser) {
+                Ok(success) => {
+                    if parser.current().span.start == before {
+                        parser.update(&checkpoint);
+                        degraded_from = Some(before);
+                        break;
+                    }
+                    let (item, item_errors, _) = success.into();
+                    elements.extend(item.as_ref().iter().cloned());
+                    errors.extend(item_errors);
+                }
+                Err(error) => {
+                    parser.update(&checkpoint);
+                    errors.push(error);
+                    degraded_from = Some(before);
+                    break;
+                }
+            }
+        }
+        if let Some(from) = degraded_from {
+            while parser.current().span.start < owner_end {
+                if parser.step().is_err() {
+                    break;
+                }
+            }
+            elements.push(Element::Text(elide_comments_from_literal(
+                &source[from..literal_end],
+            )));
+        } else {
+            if parser.current().span.start == closer_start {
+                while parser.current().span.start < owner_end {
+                    if parser.step().is_err() {
+                        break;
+                    }
+                }
+                elements.push(Element::Text(elide_comments_from_literal(
+                    &source[closer_start..owner_end],
+                )));
+            }
+            if literal_end > owner_end && parser.current().span.start == owner_end {
+                elements.push(text!("\n"));
+            }
+        }
+        let elements = if paragraph_safe {
+            elements
+        } else {
+            let mut merged: Vec<Element<'t>> = Vec::with_capacity(elements.len());
+            for element in elements {
+                match element {
+                    Element::Text(text) => {
+                        if let Some(Element::Text(previous)) = merged.last_mut() {
+                            *previous = Cow::Owned(format!("{previous}{text}"));
+                        } else {
+                            merged.push(Element::Text(text));
+                        }
+                    }
+                    element => merged.push(element),
+                }
+            }
+            merged
+        };
+        let elements = match elements.len() {
+            1 => Elements::Single(elements.into_iter().next().unwrap()),
+            _ => Elements::Multiple(elements),
+        };
+        return Ok(Some(ParseSuccess::new(elements, errors, paragraph_safe)));
     }
 
     if parser.in_wikidot_div_body()
