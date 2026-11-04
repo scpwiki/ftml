@@ -24,7 +24,7 @@ use super::prelude::*;
 use crate::delayed::{DelayedElement, GeneratedKind};
 use crate::parsing::collect::{
     collect_comment_elided_keep, collect_text_resolved_fused,
-    consume_iftags_segment_fused, consume_valid_comment,
+    consume_iftags_segment_fused, consume_valid_comment, iftags_segment_fused,
 };
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
@@ -111,6 +111,10 @@ fn try_consume_link<'r, 't>(
         return try_consume_wikidot_link(parser, target);
     }
 
+    if single_link_raw_forbids_link(parser)? {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let url_close = [ParseCondition::current(Token::Whitespace)];
     let url_invalid = [
         ParseCondition::current(Token::RightBracket),
@@ -190,6 +194,10 @@ fn try_consume_wikidot_link<'r, 't>(
 where
     'r: 't,
 {
+    if single_link_raw_forbids_link(parser)? {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let (url, authored_prefix_has_link_authority) = collect_wikidot_target(parser)?;
     let disposition = wikidot_link_disposition(&url);
     let disposition = if disposition == WikidotLinkDisposition::Link
@@ -711,6 +719,95 @@ impl WikidotNamedAnchorOwnerScan {
             _ => restart(),
         };
         false
+    }
+}
+
+fn single_link_raw_forbids_link<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> Result<bool, ParseError>
+where
+    'r: 't,
+{
+    use super::raw::RULE_RAW;
+
+    let mut probe = parser.clone();
+    let mut no_raw_close = false;
+    let mut no_alt_raw_close = false;
+
+    loop {
+        match probe.current().token {
+            Token::RightBracket
+            | Token::LineBreak
+            | Token::ParagraphBreak
+            | Token::InputEnd => return Ok(false),
+
+            Token::LeftBlock if iftags_segment_fused(&probe).is_some() => {
+                consume_iftags_segment_fused(&mut probe)?;
+            }
+
+            Token::LeftComment => {
+                let mut comment_probe = probe.clone();
+                if consume_valid_comment(&mut comment_probe).is_err() {
+                    return Ok(false);
+                }
+                probe.update(&comment_probe);
+            }
+
+            Token::Raw | Token::LeftRaw => {
+                let alternate = probe.current().token == Token::LeftRaw;
+                let known_unclosed = if alternate {
+                    no_alt_raw_close
+                } else {
+                    no_raw_close
+                };
+                if known_unclosed {
+                    probe.step()?;
+                    continue;
+                }
+
+                let terminator = if alternate {
+                    Token::RightRaw
+                } else {
+                    Token::Raw
+                };
+                let mut close_probe = probe.clone();
+                close_probe.step()?;
+                let mut has_close = false;
+                loop {
+                    match close_probe.current().token {
+                        token if token == terminator => {
+                            has_close = true;
+                            break;
+                        }
+                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                            break;
+                        }
+                        _ => {
+                            close_probe.step()?;
+                        }
+                    }
+                }
+                if !has_close {
+                    if alternate {
+                        no_alt_raw_close = true;
+                    } else {
+                        no_raw_close = true;
+                    }
+                    probe.step()?;
+                    continue;
+                }
+
+                let mut raw_probe = probe.clone();
+                if RULE_RAW.try_consume(&mut raw_probe).is_ok() {
+                    return Ok(true);
+                }
+                probe.step()?;
+            }
+
+            _ => {
+                probe.step()?;
+            }
+        }
     }
 }
 

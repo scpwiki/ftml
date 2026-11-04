@@ -344,6 +344,12 @@ where
         if parser.current().token == Token::InputEnd {
             break;
         }
+        if matches!(parser.current().token, Token::Raw | Token::LeftRaw) {
+            let mut raw_probe = parser.clone();
+            if super::raw::RULE_RAW.try_consume(&mut raw_probe).is_ok() {
+                break;
+            }
+        }
 
         let token = parser.current();
         let token_text = &source[token.span.clone()];
