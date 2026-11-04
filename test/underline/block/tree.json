@@ -125,10 +125,25 @@
                                 {
                                     "element": "text",
                                     "data": "Paragraph"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "underline",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "Underline"

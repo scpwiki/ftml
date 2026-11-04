@@ -121,16 +121,21 @@ fn parse_fn<'r, 't>(
         )));
     }
 
-    let body = parser.get_body_elements(&BLOCK_SIZE, false)?;
-    let (elements, errors, paragraph_safe) = body.into();
+    let body = parser.get_body_element_segments(&BLOCK_SIZE)?;
+    let (segments, errors, paragraph_safe) = body.into();
 
     let mut attributes = AttributeMap::new();
     attributes.insert("style", Cow::Owned(size));
 
-    let container = Container::new(ContainerType::Size, elements, attributes);
-    let element = Element::Container(container);
+    let (elements, paragraph_split) =
+        parser.wrap_body_segments(segments, ContainerType::Size, attributes);
 
-    success_elements_with_paragraph_safety(paragraph_safe, element, errors)
+    let mut result =
+        success_elements_with_paragraph_safety(paragraph_safe, elements, errors);
+    if let Ok(success) = result.as_mut() {
+        success.paragraph_split = paragraph_split;
+    }
+    result
 }
 
 #[cfg(test)]

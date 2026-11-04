@@ -109,10 +109,25 @@
                                 {
                                     "element": "text",
                                     "data": "mango"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "pineapple"
@@ -257,10 +272,25 @@
                                 {
                                     "element": "text",
                                     "data": "paragraph"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "in"
