@@ -3044,6 +3044,19 @@ where
     where
         F: FnOnce(&Self, Option<Cow<'t, str>>) -> Result<T, ParseError>,
     {
+        self.get_head_value_resolved_with_body_start(block_rule, in_head, convert)
+            .map(|(value, _)| value)
+    }
+
+    pub(crate) fn get_head_value_resolved_with_body_start<F, T>(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+        convert: F,
+    ) -> Result<(T, BlockBodyStart), ParseError>
+    where
+        F: FnOnce(&Self, Option<Cow<'t, str>>) -> Result<T, ParseError>,
+    {
         let argument = if in_head {
             let end_conditions = [ParseCondition::current(Token::RightBlock)];
             let reject_conditions = [
@@ -3065,8 +3078,8 @@ where
         };
 
         let value = convert(self, argument)?;
-        self.get_head_block_with_body_start(block_rule, false)?;
-        Ok(value)
+        let body_start = self.get_head_block_with_body_start(block_rule, false)?;
+        Ok((value, body_start))
     }
 
     pub(crate) fn get_head_value_with_body_start<F, T>(

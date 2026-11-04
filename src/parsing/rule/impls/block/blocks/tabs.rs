@@ -40,14 +40,34 @@ pub const BLOCK_TAB: BlockRule = BlockRule {
     parse_fn: parse_tab,
 };
 
+fn wikidot_quote_opener_at_row_start(source: &str, opener_start: usize) -> bool {
+    let line_start = source[..opener_start]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    let mut prefix = &source[line_start..opener_start];
+    let mut saw_quote = false;
+    while let Some(rest) = prefix.strip_prefix('>') {
+        saw_quote = true;
+        prefix = rest.strip_prefix(' ').unwrap_or(rest);
+    }
+    saw_quote && prefix.is_empty()
+}
+
 fn parse_tabview<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    if parser.settings().layout.legacy()
+        && parser.native_blockquote_depth().is_some()
+        && !wikidot_quote_opener_at_row_start(parser.full_text().inner(), opener_start)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let parser = &mut ParserWrap::new(parser, AcceptsPartial::Tab);
 
     debug!("Parsing tabview block (name '{name}', in-head {in_head})");
@@ -55,10 +75,15 @@ fn parse_tabview<'r, 't>(
     assert!(!flag_score, "Tabview doesn't allow score flag");
     assert_block_name(&BLOCK_TABVIEW, name);
 
-    let tabview_name =
-        parser.get_head_value_resolved(&BLOCK_TABVIEW, in_head, |_, value| Ok(value))?;
+    let (tabview_name, body_start) = parser.get_head_value_resolved_with_body_start(
+        &BLOCK_TABVIEW,
+        in_head,
+        |_, value| Ok(value),
+    )?;
 
-    let (elements, errors, _) = parser.get_body_elements(&BLOCK_TABVIEW, false)?.into();
+    let (elements, errors, _) = parser
+        .get_body_elements_with_context(&BLOCK_TABVIEW, false, body_start)?
+        .into();
 
     let mut tabs = Vec::new();
 
