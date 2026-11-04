@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::inline_delimiter::{ReachableCloseMode, validate_reachable_close};
 use super::prelude::*;
 use crate::parsing::inline_format::{element_contains_link, monospace_close_split};
 use crate::tree::Container;
@@ -33,6 +34,12 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create monospace container");
+    validate_reachable_close(
+        parser,
+        Token::RightMonospace,
+        None,
+        ReachableCloseMode::BlockBarrier,
+    )?;
     let opening_start = parser.current().span.start;
     assert_step(parser, Token::LeftMonospace)?;
 

@@ -1,10 +1,10 @@
 [
     {
-        "token": "paragraph-break",
+        "token": "subscript",
         "rule": "subscript",
         "span": [
-            108,
-            110
+            73,
+            75
         ],
         "kind": "rule-failed"
     },

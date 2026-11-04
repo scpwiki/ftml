@@ -1,0 +1,20 @@
+[
+    {
+        "token": "subscript",
+        "rule": "subscript",
+        "span": [
+            47,
+            49
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            47,
+            49
+        ],
+        "kind": "no-rules-match"
+    }
+]

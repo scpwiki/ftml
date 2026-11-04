@@ -1,0 +1,29 @@
+[
+    {
+        "token": "left-monospace",
+        "rule": "monospace",
+        "span": [
+            47,
+            49
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-monospace",
+        "rule": "fallback",
+        "span": [
+            47,
+            49
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-monospace",
+        "rule": "fallback",
+        "span": [
+            73,
+            75
+        ],
+        "kind": "no-rules-match"
+    }
+]

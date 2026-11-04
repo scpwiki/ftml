@@ -162,6 +162,7 @@ where
         &end_conditions,
         &reject_conditions,
         Some(ParseErrorKind::BlockMalformedArguments),
+        false,
     )
     .ok()?;
     (last.span.start == closing_start).then_some(text)

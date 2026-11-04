@@ -19,8 +19,8 @@
  */
 
 use super::inline_delimiter::{
-    append_split_close_leftover, assert_unpadded_open, prepend_split_close_leftover,
-    validate_reachable_close,
+    ReachableCloseMode, append_split_close_leftover, assert_unpadded_open,
+    prepend_split_close_leftover, validate_reachable_close,
 };
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
@@ -40,7 +40,12 @@ fn try_consume_fn<'r, 't>(
     if parser.current().token == Token::BulletItem {
         return try_consume_split_delimiter(parser);
     }
-    validate_reachable_close(parser, Token::Bold, Some(SplitDelimiter::Bold))?;
+    validate_reachable_close(
+        parser,
+        Token::Bold,
+        Some(SplitDelimiter::Bold),
+        ReachableCloseMode::Standard,
+    )?;
     assert_unpadded_open(parser, Token::Bold)?;
     let close = [
         ParseCondition::current(Token::Bold),
@@ -74,7 +79,12 @@ fn try_consume_split_delimiter<'r, 't>(
     ) else {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     };
-    validate_reachable_close(parser, Token::Bold, Some(SplitDelimiter::Bold))?;
+    validate_reachable_close(
+        parser,
+        Token::Bold,
+        Some(SplitDelimiter::Bold),
+        ReachableCloseMode::Standard,
+    )?;
     while parser.current().span.start < split_match.consume_end
         && parser.current().token != Token::InputEnd
     {

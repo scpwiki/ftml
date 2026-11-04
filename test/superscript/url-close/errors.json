@@ -1,10 +1,10 @@
 [
     {
-        "token": "paragraph-break",
+        "token": "superscript",
         "rule": "superscript",
         "span": [
-            33,
-            35
+            4,
+            6
         ],
         "kind": "rule-failed"
     },
@@ -18,11 +18,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "superscript",
         "rule": "superscript",
         "span": [
-            116,
-            118
+            86,
+            88
         ],
         "kind": "rule-failed"
     },
@@ -36,11 +36,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "superscript",
         "rule": "superscript",
         "span": [
-            152,
-            154
+            122,
+            124
         ],
         "kind": "rule-failed"
     },
@@ -54,11 +54,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "superscript",
         "rule": "superscript",
         "span": [
-            188,
-            190
+            158,
+            160
         ],
         "kind": "rule-failed"
     },
@@ -72,11 +72,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "superscript",
         "rule": "superscript",
         "span": [
-            224,
-            226
+            194,
+            196
         ],
         "kind": "rule-failed"
     },
@@ -126,11 +126,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "superscript",
         "rule": "superscript",
         "span": [
-            351,
-            353
+            318,
+            320
         ],
         "kind": "rule-failed"
     },
@@ -144,11 +144,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "input-end",
+        "token": "superscript",
         "rule": "superscript",
         "span": [
-            386,
-            386
+            357,
+            359
         ],
         "kind": "end-of-input"
     },

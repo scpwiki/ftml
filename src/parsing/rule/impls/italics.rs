@@ -19,8 +19,8 @@
  */
 
 use super::inline_delimiter::{
-    append_split_close_leftover, assert_unpadded_open, block_name_at, is_block_name,
-    link_name_at, prepend_split_close_leftover, validate_reachable_close,
+    ReachableCloseMode, append_split_close_leftover, assert_unpadded_open, block_name_at,
+    is_block_name, link_name_at, prepend_split_close_leftover, validate_reachable_close,
 };
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
@@ -54,7 +54,12 @@ fn try_consume_fn<'r, 't>(
         return collect_crossed_bold_italics(parser);
     }
 
-    validate_reachable_close(parser, Token::Italics, Some(SplitDelimiter::Italics))?;
+    validate_reachable_close(
+        parser,
+        Token::Italics,
+        Some(SplitDelimiter::Italics),
+        ReachableCloseMode::Standard,
+    )?;
     assert_unpadded_open(parser, Token::Italics)?;
     let close = [
         ParseCondition::current(Token::Italics),
@@ -89,7 +94,12 @@ fn try_consume_split_delimiter<'r, 't>(
     ) else {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     };
-    validate_reachable_close(parser, Token::Italics, Some(SplitDelimiter::Italics))?;
+    validate_reachable_close(
+        parser,
+        Token::Italics,
+        Some(SplitDelimiter::Italics),
+        ReachableCloseMode::Standard,
+    )?;
     while parser.current().span.start < split_match.consume_end
         && parser.current().token != Token::InputEnd
     {
