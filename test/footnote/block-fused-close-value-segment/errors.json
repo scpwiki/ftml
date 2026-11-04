@@ -1,0 +1,47 @@
+[
+    {
+        "token": "line-break",
+        "rule": "block-footnote-block",
+        "span": [
+            58,
+            59
+        ],
+        "kind": "block-malformed-arguments"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            2,
+            4
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            54,
+            57
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            59,
+            62
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            65,
+            67
+        ],
+        "kind": "no-rules-match"
+    }
+]

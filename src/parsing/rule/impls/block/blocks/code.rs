@@ -21,6 +21,7 @@
 use super::prelude::*;
 use crate::delayed::DelayedElement;
 use crate::tree::CodeBlock;
+use std::borrow::Cow;
 use wikidot_normalize::normalize;
 
 pub const BLOCK_CODE: BlockRule = BlockRule {
@@ -77,6 +78,7 @@ fn parse_fn<'r, 't>(
         };
 
     let mut arguments = parser.get_head_map_wikidot(&BLOCK_CODE, in_head)?;
+    let body_start = parser.current().span.start;
 
     let mut language = arguments.get("type");
     if let Some(ref mut language) = language {
@@ -117,6 +119,16 @@ fn parse_fn<'r, 't>(
             &generated,
         )));
     }
+
+    let code = if parser
+        .fused_name_residual()
+        .is_some_and(|position| position <= body_start)
+    {
+        parser.clear_fused_name_residual();
+        Cow::Owned(format!("]{code}"))
+    } else {
+        code
+    };
 
     let code_block = CodeBlock {
         contents: code,

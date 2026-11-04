@@ -1,0 +1,65 @@
+[
+    {
+        "token": "left-block",
+        "rule": "block-tab",
+        "span": [
+            6,
+            8
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "line-break",
+        "rule": "block-footnote-block",
+        "span": [
+            39,
+            40
+        ],
+        "kind": "block-malformed-arguments"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            6,
+            8
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            35,
+            38
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            45,
+            48
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            51,
+            53
+        ],
+        "kind": "no-rules-match"
+    }
+]
