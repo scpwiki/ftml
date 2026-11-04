@@ -232,7 +232,8 @@ where
     let mut bibliographies = parsed.bibliographies;
     let has_generated = tokenization.has_generated();
     let has_suppression_seam_candidate = tokenization.tokens().iter().any(|token| {
-        (token.token == Token::LeftComment && has_generated)
+        (token.token == Token::LeftComment
+            && (has_generated || !settings.layout.legacy()))
             || (token.token == Token::Identifier
                 && (token.slice.eq_ignore_ascii_case("iftags")
                     || token.slice.eq_ignore_ascii_case("ifcategory")
