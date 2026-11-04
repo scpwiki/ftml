@@ -460,6 +460,10 @@ where
         return Ok(None);
     }
 
+    if parser.at_body_end_boundary() {
+        return Ok(None);
+    }
+
     let source = parser.full_text().inner();
     if parser
         .look_ahead(0)
@@ -517,6 +521,9 @@ where
         scan.step()?;
     }
     if !matches!(scan.current().token, Token::LeftBlock | Token::LeftBlockEnd) {
+        return Ok(None);
+    }
+    if scan.at_body_end_boundary() {
         return Ok(None);
     }
     let second_start = scan.current().span.start;

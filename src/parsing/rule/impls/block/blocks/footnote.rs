@@ -387,16 +387,21 @@ mod tests {
     }
 
     #[test]
-    fn footnote_keeps_single_non_paragraph_body_element() {
+    fn footnote_module_first_content_stays_literal() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize("[[footnote]][[module Rate]][[/footnote]]");
-        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
 
-        assert!(errors.is_empty());
         assert_eq!(tree.footnotes.len(), 1);
-        assert_eq!(tree.footnotes[0].len(), 1);
-        assert!(matches!(tree.footnotes[0][0], Element::Module(_)));
+        let body_text: String = tree.footnotes[0]
+            .iter()
+            .map(|element| match element {
+                Element::Text(text) => text.as_ref(),
+                _ => panic!("unexpected footnote body element: {element:?}"),
+            })
+            .collect();
+        assert_eq!(body_text, "[[module Rate]]");
     }
 
     #[test]

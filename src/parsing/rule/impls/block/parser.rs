@@ -3037,6 +3037,15 @@ where
                 return false;
             }
 
+            if parser.at_hard_body_end_boundary() {
+                self.cache_block_end_scan_outcomes(
+                    block_rule.name,
+                    &traversed_token_states,
+                    false,
+                );
+                return false;
+            }
+
             parser.step().expect("missing input end");
             first = false;
         }
@@ -3274,6 +3283,9 @@ where
                         ) {
                             return true;
                         }
+                    }
+                    if parser.at_hard_body_end_boundary() {
+                        return false;
                     }
                 }
                 _ => {}

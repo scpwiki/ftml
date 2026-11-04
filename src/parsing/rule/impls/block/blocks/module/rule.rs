@@ -51,6 +51,9 @@ fn parse_fn<'r, 't>(
     if parser.native_blockquote_depth().is_some() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    if parser.wikidot_footnote_zone_blocks(opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if parser.settings().layout.legacy() && module_opener_has_leading_space(parser) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }

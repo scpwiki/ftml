@@ -1,0 +1,5 @@
+[[bibliography]]
+: key : Value
+[[tabview]] [[tab One]] Body one [[/tab]]
+[[/tabview]]
+[[/bibliography]]

@@ -1,0 +1,46 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "A"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "intro"
+            },
+            {
+                "element": "text",
+                "data": " "
+            },
+            {
+                "element": "raw",
+                "data": "x"
+            },
+            {
+                "element": "text",
+                "data": " "
+            },
+            {
+                "element": "text",
+                "data": "tail"
+            }
+        ]
+    ],
+    "needs-footnote-block": true
+}

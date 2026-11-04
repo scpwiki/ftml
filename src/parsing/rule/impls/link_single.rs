@@ -436,7 +436,7 @@ where
     'r: 't,
 {
     let (target, authored_prefix_has_link_authority, _) =
-        collect_wikidot_target_inner(parser, None)?;
+        collect_wikidot_target_inner(parser, None, false)?;
     Ok((target, authored_prefix_has_link_authority))
 }
 
@@ -447,26 +447,39 @@ fn collect_wikidot_target_from<'r, 't>(
 where
     'r: 't,
 {
-    collect_wikidot_target_inner(parser, Some(start))
+    let line_break_separator = parser.in_wikidot_bibliography_body();
+    collect_wikidot_target_inner(parser, Some(start), line_break_separator)
 }
 
 fn collect_wikidot_target_inner<'r, 't>(
     parser: &mut Parser<'r, 't>,
     start: Option<usize>,
+    line_break_separator: bool,
 ) -> Result<(Cow<'t, str>, bool, usize), ParseError>
 where
     'r: 't,
 {
-    let closes = [ParseCondition::current(Token::Whitespace)];
-    let invalids = [
-        ParseCondition::current(Token::LineBreak),
-        ParseCondition::current(Token::ParagraphBreak),
-    ];
+    let closes: &[ParseCondition] = if line_break_separator {
+        &[
+            ParseCondition::current(Token::Whitespace),
+            ParseCondition::current(Token::LineBreak),
+        ]
+    } else {
+        &[ParseCondition::current(Token::Whitespace)]
+    };
+    let invalids: &[ParseCondition] = if line_break_separator {
+        &[ParseCondition::current(Token::ParagraphBreak)]
+    } else {
+        &[
+            ParseCondition::current(Token::LineBreak),
+            ParseCondition::current(Token::ParagraphBreak),
+        ]
+    };
     let (target, _) = match start {
         Some(start) => {
-            collect_comment_elided_keep_from(parser, start, &closes, &invalids, None)?
+            collect_comment_elided_keep_from(parser, start, closes, invalids, None)?
         }
-        None => collect_comment_elided_keep(parser, &closes, &invalids, None)?,
+        None => collect_comment_elided_keep(parser, closes, invalids, None)?,
     };
     if target.span().len() > MAX_WIKIDOT_SINGLE_LINK_TARGET_BYTES {
         return Err(parser.make_err(ParseErrorKind::InvalidUrl));
@@ -561,6 +574,9 @@ where
             Token::LineBreak | Token::ParagraphBreak => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
+            Token::LeftBlockEnd if parser.at_body_end_boundary() => {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
             Token::InputEnd => return Err(parser.make_err(ParseErrorKind::EndOfInput)),
             Token::GeneratedPageLink | Token::GeneratedTagLinks | Token::RuntimeText => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -606,6 +622,7 @@ where
     let mut triple_link_open = false;
     let mut span_open = false;
     let mut footnote_open = false;
+    let footnote_may_own = !parser.in_footnote();
     let mut size_open = false;
     let mut a_open = false;
     loop {
@@ -673,7 +690,8 @@ where
                         }
                         if actionable {
                             span_open |= name.eq_ignore_ascii_case("span");
-                            footnote_open |= name.eq_ignore_ascii_case("footnote");
+                            footnote_open |=
+                                footnote_may_own && name.eq_ignore_ascii_case("footnote");
                             size_open |= name.eq_ignore_ascii_case("size");
                             a_open |= name.eq_ignore_ascii_case("a");
                         }
