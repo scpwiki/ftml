@@ -198,21 +198,28 @@ where
         url = without_last_character(url);
     }
 
+    // Trailing punctuation is shed only at a sentence boundary: when
+    // the URL is followed by whitespace or the end of input (or wraps a
+    // balanced suffix). Followed by anything else, such as a block
+    // opener, the punctuation is mid-string and stays in the URL.
+    let at_sentence_boundary =
+        matches!(parser.current().token, Token::Whitespace | Token::InputEnd)
+            || suffix.is_some();
     let mut trailing = Vec::new();
-    while let Some(last) = url.chars().next_back() {
-        if !matches!(last, ',' | '*' | '-' | '}')
-            && (last.is_ascii() || last.is_whitespace())
-        {
-            break;
+    if at_sentence_boundary {
+        while let Some(last) = url.chars().next_back() {
+            if !matches!(last, ',' | '*' | '-' | '}')
+                && (last.is_ascii() || last.is_whitespace())
+            {
+                break;
+            }
+            trailing.push(last);
+            url = without_last_character(url);
         }
-        trailing.push(last);
-        url = without_last_character(url);
     }
     let trailing: String = trailing.iter().rev().collect();
 
-    let split_terminal_period = url.ends_with('.')
-        && (matches!(parser.current().token, Token::Whitespace | Token::InputEnd)
-            || suffix.is_some());
+    let split_terminal_period = url.ends_with('.') && at_sentence_boundary;
     if split_terminal_period {
         url = without_last_character(url);
     }

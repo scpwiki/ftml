@@ -182,6 +182,7 @@ fn flush_group<'t>(
     output: &mut Vec<Element<'t>>,
     apply_typography: bool,
 ) -> bool {
+    let preceded_by_url = last_element_is_url_owner(output);
     if group.is_empty() {
         return false;
     }
@@ -226,7 +227,7 @@ fn flush_group<'t>(
         .into_iter()
         .map(SeamEdit::Text)
         .collect::<Vec<_>>();
-    collect_dash_edits(&source, &seams, &mut edits);
+    collect_dash_edits(&source, &seams, &mut edits, preceded_by_url);
     edits.sort_unstable_by_key(|edit| {
         let range = edit.range();
         (range.start, range.end)
@@ -275,7 +276,52 @@ impl SeamEdit {
     }
 }
 
-fn collect_dash_edits(source: &str, seams: &[usize], edits: &mut Vec<SeamEdit>) {
+/// Whether the last emitted element before a suppression group is a
+/// URL owner (a bare-URL link, or text ending inside a URL) whose
+/// value reaches the group boundary. A dash run at the very start of
+/// the group then continues that URL rather than forming typography.
+fn last_element_is_url_owner(elements: &[Element<'_>]) -> bool {
+    match elements.last() {
+        Some(Element::Link {
+            link: crate::tree::LinkLocation::Url(_),
+            ..
+        }) => true,
+        Some(Element::Text(text)) => dash_run_is_url_owned(text, text.len()),
+        _ => false,
+    }
+}
+
+/// A dash run that continues a URL is part of the URL token, not a
+/// typography boundary, so the seam replay must not merge it into an
+/// em dash. Mirrors the tokenizer's URL scan: a scheme prefix whose
+/// body reaches the run without hitting a stop character owns it.
+fn dash_run_is_url_owned(source: &str, run_start: usize) -> bool {
+    let head = &source[..run_start];
+    let Some(scheme_start) = ["http://", "https://", "ftp://", "mailto:"]
+        .iter()
+        .filter_map(|scheme| head.rfind(scheme))
+        .max()
+    else {
+        return false;
+    };
+    !source[scheme_start..run_start]
+        .char_indices()
+        .any(|(offset, ch)| {
+            let index = scheme_start + offset;
+            ch.is_whitespace()
+                || ch.is_control()
+                || matches!(ch, '"' | '\'' | '|' | '[' | ']')
+                || source[index..].starts_with(">@")
+                || source[index..].starts_with("@@")
+        })
+}
+
+fn collect_dash_edits(
+    source: &str,
+    seams: &[usize],
+    edits: &mut Vec<SeamEdit>,
+    preceded_by_url: bool,
+) {
     let bytes = source.as_bytes();
     let mut index = 0;
     while index < bytes.len() {
@@ -288,7 +334,11 @@ fn collect_dash_edits(source: &str, seams: &[usize], edits: &mut Vec<SeamEdit>) 
             index += 1;
         }
         let range = start..index;
-        if range.len() >= 2 && range_crosses_seam(&range, seams) {
+        if range.len() >= 2
+            && range_crosses_seam(&range, seams)
+            && !dash_run_is_url_owned(source, range.start)
+            && !(range.start == 0 && preceded_by_url)
+        {
             edits.push(SeamEdit::Dash {
                 run_len: range.len(),
                 range,
