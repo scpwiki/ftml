@@ -1,0 +1,295 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "See"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "note"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "link",
+                                    "data": {
+                                        "type": "direct",
+                                        "link": "https://example.com/a--",
+                                        "label": "url",
+                                        "target": null
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "tail"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "end"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "See"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "note"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "link",
+                                    "data": {
+                                        "type": "direct",
+                                        "link": "https://example.com/a--.",
+                                        "label": "url",
+                                        "target": null
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "tail"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "end"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "See"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "note"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "link",
+                                    "data": {
+                                        "type": "direct",
+                                        "link": "https://example.com/a----",
+                                        "label": "url",
+                                        "target": null
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "tail"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "end"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "See"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "link",
+                                    "data": {
+                                        "type": "direct",
+                                        "link": "https://example.com/a--",
+                                        "label": "url",
+                                        "target": null
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "end"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "See"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "—"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://example.com/a--.",
+                            "label": "url",
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "and"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "b"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "end"
+                    }
+                ]
+            }
+        }
+    ]
+}

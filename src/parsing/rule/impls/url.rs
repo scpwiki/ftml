@@ -915,4 +915,51 @@ mod tests {
             assert!(html.contains(expected), "{expected} missing from {html}");
         }
     }
+
+    #[test]
+    fn wikidot_strikethrough_close_over_url_sheds_like_live() {
+        use crate::render::Render;
+
+        let source = "shed --https://example.com/a--. end\n\nbefore --https://example.com/a.-- end\n\nrun --https://example.com/a---. end\n\ndouble --https://example.com/a--.-- end\n\nopen ---https://example.com/a--. end\n\nsplit --note https://example.com/a-- tail-- end\n\nsplit-suffix --note https://example.com/a--. tail-- end\n\nsecond --https://example.com/a--. and --b-- end\n\nnoclose --https://example.com/a--tail end\n\npadded -- https://example.com/a--. end";
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut source = source.to_owned();
+        crate::preprocess_for_layout(&mut source, Layout::Wikidot);
+        let tokenization = crate::tokenize(&source);
+        let page_info = PageInfo::dummy();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        for expected in [
+            "<span style=\"text-decoration: line-through;\"><a href=\"https://example.com/a\">https://example.com/a</a></span>.",
+            "<span style=\"text-decoration: line-through;\"><a href=\"https://example.com/a\">https://example.com/a</a>.</span>",
+            "<span style=\"text-decoration: line-through;\">note <a href=\"https://example.com/a\">https://example.com/a</a></span> tail\u{2014}",
+            "<span style=\"text-decoration: line-through;\">note <a href=\"https://example.com/a\">https://example.com/a</a></span>. tail\u{2014}",
+            "<span style=\"text-decoration: line-through;\">b</span>",
+            "\u{2014}<a href=\"https://example.com/a--tail\">https://example.com/a--tail</a>",
+            "\u{2014} <a href=\"https://example.com/a\">https://example.com/a</a>\u{2014}.",
+        ] {
+            assert!(html.contains(expected), "{expected} missing from {html}");
+        }
+
+        assert!(
+            html.contains(
+                "<span style=\"text-decoration: line-through;\"><a href=\"https://example.com/a\">https://example.com/a</a></span>.\u{2014}"
+            ),
+            "double-shed paragraph missing from {html}"
+        );
+        assert!(
+            html.contains(
+                "<span style=\"text-decoration: line-through;\">-<a href=\"https://example.com/a\">https://example.com/a</a></span>."
+            ),
+            "open-run paragraph missing from {html}"
+        );
+        assert!(
+            html.contains(
+                "<span style=\"text-decoration: line-through;\"><a href=\"https://example.com/a\">https://example.com/a</a></span>-."
+            ),
+            "run-suffix paragraph missing from {html}"
+        );
+    }
 }
