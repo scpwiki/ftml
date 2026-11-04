@@ -203,7 +203,7 @@ fn wikidot_a_block_family_matches_live_grammar_with_safe_urls() {
         (
             "a-unsafe-url",
             r#"[[a href="javascript:alert(1)"]]v7 body[[/a]]"#,
-            "<p><a href=\"javascript:alert-1\">v7 body</a></p>",
+            "<p><a href=\"#invalid-url\">v7 body</a></p>",
         ),
         (
             "a-percent-encoded",

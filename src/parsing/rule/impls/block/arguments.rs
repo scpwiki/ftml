@@ -328,6 +328,11 @@ impl<'t> Arguments<'t> {
             .filter(|value| !contains_unresolved_wikidot_variable(value))
         {
             if *href == "javascript:;" {
+            } else if matches!(
+                crate::url::classify_href(href),
+                crate::url::HrefKind::Invalid
+            ) {
+                map.insert_wikidot_relative_href(cow!("#invalid-url"));
             } else if wikidot_anchor_href_is_verbatim(href) {
                 let value = normalize_wikidot_html_attribute_value(href);
                 if value.contains(' ') {
