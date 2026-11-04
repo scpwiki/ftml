@@ -535,6 +535,14 @@ where
     if let Err(error) = &result {
         memoization.record_failure(parser, block, opener_start, error);
     }
+    #[cfg(test)]
+    if result.is_ok() {
+        crate::parsing::parser::block_pairs::record_formed_block(
+            block.name,
+            block_opener_start,
+            parser.current().span.start,
+        );
+    }
     result
 }
 

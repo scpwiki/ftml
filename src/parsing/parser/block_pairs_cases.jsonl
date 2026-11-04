@@ -1,0 +1,273 @@
+{"case_id": "l8-preview-ctl-div", "source": "[[div]]\nA\n[[/div]]\nB"}
+{"case_id": "l8-preview-ctl-coll", "source": "[[collapsible]]\nA\n[[/collapsible]]\nB"}
+{"case_id": "l8-preview-ctl-unclosed-probe", "source": "[[div]]\n+ Head[[/div]] tail\n[[/div]]\n\nAfter"}
+{"case_id": "l8-preview-q1-dsc-dsc", "source": "[[div]]\nT1 [[span]]\nT2 [[collapsible]]\nT3 [[/div]]\nx [[/span]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-dsc-dcs", "source": "[[div]]\nT1 [[span]]\nT2 [[collapsible]]\nT3 [[/div]]\nx [[/collapsible]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-dsc-sdc", "source": "[[div]]\nT1 [[span]]\nT2 [[collapsible]]\nT3 [[/span]]\nx [[/div]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-dsc-scd", "source": "[[div]]\nT1 [[span]]\nT2 [[collapsible]]\nT3 [[/span]]\nx [[/collapsible]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-dsc-cds", "source": "[[div]]\nT1 [[span]]\nT2 [[collapsible]]\nT3 [[/collapsible]]\nx [[/div]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-dsc-csd", "source": "[[div]]\nT1 [[span]]\nT2 [[collapsible]]\nT3 [[/collapsible]]\nx [[/span]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-dcs-dsc", "source": "[[div]]\nT1 [[collapsible]]\nT2 [[span]]\nT3 [[/div]]\nx [[/span]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-dcs-dcs", "source": "[[div]]\nT1 [[collapsible]]\nT2 [[span]]\nT3 [[/div]]\nx [[/collapsible]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-dcs-sdc", "source": "[[div]]\nT1 [[collapsible]]\nT2 [[span]]\nT3 [[/span]]\nx [[/div]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-dcs-scd", "source": "[[div]]\nT1 [[collapsible]]\nT2 [[span]]\nT3 [[/span]]\nx [[/collapsible]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-dcs-cds", "source": "[[div]]\nT1 [[collapsible]]\nT2 [[span]]\nT3 [[/collapsible]]\nx [[/div]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-dcs-csd", "source": "[[div]]\nT1 [[collapsible]]\nT2 [[span]]\nT3 [[/collapsible]]\nx [[/span]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-sdc-dsc", "source": "[[span]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/div]]\nx [[/span]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-sdc-dcs", "source": "[[span]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/div]]\nx [[/collapsible]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-sdc-sdc", "source": "[[span]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/span]]\nx [[/div]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-sdc-scd", "source": "[[span]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/span]]\nx [[/collapsible]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-sdc-cds", "source": "[[span]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/collapsible]]\nx [[/div]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-sdc-csd", "source": "[[span]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/collapsible]]\nx [[/span]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-scd-dsc", "source": "[[span]]\nT1 [[collapsible]]\nT2 [[div]]\nT3 [[/div]]\nx [[/span]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-scd-dcs", "source": "[[span]]\nT1 [[collapsible]]\nT2 [[div]]\nT3 [[/div]]\nx [[/collapsible]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-scd-sdc", "source": "[[span]]\nT1 [[collapsible]]\nT2 [[div]]\nT3 [[/span]]\nx [[/div]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-scd-scd", "source": "[[span]]\nT1 [[collapsible]]\nT2 [[div]]\nT3 [[/span]]\nx [[/collapsible]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-scd-cds", "source": "[[span]]\nT1 [[collapsible]]\nT2 [[div]]\nT3 [[/collapsible]]\nx [[/div]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-scd-csd", "source": "[[span]]\nT1 [[collapsible]]\nT2 [[div]]\nT3 [[/collapsible]]\nx [[/span]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-cds-dsc", "source": "[[collapsible]]\nT1 [[div]]\nT2 [[span]]\nT3 [[/div]]\nx [[/span]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-cds-dcs", "source": "[[collapsible]]\nT1 [[div]]\nT2 [[span]]\nT3 [[/div]]\nx [[/collapsible]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-cds-sdc", "source": "[[collapsible]]\nT1 [[div]]\nT2 [[span]]\nT3 [[/span]]\nx [[/div]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-cds-scd", "source": "[[collapsible]]\nT1 [[div]]\nT2 [[span]]\nT3 [[/span]]\nx [[/collapsible]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-cds-cds", "source": "[[collapsible]]\nT1 [[div]]\nT2 [[span]]\nT3 [[/collapsible]]\nx [[/div]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-cds-csd", "source": "[[collapsible]]\nT1 [[div]]\nT2 [[span]]\nT3 [[/collapsible]]\nx [[/span]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-csd-dsc", "source": "[[collapsible]]\nT1 [[span]]\nT2 [[div]]\nT3 [[/div]]\nx [[/span]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-csd-dcs", "source": "[[collapsible]]\nT1 [[span]]\nT2 [[div]]\nT3 [[/div]]\nx [[/collapsible]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-csd-sdc", "source": "[[collapsible]]\nT1 [[span]]\nT2 [[div]]\nT3 [[/span]]\nx [[/div]]\nx [[/collapsible]]\nx "}
+{"case_id": "l8-preview-q1-csd-scd", "source": "[[collapsible]]\nT1 [[span]]\nT2 [[div]]\nT3 [[/span]]\nx [[/collapsible]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q1-csd-cds", "source": "[[collapsible]]\nT1 [[span]]\nT2 [[div]]\nT3 [[/collapsible]]\nx [[/div]]\nx [[/span]]\nx "}
+{"case_id": "l8-preview-q1-csd-csd", "source": "[[collapsible]]\nT1 [[span]]\nT2 [[div]]\nT3 [[/collapsible]]\nx [[/span]]\nx [[/div]]\nx "}
+{"case_id": "l8-preview-q2-dc-own", "source": "[[div]]\nA\n[[collapsible]]\nB\n[[/div]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-q2-cd-own", "source": "[[collapsible]]\nA\n[[div]]\nB\n[[/collapsible]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-q2-dc-blank", "source": "[[div]]\n\nA\n\n[[collapsible]]\n\nB\n\n[[/div]]\n\nC\n\n[[/collapsible]]\n\nD"}
+{"case_id": "l8-preview-q2-cd-blank", "source": "[[collapsible]]\n\nA\n\n[[div]]\n\nB\n\n[[/collapsible]]\n\nC\n\n[[/div]]\n\nD"}
+{"case_id": "l8-preview-q2-dc-inlineclose", "source": "[[div]]\nA\n[[collapsible]]\nB[[/div]]C[[/collapsible]]D"}
+{"case_id": "l8-preview-q2-cd-inlineclose", "source": "[[collapsible]]\nA\n[[div]]\nB[[/collapsible]]C[[/div]]D"}
+{"case_id": "l8-preview-q2-c-unclosed-in-d", "source": "[[div]]\nA\n[[collapsible]]\nB\n[[/div]]\nC"}
+{"case_id": "l8-preview-q2-d-unclosed-in-c", "source": "[[collapsible]]\nA\n[[div]]\nB\n[[/collapsible]]\nC"}
+{"case_id": "l8-preview-q2-stray-d-in-c", "source": "[[collapsible]]\nA\n[[/div]]\nB\n[[/collapsible]]\nC"}
+{"case_id": "l8-preview-q2-stray-c-in-d", "source": "[[div]]\nA\n[[/collapsible]]\nB\n[[/div]]\nC"}
+{"case_id": "l8-preview-q2-extra-d", "source": "[[div]]\nA\n[[/div]]\nB\n[[/div]]\nC"}
+{"case_id": "l8-preview-q2-extra-c", "source": "[[collapsible]]\nA\n[[/collapsible]]\nB\n[[/collapsible]]\nC"}
+{"case_id": "l8-preview-q2-d-unclosed-nested", "source": "[[div]]\n[[div]]\nA\n[[/div]]\nB"}
+{"case_id": "l8-preview-q2-c-unclosed-nested", "source": "[[collapsible]]\n[[collapsible]]\nA\n[[/collapsible]]\nB"}
+{"case_id": "l8-preview-q2-2d1c", "source": "[[div]]\nA\n[[collapsible]]\nB\n[[/div]]\nC\n[[/div]]\nD\n[[/collapsible]]\nE"}
+{"case_id": "l8-preview-q2-1d2d-c", "source": "[[div]]\n[[collapsible]]\n[[div]]\nA\n[[/collapsible]]\nB\n[[/div]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-q2-cdc", "source": "[[collapsible]]\n[[div]]\n[[collapsible]]\nA\n[[/div]]\nB\n[[/collapsible]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-q2-outer-d-unclosed-cross", "source": "[[div]]\n[[collapsible]]\n[[div]]\nA\n[[/div]]\n[[/collapsible]]\nB"}
+{"case_id": "l8-preview-q2-d-center", "source": "[[div]]\nA\n[[=]]\nB\n[[/div]]\nC\n[[/=]]\nD"}
+{"case_id": "l8-preview-q2-center-d", "source": "[[=]]\nA\n[[div]]\nB\n[[/=]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-q2-c-center", "source": "[[collapsible]]\nA\n[[=]]\nB\n[[/collapsible]]\nC\n[[/=]]\nD"}
+{"case_id": "l8-preview-q2-center-c", "source": "[[=]]\nA\n[[collapsible]]\nB\n[[/=]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-q2-d-right", "source": "[[div]]\nA\n[[>]]\nB\n[[/div]]\nC\n[[/>]]\nD"}
+{"case_id": "l8-preview-q2-right-d", "source": "[[>]]\nA\n[[div]]\nB\n[[/>]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-q2-c-right", "source": "[[collapsible]]\nA\n[[>]]\nB\n[[/collapsible]]\nC\n[[/>]]\nD"}
+{"case_id": "l8-preview-q2-right-c", "source": "[[>]]\nA\n[[collapsible]]\nB\n[[/>]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-q2-d-note", "source": "[[div]]\nA\n[[note]]\nB\n[[/div]]\nC\n[[/note]]\nD"}
+{"case_id": "l8-preview-q2-note-d", "source": "[[note]]\nA\n[[div]]\nB\n[[/note]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-q2-c-note", "source": "[[collapsible]]\nA\n[[note]]\nB\n[[/collapsible]]\nC\n[[/note]]\nD"}
+{"case_id": "l8-preview-q2-note-c", "source": "[[note]]\nA\n[[collapsible]]\nB\n[[/note]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-q2-d-tab", "source": "[[div]]\nA\n[[tabview]]\n[[tab T]]\nB\n[[/div]]\nC\n[[/tab]]\n[[/tabview]]\nD"}
+{"case_id": "l8-preview-q2-tab-d", "source": "[[tabview]]\n[[tab T]]\nA\n[[div]]\nB\n[[/tab]]\n[[/tabview]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-q2-c-tab", "source": "[[collapsible]]\nA\n[[tabview]]\n[[tab T]]\nB\n[[/collapsible]]\nC\n[[/tab]]\n[[/tabview]]\nD"}
+{"case_id": "l8-preview-q2-tab-c", "source": "[[tabview]]\n[[tab T]]\nA\n[[collapsible]]\nB\n[[/tab]]\n[[/tabview]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-q2-center-control", "source": "[[=]]\nA\n[[/=]]\nB"}
+{"case_id": "l8-preview-q2-note-control", "source": "[[note]]\nA\n[[/note]]\nB"}
+{"case_id": "l8-preview-f-cc-nested", "source": "[[collapsible]]\nA\n[[collapsible]]\nB\n[[/collapsible]]\nE\n[[/collapsible]]\nF"}
+{"case_id": "l8-preview-f-dd-nested", "source": "[[div]]\nA\n[[div]]\nB\n[[/div]]\nE\n[[/div]]\nF"}
+{"case_id": "l8-preview-f-cc-nested-indiv", "source": "[[div]]\n[[collapsible]]\nA\n[[collapsible]]\nB\n[[/collapsible]]\nE\n[[/collapsible]]\nF\n[[/div]]\nG"}
+{"case_id": "l8-preview-f-cdc-nocross", "source": "[[collapsible]]\n[[div]]\n[[collapsible]]\nA\n[[/collapsible]]\n[[/div]]\nB\n[[/collapsible]]\nC"}
+{"case_id": "l8-preview-f-cc-unclosed-inner-tail", "source": "[[collapsible]]\nA\n[[/collapsible]]\nB\n[[collapsible]]\nE"}
+{"case_id": "l8-preview-f-cc-3-2", "source": "[[collapsible]]\n[[collapsible]]\n[[collapsible]]\nA\n[[/collapsible]]\nB\n[[/collapsible]]\nE"}
+{"case_id": "l8-preview-f-dd-3-2", "source": "[[div]]\n[[div]]\n[[div]]\nA\n[[/div]]\nB\n[[/div]]\nE"}
+{"case_id": "l8-preview-f-note-nested", "source": "[[note]]\nA\n[[note]]\nB\n[[/note]]\nE\n[[/note]]\nF"}
+{"case_id": "l8-preview-f-center-nested", "source": "[[=]]\nA\n[[=]]\nB\n[[/=]]\nE\n[[/=]]\nF"}
+{"case_id": "l8-preview-f-center-mixalign", "source": "[[=]]\nA\n[[>]]\nB\n[[/=]]\nE\n[[/>]]\nF"}
+{"case_id": "l8-preview-f-div-score-cross", "source": "[[div_]]\nA\n[[collapsible]]\nB\n[[/div]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-f-cd-span-4party", "source": "[[span]]\nA [[collapsible]]\nB [[div]]\nE [[/span]]\nF [[/collapsible]]\nG [[/div]]\nH"}
+{"case_id": "l8-preview-f-bold-cross-cd", "source": "**A [[collapsible]]\nB [[div]]\nE** F\n[[/collapsible]]\nG\n[[/div]]\nH"}
+{"case_id": "l8-preview-t-d-cell", "source": "[[table]]\n[[row]]\n[[cell]]\n[[div]]\nA\n[[/cell]]\n[[cell]]\nB[[/div]]E\n[[/cell]]\n[[/row]]\n[[/table]]"}
+{"case_id": "l8-preview-t-d-cell-own", "source": "[[table]]\n[[row]]\n[[cell]]\n[[div]]\nA\n[[/cell]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]"}
+{"case_id": "l8-preview-t-c-row", "source": "[[table]]\n[[row]]\n[[cell]]\n[[collapsible]]\nA\n[[/cell]]\n[[/row]]\n[[row]]\n[[cell]]\nB\n[[/collapsible]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]"}
+{"case_id": "l8-preview-t-d-row", "source": "[[table]]\n[[row]]\n[[cell]]\n[[div]]\nA\n[[/cell]]\n[[/row]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]"}
+{"case_id": "l8-preview-t-c-after-table", "source": "[[table]]\n[[row]]\n[[cell]]\n[[collapsible]]\nA\n[[/cell]]\n[[/row]]\n[[/table]]\nB\n[[/collapsible]]\nE"}
+{"case_id": "l8-preview-t-d-after-table", "source": "[[table]]\n[[row]]\n[[cell]]\n[[div]]\nA\n[[/cell]]\n[[/row]]\n[[/table]]\nB\n[[/div]]\nE"}
+{"case_id": "l8-preview-t-d-before-closein", "source": "[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-t-c-before-closein", "source": "[[collapsible]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/collapsible]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-t-d-before-closein2", "source": "[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[cell]]\nG\n[[/cell]]\n[[/row]]\n[[/table]]\nF\n[[/div]]\nH"}
+{"case_id": "l8-preview-t-table-in-div-open-after", "source": "[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/cell]]\n[[/row]]\n[[/div]]\nE\n[[/table]]\nF"}
+{"case_id": "l8-preview-t-row-in-div", "source": "[[table]]\n[[div]]\n[[row]]\n[[cell]]\nB\n[[/cell]]\n[[/row]]\n[[/div]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-t-cell-in-div", "source": "[[table]]\n[[row]]\n[[div]]\n[[cell]]\nB\n[[/cell]]\n[[/div]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-t-cell-cross-div", "source": "[[table]]\n[[row]]\n[[div]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-t-d-in-c-in-cell", "source": "[[table]]\n[[row]]\n[[cell]]\n[[collapsible]]\nA\n[[div]]\nB\n[[/collapsible]]\nE\n[[/cell]]\n[[cell]]\nG[[/div]]H\n[[/cell]]\n[[/row]]\n[[/table]]"}
+{"case_id": "l8-preview-t-simple-collapsible", "source": "|| [[collapsible]]\nA ||\n|| B[[/collapsible]] ||"}
+{"case_id": "l8-preview-t-simple-coll2", "source": "|| [[collapsible]]A || B[[/collapsible]] ||"}
+{"case_id": "l8-preview-t-div-simple-row", "source": "[[div]]\n|| A ||\n[[/div]]\nB\n|| E ||"}
+{"case_id": "l8-preview-t-div-close-in-simple", "source": "[[div]]\n|| A [[/div]] ||\nB"}
+{"case_id": "l8-preview-t-coll-close-in-simple", "source": "[[collapsible]]\n|| A [[/collapsible]] ||\nB"}
+{"case_id": "l8-preview-t-div-close-in-simple2", "source": "[[div]]\n|| A ||\n|| B [[/div]] E ||\nF"}
+{"case_id": "l8-preview-l-div-item-cross", "source": "* A [[div]]\n* B [[/div]]\n* C"}
+{"case_id": "l8-preview-l-coll-item-cross", "source": "* A [[collapsible]]\n* B [[/collapsible]]\n* C"}
+{"case_id": "l8-preview-l-div-open-in-item", "source": "* A [[div]]\nB\n[[/div]]\nC"}
+{"case_id": "l8-preview-l-coll-open-in-item", "source": "* A [[collapsible]]\nB\n[[/collapsible]]\nC"}
+{"case_id": "l8-preview-l-close-in-item", "source": "[[div]]\nA\n* B [[/div]]\n* C\nE"}
+{"case_id": "l8-preview-l-close-in-item-c", "source": "[[collapsible]]\nA\n* B [[/collapsible]]\n* C\nE"}
+{"case_id": "l8-preview-l-ul-li-cross", "source": "[[ul]]\n[[li]]A\n[[div]]\nB[[/li]]\n[[li]]E[[/div]]F[[/li]]\n[[/ul]]\nG"}
+{"case_id": "l8-preview-l-ul-li-closeout", "source": "[[ul]]\n[[li]]A\n[[div]]\nB[[/li]]\n[[/ul]]\nE\n[[/div]]\nG"}
+{"case_id": "l8-preview-l-ul-li-closein", "source": "[[div]]\nA\n[[ul]]\n[[li]]B[[/div]]E[[/li]]\n[[/ul]]\nG"}
+{"case_id": "l8-preview-l-ul-li-closein-c", "source": "[[collapsible]]\nA\n[[ul]]\n[[li]]B[[/collapsible]]E[[/li]]\n[[/ul]]\nG"}
+{"case_id": "l8-preview-q-open-in-quote", "source": "> A\n> [[div]]\n> B\nE\n[[/div]]\nF"}
+{"case_id": "l8-preview-q-close-in-quote", "source": "[[div]]\nA\n> B\n> [[/div]]\n> E\nF"}
+{"case_id": "l8-preview-q-close-in-quote-mid", "source": "[[div]]\nA\n> B [[/div]] E\nF"}
+{"case_id": "l8-preview-q-close-in-quote-c", "source": "[[collapsible]]\nA\n> B [[/collapsible]] E\nF"}
+{"case_id": "l8-preview-q-cross-pair", "source": "> A [[div]]\n> B\nE [[/div]]\nF"}
+{"case_id": "l8-preview-q-both-in-quote-cross", "source": "> [[div]]\n> A\n> [[collapsible]]\n> B\n> [[/div]]\n> E\n> [[/collapsible]]\n> F"}
+{"case_id": "l8-preview-q-quote-in-cross", "source": "[[div]]\nA\n[[collapsible]]\n> B\n[[/div]]\n> E\n[[/collapsible]]\nF"}
+{"case_id": "l8-preview-h-close-one", "source": "[[div]]\n+ Head[[/div]] tail\n\nAfter"}
+{"case_id": "l8-preview-h-close-one-eof", "source": "[[div]]\n+ Head[[/div]] tail"}
+{"case_id": "l8-preview-h-close-end", "source": "[[div]]\n+ Head[[/div]]\n\nAfter"}
+{"case_id": "l8-preview-h-close-c", "source": "[[collapsible]]\n+ Head[[/collapsible]] tail\n[[/collapsible]]\n\nAfter"}
+{"case_id": "l8-preview-h-close-c-one", "source": "[[collapsible]]\n+ Head[[/collapsible]] tail\n\nAfter"}
+{"case_id": "l8-preview-h-open-in-heading", "source": "+ Head [[div]]\nA\n[[/div]]\nAfter"}
+{"case_id": "l8-preview-h-open-in-heading-tail", "source": "+ Head [[div]] tail\nA\n[[/div]]\nAfter"}
+{"case_id": "l8-preview-h-open-c-heading", "source": "+ Head [[collapsible]]\nA\n[[/collapsible]]\nAfter"}
+{"case_id": "l8-preview-h-both-in-heading", "source": "+ Head [[div]]\nA[[/div]] tail"}
+{"case_id": "l8-preview-h-both-same-line", "source": "+ Head [[div]]A[[/div]] tail"}
+{"case_id": "l8-preview-h-nested-outer", "source": "[[div]]\n[[div]]\n+ Head[[/div]] tail\n[[/div]]\nAfter\n[[/div]]\nZ"}
+{"case_id": "l8-preview-h-span-close", "source": "[[span]]\n+ Head[[/span]] tail\nAfter"}
+{"case_id": "l8-preview-h-span-open", "source": "+ Head[[span]] tail\nA[[/span]]B\nAfter"}
+{"case_id": "l8-preview-h-bold-open", "source": "+ Head**x\nA**B\nAfter"}
+{"case_id": "l8-preview-h-bold-cross", "source": "[[div]]\n+ Head **x[[/div]]y** z\n[[/div]]\nAfter"}
+{"case_id": "l8-preview-h-span-in-head-cross", "source": "[[div]]\n+ Head [[span]]x[[/div]]y[[/span]] z\n[[/div]]\nAfter"}
+{"case_id": "l8-preview-h-tail-none", "source": "[[div]]\n+ [[/div]]tail\n[[/div]]\nAfter"}
+{"case_id": "l8-preview-h-plain-after-para", "source": "[[div]]\n+ Head[[/div]] tail\nA\n\nB\n\n* L\n\n|| T ||\n\n[[div]]\nI\n[[/div]]\n\nZ"}
+{"case_id": "l8-preview-h-center-close", "source": "[[=]]\n+ Head[[/=]] tail\n[[/=]]\n\nAfter"}
+{"case_id": "l8-preview-h-note-close", "source": "[[note]]\n+ Head[[/note]] tail\n[[/note]]\n\nAfter"}
+{"case_id": "l8-preview-h-in-cell-close", "source": "[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\n+ Head[[/div]] tail\n[[/cell]]\n[[/row]]\n[[/table]]\nB\n[[/div]]\nE"}
+{"case_id": "l8-preview-a-div-own", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]"}
+{"case_id": "l8-preview-a-div-own-after", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]\nafter"}
+{"case_id": "l8-preview-a-text-div", "source": "[[a href=\"https://e.com/\"]]pre\n[[div]]\nx\n[[/div]]\npost[[/a]]tail"}
+{"case_id": "l8-preview-a-outer-div", "source": "[[div]]\n[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]\n[[/div]]"}
+{"case_id": "l8-preview-a-div-2para", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx\n\ny\n[[/div]]\n[[/a]]"}
+{"case_id": "l8-preview-a-div-nested", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\n[[div]]\nx\n[[/div]]\ny\n[[/div]]\n[[/a]]"}
+{"case_id": "l8-preview-a-coll", "source": "[[a href=\"https://e.com/\"]]\n[[collapsible]]\nx\n[[/collapsible]]\n[[/a]]"}
+{"case_id": "l8-preview-a-note", "source": "[[a href=\"https://e.com/\"]]\n[[note]]\nx\n[[/note]]\n[[/a]]"}
+{"case_id": "l8-preview-a-center", "source": "[[a href=\"https://e.com/\"]]\n[[=]]\nx\n[[/=]]\n[[/a]]"}
+{"case_id": "l8-preview-a-para-break", "source": "[[a href=\"https://e.com/\"]]x\n\ny[[/a]]z"}
+{"case_id": "l8-preview-a-para-break3", "source": "[[a href=\"https://e.com/\"]]x\n\ny\n\nz[[/a]]w"}
+{"case_id": "l8-preview-a-para-empty", "source": "[[a href=\"https://e.com/\"]]\n\nx\n\n[[/a]]"}
+{"case_id": "l8-preview-a-list", "source": "[[a href=\"https://e.com/\"]]\n* x\n* y\n[[/a]]"}
+{"case_id": "l8-preview-a-list-text", "source": "[[a href=\"https://e.com/\"]]pre\n* x\n* y\npost[[/a]]"}
+{"case_id": "l8-preview-a-list-blank", "source": "[[a href=\"https://e.com/\"]]\n\n* x\n* y\n\n[[/a]]"}
+{"case_id": "l8-preview-a-simple-table", "source": "[[a href=\"https://e.com/\"]]\n|| x || y ||\n|| z || w ||\n[[/a]]"}
+{"case_id": "l8-preview-a-simple-table-text", "source": "[[a href=\"https://e.com/\"]]pre\n|| x ||\npost[[/a]]"}
+{"case_id": "l8-preview-a-adv-table", "source": "[[a href=\"https://e.com/\"]]\n[[table]]\n[[row]]\n[[cell]]\nx\n[[/cell]]\n[[cell]]\ny\n[[/cell]]\n[[/row]]\n[[/table]]\n[[/a]]"}
+{"case_id": "l8-preview-a-adv-table-text", "source": "[[a href=\"https://e.com/\"]]pre\n[[table]]\n[[row]]\n[[cell]]\nx\n[[/cell]]\n[[/row]]\n[[/table]]\npost[[/a]]"}
+{"case_id": "l8-preview-a-quote", "source": "[[a href=\"https://e.com/\"]]\n> x\n> y\n[[/a]]"}
+{"case_id": "l8-preview-a-quote-text", "source": "[[a href=\"https://e.com/\"]]pre\n> x\npost[[/a]]"}
+{"case_id": "l8-preview-a-hr", "source": "[[a href=\"https://e.com/\"]]\n----\n[[/a]]"}
+{"case_id": "l8-preview-a-heading", "source": "[[a href=\"https://e.com/\"]]\n+ H\n[[/a]]"}
+{"case_id": "l8-preview-a-heading-text", "source": "[[a href=\"https://e.com/\"]]pre\n+ H\npost[[/a]]"}
+{"case_id": "l8-preview-a-image", "source": "[[a href=\"https://e.com/\"]][[image https://e.com/x.png]][[/a]]"}
+{"case_id": "l8-preview-a-image-text", "source": "[[a href=\"https://e.com/\"]]pre[[image https://e.com/x.png]]post[[/a]]tail"}
+{"case_id": "l8-preview-a-image-own", "source": "[[a href=\"https://e.com/\"]]\n[[image https://e.com/x.png]]\n[[/a]]"}
+{"case_id": "l8-preview-a-image-div", "source": "[[div]]\n[[a href=\"https://e.com/\"]][[image https://e.com/x.png]][[/a]]\n[[/div]]"}
+{"case_id": "l8-preview-a-image-para", "source": "[[a href=\"https://e.com/\"]][[image https://e.com/x.png]]\n\ny[[/a]]"}
+{"case_id": "l8-preview-a-attrs", "source": "[[a href=\"https://e.com/\" target=\"_blank\" class=\"k\" style=\"color:red\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]"}
+{"case_id": "l8-preview-a-score-div", "source": "[[a_ href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]"}
+{"case_id": "l8-preview-a-bold-in-div", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\n**x**\n[[/div]]\n[[/a]]"}
+{"case_id": "l8-preview-a-bold-outer", "source": "**[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]**"}
+{"case_id": "l8-preview-a-span-outer", "source": "[[span]][[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]y[[/span]]z"}
+{"case_id": "l8-preview-a-span-inner", "source": "[[a href=\"https://e.com/\"]][[span]]\n[[div]]\nx\n[[/div]]\ny[[/span]]z[[/a]]w"}
+{"case_id": "l8-preview-a-close-in-div", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx[[/a]]y\n[[/div]]\nz"}
+{"case_id": "l8-preview-a-open-in-div-close-out", "source": "[[div]]\n[[a href=\"https://e.com/\"]]x\n[[/div]]\ny[[/a]]z"}
+{"case_id": "l8-preview-a-div-then-para", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n\nafter\n\nmore\n[[/a]]\nend"}
+{"case_id": "l8-preview-a-2-div", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[div]]\ny\n[[/div]]\n[[/a]]"}
+{"case_id": "l8-preview-a-div-unclosed-a", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\nno close"}
+{"case_id": "l8-preview-a-after-a", "source": "[[a href=\"https://e.com/\"]]\n[[div]]\nx\n[[/div]]\n[[/a]]\n[[a href=\"https://e.com/\"]]y[[/a]]"}
+{"case_id": "l8-preview-a-code", "source": "[[a href=\"https://e.com/\"]]\n[[code]]\nx\n[[/code]]\n[[/a]]"}
+{"case_id": "l8-preview-a-module-ish", "source": "[[a href=\"https://e.com/\"]]\n[[footnoteblock]]\n[[/a]]"}
+{"case_id": "l8-preview-a-math", "source": "[[a href=\"https://e.com/\"]]\n[[math]]\nx\n[[/math]]\n[[/a]]"}
+{"case_id": "l8-preview-h2-depth3", "source": "[[div]]\n+ [[span class=\"k1\"]]a[[span class=\"k2\"]]b[[/div]]c[[/span]]e[[/span]]f\n[[/div]]\nAfter"}
+{"case_id": "l8-preview-h2-depth2-1close", "source": "[[div]]\n+ [[span class=\"k1\"]]a[[/div]]b\nA[[/span]]B\nAfter"}
+{"case_id": "l8-preview-h2-depth2-2close", "source": "[[div]]\n+ [[span class=\"k1\"]]a[[/div]]b[[/span]]c\nAfter"}
+{"case_id": "l8-preview-h2-color", "source": "[[div]]\n+ ##blue|a[[/div]]b##c\nAfter"}
+{"case_id": "l8-preview-h2-strong-open", "source": "[[div]]\n+ **a[[/div]]b\nAfter"}
+{"case_id": "l8-preview-h2-tail-para", "source": "[[div]]\n+ H[[/div]]t\n\n**b** c\n\nAfter[[span]]in[[/span]]x"}
+{"case_id": "l8-preview-h2-span-after-closes", "source": "[[div]]\n+ H[[/div]]t\nA[[/span]]B\n\nC"}
+{"case_id": "l8-preview-h2-h2-next", "source": "[[div]]\n+ H[[/div]]t\n\n++ J\n\nK"}
+{"case_id": "l8-preview-h2-coll-tail", "source": "[[div]]\n+ H[[/div]]t\n[[collapsible]]\nI\n[[/collapsible]]\nK"}
+{"case_id": "l8-preview-h2-c-heading-tail", "source": "+ Head [[collapsible]] tail\nA\n[[/collapsible]]\nAfter"}
+{"case_id": "l8-preview-h2-c-heading-in-div", "source": "[[div]]\n+ Head [[collapsible]]\nA\n[[/collapsible]]\nB\n[[/div]]\nE"}
+{"case_id": "l8-preview-h2-c-heading-both", "source": "+ Head [[collapsible]]\nA[[/collapsible]] tail\nAfter"}
+{"case_id": "l8-preview-h2-c-heading-same", "source": "+ Head [[collapsible]]A[[/collapsible]] tail\nAfter"}
+{"case_id": "l8-preview-h2-note-heading", "source": "+ Head [[note]]\nA\n[[/note]]\nAfter"}
+{"case_id": "l8-preview-h2-center-own", "source": "[[=]]\n+ Head\n[[/=]]\nAfter"}
+{"case_id": "l8-preview-h2-two-closes-line", "source": "[[div]]\n[[div]]\n+ H[[/div]]t[[/div]]u\nAfter"}
+{"case_id": "l8-preview-h2-list-close", "source": "[[div]]\n* H[[/div]]t\nAfter"}
+{"case_id": "l8-preview-h2-h-then-eof-para", "source": "[[div]]\nI\n+ H[[/div]]t\nAfter"}
+{"case_id": "l8-preview-h2-in-list-in-quote", "source": "[[div]]\n> + H[[/div]]t\nAfter"}
+{"case_id": "l8-preview-tf-second-close", "source": "[[div]]\n[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nF\n[[/div]]\nH"}
+{"case_id": "l8-preview-tf-paras", "source": "[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\n\nE\n\nG\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-tf-block-after", "source": "[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\n[[div]]\nI\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-tf-next-row", "source": "[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[row]]\n[[cell]]\nG\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-tf-first-in-cell", "source": "[[div]]\n[[table]]\n[[row]]\n[[cell]]\n[[/div]]E\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-tf-nested-table", "source": "[[div]]\n[[table]]\n[[row]]\n[[cell]]\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nG\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-tf-inline-before-cell", "source": "[[span]]\n[[div]]\nA\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nF[[/span]]H"}
+{"case_id": "l8-preview-tf-coll-open-in-outer-cell", "source": "[[table]]\n[[row]]\n[[cell]]\n[[div]]\n[[table]]\n[[row]]\n[[cell]]\nB\n[[/div]]\nE\n[[/cell]]\n[[/row]]\n[[/table]]\nG\n[[/cell]]\n[[/row]]\n[[/table]]\nF"}
+{"case_id": "l8-preview-st-noend", "source": "|| A\nB"}
+{"case_id": "l8-preview-st-open-bare", "source": "|| A [[collapsible]]\nB\n[[/collapsible]]\nE"}
+{"case_id": "l8-preview-st-div-bare", "source": "|| A [[div]]\nB\n[[/div]]\nE"}
+{"case_id": "l8-preview-st-close-two-cells", "source": "[[div]]\n|| A || B [[/div]] E || G ||\nF"}
+{"case_id": "l8-preview-st-coll-head-tail", "source": "|| A || B [[collapsible]]\nI\n[[/collapsible]]\nE"}
+{"case_id": "l8-preview-eof-stray-root", "source": "[[table]]\n[[row]]\n[[cell]]\n[[div]]\nA\n[[/cell]]\n[[/row]]\n[[/table]]\n\nB[[/div]]E"}
+{"case_id": "l8-preview-eof-hdiv-body-end", "source": "[[div]]\n+ H[[/div]]t\n\n[[div]]\nI\n[[/div]]"}
+{"case_id": "l8-preview-eof-saved-twin", "source": "[[div]]\n+ H[[/div]] tail\n\nAfter"}
+{"case_id": "l8-preview-p-span-across-h", "source": "[[span]]x\n+ H\ny[[/span]]z"}
+{"case_id": "l8-preview-p-size-across-h", "source": "[[size 120%]]x\n+ H\ny[[/size]]z"}
+{"case_id": "l8-preview-p-span-class-across-h", "source": "[[span class=\"k\"]]x\n+ H\ny[[/span]]z"}
+{"case_id": "l8-preview-p-span-across-2h", "source": "[[span]]x\n+ H\n\ny\n++ J\n\nu[[/span]]z"}
+{"case_id": "l8-preview-p-a-across-2h", "source": "[[a href=\"https://e.com/\"]]x\n+ H\n\ny\n++ J\n\nu[[/a]]z"}
+{"case_id": "l8-preview-p-orphan-then-h3", "source": "[[div]]\n+ H[[/div]]t\n\nA\n\n++ J\n\nK\n\n+++ L\n\nM"}
+{"case_id": "l8-preview-p-orphan-size-next", "source": "[[div]]\n+ H[[/div]]t\n\n[[size 120%]]A[[/size]]B\n\nC"}
+{"case_id": "l8-preview-p-img-p", "source": "x [[a href=\"https://e.com/\"]][[image https://e.com/x.png]][[/a]] y"}
+{"case_id": "l8-preview-p-img-bare", "source": "x [[image https://e.com/x.png]] y"}
+{"case_id": "l8-preview-p-img-own", "source": "[[image https://e.com/x.png]]"}
+{"case_id": "l8-preview-p-a-img-then-para", "source": "[[a href=\"https://e.com/\"]][[image https://e.com/x.png]][[/a]]\n\nz"}
+{"case_id": "l8-preview-p-code-opaque", "source": "[[div]]\n[[code]]\n[[/div]]\n[[/code]]\nx\n[[/div]]\ny"}
+{"case_id": "l8-preview-p-raw-opaque", "source": "[[div]]\n@@[[/div]]@@\nx\n[[/div]]\ny"}
+{"case_id": "l8-preview-p-raw-opaque-c", "source": "[[collapsible]]\n@@[[/collapsible]]@@\nx\n[[/collapsible]]\ny"}
+{"case_id": "l8-preview-p-link-label", "source": "[[div]]\n[[[x|b[[/div]]c]]]\nd\n[[/div]]\ne"}
+{"case_id": "l8-preview-p-footnote-cross-div", "source": "[[div]]\nA[[footnote]]B[[/div]]E[[/footnote]]F\n[[/div]]\nG"}
+{"case_id": "l8-preview-p-footnote-cross-coll", "source": "[[collapsible]]\nA[[footnote]]B[[/collapsible]]E[[/footnote]]F\n[[/collapsible]]\nG"}
+{"case_id": "l8-preview-p-footnote-open-div", "source": "[[footnote]][[div]]\nB[[/footnote]]E\n[[/div]]\nG\n\n[[footnoteblock]]"}
+{"case_id": "l8-preview-p-size-cross-bb", "source": "[[size 120%]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/div]]\nx [[/size]]\nx [[/collapsible]]\ny"}
+{"case_id": "l8-preview-p-a-cross-bb", "source": "[[a href=\"https://e.com/\"]]\nT1 [[div]]\nT2 [[collapsible]]\nT3 [[/div]]\nx [[/a]]\nx [[/collapsible]]\ny"}
+{"case_id": "l8-preview-p-stray-in-p-span", "source": "[[span]]x\n[[table]]\n[[row]]\n[[cell]]\n[[div]]\nA\n[[/cell]]\n[[/row]]\n[[/table]]\ny[[/div]]z[[/span]]w"}
+{"case_id": "l8-preview-p-case-insens", "source": "[[DIV]]\nA\n[[COLLAPSIBLE]]\nB\n[[/DIV]]\nC\n[[/COLLAPSIBLE]]\nD"}
+{"case_id": "l8-preview-p-head-args", "source": "[[div class=\"k\"]]\nA\n[[collapsible show=\"s\" hide=\"h\" folded=\"no\"]]\nB\n[[/div]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-p-iframe-free", "source": "[[div]]\nA [[div]]\nB [[/div]] C [[/div]] D"}
+{"case_id": "l8-preview-p-closer-space-tail", "source": "[[div]]\nA [[/div]]   \nB"}
+{"case_id": "l8-preview-p-coll-hide-bottom", "source": "[[collapsible hideLocation=\"both\"]]\nA\n[[div]]\nB\n[[/collapsible]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-p-coll-hide-bottom-c", "source": "[[collapsible hideLocation=\"bottom\"]]\nA\n[[div]]\nB\n[[/collapsible]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-p-coll-d-bottom", "source": "[[div]]\nA\n[[collapsible hideLocation=\"both\"]]\nB\n[[/div]]\nC\n[[/collapsible]]\nD"}
+{"case_id": "l8-preview-z-empty-div", "source": "[[div]]\n[[/div]]\nB"}
+{"case_id": "l8-preview-z-empty-div2", "source": "A\n\n[[div]]\n\n[[/div]]\n\nB"}
+{"case_id": "l8-preview-z-dd-mixed-excess", "source": "[[div]]\nA\n[[div]]\nB\n[[/div]]\nC\n[[div]]\nE\n[[/div]]\nF\n[[div]]\nG"}
+{"case_id": "l8-preview-z-toc-h-close", "source": "[[toc]]\n\n[[div]]\n+ Head[[/div]] tail\n\n++ J"}
+{"case_id": "l8-preview-z-head-trail-space", "source": "[[div]]  \nA\n[[/div]]\nB"}
+{"case_id": "l8-preview-z-head-trail-space-c", "source": "[[collapsible]]  \nA\n[[/collapsible]]\nB"}
+{"case_id": "l8-preview-z-score-control", "source": "[[div_]]\nA\n[[/div]]\nB"}
+{"case_id": "l8-preview-z-score-inner", "source": "[[collapsible]]\nA\n[[div_]]\nB\n[[/collapsible]]\nE\n[[/div]]\nG"}
+{"case_id": "l8-preview-z-score-outer-coll", "source": "[[div_]]\nA\n[[collapsible]]\nB\n[[/collapsible]]\nC\n[[/div]]\nD"}
+{"case_id": "l8-preview-z-coll-eof-close", "source": "[[div]]\nA\n[[collapsible]]\nB\n[[/div]]\nE\n[[/collapsible]]"}
+{"case_id": "l8-preview-z-closer-first-line", "source": "[[div]]\n[[/div]]E"}
+{"case_id": "l8-preview-z-empty-div-attr", "source": "[[div class=\"k\"]]\n[[/div]]\nB"}
+{"case_id": "l8-preview-z-empty-note", "source": "[[note]]\n[[/note]]\nB"}
+{"case_id": "l8-preview-z-li-empty-attr", "source": "* A [[div class=\"k\"]]\nB\n[[/div]]\nC"}
+{"case_id": "l8-preview-z-empty-center", "source": "[[=]]\n[[/=]]\nB"}
+{"case_id": "l8-preview-x-later-pairs-close", "source": "[[div]]\n[[div]]\n+ H[[/div]]t\n\n[[div]]\nI\n[[/div]]\n\nJ\n[[/div]]\nK\n[[/div]]\nL"}
+{"case_id": "l8-preview-x-coll-outer-div", "source": "[[div]]\n[[collapsible]]\n+ H[[/collapsible]]t\nI\n[[/div]]\nJ"}
+{"case_id": "l8-preview-x-note-then-div", "source": "[[div]]\n[[note]]\n+ H[[/note]]t\nI\n[[/div]]\nJ"}
+{"case_id": "l8-preview-x-three-closers", "source": "[[div]]\n[[div]]\n[[div]]\n+ H[[/div]]t\nI\n[[/div]]\nJ\n[[/div]]\nK"}
+{"case_id": "l8-preview-x-second-heading-close", "source": "[[div]]\n[[div]]\n+ H[[/div]]t\n\n+ J[[/div]]u\n\nK"}

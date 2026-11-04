@@ -142,6 +142,32 @@ where
     })
 }
 
+#[cfg(test)]
+pub(crate) fn parse_for_test<'r, 't>(
+    tokenization: &'r Tokenization<'t>,
+    page_info: &'r PageInfo<'t>,
+    settings: &'r WikitextSettings,
+) -> ParseOutcome<SyntaxTree<'t>>
+where
+    'r: 't,
+{
+    parse_on_current_stack(
+        tokenization,
+        page_info,
+        settings,
+        DEFAULT_MAX_RECURSION_DEPTH,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn repaired_tokenization_for_test<'t>(
+    tokenization: &Tokenization<'t>,
+    page_info: &PageInfo<'t>,
+    settings: &WikitextSettings,
+) -> Option<Tokenization<'t>> {
+    repair_bracket_run_tokenization(tokenization, page_info, settings)
+}
+
 /// WebAssembly hosts do not have a portable configurable thread-stack API.
 #[cfg(target_arch = "wasm32")]
 pub fn parse<'r, 't>(

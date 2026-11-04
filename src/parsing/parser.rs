@@ -43,6 +43,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::{mem, ptr};
 
+pub(crate) mod block_pairs;
 mod wikidot_state;
 use self::wikidot_state::WikidotState;
 
@@ -125,6 +126,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_collapsible_failures: BTreeMap<usize, ParseError>,
     wikidot_div_bounded_span: BTreeMap<usize, bool>,
     wikidot_div_stream_marks: BTreeMap<usize, (u32, u32)>,
+    wikidot_block_pairs: block_pairs::WikidotBlockPairs,
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
@@ -267,6 +269,15 @@ impl<'r, 't> Parser<'r, 't> {
                 } else {
                     BTreeMap::new()
                 },
+                wikidot_block_pairs: if settings.layout.legacy() {
+                    block_pairs::compute_wikidot_block_pairs(
+                        tokenization.tokens(),
+                        tokenization.full_text().inner(),
+                        page_info,
+                    )
+                } else {
+                    block_pairs::WikidotBlockPairs::default()
+                },
                 ..Default::default()
             })),
             two_block_end_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -288,6 +299,11 @@ impl<'r, 't> Parser<'r, 't> {
             quote_body_cursor: None,
             wikidot: WikidotState::default(),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn wikidot_block_pairs_for_test(&self) -> block_pairs::WikidotBlockPairs {
+        self.block_end_scan_cache.borrow().wikidot_block_pairs.clone()
     }
 
     #[inline]

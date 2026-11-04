@@ -33,7 +33,9 @@ mod rule;
 pub mod blocks;
 
 pub use self::arguments::Arguments;
+pub(crate) use self::mapping::get_block_rule_with_name_for_layout;
 pub(crate) use self::parser::BlockBodyStart;
+pub(crate) use self::parser::{head_seam_forms_block, head_word_never_resolves};
 pub(crate) use self::rule::head_word_names_known_block;
 pub use self::rule::{RULE_BLOCK, RULE_BLOCK_SKIP_NEWLINE, RULE_BLOCK_STAR};
 
@@ -53,6 +55,18 @@ pub struct BlockRule {
 }
 
 impl BlockRule {
+    pub(crate) fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub(crate) fn accepts_star(&self) -> bool {
+        self.accepts_star
+    }
+
+    pub(crate) fn accepts_score(&self) -> bool {
+        self.accepts_score
+    }
+
     #[cold]
     pub fn rule(&self) -> Rule {
         fn try_consume_fn<'r, 't>(
