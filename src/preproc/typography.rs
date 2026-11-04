@@ -133,10 +133,13 @@ fn replace_within_paragraphs(
     let Replacer::RegexSurround { regex, .. } = replacer else {
         unreachable!("Wikidot quote replacement requires a surround replacer");
     };
-    let protected_ranges = if regex.find_iter(text).next().is_some() {
-        typography_protected_ranges(text)
+    let (protected_ranges, owner_ranges) = if regex.find_iter(text).next().is_some() {
+        (
+            typography_protected_ranges(text),
+            typography_owner_ranges(text),
+        )
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new())
     };
     let mut output = String::with_capacity(text.len());
     let mut paragraph_start = 0;
@@ -150,6 +153,7 @@ fn replace_within_paragraphs(
             paragraph_start,
             &literal_regions,
             &protected_ranges,
+            &owner_ranges,
         );
         output.push_str(&paragraph);
         paragraph_start += source_len;
@@ -159,11 +163,15 @@ fn replace_within_paragraphs(
 
 fn replace_low_quotes_within_paragraphs(text: &mut String, buffer: &mut String) {
     let literal_regions = LiteralRegionIndex::for_typography(text);
-    let protected_ranges = if LOW_DOUBLE_QUOTES.regex().find_iter(text).next().is_some() {
-        typography_protected_ranges(text)
-    } else {
-        Vec::new()
-    };
+    let (protected_ranges, owner_ranges) =
+        if LOW_DOUBLE_QUOTES.regex().find_iter(text).next().is_some() {
+            (
+                typography_protected_ranges(text),
+                typography_owner_ranges(text),
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
     let mut output = String::with_capacity(text.len());
     let mut paragraph_start = 0;
     for paragraph in text.split_inclusive("\n\n") {
@@ -185,6 +193,7 @@ fn replace_low_quotes_within_paragraphs(text: &mut String, buffer: &mut String) 
             paragraph_start + protected_end,
             &literal_regions,
             &protected_ranges,
+            &owner_ranges,
         );
         output.push_str(&suffix);
         paragraph_start += paragraph.len();
@@ -199,6 +208,7 @@ fn replace_surround_outside_closed_iftags(
     source_offset: usize,
     literal_regions: &LiteralRegionIndex,
     protected_ranges: &[Range<usize>],
+    owner_ranges: &[Range<usize>],
 ) {
     let Replacer::RegexSurround { regex, begin, end } = replacer else {
         unreachable!("Wikidot quote replacement requires a surround replacer");
@@ -210,6 +220,7 @@ fn replace_surround_outside_closed_iftags(
         let full = captures.get(0).unwrap();
         if literal_regions.contains(source_offset + full.start())
             || ranges_contain(protected_ranges, source_offset + full.start())
+            || ranges_contain(owner_ranges, source_offset + full.end() - 1)
         {
             continue;
         }
@@ -330,7 +341,16 @@ fn wikidot_head_value_ranges(text: &str) -> Vec<Range<usize>> {
             ranges.push(open + 2 + lead + 1..head_end);
         } else {
             let name_len = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
-            if trimmed[..name_len].eq_ignore_ascii_case("tab") {
+            let name = trimmed[..name_len]
+                .strip_prefix('*')
+                .unwrap_or(&trimmed[..name_len]);
+            if [
+                "tab", "user", "file", "image", "=image", "<image", ">image", "f<image",
+                "f=image", "f>image",
+            ]
+            .iter()
+            .any(|candidate| name.eq_ignore_ascii_case(candidate))
+            {
                 ranges.push(open + 2 + lead + name_len..head_end);
             }
         }
@@ -360,6 +380,15 @@ fn wikidot_head_value_ranges(text: &str) -> Vec<Range<usize>> {
         }
     }
     ranges
+}
+
+fn typography_owner_ranges(text: &str) -> Vec<Range<usize>> {
+    let mut ranges = wikidot_head_value_ranges(text);
+    ranges.extend(wikidot_block_attribute_ranges(text));
+    ranges.extend(wikidot_local_link_separator_ranges(text));
+    let tokenization = crate::tokenize(text);
+    collect_link_ranges(tokenization.tokens(), &mut ranges);
+    merge_ranges(ranges)
 }
 
 fn typography_protected_ranges(text: &str) -> Vec<Range<usize>> {

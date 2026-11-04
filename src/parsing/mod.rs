@@ -241,6 +241,11 @@ where
                 for footnote in &mut footnotes {
                     inline_scope::lower_wikidot_inline_size_scopes_inline(footnote);
                 }
+                for bibliography in bibliographies.slice_mut() {
+                    for (_, elements) in bibliography.slice_mut() {
+                        inline_scope::lower_wikidot_inline_size_scopes_inline(elements);
+                    }
+                }
             }
             debug!(
                 "Finished parsing into syntax tree ({} errors)",
