@@ -189,7 +189,9 @@ pub fn render_footnote_block(ctx: &mut HtmlContext, title: Option<&str>) {
                                 ))
                                 .contents(&id);
                             ctx.push_raw('.');
-                            ctx.push_raw(' ');
+                            if !contents.is_empty() {
+                                ctx.push_raw(' ');
+                            }
                             render_wikidot_footnote_contents(ctx, contents);
                         });
                 }

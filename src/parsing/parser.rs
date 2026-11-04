@@ -1278,6 +1278,10 @@ impl<'r, 't> Parser<'r, 't> {
         Element::Code(code_block)
     }
 
+    pub fn has_bibliography(&self) -> bool {
+        !self.bibliographies.borrow().is_empty()
+    }
+
     pub fn push_bibliography(&mut self, bibliography: Bibliography<'t>) -> usize {
         let mut guard = self.bibliographies.borrow_mut();
         let index = guard.next_index();

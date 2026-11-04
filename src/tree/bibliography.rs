@@ -98,29 +98,26 @@ impl<'t> Bibliography<'t> {
                 continue;
             }
             citation += 1;
-            self.label_index
-                .entry(label.as_ref().to_owned())
-                .or_insert(IndexedReference { citation, position });
-        }
-    }
-
-    pub fn add(&mut self, label: Cow<'t, str>, elements: Vec<Element<'t>>) {
-        if self.get(&label).is_none() {
-            let citation = self
-                .entries
-                .iter()
-                .filter(|(existing, _)| !Self::is_residual(existing))
-                .count()
-                + 1;
-            let position = self.entries.len();
             self.label_index.insert(
                 label.as_ref().to_owned(),
                 IndexedReference { citation, position },
             );
-            self.entries.push((label, elements));
-        } else {
-            warn!("Duplicate reference in bibliography: {label}");
         }
+    }
+
+    pub fn add(&mut self, label: Cow<'t, str>, elements: Vec<Element<'t>>) {
+        let citation = self
+            .entries
+            .iter()
+            .filter(|(existing, _)| !Self::is_residual(existing))
+            .count()
+            + 1;
+        let position = self.entries.len();
+        self.label_index.insert(
+            label.as_ref().to_owned(),
+            IndexedReference { citation, position },
+        );
+        self.entries.push((label, elements));
     }
 
     pub(crate) fn add_residual(&mut self, element: Element<'t>) {
@@ -151,17 +148,18 @@ impl<'t> Bibliography<'t> {
 
     fn get_by_scan(&self, label: &str) -> Option<(usize, &[Element<'t>])> {
         let mut index = 0;
+        let mut found: Option<(usize, &[Element<'t>])> = None;
         for (ref_label, elements) in &self.entries {
             if Self::is_residual(ref_label) {
                 continue;
             }
             index += 1;
             if label == ref_label {
-                return Some((index, elements));
+                found = Some((index, elements));
             }
         }
 
-        None
+        found
     }
 
     #[inline]
@@ -264,7 +262,7 @@ impl<'t> BibliographyList<'t> {
 }
 
 #[test]
-fn bibliography_helpers_preserve_first_reference() {
+fn bibliography_helpers_resolve_latest_reference() {
     let first = vec![Element::Text(cow!("first"))];
     let duplicate = vec![Element::Text(cow!("duplicate"))];
     let second = vec![Element::Text(cow!("second"))];
@@ -272,16 +270,16 @@ fn bibliography_helpers_preserve_first_reference() {
     let mut bibliography = Bibliography::new();
     assert!(bibliography.get("alpha").is_none());
 
-    bibliography.add(cow!("alpha"), first.clone());
-    bibliography.add(cow!("alpha"), duplicate);
+    bibliography.add(cow!("alpha"), first);
+    bibliography.add(cow!("alpha"), duplicate.clone());
     bibliography.add(cow!("beta"), second.clone());
 
-    assert_eq!(bibliography.get("alpha"), Some((1, first.as_slice())));
-    assert_eq!(bibliography.get("beta"), Some((2, second.as_slice())));
-    assert_eq!(bibliography.slice().len(), 2);
+    assert_eq!(bibliography.get("alpha"), Some((2, duplicate.as_slice())));
+    assert_eq!(bibliography.get("beta"), Some((3, second.as_slice())));
+    assert_eq!(bibliography.slice().len(), 3);
     assert_eq!(
         bibliography.to_owned().get("alpha"),
-        Some((1, first.as_slice()))
+        Some((2, duplicate.as_slice()))
     );
 }
 
