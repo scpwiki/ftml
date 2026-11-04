@@ -309,6 +309,10 @@ impl<'t> DelayedElement<'t> {
         )
     }
 
+    pub(crate) fn is_empty_suppression(&self) -> bool {
+        matches!(&self.node, DelayedNode::Suppressed { slots } if slots.is_empty())
+    }
+
     pub(crate) fn raw(
         source: &'t str,
         content_range: Range<usize>,

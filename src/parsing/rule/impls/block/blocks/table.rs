@@ -860,8 +860,7 @@ fn trim_cell_whitespace(elements: &mut Vec<Element<'_>>) {
         element.is_whitespace()
             || matches!(
                 element,
-                Element::Delayed(delayed)
-                    if matches!(delayed.node, crate::delayed::DelayedNode::Suppressed { .. })
+                Element::Delayed(delayed) if delayed.is_suppression_seam()
             )
     };
     let start = elements

@@ -663,7 +663,7 @@ fn try_consume_fn<'r, 't>(
                         let new_items = consumed.chain(&mut errors, &mut paragraph_break);
 
                         if comment
-                            && new_items.is_empty()
+                            && comment_left_nothing(&new_items)
                             && matches!(
                                 parser.current().token,
                                 Token::Whitespace
@@ -700,6 +700,14 @@ fn try_consume_fn<'r, 't>(
         }
 
         push_row(&mut rows, &mut cells);
+    }
+}
+
+fn comment_left_nothing(elements: &Elements<'_>) -> bool {
+    match elements {
+        Elements::None => true,
+        Elements::Single(Element::Delayed(delayed)) => delayed.is_empty_suppression(),
+        _ => false,
     }
 }
 
