@@ -269,42 +269,101 @@ fn finish_double_at_raw<'r, 't>(
 where
     'r: 't,
 {
-    if !parser.settings().layout.legacy() || parser.current().token != Token::Raw {
-        return success_elements(element);
+    fn generated_ahead<'r, 't>(parser: &Parser<'r, 't>) -> bool {
+        parser.current_generated().is_some()
+            || matches!(
+                parser.current().token,
+                Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
+            )
     }
 
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
     let mut candidate = parser.clone();
-    candidate.step()?;
+    let mut run_end = None;
 
-    loop {
-        if candidate.current_generated().is_some()
-            || matches!(
-                candidate.current().token,
-                Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
-            )
-        {
+    while !candidate.current().slice.is_empty()
+        && candidate.current().slice.bytes().all(|byte| byte == b'@')
+    {
+        if generated_ahead(&candidate) {
             return success_elements(element);
         }
 
-        match candidate.current().token {
-            Token::Raw => {
-                let end = candidate.current().span.end;
-                candidate.step()?;
-                parser.update(&candidate);
-                return ok!(Elements::Multiple(vec![
-                    element,
-                    text!(&source[start..end]),
-                ]));
-            }
+        run_end = Some(candidate.current().span.end);
+        if candidate.step().is_err() {
+            break;
+        }
+    }
+
+    let Some(end) = run_end else {
+        return success_elements(element);
+    };
+
+    let commit_run = |parser: &mut Parser<'r, 't>| {
+        parser.update(&candidate);
+        ok!(Elements::Multiple(vec![
+            element.clone(),
+            text!(&source[start..end]),
+        ]))
+    };
+
+    let mut probe = candidate.clone();
+    let at_close = loop {
+        if generated_ahead(&probe) {
+            return success_elements(element);
+        }
+
+        match probe.current().token {
+            Token::Raw => break probe.clone(),
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
-                return success_elements(element);
+                return commit_run(parser);
             }
             _ => {
-                candidate.step()?;
+                if probe.step().is_err() {
+                    return commit_run(parser);
+                }
             }
         }
+    };
+
+    let close_start = at_close.current().span.start;
+    let close_end = at_close.current().span.end;
+
+    let mut after_close = at_close.clone();
+    let _ = after_close.step();
+    let mut scan = after_close.clone();
+    let mut later_raw = false;
+    loop {
+        if generated_ahead(&scan) {
+            break;
+        }
+
+        match scan.current().token {
+            Token::Raw => {
+                later_raw = true;
+                break;
+            }
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => break,
+            _ => {
+                if scan.step().is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    if later_raw {
+        parser.update(&at_close);
+        ok!(Elements::Multiple(vec![
+            element,
+            text!(&source[start..close_start]),
+        ]))
+    } else {
+        parser.update(&after_close);
+        ok!(Elements::Multiple(vec![
+            element,
+            text!(&source[start..close_end]),
+        ]))
     }
 }
 

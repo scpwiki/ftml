@@ -587,8 +587,7 @@ fn try_consume_fn<'r, 't>(
 
                     _ => {
                         let wikidot = parser.settings().layout.legacy();
-                        let comment =
-                            wikidot && parser.current().token == Token::LeftComment;
+                        let comment = parser.current().token == Token::LeftComment;
                         let consumed = if table_block_head_crosses_line(parser) {
                             let literal = parser.current().slice;
                             parser.step()?;
@@ -612,7 +611,17 @@ fn try_consume_fn<'r, 't>(
 
                         if comment
                             && new_items.is_empty()
-                            && parser.current().token == Token::Whitespace
+                            && matches!(
+                                parser.current().token,
+                                Token::Whitespace
+                                    | Token::TableColumn
+                                    | Token::TableColumnTitle
+                                    | Token::TableColumnCenter
+                                    | Token::TableColumnRight
+                                    | Token::LineBreak
+                                    | Token::ParagraphBreak
+                                    | Token::InputEnd
+                            )
                         {
                             trim_one_trailing_ascii_space(&mut elements);
                         }
