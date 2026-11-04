@@ -2181,6 +2181,14 @@ fn pair_dash_run_stream<'t>(elements: &mut Vec<Element<'t>>) -> bool {
             index,
             false,
         );
+        if scan.end < input.len()
+            && let Some(next) =
+                expand_dash_format_container(&mut input, index, &scan, &mut output)
+        {
+            changed = true;
+            index = next;
+            continue;
+        }
         if scan.end == index {
             output.push(take_element(&mut input, index));
             index += 1;
@@ -2299,6 +2307,260 @@ fn expand_dash_strike_container<'t>(
     );
     emit_dash_pairs(&mut flat, &flat_scan, &pairs, output);
     Some(continuation.end)
+}
+
+fn dash_flatten_shell<'t>(element: &Element<'t>) -> Option<FormatShell<'t>> {
+    if let Element::Container(container) = element
+        && !container.attributes().get().is_empty()
+    {
+        return None;
+    }
+    let shell = FormatShell::from_element(element)?;
+    if shell.kind() == FormatKind::Strike {
+        return None;
+    }
+    if !subtree_has_dash_pair(element) || subtree_has_barrier(element) {
+        return None;
+    }
+    Some(shell)
+}
+
+fn dash_flatten_edge<'t>(shell: &FormatShell<'t>, open: bool) -> Element<'t> {
+    match shell {
+        FormatShell::Container { kind, .. } => {
+            let kind = match kind {
+                FormatKind::Bold => InlineFormatKind::Bold,
+                FormatKind::Italics => InlineFormatKind::Italics,
+                FormatKind::Underline => InlineFormatKind::Underline,
+                FormatKind::Strike => InlineFormatKind::Strikethrough,
+                FormatKind::Subscript => InlineFormatKind::Subscript,
+                FormatKind::Superscript => InlineFormatKind::Superscript,
+                FormatKind::Monospace => InlineFormatKind::Monospace,
+                FormatKind::Color => {
+                    unreachable!("container shells never hold the color kind")
+                }
+            };
+            Element::Partial(if open {
+                PartialElement::InlineFormatOpen(kind)
+            } else {
+                PartialElement::InlineFormatClose(kind)
+            })
+        }
+        FormatShell::Color { color, background } => {
+            if open {
+                Element::Partial(PartialElement::InlineColorOpen(
+                    color.clone(),
+                    *background,
+                ))
+            } else {
+                Element::Partial(PartialElement::InlineColorClose)
+            }
+        }
+    }
+}
+
+fn dash_flatten_scan(children: &[Element<'_>]) -> Option<Vec<char>> {
+    let mut stream = Vec::new();
+    for child in children {
+        if dash_flatten_shell(child).is_some() {
+            let inner = formatter_children(child)?;
+            stream.extend(dash_flatten_scan(inner)?);
+            continue;
+        }
+        match dash_unit(child, false) {
+            DashUnit::Text => {
+                stream.extend(text(child).expect("text unit holds text").chars());
+            }
+            DashUnit::Atom(ch) => stream.push(ch),
+            DashUnit::Partial => {}
+            DashUnit::Barrier => return None,
+        }
+    }
+    Some(stream)
+}
+
+fn dash_flatten_apply<'t>(
+    children: Vec<Element<'t>>,
+    flat: &mut Vec<Option<Element<'t>>>,
+) {
+    for child in children {
+        if let Some(shell) = dash_flatten_shell(&child) {
+            flat.push(Some(dash_flatten_edge(&shell, true)));
+            let (_, grandchildren) =
+                FormatShell::into_parts(child).expect("flatten shell has parts");
+            dash_flatten_apply(grandchildren, flat);
+            flat.push(Some(dash_flatten_edge(&shell, false)));
+            continue;
+        }
+        flat.push(Some(child));
+    }
+}
+
+fn expand_dash_format_container<'t>(
+    input: &mut Vec<Option<Element<'t>>>,
+    start: usize,
+    scan: &DashScan,
+    output: &mut Vec<Element<'t>>,
+) -> Option<usize> {
+    let container_index = scan.end;
+    let container = input.get(container_index).and_then(Option::as_ref)?;
+    let shell = dash_flatten_shell(container)?;
+    let children: &[Element<'t>] = match container {
+        Element::Container(container) => container.elements(),
+        Element::Color { elements, .. } => elements,
+        _ => return None,
+    };
+    let child_stream = dash_flatten_scan(children)?;
+    let continuation = build_dash_scan(
+        &|element_index| {
+            input
+                .get(element_index)
+                .and_then(|element| element.as_ref())
+        },
+        input.len(),
+        container_index + 1,
+        false,
+    );
+    let mut stream = scan.stream.clone();
+    stream.extend(child_stream.iter());
+    stream.extend(continuation.stream.iter());
+    let pairs = dash_stream_pairs(&stream);
+    let open_edge = scan.stream.len();
+    let close_edge = open_edge + child_stream.len();
+    if !pairs.iter().any(|&(open, close)| {
+        (open < open_edge && close >= open_edge)
+            || (open < close_edge && close >= close_edge)
+    }) {
+        return None;
+    }
+    let open_partial = dash_flatten_edge(&shell, true);
+    let close_partial = dash_flatten_edge(&shell, false);
+    let mut flat: Vec<Option<Element<'t>>> = Vec::new();
+    for element_index in start..scan.end {
+        flat.push(Some(take_element(input, element_index)));
+    }
+    flat.push(Some(open_partial));
+    let container_element = take_element(input, container_index);
+    let (_, children) =
+        FormatShell::into_parts(container_element).expect("flatten shell has parts");
+    dash_flatten_apply(children, &mut flat);
+    flat.push(Some(close_partial));
+    for element_index in container_index + 1..continuation.end {
+        flat.push(Some(take_element(input, element_index)));
+    }
+    let flat_scan = build_dash_scan(
+        &|element_index| {
+            flat.get(element_index)
+                .and_then(|element| element.as_ref())
+        },
+        flat.len(),
+        0,
+        false,
+    );
+    debug_assert_eq!(flat_scan.stream, stream);
+    emit_dash_pairs_flat(&mut flat, &flat_scan, &pairs, output);
+    Some(continuation.end)
+}
+
+fn strike_event<'t>(open: bool) -> Element<'t> {
+    Element::Partial(if open {
+        PartialElement::InlineFormatOpen(InlineFormatKind::Strikethrough)
+    } else {
+        PartialElement::InlineFormatClose(InlineFormatKind::Strikethrough)
+    })
+}
+
+fn push_dash_text_piece<'t>(
+    output: &mut Vec<Element<'t>>,
+    scan: &DashScan,
+    value: &str,
+    run_start: usize,
+    run_end: usize,
+    unit_end: usize,
+) {
+    let byte_start = scan.char_offsets[run_start];
+    let byte_end = if run_end < unit_end {
+        scan.char_offsets[run_end]
+    } else {
+        value.len()
+    };
+    push_dash_split_text(output, &value[byte_start..byte_end]);
+}
+
+fn emit_dash_pairs_flat<'t>(
+    input: &mut [Option<Element<'t>>],
+    scan: &DashScan,
+    pairs: &[(usize, usize)],
+    output: &mut Vec<Element<'t>>,
+) {
+    let mut dropped = vec![false; scan.stream.len()];
+    let mut events: Vec<(usize, bool)> = Vec::with_capacity(pairs.len() * 2);
+    for &(open, close) in pairs {
+        dropped[open] = true;
+        dropped[open + 1] = true;
+        dropped[close] = true;
+        dropped[close + 1] = true;
+        events.push((open, true));
+        events.push((close, false));
+    }
+    let mut next_event = 0;
+    for unit in &scan.units {
+        match *unit {
+            DashScanUnit::Text {
+                element,
+                start,
+                end,
+            } => {
+                while next_event < events.len() && events[next_event].0 <= start {
+                    output.push(strike_event(events[next_event].1));
+                    next_event += 1;
+                }
+                if !(start..end).any(|pos| dropped[pos]) {
+                    output.push(take_element(input, element));
+                    continue;
+                }
+                let value = text(input[element].as_ref().expect("unit element present"))
+                    .expect("text unit holds text")
+                    .to_owned();
+                let mut run_start: Option<usize> = None;
+                for (offset, &is_dropped) in
+                    dropped[start..end].iter().enumerate()
+                {
+                    let pos = start + offset;
+                    if is_dropped {
+                        if let Some(run) = run_start.take() {
+                            push_dash_text_piece(output, scan, &value, run, pos, end);
+                        }
+                        if next_event < events.len() && events[next_event].0 == pos {
+                            output.push(strike_event(events[next_event].1));
+                            next_event += 1;
+                        }
+                        continue;
+                    }
+                    if run_start.is_none() {
+                        run_start = Some(pos);
+                    }
+                }
+                if let Some(run) = run_start {
+                    push_dash_text_piece(output, scan, &value, run, end, end);
+                }
+            }
+            DashScanUnit::Atom { element, .. } => {
+                output.push(take_element(input, element));
+            }
+            DashScanUnit::Partial { element, pos } => {
+                output.push(take_element(input, element));
+                while next_event < events.len() && events[next_event].0 == pos {
+                    output.push(strike_event(events[next_event].1));
+                    next_event += 1;
+                }
+            }
+        }
+    }
+    while next_event < events.len() {
+        output.push(strike_event(events[next_event].1));
+        next_event += 1;
+    }
 }
 
 fn outer_candidates<'t>(elements: &[Element<'t>]) -> Vec<Option<OuterCandidate<'t>>> {
