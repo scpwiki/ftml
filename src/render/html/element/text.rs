@@ -245,7 +245,9 @@ fn css_pseudo_split(token: &str) -> Option<usize> {
     if split == 0
         || token.ends_with(':')
         || token.as_bytes()[split + 1] == b'/'
-        || token[..split].contains(['"', '\''])
+        || !(token.as_bytes()[split + 1].is_ascii_alphabetic()
+            || token.as_bytes()[split + 1] == b':')
+        || token[..split].contains(['"', '\'', '(', '/'])
     {
         return None;
     }
