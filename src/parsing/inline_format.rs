@@ -208,7 +208,7 @@ fn normalize_sequence_scoped<'t>(
             changed |= repair_monospace_link_close_pass(elements);
         }
         changed |=
-            repair_wikidot_scheme_star_pass(elements) | split_strike_runs_pass(elements);
+            repair_wikidot_scheme_star_pass(elements) | repair_dash_runs_pass(elements);
         if !changed {
             break;
         }
@@ -1195,43 +1195,517 @@ fn span_crossed_bold_close<'t>(
     None
 }
 
-fn split_strike_runs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+fn repair_dash_runs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    truncate_dash_run_containers(elements) | pair_dash_run_stream(elements)
+}
+
+const DASH_ATOM_CHAR: char = '\u{1}';
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DashUnit {
+    Text,
+    Atom(char),
+    Partial,
+    Barrier,
+}
+
+fn dash_unit(element: &Element<'_>, admit_link: bool) -> DashUnit {
+    match element {
+        Element::Text(_) => DashUnit::Text,
+        Element::LineBreak => DashUnit::Atom('\n'),
+        Element::Partial(partial) => match partial {
+            PartialElement::WikidotEmptyInlineOwner
+            | PartialElement::InlineSizeOpen(_)
+            | PartialElement::InlineSizeClose(_)
+            | PartialElement::InlineSpanOpen(_)
+            | PartialElement::InlineSpanClose(_)
+            | PartialElement::InlineFormatOpen(_)
+            | PartialElement::InlineFormatClose(_)
+            | PartialElement::InlineColorOpen(..)
+            | PartialElement::InlineColorClose => DashUnit::Partial,
+            _ => DashUnit::Barrier,
+        },
+        Element::Link { .. } if admit_link => DashUnit::Atom(DASH_ATOM_CHAR),
+        _ => {
+            let Some(shell) = FormatShell::from_element(element) else {
+                return DashUnit::Barrier;
+            };
+            if shell.kind() == FormatKind::Strike || subtree_has_dash_pair(element) {
+                DashUnit::Barrier
+            } else {
+                DashUnit::Atom(DASH_ATOM_CHAR)
+            }
+        }
+    }
+}
+
+fn subtree_has_dash_pair(element: &Element<'_>) -> bool {
+    match element {
+        Element::Text(value) => value.contains("--"),
+        Element::Container(container) => {
+            container.elements().iter().any(subtree_has_dash_pair)
+        }
+        Element::Color { elements, .. } => {
+            elements.iter().any(subtree_has_dash_pair)
+        }
+        Element::Link { label, .. } => match label {
+            LinkLabel::Text(value) | LinkLabel::Slug(value) => value.contains("--"),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+enum DashScanUnit {
+    Text {
+        element: usize,
+        start: usize,
+        end: usize,
+    },
+    Atom {
+        element: usize,
+        pos: usize,
+    },
+    Partial {
+        element: usize,
+        pos: usize,
+    },
+}
+
+struct DashScan {
+    stream: Vec<char>,
+    char_offsets: Vec<usize>,
+    units: Vec<DashScanUnit>,
+    end: usize,
+}
+
+fn build_dash_scan<'t>(
+    get: &dyn Fn(usize) -> Option<&'t Element<'t>>,
+    count: usize,
+    start: usize,
+    admit_link: bool,
+) -> DashScan {
+    let mut scan = DashScan {
+        stream: Vec::new(),
+        char_offsets: Vec::new(),
+        units: Vec::new(),
+        end: start,
+    };
+    let mut index = start;
+    while index < count {
+        let Some(element) = get(index) else {
+            break;
+        };
+        match dash_unit(element, admit_link) {
+            DashUnit::Text => {
+                let value = text(element).expect("text unit holds text");
+                let start_pos = scan.stream.len();
+                for (offset, ch) in value.char_indices() {
+                    scan.stream.push(ch);
+                    scan.char_offsets.push(offset);
+                }
+                scan.units.push(DashScanUnit::Text {
+                    element: index,
+                    start: start_pos,
+                    end: scan.stream.len(),
+                });
+            }
+            DashUnit::Atom(ch) => {
+                scan.units.push(DashScanUnit::Atom {
+                    element: index,
+                    pos: scan.stream.len(),
+                });
+                scan.stream.push(ch);
+                scan.char_offsets.push(0);
+            }
+            DashUnit::Partial => {
+                scan.units.push(DashScanUnit::Partial {
+                    element: index,
+                    pos: scan.stream.len(),
+                });
+            }
+            DashUnit::Barrier => break,
+        }
+        index += 1;
+    }
+    scan.end = index;
+    scan
+}
+
+fn dash_stream_close(stream: &[char], content_start: usize) -> Option<usize> {
+    let mut index = content_start + 1;
+    while index + 1 < stream.len() {
+        if stream[index] == '-'
+            && stream[index + 1] == '-'
+            && !stream[index - 1].is_whitespace()
+        {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn dash_stream_opener(stream: &[char], from: usize) -> Option<usize> {
+    (from..stream.len().saturating_sub(2)).find(|&pos| {
+        stream[pos] == '-'
+            && stream[pos + 1] == '-'
+            && !stream[pos + 2].is_whitespace()
+    })
+}
+
+fn dash_stream_pairs(stream: &[char]) -> Vec<(usize, usize)> {
+    let mut pairs = Vec::new();
+    let mut index = 0;
+    while index + 4 < stream.len() {
+        let Some(open) = dash_stream_opener(stream, index) else {
+            break;
+        };
+        let Some(close) = dash_stream_close(stream, open + 2) else {
+            break;
+        };
+        pairs.push((open, close));
+        index = close + 2;
+    }
+    pairs
+}
+
+fn dash_stream_has_unmatched_opener(stream: &[char], pairs: &[(usize, usize)]) -> bool {
+    let from = pairs
+        .last()
+        .map(|&(_, close)| close + 2)
+        .unwrap_or(0);
+    let Some(open) = dash_stream_opener(stream, from) else {
+        return false;
+    };
+    dash_stream_close(stream, open + 2).is_none()
+}
+
+fn emit_dash_segments<'t>(
+    input: &mut [Option<Element<'t>>],
+    scan: &DashScan,
+    char_segment: &dyn Fn(usize) -> Option<usize>,
+    partial_segment: &dyn Fn(usize) -> usize,
+    content: &[bool],
+    segments: &mut [Vec<Element<'t>>],
+) {
+    for unit in &scan.units {
+        match *unit {
+            DashScanUnit::Text {
+                element,
+                start,
+                end,
+            } => {
+                let value = text(
+                    input[element]
+                        .as_ref()
+                        .expect("unit element present"),
+                )
+                .expect("text unit holds text")
+                .to_owned();
+                let mut pos = start;
+                while pos < end {
+                    let owner = char_segment(pos);
+                    let mut next = pos + 1;
+                    while next < end && char_segment(next) == owner {
+                        next += 1;
+                    }
+                    if let Some(segment) = owner {
+                        let byte_start = scan.char_offsets[pos];
+                        let byte_end = if next < end {
+                            scan.char_offsets[next]
+                        } else {
+                            value.len()
+                        };
+                        if pos == start && next == end && !content[segment] {
+                            segments[segment].push(take_element(input, element));
+                        } else {
+                            push_dash_split_text(
+                                &mut segments[segment],
+                                &value[byte_start..byte_end],
+                            );
+                        }
+                    }
+                    pos = next;
+                }
+            }
+            DashScanUnit::Atom { element, pos } => {
+                let segment = char_segment(pos).expect("atom lands outside markers");
+                segments[segment].push(take_element(input, element));
+            }
+            DashScanUnit::Partial { element, pos } => {
+                let segment = partial_segment(pos);
+                segments[segment].push(take_element(input, element));
+            }
+        }
+    }
+}
+
+fn truncate_dash_run_containers<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     let mut output = Vec::with_capacity(elements.len());
     let mut changed = false;
 
     for element in mem::take(elements) {
-        let Element::Container(container) = element else {
+        let is_strike = matches!(
+            &element,
+            Element::Container(container) if container.ctype() == ContainerType::Strikethrough
+        );
+        if !is_strike {
             output.push(element);
             continue;
-        };
-        if container.ctype() != ContainerType::Strikethrough
-            || !container
-                .elements()
-                .iter()
-                .any(|element| dash_run_len(element) == Some(4))
+        }
+        let (shell, children) =
+            FormatShell::into_parts(element).expect("strike container has a shell");
+        let mut input: Vec<Option<Element<'t>>> =
+            children.into_iter().map(Some).collect();
+        let scan = build_dash_scan(
+            &|index| input.get(index).and_then(|element| element.as_ref()),
+            input.len(),
+            0,
+            true,
+        );
+        let close = if scan
+            .stream
+            .first()
+            .is_some_and(|ch| !ch.is_whitespace())
         {
-            output.push(Element::Container(container));
+            dash_stream_close(&scan.stream, 0)
+        } else {
+            None
+        };
+        let Some(close) = close else {
+            output.push(
+                shell.build(
+                    input
+                        .into_iter()
+                        .map(|element| element.expect("child present"))
+                        .collect(),
+                ),
+            );
             continue;
-        }
-
-        let mut segment = Vec::new();
-        for child in Vec::<Element>::from(container) {
-            if dash_run_len(&child) == Some(4) {
-                if !segment.is_empty() {
-                    output.push(strike_shell().build(mem::take(&mut segment)));
+        };
+        let mut segments = vec![Vec::new(), Vec::new()];
+        emit_dash_segments(
+            &mut input,
+            &scan,
+            &|pos| {
+                if pos < close {
+                    Some(0)
+                } else if pos < close + 2 {
+                    None
+                } else {
+                    Some(1)
                 }
-            } else {
-                segment.push(child);
-            }
+            },
+            &|pos| usize::from(pos >= close),
+            &[true, false],
+            &mut segments,
+        );
+        let mut segments = segments.into_iter();
+        let content = segments.next().expect("content segment");
+        let mut tail = segments.next().expect("tail segment");
+        for element in input.into_iter().skip(scan.end) {
+            tail.push(element.expect("child present"));
         }
-        if !segment.is_empty() {
-            output.push(strike_shell().build(segment));
-        }
+        output.push(shell.build(content));
+        output.append(&mut tail);
+        output.push(Element::Text(FormatKind::Strike.close_marker().into()));
         changed = true;
     }
 
     *elements = output;
     changed
+}
+
+fn emit_dash_pairs<'t>(
+    input: &mut [Option<Element<'t>>],
+    scan: &DashScan,
+    pairs: &[(usize, usize)],
+    output: &mut Vec<Element<'t>>,
+) {
+    let mut segments: Vec<Vec<Element<'t>>> =
+        (0..pairs.len() * 2 + 1).map(|_| Vec::new()).collect();
+    let content: Vec<bool> = (0..pairs.len() * 2 + 1)
+        .map(|segment| segment % 2 == 1)
+        .collect();
+    let mut owners: Vec<Option<usize>> = vec![None; scan.stream.len()];
+    let mut cursor = 0;
+    for (pair, &(open, close)) in pairs.iter().enumerate() {
+        for owner in &mut owners[cursor..open] {
+            *owner = Some(pair * 2);
+        }
+        for owner in &mut owners[open + 2..close] {
+            *owner = Some(pair * 2 + 1);
+        }
+        cursor = close + 2;
+    }
+    for owner in &mut owners[cursor..] {
+        *owner = Some(pairs.len() * 2);
+    }
+    emit_dash_segments(
+        input,
+        scan,
+        &|pos| owners[pos],
+        &|pos| {
+            for (pair, &(open, close)) in pairs.iter().enumerate() {
+                if pos <= open {
+                    return pair * 2;
+                }
+                if pos < close {
+                    return pair * 2 + 1;
+                }
+            }
+            pairs.len() * 2
+        },
+        &content,
+        &mut segments,
+    );
+    for (segment_index, segment) in segments.into_iter().enumerate() {
+        if segment_index % 2 == 1 {
+            if !segment.is_empty() {
+                output.push(strike_shell().build(segment));
+            }
+        } else {
+            output.extend(segment);
+        }
+    }
+}
+
+fn pair_dash_run_stream<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+
+    while index < input.len() {
+        let scan = build_dash_scan(
+            &|element_index| {
+                input
+                    .get(element_index)
+                    .and_then(|element| element.as_ref())
+            },
+            input.len(),
+            index,
+            false,
+        );
+        if scan.end == index {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        }
+        if !scan
+            .stream
+            .windows(3)
+            .any(|window| window == ['-', '-', '-'])
+        {
+            for element_index in index..scan.end {
+                output.push(take_element(&mut input, element_index));
+            }
+            index = scan.end;
+            continue;
+        }
+        let pairs = dash_stream_pairs(&scan.stream);
+        if dash_stream_has_unmatched_opener(&scan.stream, &pairs) {
+            if let Some(next) = expand_dash_strike_container(
+                &mut input,
+                index,
+                &scan,
+                &mut output,
+            ) {
+                changed = true;
+                index = next;
+                continue;
+            }
+        }
+        if pairs.is_empty() {
+            for element_index in index..scan.end {
+                output.push(take_element(&mut input, element_index));
+            }
+            index = scan.end;
+            continue;
+        }
+        changed = true;
+        emit_dash_pairs(&mut input, &scan, &pairs, &mut output);
+        index = scan.end;
+    }
+
+    *elements = output;
+    changed
+}
+
+fn expand_dash_strike_container<'t>(
+    input: &mut Vec<Option<Element<'t>>>,
+    start: usize,
+    scan: &DashScan,
+    output: &mut Vec<Element<'t>>,
+) -> Option<usize> {
+    let container_index = scan.end;
+    let container = input.get(container_index).and_then(Option::as_ref)?;
+    let Element::Container(container_ref) = container else {
+        return None;
+    };
+    if container_ref.ctype() != ContainerType::Strikethrough {
+        return None;
+    }
+    let children = container_ref.elements();
+    let child_scan = build_dash_scan(
+        &|index| children.get(index),
+        children.len(),
+        0,
+        false,
+    );
+    if child_scan.end != children.len() {
+        return None;
+    }
+    let continuation = build_dash_scan(
+        &|element_index| {
+            input
+                .get(element_index)
+                .and_then(|element| element.as_ref())
+        },
+        input.len(),
+        container_index + 1,
+        false,
+    );
+    let mut stream = scan.stream.clone();
+    stream.extend(['-', '-']);
+    stream.extend(child_scan.stream.iter());
+    stream.extend(['-', '-']);
+    stream.extend(continuation.stream.iter());
+    let pairs = dash_stream_pairs(&stream);
+    let boundary = scan.stream.len();
+    if !pairs
+        .iter()
+        .any(|&(open, close)| open < boundary && close >= boundary)
+    {
+        return None;
+    }
+    let mut flat: Vec<Option<Element<'t>>> = Vec::new();
+    for element_index in start..scan.end {
+        flat.push(Some(take_element(input, element_index)));
+    }
+    flat.push(Some(Element::Text(FormatKind::Strike.close_marker().into())));
+    let container_element = take_element(input, container_index);
+    let (_, children) =
+        FormatShell::into_parts(container_element).expect("strike container has parts");
+    for child in children {
+        flat.push(Some(child));
+    }
+    flat.push(Some(Element::Text(FormatKind::Strike.close_marker().into())));
+    for element_index in container_index + 1..continuation.end {
+        flat.push(Some(take_element(input, element_index)));
+    }
+    let flat_scan = build_dash_scan(
+        &|element_index| {
+            flat.get(element_index)
+                .and_then(|element| element.as_ref())
+        },
+        flat.len(),
+        0,
+        false,
+    );
+    emit_dash_pairs(&mut flat, &flat_scan, &pairs, output);
+    Some(continuation.end)
 }
 
 fn outer_candidates<'t>(elements: &[Element<'t>]) -> Vec<Option<OuterCandidate<'t>>> {
