@@ -22,8 +22,6 @@ use super::inline_delimiter::{ReachableCloseMode, validate_reachable_close};
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::tree::Container;
-use cssparser::{Parser as CssParser, ParserInput};
-use cssparser_color::Color;
 use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
@@ -63,19 +61,9 @@ fn try_consume_fn<'r, 't>(
     ];
     let (first_field, first_terminator) =
         collect_text_resolved(parser, RULE_COLOR, color_close, &color_invalid, None)?;
-    let mut body_pipe_prefix = (legacy && is_table_column_token(first_terminator.token))
+    let body_pipe_prefix = (legacy && is_table_column_token(first_terminator.token))
         .then(|| text!(&first_terminator.slice[1..]));
-    let (color, background) = if legacy && trim_field(&first_field, legacy).is_empty() {
-        let (background, terminator) =
-            collect_text_resolved(parser, RULE_COLOR, color_close, &color_invalid, None)?;
-        body_pipe_prefix = is_table_column_token(terminator.token)
-            .then(|| text!(&terminator.slice[1..]));
-        (trim_field_cow(background, legacy), true)
-    } else if legacy {
-        (trim_field_cow(first_field, legacy), false)
-    } else {
-        (first_field, false)
-    };
+    let (color, background) = (first_field, false);
     let color: Cow<'t, str> = match &color {
         Cow::Borrowed(text) => {
             let text: &'t str = text;
@@ -179,28 +167,6 @@ fn try_consume_fn<'r, 't>(
     }
 
     ok!(paragraph_safe; Elements::Multiple(output), errors)
-}
-
-fn trim_field(value: &str, legacy: bool) -> &str {
-    if legacy {
-        value.trim_matches([' ', '\t'])
-    } else {
-        value.trim()
-    }
-}
-
-fn trim_field_cow<'t>(field: Cow<'t, str>, legacy: bool) -> Cow<'t, str> {
-    match field {
-        Cow::Borrowed(value) => Cow::Borrowed(trim_field(value, legacy)),
-        Cow::Owned(value) => {
-            let trimmed = trim_field(&value, legacy);
-            if trimmed.len() == value.len() {
-                Cow::Owned(value)
-            } else {
-                Cow::Owned(trimmed.to_owned())
-            }
-        }
-    }
 }
 
 fn is_table_column_token(token: Token) -> bool {
@@ -338,77 +304,34 @@ fn is_safe_color(color: &str) -> bool {
 }
 
 pub(crate) fn normalize_wikidot_color(color: &str) -> Option<Cow<'_, str>> {
-    let color = color.trim_matches([' ', '\t']);
     if color.is_empty() {
         return None;
     }
-    let (hex, has_hash) = color
-        .strip_prefix('#')
-        .map_or((color, false), |hex| (hex, true));
-    if matches!(hex.len(), 3 | 6) && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
-        || has_hash
-            && matches!(hex.len(), 4 | 8)
-            && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
-        return Some(Cow::Owned(format!("#{}", hex.to_ascii_lowercase())));
-    }
 
-    // Wikidot passes var() references through as the color value: live
-    // pages (e.g. component:croqstyle's documentation) use
-    // ##var(--custom-property)|...## for syntax highlighting, and the
-    // baseline renders them as colored spans. cssparser's Color::parse
-    // cannot accept var(), so validate the reference shape directly.
-    if is_css_var_reference(color) {
-        return Some(Cow::Borrowed(color));
-    }
-
-    let mut input = ParserInput::new(color);
-    let mut parser = CssParser::new(&mut input);
-    let parsed: Result<_, cssparser::ParseError<'_, ()>> =
-        parser.parse_entirely(Color::parse);
-    parsed.ok().map(|_| Cow::Borrowed(color))
-}
-
-fn is_css_var_reference(color: &str) -> bool {
-    let Some(inner) = color
-        .strip_prefix("var(")
-        .and_then(|rest| rest.strip_suffix(')'))
-    else {
-        return false;
-    };
-
-    if !inner.chars().all(|ch| {
-        !ch.is_control()
-            && !matches!(ch, ';' | '{' | '}' | '<' | '>' | '"' | '\'' | '\\' | '&')
-    }) {
-        return false;
-    }
-
-    let mut depth = 0usize;
-    for ch in inner.chars() {
-        match ch {
-            '(' => depth += 1,
-            ')' => {
-                let Some(next) = depth.checked_sub(1) else {
-                    return false;
-                };
-                depth = next;
-            }
-            _ => {}
+    let mut collapsed = String::with_capacity(color.len());
+    for part in color.split([' ', '\t']) {
+        if part.is_empty() {
+            continue;
         }
+        if !collapsed.is_empty() {
+            collapsed.push(' ');
+        }
+        collapsed.push_str(part);
     }
-    if depth != 0 {
-        return false;
+    let collapsed = collapsed.to_ascii_lowercase();
+
+    let hex = collapsed.strip_prefix('#').unwrap_or(&collapsed);
+    if matches!(hex.len(), 3 | 6) && hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Some(Cow::Owned(format!("#{hex}")));
     }
 
-    let name = inner.split(',').next().unwrap_or_default().trim();
-    let Some(ident) = name.strip_prefix("--") else {
-        return false;
-    };
-    !ident.is_empty()
-        && ident
-            .chars()
-            .all(|ch| ch.is_alphanumeric() || matches!(ch, '-' | '_'))
+    collapsed
+        .bytes()
+        .all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'#' | b'(' | b')' | b',' | b'-' | b' ')
+        })
+        .then_some(Cow::Owned(collapsed))
 }
 
 #[cfg(test)]
@@ -479,30 +402,45 @@ mod tests {
     }
 
     #[test]
-    fn wikidot_color_accepts_css_var_references() {
-        for accepted in [
-            "var(--c-keyword)",
-            "var(--missing, red)",
-            "var(--a, var(--b, blue))",
-            "var(--x)",
+    fn wikidot_color_value_boundary() {
+        for (input, expected) in [
+            ("var(--c-keyword)", "var(--c-keyword)"),
+            ("var(--missing, red)", "var(--missing, red)"),
+            ("var(--a, var(--b, blue))", "var(--a, var(--b, blue))"),
+            ("var(--x)", "var(--x)"),
+            ("var(x)", "var(x)"),
+            ("var(--)", "var(--)"),
+            ("var(--x", "var(--x"),
+            ("var(--x))", "var(--x))"),
+            ("var()", "var()"),
+            ("rgb(var(--x))", "rgb(var(--x))"),
+            ("not-a-color", "not-a-color"),
+            ("rgb(1, 2)", "rgb(1, 2)"),
+            ("expression(alert(1))", "expression(alert(1))"),
+            ("DarkRed", "darkred"),
+            ("FF0000", "#ff0000"),
+            ("#FFFF", "#ffff"),
+            ("c00", "#c00"),
+            ("rgb(255,  0,  0)", "rgb(255, 0, 0)"),
+            (" ", ""),
         ] {
             assert_eq!(
-                normalize_wikidot_color(accepted).as_deref(),
-                Some(accepted),
-                "{accepted:?}",
+                normalize_wikidot_color(input).as_deref(),
+                Some(expected),
+                "{input:?}",
             );
         }
 
         for rejected in [
-            "var(x)",
-            "var(--)",
-            "var(--x",
-            "var(--x))",
+            "",
             "var(--x);background:red",
             "var(--x\"y)",
-            "var()",
+            "hsl(120, 50%, 25%)",
+            "rgba(10,20,30,.5)",
+            "a_b",
+            "url(javascript:alert(1))",
         ] {
-            assert_eq!(normalize_wikidot_color(rejected), None, "{rejected:?}",);
+            assert_eq!(normalize_wikidot_color(rejected), None, "{rejected:?}");
         }
     }
 
@@ -515,5 +453,24 @@ mod tests {
             html,
             "<p><span style=\"color: var(--c-keyword)\">text</span></p>",
         );
+    }
+
+    #[test]
+    fn wikidot_rgb_var_color_renders_as_span() {
+        let (html, errors) = render_wikidot("##rgb(var(--x))|text##");
+
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert_eq!(
+            html,
+            "<p><span style=\"color: rgb(var(--x))\">text</span></p>",
+        );
+    }
+
+    #[test]
+    fn wikidot_space_only_color_renders_empty_style() {
+        let (html, errors) = render_wikidot("## |gold|A##");
+
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert_eq!(html, "<p><span style=\"color:\">gold|A</span></p>");
     }
 }

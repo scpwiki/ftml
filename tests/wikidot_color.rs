@@ -85,18 +85,11 @@ fn residual_color_matrix_matches_live_wikidot_dom() {
 }
 
 #[test]
-fn foreground_and_background_admit_only_static_color_values() {
+fn foreground_admits_only_live_color_values() {
     for (source, expected_style) in [
         ("##red|A##", "color: red"),
         ("###B01|A##", "color: #b01"),
         ("##rgb(10, 12, 14)|A##", "color: rgb(10, 12, 14)"),
-        ("##rgba(10,20,30,.5)|A##", "color: rgba(10,20,30,.5)"),
-        ("##hsl(120, 50%, 25%)|A##", "color: hsl(120, 50%, 25%)"),
-        (
-            "##hsla(120deg,50%,25%,75%)|A##",
-            "color: hsla(120deg,50%,25%,75%)",
-        ),
-        ("##|gold|A##", "background-color: gold"),
     ] {
         assert_eq!(
             render(source),
@@ -105,14 +98,27 @@ fn foreground_and_background_admit_only_static_color_values() {
         );
     }
 
+    for source in [
+        "##rgba(10,20,30,.5)|A##",
+        "##hsl(120, 50%, 25%)|A##",
+        "##hsla(120deg,50%,25%,75%)|A##",
+        "##|gold|A##",
+    ] {
+        assert_eq!(render(source), format!("<p>{source}</p>"), "{source:?}");
+    }
+
     let tree = parse("##|gold|A##");
     let [Element::Container(paragraph)] = tree.elements.as_slice() else {
         panic!("expected a paragraph: {:#?}", tree.elements);
     };
-    let [Element::Color { background, .. }] = paragraph.elements() else {
-        panic!("expected a color node: {:#?}", paragraph.elements());
-    };
-    assert!(*background);
+    assert!(
+        !paragraph
+            .elements()
+            .iter()
+            .any(|element| matches!(element, Element::Color { .. })),
+        "expected no color node: {:#?}",
+        paragraph.elements(),
+    );
 }
 
 #[test]
@@ -124,7 +130,11 @@ fn css_var_color_values_render_as_spans() {
         ),
         (
             "##|var(--c-accent)|A##",
-            "<p><span style=\"background-color: var(--c-accent)\">A</span></p>",
+            "<p>##|var(\u{2014}c-accent)|A##</p>",
+        ),
+        (
+            "##rgb(var(--x))|A##",
+            "<p><span style=\"color: rgb(var(--x))\">A</span></p>",
         ),
         (
             "##var(--missing, red)|A##",
@@ -150,20 +160,33 @@ fn css_var_color_values_render_as_spans() {
 }
 
 #[test]
-fn unsafe_and_malformed_color_values_remain_literal() {
+fn out_of_class_color_values_remain_literal() {
     for source in [
         "##|red|##",
         "##||A##",
-        "##expression(alert(1))|A##",
-        "##rgb(1, url(x), 3)|A##",
-        "##rgb(1, 2)|A##",
-        "##hsl(1, 2, 3)|A##",
-        "##not-a-color|A##",
         "##red;background:blue|A##",
-        "##var(x)|A##",
-        "##var()|A##",
+        "##a_b|A##",
     ] {
         assert_eq!(render(source), format!("<p>{source}</p>"), "{source:?}");
+    }
+}
+
+#[test]
+fn in_class_color_values_render_as_spans() {
+    for (source, expected_style) in [
+        ("##expression(alert(1))|A##", "expression(alert(1))"),
+        ("##rgb(1, url(x), 3)|A##", "rgb(1, url(x), 3)"),
+        ("##rgb(1, 2)|A##", "rgb(1, 2)"),
+        ("##hsl(1, 2, 3)|A##", "hsl(1, 2, 3)"),
+        ("##not-a-color|A##", "not-a-color"),
+        ("##var(x)|A##", "var(x)"),
+        ("##var()|A##", "var()"),
+    ] {
+        assert_eq!(
+            render(source),
+            format!("<p><span style=\"color: {expected_style}\">A</span></p>"),
+            "{source:?}",
+        );
     }
 }
 
@@ -188,8 +211,9 @@ fn dense_valid_and_malformed_color_runs_remain_bounded() {
     let page_info = page_info();
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let html = HtmlRender.render(&tree, &page_info, &settings).body;
-    assert!(html.starts_with("<p>##rgb("));
-    assert!(html.ends_with("|A##</p>"));
+    assert!(html.starts_with("<p><span style=\"color: rgb(1,1,1,"));
+    assert!(html.ends_with("\">A</span></p>"));
+    assert_eq!(html.matches("<span").count(), 1);
 }
 
 #[test]
