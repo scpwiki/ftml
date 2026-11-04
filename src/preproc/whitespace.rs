@@ -287,6 +287,7 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
         preserve_wikidot_quote_tab_separator(text);
         preserve_wikidot_bibliography_tab_gap(text);
         preserve_wikidot_bibliography_tab_prefix(text);
+        preserve_wikidot_definition_list_colon_tab(text);
     }
 
     replace_tabs(text, &mut buffer, wikidot_compatibility);
@@ -774,6 +775,70 @@ fn preserve_wikidot_bibliography_tab_prefix(text: &mut String) {
     }
     output.push_str(&text[cursor..]);
     *text = output;
+}
+
+fn preserve_wikidot_definition_list_colon_tab(text: &mut String) {
+    if !text.contains('\t') {
+        return;
+    }
+
+    let literal_regions = LiteralRegionIndex::new(text);
+    let mut protected_ranges = literal_regions.ranges().to_vec();
+    protected_ranges.extend(wikidot_comment_ranges(text));
+    let protected_ranges = merge_protected_ranges(protected_ranges);
+    let bibliography_region = wikidot_bibliography_region(text, &protected_ranges);
+
+    let mut insertions = Vec::new();
+    let mut line_start = 0usize;
+    for line in text.split_inclusive('\n') {
+        if let Some(offset) = colon_led_tab_offset(line.as_bytes())
+            && !index_in_ranges(&protected_ranges, line_start + offset)
+            && !bibliography_region.is_some_and(|(first_body_line, closer_line)| {
+                line_start >= first_body_line && line_start <= closer_line
+            })
+        {
+            insertions.push(line_start + offset);
+        }
+        line_start += line.len();
+    }
+    if insertions.is_empty() {
+        return;
+    }
+
+    let mut output = String::with_capacity(text.len() + insertions.len());
+    let mut cursor = 0usize;
+    for insertion in insertions {
+        output.push_str(&text[cursor..insertion]);
+        output.push(' ');
+        cursor = insertion;
+    }
+    output.push_str(&text[cursor..]);
+    *text = output;
+}
+
+fn colon_led_tab_offset(bytes: &[u8]) -> Option<usize> {
+    let mut index = 0usize;
+    if bytes.first() == Some(&b'>') {
+        while bytes.get(index) == Some(&b'>') {
+            index += 1;
+        }
+        if bytes.get(index) != Some(&b' ') {
+            return None;
+        }
+        index += 1;
+    }
+    if bytes.get(index) == Some(&b':')
+        && bytes.get(index + 1) == Some(&b'\t')
+        && bytes.get(index + 2) == Some(&b':')
+        && matches!(
+            bytes.get(index + 3),
+            None | Some(&b' ') | Some(&b'\t') | Some(&b'\n')
+        )
+    {
+        Some(index + 1)
+    } else {
+        None
+    }
 }
 
 fn wikidot_bibliography_region(
