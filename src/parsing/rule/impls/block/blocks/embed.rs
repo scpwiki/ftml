@@ -54,7 +54,7 @@ fn parse_fn<'r, 't>(
     }
 
     let (name, mut arguments) = parser.get_head_name_map(&BLOCK_EMBED, in_head)?;
-    let embed = build_embed(parser, name, &mut arguments)?;
+    let embed = build_embed(parser, &name, &mut arguments)?;
 
     ok!(Element::Embed(embed))
 }

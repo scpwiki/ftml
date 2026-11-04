@@ -20,6 +20,7 @@
 
 use super::prelude::*;
 use crate::tree::{Alignment, FileSource, FloatAlignment};
+use std::borrow::Cow;
 
 pub const BLOCK_AUDIO: BlockRule = BlockRule {
     name: "block-audio",
@@ -125,7 +126,11 @@ where
     let (source, mut arguments) = parser.get_head_name_map(block_rule, in_head)?;
     let alignment = parse_media_alignment(parser, &mut arguments)?;
 
-    let source = match FileSource::parse(source) {
+    let parsed = match source {
+        Cow::Borrowed(source) => FileSource::parse(source),
+        Cow::Owned(source) => FileSource::parse(&source).map(|parsed| parsed.to_owned()),
+    };
+    let source = match parsed {
         Some(source) => source,
         None => return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments)),
     };
