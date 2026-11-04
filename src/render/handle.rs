@@ -25,6 +25,7 @@ use crate::tree::{FileSource, ImageSize, LinkLabel, LinkLocation, Module};
 use crate::url::BuildSiteUrl;
 use std::borrow::Cow;
 use std::num::NonZeroUsize;
+use unicode_normalization::UnicodeNormalization;
 
 #[derive(Debug)]
 pub struct Handle;
@@ -64,6 +65,42 @@ impl UserInfoResolver for Handle {
     }
 }
 
+fn wikidot_user_slug(name: &str) -> String {
+    let mut slug = String::with_capacity(name.len());
+    let mut pending_separator = false;
+
+    for character in name.nfkd() {
+        if is_user_slug_combining_mark(character) {
+            continue;
+        }
+
+        if character.is_ascii_alphanumeric() {
+            if pending_separator && !slug.is_empty() {
+                slug.push('-');
+            }
+
+            pending_separator = false;
+            slug.push(character.to_ascii_lowercase());
+        } else {
+            pending_separator = true;
+        }
+    }
+
+    slug
+}
+
+fn is_user_slug_combining_mark(character: char) -> bool {
+    matches!(
+        character,
+        '\u{300}'..='\u{36f}'
+            | '\u{483}'..='\u{489}'
+            | '\u{1ab0}'..='\u{1aff}'
+            | '\u{1dc0}'..='\u{1dff}'
+            | '\u{20d0}'..='\u{20ff}'
+            | '\u{fe20}'..='\u{fe2f}'
+    )
+}
+
 impl Handle {
     pub fn render_module(&self, buffer: &mut String, module: &Module) {
         debug!("Rendering module '{}'", module.name());
@@ -99,10 +136,9 @@ impl Handle {
         }
 
         let mut info = UserInfo::fallback();
-        let canonical = name.to_lowercase();
-        info.user_name = Cow::Owned(canonical.clone());
+        info.user_name = Cow::Owned(name.to_lowercase());
         info.user_profile_url =
-            Cow::Owned(format!("/user:info/{}", canonical.replace(' ', "-")));
+            Cow::Owned(format!("/user:info/{}", wikidot_user_slug(name)));
         Some(info)
     }
 

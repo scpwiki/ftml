@@ -1,0 +1,100 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "Dr_Toraya",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "Dr_Toraya",
+                            "show-avatar": true
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "a_b_c",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "a__b",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "abc_",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "John.Doe",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "José",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "Fish^12",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "#ApmV",
+                            "show-avatar": false
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
