@@ -140,10 +140,14 @@ fn parse_fn<'r, 't>(
         };
         return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
     }
-    if !in_head && !wikidot_scan_pairs_head(parser, opener_start) {
+    // First-fit binding: a scan-silent head lost its closer to an outer
+    // opener (or is unclosed) and must stay literal.
+    if parser.settings().layout.legacy()
+        && !in_head
+        && !wikidot_scan_pairs_head(parser, opener_start)
+    {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-
     let previous_collapsible_context = parser.in_wikidot_collapsible();
     if parser.settings().layout.legacy() {
         parser.set_in_wikidot_collapsible(true);

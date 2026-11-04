@@ -220,9 +220,16 @@ pub(crate) fn wikidot_flat_pair_for_head(
     if !parser.settings().layout.legacy() {
         return None;
     }
-    parser
+    if std::env::var("L83NOFLAT").is_ok() {
+        return None;
+    }
+    let pair = parser
         .wikidot_block_pair_at_head_byte(opener_start)
-        .filter(|pair| pair.flat && pair.kind.emits_flat())
+        .filter(|pair| pair.flat && pair.kind.emits_flat());
+    if std::env::var("L83DUMP").is_ok() {
+        eprintln!("L83DUMP flat_pair_for_head byte={opener_start} pair={pair:?}");
+    }
+    pair
 }
 
 pub(crate) fn wikidot_scan_pairs_head(

@@ -104,6 +104,12 @@ impl WikidotBlockPairs {
     pub(crate) fn is_empty(&self) -> bool {
         self.pairs.is_empty()
     }
+
+    pub(crate) fn byte_inside_any_span(&self, byte: usize) -> bool {
+        self.by_closer_byte.iter().any(|(closer_start, index)| {
+            *closer_start > byte && self.pairs[*index].head_byte < byte
+        })
+    }
 }
 
 #[cfg(test)]

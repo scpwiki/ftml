@@ -69,7 +69,12 @@ fn parse_note_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::NotSupportedInline));
     }
 
-    if !in_head && !wikidot_scan_pairs_head(parser, opener_start) {
+    // First-fit binding: a scan-silent head lost its closer to an outer
+    // opener (or is unclosed) and must stay literal.
+    if parser.settings().layout.legacy()
+        && !in_head
+        && !wikidot_scan_pairs_head(parser, opener_start)
+    {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 

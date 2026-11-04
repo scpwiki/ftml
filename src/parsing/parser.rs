@@ -351,6 +351,31 @@ impl<'r, 't> Parser<'r, 't> {
             .copied()
     }
 
+    pub(crate) fn wikidot_closer_inside_any_span(&self, closer_byte: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .byte_inside_any_span(closer_byte)
+    }
+
+    pub(crate) fn wikidot_flat_pair_head_before(
+        &self,
+        kind: block_pairs::WikidotBlockKind,
+        closer_byte: usize,
+    ) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .pairs()
+            .iter()
+            .any(|pair| {
+                pair.flat
+                    && pair.kind == kind
+                    && pair.kind.emits_flat()
+                    && pair.head_byte < closer_byte
+            })
+    }
+
     #[inline]
     pub(crate) fn wikidot_iftags_body_end(&self) -> Option<usize> {
         self.block_end_scan_cache

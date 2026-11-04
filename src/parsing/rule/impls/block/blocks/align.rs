@@ -20,7 +20,7 @@
 
 use super::prelude::*;
 use super::{
-    consume_wikidot_flat_head_break, wikidot_flat_pair_for_head, wikidot_scan_pairs_head,
+    consume_wikidot_flat_head_break, wikidot_flat_pair_for_head,
 };
 use crate::delayed::DelayedElement;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
@@ -107,10 +107,6 @@ pub fn parse_alignment_block<'r, 't>(
             alignment,
         };
         return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
-    }
-
-    if !in_head && !wikidot_scan_pairs_head(parser, opener_start) {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
     if !parser.has_body_end_block(block_rule) {

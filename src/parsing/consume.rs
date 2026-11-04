@@ -301,6 +301,58 @@ fn line_has_unmatched_wikidot_owner_opener(
     last_open.is_some_and(|open| last_close.is_none_or(|close| open > close))
 }
 
+fn wikidot_flat_reclose_kind(normalized: &str) -> Option<WikidotBlockKind> {
+    // Nesting kinds only: a later same-kind closer refines a crossed pair's
+    // true end. First-fit kinds bind head to first closer, so anything later
+    // is stray and stays literal.
+    if normalized.eq_ignore_ascii_case("div") {
+        Some(WikidotBlockKind::Div)
+    } else {
+        match normalized {
+            "=" => Some(WikidotBlockKind::AlignCenter),
+            "<" => Some(WikidotBlockKind::AlignLeft),
+            ">" => Some(WikidotBlockKind::AlignRight),
+            "><" => Some(WikidotBlockKind::AlignJustify),
+            _ => None,
+        }
+    }
+}
+
+fn wikidot_flat_reclose_vanishes(
+    parser: &Parser<'_, '_>,
+    after_close: &Parser<'_, '_>,
+    kind: WikidotBlockKind,
+    closer_byte: usize,
+) -> bool {
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return false;
+    }
+    // An own-line closer with no scan pair that re-closes an earlier flat
+    // head (the scan's recorded closer already passed: any same-kind closer
+    // before it would have been recorded instead) is the crossing's true
+    // end, not a literal; live consumes it and keeps the line's break.
+    // Inside another pair's span it is stray instead and stays literal.
+    if !parser.start_of_line() {
+        return false;
+    }
+    if parser.wikidot_closer_inside_any_span(closer_byte) {
+        return false;
+    }
+    let mut after = after_close.clone();
+    while after.current().token == Token::Whitespace {
+        if after.step().is_err() {
+            return false;
+        }
+    }
+    if !matches!(
+        after.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    ) {
+        return false;
+    }
+    parser.wikidot_flat_pair_head_before(kind, closer_byte)
+}
+
 fn wikidot_flat_close_kind_at(
     parser: &Parser<'_, '_>,
     closer_byte: usize,
@@ -468,6 +520,20 @@ where
         Element::Text(close_source_cow.clone())
     } else if let Some(kind) = wikidot_flat_close_kind_at(parser, start) {
         Element::Partial(PartialElement::WikidotBlockClose(kind))
+    } else if let Some(kind) = wikidot_flat_reclose_kind(normalized)
+        && wikidot_flat_reclose_vanishes(parser, &close, kind, start)
+    {
+        parser.update(&close);
+        let fused_residual =
+            resolved_close && parser.fused_name_residual() == Some(end) && {
+                parser.clear_fused_name_residual();
+                true
+            };
+        return Ok(Some(if residual_close_bracket || fused_residual {
+            Elements::Multiple(vec![text!("]")])
+        } else {
+            Elements::None
+        }));
     } else {
         return Ok(None);
     };

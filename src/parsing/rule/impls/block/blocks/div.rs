@@ -790,7 +790,8 @@ fn parse_fn<'r, 't>(
         return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
     }
 
-    if !in_head
+    if parser.settings().layout.legacy()
+        && !in_head
         && !wikidot_scan_pairs_head(parser, opener_start)
         && parser.wikidot_div_opener_is_excess(opener_start)
     {
