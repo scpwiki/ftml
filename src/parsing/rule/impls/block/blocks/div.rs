@@ -439,12 +439,19 @@ where
         return Ok(Some(ParseSuccess::new(elements, errors, paragraph_safe)));
     }
 
+    // Scan-paired multiline heads form (like their top-level siblings);
+    // only unpaired mid-line heads (and single-line ones) recover literal.
+    let paired_multiline_head = body_start == BlockBodyStart::NextPhysicalLine
+        && parser
+            .wikidot_block_pair_at_head_byte(owner_start)
+            .is_some();
     if parser.in_wikidot_div_body()
         && (!head_started_physical_line
             || inline_scored_line_literal
                 && (parser.in_wikidot_literal_alias_body()
                     || parser.has_body_end_block_on_line(&BLOCK_DIV)))
         && !follows_inline_structural_close
+        && !paired_multiline_head
     {
         let head_end = parser.current().span.start;
         let literal_end = if body_start == BlockBodyStart::NextPhysicalLine {
