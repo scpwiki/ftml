@@ -1,0 +1,35 @@
+{
+    "elements": [
+        {
+            "element": "text",
+            "data": "[["
+        },
+        {
+            "element": "text",
+            "data": "gal"
+        },
+        {
+            "element": "text",
+            "data": "lery"
+        },
+        {
+            "element": "text",
+            "data": "]]]"
+        },
+        {
+            "element": "line-break"
+        },
+        {
+            "element": "text",
+            "data": "[[/"
+        },
+        {
+            "element": "text",
+            "data": "gallery"
+        },
+        {
+            "element": "text",
+            "data": "]]"
+        }
+    ]
+}

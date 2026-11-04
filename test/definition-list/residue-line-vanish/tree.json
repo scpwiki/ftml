@@ -1,0 +1,31 @@
+{
+    "elements": [
+        {
+            "element": "text",
+            "data": "text"
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "before"
+        },
+        {
+            "element": "line-break"
+        },
+        {
+            "element": "text",
+            "data": "text"
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "after"
+        }
+    ]
+}
