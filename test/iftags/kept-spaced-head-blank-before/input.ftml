@@ -1,0 +1,6 @@
+before
+
+[[iftags -zzz]] 
+plain body
+[[/iftags]]
+after

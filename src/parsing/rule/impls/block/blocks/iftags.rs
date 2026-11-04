@@ -239,6 +239,42 @@ fn literal_unit_elements<'t>(
     (Elements::Multiple(elements), paragraph_split)
 }
 
+fn gate_pre_break(source: &[u8], opener_start: usize) -> bool {
+    let mut i = opener_start;
+    let mut saw_quote = false;
+    let mut saw_bare_whitespace = false;
+    while i > 0 {
+        match source[i - 1] {
+            b' ' | b'\t' => {
+                saw_bare_whitespace = true;
+                i -= 1;
+            }
+            b'>' => {
+                saw_quote = true;
+                i -= 1;
+            }
+            _ => break,
+        }
+    }
+    if saw_bare_whitespace && !saw_quote {
+        return false;
+    }
+    if i == 0 || source[i - 1] != b'\n' {
+        return false;
+    }
+    let mut line_end = i - 1;
+    if line_end > 0 && source[line_end - 1] == b'\r' {
+        line_end -= 1;
+    }
+    let mut line_start = line_end;
+    while line_start > 0 && source[line_start - 1] != b'\n' {
+        line_start -= 1;
+    }
+    source[line_start..line_end]
+        .iter()
+        .any(|byte| !matches!(byte, b' ' | b'\t' | b'>'))
+}
+
 /// Whether the block opener recovered from the parser's position sits
 /// at the start of a physical line. The block machinery has already
 /// consumed `[[` and the name when the parse function runs, so the
@@ -308,6 +344,23 @@ fn parse_fn<'r, 't>(
         in_head,
         parse_conditions,
     )?;
+
+    let spaced_head = body_start == BlockBodyStart::Inline
+        && parser.current().token == Token::Whitespace
+        && matches!(
+            parser
+                .full_text()
+                .inner()
+                .as_bytes()
+                .get(parser.current().span.end),
+            Some(b'\n') | Some(b'\r'),
+        );
+    if body_start == BlockBodyStart::Inline
+        && parser.current().token == Token::Whitespace
+        && !spaced_head
+    {
+        parser.step()?;
+    }
 
     // A closed no-argument gate on Wikidot passes exactly when the page
     // carries at least one tag. The frozen PagePreview parity bindings are
@@ -397,7 +450,37 @@ fn parse_fn<'r, 't>(
             Ok(_) => {
                 let hidden_end = parser.current().span.start;
                 let generated = parser.generated_in_range(hidden_start..hidden_end);
-                ok!(true; Element::Delayed(DelayedElement::suppressed(&generated)), Vec::new())
+                let suppressed = Element::Delayed(DelayedElement::suppressed(&generated));
+                let pre_break = !parser
+                    .wikidot_body_closed_with_fused_close(&BLOCK_IFTAGS)
+                    && gate_pre_break(
+                        parser.full_text().inner().as_bytes(),
+                        opener_start,
+                    );
+                let plain_break = parser.current().token == Token::LineBreak
+                    && !parser.current().slice.starts_with('\\');
+                if pre_break && (plain_break || parser.current().token == Token::Quote) {
+                    let mut success = crate::parsing::ParseSuccess::new(
+                        Elements::Single(suppressed),
+                        Vec::new(),
+                        true,
+                    );
+                    success.paragraph_split = Some(vec![(1, true), (0, true)]);
+                    Ok(success)
+                } else if pre_break
+                    && !matches!(
+                        parser.current().token,
+                        Token::ParagraphBreak
+                            | Token::InputEnd
+                            | Token::LeftBlockEnd
+                            | Token::LineBreak
+                    )
+                {
+                    parser.mark_virtual_start_of_line();
+                    ok!(true; Elements::Multiple(vec![Element::LineBreak, suppressed]), Vec::new())
+                } else {
+                    ok!(true; suppressed, Vec::new())
+                }
             }
             Err(error) => Err(error),
         }
@@ -405,7 +488,42 @@ fn parse_fn<'r, 't>(
         let head_line_break = body_start == BlockBodyStart::NextPhysicalLine
             && parser.current().token != Token::ParagraphBreak;
         let source_bytes = parser.full_text().inner().as_bytes();
-        let at_line_start = opener_start == 0 || source_bytes[opener_start - 1] == b'\n';
+        let at_line_start = {
+            let mut i = opener_start;
+            while i > 0 && matches!(source_bytes[i - 1], b' ' | b'\t') {
+                i -= 1;
+            }
+            i == 0 || source_bytes[i - 1] == b'\n' || (i == 1 && source_bytes[0] == 0)
+        };
+        let prev_line_contentful = {
+            let mut line_start = opener_start;
+            while line_start > 0 && source_bytes[line_start - 1] != b'\n' {
+                line_start -= 1;
+            }
+            let mut line_end = line_start;
+            if line_end > 0 {
+                line_end -= 1;
+                if line_end > 0 && source_bytes[line_end - 1] == b'\r' {
+                    line_end -= 1;
+                }
+            }
+            let mut prev_start = line_end;
+            while prev_start > 0 && source_bytes[prev_start - 1] != b'\n' {
+                prev_start -= 1;
+            }
+            let line = &source_bytes[prev_start..line_end];
+            let content_start = line
+                .iter()
+                .position(|byte| !matches!(byte, b' ' | b'\t'))
+                .unwrap_or(line.len());
+            let content_end = line
+                .iter()
+                .rposition(|byte| !matches!(byte, b' ' | b'\t'))
+                .map_or(content_start, |index| index + 1);
+            let trimmed = &line[content_start..content_end];
+            line.iter().any(|byte| !matches!(byte, b' ' | b'\t'))
+                && !(trimmed.starts_with(b"[!--") && trimmed.ends_with(b"--]"))
+        };
         let lead_paragraph_break = head_line_break && at_line_start && {
             let mut line_end = opener_start.saturating_sub(1);
             if line_end > 0 && source_bytes[line_end - 1] == b'\r' {
@@ -437,6 +555,34 @@ fn parse_fn<'r, 't>(
                 trace!("Conditions passed, including elements");
                 let fused_close =
                     parser.wikidot_body_closed_with_fused_close(&BLOCK_IFTAGS);
+                let (closer_indented, tail_para_scan) = match designated_end {
+                    Some(end) if !fused_close => {
+                        let source = parser.full_text().inner().as_bytes();
+                        let mut i = end;
+                        while i > 0 && matches!(source[i - 1], b' ' | b'\t') {
+                            i -= 1;
+                        }
+                        if i == end || i == 0 || source[i - 1] != b'\n' {
+                            (false, false)
+                        } else {
+                            let mut j = i - 1;
+                            if j > 0 && source[j - 1] == b'\r' {
+                                j -= 1;
+                            }
+                            (true, j > 0 && source[j - 1] == b'\n')
+                        }
+                    }
+                    _ => (false, false),
+                };
+                let insulated_tail_break = closer_indented
+                    && !tail_para_scan
+                    && segments.last().is_some_and(|segment| {
+                        matches!(segment.last(), Some(Element::LineBreak))
+                    });
+                let insulated_tail_para = closer_indented
+                    && segments.last().is_some_and(|segment| segment.is_empty())
+                    && (tail_para_scan
+                        || segments.iter().all(|segment| segment.is_empty()));
                 let mut trail_elements: Vec<Element<'t>> = Vec::new();
                 let mut trail_paragraph_break = false;
                 if trailing {
@@ -460,12 +606,41 @@ fn parse_fn<'r, 't>(
                     }
                 }
 
-                if !trail_paragraph_break
+                if insulated_tail_para
+                    && parser.current().token == Token::LineBreak
+                    && !parser.current().slice.starts_with('\\')
+                {
+                    segments.push(vec![
+                        Element::Delayed(DelayedElement::typography_boundary()),
+                        Element::LineBreak,
+                    ]);
+                    segment_safe.push(true);
+                    parser.step()?;
+                } else if !trail_paragraph_break
                     && segments.last().is_some_and(|segment| segment.is_empty())
                     && parser.current().token == Token::LineBreak
                     && !parser.current().slice.starts_with('\\')
                 {
                     parser.step()?;
+                }
+
+                if insulated_tail_break {
+                    match parser.current().token {
+                        Token::LineBreak if !parser.current().slice.starts_with('\\') => {
+                            parser.step()?;
+                            trail_elements.push(Element::LineBreak);
+                        }
+                        Token::ParagraphBreak | Token::InputEnd | Token::LeftBlockEnd
+                            if parser.settings().layout.legacy() =>
+                        {
+                            trail_elements.push(Element::LineBreak);
+                        }
+                        _ => {}
+                    }
+                }
+
+                if closer_indented {
+                    parser.mark_virtual_start_of_line();
                 }
 
                 if lead_paragraph_break {
@@ -475,6 +650,20 @@ fn parse_fn<'r, 't>(
                 if trail_paragraph_break {
                     segments.push(Vec::new());
                     segment_safe.push(true);
+                }
+                if spaced_head && at_line_start {
+                    if prev_line_contentful {
+                        segments
+                            .first_mut()
+                            .expect("segments always has a current segment")
+                            .insert(0, Element::LineBreak);
+                    } else if opener_start == 0
+                        && let Some(first) = segments.first_mut()
+                        && matches!(first.first(), Some(Element::LineBreak))
+                        && let Some(Element::Text(text)) = first.get_mut(1)
+                    {
+                        *text = Cow::Owned(format!(" {text}"));
+                    }
                 }
 
                 if segments.len() == 1 && !lead_line_break && trail_elements.is_empty() {
