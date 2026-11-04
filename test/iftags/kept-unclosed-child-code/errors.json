@@ -1,0 +1,29 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-code",
+        "span": [
+            46,
+            46
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            15,
+            17
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            21,
+            23
+        ],
+        "kind": "no-rules-match"
+    }
+]

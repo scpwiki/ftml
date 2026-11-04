@@ -182,7 +182,8 @@ fn malformed_and_fail_closed_conditionals_do_not_create_a_seam() {
         "-must-stay-hidden",
     );
     let (text, _) = render(malformed_child, Layout::Wikidot);
-    assert_eq!(text, "left-");
+    assert_eq!(text, "left-\n-must-stay-hidden");
+    assert!(!text.contains('—'), "{text}");
 }
 
 #[test]

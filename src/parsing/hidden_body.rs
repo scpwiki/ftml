@@ -118,6 +118,17 @@ impl<'r, 't> Parser<'r, 't> {
 
         Ok(())
     }
+
+    pub(crate) fn skip_to_hidden_body_boundary(&mut self) -> Result<(), ParseError>
+    where
+        'r: 't,
+    {
+        while self.current().token != Token::InputEnd && !self.at_hidden_body_boundary() {
+            self.step()?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -105,12 +105,32 @@ fn assert_false_iftags_guarded(hidden: &str, layout: Layout) {
     assert!(tree.code_blocks.is_empty(), "{layout:?}: {hidden}");
 }
 
-fn assert_false_iftags_fails_closed(hidden: &str, layout: Layout) {
+fn assert_false_iftags_unclosed_child_renders_trailing(
+    hidden: &str,
+    expected_text: &str,
+    layout: Layout,
+) {
     let tree = parse(&format!("[[iftags +missing]]\n{hidden}"), layout);
 
-    assert!(tree.elements.is_empty(), "{layout:?}: {hidden}");
+    assert_eq!(
+        render_text(&tree, layout),
+        expected_text,
+        "{layout:?}: {hidden}"
+    );
     assert!(tree.html_blocks.is_empty(), "{layout:?}: {hidden}");
     assert!(tree.code_blocks.is_empty(), "{layout:?}: {hidden}");
+}
+
+fn assert_wikidot_comment_close_ends_gate(raw_body: &str) {
+    let input = format!(
+        "[[iftags +missing]]\n{raw_body}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
+    );
+    let (tree, _) = parse_with_errors(&input, Layout::Wikidot);
+    let text = render_text(&tree, Layout::Wikidot);
+    assert!(text.contains("raw-comment"), "{raw_body}: {text}");
+    assert!(text.contains("visible"), "{raw_body}: {text}");
+    assert_eq!(tree.html_blocks, ["\n<b>guarded</b>\n"]);
+    assert!(tree.code_blocks.is_empty(), "{raw_body}: {tree:#?}");
 }
 
 fn render_iframe_with_url_and_attributes(
@@ -895,11 +915,11 @@ fn false_iftags_raw_body_end_markers_stay_hidden() {
 
     for layout in [Layout::Wikijump, Layout::Wikidot] {
         for raw_body in raw_bodies {
-            if raw_body.starts_with("[!-- ")
-                || (layout == Layout::Wikidot
-                    && (raw_body.starts_with("[[raw]]")
-                        || raw_body.starts_with("[[math]]\n\\text{")))
-            {
+            if raw_body.starts_with("[!-- ") && layout == Layout::Wikidot {
+                assert_wikidot_comment_close_ends_gate(raw_body);
+                continue;
+            }
+            if raw_body.starts_with("[!-- ") {
                 let input = format!(
                     "[[iftags +missing]]\n{raw_body}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
                 );
@@ -912,24 +932,6 @@ fn false_iftags_raw_body_end_markers_stay_hidden() {
             assert_false_iftags_guarded(raw_body, layout);
         }
     }
-
-    let (wikidot_math, _) = parse_with_errors(
-        concat!(
-            "[[iftags +missing]]\n",
-            "[[math]]\n",
-            "\\text{[[/iftags]] raw-math}\n",
-            "[[/math]]\n",
-            "[[html]]\n",
-            "<b>guarded</b>\n",
-            "[[/html]]\n",
-            "[[/iftags]]\n",
-            "visible",
-        ),
-        Layout::Wikidot,
-    );
-    assert!(wikidot_math.elements.is_empty(), "{wikidot_math:#?}");
-    assert!(wikidot_math.html_blocks.is_empty(), "{wikidot_math:#?}");
-    assert!(wikidot_math.code_blocks.is_empty(), "{wikidot_math:#?}");
 }
 
 #[test]
@@ -966,51 +968,73 @@ fn false_iftags_nameless_embed_head_does_not_close_the_page() {
 }
 
 #[test]
-fn false_iftags_malformed_hidden_structures_fail_closed() {
-    let malformed = [
-        "[[code]]\n[[/iftags]]\nunclosed code",
-        "[[html]]\n[[/iftags]]\n<b>unclosed html</b>",
-        "[[raw]]\n[[/iftags]]\nunclosed raw",
-        "[[math]]\n[[/iftags]]\nunclosed math",
-        "[[module CSS]]\n[[/iftags]]\n.unclosed { color: red; }",
-        "[[module ListPages]]\n[[/iftags]]\nunclosed module",
-        "[[code @=\"bad\"]]\n[[/iftags]]\n[[html]]\n<b>malformed head</b>\n[[/html]]",
+fn false_iftags_unclosed_child_stops_at_the_gate_close() {
+    let cases = [
+        ("[[code]]\n[[/iftags]]\nunclosed code", "unclosed code"),
+        (
+            "[[html]]\n[[/iftags]]\n<b>unclosed html</b>",
+            "<b>unclosed html</b>",
+        ),
+        ("[[raw]]\n[[/iftags]]\nunclosed raw", "unclosed raw"),
+        ("[[math]]\n[[/iftags]]\nunclosed math", "unclosed math"),
+        (
+            "[[module CSS]]\n[[/iftags]]\n.unclosed { color: red; }",
+            ".unclosed { color: red; }",
+        ),
+        (
+            "[[module ListPages]]\n[[/iftags]]\nunclosed module",
+            "unclosed module",
+        ),
     ];
 
-    for hidden in malformed {
-        assert_false_iftags_fails_closed(hidden, Layout::Wikijump);
-    }
-}
-
-#[test]
-fn wikidot_false_iftags_unclosed_raw_child_fails_closed() {
-    for hidden in [
-        "[[code]]\n[[/iftags]]\nunclosed code",
-        "[[html]]\n[[/iftags]]\n<b>unclosed html</b>",
-        "[[raw]]\n[[/iftags]]\nunclosed raw",
-    ] {
-        let tree = parse(&format!("[[iftags +missing]]\n{hidden}"), Layout::Wikidot);
-
-        assert!(tree.elements.is_empty(), "{hidden}: {tree:#?}");
-        assert!(tree.html_blocks.is_empty(), "{hidden}: {tree:#?}");
-        assert!(tree.code_blocks.is_empty(), "{hidden}: {tree:#?}");
-    }
-}
-
-#[test]
-fn wikidot_false_iftags_closed_raw_and_comment_fail_closed() {
-    for hidden in [
-        "[[raw]]\n[[/iftags]]\n[[html]]raw-raw[[/html]]\n[[/raw]]",
-        "[!-- [[/iftags]] raw-comment --]",
-    ] {
-        let input = format!(
-            "[[iftags +missing]]\n{hidden}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
+    for (hidden, expected) in cases {
+        assert_false_iftags_unclosed_child_renders_trailing(
+            hidden,
+            expected,
+            Layout::Wikijump,
         );
-        let (tree, _) = parse_with_errors(&input, Layout::Wikidot);
-        assert!(tree.elements.is_empty(), "{hidden}: {tree:#?}");
-        assert!(tree.html_blocks.is_empty(), "{hidden}: {tree:#?}");
-        assert!(tree.code_blocks.is_empty(), "{hidden}: {tree:#?}");
     }
+
+    let tree = parse(
+        "[[iftags +missing]]\n[[code @=\"bad\"]]\n[[/iftags]]\n[[html]]\n<b>malformed head</b>\n[[/html]]",
+        Layout::Wikijump,
+    );
+    assert_eq!(render_text(&tree, Layout::Wikijump), "");
+    assert_eq!(tree.html_blocks, ["<b>malformed head</b>"]);
+    assert!(tree.code_blocks.is_empty());
+}
+
+#[test]
+fn wikidot_false_iftags_unclosed_raw_child_stops_at_the_gate_close() {
+    let cases = [
+        ("[[code]]\n[[/iftags]]\nunclosed code", "unclosed code"),
+        (
+            "[[html]]\n[[/iftags]]\n<b>unclosed html</b>",
+            "<b>unclosed html</b>",
+        ),
+        ("[[raw]]\n[[/iftags]]\nunclosed raw", "unclosed raw"),
+    ];
+
+    for (hidden, expected) in cases {
+        assert_false_iftags_unclosed_child_renders_trailing(
+            hidden,
+            expected,
+            Layout::Wikidot,
+        );
+    }
+}
+
+#[test]
+fn wikidot_false_iftags_closed_raw_stays_guarded() {
+    assert_false_iftags_guarded(
+        "[[raw]]\n[[/iftags]]\n[[html]]raw-raw[[/html]]\n[[/raw]]",
+        Layout::Wikidot,
+    );
+}
+
+#[test]
+fn wikidot_false_iftags_comment_close_ends_the_gate() {
+    assert_wikidot_comment_close_ends_gate("[!-- [[/iftags]] raw-comment --]");
 }
 
 #[test]

@@ -922,7 +922,7 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
                     }
 
                     if hidden_failure_must_close_to_eof(error.kind()) {
-                        parser.skip_to_input_end()?;
+                        parser.skip_to_hidden_body_boundary()?;
                         parser.depth_decrement();
                         return Err(error);
                     }
