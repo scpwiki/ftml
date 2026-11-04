@@ -1,0 +1,8 @@
+[[tabview]]
+[[tab One]]
+First
+[[/tab]]
+[[tab [[footnoteblock]]]]
+Body
+[[/tab]]
+[[/tabview]]

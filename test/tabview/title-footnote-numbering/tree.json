@@ -4,7 +4,7 @@
             "element": "tab-view",
             "data": [
                 {
-                    "label": "Title[[footnote",
+                    "label": "",
                     "elements": [
                         {
                             "element": "container",
@@ -12,29 +12,6 @@
                                 "type": "paragraph",
                                 "attributes": {},
                                 "elements": [
-                                    {
-                                        "element": "text",
-                                        "data": "tabnote"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "[[/"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "footnote"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "]]]"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "]"
-                                    },
-                                    {
-                                        "element": "line-break"
-                                    },
                                     {
                                         "element": "text",
                                         "data": "Tab"
@@ -57,7 +34,7 @@
                                     },
                                     {
                                         "element": "footnote",
-                                        "data": 1
+                                        "data": 2
                                     }
                                 ]
                             }
@@ -79,7 +56,7 @@
                                     },
                                     {
                                         "element": "footnote",
-                                        "data": 2
+                                        "data": 3
                                     }
                                 ]
                             }
@@ -100,13 +77,19 @@
                     },
                     {
                         "element": "footnote",
-                        "data": 3
+                        "data": 4
                     }
                 ]
             }
         }
     ],
     "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "tabnote"
+            }
+        ],
         [
             {
                 "element": "text",
