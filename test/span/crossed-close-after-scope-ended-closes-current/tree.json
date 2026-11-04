@@ -1,0 +1,82 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "size",
+                            "attributes": {
+                                "style": "font-size: 120%;"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "bold",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "b"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "//"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "c"
+                                            },
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "span",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "d"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "//"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "w"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "x"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "y"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "z"
+                    }
+                ]
+            }
+        }
+    ]
+}

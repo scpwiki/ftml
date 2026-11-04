@@ -88,6 +88,31 @@ struct ActiveScope<'t> {
     next_active: Option<usize>,
 }
 
+#[derive(Clone)]
+enum IstEntry<'t> {
+    Scope {
+        tag: InlineTag,
+        position: usize,
+        kind: ScopeKind,
+        wrapper: ScopeWrapper<'t>,
+        scored: bool,
+        origin: usize,
+    },
+    Inline {
+        tag: InlineTag,
+        wrapper: ScopeWrapper<'t>,
+    },
+}
+
+impl<'t> IstEntry<'t> {
+    fn tag(&self) -> InlineTag {
+        match self {
+            IstEntry::Scope { tag, .. } => *tag,
+            IstEntry::Inline { tag, .. } => *tag,
+        }
+    }
+}
+
 #[derive(Default)]
 struct ActiveScopes<'t> {
     scopes: Vec<ActiveScope<'t>>,
@@ -96,6 +121,7 @@ struct ActiveScopes<'t> {
     space_eject_floor: Option<Option<usize>>,
     close_pairs: BTreeMap<usize, usize>,
     open_instances: BTreeMap<usize, usize>,
+    istack: Vec<IstEntry<'t>>,
 }
 
 struct ActiveScopeRevIter<'a, 't> {
@@ -139,6 +165,26 @@ impl<'t> ActiveScopes<'t> {
         });
         if let Some(previous_active) = previous_active {
             self.scopes[previous_active].next_active = Some(position);
+        }
+        let (tag, kind, wrapper, scored, origin) = {
+            let scope = &self.scopes[position];
+            (
+                scope.wrapper.tag(),
+                scope.kind,
+                scope.wrapper.clone(),
+                scope.scored,
+                scope.origin,
+            )
+        };
+        if !self.istack.iter().any(|entry| entry.tag() == tag) {
+            self.istack.push(IstEntry::Scope {
+                tag,
+                position,
+                kind,
+                wrapper,
+                scored,
+                origin,
+            });
         }
     }
 
@@ -195,9 +241,13 @@ impl<'t> ActiveScopes<'t> {
                 drops.push(entry);
             }
         }
-        for entry in drops {
-            self.unlink(entry);
+        for entry in &drops {
+            self.unlink(*entry);
         }
+        self.istack.retain(|entry| match entry {
+            IstEntry::Scope { position, .. } => !drops.contains(position),
+            IstEntry::Inline { .. } => true,
+        });
     }
 
     fn record_open_instance(&mut self, event_ordinal: usize) {
@@ -249,7 +299,7 @@ impl<'t> ActiveScopes<'t> {
         self.scopes[position].scored
     }
 
-    fn commit_close(&mut self, position: usize) {
+    fn note_scope_closed(&mut self, position: usize) {
         let closed = &self.scopes[position];
         let closed_origin = closed.origin;
         let closed_tag = closed.wrapper.tag();
@@ -258,55 +308,105 @@ impl<'t> ActiveScopes<'t> {
                 tags.push(closed_tag);
             }
         }
-        let mut above = Vec::new();
-        let mut cursor = self.scopes[position].next_active;
-        while let Some(current) = cursor {
-            above.push(current);
-            cursor = self.scopes[current].next_active;
-        }
-        let below = self.scopes[position].previous_active;
-        if above.len() >= 2 {
-            self.space_eject_floor = Some(Some(position));
-            self.scopes[position].next_active = None;
-            self.active_tail = Some(position);
-            let mut order = Vec::with_capacity(above.len());
-            let (last, rest) = above.split_last().expect("at least two scopes above");
-            order.push(*last);
-            order.extend_from_slice(rest);
-            let mut kept: Vec<usize> = Vec::with_capacity(order.len());
-            for (index, entry) in order.iter().enumerate() {
-                let tag = self.scopes[*entry].wrapper.tag();
-                let shadowed = order[index + 1..]
-                    .iter()
-                    .any(|later| self.scopes[*later].wrapper.tag() == tag);
-                if !shadowed {
-                    kept.push(*entry);
+    }
+
+    fn end_scope(&mut self, position: usize) {
+        self.unlink(position);
+    }
+
+    fn tidy_close(&mut self, tag: InlineTag) {
+        let mut ended: Vec<usize> = Vec::new();
+        let mut insert_at: Option<usize> = None;
+        while let Some(top) = self.active_tail {
+            let top_tag = self.scopes[top].wrapper.tag();
+            if top_tag == tag {
+                self.istack.pop();
+                self.end_scope(top);
+                ended.push(top);
+                break;
+            }
+            let element_index =
+                self.istack.iter().rposition(|entry| entry.tag() == top_tag);
+            let close_index = self.istack.iter().position(|entry| entry.tag() == tag);
+            match (element_index, close_index) {
+                (Some(element), Some(close)) if close < element => {
+                    self.istack.swap(element, close);
+                    insert_at = Some(close);
+                    self.end_scope(top);
+                    ended.push(top);
+                }
+                _ => {
+                    self.istack.pop();
+                    self.end_scope(top);
+                    ended.push(top);
+                    break;
                 }
             }
-            for entry in kept {
-                let scope = &self.scopes[entry];
-                let wrapper = scope.wrapper.clone();
-                let kind = scope.kind;
-                let scored = scope.scored;
-                let origin = scope.origin;
-                self.push_with_origin(kind, wrapper, scored, origin);
-            }
+        }
+        if ended.is_empty() {
             return;
         }
-        if above.len() == 1 {
-            self.space_eject_floor = Some(below);
+        let base = self.active_tail;
+        let mut reopened: Vec<usize> = Vec::new();
+        if let Some(at) = insert_at {
+            let entries: Vec<(ScopeKind, ScopeWrapper<'t>, bool, usize, Option<usize>)> =
+                self.istack
+                    .iter()
+                    .skip(at)
+                    .map(|entry| match entry {
+                        IstEntry::Scope {
+                            position,
+                            kind,
+                            wrapper,
+                            scored,
+                            origin,
+                            ..
+                        } => (*kind, wrapper.clone(), *scored, *origin, Some(*position)),
+                        IstEntry::Inline { wrapper, .. } => (
+                            scope_kind_of_wrapper(wrapper),
+                            wrapper.clone(),
+                            false,
+                            self.scopes.len(),
+                            None,
+                        ),
+                    })
+                    .collect();
+            for (kind, wrapper, scored, origin, source) in entries {
+                self.push_with_origin(kind, wrapper, scored, origin);
+                if let Some(source) = source {
+                    reopened.push(source);
+                }
+            }
         }
-        if let Some(below) = below {
-            self.scopes[below].next_active = None;
+        for position in &ended {
+            if !reopened.contains(position) {
+                self.note_scope_closed(*position);
+            }
         }
-        self.active_tail = below;
-        for entry in above {
-            let scope = &self.scopes[entry];
-            let wrapper = scope.wrapper.clone();
-            let kind = scope.kind;
-            let scored = scope.scored;
-            let origin = scope.origin;
-            self.push_with_origin(kind, wrapper, scored, origin);
+        if ended.len() >= 2 {
+            self.space_eject_floor = Some(base);
+        }
+    }
+
+    fn istack_push_inline(&mut self, tag: InlineTag, wrapper: ScopeWrapper<'t>) {
+        if !self.istack.iter().any(|entry| entry.tag() == tag) {
+            self.istack.push(IstEntry::Inline { tag, wrapper });
+        }
+    }
+
+    fn apply_subtree_istack(&mut self, element: &Element<'t>) {
+        if let Some((tag, wrapper)) = inline_scope_parts(element) {
+            self.istack_push_inline(tag, wrapper);
+            if let Some(children) = subtree_children(element) {
+                for child in children {
+                    self.apply_subtree_istack(child);
+                }
+            }
+            self.istack.pop();
+        } else if let Some(children) = subtree_children(element) {
+            for child in children {
+                self.apply_subtree_istack(child);
+            }
         }
     }
 
@@ -935,8 +1035,8 @@ fn lower_sequence<'t>(
                     &mut run_has_content,
                 );
                 trim_trailing_space(&mut output);
-                if let Some(position) = resolved {
-                    active.commit_close(position);
+                if resolved.is_some() || active.has_active_scope() {
+                    active.tidy_close(InlineTag::Span);
                 }
                 if trailing_space
                     && !next_starts_with_space
@@ -1070,8 +1170,8 @@ fn lower_sequence<'t>(
             if !(preserve_empty_owner_space || empty && scored) {
                 trim_trailing_space(&mut output);
             }
-            if let Some(position) = resolved {
-                active.commit_close(position);
+            if resolved.is_some() || active.has_active_scope() {
+                active.tidy_close(InlineTag::Span);
             }
             if trailing_space
                 && !next_starts_with_space
@@ -1177,14 +1277,79 @@ fn lower_sequence<'t>(
             && inline_scope_controls_are_self_contained(&element)
         {
             let mut nested_active = ActiveScopes::default();
-            if lower_children(
+            let root_parts = inline_scope_parts(&element);
+            if let Some((tag, wrapper)) = &root_parts {
+                nested_active.istack.clone_from(&active.istack);
+                nested_active.istack_push_inline(*tag, wrapper.clone());
+            }
+            let lowered = lower_children(
                 &mut element,
                 valid,
                 ordinal,
                 &mut nested_active,
                 trim_next_break,
-            ) {
-                debug_assert!(!nested_active.has_active_scope());
+            );
+            if lowered {
+                if let Some((tag, wrapper)) = &root_parts {
+                    let stolen = nested_active.has_active_scope();
+                    if stolen {
+                        nested_active.tidy_close(*tag);
+                    }
+                    nested_active.istack.pop();
+                    active.istack = std::mem::take(&mut nested_active.istack);
+                    if stolen {
+                        flush_run(
+                            &mut output,
+                            &mut run,
+                            active,
+                            &mut last_run_outer_scope,
+                        );
+                        active.push_with_origin(
+                            scope_kind_of_wrapper(wrapper),
+                            wrapper.clone(),
+                            false,
+                            *ordinal,
+                        );
+                        let children = match &mut element {
+                            Element::Container(data) => {
+                                std::mem::take(data.elements_mut())
+                            }
+                            Element::Color { elements, .. } => std::mem::take(elements),
+                            _ => Vec::new(),
+                        };
+                        run.extend(children);
+                        run_has_content = true;
+                        flush_run(
+                            &mut output,
+                            &mut run,
+                            active,
+                            &mut last_run_outer_scope,
+                        );
+                        let leftovers: Vec<(ScopeKind, ScopeWrapper<'t>, bool, usize)> =
+                            nested_active
+                                .iter_active_rev()
+                                .map(|scope| {
+                                    (
+                                        scope.kind,
+                                        scope.wrapper.clone(),
+                                        scope.scored,
+                                        scope.origin,
+                                    )
+                                })
+                                .collect();
+                        for (kind, leftover_wrapper, scored, origin) in
+                            leftovers.into_iter().rev()
+                        {
+                            active.push_with_origin(
+                                kind,
+                                leftover_wrapper,
+                                scored,
+                                origin,
+                            );
+                        }
+                        continue;
+                    }
+                }
                 run.push(element);
                 run_has_content = true;
             } else {
@@ -1200,6 +1365,9 @@ fn lower_sequence<'t>(
                 && matches!(run.last(), Some(Element::Text(text)) if text == " ")
             {
                 run.pop();
+            }
+            if inline_scope_parts(&element).is_some() {
+                active.apply_subtree_istack(&element);
             }
             run.push(element);
             run_has_content = true;
@@ -1222,7 +1390,14 @@ fn lower_sequence<'t>(
                 } else {
                     None
                 };
+                let root_parts = inline_scope_parts(&element);
+                if let Some((tag, wrapper)) = &root_parts {
+                    active.istack_push_inline(*tag, wrapper.clone());
+                }
                 lower_children(&mut element, valid, ordinal, active, trim_next_break);
+                if root_parts.is_some() {
+                    active.istack.pop();
+                }
                 if let Some(watermark) = watermark {
                     let completed = active.end_watch();
                     active.drop_block_boundary_scopes(watermark, &completed);
@@ -1257,6 +1432,53 @@ fn lower_sequence<'t>(
     flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
     *elements = output;
     effects
+}
+
+fn scope_kind_of_wrapper(wrapper: &ScopeWrapper<'_>) -> ScopeKind {
+    match wrapper {
+        ScopeWrapper::Container { ctype, .. } => match ctype {
+            ContainerType::Size => ScopeKind::Size,
+            ContainerType::Span => ScopeKind::Span,
+            _ => ScopeKind::Format(
+                format_kind_of(*ctype).unwrap_or(InlineFormatKind::Bold),
+            ),
+        },
+        ScopeWrapper::Color { .. } => ScopeKind::Color,
+    }
+}
+
+fn inline_scope_parts<'t>(
+    element: &Element<'t>,
+) -> Option<(InlineTag, ScopeWrapper<'t>)> {
+    match element {
+        Element::Container(container) if is_inline_scope_ctype(container.ctype()) => {
+            Some((
+                inline_tag_for_ctype(container.ctype()),
+                ScopeWrapper::Container {
+                    ctype: container.ctype(),
+                    attributes: container.attributes().clone(),
+                },
+            ))
+        }
+        Element::Color {
+            color, background, ..
+        } => Some((
+            InlineTag::Span,
+            ScopeWrapper::Color {
+                color: color.clone(),
+                background: *background,
+            },
+        )),
+        _ => None,
+    }
+}
+
+fn subtree_children<'a, 't>(element: &'a Element<'t>) -> Option<&'a [Element<'t>]> {
+    match element {
+        Element::Container(container) => Some(container.elements()),
+        Element::Color { elements, .. } => Some(elements),
+        _ => None,
+    }
 }
 
 fn wrap_scope_elements<'t>(
@@ -1487,8 +1709,8 @@ fn close_flattened_scope<'t>(
     }
     flush_close_run(output, run, active, last_run_outer_scope, run_has_content);
     trim_trailing_space(output);
-    if let Some(position) = resolved {
-        active.commit_close(position);
+    if resolved.is_some() {
+        active.tidy_close(tag);
     }
     if trailing_space && !next_starts_with_space && !empty && has_next {
         run.push(text!(" "));
