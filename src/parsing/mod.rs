@@ -73,7 +73,7 @@ use crate::tree::{
 use std::borrow::Cow;
 
 pub use self::boolean::{NonBooleanValue, parse_boolean};
-pub use self::error::{ParseError, ParseErrorKind};
+pub use self::error::{HiddenBodyFailure, ParseError, ParseErrorKind};
 pub(crate) use self::inline_format::wikidot_dash_run_elements;
 pub use self::outcome::ParseOutcome;
 pub(crate) use self::parser::DEEP_MAX_RECURSION_DEPTH;

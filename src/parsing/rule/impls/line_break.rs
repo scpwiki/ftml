@@ -33,7 +33,7 @@ pub const RULE_LINE_BREAK: Rule = Rule {
 pub const RULE_LINE_BREAK_PARAGRAPH: Rule = Rule {
     name: "line-break-paragraph",
     position: LineRequirement::Any,
-    try_consume_fn: line_break_paragraph,
+    try_consume_fn: line_break_in_no_paragraph_context,
 };
 
 const START_OF_LINE_RULE_TOKENS: &[Token] = &[
@@ -125,9 +125,20 @@ where
     })
 }
 
+#[derive(Clone, Copy)]
+struct NoParagraphContext;
+
 #[inline]
-fn line_break_paragraph<'r, 't>(
+fn line_break_in_no_paragraph_context<'r, 't>(
     parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    line_break_with_context(parser, NoParagraphContext)
+}
+
+#[inline]
+fn line_break_with_context<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    _: NoParagraphContext,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     line_break(parser)
 }

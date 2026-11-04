@@ -164,37 +164,73 @@ where
     'r: 't,
 {
     let mut body_probe = parser.clone();
-    let mut first = true;
-    let mut open_list_pages = 0;
-    let mut nested_end_blocks = 0;
+    let mut scan = CssListPagesScan::new();
 
     loop {
-        if nested_end_blocks > 0
-            && open_list_pages == 0
-            && wikidot_parser_starts_css(&body_probe)
+        match scan.advance(&mut body_probe) {
+            CssListPagesStep::Continue => {}
+            CssListPagesStep::Boundary(boundary) => return boundary,
+        }
+    }
+}
+
+struct CssListPagesScan {
+    first: bool,
+    open_list_pages: usize,
+    nested_end_blocks: usize,
+}
+
+impl CssListPagesScan {
+    fn new() -> Self {
+        CssListPagesScan {
+            first: true,
+            open_list_pages: 0,
+            nested_end_blocks: 0,
+        }
+    }
+}
+
+enum CssListPagesStep {
+    Continue,
+    Boundary(Option<CssListPagesBoundary>),
+}
+
+impl CssListPagesScan {
+    fn advance<'r, 't>(&mut self, body_probe: &mut Parser<'r, 't>) -> CssListPagesStep
+    where
+        'r: 't,
+    {
+        if self.nested_end_blocks > 0
+            && self.open_list_pages == 0
+            && wikidot_parser_starts_css(body_probe)
         {
-            return Some(CssListPagesBoundary::Unclosed);
+            return CssListPagesStep::Boundary(Some(CssListPagesBoundary::Unclosed));
         }
 
-        if wikidot_parser_starts_list_pages(&body_probe) {
-            open_list_pages += 1;
+        if wikidot_parser_starts_list_pages(body_probe) {
+            self.open_list_pages += 1;
         }
 
-        if body_probe.consume_body_end_block(first, &BLOCK_MODULE) {
-            if open_list_pages > 0 {
-                open_list_pages -= 1;
-                nested_end_blocks += 1;
-                first = false;
-                continue;
+        if body_probe.consume_body_end_block(self.first, &BLOCK_MODULE) {
+            if self.open_list_pages > 0 {
+                self.open_list_pages -= 1;
+                self.nested_end_blocks += 1;
+                self.first = false;
+                return CssListPagesStep::Continue;
             }
-            return Some(CssListPagesBoundary::Closed { nested_end_blocks });
+            return CssListPagesStep::Boundary(Some(CssListPagesBoundary::Closed {
+                nested_end_blocks: self.nested_end_blocks,
+            }));
         }
 
         if body_probe.step().is_err() {
-            return (open_list_pages == 0 && nested_end_blocks > 0)
-                .then_some(CssListPagesBoundary::Unclosed);
+            return CssListPagesStep::Boundary(
+                (self.open_list_pages == 0 && self.nested_end_blocks > 0)
+                    .then_some(CssListPagesBoundary::Unclosed),
+            );
         }
-        first = false;
+        self.first = false;
+        CssListPagesStep::Continue
     }
 }
 

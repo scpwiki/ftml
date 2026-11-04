@@ -45,6 +45,12 @@ pub(crate) enum BlockBodyStart {
     NextPhysicalLine,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscardedBodyOutcome {
+    Discarded,
+    FailedClosedThroughInputEnd,
+}
+
 /// Token index just past a `[[name ...]]` block head starting at `start`,
 /// or `None` if the tokens at `start` are not such a head. Used by the
 /// Wikidot iftags pairing search (#792), which classifies heads
@@ -1286,7 +1292,7 @@ where
     pub fn discard_body_elements(
         &mut self,
         block_rule: &BlockRule,
-    ) -> Result<(), ParseError> {
+    ) -> Result<DiscardedBodyOutcome, ParseError> {
         let mutable_state = self.get_mutable_state();
         let mut fork = self.clone();
         let was_discarding = fork.discarding_hidden_body();
@@ -1300,21 +1306,24 @@ where
             fork.consume_body_no_paragraphs(block_rule, false, false, |_| {});
         fork.pop_hidden_body_boundary();
 
-        if discard_result.is_err() {
+        let outcome = if discard_result.is_err() {
             fork.skip_to_input_end()?;
-        }
+            DiscardedBodyOutcome::FailedClosedThroughInputEnd
+        } else {
+            DiscardedBodyOutcome::Discarded
+        };
 
         fork.set_discarding_hidden_body(was_discarding);
         self.update(&fork);
         self.reset_mutable_state(mutable_state);
-        Ok(())
+        Ok(outcome)
     }
 
     pub(crate) fn discard_body_elements_with_literal_quote_context(
         &mut self,
         block_rule: &BlockRule,
         body_start: BlockBodyStart,
-    ) -> Result<(), ParseError> {
+    ) -> Result<DiscardedBodyOutcome, ParseError> {
         self.discard_body_elements_with_context_policy(block_rule, body_start, true)
     }
 
@@ -1323,7 +1332,7 @@ where
         block_rule: &BlockRule,
         body_start: BlockBodyStart,
         literal_residual_quotes: bool,
-    ) -> Result<(), ParseError> {
+    ) -> Result<DiscardedBodyOutcome, ParseError> {
         let Some(required_depth) = self.native_blockquote_depth() else {
             return self.discard_body_elements(block_rule);
         };
@@ -2231,7 +2240,12 @@ where
             ParseCondition::current(Token::LineBreak),
             ParseCondition::current(Token::ParagraphBreak),
         ];
-        let (field, last) = collect_comment_elided_keep(self, &closes, &invalids, None)?;
+        let (field, last) = collect_comment_elided_keep(
+            self,
+            &closes,
+            &invalids,
+            Some(ParseErrorKind::recoverable_local_failure()),
+        )?;
         let arguments =
             self.get_head_map_wikidot(block_rule, last.token != Token::RightBlock)?;
         Ok((field, arguments))

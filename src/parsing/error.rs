@@ -217,10 +217,39 @@ pub enum ParseErrorKind {
     NotSupportedInline,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum HiddenBodyFailure {
+    Recoverable,
+    MustCloseThroughEndOfInput,
+}
+
 impl ParseErrorKind {
     #[inline]
     pub fn name(self) -> &'static str {
         self.into()
+    }
+
+    pub fn recoverable_local_failure() -> Self {
+        ParseErrorKind::RuleFailed
+    }
+
+    pub fn hidden_body_failure(self) -> HiddenBodyFailure {
+        match self {
+            ParseErrorKind::RecursionDepthExceeded
+            | ParseErrorKind::EndOfInput
+            | ParseErrorKind::BlockDisallowsStar
+            | ParseErrorKind::BlockDisallowsScore
+            | ParseErrorKind::BlockMissingCloseBrackets
+            | ParseErrorKind::BlockMalformedArguments
+            | ParseErrorKind::BlockMissingArguments => {
+                HiddenBodyFailure::MustCloseThroughEndOfInput
+            }
+            _ => HiddenBodyFailure::Recoverable,
+        }
+    }
+
+    pub fn must_close_hidden_body_through_end_of_input(self) -> bool {
+        self.hidden_body_failure() == HiddenBodyFailure::MustCloseThroughEndOfInput
     }
 }
 

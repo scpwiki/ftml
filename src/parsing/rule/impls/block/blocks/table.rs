@@ -763,15 +763,31 @@ fn column_span_one() -> NonZeroU32 {
     NonZeroU32::new(1).expect("one is non-zero")
 }
 
-fn parse_column_span_semantic(value: &str) -> Option<NonZeroU32> {
-    const MAX_U32_DECIMAL_DIGITS: usize = 10;
+struct BoundedU32DecimalLexeme<'a> {
+    significant_digits: &'a str,
+}
 
-    let digits = value.strip_prefix('+').unwrap_or(value);
-    let significant = digits.trim_start_matches('0');
-    if significant.is_empty() || significant.len() > MAX_U32_DECIMAL_DIGITS {
-        return None;
+impl<'a> BoundedU32DecimalLexeme<'a> {
+    const MAX_SIGNIFICANT_DIGITS: usize = 10;
+
+    fn from_value(value: &'a str) -> Option<Self> {
+        let digits = value.strip_prefix('+').unwrap_or(value);
+        let significant_digits = digits.trim_start_matches('0');
+        if significant_digits.is_empty()
+            || significant_digits.len() > Self::MAX_SIGNIFICANT_DIGITS
+        {
+            return None;
+        }
+        Some(BoundedU32DecimalLexeme { significant_digits })
     }
-    significant.parse().ok()
+
+    fn parse_non_zero(self) -> Option<NonZeroU32> {
+        self.significant_digits.parse().ok()
+    }
+}
+
+fn parse_column_span_semantic(value: &str) -> Option<NonZeroU32> {
+    BoundedU32DecimalLexeme::from_value(value)?.parse_non_zero()
 }
 
 fn strip_cell_paragraph_boundaries(elements: &mut Vec<Element<'_>>) {

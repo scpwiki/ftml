@@ -1248,6 +1248,11 @@ impl<'r, 't> Parser<'r, 't> {
         self.code_blocks.borrow_mut().push(new_block);
     }
 
+    pub fn push_code_block_element(&mut self, code_block: CodeBlock<'t>) -> Element<'t> {
+        self.push_code_block(code_block.clone());
+        Element::Code(code_block)
+    }
+
     pub fn push_bibliography(&mut self, bibliography: Bibliography<'t>) -> usize {
         let mut guard = self.bibliographies.borrow_mut();
         let index = guard.next_index();

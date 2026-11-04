@@ -77,6 +77,31 @@ pub(super) fn wikidot_literal_with_empty_scored_spans_elided<'t>(
     Some(Elements::Multiple(elements))
 }
 
+struct SpeculativeSpanFailureCache {
+    enabled: bool,
+    owner_start: usize,
+}
+
+impl SpeculativeSpanFailureCache {
+    fn new(parser: &Parser<'_, '_>, owner_start: usize) -> Self {
+        SpeculativeSpanFailureCache {
+            enabled: !parser.settings().layout.legacy(),
+            owner_start,
+        }
+    }
+
+    fn replays_cached_failure(&self, parser: &Parser<'_, '_>) -> bool {
+        self.enabled
+            && parser.underclosed_block_failure_cached(BLOCK_SPAN.name, self.owner_start)
+    }
+
+    fn record_failure(&self, parser: &mut Parser<'_, '_>, error: &ParseError) {
+        if self.enabled && error.kind() == ParseErrorKind::EndOfInput {
+            parser.cache_underclosed_block_failure(BLOCK_SPAN.name, self.owner_start);
+        }
+    }
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,
@@ -95,10 +120,8 @@ fn parse_fn<'r, 't>(
     let owner_start = source[..name_start]
         .rfind("[[")
         .expect("parsed span name follows its opener");
-    let cacheable_wikijump_failure = !parser.settings().layout.legacy();
-    if cacheable_wikijump_failure
-        && parser.underclosed_block_failure_cached(BLOCK_SPAN.name, owner_start)
-    {
+    let speculative_failure_cache = SpeculativeSpanFailureCache::new(parser, owner_start);
+    if speculative_failure_cache.replays_cached_failure(parser) {
         return Err(parser.make_end_of_input_err());
     }
     let scored_empty_spaced_head =
@@ -184,9 +207,7 @@ fn parse_fn<'r, 't>(
     let (mut elements, errors, paragraph_safe) = match body {
         Ok(body) => body.into(),
         Err(error) => {
-            if cacheable_wikijump_failure && error.kind() == ParseErrorKind::EndOfInput {
-                parser.cache_underclosed_block_failure(BLOCK_SPAN.name, owner_start);
-            }
+            speculative_failure_cache.record_failure(parser, &error);
             return Err(error);
         }
     };
