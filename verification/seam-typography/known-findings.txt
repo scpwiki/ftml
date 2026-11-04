@@ -9,6 +9,15 @@
 # a segment typographed with `]` as its left context converts `>>` pairs that the joined text,
 # whose real left context differs, would group differently (or not convert at all). A fix needs
 # tree left-context in the seam code and live evidence first; see the verify-seam-typography skill.
-right-angle:text-differs: >- »+|2|2887
+right-angle:text-differs: >- »+|2|2886
 right-angle:text-differs:|4|261
 right-angle:text-differs: >+ »-|5|18
+# The three classes below and the count shift above (2887 -> 2886) are the seam whitespace rule:
+# a space run that crosses a seam collapses to a single space, matching live, where text around
+# suppressed content renders as if the suppressed content had never been in the source (the source
+# lexer never produces adjacent space runs). The typography-only oracle retains the full run, so
+# the resolved text shows a deficit of exactly one space (the ` -` component), alone or combined
+# with a right-angle class. Live evidence: the fix-seam-spaces lane probes, 2026-11-04.
+text-differs:  -|3|342
+right-angle:text-differs:  -|4|139
+right-angle:text-differs:  - >- »+|5|1
