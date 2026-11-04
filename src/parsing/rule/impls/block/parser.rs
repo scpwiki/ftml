@@ -3023,6 +3023,13 @@ where
             #[cfg(test)]
             self.increment_block_end_scan_token_visits();
 
+            if block_rule.name != "block-iftags"
+                && parser.skip_discarded_iftags_segment(false)
+            {
+                first = false;
+                continue;
+            }
+
             if parser
                 .verify_end_block(first, block_rule, false, false)
                 .is_some()
@@ -3275,6 +3282,9 @@ where
         let mut parser = self.clone();
 
         loop {
+            if block_rule.name != "block-iftags" && parser.skip_discarded_iftags_segment(true) {
+                continue;
+            }
             match parser.current().token {
                 Token::InputEnd | Token::LineBreak | Token::ParagraphBreak => {
                     return false;

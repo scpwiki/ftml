@@ -234,6 +234,9 @@ where
 {
     let mut scan = parser.clone();
     loop {
+        if scan.skip_discarded_iftags_segment(true) {
+            continue;
+        }
         match scan.current().token {
             Token::LeftBlockEnd => {
                 let mut close = scan.clone();

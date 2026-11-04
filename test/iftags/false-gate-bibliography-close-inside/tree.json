@@ -1,0 +1,49 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "bibliography"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "key",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "key"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "a"
+                        },
+                        {
+                            "element": "text",
+                            "data": "d"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

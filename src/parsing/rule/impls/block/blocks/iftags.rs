@@ -317,6 +317,128 @@ fn prepend_head_leftover<'r, 't>(
     }
 }
 
+impl<'r, 't> Parser<'r, 't>
+where
+    'r: 't,
+{
+    pub(crate) fn skip_discarded_iftags_segment(&mut self, same_line: bool) -> bool {
+        if self.current().token != Token::LeftBlock {
+            return false;
+        }
+
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        if probe.current().token == Token::Whitespace && probe.step().is_err() {
+            return false;
+        }
+
+        let name_token = probe.current();
+        if name_token.token != Token::Identifier
+            || !name_token.slice.eq_ignore_ascii_case("iftags")
+        {
+            return false;
+        }
+        let spec_start = name_token.span.end;
+        if probe.step().is_err() {
+            return false;
+        }
+
+        let spec_end = loop {
+            match probe.current().token {
+                Token::RightBlock | Token::RightLink => break probe.current().span.start,
+                Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::InputEnd
+                | Token::LeftBlock
+                | Token::LeftBlockEnd => return false,
+                _ => {
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                }
+            }
+        };
+
+        let spec = &self.full_text().inner()[spec_start..spec_end];
+        if spec.trim_start().starts_with('*')
+            || spec.contains("[!--")
+            || spec.contains("[[")
+        {
+            return false;
+        }
+
+        let conditions = match parse_conditions(&probe, Some(spec)) {
+            Ok(conditions) => conditions,
+            Err(_) => return false,
+        };
+        let include_body = if conditions.is_empty() && self.settings().layout.legacy() {
+            !self.page_info().tags.is_empty()
+        } else {
+            check_iftags(self.page_info(), &conditions)
+        };
+        if include_body {
+            return false;
+        }
+
+        if probe.step().is_err() {
+            return false;
+        }
+        let Some(pairing_end) = probe.wikidot_iftags_pairing_end().0 else {
+            return false;
+        };
+
+        loop {
+            if probe.current().span.start >= pairing_end {
+                break;
+            }
+            if probe.current().token == Token::InputEnd
+                || probe.at_hard_body_end_boundary()
+                || (probe.discarding_hidden_body() && probe.at_hidden_body_boundary())
+                || (same_line
+                    && matches!(
+                        probe.current().token,
+                        Token::LineBreak | Token::ParagraphBreak
+                    ))
+            {
+                return false;
+            }
+            if probe.step().is_err() {
+                return false;
+            }
+        }
+        if probe.current().span.start != pairing_end
+            || probe.current().token != Token::LeftBlockEnd
+            || probe.at_hard_body_end_boundary()
+            || (probe.discarding_hidden_body() && probe.at_hidden_body_boundary())
+        {
+            return false;
+        }
+
+        if probe.step().is_err() {
+            return false;
+        }
+        loop {
+            match probe.current().token {
+                Token::RightBlock | Token::RightLink => break,
+                Token::InputEnd => return false,
+                _ => {
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+        if probe.step().is_err() {
+            return false;
+        }
+
+        self.update(&probe);
+        true
+    }
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,

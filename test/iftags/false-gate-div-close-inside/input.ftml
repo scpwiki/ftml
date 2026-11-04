@@ -1,0 +1,4 @@
+[[div]]
+a[[iftags +zzz]]b
+[[/div]]
+c[[/iftags]]d
