@@ -193,7 +193,9 @@ fn normalize_sequence_scoped<'t>(
         let mut changed = repair_fifo_triples_pass(elements)
             | repair_same_family_pass(elements)
             | repair_crossed_pass(elements)
+            | repair_strike_split_close_pass(elements)
             | repair_raw_strike_pairs_pass(elements)
+            | repair_strike_shed_pairs_pass(elements)
             | repair_span_crossed_bold_pairs_pass(elements)
             | repair_script_split_close_pass(elements)
             | repair_script_pairs_pass(elements);
@@ -498,6 +500,212 @@ fn repair_raw_strike_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
 
     *elements = output;
     changed
+}
+
+fn strike_close_split(value: &str) -> Option<(&str, &str)> {
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'-' {
+            index += 1;
+            continue;
+        }
+        let run_end = index
+            + bytes[index..]
+                .iter()
+                .take_while(|byte| **byte == b'-')
+                .count();
+        if run_end - index >= 2 {
+            let before = &value[..index];
+            if before.is_empty() || is_shed_text(before) {
+                return Some((before, &value[index + 2..]));
+            }
+            return None;
+        }
+        index = run_end;
+    }
+    None
+}
+
+fn dash_split_pieces(value: &str) -> Vec<String> {
+    let bytes = value.as_bytes();
+    let mut pieces = Vec::new();
+    let mut start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'-' {
+            let run_end = index
+                + bytes[index..]
+                    .iter()
+                    .take_while(|byte| **byte == b'-')
+                    .count();
+            if run_end - index >= 2 {
+                if start < index {
+                    pieces.push(value[start..index].to_string());
+                }
+                pieces.push(value[index..run_end].to_string());
+                start = run_end;
+            }
+            index = run_end;
+        } else {
+            index += 1;
+        }
+    }
+    if start < value.len() {
+        pieces.push(value[start..].to_string());
+    }
+    pieces
+}
+
+fn push_dash_split_text<'t>(output: &mut Vec<Element<'t>>, value: &str) {
+    for piece in dash_split_pieces(value) {
+        output.push(Element::Text(Cow::Owned(piece)));
+    }
+}
+
+fn repair_strike_split_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut output = Vec::with_capacity(elements.len());
+    let mut changed = false;
+
+    for element in mem::take(elements) {
+        let is_strike = matches!(
+            &element,
+            Element::Container(container) if container.ctype() == ContainerType::Strikethrough
+        );
+        if !is_strike {
+            output.push(element);
+            continue;
+        }
+        let (shell, mut children) =
+            FormatShell::into_parts(element).expect("formatter index has a shell");
+        match strike_split_close(&children) {
+            Some((child_index, prefix, suffix)) => {
+                let mut tail: Vec<Element<'t>> =
+                    children.drain(child_index + 1..).collect();
+                children.truncate(child_index);
+                if !prefix.is_empty() {
+                    children.push(Element::Text(Cow::Owned(prefix)));
+                }
+                output.push(shell.build(children));
+                push_dash_split_text(&mut output, &suffix);
+                output.append(&mut tail);
+                output.push(Element::Text(FormatKind::Strike.close_marker().into()));
+                changed = true;
+            }
+            None => output.push(shell.build(children)),
+        }
+    }
+
+    *elements = output;
+    changed
+}
+
+fn strike_split_close(children: &[Element<'_>]) -> Option<(usize, String, String)> {
+    (1..children.len().saturating_sub(1)).find_map(|child_index| {
+        let Element::Text(value) = &children[child_index] else {
+            return None;
+        };
+        let (prefix, suffix) = strike_close_split(value.as_ref())?;
+        if prefix.is_empty() && element_ends_with_ascii_space(&children[child_index - 1])
+        {
+            return None;
+        }
+        if !children[..child_index].iter().any(element_contains_link) {
+            return None;
+        }
+        Some((child_index, prefix.to_string(), suffix.to_string()))
+    })
+}
+
+fn repair_strike_shed_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+
+    while index < input.len() {
+        let Some((opener_len, excess)) = strike_shed_opener(&input, index) else {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        };
+        let Some((close, prefix, suffix)) = strike_shed_close(&input, index, opener_len)
+        else {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        };
+        discard_range(&mut input, index..index + opener_len);
+        let mut contents = Vec::new();
+        if excess > 0 {
+            contents.push(Element::Text(Cow::Owned("-".repeat(excess))));
+        }
+        contents.extend(take_range(&mut input, index + opener_len..close));
+        if !prefix.is_empty() {
+            contents.push(Element::Text(Cow::Owned(prefix)));
+        }
+        discard_range(&mut input, close..close + 1);
+        output.push(strike_shell().build(contents));
+        push_dash_split_text(&mut output, &suffix);
+        index = close + 1;
+        changed = true;
+    }
+
+    *elements = output;
+    changed
+}
+
+fn strike_shed_opener(
+    input: &[Option<Element<'_>>],
+    index: usize,
+) -> Option<(usize, usize)> {
+    let element = input[index].as_ref()?;
+    if is_exact_text(element, "--") {
+        let next = input.get(index + 1).and_then(Option::as_ref);
+        if next.is_some_and(element_starts_with_ascii_space) {
+            return None;
+        }
+        return Some((1, 0));
+    }
+    let run_len = dash_run_len(element)?;
+    if !(3..=4).contains(&run_len) {
+        return None;
+    }
+    Some((1, run_len - 2))
+}
+
+fn strike_shed_close(
+    input: &[Option<Element<'_>>],
+    opener: usize,
+    opener_len: usize,
+) -> Option<(usize, String, String)> {
+    let first = opener + opener_len;
+    let (close, prefix, suffix) = (first..input.len()).find_map(|close_index| {
+        let element = input[close_index].as_ref()?;
+        let Element::Text(value) = element else {
+            return None;
+        };
+        let (prefix, suffix) = strike_close_split(value.as_ref())?;
+        if prefix.is_empty()
+            && input[close_index - 1]
+                .as_ref()
+                .is_some_and(|previous| element_ends_with_ascii_space(previous))
+        {
+            return None;
+        }
+        if close_index == first && prefix.is_empty() {
+            return None;
+        }
+        Some((close_index, prefix.to_string(), suffix.to_string()))
+    })?;
+    if !input[first..close]
+        .iter()
+        .filter_map(|element| element.as_ref())
+        .any(element_contains_link)
+    {
+        return None;
+    }
+    Some((close, prefix, suffix))
 }
 
 pub(crate) fn element_contains_link(element: &Element<'_>) -> bool {
@@ -1146,11 +1354,25 @@ fn discard_range(elements: &mut [Option<Element<'_>>], range: Range<usize>) {
 fn lower_dash_runs(elements: &mut Vec<Element<'_>>) {
     let mut output = Vec::with_capacity(elements.len());
     for element in elements.drain(..) {
-        let Some(run_len) = dash_run_len(&element) else {
+        if let Some(run_len) = dash_run_len(&element) {
+            output.extend(wikidot_dash_run_elements(run_len));
+            continue;
+        }
+        let Element::Text(value) = &element else {
             output.push(element);
             continue;
         };
-        output.extend(wikidot_dash_run_elements(run_len));
+        if !is_shed_text(value) || !value.contains("--") {
+            output.push(element);
+            continue;
+        }
+        for piece in dash_split_pieces(value) {
+            if piece.len() >= 2 && piece.bytes().all(|byte| byte == b'-') {
+                output.extend(wikidot_dash_run_elements(piece.len()));
+            } else {
+                output.push(Element::Text(Cow::Owned(piece)));
+            }
+        }
     }
     *elements = output;
 }

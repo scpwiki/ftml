@@ -1,0 +1,9 @@
+See --note https://example.com/a-- tail-- end
+
+See --note https://example.com/a--. tail-- end
+
+See --note https://example.com/a---- tail-- end
+
+See --https://example.com/a-- x-- end
+
+See --https://example.com/a--. and --b-- end

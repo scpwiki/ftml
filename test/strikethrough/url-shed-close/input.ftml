@@ -1,0 +1,15 @@
+See --https://example.com/a--. end
+
+See --https://example.com/a.-- end
+
+See --https://example.com/a---. end
+
+See --https://example.com/a--.-- end
+
+See ---https://example.com/a--. end
+
+See ----https://example.com/a--. end
+
+See --https://example.com/a--tail end
+
+See --https://example.com/a-.- end
