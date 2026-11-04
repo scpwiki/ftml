@@ -70,6 +70,7 @@ fn parse_fn<'r, 't>(
     let opener_start = (name.as_ptr() as usize)
         .checked_sub(source.as_ptr() as usize)
         .and_then(|name_start| source[..name_start].rfind("[["));
+    debug_assert_eq!(Some(_opener_start), opener_start);
     let body_source_start = parser.current().span.start;
     let anchor_body_start = source
         .get(..body_source_start)

@@ -51,6 +51,7 @@ fn parse_fn<'r, 't>(
     let owner_start = source[..name_start]
         .rfind("[[")
         .expect("parsed code name follows its opener");
+    debug_assert_eq!(_opener_start, owner_start);
 
     if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
         let head = &source[..parser.current().span.start];

@@ -46,6 +46,7 @@ fn parse_fn<'r, 't>(
     let opener_start = source[..name_start]
         .rfind("[[")
         .expect("parsed gallery name follows its opener");
+    debug_assert_eq!(_opener_start, opener_start);
     if !gallery_owns_physical_line(
         source,
         opener_start,

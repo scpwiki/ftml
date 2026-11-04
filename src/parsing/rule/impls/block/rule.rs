@@ -184,6 +184,10 @@ where
 {
     let parent_rule = parser.rule();
     let opener_start = parser.current().span.start;
+    let block_opener_start = match parser.current().token {
+        Token::LeftBlock | Token::LeftBlockStar => opener_start,
+        _ => opener_start.saturating_sub(2),
+    };
 
     parser.set_rule(if flag_star {
         RULE_BLOCK_STAR
@@ -321,7 +325,7 @@ where
     }
 
     let result =
-        (block.parse_fn)(parser, name, opener_start, flag_star, flag_score, in_head);
+        (block.parse_fn)(parser, name, block_opener_start, flag_star, flag_score, in_head);
     if let Err(error) = &result {
         memoization.record_failure(parser, block, opener_start, error);
     }

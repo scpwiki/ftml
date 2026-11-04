@@ -249,14 +249,20 @@ fn has_explicit_closer(source: &str, accepted: &[&str]) -> bool {
     })
 }
 
-fn table_opener_start(parser: &Parser<'_, '_>, name: &str) -> Option<usize> {
+fn table_opener_start(
+    parser: &Parser<'_, '_>,
+    name: &str,
+    opener_start: usize,
+) -> Option<usize> {
     if parser.discarding_hidden_body() {
         return None;
     }
 
     let source = parser.full_text().inner();
     let name_start = (name.as_ptr() as usize).checked_sub(source.as_ptr() as usize)?;
-    source[..name_start].rfind("[[")
+    let computed = source[..name_start].rfind("[[");
+    debug_assert_eq!(computed, Some(opener_start));
+    computed
 }
 
 fn cached_underclosed_table_error(
@@ -394,7 +400,7 @@ fn parse_table<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    let owner_start = table_opener_start(parser, name);
+    let owner_start = table_opener_start(parser, name, _opener_start);
     if let Some(error) =
         cached_underclosed_table_error(parser, BLOCK_TABLE.name, owner_start)
     {
@@ -506,7 +512,7 @@ fn parse_row<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    let owner_start = table_opener_start(parser, name);
+    let owner_start = table_opener_start(parser, name, _opener_start);
     if let Some(error) =
         cached_underclosed_table_error(parser, BLOCK_TABLE_ROW.name, owner_start)
     {
@@ -588,7 +594,7 @@ fn parse_cell_regular<'r, 't>(
     } else {
         BLOCK_TABLE_CELL_REGULAR.name
     };
-    let owner_start = table_opener_start(parser, name);
+    let owner_start = table_opener_start(parser, name, _opener_start);
     if let Some(error) = cached_underclosed_table_error(parser, cache_rule, owner_start) {
         return Err(error);
     }
@@ -653,7 +659,7 @@ fn parse_cell_header<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let legacy = parser.settings().layout.legacy();
     let cache_rule = BLOCK_TABLE_CELL_BODY.name;
-    let owner_start = table_opener_start(parser, name);
+    let owner_start = table_opener_start(parser, name, _opener_start);
     if let Some(error) = cached_underclosed_table_error(parser, cache_rule, owner_start) {
         return Err(error);
     }

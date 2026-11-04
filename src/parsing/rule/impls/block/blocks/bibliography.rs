@@ -63,6 +63,7 @@ fn parse_fn<'r, 't>(
     let opener_start = source[..name_start]
         .rfind("[[")
         .expect("parsed bibliography name follows its opener");
+    debug_assert_eq!(_opener_start, opener_start);
 
     let (mut arguments, _) =
         parser.get_head_map_with_body_start_wikidot(&BLOCK_BIBLIOGRAPHY, in_head)?;

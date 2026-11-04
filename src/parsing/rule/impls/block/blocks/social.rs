@@ -47,6 +47,16 @@ fn parse_fn<'r, 't>(
     let opener_start = source[..name_start]
         .rfind("[[")
         .expect("parsed social name follows its opener");
+    debug_assert_eq!(_opener_start, opener_start);
+    debug_assert_eq!(
+        name_start,
+        _opener_start
+            + 2
+            + source[_opener_start + 2..]
+                .bytes()
+                .take_while(|byte| matches!(byte, b' ' | b'\t'))
+                .count()
+    );
 
     if in_head && matches!(parser.current().token, Token::RightBlock | Token::RightLink) {
         let name_end = name_start + name.len();

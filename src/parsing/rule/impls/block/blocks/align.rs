@@ -83,6 +83,7 @@ pub fn parse_alignment_block<'r, 't>(
     let owner_start = source[..name_start]
         .rfind("[[")
         .expect("parsed alignment name follows its opener");
+    debug_assert_eq!(_opener_start, owner_start);
     let escaped_owner = parser.settings().layout.legacy()
         && source[..owner_start]
             .bytes()

@@ -121,6 +121,7 @@ fn parse_fn<'r, 't>(
     let owner_start = source[..name_start]
         .rfind("[[")
         .expect("parsed span name follows its opener");
+    debug_assert_eq!(_opener_start, owner_start);
     let speculative_failure_cache = SpeculativeSpanFailureCache::new(parser, owner_start);
     if speculative_failure_cache.replays_cached_failure(parser) {
         return Err(parser.make_end_of_input_err());

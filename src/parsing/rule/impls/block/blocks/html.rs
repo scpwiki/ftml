@@ -57,6 +57,7 @@ fn parse_fn<'r, 't>(
         let owner_start = source[..name_start]
             .rfind("[[")
             .expect("parsed HTML block name follows its opener");
+        debug_assert_eq!(_opener_start, owner_start);
         if owner_start > 0 && !source[..owner_start].ends_with('\n') {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
@@ -75,6 +76,7 @@ fn parse_fn<'r, 't>(
         let owner_start = source[..name_start]
             .rfind("[[")
             .expect("parsed HTML block name follows its opener");
+        debug_assert_eq!(_opener_start, owner_start);
         let mut owner = parser.clone();
         let _ = owner.get_body_text(&BLOCK_HTML)?;
         let owner_end = owner.current().span.start;

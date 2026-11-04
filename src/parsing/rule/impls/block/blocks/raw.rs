@@ -57,6 +57,7 @@ fn parse_fn<'r, 't>(
         let owner_start = source[..name_start]
             .rfind("[[")
             .expect("parsed raw name follows its opener");
+        debug_assert_eq!(_opener_start, owner_start);
         let mut owner = parser.clone();
         if in_head {
             while !matches!(owner.current().token, Token::RightBlock | Token::InputEnd) {
