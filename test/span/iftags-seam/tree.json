@@ -1,0 +1,46 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "style": "color:red"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "X"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "style": "color:"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Y"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -19,6 +19,7 @@
  */
 
 use super::BlockRule;
+use crate::parsing::collect::{CommentElidedText, consume_iftags_segment};
 use crate::parsing::string::parse_string;
 use crate::parsing::{ParseError, ParseErrorKind, Parser, Token};
 use std::borrow::Cow;
@@ -71,16 +72,28 @@ where
             return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
         }
 
+        let mut elisions = Vec::new();
         while !ends_bare_value(self.current().token) {
             if self.current().token == Token::InputEnd {
                 return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
             }
+            if self.current().token == Token::LeftBlock
+                && let Some(segment) = consume_iftags_segment(self)?
+            {
+                elisions.extend(segment.elisions());
+                continue;
+            }
             self.step()?;
         }
 
-        let value = self.full_text().slice_partial(start, self.current());
-        debug_assert!(!value.is_empty());
-        Ok(Cow::Borrowed(value))
+        if elisions.is_empty() {
+            let value = self.full_text().slice_partial(start, self.current());
+            debug_assert!(!value.is_empty());
+            return Ok(Cow::Borrowed(value));
+        }
+        let range = start.span.start..self.current().span.start;
+        let value = CommentElidedText::new(self.full_text().inner(), range, elisions);
+        Ok(value.into_cow())
     }
 
     fn get_wikidot_quoted_block_argument(
@@ -90,14 +103,29 @@ where
         let value_start = self.current();
         self.step()?;
 
+        let mut elisions = Vec::new();
         loop {
+            if self.current().token == Token::LeftBlock
+                && let Some(segment) = consume_iftags_segment(self)?
+            {
+                elisions.extend(segment.elisions());
+                continue;
+            }
+
             if self.current().token == Token::DoubleQuote
                 && quote_ends_block_argument(self)
             {
                 let value_end = self.current();
-                let value = self.full_text().slice(value_start, value_end);
                 self.step()?;
-                return Ok(parse_string(value));
+                if elisions.is_empty() {
+                    let value = self.full_text().slice(value_start, value_end);
+                    return Ok(parse_string(value));
+                }
+                let range = value_start.span.end..value_end.span.start;
+                let text =
+                    CommentElidedText::new(self.full_text().inner(), range, elisions)
+                        .into_cow();
+                return Ok(Cow::Owned(parse_string(&text).into_owned()));
             }
 
             if matches!(
@@ -107,8 +135,15 @@ where
                 return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
             }
             if allow_unclosed && self.current().token == Token::RightBlock {
-                let value = self.full_text().slice(value_start, self.current());
-                return Ok(Cow::Borrowed(value.strip_prefix('"').unwrap_or(value)));
+                if elisions.is_empty() {
+                    let value = self.full_text().slice(value_start, self.current());
+                    return Ok(Cow::Borrowed(value.strip_prefix('"').unwrap_or(value)));
+                }
+                let range = value_start.span.end..self.current().span.start;
+                let text =
+                    CommentElidedText::new(self.full_text().inner(), range, elisions)
+                        .into_cow();
+                return Ok(text);
             }
             self.step()?;
         }

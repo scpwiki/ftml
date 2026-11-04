@@ -22,13 +22,23 @@ use super::RULE_COMMENT;
 use super::math::wikidot_math_candidate_is_complete;
 use super::prelude::*;
 use crate::delayed::{DelayedElement, GeneratedKind};
-use crate::parsing::collect::{collect_comment_elided_keep, consume_valid_comment};
+use crate::parsing::collect::{
+    collect_comment_elided_keep, collect_text_resolved, consume_iftags_segment,
+    consume_valid_comment,
+};
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use crate::url::is_url;
 use std::borrow::Cow;
 
 const MAX_WIKIDOT_SINGLE_LINK_TARGET_BYTES: usize = 64 * 1024;
+
+fn trim_cow(value: Cow<'_, str>) -> Cow<'_, str> {
+    match value {
+        Cow::Borrowed(value) => Cow::Borrowed(value.trim()),
+        Cow::Owned(value) => Cow::Owned(value.trim().to_owned()),
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum WikidotLinkDisposition {
@@ -107,29 +117,30 @@ fn try_consume_link<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
-    let url = collect_text(parser, rule, &url_close, &url_invalid, None)?;
+    let (url, _) = collect_text_resolved(parser, rule, &url_close, &url_invalid, None)?;
 
     // Old Wikidot interwiki form, `[prefix:Page Label]`. It resolves through the
     // same prefix table as the modern `[[[!prefix:Page|Label]]]` form. Real URLs
     // (including `http:`, `https:`, and `mailto:`) always take the ordinary path.
-    if !url_valid(url)
-        && let Some(expanded) = parser.settings().interwiki.build(url)
+    if !url_valid(&url)
+        && let Some(expanded) = parser.settings().interwiki.build(&url)
     {
         let label_close = [ParseCondition::current(Token::RightBracket)];
         let label_invalid = [
             ParseCondition::current(Token::ParagraphBreak),
             ParseCondition::current(Token::LineBreak),
         ];
-        let label = collect_text(parser, rule, &label_close, &label_invalid, None)?;
+        let (label, _) =
+            collect_text_resolved(parser, rule, &label_close, &label_invalid, None)?;
         return success_elements(Element::Link {
             ltype: LinkType::Interwiki,
             link: LinkLocation::Url(Cow::Owned(expanded)),
-            label: LinkLabel::Text(cow!(label.trim())),
+            label: LinkLabel::Text(trim_cow(label)),
             target,
         });
     }
 
-    if !url_valid(url) {
+    if !url_valid(&url) {
         return Err(parser.make_err(ParseErrorKind::InvalidUrl));
     }
 
@@ -144,7 +155,7 @@ fn try_consume_link<'r, 't>(
         parser.step()?;
         return success_elements(Element::Delayed(DelayedElement::tag_external_label(
             generated.id,
-            Cow::Borrowed(url),
+            url,
         )));
     }
 
@@ -153,14 +164,13 @@ fn try_consume_link<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
-    let label = collect_text(parser, rule, &label_close, &label_invalid, None)?;
-
-    let label = label.trim();
+    let (label, _) =
+        collect_text_resolved(parser, rule, &label_close, &label_invalid, None)?;
 
     let element = Element::Link {
         ltype: LinkType::Direct,
-        link: LinkLocation::Url(cow!(url)),
-        label: LinkLabel::Text(cow!(label)),
+        link: LinkLocation::Url(url),
+        label: LinkLabel::Text(trim_cow(label)),
         target,
     };
 
@@ -307,6 +317,21 @@ where
                 parser.update(&comment);
                 copied_until = parser.current().span.start;
             }
+            Token::LeftBlock => match consume_iftags_segment(parser)? {
+                Some(segment) => {
+                    let output = without_comments.get_or_insert_with(|| {
+                        String::with_capacity(segment.range.start - start)
+                    });
+                    output.push_str(&source[copied_until..segment.range.start]);
+                    if segment.include_body {
+                        output.push_str(&source[segment.body.clone()]);
+                    }
+                    copied_until = segment.range.end;
+                }
+                None => {
+                    parser.step()?;
+                }
+            },
             Token::LineBreak | Token::ParagraphBreak => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }

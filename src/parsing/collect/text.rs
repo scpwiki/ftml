@@ -18,7 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::iftags::consume_iftags_segment;
 use super::prelude::*;
+use std::borrow::Cow;
 
 /// Generic function to consume all tokens into a single string slice.
 ///
@@ -91,6 +93,81 @@ where
         }
 
         end = Some(parser.current());
+        parser.step()?;
+    }
+}
+
+/// Seam-resolving form of `collect_text_keep()` for raw fields that
+/// the iftags block rule cannot reach (link targets and labels in the
+/// Wikijump layout).
+///
+/// A complete iftags segment inside the field is consumed atomically,
+/// so the whitespace and brackets in its head never terminate or
+/// corrupt the collection, and the returned text keeps only the
+/// segment's body when its conditions hold for the page. When no
+/// segment is present the result is the same borrowed slice
+/// `collect_text_keep()` would return.
+pub fn collect_text_resolved<'p, 'r, 't>(
+    parser: &'p mut Parser<'r, 't>,
+    _rule: Rule,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>), ParseError>
+where
+    'r: 't,
+{
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start;
+    let mut copied_until = start;
+    let mut output = None::<String>;
+
+    loop {
+        if matches!(
+            parser.current().token,
+            Token::GeneratedPageLink | Token::GeneratedTagLinks
+        ) {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+
+        if parser.evaluate_any(closes) {
+            let last = parser.current();
+            let end = last.span.start;
+            let text = match output {
+                Some(mut output) => {
+                    output.push_str(&source[copied_until..end]);
+                    Cow::Owned(output)
+                }
+                None => Cow::Borrowed(&source[start..end]),
+            };
+
+            if last.token != Token::InputEnd {
+                parser.step()?;
+            }
+
+            return Ok((text, last));
+        }
+
+        if parser.evaluate_any(invalids) {
+            return Err(parser.make_err(kind.unwrap_or(ParseErrorKind::RuleFailed)));
+        }
+
+        if parser.current().token == Token::InputEnd {
+            return Err(parser.make_err(ParseErrorKind::EndOfInput));
+        }
+
+        if parser.current().token == Token::LeftBlock
+            && let Some(segment) = consume_iftags_segment(parser)?
+        {
+            let output = output.get_or_insert_with(String::new);
+            output.push_str(&source[copied_until..segment.range.start]);
+            if segment.include_body {
+                output.push_str(&source[segment.body.clone()]);
+            }
+            copied_until = segment.range.end;
+            continue;
+        }
+
         parser.step()?;
     }
 }

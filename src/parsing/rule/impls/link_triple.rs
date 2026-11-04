@@ -20,7 +20,10 @@
 
 use super::prelude::*;
 use crate::data::PageRef;
-use crate::parsing::collect::{collect_comment_elided_keep, consume_valid_comment};
+use crate::parsing::collect::{
+    collect_comment_elided_keep, collect_text_resolved, consume_iftags_segment,
+    consume_valid_comment, iftags_segment,
+};
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use crate::url::is_url;
@@ -106,8 +109,10 @@ fn try_consume_link<'r, 't>(
             authored_url_prefix_is_url,
         )
     } else {
-        let (url, last) = collect_text_keep(parser, rule, &url_close, url_invalid, None)?;
-        (Cow::Borrowed(url), last, is_url(url.trim_start()))
+        let (url, last) =
+            collect_text_resolved(parser, rule, &url_close, url_invalid, None)?;
+        let authored = is_url(url.trim_start());
+        (url, last, authored)
     };
 
     let leading_space = url.trim_start_matches([' ', '\t']).len() != url.len();
@@ -235,13 +240,7 @@ fn build_separate<'r, 't>(
             }
         }
     } else {
-        Cow::Borrowed(collect_text(
-            parser,
-            rule,
-            &label_close,
-            label_invalid,
-            None,
-        )?)
+        collect_text_resolved(parser, rule, &label_close, label_invalid, None)?.0
     };
 
     let label = if legacy {
@@ -436,6 +435,17 @@ where
 
             Token::GeneratedPageLink | Token::GeneratedTagLinks | Token::RuntimeText => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+
+            Token::LeftBlock if iftags_segment(parser).is_some() => {
+                let segment = consume_iftags_segment(parser)?
+                    .expect("iftags segment presence was just checked");
+                let label = visible_label.get_or_insert_with(String::new);
+                label.push_str(&source[segment_start..segment.range.start]);
+                if segment.include_body {
+                    label.push_str(&source[segment.body.clone()]);
+                }
+                segment_start = segment.range.end;
             }
 
             Token::LeftBlock => {

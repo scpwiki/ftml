@@ -22,6 +22,7 @@ use super::RULE_COMMENT;
 use super::prelude::*;
 use crate::id_prefix::isolate_ids;
 use crate::parsing::ParseSuccess;
+use crate::parsing::collect::{collect_text_resolved, consume_iftags_segment};
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use std::borrow::Cow;
@@ -75,7 +76,7 @@ where
     let url = if parser.settings().layout.legacy() {
         collect_wikidot_anchor_name(parser)?
     } else {
-        collect_text(parser, RULE_LINK_ANCHOR, &url_close, &url_invalid, None)?
+        collect_text_resolved(parser, RULE_LINK_ANCHOR, &url_close, &url_invalid, None)?.0
     };
 
     if parser.settings().layout.legacy()
@@ -113,11 +114,7 @@ where
         collect_wikidot_anchor_label(parser)?
     } else {
         WikidotAnchorLabel {
-            text: Cow::Borrowed(collect_anchor_text(
-                parser,
-                &label_close,
-                &label_invalid,
-            )?),
+            text: collect_anchor_text(parser, &label_close, &label_invalid)?,
             delayed: Vec::new(),
         }
     };
@@ -147,17 +144,35 @@ where
 
 fn collect_wikidot_anchor_name<'r, 't>(
     parser: &mut Parser<'r, 't>,
-) -> Result<&'t str, ParseError>
+) -> Result<Cow<'t, str>, ParseError>
 where
     'r: 't,
 {
+    let source = parser.full_text().inner();
     let start = parser.current().span.start;
+    let mut copied_until = start;
+    let mut without_segments = None::<String>;
+
+    // Materializes the collected name, resolving any iftags segments
+    // that were consumed along the way.
+    macro_rules! finish {
+        ($end:expr) => {
+            match without_segments {
+                Some(mut output) => {
+                    output.push_str(&source[copied_until..$end]);
+                    Cow::Owned(output)
+                }
+                None => Cow::Borrowed(&source[start..$end]),
+            }
+        };
+    }
+
     loop {
         match parser.current().token {
             Token::Whitespace => {
                 let end = parser.current().span.start;
                 parser.step()?;
-                return Ok(&parser.full_text().inner()[start..end]);
+                return Ok(finish!(end));
             }
             // Wikidot typography turns `1 A` into a non-breaking space. It
             // must retain separator ownership when a comment-elided label
@@ -165,7 +180,7 @@ where
             Token::Other if parser.current().slice == "\u{a0}" => {
                 let end = parser.current().span.start;
                 parser.step()?;
-                return Ok(&parser.full_text().inner()[start..end]);
+                return Ok(finish!(end));
             }
             Token::RightBracket | Token::LineBreak | Token::ParagraphBreak => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -174,6 +189,19 @@ where
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
             Token::InputEnd => return Err(parser.make_err(ParseErrorKind::EndOfInput)),
+            Token::LeftBlock => match consume_iftags_segment(parser)? {
+                Some(segment) => {
+                    let output = without_segments.get_or_insert_with(String::new);
+                    output.push_str(&source[copied_until..segment.range.start]);
+                    if segment.include_body {
+                        output.push_str(&source[segment.body.clone()]);
+                    }
+                    copied_until = segment.range.end;
+                }
+                None => {
+                    parser.step()?;
+                }
+            },
             _ => {
                 parser.step()?;
             }
@@ -221,6 +249,21 @@ where
                 parser.update(&comment_parser);
                 copied_until = parser.current().span.start;
             }
+            Token::LeftBlock => match consume_iftags_segment(parser)? {
+                Some(segment) => {
+                    let output = without_comments.get_or_insert_with(|| {
+                        String::with_capacity(segment.range.start - start)
+                    });
+                    output.push_str(&source[copied_until..segment.range.start]);
+                    if segment.include_body {
+                        output.push_str(&source[segment.body.clone()]);
+                    }
+                    copied_until = segment.range.end;
+                }
+                None => {
+                    parser.step()?;
+                }
+            },
             Token::LineBreak | Token::ParagraphBreak => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
@@ -246,11 +289,11 @@ fn collect_anchor_text<'r, 't>(
     parser: &mut Parser<'r, 't>,
     close: &[ParseCondition],
     invalid: &[ParseCondition],
-) -> Result<&'t str, ParseError>
+) -> Result<Cow<'t, str>, ParseError>
 where
     'r: 't,
 {
-    collect_text(parser, RULE_LINK_ANCHOR, close, invalid, None)
+    Ok(collect_text_resolved(parser, RULE_LINK_ANCHOR, close, invalid, None)?.0)
 }
 
 #[cfg(test)]
