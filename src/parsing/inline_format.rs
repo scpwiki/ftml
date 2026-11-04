@@ -714,32 +714,40 @@ pub(crate) fn element_contains_link(element: &Element<'_>) -> bool {
             .is_some_and(|children| children.iter().any(element_contains_link))
 }
 
+fn is_shed_char(c: char) -> bool {
+    matches!(
+        c,
+        ',' | '*'
+            | '-'
+            | '}'
+            | '{'
+            | '.'
+            | ';'
+            | ':'
+            | '!'
+            | ')'
+            | ']'
+            | '>'
+            | '^'
+            | '`'
+            | '|'
+            | '#'
+    )
+}
+
 fn is_shed_text(value: &str) -> bool {
+    !value.is_empty() && value.chars().all(is_shed_char)
+}
+
+fn is_script_shed_text(value: &str) -> bool {
     !value.is_empty()
-        && value.chars().all(|c| {
-            matches!(
-                c,
-                ',' | '*'
-                    | '-'
-                    | '}'
-                    | '{'
-                    | '.'
-                    | ';'
-                    | ':'
-                    | '!'
-                    | ')'
-                    | ']'
-                    | '>'
-                    | '^'
-                    | '`'
-                    | '|'
-                    | '#'
-            )
-        })
+        && value
+            .chars()
+            .all(|c| is_shed_char(c) || (!c.is_ascii() && !c.is_whitespace()))
 }
 
 fn shed_text_pair_split<'a>(value: &'a str, marker: &str) -> Option<(&'a str, &'a str)> {
-    if !is_shed_text(value) {
+    if !is_script_shed_text(value) {
         return None;
     }
     let start = value.find(marker)?;

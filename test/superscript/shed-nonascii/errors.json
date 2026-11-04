@@ -1,0 +1,74 @@
+[
+    {
+        "token": "superscript",
+        "rule": "superscript",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "superscript",
+        "rule": "superscript",
+        "span": [
+            42,
+            44
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            42,
+            44
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "superscript",
+        "rule": "superscript",
+        "span": [
+            80,
+            82
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            80,
+            82
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "superscript",
+        "rule": "superscript",
+        "span": [
+            120,
+            122
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            120,
+            122
+        ],
+        "kind": "no-rules-match"
+    }
+]

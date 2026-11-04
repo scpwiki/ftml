@@ -1,0 +1,9 @@
+See ^^https://example.com/a^^雪 end
+
+See ^^https://example.com/a雪^^ end
+
+See ^^https://example.com/a^^雪^^ end
+
+See ^^https://example.com/a^^、 end
+
+See note https://example.com/a^^雪 tail end
