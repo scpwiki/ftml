@@ -301,7 +301,7 @@ fn exercise_element_helpers(element: &Element<'_>) -> usize {
             .sum(),
         Element::TabView(tabs) => tabs
             .iter()
-            .map(|tab| exercise_elements_helpers(&tab.elements))
+            .map(|item| exercise_elements_helpers(item.elements()))
             .sum(),
         Element::Anchor { elements, .. } => exercise_elements_helpers(elements),
         Element::List { items, .. } => items.iter().map(exercise_list_item_helpers).sum(),

@@ -3,47 +3,74 @@
         {
             "element": "tab-view",
             "data": [
-                {
-                    "label": "[[footnote",
-                    "elements": [
-                        {
-                            "element": "container",
-                            "data": {
-                                "type": "paragraph",
-                                "attributes": {},
-                                "elements": [
-                                    {
-                                        "element": "text",
-                                        "data": "x"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "[[/"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "footnote"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "]]]"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "]"
-                                    },
-                                    {
-                                        "element": "line-break"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "Body"
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                }
+                [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "tab"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "footnote"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "x"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "footnote"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "Body"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "tab"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
             ]
         }
     ]

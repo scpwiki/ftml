@@ -4,7 +4,7 @@
             "element": "tab-view",
             "data": [
                 {
-                    "label": "A [[footnote",
+                    "label": "",
                     "elements": [
                         {
                             "element": "container",
@@ -12,29 +12,6 @@
                                 "type": "paragraph",
                                 "attributes": {},
                                 "elements": [
-                                    {
-                                        "element": "text",
-                                        "data": "x"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "[[/"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "footnote"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "]]]"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "]"
-                                    },
-                                    {
-                                        "element": "line-break"
-                                    },
                                     {
                                         "element": "text",
                                         "data": "Body"
@@ -46,5 +23,14 @@
                 }
             ]
         }
-    ]
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "x"
+            }
+        ]
+    ],
+    "needs-footnote-block": true
 }

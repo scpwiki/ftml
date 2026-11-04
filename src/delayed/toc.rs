@@ -50,8 +50,8 @@ fn visit_headings<'a, 't>(
                 }
             }
             Element::TabView(tabs) => {
-                for tab in tabs {
-                    visit_headings(&tab.elements, footnotes, visitor);
+                for item in tabs {
+                    visit_headings(item.elements(), footnotes, visitor);
                 }
             }
             Element::List { items, .. } => {

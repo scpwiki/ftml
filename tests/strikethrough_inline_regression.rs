@@ -55,7 +55,7 @@ fn count_container(tree: &SyntaxTree<'_>, needle: ContainerType) -> usize {
                     .sum(),
                 Element::TabView(tabs) => tabs
                     .iter()
-                    .map(|tab| count_elements(&tab.elements, needle))
+                    .map(|item| count_elements(item.elements(), needle))
                     .sum(),
                 Element::Anchor { elements, .. }
                 | Element::Collapsible { elements, .. }

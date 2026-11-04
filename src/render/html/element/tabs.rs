@@ -19,19 +19,23 @@
  */
 
 use super::prelude::*;
-use crate::tree::Tab;
+use crate::tree::TabViewItem;
 use std::iter;
 
-pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
-    debug!("Rendering tabview (tabs {})", tabs.len());
+pub fn render_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
+    debug!("Rendering tabview (items {})", items.len());
 
     if ctx.layout().legacy() {
-        render_wikidot_tabview(ctx, tabs);
+        render_wikidot_tabview(ctx, items);
         return;
     }
 
-    let button_ids = generate_ids(ctx.random(), tabs.len());
-    let tab_ids = generate_ids(ctx.random(), tabs.len());
+    let tab_count = items
+        .iter()
+        .filter(|item| matches!(item, TabViewItem::Tab(_)))
+        .count();
+    let button_ids = generate_ids(ctx.random(), tab_count);
+    let tab_ids = generate_ids(ctx.random(), tab_count);
 
     ctx.html()
         .element("wj-tabs")
@@ -46,8 +50,12 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                     "role" => "tablist",
                 ))
                 .inner(|ctx| {
-                    for (i, tab) in tabs.iter().enumerate() {
-                        let (tab_selected, tab_index) = if i == 0 {
+                    let mut tab_index = 0usize;
+                    for item in items {
+                        let TabViewItem::Tab(tab) = item else {
+                            continue;
+                        };
+                        let (tab_selected, tab_position) = if tab_index == 0 {
                             ("true", "0")
                         } else {
                             ("false", "-1")
@@ -57,14 +65,15 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                             .element("wj-tabs-button")
                             .attr(attr!(
                                 "class" => "wj-tabs-button",
-                                "id" => &button_ids[i],
+                                "id" => &button_ids[tab_index],
                                 "role" => "tab",
                                 "aria-label" => &tab.label,
                                 "aria-selected" => tab_selected,
-                                "aria-controls" => &tab_ids[i],
-                                "tabindex" => tab_index,
+                                "aria-controls" => &tab_ids[tab_index],
+                                "tabindex" => tab_position,
                             ))
                             .contents(&tab.label);
+                        tab_index += 1;
                     }
                 });
 
@@ -74,24 +83,38 @@ pub fn render_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                     "class" => "wj-tabs-panel-list",
                 ))
                 .inner(|ctx| {
-                    for (i, tab) in tabs.iter().enumerate() {
-                        ctx.html()
-                            .div()
-                            .attr(attr!(
-                                "class" => "wj-tabs-panel",
-                                "id" => &tab_ids[i],
-                                "role" => "tabpanel",
-                                "aria-labelledby" => &button_ids[i],
-                                "tabindex" => "0",
-                                "hidden"; if i > 0,
-                            ))
-                            .contents(&tab.elements);
+                    let mut tab_index = 0usize;
+                    for item in items {
+                        match item {
+                            TabViewItem::Tab(tab) => {
+                                ctx.html()
+                                    .div()
+                                    .attr(attr!(
+                                        "class" => "wj-tabs-panel",
+                                        "id" => &tab_ids[tab_index],
+                                        "role" => "tabpanel",
+                                        "aria-labelledby" => &button_ids[tab_index],
+                                        "tabindex" => "0",
+                                        "hidden"; if tab_index > 0,
+                                    ))
+                                    .contents(&tab.elements);
+                                tab_index += 1;
+                            }
+                            TabViewItem::Content(elements) => {
+                                ctx.html()
+                                    .div()
+                                    .attr(attr!(
+                                        "class" => "wj-tabs-content",
+                                    ))
+                                    .contents(elements);
+                            }
+                        }
                     }
                 });
         });
 }
 
-fn render_wikidot_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
+fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
     let id = ctx.random().generate_wikidot_tabview_id();
     ctx.require_wikidot_tab_view(id.clone());
 
@@ -103,11 +126,15 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                 .ul()
                 .attr(attr!("class" => "yui-nav"))
                 .inner(|ctx| {
-                    for (index, tab) in tabs.iter().enumerate() {
+                    let mut tab_index = 0usize;
+                    for item in items {
+                        let TabViewItem::Tab(tab) = item else {
+                            continue;
+                        };
                         ctx.html()
                             .li()
                             .attr(attr!(
-                                "class" => "selected"; if index == 0,
+                                "class" => "selected"; if tab_index == 0,
                             ))
                             .inner(|ctx| {
                                 ctx.html()
@@ -118,6 +145,7 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                                     });
                             });
                         ctx.push_raw('\n');
+                        tab_index += 1;
                     }
                 });
 
@@ -125,12 +153,21 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, tabs: &[Tab]) {
                 .div()
                 .attr(attr!("class" => "yui-content"))
                 .inner(|ctx| {
-                    for (index, tab) in tabs.iter().enumerate() {
-                        let tab_id = format!("wiki-tab-0-{index}");
-                        ctx.html()
-                            .div()
-                            .attr(attr!("id" => &tab_id))
-                            .contents(&tab.elements);
+                    let mut tab_index = 0usize;
+                    for item in items {
+                        match item {
+                            TabViewItem::Tab(tab) => {
+                                let tab_id = format!("wiki-tab-0-{tab_index}");
+                                ctx.html()
+                                    .div()
+                                    .attr(attr!("id" => &tab_id))
+                                    .contents(&tab.elements);
+                                tab_index += 1;
+                            }
+                            TabViewItem::Content(elements) => {
+                                render_elements(ctx, elements);
+                            }
+                        }
                     }
                 });
         });
@@ -150,6 +187,7 @@ mod tests {
     use crate::render::{Render, html::HtmlRender};
     use crate::settings::{WikitextMode, WikitextSettings};
     use crate::tree::SyntaxTree;
+    use crate::tree::Tab;
 
     #[test]
     fn wikidot_tabview_uses_yui_dom_and_separates_labels() {
@@ -157,14 +195,14 @@ mod tests {
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tree = SyntaxTree {
             elements: vec![Element::TabView(vec![
-                Tab {
+                TabViewItem::Tab(Tab {
                     label: cow!("Apple"),
                     elements: vec![text!("one")],
-                },
-                Tab {
+                }),
+                TabViewItem::Tab(Tab {
                     label: cow!("Banana"),
                     elements: vec![text!("two")],
-                },
+                }),
             ])],
             ..SyntaxTree::default()
         };
@@ -207,14 +245,14 @@ mod tests {
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tree = SyntaxTree {
             elements: vec![
-                Element::TabView(vec![Tab {
+                Element::TabView(vec![TabViewItem::Tab(Tab {
                     label: cow!("A"),
                     elements: vec![text!("one")],
-                }]),
-                Element::TabView(vec![Tab {
+                })]),
+                Element::TabView(vec![TabViewItem::Tab(Tab {
                     label: cow!("B"),
                     elements: vec![text!("two")],
-                }]),
+                })]),
             ],
             ..SyntaxTree::default()
         };
@@ -246,10 +284,10 @@ mod tests {
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let attack = "wiki-tabview-x');alert(1)//";
         let tree = SyntaxTree {
-            elements: vec![Element::TabView(vec![Tab {
+            elements: vec![Element::TabView(vec![TabViewItem::Tab(Tab {
                 label: cow!("</em><script>alert(1)</script>"),
                 elements: vec![text!(attack)],
-            }])],
+            })])],
             ..SyntaxTree::default()
         };
 
@@ -273,10 +311,10 @@ mod tests {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tree = SyntaxTree {
-            elements: vec![Element::TabView(vec![Tab {
+            elements: vec![Element::TabView(vec![TabViewItem::Tab(Tab {
                 label: cow!("Empty"),
                 elements: Vec::new(),
-            }])],
+            })])],
             ..SyntaxTree::default()
         };
 

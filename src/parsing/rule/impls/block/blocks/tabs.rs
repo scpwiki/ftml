@@ -25,7 +25,7 @@ use crate::parsing::collect::{
     consume_iftags_segment_fused, consume_valid_comment, iftags_segment_fused,
 };
 use crate::parsing::consume::consume;
-use crate::tree::{AcceptsPartial, PartialElement, Tab};
+use crate::tree::{AcceptsPartial, PartialElement, Tab, TabViewItem};
 
 pub const BLOCK_TABVIEW: BlockRule = BlockRule {
     name: "block-tabview",
@@ -56,6 +56,21 @@ fn wikidot_quote_opener_at_row_start(source: &str, opener_start: usize) -> bool 
         prefix = rest.strip_prefix(' ').unwrap_or(rest);
     }
     saw_quote && prefix.is_empty()
+}
+
+fn close_content_run<'t>(
+    run: &mut Vec<Element<'t>>,
+    items: &mut Vec<TabViewItem<'t>>,
+    runs: &mut usize,
+) {
+    while matches!(run.last(), Some(element) if element.is_whitespace()) {
+        run.pop();
+    }
+    if !run.is_empty() {
+        *runs += 1;
+        items.push(TabViewItem::Content(std::mem::take(run)));
+    }
+    run.clear();
 }
 
 fn parse_tabview<'r, 't>(
@@ -94,27 +109,48 @@ fn parse_tabview<'r, 't>(
         |_, value| Ok(value),
     )?;
 
-    let (elements, errors, _) = parser
-        .get_body_elements_with_context(&BLOCK_TABVIEW, false, body_start)?
-        .into();
+    let records_at_entry = parser.degraded_title_record_count();
 
-    let mut tabs = Vec::new();
+    let (elements, errors, _) =
+        match parser.get_body_elements_with_context(&BLOCK_TABVIEW, false, body_start) {
+            Ok(success) => success.into(),
+            Err(error) => {
+                parser.truncate_degraded_title_records(records_at_entry);
+                return Err(error);
+            }
+        };
+
+    let mut items = Vec::new();
+    let mut run = Vec::new();
+    let mut runs = 0usize;
 
     for element in elements {
         match element {
-            Element::Partial(PartialElement::Tab(tab)) => tabs.push(tab),
+            Element::Partial(PartialElement::Tab(tab)) => {
+                close_content_run(&mut run, &mut items, &mut runs);
+                items.push(TabViewItem::Tab(tab));
+            }
 
-            element if element.is_whitespace() => (),
+            element if element.is_whitespace() && run.is_empty() => (),
 
-            _ => return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab)),
+            element => run.push(element),
         }
     }
+    close_content_run(&mut run, &mut items, &mut runs);
 
-    if tabs.is_empty() {
+    let records_added = parser.degraded_title_record_count() - records_at_entry;
+    let native = !parser.settings().layout.legacy();
+    parser.truncate_degraded_title_records(records_at_entry);
+
+    if runs > 0 && (!native || runs != records_added) {
+        return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
+    }
+
+    if items.is_empty() {
         return Err(parser.make_err(ParseErrorKind::TabViewEmpty));
     }
 
-    let tabview = Element::TabView(tabs);
+    let tabview = Element::TabView(items);
     if parser.settings().layout.legacy()
         && let Some(name) = tabview_name
     {
@@ -474,7 +510,11 @@ where
             }
             let footnote_count = parser.footnote_count();
             let mut probe = parser.clone();
-            let consumed = match consume(&mut probe) {
+            let outer_fused_end = probe.title_footnote_fused_end();
+            probe.set_title_footnote_fused_end(true);
+            let probe_result = consume(&mut probe);
+            probe.set_title_footnote_fused_end(outer_fused_end);
+            let consumed = match probe_result {
                 Ok(success) => {
                     success
                         .item
@@ -661,6 +701,9 @@ where
                     saw_unit,
                 );
                 if elided_footnoteblock && !saw_unit && text.is_empty() {
+                    if !parser.settings().layout.legacy() {
+                        parser.record_degraded_title(current.span.start);
+                    }
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
                 parser.step()?;
@@ -676,6 +719,9 @@ where
                     saw_unit,
                 );
                 if elided_footnoteblock && !saw_unit && text.is_empty() {
+                    if !parser.settings().layout.legacy() {
+                        parser.record_degraded_title(current.span.start);
+                    }
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
                 let leftover = &source[current.span.start + 2..current.span.end];
@@ -698,6 +744,9 @@ where
                         .any(|c| !c.is_whitespace());
                 match tab_title_footnote_construct(parser, title_has_content) {
                     TabTitleFootnote::Break => {
+                        if !parser.settings().layout.legacy() {
+                            parser.record_degraded_title(current.span.start);
+                        }
                         return Err(parser.make_err(ParseErrorKind::RuleFailed));
                     }
                     TabTitleFootnote::Unit(unit, fused_end) => {
@@ -719,6 +768,9 @@ where
                         if title_so_far_empty
                             && (fused_end || tab_title_remainder_empty(&elided))
                         {
+                            if !parser.settings().layout.legacy() {
+                                parser.record_degraded_title(current.span.start);
+                            }
                             return Err(parser.make_err(ParseErrorKind::RuleFailed));
                         }
                         let construct_start = current.span.start;
@@ -739,6 +791,9 @@ where
                                 saw_unit,
                             );
                             if elided_footnoteblock && !saw_unit && text.is_empty() {
+                                if !parser.settings().layout.legacy() {
+                                    parser.record_degraded_title(current.span.start);
+                                }
                                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
                             }
                             parser.step()?;

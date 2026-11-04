@@ -35,8 +35,8 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             }
         }
         Element::TabView(tabs) => {
-            for tab in tabs {
-                visit(&mut tab.elements);
+            for item in tabs {
+                visit(item.elements_mut());
             }
         }
         Element::Anchor { elements, .. }

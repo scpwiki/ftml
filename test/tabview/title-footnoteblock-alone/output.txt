@@ -1,5 +1,3 @@
-[[tabview]]
 [[tab [[footnoteblock]]]]
 Body
 [[/tab]]
-[[/tabview]]

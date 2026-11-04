@@ -1154,7 +1154,9 @@ where
                 }
             }
             let fused_close = (parser.settings().layout.legacy()
-                || block_rule.name == "block-iftags")
+                || block_rule.name == "block-iftags"
+                || (block_rule.name == "block-footnote"
+                    && parser.title_footnote_fused_end()))
                 && matches!(
                     block_rule.name,
                     "block-span"

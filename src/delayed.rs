@@ -811,8 +811,12 @@ fn resolve_elements(
                 }
             }
             Element::TabView(tabs) => {
-                for tab in tabs {
-                    resolve_elements(&mut tab.elements, bindings, resolved_occurrences)?;
+                for item in tabs {
+                    resolve_elements(
+                        item.elements_mut(),
+                        bindings,
+                        resolved_occurrences,
+                    )?;
                 }
             }
             Element::List { items, .. } => {
@@ -937,7 +941,7 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
         }),
         Element::TabView(tabs) => tabs
             .iter()
-            .any(|tab| elements_contain_delayed(&tab.elements)),
+            .any(|item| elements_contain_delayed(item.elements())),
         Element::List { items, .. } => items.iter().any(|item| match item {
             ListItem::Elements { elements, .. } => elements_contain_delayed(elements),
             ListItem::SubList { element } => element_contains_delayed(element),

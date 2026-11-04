@@ -25,7 +25,7 @@ use crate::tree::{
     Alignment, AnchorTarget, AttributeMap, ClearFloat, CodeBlock, Container, DateItem,
     DefinitionListItem, Embed, EmbedVideo, FileSource, FloatAlignment, Gallery,
     ImageSource, LinkLabel, LinkLocation, LinkType, ListItem, ListType, Module,
-    PartialElement, SocialButtons, StandaloneButton, Tab, Table, VariableMap,
+    PartialElement, SocialButtons, StandaloneButton, TabViewItem, Table, VariableMap,
 };
 use crate::tree::{
     element_requires_bounded_tree_stack, on_bounded_tree_stack, run_on_bounded_tree_stack,
@@ -79,7 +79,7 @@ pub enum Element<'t> {
 
     Table(Table<'t>),
 
-    TabView(Vec<Tab<'t>>),
+    TabView(Vec<TabViewItem<'t>>),
 
     StandaloneButton(StandaloneButton<'t>),
 
@@ -400,8 +400,8 @@ impl Element<'_> {
                 }
             }
             Element::TabView(tabs) => {
-                for tab in tabs {
-                    offset_elements(&mut tab.elements);
+                for item in tabs {
+                    offset_elements(item.elements_mut());
                 }
             }
             Element::StandaloneButton(_) => {}
@@ -549,7 +549,7 @@ impl Element<'_> {
             Element::ContentSeparator => Element::ContentSeparator,
             Element::Table(table) => Element::Table(table.to_owned()),
             Element::TabView(tabs) => {
-                Element::TabView(tabs.iter().map(|tab| tab.to_owned()).collect())
+                Element::TabView(tabs.iter().map(|item| item.to_owned()).collect())
             }
             Element::StandaloneButton(button) => {
                 Element::StandaloneButton(button.to_owned())

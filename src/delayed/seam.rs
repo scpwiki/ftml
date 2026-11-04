@@ -117,8 +117,8 @@ where
             }
         }
         Element::TabView(tabs) => {
-            for tab in tabs {
-                rewrite_elements(&mut tab.elements, apply_typography, classify)?;
+            for item in tabs {
+                rewrite_elements(item.elements_mut(), apply_typography, classify)?;
             }
         }
         Element::List { items, .. } => {
