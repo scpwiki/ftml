@@ -11,6 +11,8 @@
  */
 
 use super::prelude::*;
+use crate::parsing::collect::{CommentElidedText, consume_iftags_segment};
+use crate::parsing::trim_wikidot_ascii;
 use std::borrow::Cow;
 pub const BLOCK_FILE: BlockRule = BlockRule {
     name: "block-file",
@@ -43,8 +45,11 @@ fn parse_fn<'r, 't>(
         let head = parse_wikidot_file_head(parser, in_head)?;
         (head.file, head.label, head.trailing_bracket)
     } else {
-        let (file, label) =
-            parser.get_head_value(&BLOCK_FILE, in_head, parse_evidenced_file_link)?;
+        let (file, label) = parser.get_head_value_resolved(
+            &BLOCK_FILE,
+            in_head,
+            parse_evidenced_file_link,
+        )?;
         (file, label, false)
     };
 
@@ -71,7 +76,15 @@ where
     }
 
     let start = parser.current().span.start;
+    let mut elisions = Vec::new();
     loop {
+        if parser.current().token == Token::LeftBlock
+            && let Some(segment) = consume_iftags_segment(parser)?
+        {
+            elisions.extend(segment.elisions());
+            continue;
+        }
+
         let current = parser.current();
         let trailing_bracket = match current.token {
             Token::RightBlock => false,
@@ -86,7 +99,9 @@ where
             }
         };
 
-        let value = &parser.full_text().inner()[start..current.span.start];
+        let span = start..current.span.start;
+        let value =
+            CommentElidedText::new(parser.full_text().inner(), span, elisions).into_cow();
         let (file, label) = parse_evidenced_file_link(parser, Some(value))?;
         parser.step()?;
         return Ok(WikidotFileHead {
@@ -99,13 +114,41 @@ where
 
 fn parse_evidenced_file_link<'t>(
     parser: &Parser<'_, 't>,
-    value: Option<&'t str>,
-) -> Result<(std::borrow::Cow<'t, str>, std::borrow::Cow<'t, str>), ParseError> {
+    value: Option<Cow<'t, str>>,
+) -> Result<(Cow<'t, str>, Cow<'t, str>), ParseError> {
     if !parser.settings().allow_local_paths {
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    let value = require_trimmed_block_argument(parser, value)?;
+    match value {
+        Some(Cow::Borrowed(value)) => {
+            let (file, label) = parse_evidenced_file_link_str(parser, Some(value))?;
+            Ok((Cow::Borrowed(file), Cow::Borrowed(label)))
+        }
+        Some(Cow::Owned(value)) => {
+            let (file, label) = parse_evidenced_file_link_str(parser, Some(&value))?;
+            Ok((Cow::Owned(file.to_owned()), Cow::Owned(label.to_owned())))
+        }
+        None => {
+            let (file, label) = parse_evidenced_file_link_str(parser, None)?;
+            Ok((Cow::Borrowed(file), Cow::Borrowed(label)))
+        }
+    }
+}
+
+fn parse_evidenced_file_link_str<'t, 'v>(
+    parser: &Parser<'_, 't>,
+    value: Option<&'v str>,
+) -> Result<(&'v str, &'v str), ParseError> {
+    let value = match value {
+        Some(value) => value,
+        None => return Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
+    };
+    let value = if parser.settings().layout.legacy() {
+        trim_wikidot_ascii(value)
+    } else {
+        value.trim()
+    };
     if !parser.settings().layout.legacy() {
         let Some((file, label)) = value.split_once(" | ") else {
             return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
@@ -113,7 +156,7 @@ fn parse_evidenced_file_link<'t>(
         if !is_evidenced_file_name(file) || label.is_empty() || label.contains('|') {
             return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
         }
-        return Ok((cow!(file), cow!(label)));
+        return Ok((file, label));
     }
 
     let (file, label) = match value.split_once('|') {
@@ -142,7 +185,7 @@ fn parse_evidenced_file_link<'t>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    Ok((cow!(file), cow!(label)))
+    Ok((file, label))
 }
 
 fn file_name(source: &str) -> &str {

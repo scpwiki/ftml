@@ -19,6 +19,8 @@
  */
 
 use super::prelude::*;
+use crate::parsing::trim_wikidot_ascii_cow;
+use std::borrow::Cow;
 
 pub const BLOCK_USER: BlockRule = BlockRule {
     name: "block-user",
@@ -41,10 +43,28 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_USER, name);
 
     let block = &BLOCK_USER;
-    let name = parser.get_head_value(block, in_head, require_trimmed_block_argument)?;
+    let name = parser.get_head_value_resolved(block, in_head, |parser, value| {
+        let value = match value {
+            Some(value) => value,
+            None => {
+                return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
+            }
+        };
+
+        let name = if parser.settings().layout.legacy() {
+            trim_wikidot_ascii_cow(value)
+        } else {
+            match value {
+                Cow::Borrowed(value) => Cow::Borrowed(value.trim()),
+                Cow::Owned(value) => Cow::Owned(value.trim().to_owned()),
+            }
+        };
+
+        Ok(name)
+    })?;
 
     let element = Element::User {
-        name: std::borrow::Cow::Borrowed(name),
+        name,
         show_avatar: flag_star,
     };
 
