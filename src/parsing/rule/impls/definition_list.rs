@@ -63,69 +63,38 @@ fn parse_definition_list<'r, 't>(
 
     let mut items = Vec::new();
     let mut errors = Vec::new();
-    let mut _paragraph_safe = false;
+    let mut paragraph_safe = false;
 
-    if starts_definition_item(parser) && !has_definition_separator(parser) {
-        discard_current_line(parser)?;
-        return ok!(false; Elements::None, errors);
-    }
-
-    let (item, at_end) = parse_item(parser)?.chain(&mut errors, &mut _paragraph_safe);
-
-    items.push(item);
-
-    let mut at_end = at_end;
-    while !at_end {
-        if starts_definition_item(parser)
-            && !has_definition_separator(parser)
-            && has_separator_on_line(parser)
-        {
-            discard_current_line(parser)?;
-            break;
-        }
-
-        let next = parse_next_item(parser, &mut errors, &mut _paragraph_safe);
-        if let Some((item, item_at_end)) = next {
-            items.push(item);
-            at_end = item_at_end;
-        } else {
-            at_end = true;
+    loop {
+        let next = scan_item(parser)?.chain(&mut errors, &mut paragraph_safe);
+        match next {
+            Some((item, _)) => {
+                items.push(item);
+                if !starts_definition_item(parser) {
+                    break;
+                }
+            }
+            None => break,
         }
     }
 
-    ok!(Element::DefinitionList(items))
+    if items.is_empty() {
+        ok!(false; Elements::None, errors)
+    } else {
+        ok!(Element::DefinitionList(items))
+    }
 }
 
-fn parse_next_item<'r, 't>(
+fn scan_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    errors: &mut Vec<ParseError>,
-    paragraph_safe: &mut bool,
-) -> Option<(DefinitionListItem<'t>, bool)>
+) -> ParseResult<'r, 't, Option<(DefinitionListItem<'t>, bool)>>
 where
     'r: 't,
 {
-    let sub_parser = &mut parser.clone();
-    match parse_item(sub_parser) {
-        Ok(success) => {
-            trace!("Retrieved definition list item");
-            let item = success.chain(errors, paragraph_safe);
-            parser.update(sub_parser);
-            Some(item)
-        }
-        Err(error) => {
-            warn!("Definition list ended: {error:?}");
-            None
-        }
-    }
-}
-
-fn parse_item<'r, 't>(
-    parser: &mut Parser<'r, 't>,
-) -> ParseResult<'r, 't, (DefinitionListItem<'t>, bool)> {
     trace!("Trying to parse a definition list item pair");
 
     let mut errors = Vec::new();
-    let mut _paragraph_safe = false;
+    let mut paragraph_safe = false;
 
     if !parser.start_of_line() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -135,7 +104,9 @@ fn parse_item<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    parser.step_n(2)?;
+    parser.step()?;
+    let prefix_ws_extra = parser.current().slice.chars().count() > 1;
+    parser.step()?;
 
     let restore_line = if parser.settings().layout.legacy() {
         let previous = parser.in_wikidot_definition_list_line();
@@ -144,26 +115,55 @@ fn parse_item<'r, 't>(
     } else {
         None
     };
-    let parts = collect_key(parser, &mut errors, &mut _paragraph_safe).and_then(|key| {
-        collect_value(parser, &mut errors, &mut _paragraph_safe).map(|value| (key, value))
-    });
+    let scan =
+        collect_key_scanning(parser, prefix_ws_extra, &mut errors, &mut paragraph_safe);
+    let parts = match scan {
+        Ok(KeyScan::Separator {
+            key_elements,
+            key_string,
+        }) => {
+            let (value_elements, last) =
+                collect_value(parser, &mut errors, &mut paragraph_safe)?;
+            Some((key_elements, key_string, value_elements, last))
+        }
+        Ok(KeyScan::Residue) => None,
+        Err(error) => {
+            if let Some(previous) = restore_line {
+                parser.set_in_wikidot_definition_list_line(previous);
+            }
+            return Err(error);
+        }
+    };
     if let Some(previous) = restore_line {
         parser.set_in_wikidot_definition_list_line(previous);
     }
-    let (key, value) = parts?;
-    let (key_string, key_elements) = key;
-    let (value_elements, last) = value;
+    let Some((key_elements, key_string, value_elements, last)) = parts else {
+        return ok!(false; None, errors);
+    };
 
     let should_break = matches!(last.token, Token::ParagraphBreak | Token::InputEnd);
 
-    let key_string = std::borrow::Cow::Borrowed(key_string);
     let item = DefinitionListItem {
         key_string,
         key_elements,
         value_elements,
     };
 
-    ok!(false; (item, should_break), errors)
+    ok!(false; Some((item, should_break)), errors)
+}
+
+#[cfg(test)]
+fn parse_item<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, (DefinitionListItem<'t>, bool)> {
+    let mut errors = Vec::new();
+    let mut paragraph_safe = false;
+
+    let item = scan_item(parser)?.chain(&mut errors, &mut paragraph_safe);
+    match item {
+        Some(pair) => ok!(false; pair, errors),
+        None => Err(parser.make_err(ParseErrorKind::RuleFailed)),
+    }
 }
 
 fn starts_definition_item<'r, 't>(parser: &Parser<'r, 't>) -> bool {
@@ -206,85 +206,163 @@ fn has_definition_separator<'r, 't>(parser: &Parser<'r, 't>) -> bool {
     }
 }
 
-fn discard_current_line<'r, 't>(parser: &mut Parser<'r, 't>) -> Result<(), ParseError> {
-    while !matches!(
-        parser.current().token,
-        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
-    ) {
-        parser.step()?;
-    }
-    if parser.current().token == Token::LineBreak {
-        parser.step()?;
-    }
-    Ok(())
+enum KeyScan<'t> {
+    Separator {
+        key_elements: Vec<Element<'t>>,
+        key_string: std::borrow::Cow<'t, str>,
+    },
+    Residue,
 }
 
-fn has_separator_on_line<'r, 't>(parser: &Parser<'r, 't>) -> bool {
-    if !starts_definition_item(parser) {
-        return false;
-    }
-
-    let mut cursor = parser.clone();
-    if cursor.step_n(2).is_err() {
-        return false;
-    }
-    if cursor.current().token == Token::Colon {
-        return true;
-    }
-    loop {
-        if cursor.next_two_tokens() == (Token::Whitespace, Some(Token::Colon)) {
-            return true;
-        }
-        if matches!(
-            cursor.current().token,
-            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
-        ) || cursor.step().is_err()
-        {
-            return false;
-        }
-    }
-}
-
-fn collect_key<'r, 't>(
+fn collect_key_scanning<'r, 't>(
     parser: &mut Parser<'r, 't>,
+    prefix_ws_extra: bool,
     errors: &mut Vec<ParseError>,
     paragraph_safe: &mut bool,
-) -> Result<(&'t str, Vec<Element<'t>>), ParseError>
+) -> Result<KeyScan<'t>, ParseError>
 where
     'r: 't,
 {
-    if parser.current().token == Token::Colon {
-        parser.step()?;
-        parser.get_optional_space()?;
-        return Ok(("", Vec::new()));
-    }
-
     let start_token = parser.current();
-    let close = [ParseCondition::token_pair(Token::Whitespace, Token::Colon)];
-    let invalid = [
-        ParseCondition::current(Token::ParagraphBreak),
-        ParseCondition::current(Token::LineBreak),
-    ];
-    let rule = RULE_DEFINITION_LIST;
+    let mut key_elements = Vec::new();
+    let mut skipped_breaks: Vec<(usize, usize)> = Vec::new();
+    let mut crossed = false;
 
-    let collected = collect_consume_before(parser, rule, &close, &invalid, None)?;
-    let (mut key_elements, _) = collected.chain(errors, paragraph_safe);
-    let end_token = parser.current();
-
-    if parser.settings().layout.legacy() {
-        strip_wikidot_ascii_padding(&mut key_elements);
-    } else {
-        strip_whitespace(&mut key_elements);
+    if prefix_ws_extra && parser.current().token == Token::Colon {
+        let mut peek = parser.clone();
+        peek.step()?;
+        if peek.current().token == Token::Whitespace {
+            parser.step()?;
+            return Ok(KeyScan::Separator {
+                key_elements: Vec::new(),
+                key_string: std::borrow::Cow::Borrowed(""),
+            });
+        }
     }
-    parser.step_n(2)?;
 
-    let key_source = parser.full_text().slice_partial(start_token, end_token);
-    let key_string = if parser.settings().layout.legacy() {
-        key_source.trim_matches([' ', '\t'])
-    } else {
-        key_source.trim()
-    };
-    Ok((key_string, key_elements))
+    loop {
+        let closes = [
+            ParseCondition::token_pair(Token::Whitespace, Token::Colon),
+            ParseCondition::current(Token::LineBreak),
+            ParseCondition::current(Token::ParagraphBreak),
+            ParseCondition::current(Token::InputEnd),
+        ];
+        let collected =
+            collect_consume_before(parser, RULE_DEFINITION_LIST, &closes, &[], None)?;
+        let (chunk, last) = collected.chain(errors, paragraph_safe);
+        key_elements.extend(chunk);
+
+        match last.token {
+            Token::Whitespace => {
+                let after_colon = {
+                    let mut peek = parser.clone();
+                    peek.step_n(2)?;
+                    peek.current().token
+                };
+                if after_colon == Token::Whitespace {
+                    let key_string = build_key_string(
+                        parser,
+                        start_token,
+                        parser.current(),
+                        &skipped_breaks,
+                        crossed,
+                    );
+                    trim_key_elements(parser, &mut key_elements, crossed);
+                    parser.step_n(2)?;
+                    return Ok(KeyScan::Separator {
+                        key_elements,
+                        key_string,
+                    });
+                }
+
+                let (ws_chunk, _) = collect_consume_before(
+                    parser,
+                    RULE_DEFINITION_LIST,
+                    &[ParseCondition::current(Token::Colon)],
+                    &[],
+                    None,
+                )?
+                .chain(errors, paragraph_safe);
+                key_elements.extend(ws_chunk);
+            }
+            Token::LineBreak | Token::ParagraphBreak => {
+                let mut peek = parser.clone();
+                peek.step()?;
+                if !starts_definition_item(&peek) {
+                    if last.token == Token::LineBreak {
+                        parser.step()?;
+                    }
+                    return Ok(KeyScan::Residue);
+                }
+
+                crossed = true;
+                if last.token == Token::LineBreak {
+                    key_elements.push(Element::LineBreak);
+                } else {
+                    skipped_breaks
+                        .push((parser.current().span.start, parser.current().span.end));
+                }
+                parser.step()?;
+                key_elements.push(Element::Text(parser.current().slice.into()));
+                parser.step()?;
+            }
+            Token::InputEnd => return Ok(KeyScan::Residue),
+            _ => return Err(parser.make_err(ParseErrorKind::RuleFailed)),
+        }
+    }
+}
+
+fn build_key_string<'t>(
+    parser: &Parser<'_, 't>,
+    start_token: &ExtractedToken<'t>,
+    end_token: &ExtractedToken<'t>,
+    skipped_breaks: &[(usize, usize)],
+    crossed: bool,
+) -> std::borrow::Cow<'t, str> {
+    let raw = parser.full_text().slice_partial(start_token, end_token);
+    if skipped_breaks.is_empty() {
+        let trimmed = if crossed || !parser.settings().layout.legacy() {
+            raw.trim()
+        } else {
+            raw.trim_matches([' ', '\t'])
+        };
+        return std::borrow::Cow::Borrowed(trimmed);
+    }
+
+    let base = start_token.span.start;
+    let mut built = String::new();
+    let mut cursor = 0;
+    for &(span_start, span_end) in skipped_breaks {
+        built.push_str(&raw[cursor..span_start - base]);
+        cursor = span_end - base;
+    }
+    built.push_str(&raw[cursor..]);
+    std::borrow::Cow::Owned(built.trim().to_owned())
+}
+
+fn trim_key_elements(
+    parser: &Parser<'_, '_>,
+    elements: &mut Vec<Element<'_>>,
+    crossed: bool,
+) {
+    fn strip(parser: &Parser<'_, '_>, elements: &mut Vec<Element<'_>>) {
+        if parser.settings().layout.legacy() {
+            strip_wikidot_ascii_padding(elements);
+        } else {
+            strip_whitespace(elements);
+        }
+    }
+
+    strip(parser, elements);
+    if crossed {
+        while matches!(elements.first(), Some(Element::LineBreak)) {
+            elements.remove(0);
+        }
+        while matches!(elements.last(), Some(Element::LineBreak)) {
+            elements.pop();
+        }
+        strip(parser, elements);
+    }
 }
 
 fn collect_value<'r, 't>(
