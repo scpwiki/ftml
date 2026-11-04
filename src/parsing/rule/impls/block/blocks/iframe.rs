@@ -20,7 +20,7 @@
 
 use super::prelude::*;
 use crate::parsing::discard_wikidot_controls;
-use crate::tree::{AttributeMap, LinkLabel, LinkLocation, LinkType};
+use crate::tree::AttributeMap;
 
 pub const BLOCK_IFRAME: BlockRule = BlockRule {
     name: "block-iframe",
@@ -55,20 +55,6 @@ fn parse_fn<'r, 't>(
     } else {
         crate::url::is_url(&url)
     }) {
-        if parser.settings().layout.legacy()
-            && (url.starts_with("git://") || url.starts_with("sftp://"))
-        {
-            return ok!(Elements::Multiple(vec![
-                text!("[[iframe "),
-                Element::Link {
-                    ltype: LinkType::Direct,
-                    link: LinkLocation::Url(url.clone()),
-                    label: LinkLabel::Url,
-                    target: None,
-                },
-                text!("]]"),
-            ]));
-        }
         warn!("Iframe block references non-URL ({} bytes)", url.len());
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
@@ -85,7 +71,15 @@ fn parse_fn<'r, 't>(
 }
 
 fn wikidot_iframe_url(url: &str) -> bool {
-    ["http://", "https://", "ftp://", "gopher://", "mailto:"]
+    [
+        "http://",
+        "https://",
+        "ftp://",
+        "gopher://",
+        "mailto:",
+        "news://",
+        "mms://",
+    ]
         .iter()
         .any(|prefix| {
             url.get(..prefix.len())

@@ -1,0 +1,13 @@
+{
+    "elements": [
+        {
+            "element": "iframe",
+            "data": {
+                "url": "git://example.com/",
+                "attributes": {
+                    "width": "90%"
+                }
+            }
+        }
+    ]
+}
