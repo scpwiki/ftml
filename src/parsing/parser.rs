@@ -113,7 +113,7 @@ thread_local! {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct BlockScanCache {
+pub(super) struct BlockScanCache<'t> {
     peak_depth: Cell<usize>,
     rule_attempt_failures: HashMap<RuleAttemptKey, (ParseError, usize)>,
     rule_attempt_failure_positions: Vec<bool>,
@@ -134,6 +134,13 @@ pub(super) struct BlockScanCache {
     wikidot_footnote_zone_until: Cell<Option<usize>>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
+    quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
+}
+
+#[derive(Debug)]
+pub(crate) enum QuoteEscapedUnit<'t> {
+    Elements(Vec<Element<'t>>, bool),
+    Row(usize, Vec<Element<'t>>, bool),
 }
 
 fn token_starts_line(token: Token) -> bool {
@@ -178,7 +185,7 @@ pub struct Parser<'r, 't> {
     bibliographies: Rc<RefCell<BibliographyList<'t>>>,
 
     quote_scan_cache: Rc<RefCell<BTreeMap<QuoteScanKey, QuoteScanOutcome>>>,
-    pub(super) block_end_scan_cache: Rc<RefCell<BlockScanCache>>,
+    pub(super) block_end_scan_cache: Rc<RefCell<BlockScanCache<'t>>>,
     two_block_end_scan_cache: Rc<RefCell<BTreeMap<ContextualBlockEndScanKey, u8>>>,
     single_link_label_owner_scan_cache: Rc<RefCell<BTreeMap<usize, bool>>>,
     wikidot_code_candidate_cache:
@@ -698,6 +705,11 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     #[rustfmt::skip]
+    pub(crate) fn install_quote_body_cursor_at_current_line_with_literal_residuals(&mut self, required_depth: usize) {
+        self.quote_body_cursor = Some(QuoteBodyCursor { required_depth, line_state: QuoteBodyLineState::PreparedContent { content_start: self.current().span.start }, literal_residual_quotes: true });
+    }
+
+    #[rustfmt::skip]
     pub(crate) fn quote_body_close_allowed_here(&self) -> bool {
         matches!(self.quote_body_cursor, Some(QuoteBodyCursor { line_state: QuoteBodyLineState::PreparedContent { content_start }, .. }) if content_start == self.current().span.start)
     }
@@ -724,6 +736,25 @@ impl<'r, 't> Parser<'r, 't> {
     #[rustfmt::skip]
     pub(crate) fn quote_body_needs_prefix(&self) -> bool {
         matches!(self.quote_body_cursor, Some(QuoteBodyCursor { line_state: QuoteBodyLineState::NeedPrefix, .. }))
+    }
+
+    pub(crate) fn push_quote_escaped_unit(&self, unit: QuoteEscapedUnit<'t>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .quote_escaped_units
+            .push(unit);
+    }
+
+    pub(crate) fn take_quote_escaped_units(&self) -> Vec<QuoteEscapedUnit<'t>> {
+        mem::take(&mut self.block_end_scan_cache.borrow_mut().quote_escaped_units)
+    }
+
+    pub(crate) fn quote_escaped_units_pending(&self) -> bool {
+        !self
+            .block_end_scan_cache
+            .borrow()
+            .quote_escaped_units
+            .is_empty()
     }
 
     pub(crate) fn quote_body_cursor(&self) -> Option<QuoteBodyCursor> {

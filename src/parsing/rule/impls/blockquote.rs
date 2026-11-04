@@ -23,11 +23,14 @@ use super::footnote_first::{
 };
 use super::line_owner::{LineOwner, try_consume_lost_owner_block};
 use super::prelude::*;
+use crate::parsing::ParseSuccess;
 use crate::parsing::paragraph::{
     ParagraphStack, collapsible_has_direct_literal_nested_opener,
 };
-use crate::parsing::parser::QuoteBodyLineStatus;
-use crate::parsing::{DepthItem, DepthList, process_depths};
+use crate::parsing::parser::{QuoteBodyLineStatus, QuoteEscapedUnit};
+use crate::parsing::{
+    DepthItem, DepthList, ParagraphSplitEntry, ParagraphSplitKind, process_depths,
+};
 use crate::tree::{AttributeMap, Container, ContainerType, ListItem, ListType};
 
 const MAX_BLOCKQUOTE_DEPTH: usize = 128;
@@ -36,6 +39,7 @@ const MAX_BLOCKQUOTE_DEPTH: usize = 128;
 struct NativeQuoteRow<'t> {
     elements: Vec<Element<'t>>,
     paragraph_safe: bool,
+    paragraph_split: Option<Vec<ParagraphSplitEntry>>,
     empty_spaced: bool,
     indent: usize,
     source_line: Option<&'t str>,
@@ -118,6 +122,7 @@ pub const RULE_BLOCKQUOTE: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    let _ = parser.take_quote_escaped_units();
     if consume_deeper_collapsible_close(parser)? {
         return ok!(false; Elements::None);
     }
@@ -127,6 +132,8 @@ fn try_consume_fn<'r, 't>(
     }
 
     let mut depths = Vec::new();
+    let mut gate_escaped_segments: Vec<(Vec<Element<'t>>, bool)> = Vec::new();
+    let mut pending_rows: Vec<(usize, Vec<Element<'t>>, bool)> = Vec::new();
     let mut escaped_rows = Vec::new();
     let mut escaped_elements = Vec::new();
     let mut errors = Vec::new();
@@ -196,6 +203,7 @@ fn try_consume_fn<'r, 't>(
                     NativeQuoteRow {
                         elements: vec![control],
                         paragraph_safe: false,
+                        paragraph_split: None,
                         empty_spaced: false,
                         indent: row_indent,
                         source_line: None,
@@ -244,18 +252,48 @@ fn try_consume_fn<'r, 't>(
         let result = collect_native_blockquote_line(parser, close);
         parser.set_native_blockquote_depth(original_depth);
         let errors_before = errors.len();
-        let mut elements = result?.chain(&mut errors, &mut paragraph_safe);
+        let ParseSuccess {
+            item: line,
+            errors: line_errors,
+            paragraph_safe: line_safe,
+            ..
+        } = result?;
+        errors.extend(line_errors);
+        paragraph_safe &= line_safe;
+        for unit in line
+            .escaped_units
+            .into_iter()
+            .chain(parser.take_quote_escaped_units())
+        {
+            match unit {
+                QuoteEscapedUnit::Elements(elements, safe) => {
+                    gate_escaped_segments.push((elements, safe));
+                }
+                QuoteEscapedUnit::Row(depth, elements, safe) => {
+                    pending_rows.push((depth, elements, safe));
+                }
+            }
+        }
+        let mut elements = line.elements;
+        let mut paragraph_split = line.paragraph_split;
         if leave_indented_whitespace
             && elements.len() > 1
             && matches!(elements.first(), Some(Element::Text(text)) if text.chars().all(|c| c.is_whitespace()))
             && !matches!(elements.get(1), Some(Element::Text(_)))
         {
             elements.remove(0);
+            if let Some(counts) = &mut paragraph_split {
+                counts[0].0 -= 1;
+            }
         }
         if parser.settings().layout.legacy()
             && unowned_footnote_first(parser, content_start, physical_line_end, &elements)
         {
+            let len_before_footnote_removal = elements.len();
             let removed = remove_first_footnote(&mut elements);
+            if elements.len() != len_before_footnote_removal {
+                paragraph_split = None;
+            }
             debug_assert!(removed, "footnote-first classification found no footnote");
         }
 
@@ -271,8 +309,10 @@ fn try_consume_fn<'r, 't>(
             continue;
         }
 
-        quote_run_active =
-            !ends_quote_run && !stopped_at_footnote_close && !stopped_at_div_close;
+        quote_run_active = !ends_quote_run
+            && !stopped_at_footnote_close
+            && !stopped_at_div_close
+            && gate_escaped_segments.is_empty();
 
         // A multiline inline child can finish on a later quoted row. Wikidot keeps the next quoted row in the same native blockquote after that child's trailing line break.
         let row_is_empty = elements.is_empty() && errors.len() == errors_before;
@@ -289,6 +329,11 @@ fn try_consume_fn<'r, 't>(
                     continue;
                 }
                 elements.push(Element::Footnote(index));
+                if let Some(counts) = &mut paragraph_split
+                    && let Some(last) = counts.last_mut()
+                {
+                    last.0 += 1;
+                }
                 absorbed_unquoted_footnote = true;
             }
         }
@@ -350,6 +395,13 @@ fn try_consume_fn<'r, 't>(
             && !parser.pending_wikidot_collapsible_closer()
         {
             elements.push(Element::LineBreak);
+            if let Some(counts) = &mut paragraph_split {
+                let index = counts
+                    .iter()
+                    .rposition(|(count, _, _)| *count > 0)
+                    .unwrap_or(counts.len() - 1);
+                counts[index].0 += 1;
+            }
         }
 
         let source_line = if row_indent > 0 {
@@ -357,9 +409,14 @@ fn try_consume_fn<'r, 't>(
         } else {
             None
         };
+        let paragraph_split = paragraph_split.filter(|counts| {
+            counts.len() >= 2
+                && counts.iter().map(|entry| entry.0).sum::<usize>() == elements.len()
+        });
         let row = NativeQuoteRow {
             elements,
             paragraph_safe,
+            paragraph_split,
             empty_spaced: empty_spaced_row,
             indent: row_indent,
             source_line,
@@ -369,10 +426,21 @@ fn try_consume_fn<'r, 't>(
         } else {
             depths.push((depth - 1, (), row));
         }
+        push_quote_row_units(
+            &mut depths,
+            &mut escaped_rows,
+            flatten_following_rows,
+            std::mem::take(&mut pending_rows),
+        );
         flatten_following_rows |= escaped_after_deeper_close;
     }
 
-    if depths.is_empty() && escaped_elements.is_empty() {
+    if depths.is_empty()
+        && escaped_elements.is_empty()
+        && gate_escaped_segments.is_empty()
+        && pending_rows.is_empty()
+        && !parser.quote_escaped_units_pending()
+    {
         if consumed_pruned_row {
             return ok!(false; Elements::None, errors);
         }
@@ -389,11 +457,43 @@ fn try_consume_fn<'r, 't>(
         elements.extend(build_flattened_quote_rows(escaped_rows, wikidot));
     }
     elements.extend(escaped_elements);
+    let mut escaped_segments = gate_escaped_segments;
+    escaped_segments.extend(pending_rows.into_iter().map(|(depth, row_elements, _)| {
+        (form_quote_row_unit(row_elements, depth), false)
+    }));
+    for unit in parser.take_quote_escaped_units() {
+        match unit {
+            QuoteEscapedUnit::Elements(segment, segment_safe) => {
+                escaped_segments.push((segment, segment_safe));
+            }
+            QuoteEscapedUnit::Row(depth, row_elements, _) => {
+                escaped_segments.push((form_quote_row_unit(row_elements, depth), false));
+            }
+        }
+    }
+    if escaped_segments.is_empty() {
+        if append_unquoted_close_break {
+            elements.push(Element::LineBreak);
+        }
+        return ok!(false; elements, errors);
+    }
+    let mut split_counts: Vec<ParagraphSplitEntry> =
+        vec![(elements.len(), false, ParagraphSplitKind::Paragraph)];
+    for (segment, segment_safe) in escaped_segments {
+        split_counts.push((segment.len(), segment_safe, ParagraphSplitKind::Paragraph));
+        elements.extend(segment);
+    }
     if append_unquoted_close_break {
         elements.push(Element::LineBreak);
+        if let Some(last) = split_counts.last_mut() {
+            last.0 += 1;
+        }
     }
-
-    ok!(false; elements, errors)
+    let mut result = ok!(false; elements, errors);
+    if let Ok(success) = &mut result {
+        success.paragraph_split = Some(split_counts);
+    }
+    result
 }
 
 /// Whether the parser sits at a `[[/footnote]]` end block that belongs to
@@ -457,10 +557,115 @@ where
     matches!(probe.get_end_block(), Ok(found) if found.eq_ignore_ascii_case(name))
 }
 
+struct NativeQuoteLine<'t> {
+    elements: Vec<Element<'t>>,
+    paragraph_split: Option<Vec<ParagraphSplitEntry>>,
+    escaped_units: Vec<QuoteEscapedUnit<'t>>,
+}
+
+fn native_quote_line<'t>(
+    elements: Vec<Element<'t>>,
+    layout: Vec<ParagraphSplitEntry>,
+    layout_live: bool,
+    escaped_units: Vec<QuoteEscapedUnit<'t>>,
+) -> NativeQuoteLine<'t> {
+    let paragraph_split = if layout_live
+        && layout.len() >= 2
+        && layout.iter().map(|entry| entry.0).sum::<usize>() == elements.len()
+    {
+        Some(layout)
+    } else {
+        None
+    };
+    NativeQuoteLine {
+        elements,
+        paragraph_split,
+        escaped_units,
+    }
+}
+
+fn merge_quote_line_chunk<'t>(
+    layout: &mut Vec<ParagraphSplitEntry>,
+    layout_live: &mut bool,
+    chunk: &[Element<'t>],
+    chunk_safe: bool,
+    split: Option<Vec<ParagraphSplitEntry>>,
+) {
+    let split = split.filter(|counts| {
+        counts.len() >= 2
+            && counts.iter().map(|entry| entry.0).sum::<usize>() == chunk.len()
+    });
+    match split {
+        Some(counts) => {
+            *layout_live = true;
+            if layout.is_empty() {
+                *layout = counts;
+            } else {
+                let last = layout.last_mut().expect("layout is non-empty");
+                last.0 += counts[0].0;
+                last.1 &= counts[0].1;
+                layout.extend_from_slice(&counts[1..]);
+            }
+        }
+        None => {
+            if layout.is_empty() {
+                layout.push((chunk.len(), chunk_safe, ParagraphSplitKind::Paragraph));
+            } else {
+                let last = layout.last_mut().expect("layout is non-empty");
+                last.0 += chunk.len();
+                last.1 &= chunk_safe;
+            }
+        }
+    }
+}
+
+fn push_quote_row_units<'t>(
+    depths: &mut Vec<(usize, (), NativeQuoteRow<'t>)>,
+    escaped_rows: &mut Vec<NativeQuoteRow<'t>>,
+    flatten: bool,
+    units: Vec<(usize, Vec<Element<'t>>, bool)>,
+) {
+    for (depth, elements, paragraph_safe) in units {
+        let row = NativeQuoteRow {
+            elements,
+            paragraph_safe,
+            paragraph_split: None,
+            empty_spaced: false,
+            indent: 0,
+            source_line: None,
+        };
+        if flatten {
+            escaped_rows.push(row);
+        } else if depth >= 1 {
+            depths.push((depth - 1, (), row));
+        }
+    }
+}
+
+fn form_quote_row_unit<'t>(
+    row_elements: Vec<Element<'t>>,
+    depth: usize,
+) -> Vec<Element<'t>> {
+    let mut stack = ParagraphStack::new_wikidot();
+    for element in row_elements {
+        stack.push_element(element, true);
+    }
+    stack.pop_line_break();
+    let mut formed = stack.into_elements();
+    for _ in 0..depth {
+        formed = vec![Element::Container(Container::new(
+            ContainerType::Blockquote,
+            formed,
+            AttributeMap::new(),
+        ))];
+    }
+    formed
+}
+
 fn collect_native_blockquote_line<'r, 't>(
     parser: &mut Parser<'r, 't>,
     close: &[ParseCondition],
-) -> ParseResult<'r, 't, Vec<Element<'t>>> {
+) -> ParseResult<'r, 't, NativeQuoteLine<'t>> {
     let line_end_token = std::iter::once(parser.current())
         .chain(parser.remaining().iter())
         .find(|token| {
@@ -473,32 +678,57 @@ fn collect_native_blockquote_line<'r, 't>(
     let mut elements = Vec::new();
     let mut errors = Vec::new();
     let mut paragraph_safe = true;
+    let mut layout: Vec<ParagraphSplitEntry> = Vec::new();
+    let mut layout_live = false;
+    let mut escaped_units: Vec<QuoteEscapedUnit<'t>> = Vec::new();
 
     loop {
         if parser.evaluate_any(close) {
             if parser.current().token != Token::InputEnd {
                 parser.step()?;
             }
-            return ok!(paragraph_safe; elements, errors);
+            return ok!(paragraph_safe; native_quote_line(elements, layout, layout_live, escaped_units), errors);
         }
 
         if wikidot_footnote_close_ahead(parser) {
-            return ok!(paragraph_safe; elements, errors);
+            return ok!(paragraph_safe; native_quote_line(elements, layout, layout_live, escaped_units), errors);
         }
 
         if wikidot_div_close_ahead(parser) {
-            return ok!(paragraph_safe; elements, errors);
+            return ok!(paragraph_safe; native_quote_line(elements, layout, layout_live, escaped_units), errors);
         }
 
         if !parser.discarding_hidden_body() && parser.at_body_end_boundary() {
-            return ok!(paragraph_safe; elements, errors);
+            return ok!(paragraph_safe; native_quote_line(elements, layout, layout_live, escaped_units), errors);
         }
 
-        let consumed = consume(parser)?.chain(&mut errors, &mut paragraph_safe);
-        elements.extend(consumed);
+        let success = consume(parser)?;
+        let ParseSuccess {
+            item,
+            errors: chunk_errors,
+            paragraph_safe: chunk_safe,
+            paragraph_split: chunk_split,
+            ..
+        } = success;
+        errors.extend(chunk_errors);
+        paragraph_safe &= chunk_safe;
+        let chunk: Vec<Element> = match item {
+            Elements::Multiple(elements) => elements,
+            Elements::Single(element) => vec![element],
+            Elements::None => Vec::new(),
+        };
+        merge_quote_line_chunk(
+            &mut layout,
+            &mut layout_live,
+            &chunk,
+            chunk_safe,
+            chunk_split,
+        );
+        elements.extend(chunk);
+        escaped_units.extend(parser.take_quote_escaped_units());
 
         if parser.current().span.start >= line_end {
-            return ok!(paragraph_safe; elements, errors);
+            return ok!(paragraph_safe; native_quote_line(elements, layout, layout_live, escaped_units), errors);
         }
     }
 }
@@ -760,6 +990,49 @@ fn push_native_quote_row<'t>(
     }
     if wikidot && !row.paragraph_safe && !alignment_block {
         stack.pop_line_break();
+    }
+    let split_counts = row
+        .paragraph_split
+        .as_ref()
+        .filter(|counts| {
+            counts.len() >= 2
+                && counts.iter().map(|entry| entry.0).sum::<usize>() == row.elements.len()
+        })
+        .cloned();
+    if let Some(counts) = split_counts {
+        let leaves_following_content_unwrapped = row
+            .elements
+            .iter()
+            .any(collapsible_has_direct_literal_nested_opener)
+            || (wikidot && alignment_block);
+        let has_simple_table = row.elements.iter().any(|element| {
+            matches!(
+                element,
+                Element::Table(table)
+                    if table.table_type == crate::tree::TableType::Simple
+            )
+        });
+        let last_index = counts.len() - 1;
+        let mut iter = row.elements.into_iter();
+        for (index, (count, safe, _)) in counts.iter().enumerate() {
+            if index > 0 {
+                stack.end_paragraph_at_break();
+            }
+            let mut slice: Vec<Element> = iter.by_ref().take(*count).collect();
+            if index < last_index && matches!(slice.last(), Some(Element::LineBreak)) {
+                slice.pop();
+            }
+            for element in slice {
+                stack.push_element(element, *safe);
+            }
+        }
+        if has_simple_table {
+            stack.merge_wikidot_adjacent_simple_tables();
+        }
+        if leaves_following_content_unwrapped {
+            stack.mark_next_unwrapped();
+        }
+        return;
     }
     let collapsible_row =
         matches!(row.elements.first(), Some(Element::Collapsible { .. }));
