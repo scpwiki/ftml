@@ -61,6 +61,7 @@ pub struct ParagraphStack<'t> {
     current_has_discarded_control: bool,
     wikidot_complete_raw_line_occupied: bool,
     wikidot_complete_raw_run_after_block: bool,
+    wikidot_demoted_comment_break: bool,
 
     pending_unwrapped_separator: bool,
     paragraph_break_since_element: bool,
@@ -410,6 +411,16 @@ impl<'t> ParagraphStack<'t> {
     #[inline]
     pub(crate) fn clear_wikidot_complete_raw_line_occupancy(&mut self) {
         self.wikidot_complete_raw_line_occupied = false;
+    }
+
+    #[inline]
+    pub(crate) fn mark_wikidot_demoted_comment_break(&mut self) {
+        self.wikidot_demoted_comment_break = self.wikidot;
+    }
+
+    #[inline]
+    pub(crate) fn take_wikidot_demoted_comment_break(&mut self) -> bool {
+        mem::take(&mut self.wikidot_demoted_comment_break)
     }
 
     #[inline]
@@ -923,6 +934,7 @@ impl<'t> ParagraphStack<'t> {
         self.current_has_discarded_control = false;
         self.wikidot_complete_raw_line_occupied = false;
         self.wikidot_complete_raw_run_after_block = false;
+        self.wikidot_demoted_comment_break = false;
         self.pending_unwrapped_separator = false;
         self.unwrapped_after_block_line = false;
         self.wikidot_literal_iftags_line = false;

@@ -38,7 +38,7 @@ mod text;
 
 pub(crate) use self::comment::{
     CommentElidedText, collect_comment_elided_keep, collect_comment_elided_keep_from,
-    comment_closer_token_count_at, consume_valid_comment,
+    comment_bridge_end, comment_closer_token_count_at, consume_valid_comment,
 };
 pub use self::consume::{
     CollectSplitEscape, collect_consume, collect_consume_before, collect_consume_keep,
