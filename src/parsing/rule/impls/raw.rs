@@ -94,7 +94,12 @@ fn try_consume_fn<'r, 't>(
                     };
                 }
 
-                (Token::LineBreak, Token::Raw) | (Token::ParagraphBreak, Token::Raw) => {
+                (Token::LineBreak, Token::Raw) => {
+                    parser.step_n(3)?;
+                    return finish_double_at_raw(parser, text!(" "));
+                }
+
+                (Token::ParagraphBreak, Token::Raw) => {
                     if parser.settings().layout.legacy() {
                         parser.step_n(3)?;
                         return ok!(Elements::None);
@@ -133,6 +138,7 @@ fn try_consume_fn<'r, 't>(
     let mut saw_nested_raw_pair = false;
     let mut generated = Vec::new();
     let mut saw_non_authored = false;
+    let mut crossed_break = false;
 
     loop {
         let token = parser.current().token;
@@ -226,7 +232,24 @@ fn try_consume_fn<'r, 't>(
                 }
                 let element = Element::Raw(raw);
                 return if ending_token == Token::Raw {
-                    finish_double_at_raw(parser, element)
+                    let result = finish_double_at_raw(parser, element);
+                    if crossed_break {
+                        result.map(|mut success| {
+                            success.item = match success.item {
+                                Elements::None => Elements::None,
+                                Elements::Single(element) => {
+                                    Elements::Multiple(vec![element, text!(" ")])
+                                }
+                                Elements::Multiple(mut elements) => {
+                                    elements.insert(1, text!(" "));
+                                    Elements::Multiple(elements)
+                                }
+                            };
+                            success
+                        })
+                    } else {
+                        result
+                    }
                 } else {
                     success_elements(element)
                 };
@@ -238,9 +261,24 @@ fn try_consume_fn<'r, 't>(
             }
         } else if token == Token::LeftRaw && ending_token == Token::Raw {
             saw_left_raw = true;
-        } else if matches!(token, Token::LineBreak | Token::ParagraphBreak) {
-            trace!("Reached newline, aborting");
+        } else if token == Token::ParagraphBreak {
+            trace!("Reached paragraph break, aborting");
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        } else if token == Token::LineBreak {
+            let crosses = ending_token == Token::Raw
+                && start.span.start < end.span.start
+                && parser.current_generated().is_none()
+                && parser.look_ahead(0).is_some_and(|next| {
+                    next.token == Token::Raw && parser.generated_for(next).is_none()
+                });
+            if !crosses {
+                trace!("Reached newline, aborting");
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+
+            crossed_break = true;
+            parser.step()?;
+            continue;
         } else if token == Token::InputEnd {
             trace!("Reached end of input, aborting");
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
@@ -343,7 +381,17 @@ where
                 later_raw = true;
                 break;
             }
-            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => break,
+            Token::LineBreak => {
+                let mut next = scan.clone();
+                if next.step().is_ok()
+                    && !generated_ahead(&next)
+                    && next.current().token == Token::Raw
+                {
+                    later_raw = true;
+                }
+                break;
+            }
+            Token::ParagraphBreak | Token::InputEnd => break,
             _ => {
                 if scan.step().is_err() {
                     break;
@@ -406,7 +454,7 @@ mod tests {
             assert_eq!(result.unwrap(), Elements::Single(raw!("token")));
         });
         with_raw_elements("@@\n@@", |result| {
-            assert_eq!(result.unwrap(), Elements::None);
+            assert_eq!(result.unwrap(), Elements::Single(text!(" ")));
         });
     }
 

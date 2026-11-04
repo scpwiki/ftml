@@ -1,0 +1,20 @@
+[
+    {
+        "token": "raw",
+        "rule": "raw",
+        "span": [
+            16,
+            18
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "raw",
+        "rule": "fallback",
+        "span": [
+            16,
+            18
+        ],
+        "kind": "no-rules-match"
+    }
+]
