@@ -1,0 +1,8 @@
+before
+[[iftags +zzz]]
+AAA
+[[/iftags]]
+[[iftags +zzz]]
+BBB
+[[/iftags]]
+after

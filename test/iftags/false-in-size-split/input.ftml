@@ -1,0 +1,5 @@
+[[size 120%]]a
+[[iftags +zzz]]
+b
+[[/iftags]]
+c[[/size]]

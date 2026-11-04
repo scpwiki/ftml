@@ -1,0 +1,7 @@
+[[div]]
+before
+[[iftags +zzz]]
+b
+[[/iftags]]
+after
+[[/div]]
