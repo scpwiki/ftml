@@ -25,6 +25,7 @@ mod stack_orders;
 pub use self::stack::ParagraphStack;
 pub(crate) use self::stack::collapsible_has_direct_literal_nested_opener;
 
+use super::collect::{TokenWindow, comment_bridge_end};
 use super::consume::consume;
 use super::parser::Parser;
 use super::parser::QuoteBodyLineStatus;
@@ -70,6 +71,7 @@ where
 
     let mut finished = false;
     let mut literal_gallery_pending = false;
+    let mut line_prefix_whitespace_only = true;
     while !finished {
         let quote_line_status = parser.prepare_quote_body_line()?;
         if quote_line_status == QuoteBodyLineStatus::Boundary {
@@ -87,6 +89,7 @@ where
             stack.pop_line_break();
             stack.end_paragraph();
             parser.step()?;
+            line_prefix_whitespace_only = true;
             continue;
         }
 
@@ -134,6 +137,7 @@ where
                     Token::LineBreak | Token::ParagraphBreak
                 ),
         );
+        let iteration_token = parser.current().token;
         let consumed = match parser.current().token {
             Token::InputEnd => {
                 if close_condition_fn.is_some() {
@@ -155,7 +159,20 @@ where
                 if stack.wikidot_complete_raw_line_occupied() {
                     stack.clear_wikidot_complete_raw_line_occupancy();
                 }
-                stack.end_paragraph_at_break();
+                let demote_chain_end =
+                    if parser.settings().layout.legacy() && !stack.current_empty() {
+                        let window = TokenWindow::at(parser);
+                        wikidot_comment_chain_occupied(window, 1)
+                            .filter(|end| !wikidot_footnote_opener_at(window, *end))
+                    } else {
+                        None
+                    };
+                if demote_chain_end.is_some() {
+                    push_element(&mut stack, Element::LineBreak, true);
+                    stack.mark_wikidot_demoted_comment_break();
+                } else {
+                    stack.end_paragraph_at_break();
+                }
 
                 parser.step()?;
                 None
@@ -177,6 +194,18 @@ where
                     }
                     if parser.current().token == Token::DiscardedControl {
                         stack.mark_discarded_control();
+                    }
+                    if comment
+                        && parser.settings().layout.legacy()
+                        && stack.current_empty()
+                        && (comment_started_line || line_prefix_whitespace_only)
+                    {
+                        let window = TokenWindow::at(parser);
+                        if wikidot_comment_chain_occupied(window, 0)
+                            .is_some_and(|end| !wikidot_footnote_opener_at(window, end))
+                        {
+                            stack.mark_wikidot_invisible_line_occupancy();
+                        }
                     }
                     match consume(parser) {
                         Ok(consumed) => Some(consumed),
@@ -392,11 +421,25 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 )
+                && !stack.take_wikidot_demoted_comment_break()
             {
                 stack.pop_line_break();
             }
 
             stack.push_errors(&mut errors);
+        }
+
+        match iteration_token {
+            Token::LineBreak | Token::ParagraphBreak => {
+                line_prefix_whitespace_only = true;
+            }
+            Token::Whitespace
+            | Token::LeftComment
+            | Token::DiscardedControl
+            | Token::InputEnd => {}
+            _ => {
+                line_prefix_whitespace_only = false;
+            }
         }
     }
 
@@ -570,6 +613,59 @@ fn wikidot_empty_raw_line_kind(
             .is_some_and(|token| token.token == Token::Raw)
         && boundary(parser.look_ahead(4)))
     .then_some(WikidotEmptyRawLineKind::Paired)
+}
+
+fn wikidot_comment_chain_occupied(
+    window: TokenWindow<'_, '_>,
+    mut index: usize,
+) -> Option<usize> {
+    let mut saw_whitespace = false;
+    loop {
+        if !matches!(
+            window.get(index),
+            Some(token) if token.token == Token::LeftComment
+        ) {
+            return None;
+        }
+        loop {
+            let token = window.get(index)?;
+            match token.token {
+                Token::LeftComment => {
+                    let end = window.offset(index).and_then(comment_bridge_end)?;
+                    index += end;
+                }
+                Token::Whitespace => {
+                    saw_whitespace = true;
+                    index += 1;
+                }
+                Token::LineBreak => {
+                    index += 1;
+                    break;
+                }
+                Token::ParagraphBreak | Token::InputEnd => {
+                    return saw_whitespace.then_some(index);
+                }
+                _ => return None,
+            }
+        }
+        if !matches!(
+            window.get(index),
+            Some(token) if token.token == Token::LeftComment
+        ) {
+            return saw_whitespace.then_some(index);
+        }
+    }
+}
+
+fn wikidot_footnote_opener_at(window: TokenWindow<'_, '_>, index: usize) -> bool {
+    matches!(
+        window.get(index),
+        Some(token) if token.token == Token::LeftBlock
+    ) && matches!(
+        window.get(index + 1),
+        Some(token) if token.token == Token::Identifier
+            && token.slice.eq_ignore_ascii_case("footnote")
+    )
 }
 
 fn finish_hidden_boundary(
