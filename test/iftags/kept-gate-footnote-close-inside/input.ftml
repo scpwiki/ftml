@@ -1,3 +1,4 @@
-aaaa
-[[footnote]]ab[[iftags +_current]][[/footnote]]cd[[/iftags]]
-zzzz
+[[footnote]]
+a[[iftags -zzz]]b
+[[/footnote]]
+c[[/iftags]]d

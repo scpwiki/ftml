@@ -1,4 +1,4 @@
-aaaa
 [[div]]
-ab[[iftags +_current]][[/div]]cd[[/iftags]]
-zzzz
+a[[iftags -zzz]]b
+[[/div]]
+c[[/iftags]]d

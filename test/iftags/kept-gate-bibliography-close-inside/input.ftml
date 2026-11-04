@@ -1,4 +1,4 @@
-aaaa
 [[bibliography]]
-[[bibitem]]ab[[iftags +_current]][[/bibliography]]cd[[/iftags]]
-zzzz
+: key : a[[iftags -zzz]]b
+[[/bibliography]]
+c[[/iftags]]d

@@ -1,3 +1,4 @@
-aaaa
-[[math]]a[[iftags -_current]]b[[/math]]c[[/iftags]]d
-zzzz
+[[math]]
+a[[iftags +zzz]]b
+[[/math]]
+c[[/iftags]]d

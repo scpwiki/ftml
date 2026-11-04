@@ -1,4 +1,4 @@
-aaaa
-[[collapsible show="+ s" hide="- h"]]
-ab[[iftags +_current]][[/collapsible]]cd[[/iftags]]
-zzzz
+[[collapsible]]
+a[[iftags -zzz]]b
+[[/collapsible]]
+c[[/iftags]]d

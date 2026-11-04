@@ -1,0 +1,24 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": null,
+                "latex-source": "a[[iftags -zzz]]b[[/iftags]]c"
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "d"
+                    }
+                ]
+            }
+        }
+    ]
+}

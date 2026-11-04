@@ -1,0 +1,51 @@
+{
+    "elements": [
+        {
+            "element": "collapsible",
+            "data": {
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "b"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "attributes": {},
+                "start-open": false,
+                "show-text": null,
+                "hide-text": null,
+                "show-top": true,
+                "show-bottom": false
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "c"
+                    },
+                    {
+                        "element": "text",
+                        "data": "d"
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -1,4 +1,4 @@
-aaaa
-[[center]]
-ab[[iftags +_current]][[/center]]cd[[/iftags]]
-zzzz
+[[=]]
+a[[iftags -zzz]]b
+[[/=]]
+c[[/iftags]]d
