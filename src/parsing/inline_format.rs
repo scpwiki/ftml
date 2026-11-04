@@ -2221,7 +2221,9 @@ fn dash_unit(element: &Element<'_>, admit_link: bool) -> DashUnit {
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
             | PartialElement::InlineColorOpen(..)
-            | PartialElement::InlineColorClose => DashUnit::Partial,
+            | PartialElement::InlineColorClose
+            | PartialElement::InlineAnchorOpen(..)
+            | PartialElement::InlineAnchorClose(_) => DashUnit::Partial,
             _ => DashUnit::Barrier,
         },
         Element::Link { .. } if admit_link => DashUnit::Atom(DASH_ATOM_CHAR),
@@ -3311,7 +3313,9 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             | PartialElement::InlineFormatOpen(_)
             | PartialElement::InlineFormatClose(_)
             | PartialElement::InlineColorOpen(..)
-            | PartialElement::InlineColorClose => {}
+            | PartialElement::InlineColorClose
+            | PartialElement::InlineAnchorOpen(..)
+            | PartialElement::InlineAnchorClose(_) => {}
         },
         _ => {}
     }

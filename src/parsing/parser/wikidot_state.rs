@@ -21,10 +21,11 @@ pub(super) struct WikidotState {
     scored_div_body_depth: u16,
     scored_span_body_depth: u8,
     span_body_depth: u8,
+    anchor_body_depth: u8,
     bibliography_body_depth: u16,
     literal_triple_link_depth: u16,
     simple_table_crossed_closers: u16,
-    center_body_depth: u16,
+    center_body_depth: u8,
     flags: u16,
 }
 
@@ -114,6 +115,23 @@ impl Parser<'_, '_> {
     #[inline]
     pub(crate) fn in_wikidot_span_body(&self) -> bool {
         self.wikidot.span_body_depth > 0
+    }
+
+    #[inline]
+    pub(crate) fn enter_wikidot_anchor_body(&mut self) {
+        self.wikidot.anchor_body_depth =
+            self.wikidot.anchor_body_depth.saturating_add(1);
+    }
+
+    #[inline]
+    pub(crate) fn leave_wikidot_anchor_body(&mut self) {
+        self.wikidot.anchor_body_depth =
+            self.wikidot.anchor_body_depth.saturating_sub(1);
+    }
+
+    #[inline]
+    pub(crate) fn in_wikidot_anchor_body(&self) -> bool {
+        self.wikidot.anchor_body_depth > 0
     }
 
     #[inline]

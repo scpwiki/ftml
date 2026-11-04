@@ -386,7 +386,9 @@ fn render_partial(ctx: &mut HtmlContext, partial: &PartialElement) {
         | PartialElement::InlineFormatOpen(_)
         | PartialElement::InlineFormatClose(_)
         | PartialElement::InlineColorOpen(..)
-        | PartialElement::InlineColorClose => {}
+        | PartialElement::InlineColorClose
+        | PartialElement::InlineAnchorOpen(..)
+        | PartialElement::InlineAnchorClose(_) => {}
         PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
             render_elements(ctx, elements)
         }
