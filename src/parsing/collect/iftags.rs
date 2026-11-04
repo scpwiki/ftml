@@ -67,6 +67,35 @@ impl IftagsSegment {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static SEGMENT_SCAN_TOKEN_VISITS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// The number of tokens segment scans have examined on this thread.
+/// Test-only instrumentation, kept out of `Parser` because the
+/// parser's size is budgeted for deep recursive parsing.
+#[cfg(test)]
+pub(crate) fn segment_scan_token_visits() -> usize {
+    SEGMENT_SCAN_TOKEN_VISITS.with(|visits| visits.get())
+}
+
+#[cfg(test)]
+pub(crate) fn reset_segment_scan_token_visits() {
+    SEGMENT_SCAN_TOKEN_VISITS.with(|visits| visits.set(0));
+}
+
+#[cfg(test)]
+fn add_segment_scan_token_visits(count: usize) {
+    SEGMENT_SCAN_TOKEN_VISITS.with(|visits| visits.set(visits.get() + count));
+}
+
+#[cfg(test)]
+fn increment_segment_scan_token_visits() {
+    add_segment_scan_token_visits(1);
+}
+
 /// A borrowed window over the token stream: the token at some
 /// position plus every token after it. Segment scans index into a
 /// window instead of collecting the remaining tokens into a fresh
@@ -189,7 +218,7 @@ where
 
     let (name_range, mut index) = head_name(window, 0, false)?;
     #[cfg(test)]
-    parser.add_segment_scan_token_visits(index);
+    add_segment_scan_token_visits(index);
     if !source[name_range].eq_ignore_ascii_case("iftags") {
         return None;
     }
@@ -200,7 +229,7 @@ where
     let spec_end;
     loop {
         #[cfg(test)]
-        parser.increment_segment_scan_token_visits();
+        increment_segment_scan_token_visits();
         let token = window.get(index)?;
         match token.token {
             Token::RightBlock => {
@@ -241,7 +270,7 @@ where
     let mut fused_closer = false;
     let (body_end, closer_end) = loop {
         #[cfg(test)]
-        parser.increment_segment_scan_token_visits();
+        increment_segment_scan_token_visits();
         let token = window.get(index)?;
         match token.token {
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return None,
@@ -250,7 +279,7 @@ where
                     head_name(window, index, allow_fused_closer)
                 {
                     #[cfg(test)]
-                    parser.add_segment_scan_token_visits(_after_name - index);
+                    add_segment_scan_token_visits(_after_name - index);
                     if source[name_range].eq_ignore_ascii_case("iftags") {
                         depth += 1;
                     }
@@ -261,7 +290,7 @@ where
                     head_name(window, index, allow_fused_closer)
                 {
                     #[cfg(test)]
-                    parser.add_segment_scan_token_visits(_after_name - index);
+                    add_segment_scan_token_visits(_after_name - index);
                     if source[name_range].eq_ignore_ascii_case("iftags") {
                         depth -= 1;
                         if depth == 0 {
@@ -269,7 +298,7 @@ where
                             let mut end_index = index;
                             let closer_end = loop {
                                 #[cfg(test)]
-                                parser.increment_segment_scan_token_visits();
+                                increment_segment_scan_token_visits();
                                 let token = window.get(end_index)?;
                                 match token.token {
                                     Token::RightBlock => break token.span.end,
