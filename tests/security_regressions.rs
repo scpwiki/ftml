@@ -1237,20 +1237,25 @@ fn hostile_wikidot_preprocessing_and_tokenization_remain_bounded() {
 }
 
 #[test]
-fn false_iftags_unclosed_outer_body_keeps_layout_specific_semantics() {
+fn false_iftags_unclosed_outer_body_renders_literally_in_both_layouts() {
     let input = "[[iftags +missing]]\nfollowing body";
 
-    let (wikidot, literal_errors) = parse_with_errors(input, Layout::Wikidot);
-    assert!(!literal_errors.is_empty());
-    assert!(
-        render_text(&wikidot, Layout::Wikidot).contains("[[iftags +missing]]")
-            && render_text(&wikidot, Layout::Wikidot).contains("following body"),
-        "{:?}",
-        wikidot.elements
-    );
-
-    let wikijump = parse(input, Layout::Wikijump);
-    assert!(wikijump.elements.is_empty(), "{:?}", wikijump.elements);
+    // Live Wikidot renders an unclosed gate as plain text (the opener and
+    // its would-be body alike), so an iftags segment with no [[/iftags]]
+    // is not a segment at all: the rule fails and the text renders
+    // literally in both layouts. The wikijump layout previously evaluated
+    // the unterminated segment instead, silently hiding the rest of the
+    // document when the condition was false.
+    for layout in [Layout::Wikidot, Layout::Wikijump] {
+        let (tree, errors) = parse_with_errors(input, layout);
+        assert!(!errors.is_empty(), "{layout:?}: {tree:?}");
+        assert!(
+            render_text(&tree, layout).contains("[[iftags +missing]]")
+                && render_text(&tree, layout).contains("following body"),
+            "{layout:?}: {:?}",
+            tree.elements
+        );
+    }
 }
 
 #[test]
