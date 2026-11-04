@@ -43,4 +43,6 @@ pub use self::consume::{collect_consume, collect_consume_before, collect_consume
 pub use self::container::collect_container;
 pub use self::generic::collect;
 pub(crate) use self::iftags::{consume_iftags_segment, iftags_segment};
-pub use self::text::{collect_text, collect_text_keep, collect_text_resolved};
+pub use self::text::{
+    collect_text, collect_text_keep, collect_text_resolved, collect_text_resolved_fused,
+};

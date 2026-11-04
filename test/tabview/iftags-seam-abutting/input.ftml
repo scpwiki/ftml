@@ -1,0 +1,8 @@
+[[tabview]]
+[[tab A[[iftags -zzz]]B[[/iftags]]]]
+True body
+[[/tab]]
+[[tab C[[iftags +zzz]]D[[/iftags]]]]
+False body
+[[/tab]]
+[[/tabview]]

@@ -47,6 +47,11 @@ pub(crate) struct IftagsSegment {
     pub closer: Range<usize>,
     /// Whether the conditions hold and the body text is kept.
     pub include_body: bool,
+    /// Whether the closer's `]]` was fused with one following `]`
+    /// into a single `RightLink` token, whose span extends one char
+    /// past `range.end`. Only the fused scan reports this; see
+    /// `iftags_segment_fused`.
+    pub fused_closer: bool,
 }
 
 impl IftagsSegment {
@@ -68,6 +73,7 @@ impl IftagsSegment {
 fn head_name(
     tokens: &[&ExtractedToken<'_>],
     start: usize,
+    break_at_right_link: bool,
 ) -> Option<(Range<usize>, usize)> {
     let mut index = start + 1;
     while tokens.get(index)?.token == Token::Whitespace {
@@ -83,6 +89,7 @@ fn head_name(
             | Token::ParagraphBreak
             | Token::RightBlock
             | Token::InputEnd => break,
+            Token::RightLink if break_at_right_link => break,
             _ => {
                 name_end = token.span.end;
                 index += 1;
@@ -106,6 +113,32 @@ pub(crate) fn iftags_segment<'r, 't>(parser: &Parser<'r, 't>) -> Option<IftagsSe
 where
     'r: 't,
 {
+    scan_segment(parser, false)
+}
+
+/// Like `iftags_segment`, but a segment closer whose `]]` directly
+/// abuts one more `]` still terminates the segment. The scanner
+/// fuses such a `]]]` run into a single `RightLink` token, so a
+/// closer at the very end of a block-head value (whose own `]]`
+/// supplies the third bracket) is invisible to the default scan.
+/// The returned segment ends two chars into that token and is
+/// marked `fused_closer`; the caller owns the leftover bracket.
+pub(crate) fn iftags_segment_fused<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> Option<IftagsSegment>
+where
+    'r: 't,
+{
+    scan_segment(parser, true)
+}
+
+fn scan_segment<'r, 't>(
+    parser: &Parser<'r, 't>,
+    allow_fused_closer: bool,
+) -> Option<IftagsSegment>
+where
+    'r: 't,
+{
     if parser.settings().layout.legacy() && parser.in_wikidot_iftags_span() {
         return None;
     }
@@ -122,7 +155,7 @@ where
     let source = parser.full_text().inner();
     let segment_start = tokens[0].span.start;
 
-    let (name_range, mut index) = head_name(tokens, 0)?;
+    let (name_range, mut index) = head_name(tokens, 0, false)?;
     if !source[name_range].eq_ignore_ascii_case("iftags") {
         return None;
     }
@@ -169,19 +202,22 @@ where
     // before the closer means this is not a segment of the field.
     let body_start = tokens.get(index).map_or(head_end, |token| token.span.start);
     let mut depth = 1usize;
+    let mut fused_closer = false;
     let (body_end, closer_end) = loop {
         let token = tokens.get(index)?;
         match token.token {
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return None,
             Token::LeftBlock => {
-                if let Some((name_range, _)) = head_name(tokens, index)
+                if let Some((name_range, _)) =
+                    head_name(tokens, index, allow_fused_closer)
                     && source[name_range].eq_ignore_ascii_case("iftags")
                 {
                     depth += 1;
                 }
             }
             Token::LeftBlockEnd => {
-                if let Some((name_range, _)) = head_name(tokens, index)
+                if let Some((name_range, _)) =
+                    head_name(tokens, index, allow_fused_closer)
                     && source[name_range].eq_ignore_ascii_case("iftags")
                 {
                     depth -= 1;
@@ -192,6 +228,10 @@ where
                             let token = tokens.get(end_index)?;
                             match token.token {
                                 Token::RightBlock => break token.span.end,
+                                Token::RightLink if allow_fused_closer => {
+                                    fused_closer = true;
+                                    break token.span.start + 2;
+                                }
                                 Token::LineBreak
                                 | Token::ParagraphBreak
                                 | Token::InputEnd => return None,
@@ -216,6 +256,7 @@ where
         body: body_start..body_end,
         closer: body_end..closer_end,
         include_body,
+        fused_closer,
     })
 }
 
@@ -229,7 +270,35 @@ pub(crate) fn consume_iftags_segment<'r, 't>(
 where
     'r: 't,
 {
-    let Some(segment) = iftags_segment(parser) else {
+    consume_segment(parser, false)
+}
+
+/// Like `consume_iftags_segment`, but uses the fused scan, so a
+/// segment whose closer abuts one more `]` is consumed as well.
+/// The parser stops after the fused `RightLink` token; the bracket
+/// it shared with the closer remains the caller's to account for
+/// (the segment is marked `fused_closer`).
+pub(crate) fn consume_iftags_segment_fused<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<IftagsSegment>, ParseError>
+where
+    'r: 't,
+{
+    consume_segment(parser, true)
+}
+
+fn consume_segment<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    allow_fused_closer: bool,
+) -> Result<Option<IftagsSegment>, ParseError>
+where
+    'r: 't,
+{
+    let Some(segment) = (if allow_fused_closer {
+        iftags_segment_fused(parser)
+    } else {
+        iftags_segment(parser)
+    }) else {
         return Ok(None);
     };
     while parser.current().span.start < segment.range.end
