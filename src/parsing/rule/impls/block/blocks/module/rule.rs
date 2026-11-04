@@ -34,12 +34,10 @@ pub const BLOCK_MODULE: BlockRule = BlockRule {
     parse_fn,
 };
 
-// Module subnames are collected raw; this offset recovery is exempt from the block opener contract.
-#[allow(clippy::disallowed_methods)]
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -61,7 +59,7 @@ fn parse_fn<'r, 't>(
         parser.get_head_name_map_with_body_start_wikidot(&BLOCK_MODULE, in_head)?;
 
     if parser.settings().layout.legacy()
-        && let Some(literal) = wikidot_extra_bracket_css_literal(parser, subname)
+        && let Some(literal) = wikidot_extra_bracket_css_literal(parser, opener_start)
     {
         return ok!(true; text!(literal));
     }
@@ -79,19 +77,13 @@ fn parse_fn<'r, 't>(
                 && parser.current().token != Token::InputEnd
             {
                 let source = parser.full_text().inner();
-                let name_start = (subname.as_ptr() as usize)
-                    .checked_sub(source.as_ptr() as usize)
-                    .expect("parsed module name belongs to the source");
-                let owner_start = source[..name_start]
-                    .rfind("[[")
-                    .expect("parsed module name follows its opener");
                 let owner_end = if has_body_end {
                     let _ = parser.get_body_text(&BLOCK_MODULE)?;
                     parser.current().span.start
                 } else {
                     parser.current().span.start
                 };
-                return ok!(true; text!(&source[owner_start..owner_end]));
+                return ok!(true; text!(&source[opener_start..owner_end]));
             }
             if has_body_end && body_start == BlockBodyStart::NextPhysicalLine {
                 let body = parser.get_body_text(&BLOCK_MODULE)?;
@@ -111,7 +103,7 @@ fn parse_fn<'r, 't>(
 
     parser.set_module(module_rule);
 
-    let output = (module_rule.parse_fn)(parser, subname, arguments)?;
+    let output = (module_rule.parse_fn)(parser, subname, arguments, opener_start)?;
     let (elements, errors, paragraph_safe) = output.into();
 
     success_elements_with_paragraph_safety(paragraph_safe, elements, errors)
@@ -123,21 +115,17 @@ fn wikidot_valid_module_name(name: &str) -> bool {
         && chars.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-// Module subnames are collected raw; this offset recovery is exempt from the block opener contract.
-#[allow(clippy::disallowed_methods)]
 fn wikidot_extra_bracket_css_literal<'t>(
     parser: &Parser<'_, 't>,
-    subname: &'t str,
+    opener_start: usize,
 ) -> Option<&'t str> {
     let source = parser.full_text().inner();
-    let name_start = (subname.as_ptr() as usize).checked_sub(source.as_ptr() as usize)?;
-    let owner_start = source[..name_start].rfind("[[")?;
-    let prefix = source[owner_start..].get(.."[[module CSS]]]".len())?;
+    let prefix = source[opener_start..].get(.."[[module CSS]]]".len())?;
     if !prefix.eq_ignore_ascii_case("[[module CSS]]]") {
         return None;
     }
 
-    source.get(owner_start..parser.current().span.start)
+    source.get(opener_start..parser.current().span.start)
 }
 
 fn wikidot_unknown_module_error<'t>(name: &'t str) -> Element<'t> {

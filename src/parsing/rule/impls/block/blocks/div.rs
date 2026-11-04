@@ -208,7 +208,11 @@ where
                     .map(|(name, in_head, segment)| {
                         (
                             name.eq_ignore_ascii_case("span")
-                                && span.head_word_is_actionable(&name, segment),
+                                && span.head_word_is_actionable(
+                                    &name,
+                                    matches!(name, Cow::Borrowed(_)),
+                                    segment,
+                                ),
                             in_head,
                         )
                     })

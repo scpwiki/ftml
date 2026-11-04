@@ -770,23 +770,23 @@ where
         self.get_head_word_tracked(ParseErrorKind::BlockMissingName)
     }
 
-    #[allow(clippy::ptr_arg)]
     pub(crate) fn head_word_is_actionable(
         &self,
-        name: &Cow<'t, str>,
+        name: &str,
+        borrowed: bool,
         segment: bool,
     ) -> bool {
-        self.head_word_view_is_actionable(name, segment, name)
+        self.head_word_view_is_actionable(name, borrowed, segment, name)
     }
 
-    #[allow(clippy::ptr_arg)]
     pub(crate) fn head_word_view_is_actionable(
         &self,
-        name: &Cow<'t, str>,
+        _name: &str,
+        borrowed: bool,
         segment: bool,
         view: &str,
     ) -> bool {
-        if matches!(name, Cow::Borrowed(_)) {
+        if borrowed {
             return true;
         }
         let block = if self.discarding_hidden_body() {
@@ -973,7 +973,12 @@ where
         self.get_optional_space()?;
 
         let (name, in_head, segment) = self.get_block_name_after_end_marker()?;
-        if matches!(name, Cow::Owned(_)) && !self.head_word_is_actionable(&name, segment)
+        if matches!(name, Cow::Owned(_))
+            && !self.head_word_is_actionable(
+                &name,
+                matches!(name, Cow::Borrowed(_)),
+                segment,
+            )
         {
             return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
         }
@@ -3148,7 +3153,12 @@ where
                         .accepts_names
                         .iter()
                         .any(|accepted| base_name.eq_ignore_ascii_case(accepted))
-                        && opener.head_word_view_is_actionable(&name, segment, base_name)
+                        && opener.head_word_view_is_actionable(
+                            &name,
+                            matches!(name, Cow::Borrowed(_)),
+                            segment,
+                            base_name,
+                        )
                         && !scored_span_empty_spaced_head
                         && (scored_span_residual_opener
                             || opener.get_optional_space().is_ok()

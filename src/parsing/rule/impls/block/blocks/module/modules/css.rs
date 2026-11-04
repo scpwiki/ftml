@@ -42,12 +42,11 @@ fn parse_fn<'r, 't>(
     success_value(element.into(), Vec::new(), false)
 }
 
-// Module subnames are collected raw; this offset recovery is exempt from the block opener contract.
-#[allow(clippy::disallowed_methods)]
 fn parse_with_wikidot_boundary<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,
     arguments: Arguments<'t>,
+    opener_start: usize,
 ) -> ParseResult<'r, 't, ModuleParseOutput<'t>> {
     assert_module_name(&MODULE_CSS, name);
 
@@ -57,19 +56,13 @@ fn parse_with_wikidot_boundary<'r, 't>(
         }
         if !wikidot_css_body_starts_on_new_line(parser) {
             let source = parser.full_text().inner();
-            let name_start = (name.as_ptr() as usize)
-                .checked_sub(source.as_ptr() as usize)
-                .expect("parsed CSS module name belongs to the source");
-            let owner_start = source[..name_start]
-                .rfind("[[")
-                .expect("parsed CSS module name follows its opener");
             let _ = parser.get_body_text(&BLOCK_MODULE)?;
             if arguments.has_source() {
                 return ok!(false; ModuleParseOutput::None);
             }
             let owner_end = parser.current().span.start;
             return success_value(
-                ModuleParseOutput::Element(text!(&source[owner_start..owner_end])),
+                ModuleParseOutput::Element(text!(&source[opener_start..owner_end])),
                 Vec::new(),
                 true,
             );

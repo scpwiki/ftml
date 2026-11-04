@@ -30,6 +30,7 @@ fn parse_fn<'r, 't>(
     _parser: &mut Parser<'r, 't>,
     name: &'t str,
     _arguments: Arguments<'t>,
+    _opener_start: usize,
 ) -> ParseResult<'r, 't, ModuleParseOutput<'t>> {
     debug!("Parsing categories module");
     assert_module_name(&MODULE_RATE, name);

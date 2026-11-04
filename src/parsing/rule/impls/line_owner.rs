@@ -8,6 +8,7 @@ use super::prelude::*;
 use crate::parsing::collect::consume_valid_comment;
 use crate::parsing::paragraph::gather_paragraphs;
 use crate::tree::{Alignment, AttributeMap, Container, ContainerType, ListType};
+use std::borrow::Cow;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum LineOwner {
@@ -75,7 +76,11 @@ where
         let Some((block_rule, _, close_name)) = alignment_rule(&name) else {
             return Ok(None);
         };
-        if !candidate.head_word_is_actionable(&name, segment) {
+        if !candidate.head_word_is_actionable(
+            &name,
+            matches!(name, Cow::Borrowed(_)),
+            segment,
+        ) {
             return Ok(None);
         }
         candidate.set_block(block_rule);
@@ -155,7 +160,7 @@ where
     'r: 't,
 {
     let (name, in_head, segment) = parser.get_block_name(false)?;
-    if !parser.head_word_is_actionable(&name, segment) {
+    if !parser.head_word_is_actionable(&name, matches!(name, Cow::Borrowed(_)), segment) {
         return Ok(None);
     }
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {

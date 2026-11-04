@@ -229,17 +229,17 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             show_bottom,
         } => render_collapsible(
             ctx,
-            Collapsible::new(
+            Collapsible {
                 elements,
-                *unfolded_tail_start,
+                unfolded_tail_start: *unfolded_tail_start,
                 wikidot_label_spans,
                 attributes,
-                *start_open,
-                ref_cow!(show_text),
-                ref_cow!(hide_text),
-                *show_top,
-                *show_bottom,
-            ),
+                start_open: *start_open,
+                show_text: ref_cow!(show_text),
+                hide_text: ref_cow!(hide_text),
+                show_top: *show_top,
+                show_bottom: *show_bottom,
+            },
         ),
         Element::TableOfContents { align, attributes } => {
             render_table_of_contents(ctx, *align, attributes)

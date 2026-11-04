@@ -657,7 +657,11 @@ where
                         }
                     }
                     if head_complete {
-                        let actionable = opener.head_word_is_actionable(&name, segment);
+                        let actionable = opener.head_word_is_actionable(
+                            &name,
+                            matches!(name, Cow::Borrowed(_)),
+                            segment,
+                        );
                         if actionable
                             && (name.eq_ignore_ascii_case("image")
                                 || name.eq_ignore_ascii_case("user"))

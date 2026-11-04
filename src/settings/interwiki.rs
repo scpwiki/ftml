@@ -27,18 +27,17 @@ pub static EMPTY_INTERWIKI: LazyLock<InterwikiSettings> =
         prefixes: hashmap! {},
     });
 
-#[allow(rustdoc::bare_urls)]
 /// An [`InterwikiSettings`] instance that has the default prefixes.
 ///
 /// These prefixes are:
-/// - `wikipedia:path` => `https://wikipedia.org/wiki/path`
-/// - `wp:path` => `https://wikipedia.org/wiki/path`
-/// - `commons:path` => `https://commons.wikimedia.org/wiki/path`
-/// - `google:path` => `https://google.com/search?q=path`
-/// - `duckduckgo:path` => `https://duckduckgo.com/?q=path`
-/// - `ddg:path` => `https://duckduckgo.com/?q=path`
-/// - `dictionary:path` => `https://dictionary.com/browse/path`
-/// - `thesaurus:path` => `https://thesaurus.com/browse/path`
+/// - `wikipedia:path` => <https://wikipedia.org/wiki/path>
+/// - `wp:path` => <https://wikipedia.org/wiki/path>
+/// - `commons:path` => <https://commons.wikimedia.org/wiki/path>
+/// - `google:path` => <https://google.com/search?q=path>
+/// - `duckduckgo:path` => <https://duckduckgo.com/?q=path>
+/// - `ddg:path` => <https://duckduckgo.com/?q=path>
+/// - `dictionary:path` => <https://dictionary.com/browse/path>
+/// - `thesaurus:path` => <https://thesaurus.com/browse/path>
 pub static DEFAULT_INTERWIKI: LazyLock<InterwikiSettings> =
     LazyLock::new(|| InterwikiSettings {
         prefixes: hashmap! {

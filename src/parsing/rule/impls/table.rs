@@ -43,7 +43,11 @@ fn table_block_head_crosses_line<'r: 't, 't>(parser: &Parser<'r, 't>) -> bool {
         return false;
     };
     if !name.eq_ignore_ascii_case("table")
-        || !probe.head_word_is_actionable(&name, segment)
+        || !probe.head_word_is_actionable(
+            &name,
+            matches!(name, Cow::Borrowed(_)),
+            segment,
+        )
     {
         return false;
     }

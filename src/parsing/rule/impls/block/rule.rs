@@ -65,10 +65,10 @@ fn block_star<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
     parse_block(parser, true)
 }
 
-#[allow(clippy::ptr_arg)]
 fn block_for_head_word<'r, 't>(
     parser: &Parser<'r, 't>,
-    name: &Cow<'t, str>,
+    name: &str,
+    borrowed: bool,
     segment: bool,
 ) -> Option<&'static BlockRule> {
     let block = if parser.discarding_hidden_body() {
@@ -76,16 +76,12 @@ fn block_for_head_word<'r, 't>(
     } else {
         get_block_rule_with_name_for_layout(name, parser.settings().layout)
     }?;
-    let actionable = match name {
-        Cow::Borrowed(_) => true,
-        Cow::Owned(_) => {
-            if segment {
-                head_seam_forms_block(block, parser.settings().layout)
-            } else {
-                !head_word_never_resolves(block)
-            }
-        }
-    };
+    let actionable = borrowed
+        || if segment {
+            head_seam_forms_block(block, parser.settings().layout)
+        } else {
+            !head_word_never_resolves(block)
+        };
     actionable.then_some(block)
 }
 
@@ -110,7 +106,13 @@ where
     if lookup_name.ends_with('_') {
         return false;
     }
-    block_for_head_word(parser, &lookup_name, segment).is_some()
+    block_for_head_word(
+        parser,
+        &lookup_name,
+        matches!(lookup_name, Cow::Borrowed(_)),
+        segment,
+    )
+    .is_some()
 }
 
 fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
@@ -124,7 +126,8 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
 
         let (name, _, segment) = parser.get_block_name(false)?;
 
-        let block = block_for_head_word(parser, &name, segment);
+        let block =
+            block_for_head_word(parser, &name, matches!(name, Cow::Borrowed(_)), segment);
         match block {
             Some(block_rule) => Ok(block_rule.accepts_newlines_outside_body
                 && block_rule_enabled(parser, block_rule)
@@ -281,7 +284,12 @@ where
     }
     let name: &str = &lookup_name;
 
-    let block = match block_for_head_word(parser, &lookup_name, segment) {
+    let block = match block_for_head_word(
+        parser,
+        &lookup_name,
+        matches!(lookup_name, Cow::Borrowed(_)),
+        segment,
+    ) {
         Some(block) => block,
         None => {
             if parser

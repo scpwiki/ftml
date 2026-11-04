@@ -33,6 +33,7 @@ use super::prelude::*;
 use super::rule::Rule;
 use super::token::Token;
 use crate::tree::ContainerType;
+use std::borrow::Cow;
 
 type CloseConditionFn = fn(&mut Parser) -> Result<bool, ParseError>;
 
@@ -444,7 +445,12 @@ where
     probe.get_block_name(false).is_ok_and(|(name, _, segment)| {
         let view = name.strip_suffix('_').unwrap_or(&name);
         (view.eq_ignore_ascii_case("ol") || view.eq_ignore_ascii_case("ul"))
-            && probe.head_word_view_is_actionable(&name, segment, view)
+            && probe.head_word_view_is_actionable(
+                &name,
+                matches!(name, Cow::Borrowed(_)),
+                segment,
+                view,
+            )
     })
 }
 

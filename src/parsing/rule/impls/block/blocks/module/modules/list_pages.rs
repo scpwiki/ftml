@@ -30,6 +30,7 @@ fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,
     arguments: Arguments<'t>,
+    _opener_start: usize,
 ) -> ParseResult<'r, 't, ModuleParseOutput<'t>> {
     debug!("Parsing ListPages module");
     assert_module_name(&MODULE_LIST_PAGES, name);

@@ -74,6 +74,7 @@ pub type ModuleParseFn = for<'r, 't> fn(
     &mut Parser<'r, 't>,
     &'t str,
     Arguments<'t>,
+    usize,
 ) -> ParseResult<'r, 't, ModuleParseOutput<'t>>;
 
 #[cfg(test)]

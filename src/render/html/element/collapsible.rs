@@ -23,43 +23,24 @@ use crate::tree::{AttributeMap, Element};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Collapsible<'a> {
-    elements: &'a [Element<'a>],
-    unfolded_tail_start: Option<usize>,
-    wikidot_label_spans: &'a [AttributeMap<'a>],
-    attributes: &'a AttributeMap<'a>,
-    start_open: bool,
-    show_text: Option<&'a str>,
-    hide_text: Option<&'a str>,
-    show_top: bool,
-    show_bottom: bool,
+    pub(super) elements: &'a [Element<'a>],
+    pub(super) unfolded_tail_start: Option<usize>,
+    pub(super) wikidot_label_spans: &'a [AttributeMap<'a>],
+    pub(super) attributes: &'a AttributeMap<'a>,
+    pub(super) start_open: bool,
+    pub(super) show_text: Option<&'a str>,
+    pub(super) hide_text: Option<&'a str>,
+    pub(super) show_top: bool,
+    pub(super) show_bottom: bool,
 }
 
-impl<'a> Collapsible<'a> {
-    #[inline]
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        elements: &'a [Element<'a>],
-        unfolded_tail_start: Option<usize>,
-        wikidot_label_spans: &'a [AttributeMap<'a>],
-        attributes: &'a AttributeMap<'a>,
-        start_open: bool,
-        show_text: Option<&'a str>,
-        hide_text: Option<&'a str>,
-        show_top: bool,
-        show_bottom: bool,
-    ) -> Self {
-        Collapsible {
-            elements,
-            unfolded_tail_start,
-            wikidot_label_spans,
-            attributes,
-            start_open,
-            show_text,
-            hide_text,
-            show_top,
-            show_bottom,
-        }
-    }
+#[derive(Debug, Copy, Clone)]
+struct CollapsibleLabels<'a> {
+    start_open: bool,
+    show_text: &'a str,
+    hide_text: &'a str,
+    show_top: bool,
+    show_bottom: bool,
 }
 
 pub fn render_collapsible(ctx: &mut HtmlContext, collapsible: Collapsible) {
@@ -101,11 +82,13 @@ pub fn render_collapsible(ctx: &mut HtmlContext, collapsible: Collapsible) {
                 elements,
                 unfolded_tail,
                 wikidot_label_spans,
-                start_open,
-                show_text,
-                hide_text,
-                show_top,
-                show_bottom,
+                CollapsibleLabels {
+                    start_open,
+                    show_text,
+                    hide_text,
+                    show_top,
+                    show_bottom,
+                },
             );
         }
         Layout::Wikijump => {
@@ -119,28 +102,33 @@ pub fn render_collapsible(ctx: &mut HtmlContext, collapsible: Collapsible) {
                 ctx,
                 elements,
                 attributes,
-                start_open,
-                show_text,
-                hide_text,
-                show_top,
-                show_bottom,
+                CollapsibleLabels {
+                    start_open,
+                    show_text,
+                    hide_text,
+                    show_top,
+                    show_bottom,
+                },
             );
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_collapsible_wikidot(
     ctx: &mut HtmlContext,
     elements: &[Element],
     unfolded_tail: &[Element],
     label_spans: &[AttributeMap],
-    start_open: bool,
-    show_text: &str,
-    hide_text: &str,
-    show_top: bool,
-    show_bottom: bool,
+    labels: CollapsibleLabels,
 ) {
+    let CollapsibleLabels {
+        start_open,
+        show_text,
+        hide_text,
+        show_top,
+        show_bottom,
+    } = labels;
+
     ctx.html()
         .div()
         .attr(attr!("class" => "collapsible-block"))
@@ -238,17 +226,20 @@ fn render_wikidot_collapsible_link(ctx: &mut HtmlContext, label: &str) {
         });
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_collapsible_wikijump(
     ctx: &mut HtmlContext,
     elements: &[Element],
     attributes: &AttributeMap,
-    start_open: bool,
-    show_text: &str,
-    hide_text: &str,
-    show_top: bool,
-    show_bottom: bool,
+    labels: CollapsibleLabels,
 ) {
+    let CollapsibleLabels {
+        start_open,
+        show_text,
+        hide_text,
+        show_top,
+        show_bottom,
+    } = labels;
+
     ctx.html()
         .details()
         .attr(attr!(

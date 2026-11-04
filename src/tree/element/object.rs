@@ -164,7 +164,7 @@ pub enum Element<'t> {
 
     /// A checkbox.
     ///
-    /// The "checked" field determines if the radio button starts checked or not.
+    /// The "checked" field determines if the checkbox starts checked or not.
     CheckBox {
         checked: bool,
         attributes: AttributeMap<'t>,

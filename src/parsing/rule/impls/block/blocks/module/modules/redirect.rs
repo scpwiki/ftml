@@ -30,6 +30,7 @@ fn parse_fn<'r, 't>(
     _parser: &mut Parser<'r, 't>,
     name: &'t str,
     mut arguments: Arguments<'t>,
+    _opener_start: usize,
 ) -> ParseResult<'r, 't, ModuleParseOutput<'t>> {
     debug!("Parsing redirect module");
     assert_module_name(&MODULE_REDIRECT, name);

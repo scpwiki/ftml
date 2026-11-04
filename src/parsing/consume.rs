@@ -538,8 +538,12 @@ where
         if matches!(
             view.to_ascii_lowercase().as_str(),
             "footnote" | "span" | "size" | "a"
-        ) && scan.head_word_view_is_actionable(&name, segment, view)
-        {
+        ) && scan.head_word_view_is_actionable(
+            &name,
+            matches!(name, Cow::Borrowed(_)),
+            segment,
+            view,
+        ) {
             return Ok(None);
         }
     }

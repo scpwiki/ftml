@@ -675,7 +675,7 @@ where
     ["span", "size", "image", "footnote", "iframe"]
         .iter()
         .any(|owner| name.eq_ignore_ascii_case(owner))
-        && block.head_word_is_actionable(&name, segment)
+        && block.head_word_is_actionable(&name, matches!(name, Cow::Borrowed(_)), segment)
 }
 
 fn wikidot_target(
