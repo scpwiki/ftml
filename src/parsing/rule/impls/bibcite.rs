@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use std::borrow::Cow;
 
 pub const RULE_BIBCITE: Rule = Rule {
     name: "bibcite",
@@ -26,9 +27,9 @@ pub const RULE_BIBCITE: Rule = Rule {
     try_consume_fn,
 };
 
-fn bibliography_cite(label: &str) -> Element<'_> {
+fn bibliography_cite(label: Cow<'_, str>) -> Element<'_> {
     Element::BibliographyCite {
-        label: cow!(label),
+        label,
         brackets: false,
         inline: true,
     }
@@ -65,8 +66,8 @@ fn try_consume_fn<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
-    let label = collect_text(parser, RULE_BIBCITE, &close, &invalid, None)?;
-    if parser.settings().layout.legacy() && !valid_wikidot_inline_label(label) {
+    let (label, _) = collect_text_resolved(parser, RULE_BIBCITE, &close, &invalid, None)?;
+    if parser.settings().layout.legacy() && !valid_wikidot_inline_label(&label) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 

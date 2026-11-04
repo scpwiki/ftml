@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use std::borrow::Cow;
 
 pub const BLOCK_BIBCITE: BlockRule = BlockRule {
     name: "block-bibcite",
@@ -31,20 +32,25 @@ pub const BLOCK_BIBCITE: BlockRule = BlockRule {
 
 fn require_label<'r, 't>(
     parser: &Parser<'r, 't>,
-    value: Option<&'t str>,
-) -> Result<&'t str, ParseError> {
-    match value.map(str::trim).filter(|value| !value.is_empty()) {
-        Some(value) => Ok(value),
-        None => {
-            warn!("No label provided in [[bibcite]], failing rule");
-            Err(parser.make_err(ParseErrorKind::BlockMissingArguments))
-        }
+    value: Option<Cow<'t, str>>,
+) -> Result<Cow<'t, str>, ParseError> {
+    let label = match value {
+        Some(Cow::Borrowed(value)) => Cow::Borrowed(value.trim()),
+        Some(Cow::Owned(value)) => Cow::Owned(value.trim().to_owned()),
+        None => Cow::Borrowed(""),
+    };
+
+    if label.is_empty() {
+        warn!("No label provided in [[bibcite]], failing rule");
+        return Err(parser.make_err(ParseErrorKind::BlockMissingArguments));
     }
+
+    Ok(label)
 }
 
-fn bibliography_cite(label: &str, brackets: bool) -> Element<'_> {
+fn bibliography_cite(label: Cow<'_, str>, brackets: bool) -> Element<'_> {
     Element::BibliographyCite {
-        label: cow!(label),
+        label,
         brackets,
         inline: false,
     }
@@ -61,7 +67,7 @@ fn parse_fn<'r, 't>(
     assert!(!flag_star, "Bibcite doesn't allow star flag");
     assert_block_name(&BLOCK_BIBCITE, name);
 
-    let label = parser.get_head_value(&BLOCK_BIBCITE, in_head, require_label)?;
+    let label = parser.get_head_value_resolved(&BLOCK_BIBCITE, in_head, require_label)?;
 
     let brackets = !flag_score;
 

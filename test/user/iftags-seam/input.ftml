@@ -1,0 +1,3 @@
+[[user some[[iftags -zzz]][[/iftags]]-user]]
+[[user some[[iftags +zzz]]NO[[/iftags]]-user]]
+[[*user some[[iftags -zzz]][[/iftags]]-user]]

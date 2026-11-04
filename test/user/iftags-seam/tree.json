@@ -1,0 +1,40 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "some-user",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "some-user",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "some-user",
+                            "show-avatar": true
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
