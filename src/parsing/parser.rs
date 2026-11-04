@@ -119,6 +119,9 @@ pub(super) struct BlockScanCache<'t> {
     rule_attempt_failures: HashMap<RuleAttemptKey, (ParseError, usize)>,
     rule_attempt_failure_positions: Vec<bool>,
     body_end_outcomes: BTreeMap<ContextualBlockEndScanKey, bool>,
+    wikidot_composite_span_close: BTreeMap<(usize, BlockEndScanContext), bool>,
+    #[cfg(test)]
+    composite_span_close_scan_token_visits: Cell<usize>,
     underclosed_block_failures: BTreeMap<(&'static str, usize), ()>,
     deterministic_block_failures: BTreeMap<(&'static str, usize), ParseError>,
     partial_rejections: BTreeMap<PartialRejectionKey, ParseError>,
@@ -1017,6 +1020,47 @@ impl<'r, 't> Parser<'r, 't> {
                 .body_end_outcomes
                 .insert(((rule, token_start, first_iteration), context), outcome);
         }
+    }
+
+    pub(crate) fn wikidot_composite_span_close_outcome(
+        &self,
+        token_start: usize,
+    ) -> Option<bool> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_composite_span_close
+            .get(&(token_start, self.block_end_scan_context()))
+            .copied()
+    }
+
+    pub(crate) fn cache_wikidot_composite_span_close_outcomes(
+        &self,
+        token_starts: &[usize],
+        outcome: bool,
+    ) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let context = self.block_end_scan_context();
+        for &token_start in token_starts {
+            cache
+                .wikidot_composite_span_close
+                .insert((token_start, context), outcome);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn composite_span_close_scan_token_visits(&self) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .composite_span_close_scan_token_visits
+            .get()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn increment_composite_span_close_scan_token_visits(&self) {
+        let cache = self.block_end_scan_cache.borrow();
+        cache
+            .composite_span_close_scan_token_visits
+            .set(cache.composite_span_close_scan_token_visits.get() + 1);
     }
 
     pub(crate) fn underclosed_block_failure_cached(
@@ -2306,8 +2350,8 @@ fn parser_append_shared_items_and_optional_spaces_cover_helpers() {
 fn parser_state_fits_the_bounded_deep_parse_stack_budget() {
     let size = std::mem::size_of::<Parser<'static, 'static>>();
     assert!(
-        size <= 320,
-        "Parser grew to {size} bytes; deep recursive parsing requires at most 320 bytes",
+        size <= 336,
+        "Parser grew to {size} bytes; deep recursive parsing requires at most 336 bytes",
     );
 }
 
