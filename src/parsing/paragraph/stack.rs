@@ -422,6 +422,14 @@ impl<'t> ParagraphStack<'t> {
         if element != Element::LineBreak {
             self.paragraph_break_since_element = false;
         }
+        if self.wikidot && matches!(element, Element::Footnote(_)) {
+            if let Some(index) = self.current.iter().rposition(|element| {
+                !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
+            }) && self.current[index] == Element::LineBreak
+            {
+                self.current.remove(index);
+            }
+        }
         if self.wikidot_reopen_for_footnote && matches!(element, Element::Footnote(_)) {
             self.wikidot_reopen_for_footnote = false;
             let Some(Element::Container(paragraph)) = self.finished.pop() else {
