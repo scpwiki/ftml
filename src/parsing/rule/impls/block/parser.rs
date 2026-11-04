@@ -22,7 +22,7 @@ use super::BlockRule;
 use super::arguments::Arguments;
 use crate::parsing::collect::{
     CommentElidedText, collect_comment_elided_keep, collect_text, collect_text_keep,
-    consume_valid_comment,
+    collect_text_resolved, consume_iftags_segment, consume_valid_comment,
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -2105,13 +2105,23 @@ where
                 (parse_wikidot_attribute_field(&head), true)
             } else {
                 let start = self.current();
+                let mut elisions = Vec::new();
                 while !matches!(self.current().token, Token::RightBlock | Token::InputEnd)
                 {
+                    // An iftags segment in the head is consumed whole:
+                    // its own `]]` must not end the head early, and its
+                    // elisions resolve the segment in the parsed values.
+                    if self.current().token == Token::LeftBlock
+                        && let Some(segment) = consume_iftags_segment(self)?
+                    {
+                        elisions.extend(segment.elisions());
+                        continue;
+                    }
                     self.step()?;
                 }
                 let span = start.span.start..self.current().span.start;
                 let head =
-                    CommentElidedText::new(self.full_text().inner(), span, Vec::new());
+                    CommentElidedText::new(self.full_text().inner(), span, elisions);
                 (parse_wikidot_attribute_field(&head), false)
             }
         } else {
@@ -2238,6 +2248,43 @@ where
     {
         self.get_head_value_with_body_start(block_rule, in_head, convert)
             .map(|(value, _)| value)
+    }
+
+    /// Like `get_head_value`, except the head text is collected with
+    /// conditional segments resolved, so a segment inside the value
+    /// cannot terminate or corrupt it.
+    pub fn get_head_value_resolved<F, T>(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+        convert: F,
+    ) -> Result<T, ParseError>
+    where
+        F: FnOnce(&Self, Option<Cow<'t, str>>) -> Result<T, ParseError>,
+    {
+        let argument = if in_head {
+            let end_conditions = [ParseCondition::current(Token::RightBlock)];
+            let reject_conditions = [
+                ParseCondition::current(Token::ParagraphBreak),
+                ParseCondition::current(Token::LineBreak),
+            ];
+            let rule = self.rule();
+            let (slice, _) = collect_text_resolved(
+                self,
+                rule,
+                &end_conditions,
+                &reject_conditions,
+                Some(ParseErrorKind::BlockMalformedArguments),
+            )?;
+
+            Some(slice)
+        } else {
+            None
+        };
+
+        let value = convert(self, argument)?;
+        self.get_head_block_with_body_start(block_rule, false)?;
+        Ok(value)
     }
 
     pub(crate) fn get_head_value_with_body_start<F, T>(

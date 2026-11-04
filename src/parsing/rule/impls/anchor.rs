@@ -61,7 +61,8 @@ fn try_consume_fn<'r, 't>(
             ParseCondition::current(Token::RuntimeText),
         ]
     };
-    let (name, closer) = collect_text_keep(parser, RULE_ANCHOR, &close, &invalid, None)?;
+    let (name, closer) =
+        collect_text_resolved(parser, RULE_ANCHOR, &close, &invalid, None)?;
     let residual_closer = closer.token == Token::RightLink;
     let valid_wikidot_name = name
         .chars()
@@ -88,12 +89,12 @@ fn try_consume_fn<'r, 't>(
             Element::Link {
                 ltype: LinkType::Anchor,
                 link: LinkLocation::Url(Cow::Borrowed("javascript:;")),
-                label: LinkLabel::Text(cow!(label)),
+                label: LinkLabel::Text(Cow::Owned(label.to_string())),
                 target: None,
             },
         ];
         if !trailing.is_empty() {
-            elements.push(text!(trailing));
+            elements.push(Element::Text(Cow::Owned(trailing.to_string())));
         }
         elements.push(text!("]"));
         if residual_closer {
@@ -104,9 +105,9 @@ fn try_consume_fn<'r, 't>(
 
     let name = if parser.settings().isolate_user_ids && !parser.settings().layout.legacy()
     {
-        Cow::Owned(isolate_ids(name))
+        Cow::Owned(isolate_ids(&name))
     } else {
-        std::convert::identity(cow!(name))
+        name
     };
 
     let anchor = Element::AnchorName(name);

@@ -55,7 +55,7 @@ fn parse_tabview<'r, 't>(
     assert_block_name(&BLOCK_TABVIEW, name);
 
     let tabview_name =
-        parser.get_head_value(&BLOCK_TABVIEW, in_head, |_, value| Ok(value))?;
+        parser.get_head_value_resolved(&BLOCK_TABVIEW, in_head, |_, value| Ok(value))?;
 
     let (elements, errors, _) = parser.get_body_elements(&BLOCK_TABVIEW, false)?.into();
 
@@ -103,20 +103,21 @@ fn parse_tab<'r, 't>(
     assert!(!flag_score, "Tab doesn't allow score flag");
     assert_block_name(&BLOCK_TAB, name);
 
-    let label = parser.get_head_value(&BLOCK_TAB, in_head, |parser, value| {
-        if parser.settings().layout.legacy() {
-            Ok(value.unwrap_or("untitled"))
-        } else {
-            require_block_argument(parser, value)
-        }
-    })?;
+    let label =
+        parser.get_head_value_resolved(&BLOCK_TAB, in_head, |parser, value| {
+            if parser.settings().layout.legacy() {
+                Ok(value.unwrap_or(std::borrow::Cow::Borrowed("untitled")))
+            } else {
+                match value {
+                    Some(value) => Ok(value),
+                    None => Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
+                }
+            }
+        })?;
 
     let (elements, errors, _) = parser.get_body_elements(&BLOCK_TAB, true)?.into();
 
-    let element = Element::Partial(PartialElement::Tab(Tab {
-        label: std::borrow::Cow::Borrowed(label),
-        elements,
-    }));
+    let element = Element::Partial(PartialElement::Tab(Tab { label, elements }));
 
     success_elements_with_paragraph_safety(false, element, errors)
 }

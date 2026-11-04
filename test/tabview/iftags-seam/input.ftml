@@ -1,0 +1,5 @@
+[[tabview]]
+[[tab label="A[[iftags -zzz]]B[[/iftags]]"]]
+Body
+[[/tab]]
+[[/tabview]]

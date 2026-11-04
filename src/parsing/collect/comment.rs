@@ -10,6 +10,7 @@
  * (at your option) any later version.
  */
 
+use super::iftags::consume_iftags_segment;
 use super::prelude::*;
 use crate::parsing::rule::impls::comment_closer_token_count;
 use std::borrow::Cow;
@@ -145,6 +146,14 @@ where
 
         if parser.current().token == Token::LeftComment {
             comments.push(consume_valid_comment(parser)?);
+        } else if parser.current().token == Token::LeftBlock
+            && let Some(segment) = consume_iftags_segment(parser)?
+        {
+            // An iftags segment inside the field resolves where the
+            // block rule cannot run: its elision ranges join the
+            // comments so the materialized text keeps only the body
+            // when the conditions hold, and nothing when they do not.
+            comments.extend(segment.elisions());
         } else {
             parser.step()?;
         }

@@ -1,0 +1,7 @@
+[https://exam[[iftags -zzz]][[/iftags]]ple.com/ Labelel]
+[https://example.com/ Lab[[iftags -zzz]][[/iftags]]el]
+[[[some[[iftags -zzz]][[/iftags]]-page|My label]]]
+[[[some-page|My[[iftags -zzz]][[/iftags]] label]]]
+[[a href="https://exam[[iftags -zzz]][[/iftags]]ple.com"]]click[[/a]]
+[https://exam[[iftags +zzz]]NO[[/iftags]]ple.com/ Labelel]
+[/page#ma[[iftags -zzz]][[/iftags]]in With anchor]
