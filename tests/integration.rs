@@ -77,9 +77,6 @@ mod wikijump_underclosed_owners;
 #[path = "parser_functions_wikidot_syntax.rs"]
 mod parser_functions_wikidot_syntax;
 
-#[path = "parity_index.rs"]
-mod parity_index;
-
 #[path = "raw_url_delimiter.rs"]
 mod raw_url_delimiter;
 
@@ -201,12 +198,6 @@ mod wikidot_explicit_list_grammar;
 
 #[path = "wikidot_comment_consumers.rs"]
 mod wikidot_comment_consumers;
-
-#[path = "parity_branch_coverage.rs"]
-mod parity_branch_coverage;
-
-#[path = "parity_discovery_regressions.rs"]
-mod parity_discovery_regressions;
 
 #[path = "wikidot_image_attachment_default.rs"]
 mod wikidot_image_attachment_default;

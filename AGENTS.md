@@ -12,7 +12,6 @@
 
 - Search existing tests and helpers before adding parser or renderer behavior. Add focused positive and negative regression fixtures for changed syntax.
 - A behavior confirmed against live Wikidot is pinned once, as a corpus fixture whose directory and input carry the intent; do not duplicate the same shape as a per-shape Rust test. Adjudicate a suspected divergence against existing pins and frozen parity captures before probing live.
-- Adding a corpus fixture under `test/` also requires its row in `tests/fixtures/wikidot-parity/cases.jsonl`, or the `parity_index` integration test fails. Classify the row from the fixture's content, following the neighboring rows.
 - `FTML_UPDATE_TESTS=1` rewrites unrelated fixtures (a known `rel="noopener"` drift); revert every rewrite outside the fixtures the change owns before committing.
 - Prefer simple local invariants over one-off abstraction. Split large modules when their responsibilities no longer fit clearly in one place.
 - Remove task-owned branches, worktrees, target directories, and build artifacts when they are no longer useful.
