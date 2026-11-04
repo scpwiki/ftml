@@ -1,0 +1,78 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "bold",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "b"
+                                            },
+                                            {
+                                                "element": "link",
+                                                "data": {
+                                                    "type": "page",
+                                                    "link": {
+                                                        "site": null,
+                                                        "page": "p",
+                                                        "extra": null
+                                                    },
+                                                    "label": {
+                                                        "slug": "p"
+                                                    },
+                                                    "target": null
+                                                }
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "—"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": " "
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "c"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "d"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -2529,75 +2529,421 @@ fn emit_dash_segments<'t>(
 }
 
 fn truncate_dash_run_containers<'t>(elements: &mut Vec<Element<'t>>) -> bool {
-    let mut output = Vec::with_capacity(elements.len());
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
     let mut changed = false;
+    let mut index = 0;
 
-    for element in mem::take(elements) {
+    while index < input.len() {
         let is_strike = matches!(
-            &element,
-            Element::Container(container) if container.ctype() == ContainerType::Strikethrough
+            input[index].as_ref(),
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Strikethrough
         );
         if !is_strike {
-            output.push(element);
+            output.push(take_element(&mut input, index));
+            index += 1;
             continue;
         }
-        let (shell, children) =
-            FormatShell::into_parts(element).expect("strike container has a shell");
-        let mut input: Vec<Option<Element<'t>>> =
-            children.into_iter().map(Some).collect();
-        let scan = build_dash_scan(
-            &|index| input.get(index).and_then(|element| element.as_ref()),
-            input.len(),
-            0,
-            true,
+        let (mut replacement, truncated) =
+            truncate_strike_visible(take_element(&mut input, index));
+        if truncated {
+            output.append(&mut replacement);
+            changed = true;
+            index += 1;
+            continue;
+        }
+        input[index] = Some(
+            replacement
+                .pop()
+                .expect("untruncated strike returns its element"),
         );
-        let close = if scan.stream.first().is_some_and(|ch| !ch.is_whitespace()) {
-            dash_stream_close(&scan.stream, 0)
-        } else {
-            None
-        };
-        let Some(close) = close else {
-            output.push(
+        if let Some((replacement, next)) = truncate_strike_deep(&mut input, index) {
+            output.extend(replacement);
+            changed = true;
+            index = next;
+            continue;
+        }
+        output.push(take_element(&mut input, index));
+        index += 1;
+    }
+
+    *elements = output;
+    changed
+}
+
+fn truncate_strike_visible<'t>(element: Element<'t>) -> (Vec<Element<'t>>, bool) {
+    let (shell, children) =
+        FormatShell::into_parts(element).expect("strike container has a shell");
+    let mut input: Vec<Option<Element<'t>>> = children.into_iter().map(Some).collect();
+    let scan = build_dash_scan(
+        &|index| input.get(index).and_then(|element| element.as_ref()),
+        input.len(),
+        0,
+        true,
+    );
+    let close = if scan.stream.first().is_some_and(|ch| !ch.is_whitespace()) {
+        dash_stream_close(&scan.stream, 0)
+    } else {
+        None
+    };
+    let Some(close) = close else {
+        return (
+            vec![
                 shell.build(
                     input
                         .into_iter()
                         .map(|element| element.expect("child present"))
                         .collect(),
                 ),
-            );
-            continue;
-        };
-        let mut segments = vec![Vec::new(), Vec::new()];
-        emit_dash_segments(
-            &mut input,
-            &scan,
-            &|pos| {
-                if pos < close {
-                    Some(0)
-                } else if pos < close + 2 {
-                    None
-                } else {
-                    Some(1)
-                }
-            },
-            &|pos| usize::from(pos >= close),
-            &[true, false],
-            &mut segments,
+            ],
+            false,
         );
-        let mut segments = segments.into_iter();
-        let content = segments.next().expect("content segment");
-        let mut tail = segments.next().expect("tail segment");
-        for element in input.into_iter().skip(scan.end) {
-            tail.push(element.expect("child present"));
-        }
-        output.push(shell.build(content));
-        output.append(&mut tail);
-        output.push(Element::Text(FormatKind::Strike.close_marker().into()));
-        changed = true;
+    };
+    let mut segments = vec![Vec::new(), Vec::new()];
+    emit_dash_segments(
+        &mut input,
+        &scan,
+        &|pos| {
+            if pos < close {
+                Some(0)
+            } else if pos < close + 2 {
+                None
+            } else {
+                Some(1)
+            }
+        },
+        &|pos| usize::from(pos >= close),
+        &[true, false],
+        &mut segments,
+    );
+    let mut segments = segments.into_iter();
+    let content = segments.next().expect("content segment");
+    let mut tail = segments.next().expect("tail segment");
+    for element in input.into_iter().skip(scan.end) {
+        tail.push(element.expect("child present"));
     }
+    let mut replacement = vec![shell.build(content)];
+    replacement.append(&mut tail);
+    replacement.push(Element::Text(FormatKind::Strike.close_marker().into()));
+    (replacement, true)
+}
 
-    *elements = output;
-    changed
+#[derive(Default)]
+struct DeepStream {
+    stream: Vec<char>,
+    seams: Vec<usize>,
+    markers: Vec<usize>,
+    expanded: bool,
+}
+
+fn dash_deep_shell<'t>(element: &Element<'t>) -> Option<FormatShell<'t>> {
+    if let Element::Container(container) = element
+        && !container.attributes().get().is_empty()
+    {
+        return None;
+    }
+    let shell = FormatShell::from_element(element)?;
+    if shell.kind() == FormatKind::Strike || subtree_has_barrier(element) {
+        return None;
+    }
+    Some(shell)
+}
+
+fn is_plain_strike(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Container(container)
+            if container.ctype() == ContainerType::Strikethrough
+                && container.attributes().get().is_empty()
+    )
+}
+
+fn dash_deep_subtree(element: &Element<'_>) -> Option<DeepStream> {
+    let children = formatter_children(element)?;
+    let mut out = DeepStream::default();
+    if is_plain_strike(element) {
+        out.stream.extend(['-', '-']);
+        dash_deep_seq(children, true, &mut out)?;
+        out.stream.extend(['-', '-']);
+    } else {
+        dash_deep_seq(children, true, &mut out)?;
+    }
+    Some(out)
+}
+
+fn dash_deep_seq(
+    elements: &[Element<'_>],
+    inside: bool,
+    out: &mut DeepStream,
+) -> Option<usize> {
+    let mut consumed = 0;
+    for element in elements {
+        let shell = dash_deep_shell(element);
+        let strike = inside && is_plain_strike(element);
+        if shell.is_some() || strike {
+            let sub = dash_deep_subtree(element);
+            if let Some(sub) = sub
+                && (strike || sub.stream.windows(2).any(|pair| pair == ['-', '-']))
+            {
+                let base = out.stream.len();
+                out.stream.extend(sub.stream.iter());
+                out.seams.extend(sub.seams.iter().map(|pos| pos + base));
+                out.markers.extend(sub.markers.iter().map(|pos| pos + base));
+                if shell.is_some() {
+                    if base > 0 {
+                        out.seams.push(base - 1);
+                    }
+                    out.seams.push(base + sub.stream.len() - 1);
+                    if sub.stream.first() == Some(&'-') && sub.stream.get(1) == Some(&'-')
+                    {
+                        out.markers.push(base);
+                    }
+                }
+                out.expanded = true;
+                consumed += 1;
+                continue;
+            }
+        }
+        match dash_unit(element, true) {
+            DashUnit::Text => {
+                out.stream
+                    .extend(text(element).expect("text unit holds text").chars());
+                consumed += 1;
+            }
+            DashUnit::Atom(ch) => {
+                if subtree_has_dash_pair(element) {
+                    if inside {
+                        return None;
+                    }
+                    break;
+                }
+                out.stream.push(ch);
+                consumed += 1;
+            }
+            DashUnit::Partial => {
+                consumed += 1;
+            }
+            DashUnit::Barrier => {
+                if inside {
+                    return None;
+                }
+                break;
+            }
+        }
+    }
+    Some(consumed)
+}
+
+fn dash_deep_apply<'t>(
+    elements: Vec<Element<'t>>,
+    inside: bool,
+    flat: &mut Vec<Option<Element<'t>>>,
+) {
+    for element in elements {
+        let shell = dash_deep_shell(&element);
+        let strike = inside && is_plain_strike(&element);
+        if shell.is_some() || strike {
+            let sub = dash_deep_subtree(&element);
+            if let Some(sub) = sub
+                && (strike || sub.stream.windows(2).any(|pair| pair == ['-', '-']))
+            {
+                if strike {
+                    flat.push(Some(Element::Text(
+                        FormatKind::Strike.close_marker().into(),
+                    )));
+                    let (_, children) = FormatShell::into_parts(element)
+                        .expect("strike container has parts");
+                    dash_deep_apply(children, true, flat);
+                    flat.push(Some(Element::Text(
+                        FormatKind::Strike.close_marker().into(),
+                    )));
+                } else {
+                    let shell = shell.expect("shell present");
+                    flat.push(Some(dash_flatten_edge(&shell, true)));
+                    let (_, children) = FormatShell::into_parts(element)
+                        .expect("flatten shell has parts");
+                    dash_deep_apply(children, true, flat);
+                    flat.push(Some(dash_flatten_edge(&shell, false)));
+                }
+                continue;
+            }
+        }
+        flat.push(Some(element));
+    }
+}
+
+fn dash_deep_close(
+    stream: &[char],
+    content_start: usize,
+    seams: &[usize],
+    markers: &[usize],
+) -> Option<usize> {
+    let mut index = content_start + 1;
+    while index + 1 < stream.len() {
+        if stream[index] == '-'
+            && stream[index + 1] == '-'
+            && (markers.contains(&index)
+                || (!seams.contains(&index) && !stream[index - 1].is_whitespace()))
+        {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn dash_deep_opener(stream: &[char], from: usize, seams: &[usize]) -> Option<usize> {
+    (from..stream.len().saturating_sub(2)).find(|&pos| {
+        !seams.contains(&pos)
+            && stream[pos] == '-'
+            && stream[pos + 1] == '-'
+            && !stream[pos + 2].is_whitespace()
+    })
+}
+
+fn dash_deep_pairs(
+    stream: &[char],
+    seams: &[usize],
+    markers: &[usize],
+) -> Vec<(usize, usize)> {
+    let mut first = dash_deep_close(stream, 2, seams, markers);
+    if markers.contains(&2) && stream[2] == '-' && stream[3] == '-' {
+        first = Some(2);
+    }
+    let Some(first) = first else {
+        return Vec::new();
+    };
+    let mut pairs = vec![(0, first)];
+    let mut cursor = first + 2;
+    while cursor + 4 < stream.len() {
+        let Some(open) = dash_deep_opener(stream, cursor, seams) else {
+            break;
+        };
+        let Some(close) = dash_deep_close(stream, open + 2, seams, markers) else {
+            break;
+        };
+        pairs.push((open, close));
+        cursor = close + 2;
+    }
+    pairs
+}
+
+fn truncate_strike_deep<'t>(
+    input: &mut [Option<Element<'t>>],
+    strike_index: usize,
+) -> Option<(Vec<Element<'t>>, usize)> {
+    let element = input[strike_index].as_ref()?;
+    let Element::Container(container) = element else {
+        return None;
+    };
+    if container.ctype() != ContainerType::Strikethrough {
+        return None;
+    }
+    let children = container.elements();
+    let plain_scan =
+        build_dash_scan(&|index| children.get(index), children.len(), 0, true);
+    if plain_scan
+        .stream
+        .first()
+        .is_some_and(|ch| ch.is_whitespace())
+    {
+        return None;
+    }
+    if dash_stream_close(&plain_scan.stream, 0).is_some() {
+        return None;
+    }
+    let mut deep = DeepStream::default();
+    let consumed = dash_deep_seq(children, false, &mut deep)?;
+    if consumed == 0 || !deep.expanded {
+        return None;
+    }
+    if deep.stream.first().is_some_and(|ch| ch.is_whitespace()) {
+        return None;
+    }
+    let rest_empty = consumed == children.len();
+    let mut pair_stream = vec!['-', '-'];
+    pair_stream.extend(deep.stream.iter());
+    let mut continuation_end = strike_index + 1;
+    if rest_empty {
+        pair_stream.extend(['-', '-']);
+        let continuation_scan = build_dash_scan(
+            &|index| {
+                input
+                    .get(strike_index + 1 + index)
+                    .and_then(|element| element.as_ref())
+            },
+            input.len() - strike_index - 1,
+            0,
+            true,
+        );
+        pair_stream.extend(continuation_scan.stream.iter());
+        continuation_end = strike_index + 1 + continuation_scan.end;
+    }
+    let seams: Vec<usize> = deep.seams.iter().map(|pos| pos + 2).collect();
+    let markers: Vec<usize> = deep.markers.iter().map(|pos| pos + 2).collect();
+    let pairs = dash_deep_pairs(&pair_stream, &seams, &markers);
+    if !matches!(pairs.first(), Some(&(0, _))) {
+        return None;
+    }
+    let mut flat: Vec<Option<Element<'t>>> = Vec::new();
+    flat.push(Some(Element::Text(
+        FormatKind::Strike.close_marker().into(),
+    )));
+    let strike = take_element(input, strike_index);
+    let (_, strike_children) =
+        FormatShell::into_parts(strike).expect("strike container has parts");
+    let mut child_iter = strike_children.into_iter();
+    let head: Vec<Element<'t>> = child_iter.by_ref().take(consumed).collect();
+    let rest_children: Vec<Element<'t>> = child_iter.collect();
+    dash_deep_apply(head, false, &mut flat);
+    if rest_empty {
+        flat.push(Some(Element::Text(
+            FormatKind::Strike.close_marker().into(),
+        )));
+        for element_index in strike_index + 1..continuation_end {
+            flat.push(Some(take_element(input, element_index)));
+        }
+    } else {
+        for child in rest_children {
+            flat.push(Some(child));
+        }
+        flat.push(Some(Element::Text(
+            FormatKind::Strike.close_marker().into(),
+        )));
+    }
+    let flat_scan = build_dash_scan(
+        &|index| flat.get(index).and_then(|element| element.as_ref()),
+        flat.len(),
+        0,
+        true,
+    );
+    debug_assert_eq!(flat_scan.stream, pair_stream);
+    let mut output = Vec::new();
+    emit_dash_pairs_flat(&mut flat, &flat_scan, &pairs, &mut output);
+    if let Some(close_index) = output.iter().position(|element| {
+        matches!(
+            element,
+            Element::Partial(PartialElement::InlineFormatClose(
+                InlineFormatKind::Strikethrough,
+            ))
+        )
+    }) {
+        for element in &mut output[..close_index] {
+            if is_exact_text(element, "--") {
+                *element = Element::Text(Cow::Borrowed("\u{2014}"));
+            }
+        }
+    }
+    for element in flat.into_iter().skip(flat_scan.end) {
+        output.push(element.expect("unscanned element present"));
+    }
+    let next = if rest_empty {
+        continuation_end
+    } else {
+        strike_index + 1
+    };
+    Some((output, next))
 }
 
 fn emit_dash_pairs<'t>(
