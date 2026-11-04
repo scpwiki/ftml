@@ -27,7 +27,7 @@
 // Meta {{{
 
 // Complete input from start to finish
-document = _{ SOI ~ token* ~ EOI }
+document = _{ SOI ~ (comment | token)* ~ EOI }
 
 // An individual token
 // Order determines priority (earlier = higher)
@@ -160,6 +160,32 @@ left_raw = @{ "@<" }
 right_raw = @{ ">@" }
 
 left_comment = @{ "[!--" ~ &((!"--]" ~ ANY)* ~ "--]") }
+
+comment = _{ left_comment ~ comment_interior* ~ comment_close }
+comment_interior = _{ !comment_close ~ token }
+comment_close = _{
+    (triple_dash ~ right_bracket) |
+    (double_dash ~ dash_single ~ right_bracket) |
+    (double_dash ~ right_bracket) |
+    (url_star_dash_close ~ right_bracket) |
+    (url_dash_close ~ right_bracket) |
+    (email_dash_close ~ right_bracket)
+}
+dash_single = @{ "-" }
+url_char = _{
+    !(NEWLINE | " " | "\t" | "\"" | "'" | "|" | "[" | "]" | ">@" | "@@" | discarded_control) ~ ANY
+}
+url_dash_body = _{ (!("--" ~ "]") ~ url_char)* ~ "--" }
+url_dash_close = @{ ((("http" ~ "s"?) | "ftp") ~ "://" | "mailto:") ~ url_dash_body }
+url_star_dash_close = @{
+    "*" ~ ((("http" ~ "s"?) | "ftp") ~ "://" | "mailto:") ~ url_dash_body
+}
+email_dash_close = @{
+    (ASCII_ALPHANUMERIC | "_" | "-")+ ~ ("." ~ (ASCII_ALPHANUMERIC | "_" | "-")+)* ~
+    "@" ~
+    ((ASCII_ALPHANUMERIC | "-")+ ~ ".")* ~
+    (!("--" ~ "]") ~ (ASCII_ALPHANUMERIC | "-"))* ~ "--"
+}
 
 left_bracket = @{ "[" }
 left_bracket_anchor = @{ "[#" }

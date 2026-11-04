@@ -255,6 +255,10 @@ impl Token {
             Rule::left_link => Token::LeftLink,
             Rule::left_link_star => Token::LeftLinkStar,
             Rule::right_link => Token::RightLink,
+            Rule::dash_single => Token::Other,
+            Rule::url_dash_close => Token::Url,
+            Rule::url_star_dash_close => Token::UrlStar,
+            Rule::email_dash_close => Token::Email,
 
             Rule::table_column => Token::TableColumn,
             Rule::table_column_right => Token::TableColumnRight,
@@ -276,7 +280,13 @@ impl Token {
             Rule::other => Token::Other,
             Rule::EOI => Token::InputEnd,
 
-            Rule::document | Rule::token => {
+            Rule::document
+            | Rule::token
+            | Rule::comment
+            | Rule::comment_interior
+            | Rule::comment_close
+            | Rule::url_char
+            | Rule::url_dash_body => {
                 panic!("Received invalid pest rule: {rule:?}")
             }
         }

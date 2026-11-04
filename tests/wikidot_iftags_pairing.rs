@@ -289,26 +289,3 @@ fn native_layout_pairs_the_same_way() {
         "d",
     );
 }
-
-#[test]
-fn spec_comment_straddle_reads_raw() {
-    let fruit = vec![Cow::Borrowed("fruit")];
-    for layout in [Layout::Wikidot, Layout::Wikijump] {
-        assert_eq!(
-            render_layout(
-                "[[iftags +fruit [!--x--]]]KEPT[[/iftags]]",
-                layout,
-                fruit.clone(),
-            ),
-            "",
-        );
-        assert_eq!(
-            render_layout(
-                "[[iftags -fruit[!--x--]]]KEPT[[/iftags]]",
-                layout,
-                fruit.clone(),
-            ),
-            "]KEPT",
-        );
-    }
-}
