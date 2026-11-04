@@ -90,9 +90,7 @@ fn parse_fn<'r, 't>(
         let body_start = parser.current().span.start;
         let mutable_state = parser.get_mutable_state();
         let snapshot = parser.clone();
-        parser.enter_wikidot_bibliography_body();
         let body = parser.get_body_elements(&BLOCK_BIBLIOGRAPHY, false);
-        parser.leave_wikidot_bibliography_body();
         let body = body?;
         let (mut body_elements, errors, _) = body.into();
         let mut literal = vec![Element::Text(cow!(&source[opener_start..opener_end]))];

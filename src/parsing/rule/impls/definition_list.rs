@@ -81,6 +81,7 @@ fn parse_definition_list<'r, 't>(
     let mut errors = Vec::new();
     let mut paragraph_safe = false;
     let mut escape: Option<SplitEscapeLayout<'t>> = None;
+    let mut residue_vanished = false;
 
     loop {
         let next = match scan_item(parser, &mut escape) {
@@ -102,11 +103,17 @@ fn parse_definition_list<'r, 't>(
                     break;
                 }
             }
-            None => break,
+            None => {
+                residue_vanished = true;
+                break;
+            }
         }
     }
 
     if items.is_empty() {
+        if residue_vanished {
+            parser.mark_wikidot_colon_line_vanished();
+        }
         ok!(false; Elements::None, errors)
     } else if let Some((flat, entries, _escape_safe)) = escape {
         let mut elements = vec![Element::DefinitionList(items)];
