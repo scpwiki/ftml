@@ -890,7 +890,11 @@ fn resolve_elements(
                 | PartialElement::InlineSizeOpen(_)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(_)
-                | PartialElement::InlineSpanClose(_) => {}
+                | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose => {}
             },
             _ => {}
         }
@@ -960,7 +964,11 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
             | PartialElement::InlineSizeOpen(_)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(_)
-            | PartialElement::InlineSpanClose(_) => false,
+            | PartialElement::InlineSpanClose(_)
+            | PartialElement::InlineFormatOpen(_)
+            | PartialElement::InlineFormatClose(_)
+            | PartialElement::InlineColorOpen(..)
+            | PartialElement::InlineColorClose => false,
         },
         Element::Module(_)
         | Element::ContentSeparator

@@ -401,7 +401,11 @@ fn collect_page_references(
                 | PartialElement::InlineSizeOpen(_)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(_)
-                | PartialElement::InlineSpanClose(_) => {}
+                | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose => {}
             },
             _ => {}
         }
@@ -494,7 +498,11 @@ fn collect_user_references(
                 | PartialElement::InlineSizeOpen(_)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(_)
-                | PartialElement::InlineSpanClose(_) => {}
+                | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose => {}
             },
             _ => {}
         }

@@ -111,7 +111,11 @@ fn visit_headings<'a, 't>(
                 | PartialElement::InlineSizeOpen(_)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(_)
-                | PartialElement::InlineSpanClose(_) => {}
+                | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose => {}
             },
             Element::Footnote(index) => {
                 if let Some(contents) =

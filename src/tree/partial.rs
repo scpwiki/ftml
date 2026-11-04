@@ -18,9 +18,56 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{AttributeMap, ListItem, RubyText, Tab, TableCell, TableRow};
+use super::{AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell, TableRow};
 use crate::parsing::ParseErrorKind;
 use std::borrow::Cow;
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum InlineFormatKind {
+    Bold,
+    Italics,
+    Underline,
+    Superscript,
+    Subscript,
+    Strikethrough,
+    Monospace,
+}
+
+impl InlineFormatKind {
+    #[inline]
+    pub fn container_type(self) -> ContainerType {
+        match self {
+            InlineFormatKind::Bold => ContainerType::Bold,
+            InlineFormatKind::Italics => ContainerType::Italics,
+            InlineFormatKind::Underline => ContainerType::Underline,
+            InlineFormatKind::Superscript => ContainerType::Superscript,
+            InlineFormatKind::Subscript => ContainerType::Subscript,
+            InlineFormatKind::Strikethrough => ContainerType::Strikethrough,
+            InlineFormatKind::Monospace => ContainerType::Monospace,
+        }
+    }
+
+    #[inline]
+    pub fn open_marker(self) -> &'static str {
+        match self {
+            InlineFormatKind::Bold => "**",
+            InlineFormatKind::Italics => "//",
+            InlineFormatKind::Underline => "__",
+            InlineFormatKind::Superscript => "^^",
+            InlineFormatKind::Subscript => ",,",
+            InlineFormatKind::Strikethrough => "--",
+            InlineFormatKind::Monospace => "{{",
+        }
+    }
+
+    #[inline]
+    pub fn close_marker(self) -> &'static str {
+        match self {
+            InlineFormatKind::Monospace => "}}",
+            kind => kind.open_marker(),
+        }
+    }
+}
 
 /// Part of an element, as returned by a rule.
 ///
@@ -38,6 +85,14 @@ pub enum PartialElement<'t> {
     InlineSpanOpen(AttributeMap<'t>),
 
     InlineSpanClose(Cow<'t, str>),
+
+    InlineFormatOpen(InlineFormatKind),
+
+    InlineFormatClose(InlineFormatKind),
+
+    InlineColorOpen(Cow<'t, str>, bool),
+
+    InlineColorClose,
 
     ListItem(ListItem<'t>),
 
@@ -58,6 +113,10 @@ impl PartialElement<'_> {
             PartialElement::InlineSizeClose(_) => "InlineSizeClose",
             PartialElement::InlineSpanOpen(_) => "InlineSpanOpen",
             PartialElement::InlineSpanClose(_) => "InlineSpanClose",
+            PartialElement::InlineFormatOpen(_) => "InlineFormatOpen",
+            PartialElement::InlineFormatClose(_) => "InlineFormatClose",
+            PartialElement::InlineColorOpen(..) => "InlineColorOpen",
+            PartialElement::InlineColorClose => "InlineColorClose",
             PartialElement::ListItem(_) => "ListItem",
             PartialElement::TableRow(_) => "TableRow",
             PartialElement::TableCell(_) => "TableCell",
@@ -73,7 +132,11 @@ impl PartialElement<'_> {
             | PartialElement::InlineSizeOpen(_)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(_)
-            | PartialElement::InlineSpanClose(_) => ParseErrorKind::NoRulesMatch,
+            | PartialElement::InlineSpanClose(_)
+            | PartialElement::InlineFormatOpen(_)
+            | PartialElement::InlineFormatClose(_)
+            | PartialElement::InlineColorOpen(..)
+            | PartialElement::InlineColorClose => ParseErrorKind::NoRulesMatch,
             PartialElement::ListItem(_) => ParseErrorKind::ListItemOutsideList,
             PartialElement::TableRow(_) => ParseErrorKind::TableRowOutsideTable,
             PartialElement::TableCell(_) => ParseErrorKind::TableCellOutsideTable,
@@ -99,6 +162,19 @@ impl PartialElement<'_> {
             PartialElement::InlineSpanClose(source) => {
                 PartialElement::InlineSpanClose(Cow::Owned(source.to_string()))
             }
+            PartialElement::InlineFormatOpen(kind) => {
+                PartialElement::InlineFormatOpen(*kind)
+            }
+            PartialElement::InlineFormatClose(kind) => {
+                PartialElement::InlineFormatClose(*kind)
+            }
+            PartialElement::InlineColorOpen(color, background) => {
+                PartialElement::InlineColorOpen(
+                    Cow::Owned(color.to_string()),
+                    *background,
+                )
+            }
+            PartialElement::InlineColorClose => PartialElement::InlineColorClose,
             PartialElement::ListItem(list_item) => {
                 PartialElement::ListItem(list_item.to_owned())
             }
@@ -127,6 +203,10 @@ impl PartialElement<'_> {
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(_)
                 | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose
         )
     }
 }
@@ -221,6 +301,10 @@ mod tests {
             PartialElement::InlineSizeClose(cow!("[[/SiZe]]")),
             PartialElement::InlineSpanOpen(AttributeMap::new()),
             PartialElement::InlineSpanClose(cow!("[[/span]]")),
+            PartialElement::InlineFormatOpen(InlineFormatKind::Bold),
+            PartialElement::InlineFormatClose(InlineFormatKind::Monospace),
+            PartialElement::InlineColorOpen(cow!("red"), false),
+            PartialElement::InlineColorClose,
         ] {
             assert!(partial.is_inline_format_control());
             assert_eq!(partial.to_owned(), partial);

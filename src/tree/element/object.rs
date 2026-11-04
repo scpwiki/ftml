@@ -259,7 +259,9 @@ pub enum Element<'t> {
     },
 
     #[serde(rename_all = "kebab-case")]
-    MathInline { latex_source: Cow<'t, str> },
+    MathInline {
+        latex_source: Cow<'t, str>,
+    },
 
     EquationReference(Cow<'t, str>),
 
@@ -448,7 +450,11 @@ impl Element<'_> {
                 | PartialElement::InlineSizeOpen(_)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(_)
-                | PartialElement::InlineSpanClose(_) => {}
+                | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose => {}
             },
             _ => {}
         }

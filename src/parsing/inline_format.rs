@@ -1601,7 +1601,11 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             | PartialElement::InlineSizeOpen(_)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(_)
-            | PartialElement::InlineSpanClose(_) => {}
+            | PartialElement::InlineSpanClose(_)
+            | PartialElement::InlineFormatOpen(_)
+            | PartialElement::InlineFormatClose(_)
+            | PartialElement::InlineColorOpen(..)
+            | PartialElement::InlineColorClose => {}
         },
         _ => {}
     }
