@@ -1839,8 +1839,8 @@ fn visit_children<'t>(element: &Element<'t>, visit: &mut dyn FnMut(&[Element<'t>
             }
         }
         Element::TabView(tabs) => {
-            for tab in tabs {
-                visit(&tab.elements);
+            for item in tabs {
+                visit(item.elements());
             }
         }
         Element::Anchor { elements, .. }
@@ -1904,8 +1904,8 @@ fn visit_children_mut<'t>(
             }
         }
         Element::TabView(tabs) => {
-            for tab in tabs {
-                visit(&mut tab.elements);
+            for item in tabs {
+                visit(item.elements_mut());
             }
         }
         Element::Anchor { elements, .. }

@@ -131,6 +131,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_iftags_body_end: Cell<Option<usize>>,
     gate_items_allowed: Cell<bool>,
     title_footnote_fused_end: Cell<bool>,
+    degraded_title_records: Vec<usize>,
     wikidot_footnote_zone_until: Cell<Option<usize>>,
     fused_name_residual: Cell<Option<usize>>,
     head_had_segment: Cell<bool>,
@@ -354,6 +355,27 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .title_footnote_fused_end
             .set(value);
+    }
+
+    pub(crate) fn record_degraded_title(&self, position: usize) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        if !cache.degraded_title_records.contains(&position) {
+            cache.degraded_title_records.push(position);
+        }
+    }
+
+    pub(crate) fn degraded_title_record_count(&self) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .degraded_title_records
+            .len()
+    }
+
+    pub(crate) fn truncate_degraded_title_records(&self, len: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .degraded_title_records
+            .truncate(len);
     }
 
     #[inline]

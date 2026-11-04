@@ -340,8 +340,8 @@ fn collect_page_references(
                 }
             }
             Element::TabView(tabs) => {
-                for tab in tabs {
-                    collect_page_references(&tab.elements, references, seen);
+                for item in tabs {
+                    collect_page_references(item.elements(), references, seen);
                 }
             }
             Element::Anchor { elements, .. }
@@ -437,8 +437,8 @@ fn collect_user_references(
                 }
             }
             Element::TabView(tabs) => {
-                for tab in tabs {
-                    collect_user_references(&tab.elements, references, seen);
+                for item in tabs {
+                    collect_user_references(item.elements(), references, seen);
                 }
             }
             Element::Anchor { elements, .. }

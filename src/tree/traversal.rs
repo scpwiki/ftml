@@ -101,8 +101,8 @@ fn tree_stack_depth_reaches_threshold<'a>(
                 }
             }
             Element::TabView(tabs) => {
-                for tab in tabs {
-                    push_tree_elements(stack, &tab.elements, child_depth);
+                for item in tabs {
+                    push_tree_elements(stack, item.elements(), child_depth);
                 }
             }
             Element::Anchor { elements, .. }

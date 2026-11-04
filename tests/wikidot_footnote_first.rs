@@ -35,9 +35,9 @@ fn contains_empty_owner(elements: &[Element<'_>]) -> bool {
                 .iter()
                 .any(|cell| contains_empty_owner(&cell.elements))
         }),
-        Element::TabView(tabs) => {
-            tabs.iter().any(|tab| contains_empty_owner(&tab.elements))
-        }
+        Element::TabView(tabs) => tabs
+            .iter()
+            .any(|item| contains_empty_owner(item.elements())),
         Element::List { items, .. } => items.iter().any(|item| match item {
             ListItem::Elements { elements, .. } => contains_empty_owner(elements),
             ListItem::SubList { element } => {

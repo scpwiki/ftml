@@ -21,7 +21,7 @@
 use super::TextContext;
 use crate::tree::{
     CodeBlock, ContainerType, DefinitionListItem, Element, ListItem, Module,
-    PartialElement, Tab,
+    PartialElement, TabViewItem,
 };
 
 pub fn render_elements(ctx: &mut TextContext, elements: &[Element]) {
@@ -126,13 +126,21 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
 
             ctx.add_newline();
         }
-        Element::TabView(tabs) => {
-            for Tab { label, elements } in tabs {
-                ctx.push_str(label);
-                ctx.add_newline();
+        Element::TabView(items) => {
+            for item in items {
+                match item {
+                    TabViewItem::Tab(tab) => {
+                        ctx.push_str(&tab.label);
+                        ctx.add_newline();
 
-                render_elements(ctx, elements);
-                ctx.add_newline();
+                        render_elements(ctx, &tab.elements);
+                        ctx.add_newline();
+                    }
+                    TabViewItem::Content(elements) => {
+                        render_elements(ctx, elements);
+                        ctx.add_newline();
+                    }
+                }
             }
         }
         Element::StandaloneButton(button) => ctx.push_str(&button.label),
