@@ -285,6 +285,7 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
 
     if wikidot_compatibility {
         preserve_wikidot_quote_tab_separator(text);
+        preserve_wikidot_bibliography_tab_gap(text);
     }
 
     replace_tabs(text, &mut buffer, wikidot_compatibility);
@@ -651,6 +652,55 @@ fn preserve_wikidot_quote_tab_separator(text: &mut String) {
             output.push_str(line);
         }
     }
+    *text = output;
+}
+
+fn preserve_wikidot_bibliography_tab_gap(text: &mut String) {
+    if !text.contains('\t') {
+        return;
+    }
+
+    let literal_regions = LiteralRegionIndex::new(text);
+    let mut protected_ranges = literal_regions.ranges().to_vec();
+    protected_ranges.extend(wikidot_comment_ranges(text));
+    let protected_ranges = merge_protected_ranges(protected_ranges);
+
+    let mut insertions = Vec::new();
+    let mut line_start = 0usize;
+    for line in text.split_inclusive('\n') {
+        let bytes = line.as_bytes();
+        let mut index = 0usize;
+        if bytes.get(index) == Some(&b':') {
+            index += 1;
+            if bytes.get(index) == Some(&b' ') {
+                index += 1;
+            }
+            let label_start = index;
+            while bytes.get(index).is_some_and(u8::is_ascii_alphanumeric) {
+                index += 1;
+            }
+            if index > label_start
+                && bytes.get(index) == Some(&b'\t')
+                && bytes.get(index + 1) == Some(&b':')
+                && !index_in_ranges(&protected_ranges, line_start + index)
+            {
+                insertions.push(line_start + index);
+            }
+        }
+        line_start += line.len();
+    }
+    if insertions.is_empty() {
+        return;
+    }
+
+    let mut output = String::with_capacity(text.len() + insertions.len());
+    let mut cursor = 0usize;
+    for insertion in insertions {
+        output.push_str(&text[cursor..insertion]);
+        output.push(' ');
+        cursor = insertion;
+    }
+    output.push_str(&text[cursor..]);
     *text = output;
 }
 
