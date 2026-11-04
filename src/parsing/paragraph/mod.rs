@@ -224,6 +224,7 @@ where
             let mixed_paragraph_ownership =
                 parser.take_wikidot_mixed_paragraph_ownership();
             let div_literal_recovered = parser.take_wikidot_div_literal_recovered();
+            let colon_line_vanished = parser.take_wikidot_colon_line_vanished();
             let mut consumed = consumed;
             let paragraph_split = consumed.paragraph_split.take();
             let (elements, mut errors, paragraph_safe) = consumed.into();
@@ -344,6 +345,10 @@ where
                 } else {
                     push_elements(&mut stack, elements, paragraph_safe);
                 }
+            }
+            if colon_line_vanished && parser.settings().layout.legacy() {
+                stack.mark_current_unwrapped();
+                stack.end_paragraph();
             }
             if list_has_same_line_residual {
                 stack.mark_next_unwrapped_after_block();

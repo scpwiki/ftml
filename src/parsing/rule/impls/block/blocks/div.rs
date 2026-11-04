@@ -22,6 +22,7 @@ use super::BLOCK_SPAN;
 use super::prelude::*;
 use crate::delayed::DelayedElement;
 use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal};
+use crate::parsing::consume::consume;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::settings::WikitextMode;
 use crate::tree::{AcceptsPartial, AttributeMap, ListItem, ListType};
@@ -52,10 +53,92 @@ fn wikidot_div_head_started_physical_line(
     let line_start = source[..head_line_end]
         .rfind('\n')
         .map_or(0, |offset| offset + 1);
-    source[line_start..head_line_end]
-        .trim_start_matches([' ', '\t'])
+    let physical_line_end = if body_start == BlockBodyStart::NextPhysicalLine {
+        head_line_end
+    } else {
+        source[head_end..]
+            .find('\n')
+            .map_or(source.len(), |offset| head_end + offset)
+    };
+    wikidot_line_head_resolves_to_div(&source[line_start..physical_line_end])
+}
+
+fn wikidot_line_head_resolves_to_div(line: &str) -> bool {
+    let trimmed = line.trim_start_matches([' ', '\t']);
+    if trimmed
         .get(..5)
         .is_some_and(|head| head.eq_ignore_ascii_case("[[div"))
+    {
+        return true;
+    }
+    let mut rest = trimmed;
+    if !rest.starts_with("[[") {
+        return false;
+    }
+    rest = &rest[2..];
+    let mut name = String::new();
+    loop {
+        if let Some(after) = rest.strip_prefix("[!--") {
+            let Some(end) = after.find("--]") else {
+                return false;
+            };
+            rest = &after[end + 3..];
+            continue;
+        }
+        if rest.starts_with("[[") {
+            let inner = &rest[2..];
+            let keyword = ["iftags", "ifcategory"].into_iter().find(|kw| {
+                inner.len() > kw.len()
+                    && inner[..kw.len()].eq_ignore_ascii_case(kw)
+                    && !matches!(inner.as_bytes()[kw.len()], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.')
+            });
+            let Some(keyword) = keyword else {
+                return false;
+            };
+            let closer = if keyword == "iftags" {
+                "[[/iftags]]"
+            } else {
+                "[[/ifcategory]]"
+            };
+            let Some(head_end) = inner.find("]]") else {
+                return false;
+            };
+            let after_head = &inner[head_end + 2..];
+            let Some(close_pos) = find_ascii_case_insensitive(after_head, closer) else {
+                return false;
+            };
+            rest = &after_head[close_pos + closer.len()..];
+            continue;
+        }
+        let mut chars = rest.chars();
+        match chars.next() {
+            Some(ch) if ch.is_alphanumeric() || matches!(ch, '-' | '.') => {
+                name.push(ch);
+                rest = chars.as_str();
+            }
+            _ => break,
+        }
+    }
+    if !name.eq_ignore_ascii_case("div") {
+        return false;
+    }
+    let rest = rest.strip_prefix(['_', '=']).unwrap_or(rest);
+    let Some(head_end) = rest.find("]]") else {
+        return false;
+    };
+    rest[head_end + 2..]
+        .chars()
+        .all(|ch| matches!(ch, ' ' | '\t'))
+}
+
+fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
+    let hay = haystack.as_bytes();
+    let needle = needle.as_bytes();
+    if needle.is_empty() || hay.len() < needle.len() {
+        return None;
+    }
+    hay.windows(needle.len())
+        .position(|window| window.eq_ignore_ascii_case(needle))
 }
 
 fn wikidot_div_follows_inline_structural_close(
@@ -250,8 +333,11 @@ where
             };
             return Ok(Some(ParseSuccess::new(elements, Vec::new(), true)));
         }
-        let _ = parser.get_body_text(&BLOCK_DIV)?;
-        let owner_end = parser.current().span.start;
+        let body_start = parser.current().span.start;
+        let mut probe = parser.clone();
+        let body_text = probe.get_body_text(&BLOCK_DIV)?;
+        let owner_end = probe.current().span.start;
+        let closer_start = body_start + body_text.len();
         let literal_start = if line_started_after_physical_newline {
             line_start - 1
         } else {
@@ -271,14 +357,80 @@ where
         if !paragraph_safe {
             parser.mark_wikidot_div_literal_recovered();
         }
-        return Ok(Some(ParseSuccess::new(
-            Element::Text(elide_comments_from_literal(
-                &source[literal_start..literal_end],
-            ))
-            .into(),
-            Vec::new(),
-            paragraph_safe,
-        )));
+        let mut elements = vec![Element::Text(elide_comments_from_literal(
+            &source[literal_start..body_start],
+        ))];
+        let mut errors = Vec::new();
+        let mut degraded_from = None;
+        while parser.current().span.start < closer_start {
+            let before = parser.current().span.start;
+            let checkpoint = parser.clone();
+            match consume(parser) {
+                Ok(success) => {
+                    if parser.current().span.start == before {
+                        parser.update(&checkpoint);
+                        degraded_from = Some(before);
+                        break;
+                    }
+                    let (item, item_errors, _) = success.into();
+                    elements.extend(item.as_ref().iter().cloned());
+                    errors.extend(item_errors);
+                }
+                Err(error) => {
+                    parser.update(&checkpoint);
+                    errors.push(error);
+                    degraded_from = Some(before);
+                    break;
+                }
+            }
+        }
+        if let Some(from) = degraded_from {
+            while parser.current().span.start < owner_end {
+                if parser.step().is_err() {
+                    break;
+                }
+            }
+            elements.push(Element::Text(elide_comments_from_literal(
+                &source[from..literal_end],
+            )));
+        } else {
+            if parser.current().span.start == closer_start {
+                while parser.current().span.start < owner_end {
+                    if parser.step().is_err() {
+                        break;
+                    }
+                }
+                elements.push(Element::Text(elide_comments_from_literal(
+                    &source[closer_start..owner_end],
+                )));
+            }
+            if literal_end > owner_end && parser.current().span.start == owner_end {
+                elements.push(text!("\n"));
+            }
+        }
+        let elements = if paragraph_safe {
+            elements
+        } else {
+            let mut merged: Vec<Element<'t>> = Vec::with_capacity(elements.len());
+            for element in elements {
+                match element {
+                    Element::Text(text) => {
+                        if let Some(Element::Text(previous)) = merged.last_mut() {
+                            *previous = Cow::Owned(format!("{previous}{text}"));
+                        } else {
+                            merged.push(Element::Text(text));
+                        }
+                    }
+                    element => merged.push(element),
+                }
+            }
+            merged
+        };
+        let elements = match elements.len() {
+            1 => Elements::Single(elements.into_iter().next().unwrap()),
+            _ => Elements::Multiple(elements),
+        };
+        return Ok(Some(ParseSuccess::new(elements, errors, paragraph_safe)));
     }
 
     if parser.in_wikidot_div_body()
@@ -297,9 +449,16 @@ where
         let line_start = source[..literal_end]
             .rfind('\n')
             .map_or(0, |offset| offset + 1);
-        let opener_start = source[line_start..literal_end]
-            .rfind("[[")
-            .map_or(line_start, |offset| line_start + offset);
+        let opener_start = if owner_start >= line_start
+            && owner_start <= literal_end
+            && source[owner_start..].starts_with("[[")
+        {
+            owner_start
+        } else {
+            source[line_start..literal_end]
+                .rfind("[[")
+                .map_or(line_start, |offset| line_start + offset)
+        };
         if inline_scored_line_literal {
             let body_start = parser.current().span.start;
             let mut body = parser.clone();

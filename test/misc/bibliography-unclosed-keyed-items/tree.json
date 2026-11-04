@@ -1,0 +1,57 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "bibliography"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "bell",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "bell"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "Bell"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": "text"
+                        },
+                        {
+                            "element": "text",
+                            "data": "."
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

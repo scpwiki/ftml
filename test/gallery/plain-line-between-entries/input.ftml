@@ -1,0 +1,5 @@
+[[gallery]]
+: https://example.com/a.png
+plain text line
+: https://example.com/b.png
+[[/gallery]]

@@ -14,6 +14,7 @@ const IFTAGS_LITERAL_SPAN: u16 = 1 << 7;
 const DEFINITION_LIST_LINE: u16 = 1 << 8;
 const SINGLE_LINE_CONTENT: u16 = 1 << 9;
 const DIV_LITERAL_RECOVERED: u16 = 1 << 10;
+const COLON_LINE_VANISHED: u16 = 1 << 11;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WikidotState {
@@ -304,6 +305,16 @@ impl Parser<'_, '_> {
     pub(crate) fn take_wikidot_div_literal_recovered(&mut self) -> bool {
         let marked = self.wikidot.flags & DIV_LITERAL_RECOVERED != 0;
         set_flag(&mut self.wikidot.flags, DIV_LITERAL_RECOVERED, false);
+        marked
+    }
+
+    pub(crate) fn mark_wikidot_colon_line_vanished(&mut self) {
+        set_flag(&mut self.wikidot.flags, COLON_LINE_VANISHED, true);
+    }
+
+    pub(crate) fn take_wikidot_colon_line_vanished(&mut self) -> bool {
+        let marked = self.wikidot.flags & COLON_LINE_VANISHED != 0;
+        set_flag(&mut self.wikidot.flags, COLON_LINE_VANISHED, false);
         marked
     }
 
