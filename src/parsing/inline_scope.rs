@@ -553,10 +553,7 @@ fn lower_sequence<'t>(
                     matches!(source.peek(), Some(Element::Text(text)) if text == " ");
                 if leading_space {
                     source.next();
-                    if !at_start
-                        && !active.has_active_scope()
-                        && !elements_end_with_space(&output)
-                    {
+                    if span_leading_space_hoists(at_start, active, &output) {
                         run.push(text!(" "));
                         flush_run(
                             &mut output,
@@ -719,6 +716,29 @@ fn wrap_scope_elements<'t>(
     elements
 }
 
+fn run_merges_across_separator(
+    output: &[Element<'_>],
+    next: &Container<'_>,
+    outer_scope: Option<usize>,
+    last_run_outer_scope: Option<usize>,
+) -> bool {
+    if !matches!(output.last(), Some(Element::Text(text)) if text == " ") {
+        return false;
+    }
+    let Some(Element::Container(previous)) = output
+        .len()
+        .checked_sub(2)
+        .and_then(|index| output.get(index))
+    else {
+        return false;
+    };
+    matches!(previous.ctype(), ContainerType::Span | ContainerType::Size)
+        && outer_scope.is_some()
+        && outer_scope == last_run_outer_scope
+        && previous.ctype() == next.ctype()
+        && previous.attributes() == next.attributes()
+}
+
 fn flush_run<'t>(
     output: &mut Vec<Element<'t>>,
     run: &mut Vec<Element<'t>>,
@@ -743,21 +763,8 @@ fn flush_run<'t>(
         *last_run_outer_scope = None;
         return;
     };
-    let merge_across_separator = matches!(output.last(), Some(Element::Text(text)) if text == " ")
-        && match output
-            .len()
-            .checked_sub(2)
-            .and_then(|index| output.get(index))
-        {
-            Some(Element::Container(previous)) => {
-                matches!(previous.ctype(), ContainerType::Span | ContainerType::Size)
-                    && outer_scope.is_some()
-                    && outer_scope == *last_run_outer_scope
-                    && previous.ctype() == next.ctype()
-                    && previous.attributes() == next.attributes()
-            }
-            _ => false,
-        };
+    let merge_across_separator =
+        run_merges_across_separator(output, next, outer_scope, *last_run_outer_scope);
     if merge_across_separator {
         let Some(Element::Text(separator)) = output.pop() else {
             unreachable!("separator space checked above");
@@ -845,6 +852,14 @@ fn sequence_ends_with_space(output: &[Element<'_>], run: &[Element<'_>]) -> bool
     run.last().or_else(|| output.last()).is_some_and(
         |element| matches!(element, Element::Text(text) if text.ends_with(' ')),
     )
+}
+
+fn span_leading_space_hoists(
+    at_start: bool,
+    active: &ActiveScopes<'_>,
+    output: &[Element<'_>],
+) -> bool {
+    !at_start && !active.has_active_scope() && !elements_end_with_space(output)
 }
 
 fn elements_end_with_space(elements: &[Element<'_>]) -> bool {

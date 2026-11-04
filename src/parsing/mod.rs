@@ -57,7 +57,7 @@ mod prelude {
 
 use self::depth::{DepthItem, DepthList, process_depths};
 use self::element_condition::{ElementCondition, ElementConditionType};
-use self::paragraph::{NO_CLOSE_CONDITION, gather_paragraphs};
+use self::paragraph::{gather_paragraphs, no_close_condition};
 use self::parser::{DEFAULT_MAX_RECURSION_DEPTH, Parser};
 use self::parser_wrap::ParserWrap;
 use self::rule::impls::RULE_PAGE;
@@ -324,7 +324,7 @@ where
     };
 
     debug!("Running parser on {} tokens", tokenization.tokens().len());
-    let result = gather_paragraphs(&mut parser, RULE_PAGE, NO_CLOSE_CONDITION);
+    let result = gather_paragraphs(&mut parser, RULE_PAGE, no_close_condition());
 
     let html_blocks = parser.remove_html_blocks();
     let code_blocks = parser.remove_code_blocks();

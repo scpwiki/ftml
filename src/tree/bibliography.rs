@@ -28,33 +28,109 @@
 
 use super::Element;
 use super::clone::{elements_to_owned, string_to_owned};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 const RESIDUAL_LABEL: &str = "\0";
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
-pub struct Bibliography<'t>(Vec<(Cow<'t, str>, Vec<Element<'t>>)>);
+#[derive(Debug, Clone, Default)]
+pub struct Bibliography<'t> {
+    entries: Vec<(Cow<'t, str>, Vec<Element<'t>>)>,
+    label_index: HashMap<String, IndexedReference>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct IndexedReference {
+    citation: usize,
+    position: usize,
+}
+
+impl PartialEq for Bibliography<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+impl Eq for Bibliography<'_> {}
+
+impl Serialize for Bibliography<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.entries.serialize(serializer)
+    }
+}
+
+impl<'de, 't> Deserialize<'de> for Bibliography<'t>
+where
+    Vec<(Cow<'t, str>, Vec<Element<'t>>)>: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let entries = Vec::<(Cow<'t, str>, Vec<Element<'t>>)>::deserialize(deserializer)?;
+        Ok(Bibliography::from_entries(entries))
+    }
+}
 
 impl<'t> Bibliography<'t> {
     pub fn new() -> Self {
         Bibliography::default()
     }
 
+    fn from_entries(entries: Vec<(Cow<'t, str>, Vec<Element<'t>>)>) -> Self {
+        let mut bibliography = Bibliography {
+            entries,
+            label_index: HashMap::new(),
+        };
+        bibliography.rebuild_label_index();
+        bibliography
+    }
+
+    fn rebuild_label_index(&mut self) {
+        self.label_index.clear();
+        let mut citation = 0;
+        for (position, (label, _)) in self.entries.iter().enumerate() {
+            if Self::is_residual(label) {
+                continue;
+            }
+            citation += 1;
+            self.label_index
+                .entry(label.as_ref().to_owned())
+                .or_insert(IndexedReference { citation, position });
+        }
+    }
+
     pub fn add(&mut self, label: Cow<'t, str>, elements: Vec<Element<'t>>) {
         if self.get(&label).is_none() {
-            self.0.push((label, elements));
+            let citation = self
+                .entries
+                .iter()
+                .filter(|(existing, _)| !Self::is_residual(existing))
+                .count()
+                + 1;
+            let position = self.entries.len();
+            self.label_index.insert(
+                label.as_ref().to_owned(),
+                IndexedReference { citation, position },
+            );
+            self.entries.push((label, elements));
         } else {
             warn!("Duplicate reference in bibliography: {label}");
         }
     }
 
     pub(crate) fn add_residual(&mut self, element: Element<'t>) {
-        if let Some((label, elements)) = self.0.last_mut()
+        if let Some((label, elements)) = self.entries.last_mut()
             && Self::is_residual(label)
         {
             elements.push(element);
         } else {
-            self.0.push((Cow::Borrowed(RESIDUAL_LABEL), vec![element]));
+            self.entries
+                .push((Cow::Borrowed(RESIDUAL_LABEL), vec![element]));
         }
     }
 
@@ -63,8 +139,19 @@ impl<'t> Bibliography<'t> {
     }
 
     pub fn get(&self, label: &str) -> Option<(usize, &[Element<'t>])> {
+        if let Some(indexed) = self.label_index.get(label)
+            && let Some((ref_label, elements)) = self.entries.get(indexed.position)
+            && ref_label == label
+        {
+            return Some((indexed.citation, elements));
+        }
+
+        self.get_by_scan(label)
+    }
+
+    fn get_by_scan(&self, label: &str) -> Option<(usize, &[Element<'t>])> {
         let mut index = 0;
-        for (ref_label, elements) in &self.0 {
+        for (ref_label, elements) in &self.entries {
             if Self::is_residual(ref_label) {
                 continue;
             }
@@ -79,17 +166,17 @@ impl<'t> Bibliography<'t> {
 
     #[inline]
     pub fn slice(&self) -> &[(Cow<'t, str>, Vec<Element<'t>>)] {
-        &self.0
+        &self.entries
     }
 
     #[inline]
     pub(crate) fn slice_mut(&mut self) -> &mut [(Cow<'t, str>, Vec<Element<'t>>)] {
-        &mut self.0
+        &mut self.entries
     }
 
     pub fn to_owned(&self) -> Bibliography<'static> {
-        Bibliography(
-            self.0
+        Bibliography::from_entries(
+            self.entries
                 .iter()
                 .map(|(label, elements)| {
                     (string_to_owned(label), elements_to_owned(elements))
@@ -99,8 +186,21 @@ impl<'t> Bibliography<'t> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, Default, PartialEq, Eq)]
 pub struct BibliographyList<'t>(Vec<Bibliography<'t>>);
+
+impl<'de, 't> Deserialize<'de> for BibliographyList<'t>
+where
+    Vec<Bibliography<'t>>: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bibliographies = Vec::<Bibliography<'t>>::deserialize(deserializer)?;
+        Ok(BibliographyList(bibliographies))
+    }
+}
 
 impl<'t> BibliographyList<'t> {
     pub fn new() -> Self {

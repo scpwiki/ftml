@@ -33,16 +33,11 @@ use super::rule::Rule;
 use super::token::Token;
 use crate::tree::ContainerType;
 
-/// Wrapper type to satisfy the issue with generic closure types.
-///
-/// Because `None` does not specify the type for `F`, we need to
-/// tell the compiler it has a concrete type.
-///
-/// But since it's just `None`, it's not actually pointing to a function,
-/// it's just clarifying what the `_` in `Option<_>` is.
-pub const NO_CLOSE_CONDITION: Option<CloseConditionFn> = None;
-
 type CloseConditionFn = fn(&mut Parser) -> Result<bool, ParseError>;
+
+pub fn no_close_condition() -> Option<CloseConditionFn> {
+    None
+}
 
 /// Function to iterate over tokens to produce elements in paragraphs.
 ///

@@ -256,64 +256,6 @@ fn contains_closed_conditional(
     })
 }
 
-#[allow(dead_code)]
-fn wikidot_uses_getattrs(head: &str) -> bool {
-    let name = head
-        .strip_prefix("[[")
-        .unwrap_or(head)
-        .trim_start_matches([' ', '\t'])
-        .split(|character: char| {
-            character.is_ascii_whitespace() || matches!(character, ']' | '_')
-        })
-        .next()
-        .unwrap_or_default();
-    ["collapsible", "div", "table", "row", "cell", "hcell"]
-        .iter()
-        .any(|candidate| name.eq_ignore_ascii_case(candidate))
-}
-
-#[allow(dead_code)]
-fn wikidot_getattrs_attribute_ranges(text: &str) -> Vec<Range<usize>> {
-    if !text.contains("=\"") {
-        return Vec::new();
-    }
-
-    let mut ranges = Vec::new();
-    let mut cursor = 0usize;
-    while let Some(relative_open) = text[cursor..].find("[[") {
-        let open = cursor + relative_open;
-        let end = text[open + 2..]
-            .find("]]")
-            .map_or(text.len(), |relative_close| open + 2 + relative_close + 2);
-        let head = &text[open..end];
-        if !wikidot_uses_getattrs(head) {
-            cursor = end;
-            if cursor == text.len() {
-                break;
-            }
-            continue;
-        }
-
-        let delimiters = head
-            .match_indices("=\"")
-            .map(|(index, _)| index)
-            .collect::<Vec<_>>();
-        for (index, delimiter) in delimiters.iter().copied().enumerate() {
-            let value_start = delimiter + 2;
-            let segment_end = delimiters.get(index + 1).copied().unwrap_or(head.len());
-            let segment = &head[value_start..segment_end];
-            if let Some(value_end) = segment.rfind('"') {
-                ranges.push(open + value_start..open + value_start + value_end);
-            }
-        }
-        cursor = end;
-        if cursor == text.len() {
-            break;
-        }
-    }
-    ranges
-}
-
 fn wikidot_local_link_separator_ranges(text: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     let mut cursor = 0usize;
