@@ -127,6 +127,11 @@ impl PartialElement<'_> {
     }
 
     #[inline]
+    pub fn paragraph_safe(&self) -> bool {
+        self.is_inline_format_control()
+    }
+
+    #[inline]
     pub(crate) fn is_inline_format_control(&self) -> bool {
         matches!(
             self,

@@ -577,8 +577,7 @@ impl Element<'_> {
             Element::LineBreak | Element::LineBreaks { .. } => true,
             Element::ClearFloat(_) => false,
             Element::HorizontalRule => false,
-            Element::Partial(partial) if partial.is_inline_format_control() => true,
-            Element::Partial(_) => false,
+            Element::Partial(partial) => partial.paragraph_safe(),
         }
     }
 

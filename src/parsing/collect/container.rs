@@ -44,19 +44,10 @@ pub fn collect_container<'r, 't>(
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    let installed_quote_cursor = if parser.quote_body_cursor().is_none()
-        && let Some(required_depth) = parser.native_blockquote_depth()
-    {
-        parser.install_quote_body_cursor_at_current_line(required_depth);
-        true
-    } else {
-        false
-    };
+    let quote_cursor = QuoteBodyCursorInstallation::install(parser);
 
     let collection = collect_consume(parser, rule, closes, invalids, kind);
-    if installed_quote_cursor {
-        parser.set_quote_body_cursor(None);
-    }
+    quote_cursor.uninstall(parser);
     let collection = collection?;
     let (elements, errors, paragraph_safe) = collection.into();
 
@@ -64,6 +55,30 @@ pub fn collect_container<'r, 't>(
     let element = Element::Container(container);
     let safe = paragraph_safe && container_type.paragraph_safe();
     Ok(ParseSuccess::new(Elements::Single(element), errors, safe))
+}
+
+struct QuoteBodyCursorInstallation {
+    installed: bool,
+}
+
+impl QuoteBodyCursorInstallation {
+    fn install(parser: &mut Parser<'_, '_>) -> Self {
+        let installed = if parser.quote_body_cursor().is_none()
+            && let Some(required_depth) = parser.native_blockquote_depth()
+        {
+            parser.install_quote_body_cursor_at_current_line(required_depth);
+            true
+        } else {
+            false
+        };
+        QuoteBodyCursorInstallation { installed }
+    }
+
+    fn uninstall(self, parser: &mut Parser<'_, '_>) {
+        if self.installed {
+            parser.set_quote_body_cursor(None);
+        }
+    }
 }
 
 #[cfg(test)]

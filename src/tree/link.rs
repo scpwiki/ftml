@@ -63,15 +63,22 @@ impl<'a> LinkLocation<'a> {
     }
 
     pub fn parse(link: Cow<'a, str>) -> Self {
-        let link_str = &link;
-        if is_url(link_str) || link_str.starts_with('#') || link_str.starts_with("/") {
+        if Self::is_direct_target(&link) {
             return LinkLocation::Url(link);
         }
 
-        match PageRef::parse(link_str) {
+        match PageRef::parse(&link) {
             Err(_) => LinkLocation::Url(link),
             Ok(page_ref) => LinkLocation::Page(page_ref),
         }
+    }
+
+    fn is_direct_target(link: &str) -> bool {
+        is_url(link) || link.starts_with('#') || Self::is_absolute_path(link)
+    }
+
+    fn is_absolute_path(link: &str) -> bool {
+        link.starts_with('/')
     }
 
     pub fn to_owned(&self) -> LinkLocation<'static> {
@@ -123,6 +130,7 @@ fn test_link_location() {
     }
 
     test!("" => "");
+    test!("/" => "/");
     test!("#" => "#");
     test!("#anchor" => "#anchor");
 
