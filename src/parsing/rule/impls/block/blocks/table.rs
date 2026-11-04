@@ -856,13 +856,20 @@ fn strip_cell_paragraph_boundaries(elements: &mut Vec<Element<'_>>) {
 }
 
 fn trim_cell_whitespace(elements: &mut Vec<Element<'_>>) {
+    let skippable = |element: &Element<'_>| {
+        element.is_whitespace()
+            || matches!(
+                element,
+                Element::Delayed(delayed) if delayed.is_suppression_seam()
+            )
+    };
     let start = elements
         .iter()
-        .position(|element| !element.is_whitespace())
+        .position(|element| !skippable(element))
         .unwrap_or(elements.len());
     let end = elements
         .iter()
-        .rposition(|element| !element.is_whitespace())
+        .rposition(|element| !skippable(element))
         .map_or(start, |index| index + 1);
 
     elements.truncate(end);

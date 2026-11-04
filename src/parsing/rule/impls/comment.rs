@@ -81,7 +81,7 @@ fn try_consume_fn<'r, 't>(
                 {
                     parser.mark_virtual_start_of_line();
                 }
-                return if generated.is_empty() {
+                return if generated.is_empty() && parser.settings().layout.legacy() {
                     ok!(Elements::None)
                 } else {
                     success_elements(Element::Delayed(DelayedElement::suppressed(
