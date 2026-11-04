@@ -1010,8 +1010,7 @@ where
                 nested_wikidot_math += 1;
             }
 
-            if self.settings().layout.legacy()
-                && self.discarding_hidden_body()
+            if self.discarding_hidden_body()
                 && self.at_hidden_body_boundary()
                 && (!self.has_body_end_block(block_rule)
                     || matches!(block_rule.name, "block-math" | "block-raw"))
@@ -1811,7 +1810,6 @@ where
                 }
                 Err(_error)
                     if self.discarding_hidden_body()
-                        && !self.settings().layout.legacy()
                         && self.at_hidden_body_boundary() => {}
                 Err(error) => return Err(error),
             }
