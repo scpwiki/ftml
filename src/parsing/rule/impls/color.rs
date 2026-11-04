@@ -60,33 +60,44 @@ fn try_consume_fn<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
+    // The spec fields are collected with iftags segments resolved: a
+    // segment inside the `##...|` spec is resolved on live Wikidot
+    // before the spec is read, so `##c[[iftags -zzz]][[/iftags]]00|`
+    // names the color `c00`.
     let (first_field, first_terminator) =
-        collect_text_keep(parser, RULE_COLOR, color_close, &color_invalid, None)?;
+        collect_text_resolved(parser, RULE_COLOR, color_close, &color_invalid, None)?;
     let mut body_pipe_prefix = (legacy && is_table_column_token(first_terminator.token))
         .then(|| text!(&first_terminator.slice[1..]));
-    let trim_field = |value: &'t str| {
-        if legacy {
-            value.trim_matches([' ', '\t'])
-        } else {
-            value.trim()
-        }
-    };
-    let (color, background) = if legacy && trim_field(first_field).is_empty() {
+    let (color, background) = if legacy && trim_field(&first_field, legacy).is_empty() {
         let (background, terminator) =
-            collect_text_keep(parser, RULE_COLOR, color_close, &color_invalid, None)?;
+            collect_text_resolved(parser, RULE_COLOR, color_close, &color_invalid, None)?;
         body_pipe_prefix = is_table_column_token(terminator.token)
             .then(|| text!(&terminator.slice[1..]));
-        (trim_field(background), true)
+        (trim_field_cow(background, legacy), true)
     } else if legacy {
-        (trim_field(first_field), false)
+        (trim_field_cow(first_field, legacy), false)
     } else {
         (first_field, false)
     };
-    let color = if legacy {
-        normalize_wikidot_color(color)
-            .ok_or_else(|| parser.make_err(ParseErrorKind::RuleFailed))?
-    } else {
-        normalize_color(color)
+    let color: Cow<'t, str> = match &color {
+        Cow::Borrowed(text) => {
+            let text: &'t str = text;
+            if legacy {
+                normalize_wikidot_color(text)
+                    .ok_or_else(|| parser.make_err(ParseErrorKind::RuleFailed))?
+            } else {
+                normalize_color(text)
+            }
+        }
+        Cow::Owned(_) => {
+            let normalized = if legacy {
+                normalize_wikidot_color(&color)
+                    .ok_or_else(|| parser.make_err(ParseErrorKind::RuleFailed))?
+            } else {
+                normalize_color(&color)
+            };
+            Cow::Owned(normalized.into_owned())
+        }
     };
     let spec = ColorSpec { color, background };
 
@@ -163,6 +174,28 @@ fn try_consume_fn<'r, 't>(
     }
 
     ok!(paragraph_safe; Elements::Multiple(output), errors)
+}
+
+fn trim_field(value: &str, legacy: bool) -> &str {
+    if legacy {
+        value.trim_matches([' ', '\t'])
+    } else {
+        value.trim()
+    }
+}
+
+fn trim_field_cow<'t>(field: Cow<'t, str>, legacy: bool) -> Cow<'t, str> {
+    match field {
+        Cow::Borrowed(value) => Cow::Borrowed(trim_field(value, legacy)),
+        Cow::Owned(value) => {
+            let trimmed = trim_field(&value, legacy);
+            if trimmed.len() == value.len() {
+                Cow::Owned(value)
+            } else {
+                Cow::Owned(trimmed.to_owned())
+            }
+        }
+    }
 }
 
 fn is_table_column_token(token: Token) -> bool {

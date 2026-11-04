@@ -21,6 +21,11 @@ pub(crate) struct CommentElidedText<'t> {
     source: &'t str,
     span: Range<usize>,
     comments: Vec<Range<usize>>,
+    /// Elision ranges for resolved iftags segments, kept apart from
+    /// comments: a comment resets the text that follows it (the
+    /// `getAttrs` key fragment starts after the last comment), while a
+    /// segment merely joins the parts around it.
+    segments: Vec<Range<usize>>,
 }
 
 impl<'t> CommentElidedText<'t> {
@@ -36,7 +41,18 @@ impl<'t> CommentElidedText<'t> {
             source,
             span,
             comments,
+            segments: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_segments(mut self, segments: Vec<Range<usize>>) -> Self {
+        debug_assert!(segments.iter().all(|range| {
+            range.start >= self.span.start
+                && range.end <= self.span.end
+                && range.start <= range.end
+        }));
+        self.segments = segments;
+        self
     }
 
     pub(crate) fn source(&self) -> &'t str {
@@ -49,6 +65,16 @@ impl<'t> CommentElidedText<'t> {
 
     pub(crate) fn comment_ranges(&self) -> &[Range<usize>] {
         &self.comments
+    }
+
+    pub(crate) fn segment_ranges(&self) -> &[Range<usize>] {
+        &self.segments
+    }
+
+    /// Elide only the resolved iftags segment ranges in `range`,
+    /// joining the parts around each one; comments are left in place.
+    pub(crate) fn elide_segments_range(&self, range: Range<usize>) -> Cow<'t, str> {
+        elide_ranges(self.source, &self.segments, range)
     }
 
     pub(crate) fn prefix_before_first_comment(&self) -> &'t str {
@@ -72,36 +98,61 @@ impl<'t> CommentElidedText<'t> {
         range: Range<usize>,
     ) -> (Cow<'t, str>, Vec<usize>) {
         debug_assert!(range.start >= self.span.start && range.end <= self.span.end);
-        let first = self
-            .comments
-            .partition_point(|comment| comment.end <= range.start);
-        if first == self.comments.len() {
-            return (Cow::Borrowed(&self.source[range]), Vec::new());
+        if self.segments.is_empty() {
+            return elide_ranges_with_seams(self.source, &self.comments, range);
         }
-        if self.comments[first].start >= range.end {
-            return (Cow::Borrowed(&self.source[range]), Vec::new());
+        if self.comments.is_empty() {
+            return elide_ranges_with_seams(self.source, &self.segments, range);
         }
-
-        let mut output = String::with_capacity(range.len());
-        let mut seams = Vec::new();
-        let mut cursor = range.start;
-        for comment in &self.comments[first..] {
-            if comment.start >= range.end {
-                break;
-            }
-            let comment_start = comment.start.max(range.start);
-            let comment_end = comment.end.min(range.end);
-            if cursor < comment_start {
-                output.push_str(&self.source[cursor..comment_start]);
-            }
-            seams.push(output.len());
-            cursor = cursor.max(comment_end);
-        }
-        if cursor < range.end {
-            output.push_str(&self.source[cursor..range.end]);
-        }
-        (Cow::Owned(output), seams)
+        let mut merged: Vec<Range<usize>> =
+            Vec::with_capacity(self.comments.len() + self.segments.len());
+        merged.extend(self.comments.iter().cloned());
+        merged.extend(self.segments.iter().cloned());
+        merged.sort_by_key(|range| range.start);
+        elide_ranges_with_seams(self.source, &merged, range)
     }
+}
+
+fn elide_ranges_with_seams<'t>(
+    source: &'t str,
+    ranges: &[Range<usize>],
+    range: Range<usize>,
+) -> (Cow<'t, str>, Vec<usize>) {
+    let first = ranges.partition_point(|elision| elision.end <= range.start);
+    if first == ranges.len() {
+        return (Cow::Borrowed(&source[range]), Vec::new());
+    }
+    if ranges[first].start >= range.end {
+        return (Cow::Borrowed(&source[range]), Vec::new());
+    }
+
+    let mut output = String::with_capacity(range.len());
+    let mut seams = Vec::new();
+    let mut cursor = range.start;
+    for elision in &ranges[first..] {
+        if elision.start >= range.end {
+            break;
+        }
+        let elision_start = elision.start.max(range.start);
+        let elision_end = elision.end.min(range.end);
+        if cursor < elision_start {
+            output.push_str(&source[cursor..elision_start]);
+        }
+        seams.push(output.len());
+        cursor = cursor.max(elision_end);
+    }
+    if cursor < range.end {
+        output.push_str(&source[cursor..range.end]);
+    }
+    (Cow::Owned(output), seams)
+}
+
+fn elide_ranges<'t>(
+    source: &'t str,
+    ranges: &[Range<usize>],
+    range: Range<usize>,
+) -> Cow<'t, str> {
+    elide_ranges_with_seams(source, ranges, range).0
 }
 
 pub(crate) fn collect_comment_elided_keep<'r, 't>(

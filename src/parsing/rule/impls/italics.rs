@@ -24,6 +24,7 @@ use super::inline_delimiter::{
 };
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
+use crate::parsing::collect::consume_iftags_segment;
 use crate::tree::Container;
 
 pub const RULE_ITALICS: Rule = Rule {
@@ -36,6 +37,10 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create italics (emphasis) container");
+
+    if parser.current().token != Token::Italics {
+        return try_consume_split_delimiter(parser);
+    }
 
     if has_ambiguous_crossed_bold_pair(parser) {
         return collect_ambiguous_crossed_bold_italics(parser);
@@ -60,6 +65,73 @@ fn try_consume_fn<'r, 't>(
     let ctype = ContainerType::Italics;
     let collected =
         collect_container(parser, RULE_ITALICS, ctype, &close, &invalid, None)?;
+    finish_collected(parser, collected)
+}
+
+/// The two `/`s of an italics opener can be split by an iftags segment
+/// (`/[[iftags -zzz]][[/iftags]]/word//`): live Wikidot resolves the
+/// segment before the delimiter forms, so the pair still opens italics.
+/// The split opener only forms when every segment between the markers
+/// resolves to no text; a segment whose body would be kept puts real
+/// text between the markers, which is not an italics opener on live
+/// either.
+fn try_consume_split_delimiter<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    if parser.current().token != Token::Other || parser.current().slice != "/" {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    let mut probe = parser.clone();
+    probe.step()?; // first `/`
+    let mut segments = 0usize;
+    while probe.current().token == Token::LeftBlock {
+        let Some(segment) = consume_iftags_segment(&mut probe)? else {
+            break;
+        };
+        if segment.include_body
+            && !probe.full_text().inner()[segment.body.clone()].is_empty()
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+        segments += 1;
+    }
+    if segments == 0
+        || probe.current().token != Token::Other
+        || probe.current().slice != "/"
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    validate_reachable_close(parser, Token::Italics)?;
+    parser.step()?; // first `/`
+    while parser.current().token == Token::LeftBlock
+        && consume_iftags_segment(parser)?.is_some()
+    {}
+    assert_step(parser, Token::Other)?;
+    if parser.current().token == Token::Whitespace {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    let close = [ParseCondition::current(Token::Italics)];
+    let invalid = [
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::token_pair(Token::Italics, Token::Whitespace),
+        ParseCondition::token_pair(Token::Whitespace, Token::Italics),
+    ];
+    let collected = collect_container(
+        parser,
+        RULE_ITALICS,
+        ContainerType::Italics,
+        &close,
+        &invalid,
+        None,
+    )?;
+    finish_collected(parser, collected)
+}
+
+fn finish_collected<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    collected: ParseSuccess<Elements<'t>>,
+) -> ParseResult<'r, 't, Elements<'t>> {
     let (elements, errors, paragraph_safe) = collected.into();
     if parser.settings().layout.legacy()
         && matches!(
@@ -237,6 +309,15 @@ mod tests {
     use crate::render::{Render, html::HtmlRender};
     use crate::settings::{WikitextMode, WikitextSettings};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn split_italics_opener_with_kept_segment_body_stays_literal() {
+        // The segment gate passes and its body is kept, so real text
+        // sits between the two s: not an italics opener, matching
+        // the text-level resolution live Wikidot performs.
+        let (html, _errors) = render("/[[iftags +tale]]YES[[/iftags]]/word//");
+        assert_eq!(html, "<p>/YES/word//</p>");
+    }
 
     fn render(source: &str) -> (String, Vec<ParseError>) {
         let page_info = PageInfo::dummy();
