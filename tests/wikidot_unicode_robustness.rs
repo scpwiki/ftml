@@ -151,28 +151,39 @@ fn malformed_getattrs_delimiter_after_multibyte_value_never_panics() {
 }
 
 #[test]
-fn stable_parity_sources_survive_rotating_unicode_boundary_mutations() {
-    let cases = fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/wikidot-parity/cases.jsonl"),
-    )
-    .expect("read stable parity cases");
+fn stable_corpus_sources_survive_rotating_unicode_boundary_mutations() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut paths = Vec::new();
+    for tree in ["test", "tests/fixtures"] {
+        collect_ftml_sources(&root.join(tree), &mut paths);
+    }
+    paths.sort();
 
     let mut exercised = 0;
-    for (index, line) in cases
-        .split('\n')
-        .filter(|line| !line.trim().is_empty())
-        .enumerate()
-    {
-        let case: Value = serde_json::from_str(line).expect("stable parity case JSON");
-        let source = case["source"].as_str().expect("stable parity source");
-        let mutated = mutate_stable_source(source, index);
+    for (index, path) in paths.iter().enumerate() {
+        let source = fs::read_to_string(path).expect("stable corpus source");
+        let mutated = mutate_stable_source(&source, index);
         exercise_public_pipeline(&mutated, Layout::Wikidot);
         exercise_public_pipeline(&mutated, Layout::Wikijump);
         exercised += 1;
     }
 
-    assert!(exercised > 0, "stable parity corpus must not be empty");
+    assert!(exercised > 0, "fixture corpus must not be empty");
+}
+
+fn collect_ftml_sources(dir: &Path, paths: &mut Vec<std::path::PathBuf>) {
+    let entries = fs::read_dir(dir).expect("read corpus directory");
+    for entry in entries {
+        let path = entry.expect("read corpus entry").path();
+        if path.is_dir() {
+            collect_ftml_sources(&path, paths);
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "ftml")
+        {
+            paths.push(path);
+        }
+    }
 }
 
 #[test]
