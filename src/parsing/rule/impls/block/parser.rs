@@ -1618,13 +1618,72 @@ where
             );
         }
 
+        let body_names_len = self.push_inline_container_body(block_rule.name);
         let result = self.get_body_element_segments_internal(block_rule);
+        self.restore_inline_container_body(body_names_len);
 
         if track_boundary {
             self.pop_hidden_body_boundary();
         }
 
         result
+    }
+
+    fn literal_block_head_in_inline_body(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<Option<Element<'t>>, ParseError> {
+        if self.settings().layout.legacy() {
+            return Ok(None);
+        }
+        let Some(name) = self.block_head_name_here() else {
+            return Ok(None);
+        };
+        let literal = match block_rule.name {
+            "block-hidden" | "block-invisible" => false,
+            _ => {
+                matches!(name.as_str(), "div" | "blockquote" | "code")
+                    || (matches!(block_rule.name, "block-span" | "block-size")
+                        && block_rule
+                            .accepts_names
+                            .iter()
+                            .any(|accepted| accepted.eq_ignore_ascii_case(&name))
+                        && !self.inline_body_same_name_may_form(block_rule, &name))
+            }
+        };
+        if !literal {
+            return Ok(None);
+        }
+        self.take_block_head_text()
+    }
+
+    fn inline_body_same_name_may_form(&self, block_rule: &BlockRule, name: &str) -> bool {
+        let needed = self.inline_container_body_depth(block_rule.name) + 1;
+        let remaining = self.remaining();
+        let mut closers = 0_usize;
+        let mut index = 0;
+        while let Some(token) = remaining.get(index) {
+            if token.token == Token::LeftBlockEnd {
+                let mut probe = index + 1;
+                if remaining
+                    .get(probe)
+                    .is_some_and(|token| token.token == Token::Whitespace)
+                {
+                    probe += 1;
+                }
+                if let Some(name_token) = remaining.get(probe) {
+                    let candidate = name_token
+                        .slice
+                        .strip_suffix('_')
+                        .unwrap_or(name_token.slice);
+                    if candidate.eq_ignore_ascii_case(name) {
+                        closers += 1;
+                    }
+                }
+            }
+            index += 1;
+        }
+        closers >= needed
     }
 
     fn get_body_element_segments_internal(
@@ -1669,6 +1728,14 @@ where
             }
 
             first = false;
+            if let Some(element) = self.literal_block_head_in_inline_body(block_rule)? {
+                segments
+                    .last_mut()
+                    .expect("segments always has a current segment")
+                    .push(element);
+                continue;
+            }
+
             match consume(self) {
                 Ok(consumed) => {
                     let crate::parsing::ParseSuccess {
