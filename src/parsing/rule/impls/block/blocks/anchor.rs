@@ -72,57 +72,38 @@ fn parse_fn<'r, 't>(
         .and_then(|source| source.rfind("]]"))
         .map(|close| close + 2);
 
-    let mut probed_body: Option<(Vec<Element<'t>>, Vec<ParseError>, bool)> = None;
     if legacy && name.eq_ignore_ascii_case("a") {
-        let saved = parser.clone();
-        let footnotes_before = parser.footnote_count();
-        let mut collected = false;
-        if let Ok(body) = parser.get_body_elements(&BLOCK_ANCHOR, false) {
-            let triple: (Vec<Element<'t>>, Vec<ParseError>, bool) = body.into();
-            if wikidot_anchor_body_routes_collected(&triple.0) {
-                probed_body = Some(triple);
-                collected = true;
+        let mut attributes = attributes;
+        if flag_score {
+            attributes.insert(WIKIDOT_SCORE_ANCHOR_ATTRIBUTE, cow!(""));
+            let starts_next_physical_line = matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            );
+            if starts_next_physical_line || arguments.has_empty_key() {
+                attributes.insert(WIKIDOT_SCORE_ANCHOR_UNWRAPPED_ATTRIBUTE, cow!(""));
             }
         }
-        if !collected {
-            parser.update(&saved);
-            parser.truncate_footnotes(footnotes_before);
-            parser.discarding_hidden_body = saved.discarding_hidden_body;
-            parser.hidden_body_boundaries = saved.hidden_body_boundaries.clone();
-            let mut attributes = attributes;
-            if flag_score {
-                attributes.insert(WIKIDOT_SCORE_ANCHOR_ATTRIBUTE, cow!(""));
-                let starts_next_physical_line = matches!(
-                    parser.current().token,
-                    Token::LineBreak | Token::ParagraphBreak
-                );
-                if starts_next_physical_line || arguments.has_empty_key() {
-                    attributes.insert(WIKIDOT_SCORE_ANCHOR_UNWRAPPED_ATTRIBUTE, cow!(""));
-                }
+        parser.enter_wikidot_anchor_body();
+        let anchor = Element::Partial(PartialElement::InlineAnchorOpen(attributes, target));
+        if !in_head {
+            let source = parser.full_text().inner();
+            let leading_separator = source[..parser.current().span.start]
+                .rfind("]]")
+                .map(|close| close + 2)
+                .is_some_and(|body_start| {
+                    source[body_start..].starts_with(is_ascii_separator)
+                        && !follows_separator_or_line_start(&source[..opener_start])
+                });
+            if leading_separator {
+                return ok!(Elements::Multiple(vec![text!(" "), anchor]));
             }
-            parser.enter_wikidot_anchor_body();
-            let anchor = Element::Partial(PartialElement::InlineAnchorOpen(attributes, target));
-            if !in_head {
-                let source = parser.full_text().inner();
-                let leading_separator = source[..parser.current().span.start]
-                    .rfind("]]")
-                    .map(|close| close + 2)
-                    .is_some_and(|body_start| {
-                        source[body_start..].starts_with(is_ascii_separator)
-                            && !follows_separator_or_line_start(&source[..opener_start])
-                    });
-                if leading_separator {
-                    return ok!(Elements::Multiple(vec![text!(" "), anchor]));
-                }
-            }
-            return ok!(anchor);
         }
+        return ok!(anchor);
     }
 
-    let (mut elements, errors, paragraph_safe) = match probed_body {
-        Some(triple) => triple,
-        None => parser.get_body_elements(&BLOCK_ANCHOR, false)?.into(),
-    };
+    let (mut elements, errors, paragraph_safe) =
+        parser.get_body_elements(&BLOCK_ANCHOR, false)?.into();
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_ANCHOR);
     let body_source = anchor_body_start.and_then(|start| {
         let close_end = parser.current().span.start;
@@ -455,35 +436,5 @@ mod tests {
                 "<strong>BOTH</strong></p>",
             ),
         );
-    }
-}
-
-fn wikidot_anchor_body_routes_collected(elements: &[Element]) -> bool {
-    if elements.iter().any(wikidot_anchor_body_has_media) {
-        return true;
-    }
-    for element in elements {
-        match element {
-            Element::LineBreak | Element::LineBreaks(_) => continue,
-            Element::Text(text) if text.trim().is_empty() => continue,
-            _ => return !element.paragraph_safe(),
-        }
-    }
-    false
-}
-
-fn wikidot_anchor_body_has_media(element: &Element) -> bool {
-    matches!(
-        element,
-        Element::Image { .. } | Element::Audio { .. } | Element::Video { .. }
-    ) || match element {
-        Element::Container(container) => container
-            .elements()
-            .iter()
-            .any(wikidot_anchor_body_has_media),
-        Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
-            elements.iter().any(wikidot_anchor_body_has_media)
-        }
-        _ => false,
     }
 }

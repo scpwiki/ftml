@@ -809,10 +809,6 @@ fn parse_fn<'r, 't>(
         normalize_wikidot_div_elements(&mut elements, flag_score);
     }
 
-    if parser.settings().layout.legacy() && arguments.is_empty() && elements.is_empty() {
-        return ok!(false; Elements::None, errors);
-    }
-
     let mut attributes = arguments.to_attribute_map(parser.settings());
     if parser.settings().layout.legacy()
         && !attributes.get().contains_key("class")
