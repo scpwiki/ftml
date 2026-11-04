@@ -173,14 +173,20 @@ pub(super) fn preserve_wikidot_document_indentation_barrier(text: &mut String) {
     }
     let structural = text.as_bytes().get(leading_len).copied();
     let centered_line = text[leading_len..].starts_with("= ");
-    if text[..leading_len]
+    let indented = text[..leading_len]
         .bytes()
-        .any(|byte| matches!(byte, b' ' | b'\t'))
-        && !centered_line
-        && matches!(
-            structural,
-            Some(b'>' | b'=' | b'+' | b'|' | b'[' | b'_' | b'*' | b'#' | b'~')
-        )
+        .any(|byte| matches!(byte, b' ' | b'\t'));
+    let colon_line_indented = text[..leading_len]
+        .rsplit('\n')
+        .next()
+        .is_some_and(|line| line.bytes().any(|byte| matches!(byte, b' ' | b'\t')));
+    if !centered_line
+        && ((indented
+            && matches!(
+                structural,
+                Some(b'>' | b'=' | b'+' | b'|' | b'[' | b'_' | b'*' | b'#' | b'~')
+            ))
+            || (structural == Some(b':') && colon_line_indented))
     {
         let replacement = if text.as_bytes().get(leading_len) == Some(&b'_') {
             "\0 "
@@ -1047,6 +1053,9 @@ fn preserves_a_syntax_barrier_for_indented_non_center_document_openers() {
         ("\t== x", "\0== x"),
         (" + x", "\0+ x"),
         (" [[div]]x[[/div]]", "\0[[div]]x[[/div]]"),
+        (" : A : 1", "\0: A : 1"),
+        ("\n\n : A : 1", "\0: A : 1"),
+        (" \n: A : 1", ": A : 1"),
     ] {
         let mut text = input.to_owned();
         preserve_wikidot_document_indentation_barrier(&mut text);
