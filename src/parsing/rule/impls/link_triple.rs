@@ -63,6 +63,37 @@ fn link<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>
             return Ok(parsed);
         }
     }
+    if parser.settings().layout.legacy()
+        && parser.current().token == Token::NumberedItem
+        && parser.current().slice == "#"
+    {
+        if parser
+            .look_ahead(0)
+            .is_some_and(|token| token.token == Token::Whitespace)
+        {
+            let mut anchor = parser.clone();
+            if let Ok(mut parsed) = super::anchor::try_consume_wikidot_triple_anchor(
+                &mut anchor,
+                source_start + 1,
+            ) {
+                let mut elements = vec![text!("[")];
+                elements.extend(parsed.item);
+                parsed.item = Elements::Multiple(elements);
+                parser.update(&anchor);
+                return Ok(parsed);
+            }
+        }
+        let mut anchor = parser.clone();
+        if let Ok(mut parsed) =
+            super::link_anchor::try_consume_wikidot_bracket_anchor(&mut anchor)
+        {
+            let mut elements = vec![text!("[[")];
+            elements.extend(parsed.item);
+            parsed.item = Elements::Multiple(elements);
+            parser.update(&anchor);
+            return Ok(parsed);
+        }
+    }
     try_consume_link(parser, RULE_LINK_TRIPLE, None, source_start)
 }
 
