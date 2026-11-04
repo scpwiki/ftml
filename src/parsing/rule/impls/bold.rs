@@ -20,6 +20,8 @@
 
 use super::inline_delimiter::{assert_unpadded_open, validate_reachable_close};
 use super::prelude::*;
+use crate::parsing::ParseSuccess;
+use crate::parsing::collect::consume_iftags_segment;
 use crate::tree::PartialElement;
 
 pub const RULE_BOLD: Rule = Rule {
@@ -32,6 +34,9 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create bold (strong) container");
+    if parser.current().token == Token::BulletItem {
+        return try_consume_split_delimiter(parser);
+    }
     validate_reachable_close(parser, Token::Bold)?;
     assert_unpadded_open(parser, Token::Bold)?;
     let close = [ParseCondition::current(Token::Bold)];
@@ -42,6 +47,66 @@ fn try_consume_fn<'r, 't>(
     ];
     let ctype = ContainerType::Bold;
     let collected = collect_container(parser, RULE_BOLD, ctype, &close, &invalid, None)?;
+    finish_collected(parser, collected)
+}
+
+/// The two `*`s of a bold opener can be split by an iftags segment
+/// (`*[[iftags -zzz]][[/iftags]]*word**`): live Wikidot resolves the
+/// segment before the delimiter forms, so the pair still opens bold.
+/// The split opener only forms when every segment between the markers
+/// resolves to no text; a segment whose body would be kept puts real
+/// text between the markers, which is not a bold opener on live either.
+fn try_consume_split_delimiter<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    let mut probe = parser.clone();
+    probe.step()?; // first `*`
+    let mut segments = 0usize;
+    while probe.current().token == Token::LeftBlock {
+        let Some(segment) = consume_iftags_segment(&mut probe)? else {
+            break;
+        };
+        if segment.include_body
+            && !probe.full_text().inner()[segment.body.clone()].is_empty()
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+        segments += 1;
+    }
+    if segments == 0 || probe.current().token != Token::BulletItem {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    validate_reachable_close(parser, Token::Bold)?;
+    parser.step()?; // first `*`
+    while parser.current().token == Token::LeftBlock
+        && consume_iftags_segment(parser)?.is_some()
+    {}
+    assert_step(parser, Token::BulletItem)?;
+    if parser.current().token == Token::Whitespace {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    let close = [ParseCondition::current(Token::Bold)];
+    let invalid = [
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::token_pair(Token::Bold, Token::Whitespace),
+        ParseCondition::token_pair(Token::Whitespace, Token::Bold),
+    ];
+    let collected = collect_container(
+        parser,
+        RULE_BOLD,
+        ContainerType::Bold,
+        &close,
+        &invalid,
+        None,
+    )?;
+    finish_collected(parser, collected)
+}
+
+fn finish_collected<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    collected: ParseSuccess<Elements<'t>>,
+) -> ParseResult<'r, 't, Elements<'t>> {
     let (elements, errors, paragraph_safe) = collected.into();
     if parser.settings().layout.legacy()
         && matches!(
@@ -99,6 +164,19 @@ mod tests {
             "{html}"
         );
         assert_eq!(html.matches("<strong>").count(), 2, "{html}");
+    }
+
+    #[test]
+    fn split_bold_opener_with_kept_segment_body_stays_literal() {
+        // The segment gate passes and its body is kept, so real text
+        // sits between the two s: not a bold opener, matching the
+        // text-level resolution live Wikidot performs.
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("*[[iftags +tale]]YES[[/iftags]]*word**");
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(html, "<p>*YES*word**</p>");
     }
 
     #[test]

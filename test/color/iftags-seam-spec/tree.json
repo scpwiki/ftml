@@ -1,0 +1,42 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "#c00",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Apple"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "#c00",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Banana"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -315,13 +315,22 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
         let end = comment.end.saturating_sub(span.start).min(source.len());
         comment_mask[start..end].fill(true);
     }
+    // Resolved iftags segments hide `="` delimiters just like comments,
+    // but they do not reset an attribute key the way a comment does, so
+    // they get their own mask for the delimiter search.
+    let mut elision_mask = comment_mask.clone();
+    for segment in field.segment_ranges() {
+        let start = segment.start.saturating_sub(span.start).min(source.len());
+        let end = segment.end.saturating_sub(span.start).min(source.len());
+        elision_mask[start..end].fill(true);
+    }
 
     let bytes = source.as_bytes();
     let mut delimiters = Vec::new();
     for index in 0..bytes.len().saturating_sub(1) {
         if bytes[index] == b'='
             && bytes[index + 1] == b'"'
-            && comment_mask
+            && elision_mask
                 .get(index..)
                 .is_some_and(|mask| mask.starts_with(&[false, false]))
         {
@@ -348,7 +357,7 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
             .unwrap_or(source.len());
         let quote = (segment_start..segment_end)
             .rev()
-            .find(|index| bytes[*index] == b'"' && !comment_mask[*index]);
+            .find(|index| bytes[*index] == b'"' && !elision_mask[*index]);
         let (value_range, next_key_range) = match quote {
             Some(quote) => (segment_start..quote, quote + 1..segment_end),
             None => {
@@ -366,7 +375,7 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
         if key.is_empty() {
             arguments.mark_empty_key_present();
         } else {
-            arguments.insert(key, wikidot_stripslashes(value));
+            arguments.insert_cow(key, wikidot_stripslashes(value));
         }
         key = wikidot_attribute_key(field, &comment_mask, next_key_range);
     }
@@ -381,17 +390,32 @@ fn wikidot_attribute_key<'t>(
     field: &CommentElidedText<'t>,
     comment_mask: &[bool],
     range: std::ops::Range<usize>,
-) -> &'t str {
+) -> Cow<'t, str> {
     let fragment_start = comment_mask[range.clone()]
         .iter()
         .rposition(|masked| *masked)
         .map_or(range.start, |position| range.start + position + 1);
     let span = field.span();
-    let source = field.source();
-    let fragment = source
-        .get(fragment_start..range.end.min(span.len()))
-        .expect("Wikidot attribute key range must stay on UTF-8 boundaries");
-    wikidot_trim_argument_fragment(fragment)
+    let fragment_end = range.end.min(span.len());
+    // The fragment is addressed in field-relative offsets; elision works
+    // in absolute source offsets. A resolved iftags segment inside the
+    // key joins the parts around it (live Wikidot resolves the segment
+    // before getAttrs runs), rather than dropping the part before it.
+    let elided = field
+        .elide_segments_range(span.start + fragment_start..span.start + fragment_end);
+    match elided {
+        Cow::Borrowed(fragment) => {
+            Cow::Borrowed(wikidot_trim_argument_fragment(fragment))
+        }
+        Cow::Owned(text) => {
+            let trimmed = wikidot_trim_argument_fragment(&text);
+            if trimmed.len() == text.len() {
+                Cow::Owned(text)
+            } else {
+                Cow::Owned(trimmed.to_owned())
+            }
+        }
+    }
 }
 
 /// Whether an element is blank content that a paragraph break absorbs
@@ -2285,8 +2309,18 @@ where
 
                 let start = self.current();
                 let mut args_finished = false;
+                let mut key_elisions: Vec<std::ops::Range<usize>> = Vec::new();
                 loop {
                     let current = self.current();
+                    // An iftags segment inside the key resolves the way
+                    // it does inside a value: consume it whole and join
+                    // the key parts around its elisions below.
+                    if current.token == Token::LeftBlock
+                        && let Some(segment) = consume_iftags_segment(self)?
+                    {
+                        key_elisions.extend(segment.elisions());
+                        continue;
+                    }
                     match current.token {
                         Token::RightBlock => {
                             args_finished = true;
@@ -2312,8 +2346,28 @@ where
                 }
 
                 let end = self.current();
-                let key = self.full_text().slice_partial(start, end);
-                if key.is_empty() {
+                let key: Cow<'t, str> = if key_elisions.is_empty() {
+                    Cow::Borrowed(self.full_text().slice_partial(start, end))
+                } else {
+                    let source = self.full_text().inner();
+                    let mut resolved = String::new();
+                    let mut cursor = start.span.start;
+                    for elision in &key_elisions {
+                        if cursor < elision.start {
+                            resolved.push_str(&source[cursor..elision.start]);
+                        }
+                        cursor = cursor.max(elision.end);
+                    }
+                    if cursor < end.span.start {
+                        resolved.push_str(&source[cursor..end.span.start]);
+                    }
+                    Cow::Owned(resolved)
+                };
+                if key.is_empty()
+                    || !key.bytes().all(|byte| {
+                        byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
+                    })
+                {
                     return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
                 }
 
@@ -2324,12 +2378,12 @@ where
                 let space_after_equals = self.current().token == Token::Whitespace;
                 self.get_optional_space()?;
                 let bare = self.current().token != Token::DoubleQuote;
-                let value = self.get_block_argument_value(block_rule, key)?;
+                let value = self.get_block_argument_value(block_rule, &key)?;
 
                 if bare {
-                    map.insert_bare(key, value);
+                    map.insert_bare_cow(key, value);
                 } else {
-                    map.insert(key, value);
+                    map.insert_cow(key, value);
                 }
                 if space_before_equals || space_after_equals {
                     map.mark_spaced_equals();
@@ -2401,7 +2455,8 @@ where
                 }
                 let span = start.span.start..self.current().span.start;
                 let head =
-                    CommentElidedText::new(self.full_text().inner(), span, elisions);
+                    CommentElidedText::new(self.full_text().inner(), span, Vec::new())
+                        .with_segments(elisions);
                 (parse_wikidot_attribute_field(&head), false)
             }
         } else {

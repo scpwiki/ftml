@@ -190,6 +190,8 @@ fn extract_table_rows<'r, 't>(
                 residuals.push(text);
             }
 
+            Element::Delayed(delayed) if delayed.is_suppression_seam() => {}
+
             element if element.is_whitespace() => {}
 
             _ => return Err(parser.make_err(ParseErrorKind::TableContainsNonRow)),
@@ -215,6 +217,8 @@ fn extract_table_cells<'r, 't>(
             Element::Text(text) if !cells.is_empty() && is_cell_closer(&text) => {
                 residuals.push(text);
             }
+
+            Element::Delayed(delayed) if delayed.is_suppression_seam() => {}
 
             element if element.is_whitespace() => {}
 

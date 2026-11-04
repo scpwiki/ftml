@@ -515,6 +515,17 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
         | Token::EscapedBackslash => true,
 
         Token::Other => {
+            // A "/" directly before a block opener may be half of an
+            // italics opener split by an iftags segment; let the rule
+            // loop probe it instead of claiming it as text here. The
+            // text rule remains the fallback when the probe fails.
+            if parser.current().slice == "/"
+                && parser
+                    .look_ahead(0)
+                    .is_some_and(|token| token.token == Token::LeftBlock)
+            {
+                return false;
+            }
             parser.settings().layout.legacy() || parser.current().slice != "&"
         }
 

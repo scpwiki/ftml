@@ -76,7 +76,7 @@ pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
         Token::LeftRaw => &[RULE_RAW],
         Token::RightRaw => &[],
 
-        Token::BulletItem => &[RULE_LIST, RULE_TEXT],
+        Token::BulletItem => &[RULE_LIST, RULE_BOLD, RULE_TEXT],
         Token::NumberedItem => &[RULE_LIST, RULE_TEXT],
 
         Token::LeftLink => &[RULE_LINK_TRIPLE],
@@ -110,7 +110,8 @@ pub fn get_rules_for_token(current: &ExtractedToken) -> &'static [Rule] {
         Token::LeftComment => &[RULE_COMMENT],
 
         Token::Other if current.slice == "&" => &[RULE_ENTITY, RULE_TEXT],
-        Token::RuntimeText | Token::Other => &[RULE_TEXT],
+        Token::RuntimeText => &[RULE_TEXT],
+        Token::Other => &[RULE_ITALICS, RULE_TEXT],
     }
 }
 
@@ -189,7 +190,7 @@ mod tests {
             (Token::Raw, vec!["raw"]),
             (Token::LeftRaw, vec!["raw"]),
             (Token::RightRaw, vec![]),
-            (Token::BulletItem, vec!["list", "text"]),
+            (Token::BulletItem, vec!["list", "bold", "text"]),
             (Token::NumberedItem, vec!["list", "text"]),
             (Token::LeftLink, vec!["link-triple"]),
             (Token::LeftLinkStar, vec!["link-triple-new-tab"]),
@@ -213,7 +214,7 @@ mod tests {
             (Token::LeftComment, vec!["comment"]),
             (Token::InputStart, vec!["null"]),
             (Token::InputEnd, vec!["null"]),
-            (Token::Other, vec!["text"]),
+            (Token::Other, vec!["italics", "text"]),
         ];
 
         for (token, expected) in cases {

@@ -74,16 +74,16 @@ fn normalize_wikidot_html_attribute_value<'t>(value: &Cow<'t, str>) -> Cow<'t, s
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct ArgumentKey<'t> {
-    value: &'t str,
+    value: Cow<'t, str>,
     case_sensitive: bool,
 }
 
 impl<'t> ArgumentKey<'t> {
     #[inline]
-    fn as_str(self) -> &'t str {
-        self.value
+    fn as_str(&self) -> &str {
+        &self.value
     }
 }
 
@@ -93,7 +93,7 @@ impl PartialEq for ArgumentKey<'_> {
             && if self.case_sensitive {
                 self.value == other.value
             } else {
-                self.value.eq_ignore_ascii_case(other.value)
+                self.value.eq_ignore_ascii_case(other.value.as_ref())
             }
     }
 }
@@ -143,6 +143,14 @@ impl<'t> Arguments<'t> {
     #[inline]
     fn key(&self, key: &'t str) -> ArgumentKey<'t> {
         ArgumentKey {
+            value: Cow::Borrowed(key),
+            case_sensitive: self.case_sensitive,
+        }
+    }
+
+    #[inline]
+    fn key_cow(&self, key: Cow<'t, str>) -> ArgumentKey<'t> {
+        ArgumentKey {
             value: key,
             case_sensitive: self.case_sensitive,
         }
@@ -165,6 +173,26 @@ impl<'t> Arguments<'t> {
         self.bare.insert(self.key(key));
     }
 
+    /// Insert an argument whose key was materialized rather than sliced
+    /// from the source (an iftags segment inside the key was resolved).
+    pub fn insert_cow(&mut self, key: Cow<'t, str>, value: Cow<'t, str>) {
+        self.source_present = true;
+        let argument_key = self.key_cow(key);
+        self.bare.remove(&argument_key);
+        self.raw.push(RawModuleArgument {
+            name: argument_key.value.clone(),
+            value: value.clone(),
+        });
+        self.inner.insert(argument_key, value);
+    }
+
+    pub fn insert_bare_cow(&mut self, key: Cow<'t, str>, value: Cow<'t, str>) {
+        let argument_key = self.key_cow(key.clone());
+        self.insert_cow(key, value);
+        self.bare_source_present = true;
+        self.bare.insert(argument_key);
+    }
+
     #[must_use = "non-idempotent getter method"]
     pub fn get(&mut self, key: &'t str) -> Option<Cow<'t, str>> {
         let key = self.key(key);
@@ -175,7 +203,7 @@ impl<'t> Arguments<'t> {
     #[must_use = "the normalized Wikidot class value must be used"]
     pub(crate) fn take_normalized_wikidot_class(&mut self) -> Option<Cow<'t, str>> {
         let key = ArgumentKey {
-            value: "class",
+            value: Cow::Borrowed("class"),
             case_sensitive: true,
         };
         self.bare.remove(&key);
@@ -270,7 +298,7 @@ impl<'t> Arguments<'t> {
         self.inner
             .iter()
             .map(|(key, value)| {
-                let key = cow!(key.as_str());
+                let key = key.value.clone();
                 let value = value.clone();
 
                 (key, value)

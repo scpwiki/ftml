@@ -135,6 +135,47 @@ fn literal_span_gate<'r, 't>(
     ok!(true; Element::Text(Cow::Borrowed(&text[start..end])), Vec::new())
 }
 
+/// Whether the block opener recovered from the parser's position sits
+/// at the start of a physical line. The block machinery has already
+/// consumed `[[` and the name when the parse function runs, so the
+/// opener is recovered by scanning the source back from the current
+/// token, the same way `literal_span_gate` recovers its head.
+fn opener_starts_line(parser: &Parser<'_, '_>, name: &str) -> bool {
+    let text = parser.full_text().inner();
+    let bytes = text.as_bytes();
+    let mut start = parser.current().span.start;
+    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
+        start -= 1;
+    }
+    if start < name.len() || !text[start - name.len()..start].eq_ignore_ascii_case(name) {
+        return false;
+    }
+    start -= name.len();
+    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
+        start -= 1;
+    }
+    if start < 2 || &text[start - 2..start] != "[[" {
+        return false;
+    }
+    start -= 2;
+    start == 0 || bytes[start - 1] == b'\n'
+}
+
+/// Whether a gate result renders nothing: a suppressed body, an empty
+/// included body (only typography boundaries), or no elements at all.
+fn result_is_invisible(result: &ParseResult<'_, '_, Elements<'_>>) -> bool {
+    let Ok(success) = result else {
+        return false;
+    };
+    match &success.item {
+        Elements::None => true,
+        Elements::Single(element) => matches!(element, Element::Delayed(_)),
+        Elements::Multiple(elements) => elements
+            .iter()
+            .all(|element| matches!(element, Element::Delayed(_))),
+    }
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &'t str,
@@ -146,6 +187,8 @@ fn parse_fn<'r, 't>(
     assert!(!flag_star, "IfTags doesn't allow star flag");
     assert!(!flag_score, "IfTags doesn't allow score flag");
     assert_block_name(&BLOCK_IFTAGS, name);
+
+    let opener_at_line_start = opener_starts_line(parser, name);
 
     // Inside a matched Wikidot iftags span, iftags tags are literal text:
     // the enclosing span's pairing was decided at the text level and its
@@ -271,6 +314,14 @@ fn parse_fn<'r, 't>(
     if designated_end.is_some() {
         parser.set_wikidot_iftags_body_end(previous_body_end);
         parser.set_in_wikidot_iftags_span(previous_span);
+    }
+    // A gate that renders nothing does not use up its line: on live
+    // Wikidot the segment is resolved before lines are classified, so
+    // a line-start construct following it (a blockquote, heading, or
+    // list) still owns the line. Restore the line-start state the
+    // segment's own tokens consumed.
+    if opener_at_line_start && result_is_invisible(&result) {
+        parser.mark_virtual_start_of_line();
     }
     result
 }
