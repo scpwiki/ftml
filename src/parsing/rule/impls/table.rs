@@ -551,8 +551,13 @@ fn try_consume_fn<'r, 't>(
                         return finish_simple_table(rows, errors);
                     }
 
+                    // A row whose final cell is never closed keeps its
+                    // completed cells; only the incomplete cell contents
+                    // are discarded. This applies to both layouts: the
+                    // fail fallback here would silently drop the
+                    // completed cells of the row.
                     (Token::LineBreak | Token::ParagraphBreak | Token::InputEnd, _) => {
-                        if parser.settings().layout.legacy() && !cells.is_empty() {
+                        if !cells.is_empty() {
                             if parser.current().token == Token::LineBreak
                                 && parser.look_ahead(0).is_some_and(|token| {
                                     is_table_column_token(token.token)

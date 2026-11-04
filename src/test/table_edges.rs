@@ -270,6 +270,26 @@ fn with_wikidot_table<R>(
     check(table)
 }
 
+fn with_wikijump_table<R>(
+    input: &str,
+    check: impl FnOnce(&crate::tree::Table<'_>) -> R,
+) -> R {
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
+    let tokenization = crate::tokenize(input);
+    let result = crate::parse(&tokenization, &page_info, &settings);
+    let (tree, errors) = result.into();
+
+    assert!(errors.is_empty(), "unexpected parse errors: {errors:?}");
+
+    let [Element::Table(table)] = tree.elements.as_slice() else {
+        panic!("expected one table, got {:?}", tree.elements);
+    };
+
+    assert_eq!(table.table_type, TableType::Simple);
+    check(table)
+}
+
 fn assert_bold_text(elements: &[Element<'_>], expected: &str) {
     let [Element::Container(container)] = elements else {
         panic!("expected one container, got {elements:?}");
@@ -362,6 +382,32 @@ fn simple_table_unterminated_row_before_next_row_stays_one_table() {
     assert_eq!(table.rows.len(), 2);
     assert!(table.rows[0].cells[0].elements.is_empty());
     assert_text_content(&table.rows[1].cells[0].elements, "b**");
+}
+
+#[test]
+fn simple_table_unterminated_row_keeps_completed_cells_in_wikijump() {
+    enable_test_logging();
+
+    with_wikijump_table("|| A || B ||\n|| C || D", |table| {
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].cells.len(), 2);
+        assert_single_text(&table.rows[0].cells[0].elements, "A");
+        assert_single_text(&table.rows[0].cells[1].elements, "B");
+        assert_eq!(table.rows[1].cells.len(), 1);
+        assert_single_text(&table.rows[1].cells[0].elements, "C");
+    });
+}
+
+#[test]
+fn simple_table_junk_after_last_cell_keeps_completed_cells_in_wikijump() {
+    enable_test_logging();
+
+    with_wikijump_table("|| A || B ||\n|| C || D || junk", |table| {
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[1].cells.len(), 2);
+        assert_single_text(&table.rows[1].cells[0].elements, "C");
+        assert_single_text(&table.rows[1].cells[1].elements, "D");
+    });
 }
 
 #[test]
