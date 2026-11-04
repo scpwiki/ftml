@@ -5,6 +5,13 @@ import hashlib
 import json
 from pathlib import Path
 
+try:
+    from corpus_cases import corpus_source_hashes
+except ImportError:
+    from scripts.corpus_cases import corpus_source_hashes
+
+ROOT = Path(__file__).resolve().parents[1]
+
 
 OWNERS = {
     "plain": lambda body: f"{body}\n",
@@ -45,22 +52,13 @@ def main() -> int:
         default=Path("target/wikidot-parity-probes/recovery"),
     )
     parser.add_argument(
-        "--inventory",
-        type=Path,
-        default=Path("tests/fixtures/wikidot-parity/cases.jsonl"),
-    )
-    parser.add_argument(
         "--manifest",
         type=Path,
         default=Path("target/wikidot-parity-probes/recovery.json"),
     )
     args = parser.parse_args()
 
-    existing_hashes = set()
-    if args.inventory.exists():
-        for line in args.inventory.read_text().split("\n"):
-            if line.strip():
-                existing_hashes.add(json.loads(line)["source_sha256"])
+    existing_hashes = corpus_source_hashes(ROOT)
 
     probes = []
     skipped_existing = []

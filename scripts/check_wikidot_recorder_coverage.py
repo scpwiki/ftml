@@ -8,6 +8,13 @@ from pathlib import Path
 
 from wikidot_parity_fingerprint import fingerprint, primary_family
 
+try:
+    from corpus_cases import load_corpus_cases
+except ImportError:
+    from scripts.corpus_cases import load_corpus_cases
+
+ROOT = Path(__file__).resolve().parents[1]
+
 
 PAGE_PREVIEW_CLASSES = {"saved-page-batch", "page-preview-isolated"}
 
@@ -19,18 +26,13 @@ def read_jsonl(path: Path) -> list[dict]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--recorded-cases", type=Path, required=True)
-    parser.add_argument(
-        "--inventory",
-        type=Path,
-        default=Path("tests/fixtures/wikidot-parity/cases.jsonl"),
-    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--require-no-zero-modules", action="store_true")
     args = parser.parse_args()
 
     recorded = read_jsonl(args.recorded_cases)
-    inventory = read_jsonl(args.inventory)
-    frozen_hashes = {row["source_sha256"] for row in inventory}
+    corpus = load_corpus_cases(ROOT)
+    frozen_hashes = {case["source_sha256"] for case in corpus.values()}
 
     module_hashes: dict[str, set[str]] = defaultdict(set)
     module_preview_hashes: dict[str, set[str]] = defaultdict(set)
@@ -74,7 +76,7 @@ def main() -> int:
         "schema": "ftml.wikidot_parity.recorder_coverage.v1",
         "recorded_cases_sha256": hashlib.sha256(args.recorded_cases.read_bytes()).hexdigest(),
         "recorded_case_count": len(recorded),
-        "inventory_case_count": len(inventory),
+        "corpus_case_count": len(corpus),
         "page_preview_source_hash_count": len(preview_hashes),
         "unobserved_page_preview_source_hash_count": len(unobserved_preview_hashes),
         "module_count": len(module_hashes),

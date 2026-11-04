@@ -4,20 +4,20 @@ import argparse
 import json
 from pathlib import Path
 
+try:
+    from corpus_cases import corpus_case_ids
+except ImportError:
+    from scripts.corpus_cases import corpus_case_ids
+
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "tests/fixtures/wikidot-parity/wikijump-feature-contracts.json"
-CASES = ROOT / "tests/fixtures/wikidot-parity/cases.jsonl"
 SCHEMA = "ftml.wikijump_feature_contracts.v2"
 PROPERTY_AXES = {f"P{index}" for index in range(1, 9)}
 PROPERTY_OWNERS = {"ftml", "wikijump", "shared", "not-applicable"}
 
 
 def load_case_ids() -> set[str]:
-    return {
-        json.loads(line)["case_id"]
-        for line in CASES.read_text(encoding="utf-8").split("\n")
-        if line.strip()
-    }
+    return corpus_case_ids(ROOT)
 
 
 def check(wikijump_root: Path, contracts_path: Path = CONTRACTS) -> list[str]:

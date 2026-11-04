@@ -5,9 +5,13 @@ import hashlib
 import json
 from pathlib import Path
 
+try:
+    from corpus_cases import load_corpus_cases
+except ImportError:
+    from scripts.corpus_cases import load_corpus_cases
+
 
 ROOT = Path(__file__).resolve().parents[1]
-CASES = ROOT / "tests/fixtures/wikidot-parity/cases.jsonl"
 
 
 def write_seed(output: Path, source: str) -> bool:
@@ -20,14 +24,9 @@ def write_seed(output: Path, source: str) -> bool:
     return True
 
 
-def load_stable_cases(output: Path) -> int:
+def add_corpus_seeds(output: Path) -> int:
     added = 0
-    # JSON strings may contain authored U+2028/U+2029. Python's splitlines()
-    # treats those code points as record separators even though JSONL does not.
-    for line in CASES.read_text(encoding="utf-8").split("\n"):
-        if not line.strip():
-            continue
-        case = json.loads(line)
+    for case in load_corpus_cases(ROOT).values():
         added += write_seed(output, case["source"])
     return added
 
@@ -45,7 +44,7 @@ def load_wikijump_seed_pages(output: Path, wikijump_root: Path) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build a generated libFuzzer seed corpus from stable FTML parity cases."
+        description="Build a generated libFuzzer seed corpus from the FTML fixture corpus."
     )
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument(
@@ -56,7 +55,7 @@ def main() -> None:
     args = parser.parse_args()
 
     args.output.mkdir(parents=True, exist_ok=True)
-    stable_added = load_stable_cases(args.output)
+    corpus_added = add_corpus_seeds(args.output)
     wikijump_added = 0
     if args.wikijump_root is not None:
         wikijump_added = load_wikijump_seed_pages(
@@ -66,7 +65,7 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "stable_cases_added": stable_added,
+                "corpus_cases_added": corpus_added,
                 "wikijump_seeds_added": wikijump_added,
                 "unique_seed_files": len(list(args.output.iterdir())),
             },
