@@ -175,6 +175,12 @@ fn parse_fn<'r, 't>(
             _ if element.is_whitespace() && !in_residual => continue,
 
             _ => {
+                let element =
+                    if wikidot_candidate && matches!(element, Element::LineBreak) {
+                        text!(" ")
+                    } else {
+                        element
+                    };
                 bibliography.add_residual(element);
                 in_residual = true;
             }

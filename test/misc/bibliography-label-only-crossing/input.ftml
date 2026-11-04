@@ -1,0 +1,8 @@
+((bibcite alpha)) ((bibcite bell)) ((bibcite omega))
+
+[[bibliography]]
+: alpha : Alpha text.
+: bell
+: omega : Omega text.
+: solo
+[[/bibliography]]

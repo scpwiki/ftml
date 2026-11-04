@@ -1,0 +1,10 @@
+((bibcite a)) ((bibcite b)) ((bibcite c)) ((bibcite d))
+
+[[bibliography]]
+: a:
+Value on next line.
+: b:
+: c : See text.
+: d:
++ Not a heading.
+[[/bibliography]]

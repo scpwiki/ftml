@@ -78,7 +78,7 @@ fn valid_wikidot_inline_label(label: &str) -> bool {
     !label.is_empty()
         && label
             .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+            .all(|character| character.is_ascii_alphanumeric())
 }
 
 #[cfg(test)]

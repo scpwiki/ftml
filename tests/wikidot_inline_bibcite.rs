@@ -155,7 +155,6 @@ fn live_backed_twenty_case_inline_bibcite_family_stays_fixed() {
 fn valid_labels_keep_missing_item_diagnostics_and_bibliography_integration() {
     for (source, label) in [
         ("((bibcite alpha))", "alpha"),
-        ("((BIBCITE alpha_2))", "alpha_2"),
         ("((bibcite   A9))", "A9"),
         ("((bibcite\tTabbed))", "Tabbed"),
     ] {
@@ -189,6 +188,8 @@ fn invalid_labels_remain_ordinary_escaped_syntax() {
             "((bibcite <strong>alpha</strong>))",
         ),
         ("((bibcite alpha|beta))", "((bibcite alpha|beta))"),
+        ("((BIBCITE alpha_2))", "((BIBCITE alpha_2))"),
+        ("((bibcite smith-2020))", "((bibcite smith-2020))"),
         ("((bibcite alpha[beta]))", "((bibcite alpha[beta]))"),
     ] {
         let html = render(source);

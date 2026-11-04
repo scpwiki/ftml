@@ -200,7 +200,11 @@ fn render_wikidot_bibliography(
                     .div()
                     .attr(attr!("class" => "bibitem", "id" => &id))
                     .inner(|ctx| {
-                        str_write!(ctx, "{entry_index}. ");
+                        if elements.is_empty() {
+                            str_write!(ctx, "{entry_index}.");
+                        } else {
+                            str_write!(ctx, "{entry_index}. ");
+                        }
                         render_elements(ctx, elements);
                     });
             }
