@@ -226,7 +226,7 @@ fn code_opener_end(
     let relative_end = source[head_start..].find("]]")?;
     let head_end = head_start + relative_end;
     let head = &source[head_start..head_end];
-    if head.contains("[[") {
+    if head_has_malformed_nested_marker(head) {
         return None;
     }
     let name_end = head
@@ -235,6 +235,28 @@ fn code_opener_end(
     let name = &head[..name_end];
 
     name.eq_ignore_ascii_case("code").then_some(head_end + 2)
+}
+
+fn head_has_malformed_nested_marker(head: &str) -> bool {
+    // The head ends at the first close marker, so a nested opener inside
+    // it is an unclosed fragment. An iftags segment opener fragment is
+    // live behavior: Wikidot ends the head at the segment's own close
+    // marker and treats the rest as body, so the candidate stands. Any
+    // other fragment (a closer, or another block's opener) leaves the
+    // head malformed, since it could let the head steal a closer that
+    // belongs to a later block.
+    let mut rest = head;
+    while let Some(index) = rest.find("[[") {
+        let fragment = &rest[index + 2..];
+        let name_end = fragment
+            .find(|character: char| character.is_ascii_whitespace())
+            .unwrap_or(fragment.len());
+        if !fragment[..name_end].eq_ignore_ascii_case("iftags") {
+            return true;
+        }
+        rest = &fragment[name_end..];
+    }
+    false
 }
 
 fn code_closer_end(source: &str, closer_start: usize) -> Option<usize> {
@@ -413,6 +435,16 @@ mod tests {
             candidates(source).is_empty(),
             "suffixed closer must not close"
         );
+    }
+
+    #[test]
+    fn candidate_accepts_an_iftags_fragment_in_the_head() {
+        let source = "[[code type=\"py[[iftags -zzz]]thon[[/iftags]]\"]]x = 1[[/code]]";
+        let candidate = candidate_at(source, 0).expect("code candidate");
+
+        assert_eq!(&source[candidate.body.clone()], "thon[[/iftags]]\"]]x = 1",);
+        assert_eq!(candidate.owner_end, source.len());
+        assert_eq!(candidate.end_blocks_to_skip, 0);
     }
 
     #[test]

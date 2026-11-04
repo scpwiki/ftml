@@ -89,8 +89,17 @@ where
         }
     }
 
-    parser.get_head_value(&BLOCK_MATH, in_head, |_, value| {
-        Ok(value.map(|source| Cow::Borrowed(source.trim())))
+    parser.get_head_value_resolved(&BLOCK_MATH, in_head, |_, value| {
+        Ok(value.and_then(|source| match source {
+            Cow::Borrowed(text) => {
+                let name = text.trim();
+                (!name.is_empty()).then_some(Cow::Borrowed(name))
+            }
+            Cow::Owned(text) => {
+                let name = text.trim();
+                (!name.is_empty()).then_some(Cow::Owned(name.to_owned()))
+            }
+        }))
     })
 }
 

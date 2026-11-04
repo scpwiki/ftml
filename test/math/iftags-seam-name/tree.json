@@ -1,0 +1,71 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": "alpha",
+                "latex-source": "a^2"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "bet",
+                "latex-source": "a^2"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "gamma",
+                "latex-source": "a^2"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": null,
+                "latex-source": "a^2"
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "equation-reference",
+                        "data": "alpha"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "equation-reference",
+                        "data": "bet"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "equation-reference",
+                        "data": "gamma"
+                    }
+                ]
+            }
+        }
+    ]
+}

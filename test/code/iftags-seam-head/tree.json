@@ -1,0 +1,45 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "x = 1",
+                "language": "python",
+                "name": null
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "x = 1",
+                "language": "py",
+                "name": null
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "x = 1",
+                "language": "python",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "x = 1",
+            "language": "python",
+            "name": null
+        },
+        {
+            "contents": "x = 1",
+            "language": "py",
+            "name": null
+        },
+        {
+            "contents": "x = 1",
+            "language": "python",
+            "name": null
+        }
+    ]
+}

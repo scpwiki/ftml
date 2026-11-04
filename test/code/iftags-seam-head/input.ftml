@@ -1,0 +1,5 @@
+[[code type="py[[iftags -zzz]]thon[[/iftags]]"]]x = 1[[/code]]
+
+[[code type="py[[iftags +zzz]]thon[[/iftags]]"]]x = 1[[/code]]
+
+[[code ty[[iftags -zzz]][[/iftags]]pe="python"]]x = 1[[/code]]
