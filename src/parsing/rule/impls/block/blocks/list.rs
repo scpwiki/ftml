@@ -54,32 +54,51 @@ pub const BLOCK_LI: BlockRule = BlockRule {
 
 fn parse_unordered_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let block = (&BLOCK_UL, ListType::Bullet);
 
-    parse_list_block(block, parser, name, flag_star, flag_score, in_head)
+    parse_list_block(
+        block,
+        parser,
+        name,
+        _opener_start,
+        flag_star,
+        flag_score,
+        in_head,
+    )
 }
 
 fn parse_ordered_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let block = (&BLOCK_OL, ListType::Numbered);
 
-    parse_list_block(block, parser, name, flag_star, flag_score, in_head)
+    parse_list_block(
+        block,
+        parser,
+        name,
+        _opener_start,
+        flag_star,
+        flag_score,
+        in_head,
+    )
 }
 
 fn parse_list_block<'r, 't>(
     (block_rule, list_type): (&BlockRule, ListType),
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -378,7 +397,8 @@ fn join_lines<'t>(lines: Vec<Vec<Element<'t>>>) -> Vec<Element<'t>> {
 
 fn parse_list_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

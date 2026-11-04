@@ -33,7 +33,8 @@ pub const BLOCK_ANCHOR: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -66,9 +67,6 @@ fn parse_fn<'r, 't>(
     // a separator already moved out of a preceding inline closer.
     let legacy = parser.settings().layout.legacy();
     let source = parser.full_text().inner();
-    let opener_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .and_then(|name_start| source[..name_start].rfind("[["));
     let body_source_start = parser.current().span.start;
     let anchor_body_start = source
         .get(..body_source_start)
@@ -86,8 +84,7 @@ fn parse_fn<'r, 't>(
         body_source.is_some_and(|body| !body.trim_matches(is_ascii_separator).is_empty());
     let leading_separator = legacy
         && body_source.is_some_and(|body| body.starts_with(is_ascii_separator))
-        && opener_start
-            .is_some_and(|start| !follows_separator_or_line_start(&source[..start]));
+        && !follows_separator_or_line_start(&source[..opener_start]);
     let trailing_separator = legacy
         && body_has_content
         && body_source.is_some_and(|body| body.ends_with(is_ascii_separator))

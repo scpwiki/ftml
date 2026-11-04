@@ -34,7 +34,8 @@ pub const BLOCK_CODE: BlockRule = BlockRule {
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -44,12 +45,6 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Code doesn't allow score flag");
     assert_block_name(&BLOCK_CODE, name);
     let source = parser.full_text().inner();
-    let name_start = (name.as_ptr() as usize)
-        .checked_sub(source.as_ptr() as usize)
-        .expect("parsed code name belongs to the source");
-    let owner_start = source[..name_start]
-        .rfind("[[")
-        .expect("parsed code name follows its opener");
 
     if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
         let head = &source[..parser.current().span.start];
@@ -69,10 +64,10 @@ fn parse_fn<'r, 't>(
     let wikidot_candidate =
         if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
             let candidate = parser
-                .wikidot_code_candidate(owner_start)
+                .wikidot_code_candidate(opener_start)
                 .ok_or_else(|| parser.make_err(ParseErrorKind::RuleFailed))?;
-            if !source[owner_start..candidate.owner_end].contains(['\r', '\n'])
-                && source[owner_start..candidate.body.start].contains("[!--")
+            if !source[opener_start..candidate.owner_end].contains(['\r', '\n'])
+                && source[opener_start..candidate.body.start].contains("[!--")
             {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
@@ -95,11 +90,11 @@ fn parse_fn<'r, 't>(
 
     let has_delayed_input = wikidot_candidate.as_ref().map_or_else(
         || {
-            parser.has_runtime_literal_in_range(owner_start..parser.current().span.start)
+            parser.has_runtime_literal_in_range(opener_start..parser.current().span.start)
                 || parser.body_has_delayed_input(&BLOCK_CODE)
         },
         |candidate| {
-            let owner_range = owner_start..candidate.owner_end;
+            let owner_range = opener_start..candidate.owner_end;
             parser.has_generated_in_range(owner_range.clone())
                 || parser.has_runtime_literal_in_range(owner_range)
         },
@@ -115,10 +110,10 @@ fn parse_fn<'r, 't>(
 
     if has_delayed_input {
         let owner_end = parser.current().span.start;
-        let generated = parser.generated_in_range(owner_start..owner_end);
+        let generated = parser.generated_in_range(opener_start..owner_end);
         return success_elements(Element::Delayed(DelayedElement::shell(
             source,
-            owner_start..owner_end,
+            opener_start..owner_end,
             &generated,
         )));
     }

@@ -1,0 +1,3 @@
+disallowed-methods = [
+    { path = "str::as_ptr", reason = "head offsets come from token spans (opener_start), not pointer arithmetic on collected name slices" },
+]

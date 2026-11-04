@@ -69,7 +69,7 @@ impl<'t> CollapsibleHead<'t> {
 
 pub(crate) fn parse_collapsible_head<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
     in_head: bool,
 ) -> Result<(CollapsibleHead<'t>, BlockBodyStart), ParseError>
 where
@@ -108,7 +108,8 @@ where
 
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

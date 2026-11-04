@@ -42,7 +42,8 @@ pub const BLOCK_FOOTNOTE_BLOCK: BlockRule = BlockRule {
 
 fn parse_footnote_ref<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -122,7 +123,8 @@ fn parse_footnote_ref<'r, 't>(
 
 fn parse_footnote_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,

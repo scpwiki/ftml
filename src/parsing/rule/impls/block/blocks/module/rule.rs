@@ -34,9 +34,12 @@ pub const BLOCK_MODULE: BlockRule = BlockRule {
     parse_fn,
 };
 
+// Module subnames are collected raw; this offset recovery is exempt from the block opener contract.
+#[allow(clippy::disallowed_methods)]
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
-    name: &'t str,
+    name: &str,
+    _opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -120,6 +123,8 @@ fn wikidot_valid_module_name(name: &str) -> bool {
         && chars.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
+// Module subnames are collected raw; this offset recovery is exempt from the block opener contract.
+#[allow(clippy::disallowed_methods)]
 fn wikidot_extra_bracket_css_literal<'t>(
     parser: &Parser<'_, 't>,
     subname: &'t str,
