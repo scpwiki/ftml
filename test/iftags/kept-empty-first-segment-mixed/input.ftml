@@ -1,0 +1,4 @@
+x
+[[iftags -zzz]]
+A
+>> B[[/iftags]]
