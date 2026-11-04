@@ -49,18 +49,10 @@ fn parse_conditions<'r, 't>(
     }
 }
 
-/// Consume an iftags gate inside a matched Wikidot span as literal text
-/// (#792): its head, plus its body through its own paired closer when it
-/// has one before the enclosing span's designated end. The condition is
-/// never evaluated and the consumed range renders verbatim.
 fn literal_span_gate<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    // The block machinery has already consumed `[[` and the name, so the
-    // head's start is recovered by scanning the source back from the
-    // current token: optional whitespace, the name, optional whitespace,
-    // then `[[`.
     let text = parser.full_text().inner();
     let mut start = parser.current().span.start;
     let bytes = text.as_bytes();
@@ -79,7 +71,6 @@ fn literal_span_gate<'r, 't>(
     }
     start -= 2;
 
-    // Consume the rest of the head.
     loop {
         match parser.current().token {
             Token::RightBlock => {
@@ -100,8 +91,6 @@ fn literal_span_gate<'r, 't>(
     let designated = parser.wikidot_iftags_body_end();
     let mut line_breaks: Vec<(usize, usize, bool)> = Vec::new();
     match (pairing_end, designated) {
-        // This gate's pairing reaches or passes the enclosing span's end:
-        // consume up to (not including) the designated closer.
         (Some(pe), Some(d)) if pe >= d => {
             while parser.current().span.start < d
                 && parser.current().token != Token::InputEnd
@@ -110,7 +99,6 @@ fn literal_span_gate<'r, 't>(
                 parser.step()?;
             }
         }
-        // Consume through this gate's own paired closer.
         (Some(pe), _) => loop {
             let token = parser.current();
             if token.token == Token::LeftBlockEnd && token.span.start == pe {
@@ -132,8 +120,6 @@ fn literal_span_gate<'r, 't>(
             record_line_break(parser, &mut line_breaks);
             parser.step()?;
         },
-        // Unpairable here: the head alone is the literal unit; the rest of
-        // the enclosing body is gathered normally.
         _ => {}
     }
 
@@ -145,10 +131,6 @@ fn literal_span_gate<'r, 't>(
     Ok(success)
 }
 
-/// Record the current token's span if it is a line or paragraph break,
-/// so a literal gate unit can reproduce the breaks its text contains.
-/// The flag marks paragraph breaks, which split the enclosing gather
-/// like any other kept body's breaks.
 fn record_line_break(
     parser: &Parser<'_, '_>,
     line_breaks: &mut Vec<(usize, usize, bool)>,
@@ -163,15 +145,6 @@ fn record_line_break(
     }
 }
 
-/// Build the elements for a literal gate unit: its source text, with a
-/// line-break element wherever the consumed tokens held a line or
-/// paragraph break (a paragraph break flattens to one line break, as
-/// elsewhere in a segment body). Live Wikidot resolves the enclosing
-/// segment at the text level, so breaks inside the unit render as
-/// breaks, not as raw newlines inside one text run. Where the unit
-/// held paragraph breaks, the returned split layout lets the enclosing
-/// gather re-establish them as real paragraph breaks; the flattened
-/// batch is unchanged.
 fn literal_unit_elements<'t>(
     source: &'t str,
     start: usize,
@@ -189,9 +162,6 @@ fn literal_unit_elements<'t>(
     let mut counts: Vec<ParagraphSplitEntry> = Vec::new();
     let mut segment_count = 0_usize;
     let mut segment_split = false;
-    // Whether the element batch currently ends with the separator of a
-    // paragraph break whose segment was just closed: further breaks in
-    // the same run shed into that break instead of opening content.
     let mut at_break_run_end = false;
     let mut chunk_start = start;
     for &(break_start, break_end, paragraph) in line_breaks {
@@ -204,9 +174,6 @@ fn literal_unit_elements<'t>(
         }
         if paragraph {
             if at_break_run_end {
-                // A further paragraph break in the same run closes an
-                // empty segment, matching how a body gather segments
-                // consecutive breaks.
                 counts.push((0, true, ParagraphSplitKind::Paragraph));
             } else {
                 if !matches!(elements.last(), Some(Element::LineBreak)) {
@@ -275,11 +242,6 @@ fn gate_pre_break(source: &[u8], opener_start: usize) -> bool {
         .any(|byte| !matches!(byte, b' ' | b'\t' | b'>'))
 }
 
-/// Whether the block opener recovered from the parser's position sits
-/// at the start of a physical line. The block machinery has already
-/// consumed `[[` and the name when the parse function runs, so the
-/// opener is recovered by scanning the source back from the current
-/// token, the same way `literal_span_gate` recovers its head.
 fn opener_starts_line(parser: &Parser<'_, '_>, name: &str) -> bool {
     let text = parser.full_text().inner();
     let bytes = text.as_bytes();
@@ -301,8 +263,6 @@ fn opener_starts_line(parser: &Parser<'_, '_>, name: &str) -> bool {
     start == 0 || bytes[start - 1] == b'\n'
 }
 
-/// Whether a gate result renders nothing: a suppressed body, an empty
-/// included body (only typography boundaries), or no elements at all.
 fn result_is_invisible(result: &ParseResult<'_, '_, Elements<'_>>) -> bool {
     let Ok(success) = result else {
         return false;
@@ -331,10 +291,6 @@ fn parse_fn<'r, 't>(
 
     let opener_at_line_start = opener_starts_line(parser, name);
 
-    // Inside a matched iftags span, iftags tags are literal text:
-    // the enclosing span's pairing was decided at the text level and its
-    // body is never rescanned (ftml #792). Consume this gate's own paired
-    // unit as literal text, without evaluating its condition.
     if parser.in_wikidot_iftags_span() {
         return literal_span_gate(parser, name);
     }
@@ -369,41 +325,12 @@ fn parse_fn<'r, 't>(
         parser.step()?;
     }
 
-    // A closed no-argument gate on Wikidot passes exactly when the page
-    // carries at least one tag. The frozen PagePreview parity bindings are
-    // tag-less observations and bind the gate as false; on the saved-page
-    // route every real bare-gate page on record is tagged and renders its
-    // body. Keeping this explicit avoids changing ElementCondition's
-    // general empty-set semantics.
     let include_body = if conditions.is_empty() && parser.settings().layout.legacy() {
         !parser.page_info().tags.is_empty()
     } else {
         check_iftags(parser.page_info(), &conditions)
     };
 
-    // IfTags pairing (#792): in a visible context, the opener pairs with
-    // the closer the pairing search chooses, not the closer proper nesting
-    // would pick; the gather below is restricted to that designated closer
-    // and nested iftags gates are literal inside the span. An unpairable
-    // opener renders literally, as before. Gates parsed while a hidden body
-    // is discarded, gates inside blockquote bodies, and false gates whose
-    // only closers sit inside regions the search cannot see into all keep
-    // the guards and gathers below (hidden bodies discard one gate at a
-    // time, fail-closed).
-    //
-    // The pairing model is live Wikidot's in both layouts: saved pages
-    // never evaluate a nested gate, in either the kept-body or the
-    // discarded-body direction (saved-page probes, 2026-11-04). Proper
-    // nesting in the wikijump layout evaluated nested gates and, for a
-    // false outer gate whose only closer belonged to a nested gate,
-    // discarded text past the designated closer as well.
-    //
-    // Both layouts also take the missing-closer guard: a gate with no
-    // closer is not a gate at all, so the rule fails and the opener
-    // renders literally, matching live Wikidot, which renders both
-    // unclosed forms as plain text. Without the guard, the wikijump
-    // false-condition path discarded elements to the end of the input
-    // and reported success, silently swallowing the rest of the document.
     let legacy = parser.settings().layout.legacy();
     let mut designated_end = None;
     if !parser.discarding_hidden_body() && !parser.in_quote_body() {
@@ -433,11 +360,6 @@ fn parse_fn<'r, 't>(
     } else if !parser.discarding_hidden_body()
         && !parser.has_body_end_block(&BLOCK_IFTAGS)
     {
-        // A gate parsed while a hidden body is discarded needs no guard:
-        // the discard machinery consumes fail-closed (an unterminated
-        // discard runs to the end of the input), so nothing can leak
-        // through it, and imposing the guard there would change which
-        // closer the enclosing discard treats as its end.
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
@@ -781,10 +703,6 @@ fn parse_fn<'r, 't>(
         }
     };
 
-    // A fused close leaves its third bracket behind as following
-    // text: the end-block verification consumed the whole `]]]` token,
-    // so append the residual bracket to the gate's result, in the
-    // final segment when the body split.
     let result = if parser.wikidot_body_closed_with_fused_close(&BLOCK_IFTAGS) {
         match result {
             Ok(mut success) => {
@@ -816,11 +734,6 @@ fn parse_fn<'r, 't>(
         parser.set_wikidot_iftags_body_end(previous_body_end);
         parser.set_in_wikidot_iftags_span(previous_span);
     }
-    // A gate that renders nothing does not use up its line: on live
-    // Wikidot the segment is resolved before lines are classified, so
-    // a line-start construct following it (a blockquote, heading, or
-    // list) still owns the line. Restore the line-start state the
-    // segment's own tokens consumed.
     if opener_at_line_start && result_is_invisible(&result) {
         parser.mark_virtual_start_of_line();
     }
@@ -1030,19 +943,11 @@ mod tests {
             format!("{tree:?}").contains("body")
         }
 
-        // A closed no-argument gate hides its body on a tag-less page (the
-        // frozen PagePreview binding context) and renders it on a tagged
-        // page (the saved-route evidence).
         for source in ["[[iftags]]body[[/iftags]]", "[[iftags   ]]body[[/iftags]]"] {
             assert!(!body_rendered(source, &tagless, &legacy), "{source}");
             assert!(body_rendered(source, &tagged, &legacy), "{source}");
         }
 
-        // Sign-only specs: "+" parses to a required condition on an empty
-        // tag name, which no page satisfies, so the body stays hidden with
-        // or without tags. "-" normalizes to no conditions in the legacy
-        // layout and follows the no-argument rule above. Both stay hidden
-        // on a tag-less page, as the frozen bindings record.
         assert!(!body_rendered(
             "[[iftags +]]body[[/iftags]]",
             &tagless,

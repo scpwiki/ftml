@@ -18,16 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Utilities to help convert tree structures into owned versions.
-//!
-//! `SyntaxTree` and its child structures use `Cow` to enable both
-//! serialization and deserialization.
-//!
-//! However if you need to convert a referenced version into an owned
-//! version, that requires traversing all the child structures and
-//! using `to_owned()`.
-//!
-//! This module has helpers to make this process easier.
 
 use super::element::Element;
 use super::list::ListItem;

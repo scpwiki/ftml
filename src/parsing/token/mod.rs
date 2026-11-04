@@ -45,7 +45,6 @@ use std::fmt::Display;
 use std::ops::Range;
 use strum_macros::IntoStaticStr;
 
-/// Struct that represents a token in a specific text.
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ExtractedToken<'a> {
     pub token: Token,
@@ -54,8 +53,6 @@ pub struct ExtractedToken<'a> {
 }
 
 impl ExtractedToken<'_> {
-    /// Returns a new object with the same values, except with span refering to the byte indicies
-    /// of the text if it were in UTF-16 rather than in UTF-8.
     #[must_use]
     pub fn to_utf16_indices(&self, map: &Utf16IndexMap) -> Self {
         let ExtractedToken { token, slice, span } = self.clone();
@@ -68,8 +65,6 @@ impl ExtractedToken<'_> {
     }
 }
 
-/// Enum that represents the type of a parsed token. For a struct with additional context
-/// surrounding the positioning and content of the token, see [`ExtractedToken`].
 #[derive(
     Serialize, Deserialize, Enum, IntoStaticStr, Debug, Copy, Clone, PartialEq, Eq,
 )]

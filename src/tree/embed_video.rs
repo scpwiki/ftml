@@ -16,7 +16,6 @@ use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::fmt::{self, Display, Formatter};
 
-/// The SHA-256 identity of an exact authored source slice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceSha256([u8; 32]);
 
@@ -25,12 +24,10 @@ impl SourceSha256 {
         Self(Sha256::digest(source.as_bytes()).into())
     }
 
-    /// Returns the digest bytes.
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
 
-    /// Returns the lowercase hexadecimal digest.
     pub fn to_hex(self) -> String {
         use std::fmt::Write;
 
@@ -178,7 +175,6 @@ impl<'t> EmbedVideo<'t> {
         &self.payload
     }
 
-    /// Returns the identity of [`Self::source`].
     pub const fn source_sha256(&self) -> SourceSha256 {
         self.source_sha256
     }

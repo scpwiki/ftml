@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Representation of Wikidot modules, along with their context.
 
 use super::AttributeMap;
 use super::clone::{option_string_to_owned, string_to_owned};
@@ -50,11 +49,9 @@ pub enum Module<'t> {
     /// If no page is listed, the backlinks are returned for the current page.
     Backlinks { page: Option<Cow<'t, str>> },
 
-    /// Lists all categories on the site, along with the pages they contain.
     #[serde(rename_all = "kebab-case")]
     Categories { include_hidden: bool },
 
-    /// Allows a user to join a site.
     #[serde(rename_all = "kebab-case")]
     Join {
         button_text: Option<Cow<'t, str>>,
@@ -91,7 +88,6 @@ pub enum Module<'t> {
         depth: Option<NonZeroU32>,
     },
 
-    /// A rating module, which can be used to vote on the page.
     Rate,
 
     /// Redirects the browser to another page or URL.

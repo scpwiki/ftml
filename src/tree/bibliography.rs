@@ -18,13 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Structures managing bibliographic references.
-//!
-//! As an extension from Wikidot, we permit multiple bibliographies
-//! to appear on a page, allowing people to have multiple sets,
-//! for instance on separate tabs on a page.
-//!
-//! The first reference found is the one used.
 
 use super::Element;
 use super::clone::{elements_to_owned, string_to_owned};

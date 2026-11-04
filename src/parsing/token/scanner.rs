@@ -222,11 +222,6 @@ fn scan_literal(
         b'[' if has(bytes, start, b"[[[*") => (Token::LeftLinkStar, start + 4),
         b'[' if has(bytes, start, b"[[[") => (Token::LeftLink, start + 3),
         b'[' if has(bytes, start, b"[[$") => (Token::LeftMath, start + 3),
-        // `[[##` is never an anchor opener: a named anchor requires
-        // whitespace after `[[#` and the delayed conditional requires the
-        // identifier `if`, so a `#` here starts a `##` color token and the
-        // `[[` must tokenize as a plain block opener instead of eating the
-        // color token's first `#`.
         b'[' if has(bytes, start, b"[[#") && !has(bytes, start, b"[[##") => {
             (Token::LeftBlockAnchor, start + 3)
         }
@@ -357,9 +352,6 @@ fn scan_url(bytes: &[u8], start: usize) -> Option<usize> {
         return None;
     };
 
-    // Tokenization is context-free, so a reserved raw closer must remain a
-    // separate token even after a URL scan has started. This intentionally
-    // splits an ordinary `https://example.com/a>@b` at the `>@` marker.
     let mut end = body_start;
     while end < bytes.len() {
         let character = char_at(bytes, end)?;
@@ -404,10 +396,6 @@ fn scan_identifier_or_email(bytes: &[u8], start: usize) -> (Token, usize) {
         _ => {}
     }
 
-    // Wikidot recognizes `word(.word)*@label(.label)+`, where a local word is
-    // ASCII alphanumeric, `_`, or `-`, and a domain label is ASCII
-    // alphanumeric or `-`. Anything else, including trailing sentence
-    // punctuation such as the period in `a@b.gov.`, stays outside.
     let local_end = scan_email_dotted(bytes, start, is_email_local_byte);
     if bytes.get(local_end) != Some(&b'@') {
         return (Token::Identifier, identifier_end);

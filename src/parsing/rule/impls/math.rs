@@ -68,12 +68,6 @@ fn try_consume_fn<'r, 't>(
     }
 }
 
-/// Collect Wikidot inline math without granting formula bytes parser authority.
-///
-/// Valid comments are transparent. A physical line break or a complete
-/// authored raw span suppresses the formula bytes while retaining the math
-/// node. A raw span that closes after the math candidate owns the crossed
-/// composition instead, so the math transaction rolls back.
 fn collect_wikidot_math_source<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<WikidotMathSource<'t>, ParseError>

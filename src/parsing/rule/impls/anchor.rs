@@ -65,10 +65,6 @@ fn try_consume_anchor_body<'r, 't>(
 where
     'r: 't,
 {
-    // Gather name for anchor
-    // The scanner assigns a three-bracket run to `RightLink`. Wikidot gives
-    // the first two brackets to a valid named anchor and leaves the third as
-    // source text, so the rule must make that split transactionally.
     let close = [
         ParseCondition::current(Token::RightBlock),
         ParseCondition::current(Token::RightLink),

@@ -406,8 +406,6 @@ fn parse_include_canonicalizes_dotted_site_segments() {
 
 #[test]
 fn parse_keeps_dotted_site_for_links() {
-    // Triple-bracket links have no cross-site form: Wikidot keeps the dotted
-    // spelling in the local slug, so the general parser must not strip it.
     let actual = PageRef::parse(":scp-jp.wikidot.com:component:jstyles")
         .expect("dotted target parses");
     assert_eq!(actual.site(), Some("scp-jp-wikidot-com"));

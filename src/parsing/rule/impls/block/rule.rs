@@ -165,8 +165,6 @@ where
             if let Some(Element::Partial(PartialElement::InlineSpanOpen(attributes))) =
                 elements.first_mut()
             {
-                // Wikidot gives this malformed root opener the same unwrapped
-                // paragraph ownership as a scored span starting on its own line.
                 attributes.insert(WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE, cow!(""));
             }
             elements.insert(1.min(elements.len()), text!("]"));
@@ -186,9 +184,6 @@ fn wikidot_literal_css_module(elements: &Elements<'_>) -> bool {
 }
 
 fn block_rule_enabled(parser: &Parser<'_, '_>, block_rule: &BlockRule) -> bool {
-    // Preview callers disable hosted HTML execution, but the block still owns
-    // its complete body so nested module syntax remains literal as Wikidot
-    // renders it. `BLOCK_HTML::parse_fn` performs the escaped-literal branch.
     if block_rule.name == BLOCK_EMBED_VIDEO.name {
         return parser.settings().layout.legacy();
     }

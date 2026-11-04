@@ -614,11 +614,6 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
         | Token::EscapedBackslash => true,
 
         Token::Other => {
-            // A "/" directly before a block opener or a comment may be
-            // half of an italics opener split by an iftags segment or a
-            // comment; let the rule loop probe it instead of claiming
-            // it as text here. The text rule remains the fallback when
-            // the probe fails.
             if parser.current().slice == "/"
                 && parser.look_ahead(0).is_some_and(|token| {
                     matches!(token.token, Token::LeftBlock | Token::LeftComment)
@@ -646,10 +641,6 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
                     ))
         }
 
-        // Wikidot leaves padded formatting openers as literal text. A
-        // delimiter followed by whitespace cannot begin any of these inline
-        // containers, so do not send it through a rule that is guaranteed to
-        // fail and add a warning.
         Token::Underline => {
             matches!(
                 parser.look_ahead(0).map(|token| token.token),
@@ -662,30 +653,17 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
             Some(Token::Whitespace)
         ),
 
-        // These markers are structural only at the start of a line. Real
-        // Wikidot pages also use repeated tildes as ordinary punctuation.
         Token::ClearFloatBoth | Token::ClearFloatLeft | Token::ClearFloatRight => {
             !parser.start_of_line()
         }
 
-        // Wikidot treats a nested monospace opener as literal text and closes
-        // the outer span at the first following terminator.
         Token::LeftMonospace => parser.rule().name() == "monospace",
 
-        // A closing raw marker is intercepted by the raw collector when it
-        // has a matching opener. Outside a raw span Wikidot preserves it.
         Token::RightRaw => true,
 
-        // A standalone closing bracket pair is literal Wikidot text. Valid
-        // block collectors intercept their own closer before `consume()`.
         Token::RightBlock => parser.start_of_line(),
 
         Token::BulletItem => {
-            // A `*` directly before a block opener or a comment may be
-            // half of a bold opener split by an iftags segment or a
-            // comment; let the rule loop probe it instead of claiming
-            // it as text here. The text rule remains the fallback when
-            // the probe fails.
             if parser.look_ahead(0).is_some_and(|token| {
                 matches!(token.token, Token::LeftBlock | Token::LeftComment)
             }) {
@@ -696,9 +674,6 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
 
         Token::NumberedItem | Token::Equals | Token::Colon => !parser.start_of_line(),
 
-        // Four-or-more hyphen runs can be horizontal rules only at an
-        // immediate line boundary, but Wikidot still gives their inline
-        // fallback structured dash/strikethrough semantics.
         Token::TripleDash => false,
 
         _ => false,
@@ -721,9 +696,6 @@ fn try_consume_text_token<'r, 't>(
         parser.step()?;
         return Ok(Some(Elements::None));
     }
-    // Wikidot discards adjacent underline delimiters as empty containers. Do
-    // that one pair at a time so a long run never needs a forward scan at
-    // every delimiter.
     if parser.settings().layout.legacy() && parser.current().token == Token::Underline {
         #[cfg(test)]
         parser.increment_underline_fast_path_visits();
@@ -957,10 +929,6 @@ fn try_consume_past_wikidot_designated_iftags_end<'r, 't>(
     })
 }
 
-/// Main function that consumes tokens to produce a single element, then returns.
-///
-/// It will use the fallback if all rules, fail, so the only failure case is if
-/// the end of the input is reached.
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     if parser.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
         return Err(parser.make_err(ParseErrorKind::EndOfInput));

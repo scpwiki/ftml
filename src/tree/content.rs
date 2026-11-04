@@ -24,7 +24,6 @@ pub enum ContentSegment<'e, 't> {
     Boundary,
 }
 
-/// Linear iterator over content sections and their typed boundaries.
 #[derive(Debug, Clone)]
 pub struct ContentSegments<'e, 't> {
     elements: &'e [Element<'t>],
@@ -84,14 +83,12 @@ impl<'e, 't> Iterator for ContentSegments<'e, 't> {
     }
 }
 
-/// Iterate over an element slice as ordered content sections and boundaries.
 #[inline]
 pub fn content_segments<'e, 't>(elements: &'e [Element<'t>]) -> ContentSegments<'e, 't> {
     ContentSegments::new(elements)
 }
 
 impl<'t> SyntaxTree<'t> {
-    /// Iterate over the root content sections and typed separator boundaries.
     #[inline]
     pub fn content_segments(&self) -> ContentSegments<'_, 't> {
         content_segments(&self.elements)

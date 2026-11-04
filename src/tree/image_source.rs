@@ -22,11 +22,9 @@ use super::FileSource;
 use super::clone::string_to_owned;
 use std::borrow::Cow;
 
-/// The image source and the parser-owned disposition used to render it.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "type", content = "data")]
 pub enum ImageSource<'t> {
-    /// A source that renders directly without an implicit attachment link.
     Direct(FileSource<'t>),
 
     /// A filename inferred as an attachment on a page.
@@ -46,7 +44,6 @@ pub enum ImageSource<'t> {
     },
 }
 
-/// A typed Wikidot image resize variant.
 #[derive(Serialize, Deserialize, Debug, Hash, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ImageSize {

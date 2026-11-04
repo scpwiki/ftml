@@ -37,11 +37,6 @@ impl<'r, 't> Parser<'r, 't>
 where
     'r: 't,
 {
-    /// Parse one block argument value.
-    ///
-    /// Wikidot accepts both `key="value"` and `key=value`. Bare values end at
-    /// whitespace or the block's closing brackets and otherwise preserve the
-    /// exact source slice, including syntax-shaped tokens such as `#`.
     pub(super) fn get_block_argument_value(
         &mut self,
         block_rule: &BlockRule,

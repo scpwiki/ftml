@@ -117,11 +117,6 @@ mod tests {
 
     #[test]
     fn unmatched_dash_does_not_swallow_the_next_block() {
-        // Real shape from jp/archived:log-of-anomalous-items-jp: a
-        // collapsible whose body ends in an unmatched `--` attribution,
-        // followed by a collapsible whose body strikes a number through.
-        // The unmatched delimiter must not pair across the block
-        // boundary; Wikidot renders both collapsibles.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize(concat!(

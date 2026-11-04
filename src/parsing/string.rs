@@ -29,18 +29,12 @@ impl<'r, 't> Parser<'r, 't>
 where
     'r: 't,
 {
-    /// Gets the contents of a double-quoted string.
-    ///
-    /// This also performs the string parsing, so you get the value
-    /// as intended, i.e. `"foo\nbar"` has a newline in the middle.
     pub fn get_quoted_string(&mut self, rule: Rule) -> Result<Cow<'t, str>, ParseError> {
         let escaped = self.get_quoted_string_escaped(rule)?;
         let value = parse_string(escaped);
         Ok(value)
     }
 
-    /// Gets the contents of a double-quoted string, with escape codes.
-    /// Does not include the outer quotes.
     pub fn get_quoted_string_escaped(
         &mut self,
         rule: Rule,

@@ -38,7 +38,6 @@ impl StandaloneButton<'_> {
     }
 }
 
-/// The closed set of actions supported by standalone buttons.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case", tag = "type", content = "data")]
 pub enum StandaloneButtonAction<'t> {
@@ -63,7 +62,6 @@ impl StandaloneButtonAction<'_> {
     }
 }
 
-/// One ordered tag mutation from a `set-tags` button.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case", tag = "operation", content = "tag")]
 pub enum TagAlteration<'t> {

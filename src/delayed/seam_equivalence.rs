@@ -18,25 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Exhaustive check that suppression seams are transparent to Wikidot typography.
-//!
-//! Property, modeled on the real preprocess path: join the authored text
-//! segments with a hidden conditional block between each pair of neighbours,
-//! `seg0 + BLOCK + seg1 + ...` where `BLOCK` is a false `[[iftags]]` block,
-//! and run the preprocess-path typography
-//! (`substitute_wikidot_deferring_conditionals`) on the whole source, exactly
-//! as `preprocess_internal` does for a page. Split the output on the literal
-//! block, insert a typography boundary between the pieces, and resolve the
-//! seams. The joined text of the result must equal `substitute_wikidot` run
-//! on the plain concatenation of the raw segments, as if the suppressed
-//! content had never been in the source. It must also not panic and must
-//! leave no seam behind. Run through `verification/seam-typography/run.sh`;
-//! see the `verify-seam-typography` skill. The tests are `#[ignore]`.
-//!
-//! No production caller typographs segments one at a time: the preprocess
-//! path typographs the whole source, and Deepwell typographs the whole row
-//! template before allocating its slots. The earlier per-segment model
-//! described no real caller.
 
 use super::seam::resolve_static_suppressions;
 use crate::delayed::DelayedElement;
@@ -46,10 +27,6 @@ use crate::preproc::typography::{
 use crate::tree::Element;
 use std::borrow::Cow;
 
-/// The hidden block placed between segments. Its body is a single text
-/// character, and the block itself contains no typography sequences, so
-/// the preprocess-path typography leaves it byte-identical and the
-/// output can be split on it literally.
 const BLOCK: &str = "[[iftags +zz-no-such-tag]]x[[/iftags]]";
 
 const TOKENS: &[&str] = &[
@@ -62,9 +39,6 @@ fn typography(raw: &str) -> String {
     text
 }
 
-/// Run the preprocess-path typography on `source` (which contains
-/// [`BLOCK`] between its segments) and return the pieces obtained by
-/// splitting the output on the literal block.
 fn preprocess_pieces(source: &str) -> Vec<String> {
     let mut text = source.to_owned();
     substitute_wikidot_deferring_conditionals(&mut text);
@@ -89,9 +63,6 @@ fn difference_class(got: &str, expected: &str) -> String {
     class
 }
 
-/// Whether the input's token pick contains a `>` or `>>` token. Such
-/// failures are labelled with a `right-angle:` prefix, so a class that
-/// does not involve right angles can never hide among them.
 fn pick_has_right_angle(pick: &[usize]) -> bool {
     pick.iter()
         .any(|&p| p < TOKENS.len() && matches!(TOKENS[p], ">" | ">>"))
@@ -125,8 +96,6 @@ fn check_inner(pick: &[usize]) -> Option<(String, String)> {
             .join(" | ")
     };
 
-    // The real path: one typography pass over the whole source with a
-    // hidden block between the segments, then split on the block.
     let with_blocks = segments.join(BLOCK);
     let pieces = preprocess_pieces(&with_blocks);
     debug_assert_eq!(pieces.len(), segments.len());
@@ -217,9 +186,6 @@ fn seams_are_transparent_to_wikidot_typography() {
         }
     }
     let _ = std::panic::take_hook();
-    // The leading newlines keep the marker lines at a line start even
-    // when another test's progress output is interleaved into the
-    // nocapture stream; run.sh matches them with `^CLASS` / `^SEAM-BOUND`.
     for (class, (len, count, example)) in &shortest {
         println!("\nCLASS {class}|{len}|{count}|{example}");
     }
@@ -233,19 +199,6 @@ fn seams_are_transparent_to_wikidot_typography() {
     );
 }
 
-/// End-to-end layer: the split harness above does not exercise the
-/// parser, so this test runs the full pipeline (preprocess, tokenize,
-/// parse, render) at bound 4 on sources with an `a` prefix, comparing
-/// the with-block source against the joined source. The prefix keeps
-/// the conditional block away from the paragraph start. Inputs whose
-/// pick contains a `>` or `>>` token belong to the known right-angle
-/// gap and are reported, not asserted. Mismatches that disappear when
-/// spaces are removed from both renders are whitespace-only: how many
-/// spaces survive around a suppressed block is a pre-existing seam
-/// behaviour of the paragraph stack (verified identical on the parent
-/// commit of the #775 change, e.g. `a ` + BLOCK + ` "` renders two
-/// spaces where the joined `a  "` renders one) and is reported, not
-/// asserted; every other mismatch fails.
 #[test]
 #[ignore = "end-to-end seam check; run explicitly with --ignored"]
 fn seams_are_transparent_end_to_end() {
@@ -331,13 +284,6 @@ fn seams_are_transparent_end_to_end() {
     );
 }
 
-/// Plain-parse regression tests for ftml #775: a hidden `[[iftags]]`
-/// block splitting a quote or ellipsis run must render exactly as the
-/// joined text does. Live Wikidot evidence is in
-/// `verification/seam-typography/evidence/wikidot-2026-11-01.json` and
-/// `wikidot-2026-11-02.json`. Unlike the exhaustive harness above, this
-/// test is not `#[ignore]`: it runs the real pipeline (preprocess,
-/// tokenize, parse, render) on the recorded shapes only.
 #[test]
 fn plain_parse_hidden_iftags_typography_matches_joined_text() {
     use crate::data::PageInfo;
@@ -355,19 +301,13 @@ fn plain_parse_hidden_iftags_typography_matches_joined_text() {
         HtmlRender.render(&tree, &page_info, &settings).body
     }
 
-    // `PageInfo::dummy()` carries neither tag, so the `+` block is
-    // hidden and the `-` block is shown.
     const HIDDEN: &str = "[[iftags +zz-no-such-tag]]x[[/iftags]]";
 
-    // The issue table (all four rows).
     assert_eq!(render(&format!("<{HIDDEN}<<<")), "<p>««</p>");
     assert_eq!(render(&format!(".{HIDDEN}...")), "<p>….</p>");
     assert_eq!(render(&format!(".{HIDDEN}.....")), "<p>……</p>");
     assert_eq!(render(&format!("\"{HIDDEN}>>>>")), "<p>&quot;»»</p>");
 
-    // A shown body behaves as if the tags were absent: the run after
-    // the opener and the run after the closer both regroup with their
-    // visible neighbours (wikidot-2026-11-02.json, shown-body-* rows).
     assert_eq!(
         render("<[[iftags -zz-no-such-tag]]<<<[[/iftags]]"),
         "<p>««</p>",
@@ -385,15 +325,11 @@ fn plain_parse_hidden_iftags_typography_matches_joined_text() {
         "<p>.x…</p>",
     );
 
-    // A non-text body keeps the runs on either side of it apart.
     assert_eq!(
         render("<[[iftags -zz-no-such-tag]]**b**[[/iftags]]<<<"),
         "<p>&lt;<strong>b</strong>«&lt;</p>",
     );
 
-    // Negatives: with no balanced, non-literal iftags pair there is no
-    // deferral, and the runs convert exactly as `substitute_wikidot`
-    // converts them.
     assert_eq!(render("[[/iftags]]..."), "<p>[[/iftags]]…</p>");
     assert_eq!(
         render("[[ifcategory x]]y[[/ifcategory]]..."),
@@ -406,9 +342,5 @@ fn plain_parse_hidden_iftags_typography_matches_joined_text() {
     );
     assert!(unclosed.contains('«'), "the run still converts: {unclosed}");
 
-    // An authored literal `«` across a hidden block is not regrouped
-    // into the neighbouring raw `<` characters: `<`, `«`, `<` stay as
-    // authored. This is the case that rejects decoding produced
-    // characters back into authored ones.
     assert_eq!(render(&format!("<\u{ab}{HIDDEN}<")), "<p>&lt;«&lt;</p>",);
 }

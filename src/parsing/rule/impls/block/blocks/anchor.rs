@@ -61,10 +61,6 @@ fn parse_fn<'r, 't>(
         None
     };
 
-    // Wikidot moves ASCII whitespace at either edge of an inline anchor body
-    // outside the link as one separator. A separator is dropped at the start
-    // or end of a line and merges with adjacent authored whitespace, including
-    // a separator already moved out of a preceding inline closer.
     let legacy = parser.settings().layout.legacy();
     let source = parser.full_text().inner();
     let body_source_start = parser.current().span.start;

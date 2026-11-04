@@ -20,11 +20,6 @@
 
 use super::token::{ExtractedToken, Token};
 
-/// Represents a condition on a parse state.
-///
-/// It takes a parser state and determines if it matches
-/// the condition described by this structure, returning
-/// a boolean as appropriate.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SplitDelimiter {
     Bold,
@@ -56,18 +51,12 @@ impl SplitDelimiter {
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParseCondition {
-    /// Condition is valid if the current token matches.
     CurrentToken(Token),
 
-    /// Condition is valid if current and next tokens match.
     TokenPair(Token, Token),
 
-    /// Condition is valid if the current token is one half of the
-    /// delimiter, followed only by textless bridges and the other half.
     SplitClose(SplitDelimiter),
 
-    /// Condition is valid if whitespace is immediately followed by
-    /// a split close of the delimiter.
     PaddedSplitClose(SplitDelimiter),
 }
 

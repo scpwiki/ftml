@@ -122,13 +122,6 @@ fn assert_false_iftags_unclosed_child_renders_trailing(
 }
 
 fn assert_comment_close_ends_gate(raw_body: &str, layout: Layout) {
-    // Pairing outcome, live-verified on a saved page (2026-11-04): the
-    // pairing search sees into comments, so a false gate pairs with a
-    // closer inside a comment and the text after that closer is
-    // outside the gate in both layouts (the pairing model is shared):
-    // the comment's remainder renders as text and the html block
-    // after it registers. Raw-bodied blocks stay opaque to the
-    // search; only the comment is not raw.
     let input = format!(
         "[[iftags +missing]]\n{raw_body}\n[[html]]\n<b>guarded</b>\n[[/html]]\n[[/iftags]]\nvisible",
     );
@@ -1104,10 +1097,6 @@ fn wikidot_false_iftags_single_nested_close_ends_the_outer_gate() {
 
 #[test]
 fn native_false_iftags_single_nested_close_ends_the_outer_gate() {
-    // Pairing outcome, live-verified on a saved page (2026-11-04): the
-    // single nested closer ends the outer gate in the native layout as
-    // it does in the legacy one, so the html block after it is outside
-    // the gate. Only the gate's own body text stays hidden.
     let input = concat!(
         "[[iftags +missing]]\n",
         "[[iftags +missing]]\n",
@@ -1335,12 +1324,6 @@ fn hostile_wikidot_preprocessing_and_tokenization_remain_bounded() {
 fn false_iftags_unclosed_outer_body_renders_literally_in_both_layouts() {
     let input = "[[iftags +missing]]\nfollowing body";
 
-    // Live Wikidot renders an unclosed gate as plain text (the opener and
-    // its would-be body alike), so an iftags segment with no [[/iftags]]
-    // is not a segment at all: the rule fails and the text renders
-    // literally in both layouts. The wikijump layout previously evaluated
-    // the unterminated segment instead, silently hiding the rest of the
-    // document when the condition was false.
     for layout in [Layout::Wikidot, Layout::Wikijump] {
         let (tree, errors) = parse_with_errors(input, layout);
         assert!(!errors.is_empty(), "{layout:?}: {tree:?}");

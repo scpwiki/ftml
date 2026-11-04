@@ -22,10 +22,6 @@ use super::Parser;
 use crate::tree::AcceptsPartial;
 use std::ops::{Deref, DerefMut};
 
-/// A wrapper around `Parser` which sets / clears the partial flag.
-///
-/// On creation, it sets an `AcceptsPartial` flag, and on destruction
-/// it clears it.
 #[derive(Debug)]
 pub struct ParserWrap<'p, 'r, 't> {
     parser: &'p mut Parser<'r, 't>,

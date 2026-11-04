@@ -42,23 +42,16 @@ fn parse_note_block<'r, 't>(
     assert!(!flag_score, "Note doesn't allow score flag");
     assert_block_name(&BLOCK_NOTE, name);
 
-    // Wikidot does not nest notes: an inner `[[note]]` stays literal text.
     if parser.in_note() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
     let arguments = parser.get_head_map(&BLOCK_NOTE, in_head)?;
 
-    // Wikidot's note takes no arguments: `[[note class=\"x\"]]` stays literal
-    // (references-20260815-10), while a bare `[[note]]` renders
-    // (references-20261025-01).
     if parser.settings().layout.legacy() && !arguments.is_empty() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // `[[note]]` is a block element and must start on a new line.
-    // Legacy `Text_Wiki` parser also rejected inline note blocks, so preserve
-    // that behavior for compatibility.
     if !parser.start_of_line() {
         return Err(parser.make_err(ParseErrorKind::NotSupportedInline));
     }
@@ -75,7 +68,6 @@ fn parse_note_block<'r, 't>(
         arguments.to_attribute_map(parser.settings()),
     ));
 
-    // Wikidot's note is always a block, even when its body is empty.
     ok!(paragraph_safe && !legacy; element, errors)
 }
 

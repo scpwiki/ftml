@@ -145,10 +145,6 @@ fn try_consume_fn<'r, 't>(
 
         trace!("Received token '{}' inside raw", token.name());
 
-        // `@@<...>@@` overlaps an angle-delimited raw span by one `@` on
-        // each side in Wikidot. The ordinary scanner therefore exposes the
-        // closing `>@` before it can expose a second `@@` token. Preserve the
-        // two residual at signs and give the authored angle span ownership.
         if parser.settings().layout.legacy()
             && ending_token == Token::Raw
             && token == Token::RightRaw

@@ -65,9 +65,6 @@ pub const BLOCK_TABLE_CELL_HEADER: BlockRule = BlockRule {
     parse_fn: parse_cell_header,
 };
 
-// The closer, rather than the opener, selects Wikidot's rendered cell type.
-// Keep the registered opener rules distinct for dispatch, then accept either
-// closer while collecting either cell body.
 const BLOCK_TABLE_CELL_BODY: BlockRule = BlockRule {
     name: "block-table-cell-body",
     accepts_names: &["hcell", "cell"],
@@ -94,9 +91,6 @@ enum AdvancedTableElement {
 
 impl AdvancedTableElement {
     fn accepts_attribute(self, key: &str, authored_value: &str) -> bool {
-        // This check intentionally precedes Wikidot whitespace normalization:
-        // authored `""` is absent, while authored `" "` survives as an empty
-        // DOM value. AttributeMap applies the shared safety policy afterward.
         if authored_value.is_empty() || key == "title" {
             return false;
         }
@@ -749,9 +743,6 @@ fn parse_cell<'r, 't>(
         }
     }
 
-    // Wikidot exposes the normalized authored colspan lexeme in the DOM, even
-    // when it is invalid or numerically one. Keep that lexeme in attributes
-    // while deriving the separate bounded numeric value used by table layout.
     let column_span = if legacy {
         if attributes
             .get()

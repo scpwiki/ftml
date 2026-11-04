@@ -35,8 +35,6 @@ use pest::Parser;
 use pest::iterators::Pairs;
 use std::collections::HashMap;
 
-// Recursive references are part of the Wikidot include contract, but their
-// resolved representation must remain proportional to the authored source.
 const INCLUDE_ARGUMENT_EXPANSION_ALLOWANCE: usize = 64 * 1024;
 
 #[derive(Debug)]
@@ -235,9 +233,6 @@ fn resolve_include_arguments(
         .saturating_add(INCLUDE_ARGUMENT_EXPANSION_ALLOWANCE);
     let mut arguments = HashMap::<String, String>::new();
 
-    // Seed the graph with the first literal fallback for each fixed key. This
-    // gives dynamic expressions such as `{$mode_{$mode}}` a bounded value from
-    // which to resolve, while preserving Wikidot's first-concrete-value rule.
     for argument in raw_arguments {
         if argument.authored_empty_value
             || !is_static_identifier(argument.key)
@@ -451,8 +446,6 @@ mod tests {
 
     #[test]
     fn parse_include_block_canonicalizes_dotted_host_site() {
-        // Wikidot resolves the host-form site to the bare slug; the dashed
-        // spelling is a different, nonexistent site and must not be touched.
         let (include, _) =
             parse_include_block("[[include :scp-jp.wikidot.com:component:jstyles]]", 0)
                 .expect("dotted include should parse");

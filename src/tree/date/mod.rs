@@ -346,8 +346,6 @@ fn render_directive(
     Ok(())
 }
 
-/// %a/%A - localized weekday name.
-/// EN: "Fri"/"Friday" | ES: "vie"/"viernes" | JA: "金"/"金曜日"
 fn append_localized_weekday(
     rendered: &mut String,
     datetime: &OffsetDateTime,
@@ -366,8 +364,6 @@ fn append_localized_weekday(
     })
 }
 
-/// %b/%B - localized month name.
-/// EN: "Dec"/"December" | ES: "dic"/"diciembre" | JA: "12月"/"12月"
 fn append_localized_month(
     rendered: &mut String,
     datetime: &OffsetDateTime,
@@ -386,8 +382,6 @@ fn append_localized_month(
     })
 }
 
-/// %x - localized short date.
-/// EN: "12/25/09" | ES: "25/12/09" | JA: "2009/12/25"
 fn append_localized_date(
     rendered: &mut String,
     datetime: &OffsetDateTime,
@@ -400,8 +394,6 @@ fn append_localized_date(
     })
 }
 
-/// %c - localized date+time with full year.
-/// EN: "12/25/2009, 8:18:05 AM" | ES: "25/12/2009, 08:18:05" | JA: "2009/12/25 8:18:05"
 fn append_localized_datetime_full_year(
     rendered: &mut String,
     datetime: &OffsetDateTime,
@@ -414,8 +406,6 @@ fn append_localized_datetime_full_year(
     })
 }
 
-/// %X - localized time (follows locale hour cycle).
-/// EN: "8:18:05 AM" | ES: "08:18:05" | JA: "8:18:05"
 fn append_localized_time(
     rendered: &mut String,
     datetime: &OffsetDateTime,
@@ -428,8 +418,6 @@ fn append_localized_time(
     })
 }
 
-/// %p/%P - localized day period via ICU pattern "a".
-/// EN: "AM"/"am" | ES: "a. m."/"a. m." | JA: "午前"/"午前"
 fn append_localized_day_period(
     rendered: &mut String,
     datetime: &OffsetDateTime,
@@ -456,8 +444,6 @@ fn append_localized_day_period(
     })
 }
 
-/// %r - localized 12-hour time (forced H12 cycle).
-/// EN: "8:18:05 AM" | ES: "8:18:05 a. m." | JA: "午前8:18:05"
 fn append_localized_time_h12(
     rendered: &mut String,
     datetime: &OffsetDateTime,
@@ -470,8 +456,6 @@ fn append_localized_time_h12(
     })
 }
 
-/// %O - localized relative time from now.
-/// EN: "7 days ago" | ES: "hace 7 dias" | JA: "7 日前"
 fn append_relative_time(
     rendered: &mut String,
     datetime: OffsetDateTime,
@@ -564,8 +548,6 @@ impl fmt::Write for NormalizingWriter<'_> {
     }
 }
 
-/// %d, %H, %I, %m, %M, %R, %S, %T, %y, %Y, %z, etc. - non-localized strftime.
-/// Delegates to the `time` crate's strftime formatter.
 fn append_unlocalized_directive(
     rendered: &mut String,
     datetime: &OffsetDateTime,

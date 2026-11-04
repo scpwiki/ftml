@@ -126,8 +126,6 @@ fn try_consume_fn<'r, 't>(
         has_padding
     };
 
-    // Wikidot assigns the unmatched final brace of an odd closing run to the
-    // monospace owner. This applies equally to authored and delayed content.
     if terminator.token == Token::RightMonospace
         && parser.current().token == Token::Other
         && parser.current().slice == "}"
@@ -372,9 +370,6 @@ mod tests {
 
     #[test]
     fn repeated_quoted_monospace_emails_stay_bounded() {
-        // Reduced from EN vivid-visions, whose message transcript repeats this shape.
-        // Wikidot renders each address inside tt > span.wiki-email, so the email
-        // token must stop before the monospace closer rather than consume it.
         let mut input = String::new();
         for _ in 0..32 {
             input.push_str("> FROM: <{{person@scp.foundation}}>\n> \n");

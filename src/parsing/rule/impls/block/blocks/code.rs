@@ -138,11 +138,6 @@ mod tests {
 
     #[test]
     fn code_blocks_with_trailing_space_closers_parse_and_track() {
-        // scp-9844's real shape: both `[[/code]]` closers carry a trailing
-        // space (and the second opener does too). Live Wikidot renders both
-        // blocks and hosts their contents; the legacy candidate scan used to
-        // reject the suffixed closer, degrading the region to literal text
-        // and leaving zero tracked code blocks for hosted persistence.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let source = concat!(
@@ -261,10 +256,6 @@ mod tests {
 
     #[test]
     fn wikidot_code_head_ends_at_an_iftags_segment_close() {
-        // Live Wikidot scans a code head raw: the head ends at the first
-        // close marker, which may be the segment opener's own, the
-        // truncated head text is what its attribute parser sees, and the
-        // rest of the line becomes the body. The gate is never evaluated.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         for (source, expected) in [

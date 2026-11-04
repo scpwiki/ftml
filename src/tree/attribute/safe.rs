@@ -171,15 +171,6 @@ pub static BOOLEAN_ATTRIBUTES: LazyLock<HashSet<UniCase<&'static str>>> =
         ]
     });
 
-/// List of HTML attributes which need to be checked for XSS.
-///
-/// For instance, you could have `href="javascript:doSomething()"`,
-/// which would escape normal sandboxing and run trusted javascript
-/// from untrusted user data.
-///
-/// ## See also
-/// * `detect_dangerous_schemes()`
-/// * `normalize_href()`
 pub static URL_ATTRIBUTES: LazyLock<HashSet<UniCase<&'static str>>> =
     LazyLock::new(|| {
         hashset_unicase!["background", "cite", "href", "poster", "src", "usemap"]

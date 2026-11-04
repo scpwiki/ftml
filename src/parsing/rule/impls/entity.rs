@@ -25,15 +25,6 @@ use std::char;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-/// Decodes a complete `&name;`, `&#ddd;`, or `&#xhhh;` entity in ordinary text.
-///
-/// Only `Layout::Wikijump` decodes these. Live Wikidot escapes entity
-/// spellings in prose (see the `entity-*` and `recorder-unit-entity-omega`
-/// parity fixtures), so `Layout::Wikidot` falls through to plain text.
-///
-/// The result is an ordinary text element, which the renderer escapes like
-/// any other text. An entity which decodes to `<`, `&`, or a quote therefore
-/// produces that character as text, never as markup.
 pub const RULE_ENTITY: Rule = Rule {
     name: "entity",
     position: LineRequirement::Any,
@@ -81,10 +72,6 @@ fn try_consume_fn<'r, 't>(
     ok!(Element::Text(decoded))
 }
 
-/// Whether a decoded entity may be emitted as ordinary text.
-///
-/// Control characters (including NUL and C1, which browsers remap rather than
-/// emit) and Unicode noncharacters stay as their literal, escaped spelling.
 fn is_text_safe(decoded: &str) -> bool {
     decoded.chars().all(|ch| {
         let codepoint = u32::from(ch);
@@ -329,7 +316,6 @@ fn entity_spellings_stay_escaped_unless_decoded_by_wikijump_text() {
         "<p>&amp;mdash &amp;bogus; &amp;#X41; &amp;#0; &amp;#x80; &amp;#xFFFE; &amp;Tab;</p>",
     );
 
-    // Raw text is not decoded, and live Wikidot escapes entities in prose.
     assert_eq!(
         render_entity_html("@@&mdash;@@", Layout::Wikijump),
         "<p><span class=\"wj-raw\">&amp;mdash;</span></p>",

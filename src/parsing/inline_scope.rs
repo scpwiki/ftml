@@ -675,14 +675,9 @@ fn lower_sequence<'t>(
                         wrapped,
                         AttributeMap::new(),
                     )));
-                    // The physical opener-line break is moved before the list
-                    // by Wikidot; do not also retain it after the list.
                     *trim_next_break = true;
                     last_run_outer_scope = None;
                 } else if active_after == 0 {
-                    // When the inline owner closes from inside the list, the
-                    // same opener-line break is unwrapped but still belongs to
-                    // the inline scope.
                     output.extend(wrap_scope_elements(&scopes, vec![Element::LineBreak]));
                     last_run_outer_scope = None;
                 }
@@ -1171,12 +1166,6 @@ mod tests {
 
     #[test]
     fn wikidot_nested_span_edge_spaces_keep_outer_span_whole() {
-        // ListPages set-record pattern: the inner spans' edge spaces must not
-        // split the outer span into sibling copies (ftml #758 follow-up), and
-        // a nested inner span's leading space is discarded (legacy behavior),
-        // so no space lands between the outer open tag and the inner span
-        // (wikidot.py set-record contract). The trailing separator space is
-        // absorbed between the inner spans inside the single outer span.
         for (source, expected) in [
             (
                 "[[span class=\"set category\"]][[span class=\"name\"]] category [[/span]][[span class=\"value\"]] _default [[/span]][[/span]]",

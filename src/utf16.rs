@@ -23,9 +23,6 @@ use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 pub struct Utf16IndexMap<'t> {
-    /// A mapping of UTF-8 byte indices to UTF-16 indices, with the character.
-    ///
-    /// Schema: utf8_index -> utf16_index
     map: HashMap<usize, usize>,
 
     marker: PhantomData<&'t str>,

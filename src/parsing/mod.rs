@@ -89,9 +89,6 @@ pub(crate) use self::wikidot_text::{
     discard_wikidot_controls, trim_wikidot_ascii, trim_wikidot_ascii_cow,
 };
 
-/// Parse through the given tokens and produce an AST.
-///
-/// This takes a list of [`ExtractedToken`] items produced by [tokenize](crate::tokenizer::tokenize()).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn parse<'r, 't>(
     tokenization: &'r Tokenization<'t>,

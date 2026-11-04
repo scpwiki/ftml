@@ -26,19 +26,15 @@ use strum_macros::IntoStaticStr;
 #[derive(Serialize, Deserialize, IntoStaticStr, Debug, Hash, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "type", content = "data")]
 pub enum FileSource<'a> {
-    /// File is sourced from an arbitrary URL.
     Url(Cow<'a, str>),
 
-    /// File is attached the current page.
     File1 { file: Cow<'a, str> },
 
-    /// File is attached to another page on the site.
     File2 {
         page: Cow<'a, str>,
         file: Cow<'a, str>,
     },
 
-    /// File is attached to another page on another site.
     File3 {
         site: Cow<'a, str>,
         page: Cow<'a, str>,

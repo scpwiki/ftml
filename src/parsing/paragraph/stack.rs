@@ -66,13 +66,6 @@ pub struct ParagraphStack<'t> {
     pending_unwrapped_separator: bool,
     paragraph_break_since_element: bool,
 
-    /// Index into `finished` of a speculative newline separator emitted at a
-    /// paragraph break that directly followed a standalone aligned image.
-    ///
-    /// Wikidot keeps the source newline after the image container when the
-    /// following run renders without a paragraph wrapper (issue #733), but
-    /// the separator is only speculative until that run is known: it is
-    /// removed if the next run is wrapped, is a block, or never comes.
     pending_aligned_image_separator: Option<usize>,
     unwrapped_after_block_line: bool,
     wikidot_literal_iftags_line: bool,
@@ -587,8 +580,6 @@ impl<'t> ParagraphStack<'t> {
             self.end_paragraph();
             self.finished.push(element);
         } else if unaligned_image {
-            // Any unaligned image suppresses the paragraph wrapper for its
-            // contiguous physical paragraph on Wikidot.
             if self.wikidot
                 && self.finished.is_empty()
                 && !self.current.is_empty()
@@ -961,9 +952,6 @@ impl<'t> ParagraphStack<'t> {
         let literal_div_line = self.wikidot_literal_div_line;
         let unwrapped_after_block_line = self.unwrapped_after_block_line;
         let complete_raw_run_after_block = self.wikidot_complete_raw_run_after_block;
-        // Issue #733: a paragraph break directly after a standalone aligned
-        // image (which the stack moved into `finished`) otherwise vanishes,
-        // because there is no current run to attach a separator to.
         let last_is_aligned_image = match self.finished.last() {
             Some(Element::Image {
                 alignment: Some(_), ..

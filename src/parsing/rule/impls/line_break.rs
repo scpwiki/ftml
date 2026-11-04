@@ -104,9 +104,6 @@ where
             && padded
             && parser.current().token == Token::Equals
         {
-            // Wikidot does not grant content-separator ownership through
-            // leading SP/TAB. Keep the preceding physical line break instead
-            // of treating the padded equals run like an own-line block.
             return Ok(false);
         }
 

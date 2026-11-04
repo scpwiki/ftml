@@ -53,10 +53,6 @@ pub enum DiscardedBodyOutcome {
     FailedClosedThroughInputEnd,
 }
 
-/// Token index just past a `[[name ...]]` block head starting at `start`,
-/// or `None` if the tokens at `start` are not such a head. Used by the
-/// Wikidot iftags pairing search (#792), which classifies heads
-/// syntactically over the token stream.
 fn named_block_head_end(
     tokens: &[&ExtractedToken<'_>],
     start: usize,
@@ -86,7 +82,6 @@ fn named_block_head_end(
     }
 }
 
-/// Token index just past a `[[/name]]` end head starting at `start`.
 fn named_block_end_head_end(
     tokens: &[&ExtractedToken<'_>],
     start: usize,
@@ -123,11 +118,6 @@ fn iftags_end_head_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<u
         return Some(end);
     }
 
-    // A fused close (`[[/iftags]]]`) lexes its three brackets as one
-    // RightLink token. Live Wikidot's pairing scan is text-level and
-    // matches the `[[/iftags]]` prefix, closing the gate and leaving
-    // the extra bracket as following text, so the walk designates the
-    // fused head as an end as well.
     if tokens.get(start)?.token != Token::LeftBlockEnd {
         return None;
     }
@@ -217,12 +207,6 @@ fn protected_span_end(
     }
 }
 
-/// Blocks whose names are never read through the resolved head-word
-/// reader for comment elision: raw-verbatim bodies, self-pairing gate
-/// blocks, and the module block, whose heads live scans and pairs
-/// verbatim. Math is listed for its raw body and because live does
-/// not elide comments in its name; its name still resolves through
-/// an iftags segment (see `head_seam_forms_block`).
 pub(crate) fn head_word_never_resolves(block: &BlockRule) -> bool {
     matches!(
         block.name,
@@ -236,16 +220,6 @@ pub(crate) fn head_word_never_resolves(block: &BlockRule) -> bool {
     )
 }
 
-/// Whether a block whose head word was resolved through an iftags
-/// segment may form under the head-seam policy. The resolved name
-/// selects the block, but live does not dispatch every block through
-/// a seam: the never-resolved blocks never form through one, and the
-/// Wikidot layout admits only the blocks saved-page evidence has
-/// confirmed (the allowlist grows one block per saved-page row). The
-/// Wikijump layout admits everything else. Math is the split case:
-/// live resolves its name through a segment while its body stays
-/// raw, so the Wikidot layout admits the name and the Wikijump
-/// layout keeps refusing it.
 pub(crate) fn head_seam_forms_block(block: &BlockRule, layout: Layout) -> bool {
     if block.name == "block-math" {
         return layout.legacy();
@@ -340,8 +314,6 @@ fn raw_block_span_end(
     None
 }
 
-/// Whether a byte offset sits inside a `[!-- --]` comment, judging by
-/// the nearest comment opener and closer before it in the source.
 fn offset_inside_comment(source: &str, offset: usize) -> bool {
     let before = &source[..offset.min(source.len())];
     match (before.rfind("[!--"), before.rfind("--]")) {
@@ -450,10 +422,6 @@ pub(crate) fn parse_wikidot_attributes(value: &str) -> Arguments<'_> {
 }
 
 fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments<'t> {
-    // Wikidot's getAttrs grammar splits only on the exact ASCII delimiter
-    // `="`, then treats the last quote before the next delimiter as the
-    // current value terminator. Valid comments are absent for value parsing,
-    // but a comment cannot manufacture a new key or `="` delimiter.
     let source = field.source();
     let span = field.span();
     let mut comment_mask = vec![false; source.len()];
@@ -462,9 +430,6 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
         let end = comment.end.saturating_sub(span.start).min(source.len());
         comment_mask[start..end].fill(true);
     }
-    // Resolved iftags segments hide `="` delimiters just like comments,
-    // but they do not reset an attribute key the way a comment does, so
-    // they get their own mask for the delimiter search.
     let mut elision_mask = comment_mask.clone();
     for segment in field.segment_ranges() {
         let start = segment.start.saturating_sub(span.start).min(source.len());
@@ -544,10 +509,6 @@ fn wikidot_attribute_key<'t>(
         .map_or(range.start, |position| range.start + position + 1);
     let span = field.span();
     let fragment_end = range.end.min(span.len());
-    // The fragment is addressed in field-relative offsets; elision works
-    // in absolute source offsets. A resolved iftags segment inside the
-    // key joins the parts around it (live Wikidot resolves the segment
-    // before getAttrs runs), rather than dropping the part before it.
     let elided = field
         .elide_segments_range(span.start + fragment_start..span.start + fragment_end);
     match elided {
@@ -659,8 +620,6 @@ fn distribute_quote_gate_split<'t>(
     }
 }
 
-/// Whether an element is blank content that a paragraph break absorbs
-/// at a segment edge: a line break, or text holding only spaces and tabs.
 fn segment_edge_blank(element: &Element) -> bool {
     match element {
         Element::LineBreak => true,
@@ -683,13 +642,6 @@ fn trim_segment_trailing_blanks(segment: &mut Vec<Element>) {
     }
 }
 
-/// Distributes the elements of a nested block result that itself split
-/// at paragraph breaks into the segment list being collected: the first
-/// segment's elements join the current segment, and each subsequent
-/// segment starts a new segment here, so a nested split splits its
-/// ancestors' bodies at the same breaks. Falls back to appending every
-/// element to the current segment if the counts do not match the
-/// element batch (defensive; well-formed batches always match).
 fn distribute_paragraph_split<'t>(
     segments: &mut Vec<Vec<Element<'t>>>,
     mut segment_safe: Option<&mut Vec<bool>>,
@@ -809,11 +761,6 @@ where
         self.get_head_word_tracked(ParseErrorKind::BlockMissingName)
     }
 
-    /// Whether a head word read by `get_block_name` / `get_end_block`
-    /// may be acted on: an unseamed word always may; a word resolved
-    /// through comment elision alone may unless its block never
-    /// resolves; a word resolved through an iftags segment only
-    /// where the head-seam policy admits its block.
     #[allow(clippy::ptr_arg)]
     pub(crate) fn head_word_is_actionable(
         &self,
@@ -823,9 +770,6 @@ where
         self.head_word_view_is_actionable(name, segment, name)
     }
 
-    /// Like `head_word_is_actionable`, but judges a view of the word
-    /// (for example with a trailing score marker stripped) while the
-    /// word itself decides whether it was resolved through a segment.
     #[allow(clippy::ptr_arg)]
     pub(crate) fn head_word_view_is_actionable(
         &self,
@@ -1107,12 +1051,6 @@ where
         }
     }
 
-    /// Whether the current token is trailing whitespace that ends its
-    /// physical line (only spaces/tabs before the line break or input
-    /// end). Wikidot accepts a code, math or bibliography closer followed
-    /// by such a blank line remainder (scp-9844's `[[/code]] ` closers render
-    /// and are hosted; scp-099-fr's `[[/math]] ` renders an equation;
-    /// scp-7451's `[[/bibliography]]  ` renders its bibitems).
     fn at_blank_line_remainder(&self) -> bool {
         if self.current().token != Token::Whitespace {
             return false;
@@ -1132,11 +1070,6 @@ where
         restrict_quote_close: bool,
         allow_inline_quote_close: bool,
     ) -> Option<&'r ExtractedToken<'t>> {
-        // IfTags pairing (#792): while a matched iftags body is gathered,
-        // only the end block the pairing search designated may close it.
-        // Any other `[[/iftags]]` in the span is literal text. The
-        // designated end is only ever set under the pairing model, which
-        // both layouts now use, so no layout check is needed here.
         if block_rule.name == "block-iftags"
             && let Some(designated) = self.wikidot_iftags_body_end()
             && !self.at_designated_iftags_end(designated)
@@ -1156,13 +1089,6 @@ where
                 return Ok(true);
             }
 
-            // Check that the end block is on a new line, if required
-            //
-            // The legacy math line-ownership requirements model how Wikidot
-            // merges consecutive top-level equations. Footnote bodies are
-            // gathered as their own element stream, and Wikidot closes a
-            // footnote's math at its first [[/math]] even mid-line (e.g.
-            // scp-7079's table-header footnote), so they do not apply there.
             if block_rule.accepts_newlines_outside_body {
                 if !first_iteration
                     && parser.settings().layout.legacy()
@@ -1213,11 +1139,6 @@ where
                     return Ok(false);
                 }
             }
-            // IfTags takes the fused path in either layout: its
-            // pairing model (which designates fused closes as ends)
-            // is layout-independent, unlike the legacy-only blocks
-            // below whose fused acceptance live Wikidot grants per
-            // block type.
             let fused_close = (parser.settings().layout.legacy()
                 || block_rule.name == "block-iftags")
                 && matches!(
@@ -2013,19 +1934,6 @@ where
         ok!(paragraph_safe; all_elements, all_errors)
     }
 
-    /// Collects a block body like `get_body_elements_no_paragraphs`, but
-    /// splits the collected elements into segments at each top-level
-    /// paragraph break within the body.
-    ///
-    /// Inline container blocks consume their whole body in one call, so a
-    /// paragraph break inside the body would otherwise be flattened into
-    /// a line break element, merging the authored paragraphs on either
-    /// side of the block. Splitting the body here lets the caller wrap
-    /// each segment in its own container (see `wrap_body_segments`) so the
-    /// paragraph gather can re-establish the breaks between them.
-    ///
-    /// Wikijump layout only: legacy-layout callers must use the unsplit
-    /// collection, whose behavior this method does not reproduce.
     pub(crate) fn get_body_element_segments(
         &mut self,
         block_rule: &BlockRule,
@@ -2151,8 +2059,6 @@ where
             }
 
             if self.current().token == Token::ParagraphBreak {
-                // A paragraph break at the body's top level ends the
-                // current segment instead of becoming a line break.
                 self.step()?;
                 first = false;
                 segments.push(Vec::new());
@@ -2217,16 +2123,6 @@ where
         ))
     }
 
-    /// Collects the body of an iftags gate whose pairing designated an
-    /// end, splitting at top-level paragraph breaks like
-    /// `get_body_element_segments` but in either layout: live Wikidot
-    /// splices a kept gate body into the text before paragraph
-    /// formation, so the body's breaks are real paragraph breaks in
-    /// both layouts, and the caller re-establishes them through the
-    /// split layout on its result. Apart from the split, the gather
-    /// mirrors `consume_body_no_paragraphs` (end verification, list
-    /// close, hidden-body boundaries, the legacy input-end return), so
-    /// a kept body gathers exactly as it did unsplit.
     pub(crate) fn get_body_element_segments_iftags(
         &mut self,
         block_rule: &BlockRule,
@@ -2280,10 +2176,6 @@ where
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
-            // The designated end sat inside a construct the previous
-            // iteration consumed whole (a comment holding the closer):
-            // the body is complete, with the end absorbed into that
-            // construct's elements.
             if let Some(designated) = self.wikidot_iftags_body_end()
                 && self.current().span.start > designated
             {
@@ -2425,13 +2317,6 @@ where
                         Elements::Single(element) => vec![element],
                         Elements::None => Vec::new(),
                     };
-                    // A consume that absorbed the paragraph break at
-                    // its tail without reporting a split layout (the
-                    // wikidot div-literal recovery walks the physical
-                    // line, break included) still ends the segment at
-                    // that break: the content after it belongs to the
-                    // next segment, as if the break token had been
-                    // gathered here.
                     let steps = before.len() - self.remaining().len();
                     let absorbed_trailing_break = paragraph_split.is_none()
                         && match steps {
@@ -2457,17 +2342,6 @@ where
                                 .last_mut()
                                 .expect("segments always has a current segment")
                                 .extend(elements);
-                            // A wikidot div-literal recovery inside a
-                            // multi-segment body produced a literal line
-                            // as this segment's only element: on the
-                            // plain path the paragraph stack wraps such
-                            // a line as its own paragraph, so let the
-                            // segment form one too. The newline the
-                            // recovery borrowed from the preceding break
-                            // belongs to the break, which the split
-                            // already represents. Single-segment bodies
-                            // keep the mark for the receiver, whose own
-                            // literal handling covers them.
                             if segments.len() > 1
                                 && self.take_wikidot_div_literal_recovered()
                                 && !segment_safe.last().copied().unwrap_or(true)
@@ -2884,14 +2758,6 @@ where
         ))
     }
 
-    /// Wraps body segments collected by `get_body_element_segments` into
-    /// one inline container per non-empty segment, returning the segment
-    /// layout (see `ParseSuccess::paragraph_split`) alongside the wrapped
-    /// elements so the caller can attach it to its parse result.
-    ///
-    /// A body that did not cross a paragraph break (a single segment)
-    /// produces exactly the container the unsplit collection produced,
-    /// including for an empty body, and returns no layout.
     pub(crate) fn wrap_body_segments(
         &mut self,
         segments: Vec<Vec<Element<'t>>>,
@@ -2909,12 +2775,6 @@ where
         let mut counts = Vec::with_capacity(segments.len());
         let mut containers = Vec::new();
         for (index, mut segment) in segments.into_iter().enumerate() {
-            // Content blank at a segment edge adjacent to a paragraph
-            // break belongs to the break, not to either segment: just as
-            // a paragraph's own edges shed leading and trailing line
-            // breaks and whitespace, a segment sheds them where it meets
-            // a break. Edges at the body's own start and end keep their
-            // content, as before.
             if index > 0 {
                 trim_segment_leading_blanks(&mut segment);
             }
@@ -2947,10 +2807,6 @@ where
         (elements, Some(counts))
     }
 
-    /// Collects the body of an inline container block and wraps it,
-    /// splitting at paragraph breaks as described on
-    /// `get_body_element_segments`. In the legacy layout this is exactly
-    /// the unsplit collection and wrap the block rules used before.
     pub fn get_body_elements_inline_container(
         &mut self,
         block_rule: &BlockRule,
@@ -3009,11 +2865,6 @@ where
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
-            // An iftags gather whose designated end sat inside a
-            // construct an earlier iteration consumed whole (a comment
-            // holding the closer) is complete once the parser has moved
-            // past the designated end: the end was absorbed into that
-            // construct, and live Wikidot ends the gate there.
             if block_rule.name == "block-iftags"
                 && let Some(designated) = self.wikidot_iftags_body_end()
                 && self.current().span.start > designated
@@ -3038,15 +2889,6 @@ where
                     self.take_wikidot_mixed_paragraph_ownership();
                     process(consumed);
                 }
-                // A comment that stopped at the designated iftags end
-                // while discarding ends the hidden body there: the
-                // next loop iteration verifies and consumes the
-                // designated end block, and the comment's remainder
-                // past the closer is ordinary following content, as on
-                // live Wikidot. The stop is only honored when the
-                // designated end is comment-internal; any other
-                // construct's error at the same position (an unclosed
-                // raw block, above all) still fails the discard closed.
                 Err(_error)
                     if self.discarding_hidden_body()
                         && self.wikidot_iftags_body_end().is_some_and(|designated| {
@@ -3064,9 +2906,6 @@ where
         }
     }
 
-    /// Whether the end block at the current position (after the one line
-    /// break `verify_end_block` may step over) is the designated
-    /// `[[/iftags]]` at byte offset `designated`.
     pub(crate) fn at_designated_iftags_end(&self, designated: usize) -> bool {
         let mut probe = self.clone();
         if probe.current().token == Token::LineBreak && probe.step().is_err() {
@@ -3076,12 +2915,6 @@ where
             && probe.current().span.start == designated
     }
 
-    /// Wikidot `[[iftags]]` pairing search (ftml #792), run from the first
-    /// body token of an iftags opener whose head has just been parsed.
-    /// Returns the byte offset of the `[[/iftags]]` head that pairs with
-    /// this opener (`None` = unpairable, renders literally), plus whether
-    /// the paired span contains a nested iftags opener head. The search is
-    /// bounded to a window of tokens after the opener.
     pub(crate) fn wikidot_iftags_pairing_end(&self) -> (Option<usize>, bool) {
         const WINDOW: usize = 8192;
 
@@ -3101,13 +2934,7 @@ where
 
         let source = self.full_text().inner();
         let n = tokens.len();
-        // ends[i] = token indices of `[[/iftags]]` heads (their LeftBlockEnd
-        // token) that a body starting at token i can end at, in the walk's
-        // preference order, de-duplicated. All dependencies are at larger
-        // indices, so fill the table back to front.
         let mut ends: Vec<Vec<usize>> = vec![Vec::new(); n + 1];
-        // De-duplication stamps: seen[end] holds i + 1 while position i's
-        // list is being built, so no separate set is needed.
         let mut seen: Vec<usize> = vec![0; n + 1];
         for i in (0..n).rev() {
             let stamp = i + 1;
@@ -3201,14 +3028,6 @@ where
         }
     }
 
-    /// Determine whether a scored Wikidot `div_` or `span_` opener owns a
-    /// compatible ordinary closer.
-    ///
-    /// Wikidot does not normalize underscore closers. A scored opener accepts
-    /// the ordinary closer, while its same-spelling underscore closer rejects
-    /// that opener. Nested ordinary and scored owners still pair independently,
-    /// so this scan records every scored opener it resolves instead of retrying
-    /// the recursive block parser for each suffix.
     pub(crate) fn wikidot_alias_has_compatible_close(
         &self,
         block_rule: &BlockRule,
@@ -3573,9 +3392,6 @@ where
                 let mut key_elisions: Vec<std::ops::Range<usize>> = Vec::new();
                 loop {
                     let current = self.current();
-                    // An iftags segment inside the key resolves the way
-                    // it does inside a value: consume it whole and join
-                    // the key parts around its elisions below.
                     if current.token == Token::LeftBlock
                         && let Some(segment) = consume_iftags_segment(self)?
                     {
@@ -3664,9 +3480,6 @@ where
         Ok((map, body_start))
     }
 
-    /// Parses a key-value block head using Wikidot's legacy `getAttrs`
-    /// grammar in `Layout::Wikidot`, while retaining FTML's strict grammar in
-    /// other layouts.
     pub fn get_head_map_wikidot(
         &mut self,
         block_rule: &BlockRule,
@@ -3709,11 +3522,6 @@ where
             } else {
                 let start = self.current();
                 let mut elisions = Vec::new();
-                // A code head is raw on Wikidot: it ends at the first
-                // close marker, even when that marker closes an iftags
-                // segment opener, and the truncated head text is what
-                // getAttrs sees. Segments in a code head are therefore
-                // stepped over raw rather than resolved.
                 let raw_head = block_rule.name == "block-code";
                 let fused_name_close = self.head_had_segment();
                 while !matches!(self.current().token, Token::RightBlock | Token::InputEnd)
@@ -3721,9 +3529,6 @@ where
                     if fused_name_close && self.current().token == Token::RightLink {
                         break;
                     }
-                    // An iftags segment in the head is consumed whole:
-                    // its own `]]` must not end the head early, and its
-                    // elisions resolve the segment in the parsed values.
                     if !raw_head
                         && self.current().token == Token::LeftBlock
                         && let Some(segment) = consume_iftags_segment(self)?
@@ -3817,8 +3622,6 @@ where
         Ok((subname, arguments, body_start))
     }
 
-    /// Parses a positional block-head value followed by Wikidot `getAttrs`
-    /// arguments in `Layout::Wikidot`.
     pub fn get_head_name_map_wikidot(
         &mut self,
         block_rule: &BlockRule,
@@ -3838,9 +3641,6 @@ where
         Ok((subname, arguments))
     }
 
-    /// Parses one already-owned positional field with valid comments elided,
-    /// followed by Wikidot `getAttrs` arguments. This does not participate in
-    /// block-name recognition, so joined text cannot create a new block owner.
     pub(crate) fn get_head_field_map_wikidot(
         &mut self,
         block_rule: &BlockRule,
@@ -3865,9 +3665,6 @@ where
             &invalids,
             Some(ParseErrorKind::recoverable_local_failure()),
         )?;
-        // A trailing-edge iftags segment can fuse the head
-        // closing into a bracket run whose final token is a
-        // single bracket; the head still ended there.
         let head_ended = matches!(last.token, Token::RightBlock | Token::RightBracket);
         let arguments = self.get_head_map_wikidot(block_rule, !head_ended)?;
         Ok((field, arguments))
@@ -3929,9 +3726,6 @@ where
             .map(|(value, _)| value)
     }
 
-    /// Like `get_head_value`, except the head text is collected with
-    /// conditional segments resolved, so a segment inside the value
-    /// cannot terminate or corrupt it.
     pub fn get_head_value_resolved<F, T>(
         &mut self,
         block_rule: &BlockRule,
@@ -4082,9 +3876,6 @@ mod tests {
 
     #[test]
     fn wikidot_attribute_offsets_preserve_multibyte_malformed_recovery() {
-        // The first value intentionally has no terminating quote before the
-        // next `="` delimiter. Wikidot drops exactly the first UTF-8 scalar of
-        // that malformed segment before recovering the next key.
         let mut arguments = parse_wikidot_attributes("a=\"éb=\"value\"");
         assert_eq!(arguments.get("a").as_deref(), Some(""));
         assert_eq!(arguments.get("b").as_deref(), Some("value"));

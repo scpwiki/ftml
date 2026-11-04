@@ -125,9 +125,6 @@ fn try_consume_link<'r, 't>(
     let (url, _) =
         collect_text_resolved_fused(parser, rule, &url_close, &url_invalid, None, false)?;
 
-    // Old Wikidot interwiki form, `[prefix:Page Label]`. It resolves through the
-    // same prefix table as the modern `[[[!prefix:Page|Label]]]` form. Real URLs
-    // (including `http:`, `https:`, and `mailto:`) always take the ordinary path.
     if !url_valid(&url)
         && let Some(expanded) = parser.settings().interwiki.build(&url)
     {
@@ -551,10 +548,6 @@ where
                     copied_until = segment.range.end;
 
                     if segment.fused_closer {
-                        // The segment ended inside a fused bracket
-                        // token whose leftover bracket is the link's
-                        // own closing bracket; the token is already
-                        // consumed and nothing of it is residual.
                         return Ok(WikidotLabel {
                             text: Cow::Owned(without_comments.take().unwrap()),
                             residual_closer: "",
@@ -1112,7 +1105,6 @@ mod tests {
         let html = render("[nosuchwiki:Mallard The duck]");
         assert!(!html.contains("<a "), "{html}");
 
-        // The Wikidot layout keeps its evidenced label-only behavior.
         let wikidot = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize("[wikipedia:Mallard The duck]");
         let (tree, _) = crate::parse(&tokenization, &page_info, &wikidot).into();

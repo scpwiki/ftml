@@ -48,8 +48,6 @@ fn try_consume_fn<'r, 't>(
     step_expected(parser, Token::Equals)?;
     step_expected(parser, Token::Whitespace)?;
 
-    // Wikidot keeps an empty `= ` line as a literal equals sign. Returning a
-    // failed rule here restores the leading whitespace and marker together.
     if parser.settings().layout.legacy()
         && matches!(
             parser.current().token,

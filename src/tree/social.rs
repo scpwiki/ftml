@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/// One of the Wikidot social-bookmarking providers still rendered by the
-/// anonymous PagePreview surface.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum SocialService {

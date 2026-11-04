@@ -128,8 +128,6 @@ pub fn parse(
     let settings = settings.get();
     let (syntax_tree, errors) = crate::parse(tokenization, page_info, settings).into();
 
-    // Deep-clone AST to make it owned, so it can be
-    // safely passed to JS, where it will live for an unknown time.
     let syntax_tree = syntax_tree.to_owned();
 
     let errors = convert_errors_utf16(tokenization, errors);

@@ -25,13 +25,6 @@ use std::borrow::Cow;
 use std::ops::Range;
 use strum_macros::IntoStaticStr;
 
-/// An issue that occurred during parsing.
-///
-/// These refer to circumstances where a rule was attempted, but did not
-/// succeed due to an issue with the syntax.
-///
-/// However, as outlined by the crate's philosophy, no parsing issue is fatal.
-/// Instead a fallback rules is applied and parsing continues.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ParseError {
@@ -102,118 +95,80 @@ impl ParseError {
 #[derive(Serialize, Deserialize, IntoStaticStr, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ParseErrorKind {
-    /// The self-enforced recursion limit has been passed, giving up.
     RecursionDepthExceeded,
 
-    /// Attempting to process this rule failed because the end of input was reached.
     EndOfInput,
 
-    /// No rules match for these tokens, returning as plain text.
     NoRulesMatch,
 
-    /// Attempting to match this rule failed, falling back to try an alternate.
     RuleFailed,
 
-    /// This syntax is not supported when parsing in the current mode.
     NotSupportedMode,
 
-    /// Attempting to match this rule failed, it must be on the start of a new line.
     NotStartOfLine,
 
-    /// This include block was malformed, and thus not substituted.
     InvalidInclude,
 
-    /// This list has no elements in it.
     ListEmpty,
 
-    /// This list has elements other than items in it.
     ListContainsNonItem,
 
-    /// This list item is not within a list.
     ListItemOutsideList,
 
-    /// This list tries to nest too deeply.
     ListDepthExceeded,
 
-    /// This table has elements other than rows in it.
     TableContainsNonRow,
 
-    /// This table row has elements other than cells in it.
     TableRowContainsNonCell,
 
-    /// This table row appears outside of a table.
     TableRowOutsideTable,
 
-    /// This table cell appears outside of a table row.
     TableCellOutsideTable,
 
-    /// This tabview has no elements in it.
     TabViewEmpty,
 
-    /// This tabview has elements other than tabs in it.
     TabViewContainsNonTab,
 
-    /// There is a tab outside of a tabview.
     TabOutsideTabView,
 
-    /// Footnotes are not permitted from inside footnotes.
     FootnotesNested,
 
-    /// This native blockquote tries to nest too deeply.
     BlockquoteDepthExceeded,
 
-    /// Ruby text block appears outside of a ruby annotation block.
     RubyTextOutsideRuby,
 
-    /// Bibliography contains an element other than a definition list.
     BibliographyContainsNonDefinitionList,
 
-    /// There is no rule for the block name specified.
     NoSuchBlock,
 
-    /// This block does not allow star (`*`) invocation.
     BlockDisallowsStar,
 
-    /// This block does not allow score (`_`) invocation.
     BlockDisallowsScore,
 
-    /// This block does not specify a name.
     BlockMissingName,
 
-    /// This block does not have close brackets when required.
     BlockMissingCloseBrackets,
 
-    /// Encountered malformed arguments when parsing the block.
     BlockMalformedArguments,
 
-    /// Some required arguments where missing when parsing the block.
     BlockMissingArguments,
 
-    /// This block expected to end its body here.
     BlockExpectedEnd,
 
-    /// An end block was found, but of the incorrect type.
     BlockEndMismatch,
 
-    /// No embed with this name exists.
     NoSuchEmbed,
 
-    /// This no rule for the module name specified.
     NoSuchModule,
 
-    /// This module does not specify a name.
     ModuleMissingName,
 
-    /// The given page to be included does not exist.
     NoSuchPage,
 
-    /// The given variable was not found, and thus not substituted.
     NoSuchVariable,
 
-    /// The URL passed here was invalid.
     InvalidUrl,
 
-    /// The block must be across multiple lines, but it was inline.
     NotSupportedInline,
 }
 
@@ -253,7 +208,6 @@ impl ParseErrorKind {
     }
 }
 
-/// Helper function to serialize spans as a 2-tuple.
 fn serialize_span<S>(span: &Range<usize>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

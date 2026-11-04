@@ -62,8 +62,6 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "IfCategory doesn't allow score flag");
     assert_block_name(&BLOCK_IFCATEGORY, name);
 
-    // Wikidot emits ifcategory syntax literally. Retain the executable block
-    // in the Wikijump layout, where it remains a supported extension.
     if parser.settings().layout.legacy() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }

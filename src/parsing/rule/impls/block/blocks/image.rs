@@ -93,9 +93,6 @@ fn parse_fn<'r, 't>(
             None => (None, None),
             Some(value) => {
                 let value = discard_wikidot_controls(value);
-                // Wikidot does not resolve a link target that starts with
-                // whitespace, with or without a leading `*` marker: the whole
-                // block stays literal.
                 let location = value.strip_prefix('*').unwrap_or(&value);
                 if location.starts_with(char::is_whitespace) {
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -121,9 +118,6 @@ fn parse_fn<'r, 't>(
         }
     };
     let alignment = FloatAlignment::parse(name);
-    // Only a quoted, recognized size name selects a resize explicitly. An
-    // absent, unquoted, empty, or unknown size (including "original") falls
-    // back to the file-type default in `classify_wikidot_image_source`.
     let explicit_attachment_size = if parser.settings().layout.legacy() {
         arguments
             .get("size")
@@ -275,9 +269,6 @@ fn parse_wikidot_image_source<'t>(
             return Some(ImageSource::Direct(FileSource::Url(Cow::Owned(encoded))));
         }
     }
-    // Wikidot treats an assignment-shaped head token containing a literal URL
-    // separator as a direct source. The token itself remains inert because its
-    // scheme is not at the start of the rendered src value.
     if source.contains("://") {
         return Some(ImageSource::Direct(FileSource::Url(source)));
     }
@@ -321,10 +312,6 @@ fn classify_wikidot_image_source<'t>(
                 None => ImageSource::Direct(FileSource::File1 { file }),
             }
         }
-        // A page-qualified attachment follows the same display rule as a
-        // current-page one; Wikidot only distinguishes the owning page.
-        // The `alt` for this arm is the filename alone, not the whole
-        // page-qualified source the caller passes in.
         FileSource::File2 { page, file } => {
             let size = explicit_attachment_size
                 .or_else(|| default_wikidot_attachment_size(&file));
@@ -342,11 +329,6 @@ fn classify_wikidot_image_source<'t>(
     }
 }
 
-/// Wikidot shows a current-page attachment without an explicit size directly
-/// only when its name ends in `.png`, `.jpg`, or `.gif` (ASCII
-/// case-insensitive). Every other name renders the medium resize linked to the
-/// original attachment. This holds for previews and saved pages alike, whether
-/// or not the attachment exists.
 fn default_wikidot_attachment_size(file: &str) -> Option<ImageSize> {
     const ORIGINAL_DISPLAY_EXTENSIONS: [&str; 3] = ["png", "jpg", "gif"];
 
@@ -367,11 +349,6 @@ fn parse_direct_image_source<'t>(source: Cow<'t, str>) -> Option<ImageSource<'t>
     }
 }
 
-/// Splits a leading `*` off an image `link` argument, returning the
-/// remaining location text and the anchor target it implies.
-///
-/// In Wikidot syntax, `link="*https://example.com/"` makes the image link
-/// open in a new tab; the `*` is not part of the location.
 fn split_image_link_target(value: Cow<'_, str>) -> (Cow<'_, str>, Option<AnchorTarget>) {
     match value.strip_prefix('*') {
         Some(rest) => (
@@ -379,8 +356,6 @@ fn split_image_link_target(value: Cow<'_, str>) -> (Cow<'_, str>, Option<AnchorT
             Some(AnchorTarget::NewTab),
         ),
         None => {
-            // Leading whitespace in the argument is not part of the
-            // location either (e.g. `link=" https://example.com/"`).
             let trimmed = value.trim_start();
             if trimmed.len() == value.len() {
                 (value, None)
@@ -423,9 +398,6 @@ fn parse_wikidot_image_link_target<'t>(target: Cow<'t, str>) -> Option<LinkLocat
         encoded.push('/');
     }
     for byte in target.bytes() {
-        // Browser special-scheme parsing treats an authored backslash after
-        // the leading slash like an authority separator. Percent-encode it so
-        // a legacy internal image-link target cannot navigate off-origin.
         if matches!(byte, b' ' | b'\\') || !byte.is_ascii() {
             encoded.push('%');
             encoded.push(char::from(HEX[usize::from(byte >> 4)]));
@@ -956,9 +928,6 @@ mod tests {
 
     #[test]
     fn wikidot_local_image_size_variants_match_live_resize_boundary() {
-        // Anonymous PagePreview evidence captured 2026-09-13 proves that a
-        // quoted local-image size selects Wikidot's named resize while the
-        // original attachment remains the implicit link target.
         let mut page_info = PageInfo::dummy();
         page_info.site = cow!("sandbox-for-codex");
         page_info.page = cow!("");
@@ -995,8 +964,6 @@ mod tests {
 
     #[test]
     fn wikidot_invalid_empty_and_unquoted_local_image_size_stay_unresized() {
-        // The matching live controls render the current-page file directly:
-        // no resized URL and no implicit original-file link are synthesized.
         let mut page_info = PageInfo::dummy();
         page_info.site = cow!("sandbox-for-codex");
         page_info.page = cow!("");
@@ -1026,9 +993,6 @@ mod tests {
 
     #[test]
     fn wikidot_size_lookalikes_outside_bare_pairs_keep_file_type_default() {
-        // Anonymous Wikidot PagePreview (2026-10-11): `size=` text inside a
-        // quoted value or a comment is not a size argument, so the file-type
-        // default applies. For `.png` that is the original attachment.
         let mut page_info = PageInfo::dummy();
         page_info.site = cow!("sandbox-for-codex");
         page_info.page = cow!("");
@@ -1177,10 +1141,6 @@ mod tests {
 
     #[test]
     fn wikidot_page_qualified_attachment_uses_owning_page_for_resize() {
-        // Issue #734: a page-qualified attachment follows the same file-type
-        // default as a current-page one. Anonymous Wikidot PagePreview
-        // (2026-10-11) renders `scp-9506/x.jpeg` as the linked medium resize
-        // on the owning page while `scp-9506/x.png` shows the original.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize("[[image other-page/photo.jpeg]]");
@@ -1212,8 +1172,6 @@ mod tests {
             ),
         );
 
-        // An original-display extension stays a plain, unlinked original on
-        // the owning page, exactly as before.
         let (html, errors) =
             render_image("[[image other-page/photo.png]]", Layout::Wikidot);
         assert!(errors.is_empty(), "{errors:#?}");
@@ -1256,9 +1214,6 @@ mod tests {
 
     #[test]
     fn wikidot_explicit_image_link_overrides_implicit_attachment_link() {
-        // Anonymous Wikidot PagePreview (2026-10-11): an explicit link wraps
-        // the file-type default display. `.jpeg` keeps the medium resize but
-        // loses the implicit original-file link; `.png` shows the original.
         let (html, errors) = render_image(
             r#"[[image photo.jpeg link="Target Page"]]"#,
             Layout::Wikidot,

@@ -25,14 +25,8 @@ use std::convert::TryFrom;
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Hash, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Heading {
-    /// The depth that this heading extends to.
-    ///
-    /// See [`HeadingLevel`].
-    ///
-    /// [`HeadingLevel`]: ./enum.HeadingLevel.html
     pub level: HeadingLevel,
 
-    /// Whether this heading should get a table of contents entry or not.
     pub has_toc: bool,
 }
 

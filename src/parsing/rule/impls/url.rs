@@ -391,10 +391,6 @@ where
         url = without_last_character(url);
     }
 
-    // Trailing punctuation is shed only at a sentence boundary: when
-    // the URL is followed by whitespace or the end of input (or wraps a
-    // balanced suffix). Followed by anything else, such as a block
-    // opener, the punctuation is mid-string and stays in the URL.
     let at_sentence_boundary =
         matches!(parser.current().token, Token::Whitespace | Token::InputEnd)
             || suffix.is_some();
@@ -597,10 +593,6 @@ mod tests {
 
     #[test]
     fn wikidot_url_rule_keeps_live_unicode_spaces_inside_the_automatic_url() {
-        // Anonymous PagePreview observations on 2026-08-21 show that Wikidot
-        // treats these Unicode whitespace scalars as URL data rather than as
-        // automatic-link terminators. ASCII space/tab/newline remain the
-        // actual whitespace boundaries.
         for whitespace in [
             '\u{1680}', '\u{2000}', '\u{2001}', '\u{2002}', '\u{2003}', '\u{2004}',
             '\u{2005}', '\u{2006}', '\u{2007}', '\u{2008}', '\u{2009}', '\u{200a}',

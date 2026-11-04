@@ -224,11 +224,6 @@ mod tests {
 
     #[test]
     fn wikidot_math_closer_accepts_trailing_line_blanks() {
-        // scp-099-fr's shape: the closer carries a trailing space and the
-        // prose continues on the next line. Live Wikidot renders the equation
-        // (retained html.xmlrpc.html has a math-equation div and no literal
-        // `[[math]]`). A blank remainder must behave like the bare closer;
-        // text after the closer on the same line still must not close it.
         for blanks in ["", " ", "\t", "  ", " \t"] {
             let source = format!("A\n[[math]]\nx + y\n[[/math]]{blanks}\nB");
             let (html, errors) = render(Layout::Wikidot, &source);
@@ -245,7 +240,6 @@ mod tests {
             );
         }
 
-        // The blank remainder at the end of the input closes the block too.
         let (html, _) = render(Layout::Wikidot, "[[math]]\nx\n[[/math]] ");
         assert_eq!(html.matches("math-equation").count(), 1, "{html}");
 
@@ -265,11 +259,6 @@ mod tests {
 
     #[test]
     fn wikidot_math_body_keeps_backslash_line_breaks() {
-        // scp-2223 (en and jp): a matrix equation whose lines end in `\\`.
-        // Wikidot keeps the `\\` and joins the lines with a space; the
-        // retained html reads `PR(p_1) \\ \vdots \\ PR(p_N)`. The generic
-        // backslash line continuation used to eat one backslash and the
-        // newline, leaving `PR(p_1) \\vdots \PR(p_N)`.
         let (html, errors) = render_wikidot(concat!(
             "[[math]]\n",
             "\\left[ \\begin{array}{cc}\n",
@@ -294,13 +283,6 @@ mod tests {
 
     #[test]
     fn wikidot_math_closer_after_a_double_backslash_line_still_closes() {
-        // jp/wiki-syntax:math: an example equation ends its body with `\\`
-        // directly before the closer, and the page documents more
-        // `[[code]]` blocks around further `[[math]]` examples. Wikidot closes
-        // the equation at its own closer and registers all five code blocks
-        // (retained html: 5 code divs, `\lim ... h} \\ \end{align}`). The
-        // join used to fuse `\\` + newline + `[[/math]]`, so the equation
-        // swallowed the next `[[code]]` opener and one code block was lost.
         let source = concat!(
             "[[code]]\n",
             "[[math sample]]\n",
@@ -342,8 +324,6 @@ mod tests {
         assert_eq!(tree.code_blocks.len(), 3, "{:?}", tree.code_blocks);
         assert_eq!(html.matches("<div class=\"code\">").count(), 3, "{html}");
         assert!(html.contains(r"{h} \\ \end{align}"), "{html}");
-        // The first example keeps its single trailing backslash and line break
-        // inside the code body, as Wikidot's html does (`h} \` + newline).
         assert!(html.contains("{h} \\\n[[/math]]</code>"), "{html}");
         assert!(!html.contains("[[code]]"), "{html}");
     }

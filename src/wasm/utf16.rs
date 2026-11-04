@@ -67,8 +67,6 @@ impl Utf16IndexMap {
     fn check_index(&self, index: usize) -> Result<(), JsValue> {
         let text = self.inner.borrow_owner();
 
-        // Since we don't want the process to panic,
-        // we do the check ourselves and throw a JS exception.
         if index > text.len() {
             let message = format!(
                 "UTF-8 byte index out of range: {} (byte length {}",

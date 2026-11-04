@@ -56,7 +56,6 @@ where
         HtmlBuilderTag::new(ctx, tag)
     }
 
-    /// Create a new custom element. Tag must start with `wj-`.
     #[inline]
     pub fn element(self, tag: &'t str) -> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         debug_assert!(tag.starts_with("wj-"));

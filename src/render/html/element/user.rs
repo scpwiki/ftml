@@ -191,12 +191,6 @@ fn render_user_wikijump(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
 
 const DEFAULT_WIKIDOT_AVATAR_BASE: &str = "http://www.wikidot.com";
 
-/// Return the `scheme://host` base of a Wikidot `avatar.php` URL.
-///
-/// Wikidot serves the avatar image and the karma badge of one user from the
-/// same avatar base (the `%%%URL_AVATARS%%%` placeholder in its compiled
-/// HTML), so the karma badge follows the scheme and host the resolver chose
-/// for the avatar.
 fn wikidot_avatar_base(avatar_src: &str) -> Option<&str> {
     let scheme_len = ["https://", "http://"]
         .iter()

@@ -128,8 +128,6 @@ pub(super) struct BlockScanCache<'t> {
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
-    // Designated `[[/iftags]]` byte offset for the Wikidot pairing gather
-    // currently in progress (#792); see `Parser::wikidot_iftags_body_end`.
     wikidot_iftags_body_end: Cell<Option<usize>>,
     gate_items_allowed: Cell<bool>,
     wikidot_footnote_zone_until: Cell<Option<usize>>,
@@ -159,7 +157,6 @@ fn is_optional_space_token(token: Token) -> bool {
         || token == Token::Equals
 }
 
-/// Parser for a set of tokens.
 #[derive(Debug, Clone)]
 pub struct Parser<'r, 't> {
     page_info: &'r PageInfo<'t>,
@@ -284,16 +281,6 @@ impl<'r, 't> Parser<'r, 't> {
         }
     }
 
-    // Wikidot [[iftags]] pairing state (legacy layout only, #792). While a
-    // matched iftags body is gathered, this is the byte offset of the one
-    // `[[/iftags]]` head the pairing search designated as the body's end;
-    // other iftags end blocks inside the span are literal text. It lives in
-    // the shared scan cache, not in the parser value, because the parser
-    // state has a hard size budget for deep recursive parsing; access is
-    // stack-disciplined (the owning iftags rule sets it around its body
-    // gather and restores the previous value, and nested iftags rules
-    // consume their unit literally without touching it, via
-    // `WikidotState`'s iftags-span flag).
     #[inline]
     pub(crate) fn wikidot_iftags_body_end(&self) -> Option<usize> {
         self.block_end_scan_cache
@@ -474,10 +461,6 @@ impl<'r, 't> Parser<'r, 't> {
             .is_empty()
     }
 
-    // Whether this parser is currently consuming blockquote body content
-    // under a quote body cursor. Wikidot [[iftags]] pairing (#792) does
-    // not apply there: a pairing span must not cross a quote boundary, so
-    // gates in quote bodies keep the legacy nesting behavior.
     #[inline]
     pub(crate) fn in_quote_body(&self) -> bool {
         self.quote_body_cursor.is_some()
@@ -1357,9 +1340,6 @@ impl<'r, 't> Parser<'r, 't> {
         self.has_footnote_block = true;
     }
 
-    /// Gets the parser's mutable state to enable resetting later if needed.
-    ///
-    /// See `reset_mutable_state()`.
     pub fn get_mutable_state(&self) -> ParserMutableState {
         ParserMutableState {
             footnote_index: self.footnotes.borrow().len(),
@@ -1371,9 +1351,6 @@ impl<'r, 't> Parser<'r, 't> {
         }
     }
 
-    /// Reset the parser's mutable state to the point described in the struct.
-    ///
-    /// This structure should be retrieved from `get_mutable_state()`.
     pub fn reset_mutable_state(
         &mut self,
         ParserMutableState {
@@ -1403,7 +1380,6 @@ impl<'r, 't> Parser<'r, 't> {
         }
     }
 
-    /// Add heading element to table of contents.
     pub fn push_table_of_contents_entry(
         &mut self,
         heading: HeadingLevel,
@@ -1411,15 +1387,6 @@ impl<'r, 't> Parser<'r, 't> {
     ) {
         let level = usize::from(heading.value()) - 1;
 
-        // Render the name from the statically resolved elements: ones
-        // that resolve statically (iftags suppression seams, typography
-        // boundaries) carry no generated content. The Wikidot inline
-        // normalization is applied as well, since it is what lowers dash
-        // runs in the heading text, which the as-parsed elements still
-        // carry raw. Anything still delayed afterwards is a generated
-        // value whose label is bound once the values are known (see the
-        // label binding in delayed::toc), so it keeps the empty
-        // placeholder.
         let mut resolved = name_elements.to_vec();
         resolve_static_suppressions(&mut resolved, self.settings.layout.legacy());
         if self.settings.layout.legacy() {
@@ -1611,10 +1578,6 @@ impl<'r, 't> Parser<'r, 't> {
         ptr::eq(self.remaining, old_remaining)
     }
 
-    /// Move the token pointer forward one step.
-    ///
-    /// # Returns
-    /// Returns the new current token.
     #[inline]
     pub fn step(&mut self) -> Result<&'r ExtractedToken<'t>, ParseError> {
         self.start_of_line = token_starts_line(self.current.token);
@@ -1635,7 +1598,6 @@ impl<'r, 't> Parser<'r, 't> {
         }
     }
 
-    /// Move the token pointer forward `count` steps.
     #[inline]
     pub fn step_n(&mut self, count: usize) -> Result<(), ParseError> {
         for _ in 0..count {
@@ -1645,15 +1607,11 @@ impl<'r, 't> Parser<'r, 't> {
         Ok(())
     }
 
-    /// Look for the token `offset + 1` beyond the current one.
-    ///
-    /// For instance, submitting `0` will yield the first item of `parser.remaining()`.
     #[inline]
     pub fn look_ahead(&self, offset: usize) -> Option<&'r ExtractedToken<'t>> {
         self.remaining.get(offset)
     }
 
-    /// Like `look_ahead`, except returns an error if the token isn't found.
     #[inline]
     pub fn look_ahead_err(
         &self,
@@ -1663,14 +1621,12 @@ impl<'r, 't> Parser<'r, 't> {
             .ok_or_else(|| self.make_err(ParseErrorKind::EndOfInput))
     }
 
-    /// Retrieves the current and next tokens.
     pub fn next_two_tokens(&self) -> (Token, Option<Token>) {
         let current = self.current.token;
         let next = self.look_ahead(0).map(|token| token.token);
         std::convert::identity((current, next))
     }
 
-    /// Retrieves the current, second, and third tokens.
     pub fn next_three_tokens(&self) -> (Token, Option<Token>, Option<Token>) {
         let first = self.current.token;
         let second = self.look_ahead(0).map(|next| next.token);
@@ -1734,17 +1690,6 @@ impl<'r, 't> Parser<'r, 't> {
     }
 }
 
-/// This struct stores the state of the mutable fields in `Parser`.
-///
-/// This way, on rule failure, we can revert to the state these
-/// fields were in prior to rule execution.
-///
-/// See the "revert" tests for examples of how this reset data is
-/// needed to ensure proper AST formation:
-/// * `test/footnotes/revert`
-/// * `test/html/revert`
-/// * `test/code/revert`
-/// * `test/toc/revert`
 #[derive(Debug, Copy, Clone)]
 pub struct ParserMutableState {
     footnote_index: usize,
@@ -2070,9 +2015,6 @@ fn parser_table_of_contents_entry_resolves_static_delayed_markers() {
     let tokenization = crate::tokenize("body");
     let mut parser = Parser::new(&tokenization, &page_info, &settings);
 
-    // A visible iftags segment leaves typography-boundary markers around
-    // its body; the entry name is rendered from the resolved elements
-    // rather than dropped.
     parser.push_table_of_contents_entry(
         HeadingLevel::One,
         &[
@@ -2083,7 +2025,6 @@ fn parser_table_of_contents_entry_resolves_static_delayed_markers() {
         ],
     );
 
-    // A hidden (suppressed) segment contributes no text to the name.
     parser.push_table_of_contents_entry(
         HeadingLevel::Two,
         &[
@@ -2093,8 +2034,6 @@ fn parser_table_of_contents_entry_resolves_static_delayed_markers() {
         ],
     );
 
-    // A generated value is not known at parse time, so its entry keeps the
-    // empty placeholder that bind-time label replacement fills in.
     parser.push_table_of_contents_entry(
         HeadingLevel::One,
         &[Element::Delayed(DelayedElement::active(

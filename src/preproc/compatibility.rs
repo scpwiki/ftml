@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Canonicalization of malformed-but-real Wikidot syntax shapes.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Marker {
@@ -773,9 +772,6 @@ fn canonicalize_collapsible_closers_sharing_lines(lines: &mut Vec<String>) {
     *lines = output;
 }
 
-/// Split a trailing `[[/collapsible]]` off a list item line onto its own
-/// line. Returns false when the line is not a list item carrying content
-/// before the closer.
 fn split_list_item_collapsible_close(
     output: &mut Vec<String>,
     body: &str,
@@ -1149,10 +1145,6 @@ fn standalone_named_block_marker(line: &str, prefix: &str, name: &str) -> Option
     }
 }
 
-/// Canonicalize live-backed crossed owner pairs that close the outer owner
-/// before a nested block owner. The parser can already reproduce the live DOM
-/// once the two closes are in stack order; explicit-list crossings additionally
-/// retain one physical break after the outer owner.
 fn canonicalize_crossed_outer_owner_closers(
     lines: &mut [String],
     literal_lines: &[bool],

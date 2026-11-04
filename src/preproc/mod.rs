@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! This module mimics the Wikidot preprocessor, which replaces certian character sequences to make
-//! them look better, or be easier to parse.
 
 pub mod typography;
 pub mod whitespace;
@@ -43,28 +41,13 @@ mod test;
 use crate::layout::Layout;
 use regex::Regex;
 
-/// Helper struct to easily perform string replacements.
 #[derive(Debug)]
 pub enum Replacer {
-    /// Replaces any text matching the "repl" group,
-    /// (or the entire regular expression if "repl" does not exist)
-    /// with the static string.
     RegexReplace {
         regex: Regex,
         replacement: &'static str,
     },
 
-    /// Takes text matching the regular expression, and replaces the exterior.
-    ///
-    /// The regular expression must return the content to be preserved in
-    /// capture group 1, and surrounds it with the `begin` and `end` strings.
-    ///
-    /// For instance, say:
-    /// * `regex` matched `[% (.+) %]`
-    /// * `begin` was `<(`
-    /// * `end` was `)>`
-    ///
-    /// Then input string `[% wikidork %]` would become `<(wikidork)>`.
     RegexSurround {
         regex: Regex,
         begin: &'static str,

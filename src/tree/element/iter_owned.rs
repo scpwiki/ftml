@@ -33,7 +33,6 @@ impl<'t> IntoIterator for Elements<'t> {
     }
 }
 
-/// Owned iterator implementation for `Elements`.
 #[derive(Debug)]
 pub struct OwnedElementsIterator<'t> {
     single: Option<Element<'t>>,

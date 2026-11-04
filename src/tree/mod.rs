@@ -96,42 +96,26 @@ use std::collections::HashSet;
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct SyntaxTree<'t> {
-    /// The list of elements that compose this tree.
-    ///
-    /// Note that each `Element<'t>` can contain other elements within it,
-    /// and these as well, etc. This structure composes the depth of the
-    /// syntax tree.
     pub elements: Vec<Element<'t>>,
 
-    /// The full table of contents for this page.
-    ///
-    /// Depth list conversion happens here, so that depths on the table
-    /// match the heading level.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub table_of_contents: Vec<Element<'t>>,
 
-    /// The full list of HTML blocks for this page.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub html_blocks: Vec<Cow<'t, str>>,
 
-    /// The full list of code blocks for this page.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub code_blocks: Vec<CodeBlock<'t>>,
 
-    /// The full footnote list for this page.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub footnotes: Vec<Vec<Element<'t>>>,
 
     #[serde(default, skip_serializing_if = "Not::not")]
     pub needs_footnote_block: bool,
 
-    /// The full list of bibliographies for this page.
     #[serde(default, skip_serializing_if = "BibliographyList::is_empty")]
     pub bibliographies: BibliographyList<'t>,
 
-    /// Hint for the size of the wikitext input.
-    ///
-    /// This is an optimization to make rendering large parges slightly faster.
     #[serde(skip)]
     pub wikitext_len: usize,
 }

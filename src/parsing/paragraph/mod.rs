@@ -40,15 +40,6 @@ pub fn no_close_condition() -> Option<CloseConditionFn> {
     None
 }
 
-/// Function to iterate over tokens to produce elements in paragraphs.
-///
-/// Originally in `parse()`, but was moved out to allow paragraph
-/// extraction deeper in code, such as in the `try_paragraph`
-/// collection helper.
-///
-/// This does not necessarily produce a paragraph container.
-/// It may produce multiple or none. Instead the logic iterates
-/// and produces paragraphs or child elements as needed.
 pub fn gather_paragraphs<'r, 't, F>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -240,15 +231,6 @@ where
                 && errors
                     .iter()
                     .any(|error| error.kind() == ParseErrorKind::ListItemOutsideList);
-            // A paragraph-split layout describes the batch exactly as
-            // produced, so validate it before suppression seams are
-            // deferred out of the batch: a producer whose batch carries
-            // seams of its own (an iftags body bounded by typography
-            // seams) would otherwise never validate, and its breaks
-            // would flatten. When the layout validates, distribution
-            // below pushes the raw batch and deferral is skipped; for
-            // the container batches this changes nothing, as deferral
-            // retains them untouched.
             let split_batch = paragraph_split_batch(&elements, paragraph_split);
             if split_batch.is_none() {
                 defer_suppression_seams(&mut stack, &mut elements);
@@ -310,15 +292,6 @@ where
                     stack.mark_wikidot_empty_list_break();
                 }
                 if let Some(counts) = split_batch {
-                    // A block whose body crossed paragraph breaks
-                    // returns its elements laid out by segment;
-                    // re-establish the breaks between the segments so
-                    // they land in separate paragraphs, exactly as if
-                    // the block had not consumed the break tokens. Each
-                    // segment is pushed with the paragraph safety its
-                    // own content reported, so a block-level segment
-                    // does not strip the paragraphs from the text
-                    // segments around it.
                     let elements = match elements {
                         Elements::Multiple(elements) => elements,
                         Elements::Single(element) => vec![element],
@@ -333,11 +306,6 @@ where
                         }
                         let mut slice: Vec<Element<'t>> =
                             elements.by_ref().take(*count).collect();
-                        // A producer may end each non-final segment
-                        // with a synthetic line break so receivers
-                        // that flatten the batch reproduce the unsplit
-                        // render; where the paragraph really breaks,
-                        // the break itself replaces it.
                         if index < last_index
                             && matches!(slice.last(), Some(Element::LineBreak))
                         {
@@ -679,11 +647,6 @@ fn finish_hidden_boundary(
     }
 }
 
-/// Validates a recorded paragraph-split layout against the element
-/// batch it was recorded for, returning the layout when it is
-/// well-formed (at least two segments, and segment counts summing to
-/// the batch length). A malformed layout is dropped and the batch is
-/// pushed normally; well-formed batches always validate.
 fn paragraph_split_batch<'t>(
     elements: &Elements<'t>,
     counts: Option<Vec<ParagraphSplitEntry>>,
@@ -750,16 +713,6 @@ fn defer_suppression_seams<'t>(
         }
         Elements::Multiple(items) => {
             let mut items = items;
-            // A seam in final position closes the elements before it:
-            // the closing typography boundary of a shown conditional
-            // body is the case that matters. Deferring it would flush
-            // it ahead of those elements, recording the seam at the
-            // start of the body instead of its end, so a character run
-            // following the block would regroup against the wrong
-            // offset. Keep one such trailing seam in place; every
-            // other seam is deferred as before. A result consisting
-            // only of seams keeps the old behaviour, since there the
-            // positions coincide.
             let trailing = match items.split_last() {
                 Some((last, rest))
                     if items.len() > 1
@@ -848,10 +801,6 @@ mod tests {
 
     #[test]
     fn wikijump_inline_containers_split_at_paragraph_breaks() {
-        // Live Wikidot closes and reopens a [[span]] at a paragraph break,
-        // preserving the authored paragraphs (PagePreview capture,
-        // 2026-11-04). The wikijump layout previously flattened the break
-        // into a line break inside one container, merging the paragraphs.
         for (source, expected) in [
             (
                 "Para [[span]]A1 one\n\npara two B2[[/span]] C3",
@@ -907,8 +856,6 @@ mod tests {
             assert_eq!(render_wikijump(source), expected, "{source}");
         }
 
-        // A single newline is not a paragraph break: the container and
-        // the paragraph stay whole.
         assert_eq!(
             render_wikijump("Para [[span]]A1 one\npara two B2[[/span]] C3"),
             "<p>Para <span>A1 one<br>para two B2</span> C3</p>",
@@ -1078,9 +1025,6 @@ mod tests {
 
     #[test]
     fn wikidot_aligned_image_paragraph_break_keeps_newline_before_bare_run() {
-        // Issue #733: anonymous Wikidot PagePreview for `test--image--basic`
-        // keeps the source newline between a floated image container and a
-        // following unwrapped run as the run's leading text newline.
         assert_eq!(
             render_wikidot(
                 "FLOAT RIGHT [[f>image landscape.jpg]]\n\nEXTERNAL [[image https://example.com/some-image.webp]]",

@@ -18,14 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! This performs the various miscellaneous substitutions that Wikidot does
-//! in preparation for its parsing and handling processes. These are:
-//! * Replacing DOS and legacy Mac newlines
-//! * Trimming whitespace lines
-//! * Concatenating lines that end with backslashes
-//! * Convert tabs to four spaces
-//! * Remove characters discarded by Wikidot's input filter
-//! * Compress groups of 3+ newlines into 2 newlines
 
 use super::Replacer;
 use super::parser_functions::LiteralRegionIndex;
@@ -231,7 +223,6 @@ fn logical_newline_end(characters: &[char], start: usize) -> usize {
         start + 1
     }
 }
-/// Performs all whitespace substitutions in-place in the given text.
 pub fn substitute(text: &mut String) {
     substitute_for_layout(text, false);
 }
@@ -951,12 +942,6 @@ pub(super) fn filter_characters(text: &mut String, preserve_terminal_marker: boo
     LEADING_DOCUMENT_WHITESPACE.replace(text, &mut buffer);
 }
 
-/// Removes line-continuation pairs, including pairs exposed by earlier removals.
-///
-/// The output buffer acts as a stack: a newline cancels the immediately preceding
-/// backslash, whether that backslash was adjacent in the input or exposed by a
-/// previous cancellation. Each character is pushed at most once and popped at
-/// most once, so cascading continuations are handled in linear time.
 fn join_continued_lines(
     text: &mut String,
     buffer: &mut String,

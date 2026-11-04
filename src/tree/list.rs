@@ -26,18 +26,11 @@ use strum_macros::IntoStaticStr;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "item-type")]
 pub enum ListItem<'t> {
-    /// This item is a series of elements.
-    ///
-    /// It's just an item in the list, which may have multiple elements
-    /// similar to any other container.
     Elements {
         attributes: AttributeMap<'t>,
         elements: Vec<Element<'t>>,
     },
 
-    /// This item in the list is a sub-list.
-    ///
-    /// That is, it's another, deeper list within the list.
     SubList {
         #[serde(flatten)]
         element: Box<Element<'t>>,
@@ -70,14 +63,8 @@ impl ListItem<'_> {
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum ListType {
-    /// Bullet lists, or "unordered lists" in HTML.
-    ///
-    /// Corresponds to the tag `<ul>`.
     Bullet,
 
-    /// Numbered lists, or "ordered lists" in HTML.
-    ///
-    /// Corresponds to the tag `<ol>`.
     Numbered,
 
     /// Generic list, which does not have a preferred list type.

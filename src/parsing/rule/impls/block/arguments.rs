@@ -173,8 +173,6 @@ impl<'t> Arguments<'t> {
         self.bare.insert(self.key(key));
     }
 
-    /// Insert an argument whose key was materialized rather than sliced
-    /// from the source (an iftags segment inside the key was resolved).
     pub fn insert_cow(&mut self, key: Cow<'t, str>, value: Cow<'t, str>) {
         self.source_present = true;
         let argument_key = self.key_cow(key);

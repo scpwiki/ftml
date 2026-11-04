@@ -18,14 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! This module is an easter egg.
-//!
-//! It only outputs `later.` and nothing else.
-//! It is a reference to Wikidot's broken `RecentThreads` module
-//! (not to be confused with `MiniRecentThreads`) which only
-//! outputted "later." and no other functionality.
-//!
-//! See <https://twitter.com/wikidotbugs/status/1328588862218702850>
 
 use super::prelude::*;
 

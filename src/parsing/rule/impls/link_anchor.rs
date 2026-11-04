@@ -114,8 +114,6 @@ where
     let url = if url.is_empty() {
         Cow::Borrowed("javascript:;")
     } else {
-        // Wikidot preserves the authored fragment spelling. Wikijump keeps
-        // its normalized, optionally isolated identifier behavior.
         let mut url = str!(url);
         if !parser.settings().layout.legacy() {
             normalize(&mut url);
@@ -184,8 +182,6 @@ where
     let mut copied_until = start;
     let mut without_segments = None::<String>;
 
-    // Materializes the collected name, resolving any iftags segments
-    // that were consumed along the way.
     macro_rules! finish {
         ($end:expr) => {
             match without_segments {
@@ -205,9 +201,6 @@ where
                 parser.step()?;
                 return Ok(finish!(end));
             }
-            // Wikidot typography turns `1 A` into a non-breaking space. It
-            // must retain separator ownership when a comment-elided label
-            // exposes that sequence, as in `[#toc1 A[!--x--]B]`.
             Token::Other if parser.current().slice == "\u{a0}" => {
                 let end = parser.current().span.start;
                 parser.step()?;
@@ -296,10 +289,6 @@ where
                     copied_until = segment.range.end;
 
                     if segment.fused_closer {
-                        // The segment ended inside a fused bracket
-                        // token whose leftover bracket is the link's
-                        // own closing bracket; the token is already
-                        // consumed.
                         return Ok(WikidotAnchorLabel {
                             text: Cow::Owned(without_comments.take().unwrap()),
                             delayed,

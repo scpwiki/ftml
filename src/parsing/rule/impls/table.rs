@@ -577,9 +577,6 @@ fn try_consume_fn<'r, 't>(
                         return finish_simple_table(rows, errors);
                     }
 
-                    // Wikidot recognizes a row that starts with a cell marker
-                    // but never closes it, then discards the incomplete cell
-                    // contents and renders one empty cell.
                     (Token::LineBreak | Token::ParagraphBreak | Token::InputEnd, _)
                         if cells.is_empty() =>
                     {
@@ -621,11 +618,6 @@ fn try_consume_fn<'r, 't>(
                         return finish_simple_table(rows, errors);
                     }
 
-                    // A row whose final cell is never closed keeps its
-                    // completed cells; only the incomplete cell contents
-                    // are discarded. This applies to both layouts: the
-                    // fail fallback here would silently drop the
-                    // completed cells of the row.
                     (Token::LineBreak | Token::ParagraphBreak | Token::InputEnd, _) => {
                         if !cells.is_empty() {
                             if parser.current().token == Token::LineBreak

@@ -126,8 +126,6 @@ fn consume_header_once<'r, 't>(
         parser.push_table_of_contents_entry(heading.level, container.elements());
     }
 
-    // Wikidot joins a footnote that starts the next physical line to the
-    // preceding heading instead of wrapping it in a new paragraph.
     if parser.settings().layout.legacy()
         && content == WikidotHeadingContent::Other
         && parser.current().token == Token::LeftBlock

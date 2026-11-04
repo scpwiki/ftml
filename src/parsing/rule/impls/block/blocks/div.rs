@@ -419,9 +419,6 @@ fn normalize_wikidot_div_elements(elements: &mut Vec<Element<'_>>, flag_score: b
     }
 }
 
-/// Wikidot ignores spaces and tabs between a div head's closing brackets and
-/// the end of its physical line, so `[[div class="a"]]  \n` opens the same
-/// block as `[[div class="a"]]\n`. Spaces followed by body text stay put.
 fn skip_trailing_head_space<'r, 't>(
     parser: &mut Parser<'r, 't>,
     body_start: BlockBodyStart,
@@ -501,10 +498,6 @@ fn parse_fn<'r, 't>(
         && (!arguments.is_empty() || arguments.has_empty_key())
         && parser.has_body_end_block_on_line(&BLOCK_DIV)
     {
-        // Wikidot rejects a root div that does not own its physical line, but
-        // the failed owner does not make the bytes between its markers opaque.
-        // Roll the block attempt back so ordinary downstream inline grammar
-        // can still own bold/link/footnote/span/math syntax in that residual.
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if parser.settings().layout.legacy()
@@ -792,20 +785,12 @@ mod tests {
 
     #[test]
     fn wikidot_div_closes_at_closer_on_quote_line() {
-        // en/1st-cetres-donation and cn/scp-cn-1513's shape: a [[div]] body
-        // ends with a `> ` quote line whose last token is the [[/div]]
-        // closer. Wikidot keeps the quote line as a blockquote inside the
-        // div and closes the div there. Losing the closer makes the body
-        // gather run to the end of the input, swallowing the closer and
-        // everything after it as literal text inside the div.
         let source = "[[div]]\nbody text\n> quoted line [[/div]]\nafter text";
         assert_eq!(
             render_preprocessed_wikidot(source),
             "<div><p>body text</p><blockquote><p>quoted line</p></blockquote></div><br>\nafter text",
         );
 
-        // A quote line carrying only the closer leaves no empty blockquote
-        // behind; the div closes the same way.
         let source = "[[div]]\nbody text\n> [[/div]]\nafter text";
         assert_eq!(
             render_preprocessed_wikidot(source),

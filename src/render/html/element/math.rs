@@ -27,7 +27,6 @@ cfg_if! {
         use crate::render::html::escape::escape;
         use latex2mathml::{latex_to_mathml, DisplayStyle};
     } else {
-        /// Mocked version of the enum from `latex2mathml`.
         #[derive(Debug, Copy, Clone, PartialEq, Eq)]
         enum DisplayStyle {
             Block,
@@ -145,8 +144,6 @@ fn render_latex(
                     });
             }
 
-            // Add LaTeX source (hidden)
-            // Can't use a pre tag because that won't work for inline tags
             ctx.html()
                 .code()
                 .attr(attr!(

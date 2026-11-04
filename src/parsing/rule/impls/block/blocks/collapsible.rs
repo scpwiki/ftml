@@ -79,8 +79,6 @@ where
         parser.get_head_map_with_body_start_wikidot(&BLOCK_COLLAPSIBLE, in_head)?;
     let show_text = arguments.get("show");
     let hide_text = arguments.get("hide");
-    // Wikidot unfolds only these two exact values. Every other present value,
-    // including an empty value, retains the default folded state.
     let start_open = if parser.settings().layout.legacy() {
         matches!(arguments.get("folded").as_deref(), Some("no" | "false"))
     } else {
@@ -230,7 +228,6 @@ fn prepare_wikidot_unfolded_tail(mut elements: Vec<Element<'_>>) -> Vec<Element<
 }
 
 fn parse_hide_location(s: &str, parser: &Parser) -> Result<(bool, bool), ParseError> {
-    // Wikidot treats every unrecognized or differently-cased value as `top`.
     if parser.settings().layout.legacy() {
         return Ok(match s {
             "bottom" => (false, true),
@@ -527,8 +524,6 @@ mod tests {
         );
         let (html, _, _) = render(input);
 
-        // Live Wikidot closes the collapsible at the first closer even though
-        // the span remains active until the following quoted line.
         assert_eq!(
             html.matches("class=\"collapsible-block\"").count(),
             1,
@@ -708,14 +703,6 @@ mod tests {
 
     #[test]
     fn quoted_collapsible_with_trailing_opener_content_closes_at_its_quoted_closer() {
-        // en/nexus-series (and jp/nexus-series): the table of contents is a
-        // quoted collapsible whose opener line carries more content (`[[/size]]`
-        // after the opener). Live Wikidot closes it at the quoted
-        // `> [[/collapsible]]`: the retained html has three collapsible blocks
-        // and all four code blocks on the full page. Before this change the
-        // quoted closer stayed invisible behind its `> ` prefix, the first
-        // collapsible swallowed the page up to the next unquoted closer, and
-        // the later collapsible and its code blocks degraded to literal text.
         let source = concat!(
             "[[# toc]]\n",
             "> [[size larger]] [[collapsible show=\"Table of Contents\" hide=\"Fold\"]] [[/size]]\n",

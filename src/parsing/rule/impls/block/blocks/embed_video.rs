@@ -44,13 +44,6 @@ fn parse_fn<'r, 't>(
     let body_cursor = parser.current().span.start;
     let normal_length = "[[embedvideo]]".len();
     let extra_length = "[[embedvideo]]]".len();
-    // Wikidot ignores spaces and tabs between the embedvideo head's closing
-    // brackets and the end of its physical line (the same convention as the
-    // div head): `[[embedvideo]] \n` opens the same block as
-    // `[[embedvideo]]\n`. The head check therefore runs against the end of
-    // the head itself, before any such trailing whitespace. Whitespace
-    // followed by body text on the same line is not a head ending, so
-    // `[[embedvideo]] X[[/embedvideo]]` stays literal.
     let head_end = source[..body_cursor].trim_end_matches([' ', '\t']).len();
     if head_end < body_cursor {
         let line_rest = source[head_end..].lines().next().unwrap_or("");

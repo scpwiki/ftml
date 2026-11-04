@@ -277,10 +277,6 @@ impl SeamEdit {
     }
 }
 
-/// Whether the last emitted element before a suppression group is a
-/// URL owner (a bare-URL link, or text ending inside a URL) whose
-/// value reaches the group boundary. A dash run at the very start of
-/// the group then continues that URL rather than forming typography.
 fn last_element_is_url_owner(elements: &[Element<'_>]) -> bool {
     match elements.last() {
         Some(Element::Link {
@@ -292,10 +288,6 @@ fn last_element_is_url_owner(elements: &[Element<'_>]) -> bool {
     }
 }
 
-/// A dash run that continues a URL is part of the URL token, not a
-/// typography boundary, so the seam replay must not merge it into an
-/// em dash. Mirrors the tokenizer's URL scan: a scheme prefix whose
-/// body reaches the run without hitting a stop character owns it.
 fn dash_run_is_url_owned(source: &str, run_start: usize) -> bool {
     let head = &source[..run_start];
     let Some(scheme_start) = ["http://", "https://", "ftp://", "mailto:"]

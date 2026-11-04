@@ -596,10 +596,6 @@ fn tokens() {
 
 #[test]
 fn double_bracket_before_color_is_not_an_anchor_opener() {
-    // `[[##` must tokenize as `[[` + `##`: the `#` right after `[[`
-    // belongs to a color token, never to a named anchor (which requires
-    // whitespace after `[[#`) or the delayed conditional (`[[#if`).
-    // The pest oracle must agree with the fast scanner on all of these.
     for input in [
         "##darkred|[[##",
         "**##darkred|[[##**",

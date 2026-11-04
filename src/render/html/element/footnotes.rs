@@ -61,10 +61,6 @@ pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
         return;
     }
 
-    // A footnote reference is phrasing content and is commonly rendered inside a
-    // paragraph. Preserve rich inline markup when possible, but flatten block
-    // footnotes to escaped text for the hover preview. The full footnote block
-    // still renders the original structure below the article.
     let tooltip_text = (!contents.iter().all(|element| {
         !matches!(element, Element::Partial(_)) && element.paragraph_safe()
     }))
@@ -89,10 +85,6 @@ pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
                 ))
                 .contents(&id);
 
-            // Tooltip shown on hover.
-            // Is aria-hidden due to difficulty in getting a simultaneous
-            // tooltip and link to work. A screen reader can still navigate
-            // through to the link and read the footnote directly.
             ctx.html()
                 .span()
                 .attr(attr!(

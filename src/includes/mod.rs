@@ -39,9 +39,6 @@ use regex::{Regex, RegexBuilder};
 use std::sync::LazyLock;
 
 static INCLUDE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    // Wikidot only expands an include immediately following native quote
-    // markers. A horizontal space after `>` makes the marker quoted example
-    // text instead (corpus provenance: scp-wiki/svg-animation).
     RegexBuilder::new(r"^(?:[ \t]*>)*\[\[\s*include\s+")
         .case_insensitive(true)
         .multi_line(true)
@@ -118,9 +115,6 @@ where
                 candidate_end,
             );
             if let Some(parsed) = parsed {
-                // Wikidot consumes a tight quote-prefixed include without
-                // resolving or rendering its target. Spaced quote examples
-                // never reach this branch because the scanner excludes them.
                 consumed_quoted_ranges.push(start..parsed.end);
                 search_start = parsed.end;
                 continue;
@@ -207,10 +201,6 @@ where
         if replace_with.is_empty() {
             output.replace_range(range, "");
         } else {
-            // Wikidot treats an expanded include as its own block run. Add one
-            // line ending on each side that has caller source, turning the
-            // caller's ordinary line ending into a blank-line boundary. Do not
-            // pad a document edge, so an include-only source remains unchanged.
             let before = (range.start > 0).then(|| {
                 if input[..range.start].ends_with("\r\n") {
                     "\r\n"
@@ -269,9 +259,6 @@ fn find_include_end(input: &str, start: usize, end_bound: usize) -> Option<usize
     None
 }
 
-/// Replaces all specified variables in the content to be included.
-///
-/// Read <https://www.wikidot.com/doc-wiki-syntax:include> for more details.
 fn replace_variables(content: &mut String, variables: &VariableMap) {
     let mut matches = Vec::new();
 

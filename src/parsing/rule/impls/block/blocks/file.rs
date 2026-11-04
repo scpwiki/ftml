@@ -220,7 +220,6 @@ mod tests {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
 
-        // Saved-page cases record--a31ae3233a367367f65eb4cb, record--95406cc12956c54f1dd849bf, record--5a933922d44be7b45247533e, and record--c99e6dd95cff0355c4ac6408 produced anchors on Wikidot without uploaded-file state.
         for (source, file, label) in [
             ("[[file elements.tsv]]", "elements.tsv", "elements.tsv"),
             (

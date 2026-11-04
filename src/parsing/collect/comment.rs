@@ -23,10 +23,6 @@ pub(crate) struct CommentElidedText<'t> {
     source: &'t str,
     span: Range<usize>,
     comments: Vec<Range<usize>>,
-    /// Elision ranges for resolved iftags segments, kept apart from
-    /// comments: a comment resets the text that follows it (the
-    /// `getAttrs` key fragment starts after the last comment), while a
-    /// segment merely joins the parts around it.
     segments: Vec<Range<usize>>,
 }
 
@@ -73,8 +69,6 @@ impl<'t> CommentElidedText<'t> {
         &self.segments
     }
 
-    /// Elide only the resolved iftags segment ranges in `range`,
-    /// joining the parts around each one; comments are left in place.
     pub(crate) fn elide_segments_range(&self, range: Range<usize>) -> Cow<'t, str> {
         elide_ranges(self.source, &self.segments, range)
     }
@@ -194,10 +188,6 @@ where
 
         if parser.evaluate_any(closes) {
             let last = parser.current();
-            // A resolved segment at the field's trailing edge can
-            // end inside the closing token, its closer fused with
-            // the field's own closing bracket: the field then ends
-            // at the segment's end, not at the token's start.
             let end = comments
                 .iter()
                 .map(|range: &Range<usize>| range.end)
@@ -224,9 +214,6 @@ where
         } else if parser.current().token == Token::LeftBlock
             && let Some(segment) = iftags_segment_fused(parser)
         {
-            // The token a fused segment ends inside, captured before
-            // consumption moves past it: a caller matching on the
-            // terminating token may need it below.
             let straddle = if segment.fused_closer {
                 std::iter::once(parser.current())
                     .chain(parser.remaining())
@@ -240,17 +227,8 @@ where
             let segment = consume_iftags_segment_fused(parser)?
                 .expect("segment presence was just checked");
 
-            // An iftags segment inside the field resolves where the
-            // block rule cannot run: its elision ranges join the
-            // comments so the materialized text keeps only the body
-            // when the conditions hold, and nothing when they do not.
             comments.extend(segment.elisions());
 
-            // A segment at the field's trailing edge ends inside a
-            // fused bracket token: the token's leftover bracket,
-            // extended by any bracket tokens after it, is this
-            // field's closing run when it spells one of the closing
-            // tokens exactly.
             if let Some(straddle) = straddle {
                 let fused = closes.iter().find_map(|close| match close {
                     ParseCondition::CurrentToken(token) => {
@@ -283,10 +261,6 @@ where
                     return Ok((field, last));
                 }
 
-                // The run overshoots the close (extra authored
-                // brackets) but nothing but brackets remains: the
-                // field ends at the fused token, and the leftover
-                // brackets render as following text.
                 let only_brackets_left = std::iter::once(parser.current())
                     .chain(parser.remaining())
                     .all(|token| {

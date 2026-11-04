@@ -28,15 +28,12 @@ use strum_macros::EnumIter;
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum LinkLocation<'a> {
-    /// This link points to a particular page on a wiki.
     Page(PageRef),
 
-    /// This link is to a specific URL.
     Url(Cow<'a, str>),
 }
 
 impl<'a> LinkLocation<'a> {
-    /// Like `parse()`, but also handles interwiki links.
     pub fn parse_with_interwiki(
         link: Cow<'a, str>,
         settings: &WikitextSettings,
@@ -203,9 +200,6 @@ fn link_location_parse_with_interwiki_expands_known_prefixes() {
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum LinkLabel<'a> {
-    /// Custom text link label.
-    ///
-    /// Can be set to any arbitrary value of the input text's choosing.
     Text(Cow<'a, str>),
 
     /// Page slug-based link label.
@@ -219,14 +213,8 @@ pub enum LinkLabel<'a> {
     /// * `[[[system: Recent Pages]]]`
     Slug(Cow<'a, str>),
 
-    /// URL-mirroring link label.
-    ///
-    /// This is where the label is just the same as the URL.
     Url,
 
-    /// Article title-based link label.
-    ///
-    /// The label for this link is whatever the page's title is.
     Page,
 
     /// Wikidot's empty link label (`[[[target|]]]`).
@@ -252,23 +240,14 @@ impl LinkLabel<'_> {
 #[derive(EnumIter, Serialize, Deserialize, Debug, Hash, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum LinkType {
-    /// This URL was specified directly.
-    ///
-    /// For instance, as a raw URL, or a single-bracket link.
     Direct,
 
-    /// This URL was specified by specifying a particular Wikijump page.
-    ///
-    /// This variant comes from triple-bracket links.
     Page,
 
-    /// This URL was generated via interwiki substitution.
     Interwiki,
 
-    /// This URL points to an anchor elsewhere on this page.
     Anchor,
 
-    /// This URL points to entries on a page in a table of contents.
     TableOfContents,
 }
 

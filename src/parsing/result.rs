@@ -60,12 +60,8 @@ where
     success_value(item.into(), errors, paragraph_safe)
 }
 
-/// One paragraph-split entry: the number of flat elements in the
-/// segment, whether the segment is paragraph-safe, and the boundary
-/// kind.
 pub type ParagraphSplitEntry = (usize, bool, ParagraphSplitKind);
 
-/// The kind of boundary recorded by one paragraph-split entry.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParagraphSplitKind {
     Paragraph,
@@ -83,30 +79,6 @@ where
     pub errors: Vec<ParseError>,
     pub paragraph_safe: bool,
 
-    /// Paragraph-split slot layout for an element batch produced by an
-    /// block whose body crossed one or more paragraph breaks. Each
-    /// entry corresponds to one body segment in order, counts the
-    /// elements of `item` that belong to that segment (an inline
-    /// container contributes 0 or 1 per segment: nothing, or its one
-    /// container for that segment), and records the paragraph safety
-    /// the content gathered in that segment reported. The immediate
-    /// receiver of the result (a paragraph gather or a segmented body
-    /// collection) reads this and ends the current paragraph between
-    /// consecutive segments, pushing each segment with its own safety,
-    /// mirroring how the segments would have been separated and
-    /// classified had the block not consumed the breaks. Producers
-    /// that wrap each segment into a container element broadcast their
-    /// overall safety to every segment, because the wrapped elements
-    /// are what the receiver sees. Receivers that flatten results
-    /// (`chain`, `map`, the tuple conversion) drop the layout, which
-    /// is the correct behavior for content absorbed into another
-    /// element. The third component of each entry is the boundary
-    /// kind: `Paragraph` for an ordinary paragraph boundary, or
-    /// `Item` when the segment is a list item that a kept gate body
-    /// contributed to an enclosing list run (the segment's elements
-    /// are the item's content). Receivers that only form paragraphs
-    /// treat every kind alike; the list and definition-list
-    /// collectors claim leading `Item` entries as items.
     pub paragraph_split: Option<Vec<ParagraphSplitEntry>>,
 
     pub split_close_leftover: Option<String>,
@@ -164,8 +136,6 @@ impl<'r, 't, T> ParseSuccess<'r, 't, T> {
             item: new_item,
             errors,
             paragraph_safe,
-            // Mapping a result absorbs its elements into a new item, so
-            // any paragraph-split layout no longer describes it.
             paragraph_split: None,
             split_close_leftover,
             _ref_marker: PhantomData,

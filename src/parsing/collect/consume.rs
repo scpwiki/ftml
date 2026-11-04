@@ -23,12 +23,6 @@ use super::prelude::*;
 use crate::parsing::{ParagraphSplitEntry, ParagraphSplitKind};
 use crate::tree::PartialElement;
 
-/// Convenience wrapper around `collect()` to consume each token iteration.
-///
-/// Since simply consuming to produce an `Element<'t>` is a typical pattern,
-/// this function implements it here to avoid code duplication.
-///
-/// This call always sets `step_on_final` to `true`.
 fn delimiter_inert_block_head<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -54,12 +48,6 @@ pub fn collect_consume<'r, 't>(
     Ok(success.map(|(elements, _)| elements))
 }
 
-/// Modified form of `collect_consume()` that also returns the last token.
-///
-/// The last token terminating the collection is kept, and returned
-/// to the caller alongside the string slice.
-///
-/// Compare with `collect_text_keep()`.
 pub fn collect_consume_keep<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -138,15 +126,6 @@ impl<'t> CollectSplitEscape<'t> {
     }
 }
 
-/// Like `collect_consume_keep()`, but watches for the first consumed
-/// unit that crosses a paragraph break: a unit carrying a paragraph
-/// split layout contributes only its first segment to the collected
-/// elements, and the remaining segments are returned as an escape; a
-/// unit whose flat elements contain a line break with real content
-/// after it (a kept gate body whose segments were flattened into one
-/// by line-scoped body gathers) escapes at that break instead.
-/// Everything consumed after the escape point joins the last escaped
-/// segment.
 pub fn collect_consume_keep_split<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -308,7 +287,6 @@ pub fn collect_consume_keep_split<'r, 't>(
     Ok(success)
 }
 
-/// Collect elements up to a closing condition without consuming its token.
 pub fn collect_consume_before<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,

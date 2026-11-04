@@ -66,9 +66,6 @@ fn parse_fn<'r, 't>(
             .expect("parsed bibliography opener has closing brackets")
         + "]]".len();
 
-    // A canonical bibliography nested directly in another bibliography is
-    // literal. Wikidot also folds the one physical line break after that
-    // marker into a space before the outer body continues.
     if nested_wikidot_opener {
         let opener = &source[opener_start..opener_end];
         if opener != "[[bibliography]]" {
@@ -85,9 +82,6 @@ fn parse_fn<'r, 't>(
     let title = arguments.get("title");
     let hide = arguments.get_bool(parser, "hide")?.unwrap_or(false);
 
-    // Wikidot commits a bibliography only after finding its closing marker.
-    // Validate before body parsing so an EOF candidate cannot commit delayed
-    // metadata or an invented bibliography container.
     if wikidot_candidate && !parser.has_body_end_block(&BLOCK_BIBLIOGRAPHY) {
         let opener_text = &source[opener_start..opener_end];
         if opener_text[2..].contains("[[") || opener_text.contains("[!--") {
@@ -114,11 +108,6 @@ fn parse_fn<'r, 't>(
         return success_elements_with_paragraph_safety(false, literal, Vec::new());
     }
 
-    // Get body content. Wikidot accepts non-definition content and renders it
-    // directly inside the bibliography container.
-    //
-    // We also discard paragraph_safe, since it's not relevant, and this element
-    // never is (uses <div>).
     let body_start = parser.current().span.start;
     if wikidot_candidate {
         parser.enter_wikidot_bibliography_body();
@@ -243,10 +232,6 @@ mod tests {
 
     #[test]
     fn wikidot_bibliography_closer_accepts_trailing_line_blanks() {
-        // scp-7451's shape: `[[/bibliography]]  ` (trailing spaces) then a
-        // blank line. Live Wikidot renders the bibliography (retained
-        // html.xmlrpc.html has a `bibitems` div). The blank remainder must
-        // behave like the bare closer.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         for blanks in ["", " ", "\t", "  ", " \t"] {

@@ -130,8 +130,6 @@ fn parse_list_block<'r, 't>(
     );
     let (mut elements, errors, _) = body.into();
 
-    // Wikidot recognizes uppercase OL/UL controls, but does not activate the
-    // list wrapper. It keeps the parsed body as an unwrapped block line.
     if wikidot && name != block_rule.accepts_names[0] {
         strip_newlines(&mut elements);
         if fused_close {
@@ -150,7 +148,6 @@ fn parse_list_block<'r, 't>(
         strip_newlines(&mut elements);
     }
 
-    // Wikidot consumes an empty advanced list into a trailing line break.
     if elements.is_empty() {
         if parser.settings().layout.legacy() {
             return if nested {
@@ -200,9 +197,6 @@ fn parse_list_block<'r, 't>(
 
             element if element.is_whitespace() && literal_elements.is_empty() => continue,
 
-            // Wikidot wraps bare list body content in an unstyled synthetic
-            // list item. This is used by real components for shapes such as
-            // `[[ul]]_[[/ul]]`.
             element => literal_elements.push(element),
         }
     }

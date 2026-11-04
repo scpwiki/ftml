@@ -436,9 +436,6 @@ mod tests {
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let output = HtmlRender.render(&tree, &page_info, &settings);
 
-        // Anonymous Wikidot PagePreview emits two ListPages wrappers. Its
-        // provenance-backed raw HTML SHA-256 is
-        // 48a80a2dd6ca8c27d1813e82ed7e0f9a1700214d34095cb81fdefda88344365f.
         assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(
             tree.elements
@@ -503,10 +500,6 @@ mod tests {
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let output = HtmlRender.render(&tree, &page_info, &settings);
 
-        // Anonymous Wikidot PagePreview executes this as the default
-        // ListPages query instead of treating it as CSS. The raw HTML
-        // SHA-256 is
-        // 5884e46ecf111e5e587c9cd0a911fa7bbeefd31b1a9f74021c14141a71f8d1fd.
         assert!(!errors.is_empty());
         assert!(
             !tree
@@ -535,9 +528,6 @@ mod tests {
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let output = HtmlRender.render(&tree, &page_info, &settings);
 
-        // The matching anonymous Wikidot PagePreview is empty; no ListPages
-        // wrapper executes. Its raw HTML SHA-256 is
-        // 545c38b0922de19734fbffde62792c37c2aef6a3216cfa472449173165220f7d.
         assert!(errors.is_empty(), "{errors:#?}");
         assert!(matches!(tree.elements.as_slice(), [Element::Style(_)]));
         assert!(!format!("{tree:?}").contains("Module(ListPages"));

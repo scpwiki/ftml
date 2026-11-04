@@ -70,9 +70,6 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Wikidot only starts a native-list run at the root depth. An indented
-    // marker after another block is literal text until a root marker starts
-    // a new run.
     let mut start_parser = parser.clone();
     if let Some(start_depth) = parse_list_depth(&mut start_parser)? {
         if start_depth > MAX_LIST_DEPTH {
@@ -558,9 +555,6 @@ pub(crate) fn build_list_element(
         }
     }
 
-    // Wikidot discards an empty list marker unless the following, deeper list
-    // makes it an authored parent. Defer pruning until all sub-lists have been
-    // attached so an empty parent remains distinguishable from a skipped depth.
     items.retain(|item| match item {
         ListItem::Elements { elements, .. } => !elements.is_empty(),
         ListItem::SubList { .. } => true,

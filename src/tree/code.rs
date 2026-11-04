@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Structure to represent a code block.
 
 use super::clone::{option_string_to_owned, string_to_owned};
 use std::borrow::Cow;

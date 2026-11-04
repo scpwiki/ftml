@@ -869,10 +869,6 @@ fn page_slot_recovers_image_owner_while_tag_slot_stays_attribute_text() {
 
 #[test]
 fn generated_image_attributes_preserve_implicit_attachment_disposition() {
-    // The generated attribute must not change the file-type disposition that
-    // anonymous Wikidot PagePreview shows for the same authored attribute
-    // (2026-10-11): `.jpeg` keeps the linked medium resize, `.png` stays the
-    // original attachment.
     assert_eq!(
         render_tag(r#"[[=image photo.jpeg alt="%%tags_linked%%"]]"#),
         concat!(
@@ -1734,32 +1730,20 @@ fn delayed_slots_preserve_the_frozen_listpages_owner_boundaries() {
 
 #[test]
 fn right_angle_run_touching_a_suppressed_seam_converts_every_pair() {
-    // Live Wikidot renders a hidden block as if it were absent, so each of these
-    // must equal the typography of the joined text (evidence:
-    // verification/seam-typography/evidence/wikidot-2026-11-01.json).
     assert_eq!(render("a[!-- %%title_linked%% --]>>>>"), "<p>a»»</p>");
     assert_eq!(render("a>[!-- %%title_linked%% --]>>>"), "<p>a»»</p>");
     assert_eq!(render("a>>[!-- %%title_linked%% --]>>>>"), "<p>a»»»</p>");
     assert_eq!(render("\"[!-- %%title_linked%% --]>>>>"), "<p>&quot;»»</p>");
-    // An odd run leaves its last `>` literal, as in joined text.
     assert_eq!(render("a>[!-- %%title_linked%% --]>>>>"), "<p>a»»&gt;</p>");
 }
 
 #[test]
 fn left_angle_and_ellipsis_runs_touching_a_suppressed_seam_convert_with_joined_grouping()
 {
-    // Live Wikidot renders a hidden block as if it were absent, so each of
-    // these must equal the typography of the joined text (evidence:
-    // verification/seam-typography/evidence/wikidot-2026-11-01.json).
     assert_eq!(render("<[!-- %%title_linked%% --]<<<"), "<p>««</p>");
     assert_eq!(render(".[!-- %%title_linked%% --]..."), "<p>….</p>");
     assert_eq!(render(".[!-- %%title_linked%% --]....."), "<p>……</p>");
-    // A run starting exactly at the seam was grouped without its left
-    // neighbour, so a seam flush with the run start counts too.
     assert_eq!(render("a[!-- %%title_linked%% --]..."), "<p>a…</p>");
-    // An authored literal angle quote next to raw angles across a seam
-    // is not regrouped: `<`, `«`, `<` stay as authored. Decoding a
-    // produced `«` back into `<<` would break this case.
     assert_eq!(
         render("<[!-- %%title_linked%% --]\u{ab}<"),
         "<p>&lt;«&lt;</p>",
@@ -1768,11 +1752,6 @@ fn left_angle_and_ellipsis_runs_touching_a_suppressed_seam_convert_with_joined_g
 
 #[test]
 fn runtime_origin_text_stays_a_typography_barrier_at_a_seam() {
-    // Modeled on the runtime--authored cases in
-    // suppressed_delayed_owners_apply_typography_only_across_authored_text:
-    // the `<` from the runtime segment must not group with the authored
-    // `<<` across the suppressed comment. The authored pair still
-    // converts on its own, because its run starts at the seam.
     let source = "runtime-<[!-- %%title_linked%% --]<<";
     let input = page_link_input_with_runtime_prefix(source, "runtime-<");
     assert_eq!(render_input(&input), "<p>runtime-&lt;«</p>");

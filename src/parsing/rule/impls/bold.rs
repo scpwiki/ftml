@@ -62,13 +62,6 @@ fn try_consume_fn<'r, 't>(
     finish_collected(parser, collected)
 }
 
-/// The two `*`s of a bold opener can be split by elided source text
-/// (`*[[iftags -zzz]][[/iftags]]*word**`): live Wikidot resolves the
-/// text before the delimiter forms, so the pair still opens bold.
-/// The shared split scan decides the match on the resolved text: a
-/// kept segment body contributes its text, so a body holding exactly
-/// the second `*` completes the opener, and a body with other text
-/// between the markers is not a bold opener on live either.
 fn try_consume_split_delimiter<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -160,10 +153,6 @@ mod tests {
 
     #[test]
     fn unmatched_bold_does_not_swallow_the_next_block() {
-        // Real shape from cn scp-cn-852-3: dialogue lines pair `**`
-        // around speaker names, and a censorship `***` leaves one
-        // `**` unmatched. It must not pair across the collapsible
-        // boundary; Wikidot renders both collapsibles.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize(concat!(
@@ -192,9 +181,6 @@ mod tests {
 
     #[test]
     fn split_bold_opener_with_kept_segment_body_stays_literal() {
-        // The segment gate passes and its body is kept, so real text
-        // sits between the two s: not a bold opener, matching the
-        // text-level resolution live Wikidot performs.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize("*[[iftags +tale]]YES[[/iftags]]*word**");

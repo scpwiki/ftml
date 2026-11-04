@@ -154,8 +154,6 @@ fn parse_footnote_block<'r, 't>(
     let mut arguments = parser.get_head_map_wikidot(&BLOCK_FOOTNOTE_BLOCK, in_head)?;
 
     let title = arguments.get("title");
-    // Wikidot does not reject the block over an unrecognized `hide`
-    // value; anything outside the boolean vocabulary acts as false.
     let hide = arguments
         .get("hide")
         .map(|value| parse_boolean(value.as_ref()).unwrap_or(false))
@@ -473,13 +471,6 @@ mod tests {
 
     #[test]
     fn wikidot_footnote_closes_at_closer_on_quote_line() {
-        // jp/user-component-policy's shape: a footnote body starts on one
-        // line and its [[/footnote]] closer sits at the end of a following
-        // `> ` quote line. Wikidot keeps the quote line as a blockquote
-        // inside the footnote and closes the footnote there. Losing the
-        // closer makes the body gather run to the end of the input, which
-        // loses the footnote and degrades everything after it (on the
-        // page, the two [[code]] blocks inside the following [[div]]).
         let source = "First[[footnote]] excerpt\n> quoted one [[/footnote]] and second[[footnote]] excerpt two\n> quoted two [[/footnote]] done.\n\n[[div]]\n[[code]]\ncode body\n[[/code]]\n[[/div]]\n\n[[footnoteblock]]";
         let (html, errors) = render_wikidot(source);
 
@@ -501,9 +492,6 @@ mod tests {
 
     #[test]
     fn wikidot_footnote_renders_math_block_in_body() {
-        // Triage shape mx-footnote: the math opener follows body text on the
-        // same line, and text follows [[/math]] on its line. Wikidot closes
-        // the footnote's math at its first [[/math]] regardless.
         let (html, errors) = render_wikidot(
             "Text[[footnote]]note [[math]]\nx^2\n[[/math]] end[[/footnote]] done.\n\n[[footnoteblock]]",
         );
@@ -535,10 +523,6 @@ mod tests {
 
     #[test]
     fn wikidot_footnote_from_table_header_renders_math_block() {
-        // scp-7079's shape: the footnote opens at the end of a table header
-        // line, its body begins with a math block, and text trails the
-        // [[/math]] closer on the same line. Live Wikidot renders the
-        // equation inside the footnote, with the trailing text after it.
         let (html, errors) = render_wikidot(
             "||~ N ||~ x[[footnote]]\n[[math]]\nx^2\n[[/math]] tail\n[[/footnote]]||\n|| a ||\n\n[[footnoteblock]]",
         );

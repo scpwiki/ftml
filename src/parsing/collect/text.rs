@@ -26,11 +26,6 @@ use super::iftags::{
 use super::prelude::*;
 use std::borrow::Cow;
 
-/// Generic function to consume all tokens into a single string slice.
-///
-/// This is a subset of the functionality provided by `collect()`,
-/// as it specifically gathers all the extracted tokens into a string slice,
-/// rather than considering them as special elements.
 #[inline]
 pub fn collect_text<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
@@ -47,12 +42,6 @@ where
     Ok(slice)
 }
 
-/// Modified form of `collect_text()` that also returns the last token.
-///
-/// The last token terminating the collection is kept, and returned
-/// to the caller alongside the string slice.
-///
-/// Compare with `collect_consume_keep()`.
 pub fn collect_text_keep<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
     _rule: Rule,
@@ -101,16 +90,6 @@ where
     }
 }
 
-/// Seam-resolving form of `collect_text_keep()` for raw fields that
-/// the iftags block rule cannot reach (link targets and labels in the
-/// Wikijump layout).
-///
-/// A complete iftags segment inside the field is consumed atomically,
-/// so the whitespace and brackets in its head never terminate or
-/// corrupt the collection, and the returned text keeps only the
-/// segment's body when its conditions hold for the page. When no
-/// segment is present the result is the same borrowed slice
-/// `collect_text_keep()` would return.
 pub fn collect_text_resolved<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
     rule: Rule,
@@ -126,16 +105,6 @@ where
     Ok((text, last))
 }
 
-/// Fused-closer form of `collect_text_resolved()` for block-head
-/// values and link fields. A segment whose closer `]]` directly
-/// abuts the field's own closing brackets is fused by the scanner
-/// into one `RightLink` token; this form still resolves the
-/// segment and then completes the field's closing run from the
-/// fused token's leftover bracket: for a block-head value (the
-/// usual single `RightBlock` condition) a directly following `]`
-/// completes the head's `]]` close, and for a link target or label
-/// the bracket tokens that follow complete its `]` or `]]]` run.
-/// Every other input behaves exactly like `collect_text_resolved()`.
 /// Resolved head text for a bespoke head scan that has already
 /// located the head's closing token itself (the standalone-button
 /// and social scans). Collects from the parser's current position
@@ -191,11 +160,6 @@ where
     Ok((text, last))
 }
 
-/// Like `collect_text_resolved_fused()`, but also reports whether any
-/// iftags segment was consumed while collecting. Callers that dispatch
-/// on the collected text (block names) need this: the head-seam policy
-/// judges a name resolved through a segment differently from one
-/// resolved through comment elision alone.
 pub fn collect_text_resolved_fused_tracked<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
     rule: Rule,
@@ -226,10 +190,6 @@ where
     let mut copied_until = start;
     let mut output = None::<String>;
     let mut segment_consumed = false;
-    // After a fused segment, the source offset at which a `]`
-    // token must start for it to complete the head's close with
-    // the fused token's leftover bracket, and the offset the
-    // collected text ends at (the segment's end).
     let mut fused_close = None::<(usize, usize)>;
 
     loop {
@@ -262,10 +222,6 @@ where
             let end = last.span.start;
             let text = match output {
                 Some(mut output) => {
-                    // The closing token can start inside the last
-                    // resolved segment (a fused trailing edge whose
-                    // bracket run overshoots this close): the
-                    // collected text is already complete then.
                     if end >= copied_until {
                         output.push_str(&source[copied_until..end]);
                     }

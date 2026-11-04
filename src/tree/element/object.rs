@@ -34,13 +34,9 @@ use ref_map::*;
 use std::borrow::Cow;
 use std::num::NonZeroU32;
 
-/// Represents an element to be rendered.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "element", content = "data")]
 pub enum Element<'t> {
-    /// Generic element that contains other elements within it.
-    ///
-    /// Examples would include divs, italics, paragraphs, etc.
     Container(Container<'t>),
 
     /// A Wikidot module being invoked, along with its arguments.
@@ -50,9 +46,6 @@ pub enum Element<'t> {
     /// directly rendered.
     Module(Module<'t>),
 
-    /// An element only containing text.
-    ///
-    /// Should be formatted like typical body text.
     Text(Cow<'t, str>),
 
     /// Raw text.
@@ -74,7 +67,6 @@ pub enum Element<'t> {
     /// is up to the render implementation.
     Email(Cow<'t, str>),
 
-    /// Out-of-band generated List-mode semantics.
     #[serde(skip)]
     Delayed(DelayedElement<'t>),
 
@@ -85,22 +77,16 @@ pub enum Element<'t> {
     /// the legacy hidden div.
     ContentSeparator,
 
-    /// An element representing an HTML table.
     Table(Table<'t>),
 
-    /// An element representing a tabview.
     TabView(Vec<Tab<'t>>),
 
-    /// A typed standalone action control with no authored executable behavior.
     StandaloneButton(StandaloneButton<'t>),
 
-    /// A typed Wikidot social-bookmarking request resolved by the caller.
     SocialButtons(SocialButtons),
 
-    /// An opaque authored `[[embedvideo]]` block resolved by the caller.
     EmbedVideo(EmbedVideo<'t>),
 
-    /// A typed authored `[[gallery]]` request resolved by the caller.
     Gallery(Gallery<'t>),
 
     /// An element representing an arbitrary anchor.
@@ -113,10 +99,6 @@ pub enum Element<'t> {
         elements: Vec<Element<'t>>,
     },
 
-    /// An element representing a named anchor.
-    ///
-    /// This is an area of the page that can be jumped to by name.
-    /// Associated syntax is `[[# name-of-anchor]]`.
     AnchorName(Cow<'t, str>),
 
     /// An element linking to a different page.
@@ -135,7 +117,6 @@ pub enum Element<'t> {
         target: Option<AnchorTarget>,
     },
 
-    /// A link to a file attached to the current or another wiki page.
     FileLink {
         file: Cow<'t, str>,
         label: Cow<'t, str>,
@@ -154,27 +135,18 @@ pub enum Element<'t> {
         target: Option<AnchorTarget>,
     },
 
-    /// An element representing audio and its associated metadata.
-    ///
-    /// The "source" field is the link to the audio itself.
-    ///
     Audio {
         source: FileSource<'t>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
     },
 
-    /// An element representing video and its associated metadata.
-    ///
-    /// The "source" field is the link to the video itself.
-    ///
     Video {
         source: FileSource<'t>,
         alignment: Option<FloatAlignment>,
         attributes: AttributeMap<'t>,
     },
 
-    /// An ordered or unordered list.
     List {
         #[serde(rename = "type")]
         ltype: ListType,
@@ -182,13 +154,8 @@ pub enum Element<'t> {
         items: Vec<ListItem<'t>>,
     },
 
-    /// A definition list.
     DefinitionList(Vec<DefinitionListItem<'t>>),
 
-    /// A radio button.
-    ///
-    /// The "name" field translates to HTML, but is standard for grouping them.
-    /// The "checked" field determines if the radio button starts checked or not.
     RadioButton {
         name: Cow<'t, str>,
         checked: bool,
@@ -203,11 +170,6 @@ pub enum Element<'t> {
         attributes: AttributeMap<'t>,
     },
 
-    /// A collapsible, containing content hidden to be opened on click.
-    ///
-    /// This is an interactable element provided by Wikidot which allows hiding
-    /// all of the internal elements until it is opened by clicking, which can
-    /// then be re-hidden by clicking again.
     #[serde(rename_all = "kebab-case")]
     Collapsible {
         elements: Vec<Element<'t>>,
@@ -227,9 +189,6 @@ pub enum Element<'t> {
         show_bottom: bool,
     },
 
-    /// A table of contents block.
-    ///
-    /// This contains links to sub-headings on the page.
     TableOfContents {
         attributes: AttributeMap<'t>,
         align: Option<Alignment>,
@@ -273,65 +232,49 @@ pub enum Element<'t> {
         hide: bool,
     },
 
-    /// A user block, linking to their information and possibly showing their avatar.
     #[serde(rename_all = "kebab-case")]
     User {
         name: Cow<'t, str>,
         show_avatar: bool,
     },
 
-    /// A date display, showcasing a particular moment in time.
     Date {
         value: DateItem,
         format: Option<Cow<'t, str>>,
         hover: bool,
     },
 
-    /// Element containing colored text.
-    ///
-    /// The validated static CSS color and whether it applies to the background
-    /// are specified, followed by the elements contained within.
     Color {
         color: Cow<'t, str>,
         background: bool,
         elements: Vec<Element<'t>>,
     },
 
-    /// Element containing a code block.
     Code(CodeBlock<'t>),
 
-    /// Element containing a named math equation.
     #[serde(rename_all = "kebab-case")]
     Math {
         name: Option<Cow<'t, str>>,
         latex_source: Cow<'t, str>,
     },
 
-    /// Element containing inline math.
     #[serde(rename_all = "kebab-case")]
     MathInline { latex_source: Cow<'t, str> },
 
-    /// Element referring to an equation elsewhere in the page.
     EquationReference(Cow<'t, str>),
 
-    /// An embedded piece of media or content from elsewhere.
     Embed(Embed<'t>),
 
-    /// Element containing a sandboxed HTML block.
     Html {
         contents: Cow<'t, str>,
         attributes: AttributeMap<'t>,
     },
 
-    /// Element containing an iframe component.
     Iframe {
         url: Cow<'t, str>,
         attributes: AttributeMap<'t>,
     },
 
-    /// Element containing the contents of a page included elsewhere.
-    ///
-    /// From `[[include-elements]]`.
     #[serde(rename_all = "kebab-case")]
     Include {
         paragraph_safe: bool,
@@ -340,23 +283,14 @@ pub enum Element<'t> {
         elements: Vec<Element<'t>>,
     },
 
-    /// A CSS stylesheet.
-    ///
-    /// Corresponds with a `<style>` entity in the body of the HTML.
     Style(Cow<'t, str>),
 
-    /// A newline or line break.
-    ///
-    /// This calls for a newline in the final output, such as `<br>` in HTML.
     LineBreak,
 
-    /// A collection of line breaks adjacent to each other.
     LineBreaks(NonZeroU32),
 
-    /// A "clear float" div.
     ClearFloat(ClearFloat),
 
-    /// A horizontal rule.
     HorizontalRule,
 
     /// A partial element.
@@ -369,7 +303,6 @@ pub enum Element<'t> {
 }
 
 impl Element<'_> {
-    /// Whether this is a typed authored content-section boundary.
     #[inline]
     pub const fn is_content_separator(&self) -> bool {
         matches!(self, Self::ContentSeparator)
@@ -391,7 +324,6 @@ impl Element<'_> {
         }
     }
 
-    /// Returns the Rust name of this `Element` variant.
     pub fn name(&self) -> &'static str {
         match self {
             Element::Container(container) => container.ctype().name(),

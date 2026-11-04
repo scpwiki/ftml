@@ -67,10 +67,6 @@ pub fn render_bibcite(ctx: &mut HtmlContext, label: &str, brackets: bool, inline
                         ctx.push_raw(']');
                     }
 
-                    // Tooltip shown on hover.
-                    // Is aria-hidden due to difficulty in getting a simultaneous
-                    // tooltip and link to work. A screen reader can still navigate
-                    // through to the link and read the bibliography directly.
                     ctx.html()
                         .span()
                         .attr(attr!(

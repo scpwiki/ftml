@@ -29,37 +29,24 @@ use std::borrow::Cow;
 /// context, they are errors are parsing will fail.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum PartialElement<'t> {
-    /// A parse-only empty Wikidot inline owner whose phase remains observable
-    /// until inline-scope lowering decides adjacent whitespace ownership.
     WikidotEmptyInlineOwner,
 
-    /// A parse-only Wikidot inline size scope opener.
     InlineSizeOpen(Cow<'t, str>),
 
-    /// A parse-only Wikidot inline size scope closer.
     InlineSizeClose(Cow<'t, str>),
 
-    /// A parse-only Wikidot inline span scope opener.
     InlineSpanOpen(AttributeMap<'t>),
 
-    /// A parse-only Wikidot inline span scope closer.
     InlineSpanClose(Cow<'t, str>),
 
-    /// An item or sub-list within some list.
     ListItem(ListItem<'t>),
 
-    /// A row within some table.
     TableRow(TableRow<'t>),
 
-    /// A cell within some table row.
     TableCell(TableCell<'t>),
 
-    /// A particular tab within a tab view.
     Tab(Tab<'t>),
 
-    /// Text associated with a Ruby annotation.
-    ///
-    /// Outputs HTML `<rt>`. See also <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ruby>.
     RubyText(RubyText<'t>),
 }
 
@@ -144,10 +131,6 @@ impl PartialElement<'_> {
     }
 }
 
-/// A marker enum counterpart to `PartialElement`.
-///
-/// This is a flag to the parser which designates which
-/// partial (if any) the rule is currently looking to accept.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AcceptsPartial {
     #[default]

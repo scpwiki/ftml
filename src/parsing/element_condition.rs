@@ -21,10 +21,6 @@
 use std::borrow::Cow;
 use strum_macros::IntoStaticStr;
 
-/// Representation of a single condition to determine element presence.
-///
-/// A list of these constitutes a full condition specification, and is
-/// used in blocks like `[[iftags]]` and `[[ifcategory]]`.
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ElementCondition<'t> {
     #[serde(rename = "condition")]
@@ -40,10 +36,6 @@ impl<'t> ElementCondition<'t> {
         }
     }
 
-    /// Parse out a specification.
-    ///
-    /// The specification is a space separated list of strings, prefixed with
-    /// either `+` or `-` or nothing.
     pub fn parse(raw_spec: &'t str) -> Vec<ElementCondition<'t>> {
         let mut conditions = Vec::new();
         for spec in raw_spec.split(' ').filter(|s| !s.is_empty()) {
@@ -83,13 +75,6 @@ impl<'t> ElementCondition<'t> {
         }
     }
 
-    /// Determines if this condition is satisfied.
-    ///
-    /// * `ElementConditionType::Required` -- All values of this kind must be present.
-    /// * `ElementConditionType::Prohibited` -- All values of this kind must be absent.
-    /// * `ElementConditionType::Present` -- Some values of this kind must be present.
-    ///
-    /// The full logic is essentially `all(required) && any(present) && all(prohibited)`.
     pub fn check(conditions: &[ElementCondition], values: &[Cow<str>]) -> bool {
         let mut required = true;
         let mut prohibited = true;

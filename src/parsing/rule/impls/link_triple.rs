@@ -47,9 +47,6 @@ pub const RULE_LINK_TRIPLE_NEW_TAB: Rule = Rule {
 fn link<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     let source_start = parser.current().span.start;
     assert_step(parser, Token::LeftLink)?;
-    // Wikidot recognizes an inline span following a literal '[' before it
-    // considers a triple link. Reuse the block parser, including its normal
-    // argument sanitization, closer ownership, and recursion budget.
     if parser.settings().layout.legacy()
         && parser.current().token == Token::Identifier
         && parser.current().slice.eq_ignore_ascii_case("span")
@@ -331,7 +328,6 @@ fn build_separate<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     };
 
-    // Wikidot derives an empty external-link label from its normalized URL slug.
     let label = if label.is_empty() && legacy {
         let mut normalized = str!(url.as_ref());
         if normalized.starts_with(':') {
@@ -495,10 +491,6 @@ where
                 }
                 return match visible_label {
                     Some(mut label) => {
-                        // The closing token can start inside the
-                        // last resolved segment (a fused trailing
-                        // edge whose bracket run overshoots this
-                        // close): the label is already complete.
                         if end >= segment_start {
                             label.push_str(&source[segment_start..end]);
                         }
@@ -610,9 +602,6 @@ where
                 }
                 segment_start = segment.range.end;
 
-                // A segment at the label's trailing edge ends inside
-                // the fused `]]]` token: the run it starts is this
-                // label's own closing run.
                 if segment.fused_closer {
                     match complete_fused_bracket_close(parser, "]]]") {
                         Some(last) => {
@@ -629,13 +618,6 @@ where
                             return Err(parser.make_err(ParseErrorKind::RuleFailed));
                         }
                         None => {
-                            // The bracket run overshoots the close
-                            // (extra authored brackets) but nothing
-                            // but brackets remains: the label is
-                            // complete; the leftover brackets render
-                            // as following text. Otherwise the run's
-                            // first bracket was label text and the
-                            // collection continues below.
                             let only_brackets_left = std::iter::once(parser.current())
                                 .chain(parser.remaining())
                                 .all(|token| {
@@ -707,17 +689,6 @@ fn wikidot_target(
     }
 }
 
-/// Transliterate a non-ASCII triple-link target the way live Wikidot does.
-///
-/// The mechanism is NFKD decomposition with combining marks removed (which
-/// strips diacritics: `café` becomes `cafe`), plus a standard Russian
-/// Cyrillic table (`документ` becomes `dokument`). Precomposed Cyrillic
-/// letters with marks (`ё`, `й`) decompose to their base letters first, so
-/// they need no table entries of their own.
-///
-/// Returns `None` when any character has no transliteration, so the caller
-/// keeps the existing empty-slug fallback. That preserves the live-pinned
-/// CJK behavior (`[[[日本語|Label]]]` links to `/`).
 fn transliterate_triple_target(url: &str) -> Option<String> {
     let mut transliterated = String::with_capacity(url.len());
 
@@ -737,12 +708,6 @@ fn transliterate_triple_target(url: &str) -> Option<String> {
     Some(transliterated)
 }
 
-/// Transliterate a triple-link anchor character by character.
-///
-/// Unlike page targets, anchors keep characters that have no
-/// transliteration (such as CJK): the render layer percent-encodes them,
-/// matching live (`page#café` links to `/page#cafe`, while
-/// `page#日本語セクション` links to `/page#%E6%97%A5...`).
 fn transliterate_triple_anchor(anchor: &str) -> String {
     let mut transliterated = String::with_capacity(anchor.len());
 
@@ -766,9 +731,6 @@ fn transliterate_triple_anchor(anchor: &str) -> String {
     transliterated
 }
 
-/// Unicode format characters (general category Cf). Live Wikidot's page
-/// slug rule treats them as separators, the way it treats spaces, while
-/// anchors keep them as authored characters.
 fn is_format_character(character: char) -> bool {
     matches!(
         character,
@@ -807,14 +769,6 @@ fn is_transliteration_combining_mark(character: char) -> bool {
     )
 }
 
-/// Standard Russian Cyrillic transliteration for triple-link targets.
-///
-/// Only the letters pinned by the frozen captures are live-evidenced
-/// (`документ` covers д, о, к, у, м, е, н, т); the remaining letters follow
-/// the standard transliteration of the modern Russian alphabet so the table
-/// is coherent. The hard and soft signs have no Latin form and are dropped.
-/// Non-Russian Cyrillic letters are not covered and keep the empty-slug
-/// fallback.
 fn transliterate_cyrillic(character: char) -> Option<&'static str> {
     match character {
         'а' | 'А' => Some("a"),
@@ -931,18 +885,6 @@ fn parse_link_location<'r, 't>(
     }
 
     if !url.is_ascii() && !is_url(&url) {
-        // Live Wikidot transliterates non-ASCII page targets instead of
-        // dropping them (wikijump#3295): `[[[документ]]]` links to
-        // `/dokument` and `[[[café]]]` to `/cafe`, while the display label
-        // keeps the original text. Page targets with no transliteration
-        // (e.g. CJK, pinned by live evidence to an empty slug) keep the
-        // fallback below.
-        //
-        // Only the page portion goes through that all-or-nothing
-        // transliteration. An anchor is not a slug: live percent-encodes a
-        // non-ASCII anchor as UTF-8 (`page#日本語セクション` links to
-        // `/page#%E6%97%A5...`), so a CJK anchor must not discard the whole
-        // target the way an untransliterable page name does.
         let (page_part, anchor_part) = match url.split_once('#') {
             Some((page, anchor)) => (page, Some(anchor)),
             None => (url.as_ref(), None),
@@ -980,9 +922,6 @@ fn parse_link_location<'r, 't>(
 }
 
 fn strip_category(url: &str) -> Option<&str> {
-    // A URL scheme colon is not a Wikidot page-category separator. Live
-    // Wikidot keeps the complete URL as the default label for both ordinary
-    // and new-tab unlabeled external triple links.
     if is_url(url) {
         return None;
     }
@@ -1058,7 +997,6 @@ fn test_transliterate_triple_target() {
         }};
     }
 
-    // Live-evidenced mappings (wikijump#3295 frozen captures).
     test!("документ", Some("dokument"));
     test!("café", Some("cafe"));
 
@@ -1093,13 +1031,10 @@ fn test_transliterate_triple_anchor() {
         };
     }
 
-    // Characters with a transliteration are transliterated, as before.
     test!("café", "cafe");
     test!("документ", "dokument");
     test!("Section Title", "Section Title");
 
-    // Characters with no transliteration are kept, not dropped:
-    // the render layer percent-encodes them, like live.
     test!("日本語セクション", "日本語セクション");
     test!("Section日本", "Section日本");
     test!("ß", "ß");
@@ -1132,9 +1067,6 @@ mod wikidot_tests {
 
     #[test]
     fn wikidot_star_external_triple_links_open_a_new_tab() {
-        // Live anonymous PagePreviewModule provenance:
-        // listpages-synchronized-final-20260730/actionable-23-references-20260731.jsonl,
-        // case jp:neko-sagashi:L17:B190.
         let html = render(concat!(
             "[[[*http://ja.scp-wiki.net/scp-040-jp |ねこでした。]]] ",
             "[[[http://ja.scp-wiki.net/scp-040-jp |ordinary]]]",

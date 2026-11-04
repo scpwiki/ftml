@@ -61,10 +61,6 @@ fn try_consume_fn<'r, 't>(
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
-    // The spec fields are collected with iftags segments resolved: a
-    // segment inside the `##...|` spec is resolved on live Wikidot
-    // before the spec is read, so `##c[[iftags -zzz]][[/iftags]]00|`
-    // names the color `c00`.
     let (first_field, first_terminator) =
         collect_text_resolved(parser, RULE_COLOR, color_close, &color_invalid, None)?;
     let mut body_pipe_prefix = (legacy && is_table_column_token(first_terminator.token))
@@ -373,14 +369,6 @@ pub(crate) fn normalize_wikidot_color(color: &str) -> Option<Cow<'_, str>> {
     parsed.ok().map(|_| Cow::Borrowed(color))
 }
 
-/// Whether the value is a well-formed CSS `var()` reference:
-/// `var(--custom-property)` or `var(--custom-property, <fallback>)`,
-/// where the fallback may itself contain nested functions.
-///
-/// The accepted value is emitted verbatim into a `style` attribute,
-/// so it must not contain characters that could break out of the
-/// declaration (the same exclusion set as `is_safe_color`), and its
-/// parentheses must balance.
 fn is_css_var_reference(color: &str) -> bool {
     let Some(inner) = color
         .strip_prefix("var(")

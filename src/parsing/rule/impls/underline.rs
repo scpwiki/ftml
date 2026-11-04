@@ -126,10 +126,6 @@ mod tests {
 
     #[test]
     fn unmatched_underline_does_not_swallow_the_next_block() {
-        // A collapsible whose body ends in an unmatched `__`, followed
-        // by a collapsible whose body underlines a word. The unmatched
-        // delimiter must not pair across the block boundary; Wikidot
-        // renders both collapsibles.
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize(concat!(

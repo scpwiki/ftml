@@ -45,14 +45,6 @@ fn try_consume_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
         }
 
-        // Live Wikidot pairs an iftags gate with a closer inside a
-        // comment: the pairing search sees into comments even though
-        // raw-bodied blocks stay opaque to it. While a hidden gate
-        // body is discarded, stop the comment at the designated end so
-        // the discard ends there and the comment's remainder past the
-        // closer is ordinary following content. (In a kept body the
-        // comment is consumed whole, as the spliced text completes it
-        // there.)
         if parser.discarding_hidden_body()
             && parser
                 .wikidot_iftags_body_end()
@@ -69,10 +61,6 @@ fn try_consume_fn<'r, 't>(
         trace!("Received token '{}' inside comment", token.name());
 
         match token {
-            // Wikidot accepts any run of at least two hyphens immediately
-            // followed by `]` as a comment closer while it is scanning a
-            // comment. Keep this contextual: outside a comment, longer runs
-            // retain their ordinary dash and horizontal-rule tokenization.
             _ if let Some(token_count) = comment_closer_token_count(parser) => {
                 trace!("Reached Wikidot comment closer, returning");
                 parser.step_n(token_count)?;

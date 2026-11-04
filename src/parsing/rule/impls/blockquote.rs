@@ -155,8 +155,6 @@ fn try_consume_fn<'r, 't>(
         let (depth, absolute_depth) = parser.native_blockquote_depths(physical_depth);
         debug_assert!(depth > 0, "residual quote depth must be positive");
         parser.step()?;
-        // Wikidot distinguishes an empty `> ` row, which separates quoted
-        // paragraphs, from an empty `>` row, which has no rendering effect.
         let single_space_after_marker = parser.current().slice == " ";
         let spaced_after_marker = parser.current().token == Token::Whitespace;
         let pre_space = parser.clone();
@@ -176,8 +174,6 @@ fn try_consume_fn<'r, 't>(
             });
         parser.get_optional_space()?;
         if parser.current().token != Token::Quote {
-            // Wikidot only counts contiguous quote markers toward native depth.
-            // A marker after horizontal space is literal quoted content.
             parser.mark_virtual_start_of_line();
         }
         let content_start = parser.current().span.start;
@@ -314,7 +310,6 @@ fn try_consume_fn<'r, 't>(
             && !stopped_at_div_close
             && gate_escaped_segments.is_empty();
 
-        // A multiline inline child can finish on a later quoted row. Wikidot keeps the next quoted row in the same native blockquote after that child's trailing line break.
         let row_is_empty = elements.is_empty() && errors.len() == errors_before;
         let mut absorbed_unquoted_footnote = false;
         if parser.settings().layout.legacy() && starts_footnote(parser) {
@@ -496,14 +491,6 @@ fn try_consume_fn<'r, 't>(
     result
 }
 
-/// Whether the parser sits at a `[[/footnote]]` end block that belongs to
-/// an enclosing footnote body.
-///
-/// In the Wikidot layout a footnote body may span quote lines, and its
-/// closer may sit on one of those lines. The quote line's own collection
-/// must stop there so the enclosing footnote's end-block check can see
-/// the closer; consuming it as quote content loses the footnote, and the
-/// failed body gather then degrades the rest of the page.
 fn wikidot_footnote_close_ahead<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,
@@ -511,15 +498,6 @@ where
     parser.in_footnote() && wikidot_named_close_ahead(parser, "footnote")
 }
 
-/// Whether the parser sits at a `[[/div]]` end block that belongs to an
-/// enclosing div body.
-///
-/// In the Wikidot layout a div body may span quote lines, and its closer
-/// may sit on one of those lines. The quote line's own collection must
-/// stop there so the enclosing div's end-block check can see the closer;
-/// consuming it as quote content loses the div, which then closes only
-/// at the end of the input and pulls everything after the closer into
-/// the div.
 fn wikidot_div_close_ahead<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,
@@ -527,8 +505,6 @@ where
     parser.in_wikidot_div_body() && wikidot_named_close_ahead(parser, "div")
 }
 
-/// Whether the parser sits at an end block with the given name, in the
-/// Wikidot layout.
 fn wikidot_named_close_ahead<'r, 't>(parser: &Parser<'r, 't>, name: &str) -> bool
 where
     'r: 't,
@@ -1358,9 +1334,6 @@ mod tests {
     fn native_blockquote_line_rules_do_not_trigger_combinatorial_div_retries() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-        // Reduced from EN:anomalous-entity-engagement-division-hub
-        // (source SHA-256 19ceb79035996a7c70df15cbcfc49ebe4833147aef4343b43ae77786f43e5f04),
-        // which repeats div-wrapped native quote lines throughout its tabview.
         let cases = [
             ("= Centered corpus quote", "text-align: center;"),
             ("+ Quoted heading", "<h1"),

@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Context-free Wikidot parser-function orchestration.
 
 mod expression;
 mod literal;
@@ -32,24 +31,16 @@ const MAX_PARSER_FUNCTION_NESTING: usize = 1_024;
 const MAX_UNMATCHED_DELIMITERS: usize = MAX_DOCUMENT_CANDIDATES;
 const MAX_CONDITIONAL_SCAN_MULTIPLIER: usize = 32;
 
-/// Policy for arithmetic division or remainder operations with a zero divisor.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WikidotZeroOperatorPolicy {
-    /// Emit Wikidot's runtime error for a zero divisor.
     #[default]
     RuntimeError,
 
-    /// Replace that operator's result with zero, then continue evaluation.
-    ///
-    /// This supports callers with an independently evidenced compatibility
-    /// policy without maintaining a second expression evaluator.
     ReplaceOperationWithZero,
 }
 
-/// Context-free parser-function evaluation options.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WikidotParserFunctionOptions {
-    /// Behavior of `/` and `%` when their right-hand operand is zero.
     pub zero_operator_policy: WikidotZeroOperatorPolicy,
 }
 

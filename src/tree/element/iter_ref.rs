@@ -35,7 +35,6 @@ impl<'e, 't> IntoIterator for &'e Elements<'t> {
     }
 }
 
-/// Borrowed iterator implementation for `Elements`.
 #[derive(Debug)]
 pub enum BorrowedElementsIterator<'e, 't> {
     None,

@@ -18,19 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Perform Wikidot's typographical modifications.
-//! For full information, see the original source file:
-//! <https://github.com/gabrys/wikidot/blob/master/lib/Text_Wiki/Text/Wiki/Parse/Default/Typography.php>
-//!
-//! The transformations performed here are listed:
-//! * `` .. '' to fancy double quotes
-//! * ` .. ' to fancy single quotes
-//! * ,, .. '' to fancy lowered double quotes
-//! * ... to an ellipsis
-//!
-//! Em dash conversion was originally implemented here, however
-//! it was moved to the parser to prevent typography from converting
-//! the `--` in `[!--` and `--]` into em dashes.
 
 use super::Replacer;
 use super::parser_functions::LiteralRegionIndex;
@@ -534,7 +521,6 @@ fn replace_unit_spaces(text: &mut String, protected: &[Range<usize>]) {
     }
 }
 
-/// Performs all typographic substitutions in-place in the given text
 pub fn substitute(text: &mut String) {
     let mut buffer = String::new();
     replace_native_quotes(&NATIVE_DOUBLE_QUOTES, text, &mut buffer);
@@ -606,20 +592,6 @@ pub fn substitute_wikidot(text: &mut String) {
     substitute_wikidot_impl(text, false);
 }
 
-/// Wikidot typography for the legacy preprocess path.
-///
-/// Like [`substitute_wikidot`], except that a maximal `<` run or
-/// dot-and-space run starting directly after the `]]` of an opener or
-/// closer of a balanced, non-literal `[[iftags]]` pair is left
-/// unconverted. Whether the block is shown or hidden is only known
-/// after parsing; if it is hidden, grouping that run from its left
-/// neighbour is the seam code's job, and if it is shown with a
-/// pure-text body, the typography boundary around the body lets the
-/// same seam code regroup it. Grouping is left to right, so a run
-/// ending at a conditional block is already grouped correctly and is
-/// not deferred: only the left edge of a run needs deferral. Only the
-/// `<<` and ellipsis replacements are held back; digit and unit
-/// spacing are unchanged. This entry is idempotent.
 pub(crate) fn substitute_wikidot_deferring_conditionals(text: &mut String) {
     substitute_wikidot_impl(text, true);
 }
@@ -651,18 +623,6 @@ fn substitute_wikidot_impl(text: &mut String, defer_conditionals: bool) {
     }
 }
 
-/// Byte ranges of the character runs deferred by
-/// [`substitute_wikidot_deferring_conditionals`]: the maximal `<+` run
-/// or the maximal `[. ]+` run starting directly after the `]]` of an
-/// opener or closer belonging to a balanced `[[iftags]]` pair.
-///
-/// The scan is a balanced-stack scan, not a search for any opener with
-/// a later closer: a stray closer pairs with nothing, an opener left
-/// on the stack at the end of the text pairs with nothing, and tags
-/// inside literal regions (for example `[[code]]` bodies or `@@`
-/// escapes) do not participate. Only `iftags` is scanned:
-/// `[[ifcategory]]` renders literally under the Wikidot layout, so it
-/// never forms a seam.
 fn conditional_deferral_spans(text: &str) -> Vec<Range<usize>> {
     let literal_regions = LiteralRegionIndex::for_typography(text);
     let lower = text.to_ascii_lowercase();
@@ -713,7 +673,6 @@ fn conditional_deferral_spans(text: &str) -> Vec<Range<usize>> {
                 .bytes()
                 .take_while(|byte| *byte == b'.' || *byte == b' ')
                 .count();
-            // A spaces-only span holds no ellipsis match; it is not a run.
             if rest[..len].contains('.') {
                 spans.push(edge..edge + len);
             }
@@ -769,10 +728,6 @@ fn replace_angle_quotes_in_segment_deferring(
     output: &mut String,
     buffer: &mut String,
 ) {
-    // Hold back only the `<<` replacement inside deferred spans. The
-    // right-angle pass runs on the whole segment afterwards, so its
-    // slice-start eligibility is unchanged: a `>>` following a deferred
-    // `<` still sees a non-newline predecessor.
     let mut converted = String::with_capacity(segment.len());
     let segment_end = segment_start + segment.len();
     let mut cursor = 0usize;
@@ -846,13 +801,6 @@ pub(crate) fn wikidot_seam_edits(text: &str, seams: &[usize]) -> Vec<WikidotSeam
 
     for candidate in LEFT_ANGLE_QUOTES.regex().find_iter(text) {
         let range = candidate.range();
-        // Expand the match to its maximal `<` run. A match is accepted
-        // when that run touches or contains a seam (a seam at either
-        // run end counts), so a run left raw by the preprocess
-        // deferral at the start of a segment converts with joined-text
-        // grouping: the regex enumerates the run's pairs left to
-        // right, which is exactly the joined grouping. Typography
-        // never produces `<`, so each `<` here is authored text.
         let bytes = text.as_bytes();
         let mut run_start = range.start;
         while run_start > 0 && bytes[run_start - 1] == b'<' {
@@ -889,13 +837,6 @@ pub(crate) fn wikidot_seam_edits(text: &str, seams: &[usize]) -> Vec<WikidotSeam
     for captures in HORIZONTAL_ELLIPSIS.regex().captures_iter(text) {
         let candidate = captures.name("repl").unwrap();
         let range = candidate.range();
-        // Expand the match to its maximal run of `.` and space
-        // characters (the spaced-ellipsis family), and accept the
-        // match when that run touches or contains a seam, as for the
-        // left-angle run above. Every regex match inside such a run
-        // is enumerated by this same loop, so the whole run converts
-        // with joined-text grouping. Typography never produces `.`,
-        // so each `.` here is authored text.
         let bytes = text.as_bytes();
         let mut run_start = range.start;
         while run_start > 0 && matches!(bytes[run_start - 1], b'.' | b' ') {
@@ -1002,10 +943,6 @@ fn range_crosses_seam(range: &Range<usize>, seams: &[usize]) -> bool {
     seams.get(candidate).is_some_and(|seam| *seam < range.end)
 }
 
-/// Whether any seam lies inside the run `start..end` or at either of
-/// its ends. Unlike [`range_crosses_seam`], a seam flush with a run
-/// boundary counts: a run that starts or ends exactly at a seam was
-/// grouped without its other side.
 fn seam_touches_run(start: usize, end: usize, seams: &[usize]) -> bool {
     let candidate = seams.partition_point(|seam| *seam < start);
     seams.get(candidate).is_some_and(|seam| *seam <= end)
@@ -1481,8 +1418,6 @@ fn wikidot_angle_quotes_respect_literal_and_link_owners() {
 fn deferring_conditionals_holds_back_only_left_edge_runs() {
     use super::test::test_substitution;
 
-    // Runs starting directly after an opener or a closer of a balanced
-    // iftags pair stay raw; every other conversion still applies.
     const DEFERRED_CASES: [(&str, &str); 8] = [
         (
             "<[[iftags +zz-no-such-tag]]x[[/iftags]]<<<",
@@ -1528,9 +1463,6 @@ fn deferring_conditionals_holds_back_only_left_edge_runs() {
 fn deferring_conditionals_still_converts_undeferred_runs() {
     use super::test::test_substitution;
 
-    // None of these runs follows a balanced, non-literal iftags pair,
-    // so the deferring entry converts them exactly like
-    // `substitute_wikidot`.
     const CONVERTED_CASES: [(&str, &str); 9] = [
         ("[[/iftags]]...", "[[/iftags]]\u{2026}"),
         ("[[/iftags]]<<<", "[[/iftags]]\u{ab}<"),
@@ -1585,10 +1517,6 @@ fn deferring_conditionals_is_idempotent_and_public_call_undoes_deferral() {
         substitute_wikidot_deferring_conditionals(&mut twice);
         assert_eq!(once, twice, "deferring entry must be idempotent: {source}");
 
-        // Deepwell's row path typographs the whole template with the
-        // public function after preprocess; running the public
-        // function after the deferring entry must give exactly what
-        // the public function alone gives today.
         let mut deferred_then_public = once.clone();
         substitute_wikidot(&mut deferred_then_public);
         let mut public_only = source.to_owned();
@@ -1599,8 +1527,6 @@ fn deferring_conditionals_is_idempotent_and_public_call_undoes_deferral() {
         );
     }
 
-    // The public function takes self-contained text and still
-    // converts a run after a stray closer.
     let mut stray = "[[/iftags]]...".to_owned();
     substitute_wikidot(&mut stray);
     assert_eq!(stray, "[[/iftags]]\u{2026}");
@@ -1608,7 +1534,6 @@ fn deferring_conditionals_is_idempotent_and_public_call_undoes_deferral() {
 
 #[test]
 fn seam_edits_expand_runs_touching_a_seam() {
-    // A seam at the start of a run counts.
     assert_eq!(
         wikidot_seam_edits("<<<", &[0]),
         vec![WikidotSeamEdit {
@@ -1616,7 +1541,6 @@ fn seam_edits_expand_runs_touching_a_seam() {
             replacement: "\u{ab}",
         }],
     );
-    // A seam at the end of a run counts.
     assert_eq!(
         wikidot_seam_edits("...", &[3]),
         vec![WikidotSeamEdit {
@@ -1624,7 +1548,6 @@ fn seam_edits_expand_runs_touching_a_seam() {
             replacement: "\u{2026}",
         }],
     );
-    // A spaced ellipsis whose run touches a seam converts.
     assert_eq!(
         wikidot_seam_edits(". . .", &[0]),
         vec![WikidotSeamEdit {
@@ -1632,11 +1555,7 @@ fn seam_edits_expand_runs_touching_a_seam() {
             replacement: "\u{2026}",
         }],
     );
-    // An authored literal mixed with raw angles across a seam is not
-    // regrouped: `<` and `<` here are not adjacent in the joined text.
     assert!(wikidot_seam_edits("<\u{ab}<", &[1]).is_empty());
-    // A run that does not touch any seam is left alone, while a seam
-    // flush with the end of a run does count.
     assert!(wikidot_seam_edits("a<<<b", &[0]).is_empty());
     assert_eq!(wikidot_seam_edits("<<<", &[3]).len(), 1);
 }

@@ -22,20 +22,6 @@ use super::prelude::*;
 use crate::parsing::collect::collect_consume;
 use crate::tree::{AttributeMap, Container, ContainerType, Element};
 
-/// Generic function to consume tokens into a container.
-///
-/// This is a subset of the functionality provided by `collect`,
-/// as it builds `Container`s specifically.
-///
-/// The arguments which differ from `collect` are listed:
-/// See that function for full documentation, as the call here
-/// mostly wraps it.
-///
-/// This call always sets `step_on_final` to `true`.
-///
-/// The kind of container we're building:
-/// Must match the parse rule.
-/// * `container_type`
 pub fn collect_container<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,

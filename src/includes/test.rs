@@ -548,11 +548,6 @@ fn include_rejects_includer_page_ref_mismatch() {
 
 #[test]
 fn include_swallowed_by_multiline_argument_does_not_overlap() {
-    // A multiline argument value only terminates at "]]" before a newline,
-    // so the first block swallows the second include's opening. The second
-    // regex match must be skipped as part of the first block's argument,
-    // not substituted as an overlapping range (previously panicked with
-    // "range end index out of range"; see wikijump#257).
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let text = "[[include component:info\n\
                 |comments=some text\n\
@@ -647,8 +642,6 @@ fn spaced_quoted_include_with_crlf_remains_literal() {
 
 #[test]
 fn svg_animation_spaced_self_include_examples_remain_literal() {
-    // Corpus provenance: scp-wiki/svg-animation. Wikidot renders these as
-    // visible example text instead of recursively including the current page.
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let input = concat!(
         "> [[include :scp-wiki:svg-animation |oneiroi=true|width=100%]]\n",
@@ -697,13 +690,6 @@ fn quoted_include_scanner_handles_many_one_line_includes_in_bounded_time() {
 
 #[test]
 fn include_tolerates_stray_open_brackets_before_arguments() {
-    // Four pages in the imported Wikidot corpus (scp-9507, scp-6823, scp-7446,
-    // fragment:scp-9988-2) write a bare "[[" on the line after the page
-    // reference. Live Wikidot discards it, parses every argument, and shows no
-    // bracket: scp-9507 renders
-    // <div class="anom-bar-container item-9507-D clear-3 Decommissioned …">.
-    // Previously the grammar rejected the block and the directive was left
-    // literal, so the raw include text appeared in the article body.
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
     let text = "[[include :scp-wiki:component:anomaly-class-bar-source\n\
                 [[\n\

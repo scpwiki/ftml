@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//! Representation of generic syntax elements which wrap other elements.
 
 use super::clone::elements_to_owned;
 use super::{Alignment, AttributeMap, Element, Heading, HtmlTag};
@@ -177,9 +176,6 @@ impl ContainerType {
         }
     }
 
-    /// Determines if this container type is able to be embedded in a paragraph.
-    ///
-    /// See `Element::paragraph_safe()`, as the same caveats apply.
     #[inline]
     pub fn paragraph_safe(self) -> bool {
         match self {

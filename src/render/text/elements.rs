@@ -194,9 +194,6 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         }
         Element::TableOfContents { .. } => {}
         Element::Footnote(index) => {
-            // A footnote reference has no plain-text form of its own, but
-            // in a heading title (table-of-contents entries) it reads as
-            // its number, matching the text the rendered heading shows.
             if ctx.title_mode() {
                 ctx.push_str(&index.to_string());
             }
