@@ -224,6 +224,63 @@ fn normalize_sequence_scoped<'t>(
     }
 
     lower_dash_runs(elements);
+    substitute_number_unit_spaces(elements);
+}
+
+fn substitute_number_unit_spaces<'t>(elements: &mut [Element<'t>]) {
+    let mut start = 0;
+    while start < elements.len() {
+        if !matches!(elements[start], Element::Text(_)) {
+            start += 1;
+            continue;
+        }
+        let mut end = start + 1;
+        while end < elements.len() && matches!(elements[end], Element::Text(_)) {
+            end += 1;
+        }
+        let mut joined = String::new();
+        for element in &elements[start..end] {
+            let Element::Text(text) = element else {
+                unreachable!();
+            };
+            joined.push_str(text);
+        }
+        let positions = crate::preproc::typography::wikidot_nbsp_space_positions(&joined);
+        if !positions.is_empty() {
+            let mut position_iter = positions.into_iter().peekable();
+            let mut base = 0usize;
+            for element in &mut elements[start..end] {
+                let Element::Text(text) = element else {
+                    unreachable!();
+                };
+                let span_end = base + text.len();
+                let mut local = Vec::new();
+                while let Some(&position) = position_iter.peek() {
+                    if position >= span_end {
+                        break;
+                    }
+                    position_iter.next();
+                    if position >= base {
+                        local.push(position - base);
+                    }
+                }
+                if !local.is_empty() {
+                    let mut substituted = String::with_capacity(text.len() + local.len());
+                    let mut last = 0usize;
+                    for position in local {
+                        debug_assert_eq!(text.as_bytes()[position], b' ');
+                        substituted.push_str(&text[last..position]);
+                        substituted.push('\u{a0}');
+                        last = position + 1;
+                    }
+                    substituted.push_str(&text[last..]);
+                    *text = Cow::Owned(substituted);
+                }
+                base = span_end;
+            }
+        }
+        start = end;
+    }
 }
 
 fn repair_fifo_triples_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
