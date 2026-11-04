@@ -61,6 +61,8 @@ where
     equation_index: NonZeroUsize,
 
     footnote_index: NonZeroUsize,
+
+    title_mode: bool,
 }
 
 impl<'i, 'h, 'e, 't> TextContext<'i, 'h, 'e, 't>
@@ -91,7 +93,18 @@ where
             invisible: 0,
             equation_index: NonZeroUsize::new(1).unwrap(),
             footnote_index: NonZeroUsize::new(1).unwrap(),
+            title_mode: false,
         }
+    }
+
+    #[inline]
+    pub fn set_title_mode(&mut self, value: bool) {
+        self.title_mode = value;
+    }
+
+    #[inline]
+    pub fn title_mode(&self) -> bool {
+        self.title_mode
     }
 
     pub fn buffer(&mut self) -> &mut String {
