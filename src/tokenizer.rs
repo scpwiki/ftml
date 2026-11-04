@@ -69,6 +69,14 @@ impl<'t> Tokenization<'t> {
         &self.tokens
     }
 
+    pub(crate) fn with_tokens(&self, tokens: Vec<ExtractedToken<'t>>) -> Self {
+        Tokenization {
+            tokens,
+            full_text: self.full_text,
+            delayed_markers: self.delayed_markers.clone(),
+        }
+    }
+
     #[inline]
     pub(crate) fn full_text(&self) -> FullText<'t> {
         self.full_text

@@ -133,6 +133,8 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_iftags_body_end: Cell<Option<usize>>,
     gate_items_allowed: Cell<bool>,
     wikidot_footnote_zone_until: Cell<Option<usize>>,
+    fused_name_residual: Cell<Option<usize>>,
+    head_had_segment: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
@@ -305,6 +307,35 @@ impl<'r, 't> Parser<'r, 't> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_iftags_body_end
+            .set(value);
+    }
+
+    pub(crate) fn fused_name_residual(&self) -> Option<usize> {
+        self.block_end_scan_cache.borrow().fused_name_residual.get()
+    }
+
+    pub(crate) fn note_fused_name_residual(&self, position: usize) {
+        self.block_end_scan_cache
+            .borrow()
+            .fused_name_residual
+            .set(Some(position));
+    }
+
+    pub(crate) fn clear_fused_name_residual(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .fused_name_residual
+            .set(None);
+    }
+
+    pub(crate) fn head_had_segment(&self) -> bool {
+        self.block_end_scan_cache.borrow().head_had_segment.get()
+    }
+
+    pub(crate) fn set_head_had_segment(&self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .head_had_segment
             .set(value);
     }
 

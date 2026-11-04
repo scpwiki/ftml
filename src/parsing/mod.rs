@@ -173,6 +173,53 @@ fn parse_on_current_stack<'r, 't>(
 where
     'r: 't,
 {
+    match repair_bracket_run_tokenization(tokenization, page_info, settings) {
+        Some(repaired) => parse_repaired_tokenization(
+            repaired,
+            page_info,
+            settings,
+            max_recursion_depth,
+        ),
+        None => parse_and_convert(tokenization, page_info, settings, max_recursion_depth),
+    }
+}
+
+/// Parses with a tokenization whose bracket runs were re-split. The
+/// re-split tokens borrow the caller's text, but the parse machinery
+/// requires the tokenization borrow to outlive the text lifetime, so
+/// the parse runs over an owned copy of the text and the resulting
+/// tree is converted to owned data before it leaves this scope.
+fn parse_repaired_tokenization<'t>(
+    repaired: Tokenization<'t>,
+    page_info: &PageInfo<'t>,
+    settings: &WikitextSettings,
+    max_recursion_depth: usize,
+) -> ParseOutcome<SyntaxTree<'t>> {
+    let source: String = repaired.full_text().inner().into();
+    let remapped: Vec<ExtractedToken<'_>> = repaired
+        .tokens()
+        .iter()
+        .map(|token| ExtractedToken {
+            token: token.token,
+            slice: &source[token.span.clone()],
+            span: token.span.clone(),
+        })
+        .collect();
+    let owned = crate::tokenize(&source).with_tokens(remapped);
+    let (tree, errors) =
+        parse_and_convert(&owned, page_info, settings, max_recursion_depth).into();
+    ParseOutcome::new(tree.to_owned(), errors)
+}
+
+fn parse_and_convert<'r, 't>(
+    tokenization: &'r Tokenization<'t>,
+    page_info: &'r PageInfo<'t>,
+    settings: &'r WikitextSettings,
+    max_recursion_depth: usize,
+) -> ParseOutcome<SyntaxTree<'t>>
+where
+    'r: 't,
+{
     let parsed = parse_internal_with_recursion_limit(
         page_info,
         settings,
@@ -296,6 +343,153 @@ where
             )
         }
     }
+}
+
+/// A run of four `[` at a token boundary lexes as a single bracket plus
+/// a triple-link opener, which hides the two readings Wikidot gives the
+/// same bytes: a block whose head opens with an iftags segment (the
+/// second `[[` opens the segment inside the head), and a block preceded
+/// by two literal brackets (the block opens at the second `[[`). Each
+/// candidate pair is re-split and the reading whose block actually
+/// parses is committed; a complete segment in the prefix position also
+/// commits the segment reading so a refused head falls back to its
+/// resolved literal form instead of manufacturing a link from the
+/// segment's text. Anything else keeps the original tokens.
+fn repair_bracket_run_tokenization<'t>(
+    tokenization: &Tokenization<'t>,
+    page_info: &PageInfo<'t>,
+    settings: &WikitextSettings,
+) -> Option<Tokenization<'t>> {
+    if tokenization.has_generated() {
+        return None;
+    }
+    let source = tokenization.full_text().inner();
+    let mut tokens: Vec<ExtractedToken<'t>> = tokenization.tokens().to_vec();
+    let mut repaired = false;
+    let mut index = 0;
+    while index + 1 < tokens.len() {
+        let pair = tokens[index].token == Token::LeftBracket
+            && tokens[index + 1].token == Token::LeftLink
+            && tokens[index + 1].span.start == tokens[index].span.end
+            && tokens[index].span.end - tokens[index].span.start == 1;
+        if !pair {
+            index += 1;
+            continue;
+        }
+        let start = tokens[index].span.start;
+        let token_at = |token: Token, span: std::ops::Range<usize>| ExtractedToken {
+            token,
+            slice: &source[span.clone()],
+            span,
+        };
+        let mut candidate = tokens.clone();
+        candidate.splice(
+            index..index + 2,
+            [
+                token_at(Token::LeftBlock, start..start + 2),
+                token_at(Token::LeftBlock, start + 2..start + 4),
+            ],
+        );
+        if bracket_run_block_parses(&candidate, index, tokenization, page_info, settings)
+        {
+            tokens = candidate;
+            repaired = true;
+            index += 2;
+            continue;
+        }
+        let segment_candidate = candidate;
+        let mut candidate = tokens.clone();
+        candidate.splice(
+            index..index + 2,
+            [
+                token_at(Token::LeftBracket, start..start + 1),
+                token_at(Token::LeftBracket, start + 1..start + 2),
+                token_at(Token::LeftBlock, start + 2..start + 4),
+            ],
+        );
+        if bracket_run_block_parses(
+            &candidate,
+            index + 2,
+            tokenization,
+            page_info,
+            settings,
+        ) {
+            tokens = candidate;
+            repaired = true;
+            index += 3;
+            continue;
+        }
+        if bracket_run_segment_prefix(
+            &segment_candidate,
+            index + 1,
+            tokenization,
+            page_info,
+            settings,
+            source,
+        ) {
+            tokens = segment_candidate;
+            repaired = true;
+            index += 2;
+            continue;
+        }
+        index += 1;
+    }
+    repaired.then(|| tokenization.with_tokens(tokens))
+}
+
+fn bracket_run_block_parses<'t>(
+    tokens: &[ExtractedToken<'t>],
+    target: usize,
+    tokenization: &Tokenization<'t>,
+    page_info: &PageInfo<'t>,
+    settings: &WikitextSettings,
+) -> bool {
+    let candidate = tokenization.with_tokens(tokens.to_vec());
+    let mut parser = Parser::new(&candidate, page_info, settings);
+    for _ in 0..target {
+        if parser.step().is_err() {
+            return false;
+        }
+    }
+    parser.current().token == Token::LeftBlock
+        && self::rule::impls::RULE_BLOCK
+            .try_consume(&mut parser)
+            .is_ok()
+}
+
+fn bracket_run_segment_prefix<'t>(
+    tokens: &[ExtractedToken<'t>],
+    target: usize,
+    tokenization: &Tokenization<'t>,
+    page_info: &PageInfo<'t>,
+    settings: &WikitextSettings,
+    source: &'t str,
+) -> bool {
+    let candidate = tokenization.with_tokens(tokens.to_vec());
+    let mut parser = Parser::new(&candidate, page_info, settings);
+    for _ in 0..target {
+        if parser.step().is_err() {
+            return false;
+        }
+    }
+    let Some(segment) = self::collect::iftags_segment_fused(&parser) else {
+        return false;
+    };
+    let mut word = String::new();
+    if segment.include_body {
+        word.push_str(&source[segment.body.clone()]);
+    }
+    let rest = &source[segment.range.end..];
+    let tail: String = rest
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
+        .collect();
+    word.push_str(&tail);
+    if word.is_empty() {
+        return false;
+    }
+    let after = &rest[tail.len()..];
+    after.is_empty() || after.starts_with(']') || after.starts_with(char::is_whitespace)
 }
 
 /// Runs the parser, but returns the raw internal results prior to conversion.

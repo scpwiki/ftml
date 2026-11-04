@@ -347,16 +347,58 @@ where
     }
 
     let mut close = parser.clone();
-    let Ok((name, residual_close_bracket)) = close.get_wikidot_end_block_with_residual()
-    else {
-        return Ok(None);
+    let raw_close = close.get_wikidot_end_block_with_residual();
+    let (name, residual_close_bracket, resolved_close) = match raw_close {
+        Ok((name, residual_close_bracket)) => {
+            (Cow::Borrowed(name), residual_close_bracket, false)
+        }
+        Err(_) => {
+            let mut scan = parser.clone();
+            let mut seamed = false;
+            loop {
+                match scan.current().token {
+                    Token::LeftBlock => {
+                        seamed = true;
+                        break;
+                    }
+                    Token::RightBlock
+                    | Token::RightLink
+                    | Token::Whitespace
+                    | Token::LineBreak
+                    | Token::ParagraphBreak
+                    | Token::InputEnd => break,
+                    _ => {
+                        if scan.step().is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+            if !seamed {
+                return Ok(None);
+            }
+            let mut resolved = parser.clone();
+            let Ok(name) = resolved.get_end_block() else {
+                return Ok(None);
+            };
+            close = resolved;
+            (name, false, true)
+        }
     };
+    let name: &str = &name;
     let normalized = name.strip_suffix('_').unwrap_or(name);
     let scored_close = normalized.len() != name.len();
     let start = parser.current().span.start;
     let end = close.current().span.start;
-    let close_source = &parser.full_text().inner()[start..end];
-    if let Some(label) = wikidot_leading_space_close_label(close_source) {
+    let raw_close_source = &parser.full_text().inner()[start..end];
+    let close_source_cow: Cow<'t, str> = if resolved_close {
+        Cow::Owned(format!("[[/{normalized}]]"))
+    } else {
+        Cow::Borrowed(raw_close_source)
+    };
+    if !resolved_close
+        && let Some(label) = wikidot_leading_space_close_label(raw_close_source)
+    {
         parser.update(&close);
         return Ok(Some(Elements::Multiple(vec![
             text!("["),
@@ -370,17 +412,17 @@ where
         ])));
     }
     let element = if scored_close && normalized.eq_ignore_ascii_case("span") {
-        text!(close_source)
+        Element::Text(close_source_cow.clone())
     } else if normalized.eq_ignore_ascii_case("size") {
-        Element::Partial(PartialElement::InlineSizeClose(cow!(close_source)))
+        Element::Partial(PartialElement::InlineSizeClose(close_source_cow.clone()))
     } else if normalized.eq_ignore_ascii_case("span") {
-        Element::Partial(PartialElement::InlineSpanClose(cow!(close_source)))
+        Element::Partial(PartialElement::InlineSpanClose(close_source_cow.clone()))
     } else if !parser.discarding_hidden_body()
         && parser.rule().name() == "block-table-row"
         && (normalized.eq_ignore_ascii_case("cell")
             || normalized.eq_ignore_ascii_case("hcell"))
     {
-        text!(close_source)
+        Element::Text(close_source_cow.clone())
     } else {
         return Ok(None);
     };
@@ -392,7 +434,11 @@ where
     if !scored_close && normalized.eq_ignore_ascii_case("span") {
         parser.leave_wikidot_span_body(closes_scored_span);
     }
-    Ok(Some(if residual_close_bracket {
+    let fused_residual = resolved_close && parser.fused_name_residual() == Some(end) && {
+        parser.clear_fused_name_residual();
+        true
+    };
+    Ok(Some(if residual_close_bracket || fused_residual {
         Elements::Multiple(vec![element, text!("]")])
     } else {
         element.into()
@@ -922,6 +968,13 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
 
     if let Some(result) = try_consume_past_wikidot_designated_iftags_end(parser) {
         return result;
+    }
+
+    if let Some(position) = parser.fused_name_residual()
+        && parser.current().span.start >= position
+    {
+        parser.clear_fused_name_residual();
+        return ok!(text!("]"));
     }
 
     if parser.settings().layout.legacy()

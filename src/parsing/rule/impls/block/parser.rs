@@ -22,7 +22,7 @@ use super::BlockRule;
 use super::arguments::Arguments;
 use crate::layout::Layout;
 use crate::parsing::collect::{
-    CommentElidedText, collect_comment_elided_keep, collect_text, collect_text_keep,
+    CommentElidedText, collect_comment_elided_keep, collect_text_keep,
     collect_text_resolved_fused, collect_text_resolved_fused_tracked,
     consume_iftags_segment, consume_valid_comment,
 };
@@ -257,6 +257,7 @@ pub(crate) fn head_seam_forms_block(block: &BlockRule, layout: Layout) -> bool {
         || matches!(
             block.name,
             "block-footnote"
+                | "block-div"
                 | "block-table"
                 | "block-table-row"
                 | "block-table-cell-regular"
@@ -780,10 +781,26 @@ where
         &mut self,
         flag_star: bool,
     ) -> Result<(Cow<'t, str>, bool, bool), ParseError> {
-        if flag_star {
-            self.get_optional_token(Token::LeftBlockStar)?;
-        } else {
-            self.get_optional_token(Token::LeftBlock)?;
+        self.get_block_name_bracketed(flag_star, true)
+    }
+
+    pub(crate) fn get_block_name_after_end_marker(
+        &mut self,
+    ) -> Result<(Cow<'t, str>, bool, bool), ParseError> {
+        self.get_block_name_bracketed(false, false)
+    }
+
+    fn get_block_name_bracketed(
+        &mut self,
+        flag_star: bool,
+        consume_bracket: bool,
+    ) -> Result<(Cow<'t, str>, bool, bool), ParseError> {
+        if consume_bracket {
+            if flag_star {
+                self.get_optional_token(Token::LeftBlockStar)?;
+            } else {
+                self.get_optional_token(Token::LeftBlock)?;
+            }
         }
 
         self.get_optional_space()?;
@@ -923,7 +940,10 @@ where
         {
             return Err(self.make_err(ParseErrorKind::RuleFailed));
         }
-        let in_head = !matches!(last.token, Token::RightBlock | Token::RightBracket);
+        let in_head = !matches!(
+            last.token,
+            Token::RightBlock | Token::RightBracket | Token::RightLink
+        );
 
         Ok((name, in_head, segment_consumed))
     }
@@ -998,7 +1018,7 @@ where
         self.get_token(Token::LeftBlockEnd, ParseErrorKind::BlockExpectedEnd)?;
         self.get_optional_space()?;
 
-        let (name, in_head, segment) = self.get_block_name(false)?;
+        let (name, in_head, segment) = self.get_block_name_after_end_marker()?;
         if matches!(name, Cow::Owned(_)) && !self.head_word_is_actionable(&name, segment)
         {
             return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
@@ -3219,10 +3239,12 @@ where
                 let mut close = scan.clone();
                 if let Ok(name) = close.get_end_block() {
                     let close_end = close.current().span.start;
-                    if !wikidot_alias_close_is_exact(
-                        &scan.full_text().inner()[close_start..close_end],
-                        &name,
-                    ) {
+                    if !matches!(name, Cow::Owned(_))
+                        && !wikidot_alias_close_is_exact(
+                            &scan.full_text().inner()[close_start..close_end],
+                            &name,
+                        )
+                    {
                         scan.update(&close);
                         continue;
                     }
@@ -3692,8 +3714,12 @@ where
                 // getAttrs sees. Segments in a code head are therefore
                 // stepped over raw rather than resolved.
                 let raw_head = block_rule.name == "block-code";
+                let fused_name_close = self.head_had_segment();
                 while !matches!(self.current().token, Token::RightBlock | Token::InputEnd)
                 {
+                    if fused_name_close && self.current().token == Token::RightLink {
+                        break;
+                    }
                     // An iftags segment in the head is consumed whole:
                     // its own `]]` must not end the head early, and its
                     // elisions resolve the segment in the parsed values.
@@ -3710,7 +3736,12 @@ where
                 let head =
                     CommentElidedText::new(self.full_text().inner(), span, Vec::new())
                         .with_segments(elisions);
-                (parse_wikidot_attribute_field(&head), false)
+                let fused_close = self.current().token == Token::RightLink;
+                if fused_close {
+                    self.note_fused_name_residual(self.current().span.end);
+                    self.step()?;
+                }
+                (parse_wikidot_attribute_field(&head), fused_close)
             }
         } else {
             (Arguments::new_case_sensitive(), false)
@@ -3868,15 +3899,19 @@ where
             ParseCondition::current(Token::RightBlock),
         ];
         let rule = self.rule();
+        let fused_name_close = self.head_had_segment();
         let (field, last) = collect_text_resolved_fused(
             self,
             rule,
             &end_conditions,
             &[],
             Some(ParseErrorKind::BlockMissingName),
+            fused_name_close,
         )?;
-        let (arguments, _) = self
-            .get_head_map_with_body_start(block_rule, last.token != Token::RightBlock)?;
+        let (arguments, _) = self.get_head_map_with_body_start(
+            block_rule,
+            !matches!(last.token, Token::RightBlock | Token::RightLink),
+        )?;
         Ok((field, arguments))
     }
 
@@ -3925,12 +3960,14 @@ where
                 ParseCondition::current(Token::LineBreak),
             ];
             let rule = self.rule();
+            let fused_name_close = self.head_had_segment();
             let (slice, _) = collect_text_resolved_fused(
                 self,
                 rule,
                 &end_conditions,
                 &reject_conditions,
                 Some(ParseErrorKind::BlockMalformedArguments),
+                fused_name_close,
             )?;
 
             Some(slice)
@@ -3953,7 +3990,6 @@ where
         F: FnOnce(&Self, Option<&'t str>) -> Result<T, ParseError>,
     {
         let argument = if in_head {
-            let end_conditions = [ParseCondition::current(Token::RightBlock)];
             let reject_conditions = [
                 ParseCondition::current(Token::ParagraphBreak),
                 ParseCondition::current(Token::LineBreak),
@@ -3961,9 +3997,19 @@ where
             let rule = self.rule();
             let kind = ParseErrorKind::BlockMalformedArguments;
             let malformed_arguments = Some(kind);
-            let stops = &end_conditions;
+            let stops = [
+                ParseCondition::current(Token::RightBlock),
+                ParseCondition::current(Token::RightLink),
+            ];
             let rejects = &reject_conditions;
-            let slice = collect_text(self, rule, stops, rejects, malformed_arguments)?;
+            let (slice, last) =
+                collect_text_keep(self, rule, &stops, rejects, malformed_arguments)?;
+            if last.token == Token::RightLink {
+                if !(self.settings().layout.legacy() && self.head_had_segment()) {
+                    return Err(self.make_err(kind));
+                }
+                self.note_fused_name_residual(last.span.end);
+            }
 
             Some(slice)
         } else {

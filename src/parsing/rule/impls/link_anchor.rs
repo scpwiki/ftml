@@ -98,6 +98,7 @@ where
             &url_close,
             &url_invalid,
             None,
+            false,
         )?
         .0
     };
@@ -339,7 +340,15 @@ fn collect_anchor_text<'r, 't>(
 where
     'r: 't,
 {
-    Ok(collect_text_resolved_fused(parser, RULE_LINK_ANCHOR, close, invalid, None)?.0)
+    Ok(collect_text_resolved_fused(
+        parser,
+        RULE_LINK_ANCHOR,
+        close,
+        invalid,
+        None,
+        false,
+    )?
+    .0)
 }
 
 #[cfg(test)]

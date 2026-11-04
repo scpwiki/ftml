@@ -1,0 +1,11 @@
+[
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            45,
+            48
+        ],
+        "kind": "no-rules-match"
+    }
+]
