@@ -259,7 +259,9 @@ pub enum Element<'t> {
     },
 
     #[serde(rename_all = "kebab-case")]
-    MathInline { latex_source: Cow<'t, str> },
+    MathInline {
+        latex_source: Cow<'t, str>,
+    },
 
     EquationReference(Cow<'t, str>),
 

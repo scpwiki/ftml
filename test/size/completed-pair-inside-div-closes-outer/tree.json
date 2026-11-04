@@ -1,0 +1,67 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "size",
+                "attributes": {
+                    "style": "font-size: 120%;"
+                },
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "A"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "div",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "paragraph",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "B"
+                                            },
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "size",
+                                                    "attributes": {
+                                                        "style": "font-size: 120%;"
+                                                    },
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "C"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "D"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "E"
+                    }
+                ]
+            }
+        }
+    ]
+}

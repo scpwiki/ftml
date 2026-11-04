@@ -18,12 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::{
-    AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell, TableRow,
-};
+use super::{AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell, TableRow};
 use crate::parsing::ParseErrorKind;
 use std::borrow::Cow;
-
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum InlineFormatKind {
