@@ -1,0 +1,51 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "container",
+                                "data": {
+                                    "type": "bold",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "A"
+                                        },
+                                        {
+                                            "element": "line-break"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": "*"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": " "
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": "B"
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "element": "text",
+                                "data": "C"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

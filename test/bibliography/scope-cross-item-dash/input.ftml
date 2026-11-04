@@ -1,0 +1,6 @@
+((bibcite key1)) ((bibcite key2))
+
+[[bibliography]]
+: key1 : aa --bb
+: key2 : cc-- dd
+[[/bibliography]]

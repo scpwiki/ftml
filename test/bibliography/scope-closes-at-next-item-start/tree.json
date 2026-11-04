@@ -1,0 +1,96 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "key1",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "bibliography-cite",
+                        "data": {
+                            "label": "key2",
+                            "brackets": false,
+                            "inline": true
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "key1",
+                [
+                    {
+                        "element": "text",
+                        "data": "aa"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "size",
+                            "attributes": {
+                                "style": "font-size: 150%;"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "bb"
+                                },
+                                {
+                                    "element": "definition-list",
+                                    "data": [
+                                        {
+                                            "key_string": "key2",
+                                            "key": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "key2"
+                                                }
+                                            ],
+                                            "value": []
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "dd"
+                    }
+                ]
+            ]
+        ]
+    ]
+}
