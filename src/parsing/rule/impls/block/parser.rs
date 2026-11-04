@@ -569,10 +569,10 @@ where
 
         self.get_optional_space()?;
 
-        self.get_block_name_internal(ParseErrorKind::BlockMissingName)
+        self.get_head_word_raw(ParseErrorKind::BlockMissingName)
     }
 
-    fn get_block_name_internal(
+    fn get_head_word_raw(
         &mut self,
         kind: ParseErrorKind,
     ) -> Result<(&'t str, bool), ParseError> {
@@ -594,6 +594,39 @@ where
 
             (name, in_head)
         })
+    }
+
+    pub fn get_head_word(
+        &mut self,
+        kind: ParseErrorKind,
+    ) -> Result<(Cow<'t, str>, bool), ParseError> {
+        let end_conditions = [
+            ParseCondition::current(Token::Whitespace),
+            ParseCondition::current(Token::LineBreak),
+            ParseCondition::current(Token::ParagraphBreak),
+            ParseCondition::current(Token::RightBlock),
+        ];
+        let rule = self.rule();
+        let (name, last) =
+            collect_text_resolved_fused(self, rule, &end_conditions, &[], Some(kind))?;
+        let legacy = self.settings().layout.legacy();
+        fn trim_head_word(name: &str, legacy: bool) -> &str {
+            if legacy {
+                name.trim_matches([' ', '\t', '\r', '\n'])
+            } else {
+                name.trim()
+            }
+        }
+        let name = match name {
+            Cow::Borrowed(name) => Cow::Borrowed(trim_head_word(name, legacy)),
+            Cow::Owned(name) => Cow::Owned(trim_head_word(&name, legacy).to_owned()),
+        };
+        if name.contains(char::is_whitespace) || name.contains("]]") {
+            return Err(self.make_err(ParseErrorKind::RuleFailed));
+        }
+        let in_head = !matches!(last.token, Token::RightBlock | Token::RightBracket);
+
+        Ok((name, in_head))
     }
 
     pub(crate) fn get_wikidot_block_name_with_residual_opener(
@@ -2787,7 +2820,7 @@ where
         }
 
         let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_block_name_internal(missing_name)?;
+        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
 
         let (arguments, body_start) =
             self.get_head_map_with_body_start(block_rule, in_head)?;
@@ -2817,7 +2850,7 @@ where
         }
 
         let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_block_name_internal(missing_name)?;
+        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
         let (arguments, body_start) =
             self.get_head_map_with_body_start_wikidot(block_rule, in_head)?;
         Ok((subname, arguments, body_start))
@@ -2838,7 +2871,7 @@ where
         }
 
         let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_block_name_internal(missing_name)?;
+        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
         let arguments = self.get_head_map_wikidot(block_rule, in_head)?;
 
         Ok((subname, arguments))
@@ -3417,5 +3450,93 @@ mod tests {
 
         assert_eq!(start.slice, "[[/");
         assert_eq!(end.slice, "[[/");
+    }
+
+    fn head_word(
+        input: &str,
+        layout: Layout,
+    ) -> Result<(String, bool, bool), ParseErrorKind> {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
+        let tokenization = crate::tokenize(input);
+        let mut parser = Parser::new(&tokenization, &page_info, &settings);
+        parser.step().map_err(|error| error.kind())?;
+        parser
+            .get_optional_token(Token::LeftBlock)
+            .map_err(|error| error.kind())?;
+        parser.get_optional_space().map_err(|error| error.kind())?;
+        parser
+            .get_head_word(ParseErrorKind::BlockMissingName)
+            .map(|(name, in_head)| {
+                let owned = matches!(name, Cow::Owned(_));
+                (name.into_owned(), owned, in_head)
+            })
+            .map_err(|error| error.kind())
+    }
+
+    fn head_word_raw(input: &str, layout: Layout) -> Result<(String, bool), ParseErrorKind> {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
+        let tokenization = crate::tokenize(input);
+        let mut parser = Parser::new(&tokenization, &page_info, &settings);
+        parser.step().map_err(|error| error.kind())?;
+        parser
+            .get_optional_token(Token::LeftBlock)
+            .map_err(|error| error.kind())?;
+        parser.get_optional_space().map_err(|error| error.kind())?;
+        parser
+            .get_head_word_raw(ParseErrorKind::BlockMissingName)
+            .map(|(name, in_head)| (name.to_owned(), in_head))
+            .map_err(|error| error.kind())
+    }
+
+    #[test]
+    fn head_word_without_segment_stays_borrowed() {
+        for layout in [Layout::Wikidot, Layout::Wikijump] {
+            assert_eq!(
+                head_word("[[footnote]]", layout),
+                Ok(("footnote".to_owned(), false, false)),
+            );
+            assert_eq!(
+                head_word("[[span class=\"c\"]]", layout),
+                Ok(("span".to_owned(), false, true)),
+            );
+            assert_eq!(
+                head_word_raw("[[footnote]]", layout),
+                Ok(("footnote".to_owned(), false)),
+            );
+            assert_eq!(
+                head_word_raw("[[span class=\"c\"]]", layout),
+                Ok(("span".to_owned(), true)),
+            );
+        }
+    }
+
+    #[test]
+    fn head_word_resolves_iftags_segments() {
+        assert_eq!(
+            head_word("[[foot[[iftags -zzz]]x[[/iftags]]note]]", Layout::Wikidot),
+            Ok(("footxnote".to_owned(), true, false)),
+        );
+        assert_eq!(
+            head_word("[[foot[[iftags +zzz]]x[[/iftags]]note]]", Layout::Wikidot),
+            Ok(("footnote".to_owned(), true, false)),
+        );
+    }
+
+    #[test]
+    fn head_word_rejects_kept_body_with_whitespace() {
+        assert_eq!(
+            head_word("[[foot[[iftags -zzz]]a b[[/iftags]]note]]", Layout::Wikidot),
+            Err(ParseErrorKind::RuleFailed),
+        );
+    }
+
+    #[test]
+    fn head_word_fused_segment_close_ends_the_head() {
+        assert_eq!(
+            head_word("[[foot[[iftags -zzz]]note[[/iftags]]]]", Layout::Wikidot),
+            Ok(("footnote".to_owned(), true, false)),
+        );
     }
 }

@@ -263,8 +263,9 @@ where
                 // A block-head value closes with a single `]]`: the
                 // fused token's leftover bracket plus a directly
                 // following `]` complete it (checked at loop top).
-                let head_close =
-                    matches!(closes, [ParseCondition::CurrentToken(Token::RightBlock)]);
+                let head_close = closes.iter().any(|close| {
+                    matches!(close, ParseCondition::CurrentToken(Token::RightBlock))
+                });
                 if head_close {
                     fused_close = Some((segment.range.end + 1, segment.range.end));
                 } else if let Some(straddle) = straddle {
