@@ -639,6 +639,14 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy() && body_start == BlockBodyStart::Inline {
         body_start = skip_trailing_head_space(parser, body_start)?;
     }
+    // Scored aliases need a compatible (unscored) closer on both the flat
+    // and legacy paths; check before diverting.
+    if parser.settings().layout.legacy()
+        && flag_score
+        && !parser.wikidot_alias_has_compatible_close(&BLOCK_DIV, opener_start)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
         && pair.kind == WikidotBlockKind::Div
     {
@@ -660,12 +668,6 @@ fn parse_fn<'r, 't>(
         )) == Some(false)
     {
         return Err(parser.make_end_of_input_err());
-    }
-    if parser.settings().layout.legacy()
-        && flag_score
-        && !parser.wikidot_alias_has_compatible_close(&BLOCK_DIV, opener_start)
-    {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if parser.settings().layout.legacy()
         && parser.in_wikidot_simple_table_cell()

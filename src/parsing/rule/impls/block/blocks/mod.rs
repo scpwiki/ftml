@@ -233,6 +233,16 @@ pub(crate) fn wikidot_flat_pair_for_head(
     pair
 }
 
+pub(crate) fn wikidot_scored_div_close_compatible<'r, 't>(
+    parser: &Parser<'r, 't>,
+    head_byte: usize,
+) -> bool
+where
+    'r: 't,
+{
+    parser.wikidot_alias_has_compatible_close(&BLOCK_DIV, head_byte)
+}
+
 pub(crate) fn wikidot_scan_pairs_head(
     parser: &Parser<'_, '_>,
     opener_start: usize,

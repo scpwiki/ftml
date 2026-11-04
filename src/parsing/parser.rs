@@ -369,22 +369,23 @@ impl<'r, 't> Parser<'r, 't> {
             .shows_stolen_head(kind, head_byte)
     }
 
-    pub(crate) fn wikidot_flat_pair_head_before(
+    pub(crate) fn wikidot_flat_pair_before(
         &self,
         kind: block_pairs::WikidotBlockKind,
         closer_byte: usize,
-    ) -> bool {
+    ) -> Option<(usize, bool)> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_block_pairs
             .pairs()
             .iter()
-            .any(|pair| {
+            .find(|pair| {
                 pair.flat
                     && pair.kind == kind
                     && pair.kind.emits_flat()
                     && pair.head_byte < closer_byte
             })
+            .map(|pair| (pair.head_byte, pair.scored))
     }
 
     #[inline]

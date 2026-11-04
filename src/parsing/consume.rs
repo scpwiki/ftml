@@ -318,12 +318,15 @@ fn wikidot_flat_reclose_kind(normalized: &str) -> Option<WikidotBlockKind> {
     }
 }
 
-fn wikidot_flat_reclose_vanishes(
-    parser: &Parser<'_, '_>,
+fn wikidot_flat_reclose_vanishes<'r, 't>(
+    parser: &Parser<'r, 't>,
     after_close: &Parser<'_, '_>,
     kind: WikidotBlockKind,
     closer_byte: usize,
-) -> bool {
+) -> bool
+where
+    'r: 't,
+{
     if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
         return false;
     }
@@ -350,18 +353,41 @@ fn wikidot_flat_reclose_vanishes(
     ) {
         return false;
     }
-    parser.wikidot_flat_pair_head_before(kind, closer_byte)
+    let Some((head_byte, scored)) = parser.wikidot_flat_pair_before(kind, closer_byte)
+    else {
+        return false;
+    };
+    // A scored justifier the alias check rejected stays literal, so an
+    // unpaired closer after it stays literal too.
+    if scored
+        && kind == WikidotBlockKind::Div
+        && !super::rule::impls::wikidot_scored_div_close_compatible(parser, head_byte)
+    {
+        return false;
+    }
+    true
 }
 
-fn wikidot_flat_close_kind_at(
-    parser: &Parser<'_, '_>,
+fn wikidot_flat_close_kind_at<'r, 't>(
+    parser: &Parser<'r, 't>,
     closer_byte: usize,
-) -> Option<WikidotBlockCloseKind> {
+) -> Option<WikidotBlockCloseKind>
+where
+    'r: 't,
+{
     if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
         return None;
     }
     let pair = parser.wikidot_block_pair_at_closer_byte(closer_byte)?;
     if !pair.flat || !pair.kind.emits_flat() {
+        return None;
+    }
+    // A scored head rejected by the alias check stays literal, so its closer
+    // must stay literal too (memoized by the head-side check).
+    if pair.kind == WikidotBlockKind::Div
+        && pair.scored
+        && !super::rule::impls::wikidot_scored_div_close_compatible(parser, pair.head_byte)
+    {
         return None;
     }
     Some(match pair.kind {
