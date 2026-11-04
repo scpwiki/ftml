@@ -26,6 +26,7 @@ pub struct Collapsible<'a> {
     pub(super) elements: &'a [Element<'a>],
     pub(super) unfolded_tail_start: Option<usize>,
     pub(super) wikidot_label_spans: &'a [AttributeMap<'a>],
+    pub(super) wikidot_block_open_elements: &'a [Element<'a>],
     pub(super) attributes: &'a AttributeMap<'a>,
     pub(super) start_open: bool,
     pub(super) show_text: Option<&'a str>,
@@ -48,6 +49,7 @@ pub fn render_collapsible(ctx: &mut HtmlContext, collapsible: Collapsible) {
         elements,
         unfolded_tail_start,
         wikidot_label_spans,
+        wikidot_block_open_elements,
         attributes,
         start_open,
         show_text,
@@ -82,6 +84,7 @@ pub fn render_collapsible(ctx: &mut HtmlContext, collapsible: Collapsible) {
                 elements,
                 unfolded_tail,
                 wikidot_label_spans,
+                wikidot_block_open_elements,
                 CollapsibleLabels {
                     start_open,
                     show_text,
@@ -119,6 +122,7 @@ fn render_collapsible_wikidot(
     elements: &[Element],
     unfolded_tail: &[Element],
     label_spans: &[AttributeMap],
+    block_open_elements: &[Element],
     labels: CollapsibleLabels,
 ) {
     let CollapsibleLabels {
@@ -133,6 +137,8 @@ fn render_collapsible_wikidot(
         .div()
         .attr(attr!("class" => "collapsible-block"))
         .inner(|ctx| {
+            render_elements(ctx, block_open_elements);
+
             ctx.html()
                 .div()
                 .attr(attr!(

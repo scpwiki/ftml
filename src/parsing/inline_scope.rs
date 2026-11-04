@@ -101,6 +101,8 @@ struct ActiveScope<'t> {
     kind: ScopeKind,
     scored: bool,
     has_content: bool,
+    pending: bool,
+    materialized: bool,
     origin: usize,
     previous_active: Option<usize>,
     next_active: Option<usize>,
@@ -178,6 +180,8 @@ impl<'t> ActiveScopes<'t> {
             kind,
             scored,
             has_content: false,
+            pending: false,
+            materialized: false,
             origin,
             previous_active,
             next_active: None,
@@ -514,8 +518,136 @@ impl<'t> ActiveScopes<'t> {
         let mut position = self.active_tail;
         while let Some(current) = position {
             self.scopes[current].has_content = true;
+            self.scopes[current].materialized = true;
+            self.scopes[current].pending = false;
             position = self.scopes[current].previous_active;
         }
+    }
+
+    fn any_live_unmaterialized(&self) -> bool {
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            let scope = &self.scopes[current];
+            if !scope.pending && !scope.materialized {
+                return true;
+            }
+            position = scope.previous_active;
+        }
+        false
+    }
+
+    fn copies_from(&self, position: usize) -> Vec<Element<'t>> {
+        let positions = self.active_positions();
+        let Some(index) = positions.iter().position(|entry| *entry == position) else {
+            return Vec::new();
+        };
+        let mut copies: Vec<Element<'t>> = Vec::new();
+        for entry in positions[index..].iter().rev() {
+            copies = vec![self.scopes[*entry].wrapper.wrap(copies)];
+        }
+        copies
+    }
+
+    fn any_unmaterialized(&self) -> bool {
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            if !self.scopes[current].materialized {
+                return true;
+            }
+            position = self.scopes[current].previous_active;
+        }
+        false
+    }
+
+    fn pend_all(&mut self) {
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            self.scopes[current].pending = true;
+            self.scopes[current].materialized = false;
+            position = self.scopes[current].previous_active;
+        }
+    }
+
+    fn enter_block(&mut self) {
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            self.scopes[current].pending = false;
+            self.scopes[current].materialized = false;
+            position = self.scopes[current].previous_active;
+        }
+    }
+
+    fn scope_materialized(&self, position: usize) -> bool {
+        self.scopes[position].materialized
+    }
+
+    fn scope_is_pending(&self, position: usize) -> bool {
+        self.scopes[position].pending
+    }
+
+    fn kill_from(&mut self, position: usize) {
+        let mut killed = Vec::new();
+        let mut cursor = Some(position);
+        while let Some(current) = cursor {
+            killed.push(current);
+            cursor = self.scopes[current].next_active;
+        }
+        for &entry in &killed {
+            let closed = &self.scopes[entry];
+            let closed_origin = closed.origin;
+            let closed_tag = closed.wrapper.tag();
+            for (watermark, tags) in &mut self.watches {
+                if closed_origin >= *watermark && !tags.contains(&closed_tag) {
+                    tags.push(closed_tag);
+                }
+            }
+        }
+        let below = self.scopes[position].previous_active;
+        if let Some(below) = below {
+            self.scopes[below].next_active = None;
+        }
+        if self.active_tail.is_some_and(|tail| killed.contains(&tail)) {
+            self.active_tail = below;
+        }
+        for &entry in &killed {
+            self.scopes[entry].previous_active = None;
+            self.scopes[entry].next_active = None;
+        }
+        self.istack.retain(|entry| match entry {
+            IstEntry::Scope { position, .. } => !killed.contains(position),
+            IstEntry::Inline { .. } => true,
+        });
+    }
+
+    fn kill_scope(&mut self, position: usize) {
+        let closed = &self.scopes[position];
+        let closed_origin = closed.origin;
+        let closed_tag = closed.wrapper.tag();
+        for (watermark, tags) in &mut self.watches {
+            if closed_origin >= *watermark && !tags.contains(&closed_tag) {
+                tags.push(closed_tag);
+            }
+        }
+        self.unlink(position);
+        self.istack.retain(|entry| match entry {
+            IstEntry::Scope {
+                position: entry_position,
+                ..
+            } => *entry_position != position,
+            IstEntry::Inline { .. } => true,
+        });
+    }
+
+    fn nested_empty_copies(&self) -> Vec<Element<'t>> {
+        let mut copies: Vec<Element<'t>> = Vec::new();
+        for position in self.active_positions() {
+            copies = vec![self.scopes[position].wrapper.wrap(copies)];
+        }
+        copies
+    }
+
+    fn has_anchor_scope(&self) -> bool {
+        self.anchor_position().is_some()
     }
 
     fn has_active_scope(&self) -> bool {
@@ -646,6 +778,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
         &mut active,
         &mut trim_next_break,
         false,
+        false,
     );
     eject_segment_trailing_space(elements);
     drop_empty_inline_scopes(elements);
@@ -677,6 +810,7 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
             &mut ordinal,
             &mut active,
             &mut trim_next_break,
+            false,
             false,
         );
         eject_segment_trailing_space(elements);
@@ -919,9 +1053,40 @@ fn lower_root_sequence<'t>(
         if let Element::Container(container) = &mut element
             && container.ctype() == ContainerType::Paragraph
         {
+            if paragraph_group.is_none()
+                && let Some(position) = active.anchor_position()
+                && !active.scope_is_pending(position)
+            {
+                let dying: Vec<usize> = {
+                    let positions = active.active_positions();
+                    let index = positions
+                        .iter()
+                        .position(|entry| *entry == position)
+                        .unwrap_or(positions.len());
+                    positions[index..].to_vec()
+                };
+                if dying
+                    .iter()
+                    .any(|entry| !active.scope_materialized(*entry))
+                {
+                    output.append(&mut active.copies_from(position));
+                }
+                active.kill_from(position);
+            }
             let paragraph_attributes = container.attributes().clone();
             let starts_in_scored_span = active.has_scored_scope();
             let starts_in_inline_scope = active.has_active_scope();
+            let previous_is_own_chunk_block = matches!(
+                output.last(),
+                Some(Element::List { .. } | Element::Table(_))
+            ) || matches!(
+                output.last(),
+                Some(Element::Container(container))
+                    if matches!(
+                        container.ctype(),
+                        ContainerType::Header(_) | ContainerType::Blockquote
+                    )
+            );
             let reopens_paragraph_after_separator = starts_in_inline_scope
                 && output.last().is_some_and(|element| {
                     matches!(element, Element::HorizontalRule)
@@ -929,12 +1094,14 @@ fn lower_root_sequence<'t>(
                 });
             if starts_in_inline_scope
                 && !reopens_paragraph_after_separator
+                && !previous_is_own_chunk_block
                 && !output.is_empty()
                 && paragraph_group.is_none()
             {
                 container.elements_mut().insert(0, Element::LineBreak);
             }
-            let continued_from_paragraph = paragraph_group.is_some();
+            let continued_from_paragraph =
+                paragraph_group.is_some() || previous_is_own_chunk_block;
             active.take_space_eject_floor();
             let effects = lower_sequence(
                 container.elements_mut(),
@@ -943,7 +1110,11 @@ fn lower_root_sequence<'t>(
                 active,
                 trim_next_break,
                 false,
+                true,
             );
+            if !effects.scored_span_opened_unwrapped_at_start {
+                active.pend_all();
+            }
             let joins_previous =
                 previous_scored_close || effects.scored_span_opened_at_start;
 
@@ -966,9 +1137,14 @@ fn lower_root_sequence<'t>(
         }
 
         flush_paragraph_group(&mut output, &mut paragraph_group);
+        if align_head_joins_previous_chunk(&output, &element, active)
+            && let Some(position) = active.anchor_position()
+        {
+            active.kill_from(position);
+        }
         let scope_before = active.outer_active_position();
         let mut sequence = vec![element];
-        lower_sequence(&mut sequence, valid, ordinal, active, trim_next_break, true);
+        lower_sequence(&mut sequence, valid, ordinal, active, trim_next_break, true, true);
         let scope_continues =
             scope_before.is_some() && scope_before == active.outer_active_position();
         append_root_sequence(&mut output, &mut sequence, scope_continues);
@@ -1010,6 +1186,7 @@ fn flush_root_pending<'t>(
         active,
         trim_next_break,
         false,
+        true,
     );
     drop_segment_trailing_space(&mut sequence);
     let scope_continues =
@@ -1122,6 +1299,7 @@ fn lower_sequence<'t>(
     active: &mut ActiveScopes<'t>,
     trim_next_break: &mut bool,
     root_structural_boundary: bool,
+    segment: bool,
 ) -> SequenceEffects {
     let mut output = Vec::with_capacity(elements.len());
     let mut run = Vec::new();
@@ -1611,7 +1789,9 @@ fn lower_sequence<'t>(
                     trim_trailing_space(&mut output);
                 }
                 if let Some(position) = resolved {
-                    if !active.scope_has_content(position) {
+                    if !active.scope_has_content(position)
+                        || !active.scope_materialized(position)
+                    {
                         run.push(Element::Partial(
                             PartialElement::WikidotEmptyInlineOwner,
                         ));
@@ -1721,7 +1901,12 @@ fn lower_sequence<'t>(
             && active.has_active_scope()
             && matches!(&element, Element::List { .. })
         {
-            Some(active.scope_wrappers())
+            let wrappers = active.scope_wrappers();
+            if wrappers.is_empty() {
+                None
+            } else {
+                Some(wrappers)
+            }
         } else {
             None
         };
@@ -1742,6 +1927,7 @@ fn lower_sequence<'t>(
                 ordinal,
                 &mut nested_active,
                 trim_next_break,
+                false,
             );
             if lowered {
                 if let Some((tag, wrapper)) = &root_parts {
@@ -1829,15 +2015,54 @@ fn lower_sequence<'t>(
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
-                lower_children(&mut element, valid, ordinal, active, trim_next_break);
+                lower_children(&mut element, valid, ordinal, active, trim_next_break, segment);
             } else {
                 let block_boundary = is_block_boundary(&element);
                 if block_boundary && active.has_active_scope() {
                     strip_trailing_space_from_vec(&mut run);
                 }
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+                let is_paragraph = matches!(
+                    &element,
+                    Element::Container(container)
+                        if container.ctype() == ContainerType::Paragraph
+                );
                 if block_boundary {
-                    active.drop_anchor_scopes();
+                    if !segment {
+                        active.drop_anchor_scopes();
+                    } else if !matches!(element, Element::Table(_)) {
+                        if align_head_joins_previous_chunk(&output, &element, active)
+                            && let Some(position) = active.anchor_position()
+                        {
+                            active.kill_from(position);
+                        }
+                        close_live_anchor(
+                            &mut output,
+                            &mut run,
+                            active,
+                            &mut last_run_outer_scope,
+                        );
+                        active.enter_block();
+                        if let Element::Collapsible {
+                            wikidot_block_open_elements,
+                            ..
+                        } = &mut element
+                            && active.has_anchor_scope()
+                        {
+                            *wikidot_block_open_elements = active.nested_empty_copies();
+                            if let Some(position) = active.anchor_position() {
+                                active.kill_from(position);
+                            }
+                        }
+                    }
+                } else if is_paragraph && segment {
+                    close_live_anchor(
+                        &mut output,
+                        &mut run,
+                        active,
+                        &mut last_run_outer_scope,
+                    );
+                    active.pend_all();
                 }
                 let watermark = if block_boundary {
                     Some(active.begin_watch())
@@ -1848,7 +2073,7 @@ fn lower_sequence<'t>(
                 if let Some((tag, wrapper)) = &root_parts {
                     active.istack_push_inline(*tag, wrapper.clone());
                 }
-                lower_children(&mut element, valid, ordinal, active, trim_next_break);
+                lower_children(&mut element, valid, ordinal, active, trim_next_break, segment);
                 if root_parts.is_some() {
                     active.istack.pop();
                 }
@@ -1873,17 +2098,27 @@ fn lower_sequence<'t>(
                     last_run_outer_scope.reset();
                 }
             }
-            if !is_empty_paragraph(&element) {
+            if !is_empty_paragraph(&element) && !is_vanished_empty_div(&element) {
                 output.push(element);
                 last_run_outer_scope.reset();
             }
         } else {
             flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
-            output.push(element);
+            if !is_vanished_empty_div(&element) {
+                output.push(element);
+            }
             last_run_outer_scope.reset();
         }
     }
     flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+    if segment && active.any_live_unmaterialized() {
+        emit_segment_copies(
+            &mut output,
+            &mut run,
+            active,
+            &mut last_run_outer_scope,
+        );
+    }
     *elements = output;
     effects
 }
@@ -2069,11 +2304,20 @@ fn scope_sibling_merge<'t>(previous: &mut Element<'t>, next: Element<'t>) -> boo
     }
 }
 
+fn elements_render_empty(elements: &[Element<'_>]) -> bool {
+    elements.iter().all(|element| {
+        matches!(
+            element,
+            Element::Partial(PartialElement::WikidotEmptyInlineOwner)
+        )
+    })
+}
+
 fn scope_wrapper_is_empty(element: &Element<'_>) -> bool {
     match element {
-        Element::Container(container) => container.elements().is_empty(),
-        Element::Color { elements, .. } => elements.is_empty(),
-        Element::Anchor { elements, .. } => elements.is_empty(),
+        Element::Container(container) => elements_render_empty(container.elements()),
+        Element::Color { elements, .. } => elements_render_empty(elements),
+        Element::Anchor { elements, .. } => elements_render_empty(elements),
         _ => false,
     }
 }
@@ -2082,11 +2326,11 @@ fn empty_inline_scope_vanishes(element: &Element<'_>) -> bool {
     match element {
         Element::Container(container) => {
             is_inline_scope_ctype(container.ctype())
-                && container.elements().is_empty()
+                && elements_render_empty(container.elements())
                 && !(container.ctype() == ContainerType::Span
                     && container.attributes().get().contains_key("id"))
         }
-        Element::Color { elements, .. } => elements.is_empty(),
+        Element::Color { elements, .. } => elements_render_empty(elements),
         _ => false,
     }
 }
@@ -2099,7 +2343,9 @@ fn drop_empty_inline_scopes(elements: &mut Vec<Element>) {
     }
     let mut index = 0;
     while index < elements.len() {
-        if empty_inline_scope_vanishes(&elements[index]) {
+        if empty_inline_scope_vanishes(&elements[index])
+            || emptied_block_vanishes(&elements[index])
+        {
             elements.remove(index);
             merge_space_across_vanished(elements, index);
         } else {
@@ -2148,6 +2394,18 @@ fn vanished_list_item(item: &ListItem) -> bool {
         } => attributes.get().is_empty() && all_whitespace_text(elements),
         ListItem::SubList { .. } => false,
     }
+||||||| parent of e8c512ab7 (Wikidot inline scopes: live/pending/dead state, anchor partial stream, empty div vanish (L8.1))
+
+fn emptied_block_vanishes(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Container(container)
+            if matches!(
+                container.ctype(),
+                ContainerType::Paragraph | ContainerType::Div
+            ) && container.attributes().get().is_empty()
+                && container.elements().is_empty()
+    )
 }
 
 fn merge_space_across_vanished(elements: &mut Vec<Element>, index: usize) {
@@ -2278,6 +2536,7 @@ fn parent_is_block_segment(element: &Element<'_>) -> bool {
             ContainerType::Div
                 | ContainerType::Paragraph
                 | ContainerType::Blockquote
+                | ContainerType::Note
                 | ContainerType::Align(_)
         ),
         Element::Collapsible { .. }
@@ -2328,6 +2587,34 @@ fn close_flattened_scope<'t>(
         run.push(text!(" "));
         *run_has_content = true;
     }
+}
+
+fn emit_segment_copies<'t>(
+    output: &mut Vec<Element<'t>>,
+    run: &mut Vec<Element<'t>>,
+    active: &mut ActiveScopes<'t>,
+    last_run_outer_scope: &mut RunMergeState,
+) {
+    if active.any_unmaterialized() {
+        run.push(Element::Partial(PartialElement::WikidotEmptyInlineOwner));
+        flush_run(output, run, active, last_run_outer_scope);
+    }
+}
+
+fn close_live_anchor<'t>(
+    output: &mut Vec<Element<'t>>,
+    run: &mut Vec<Element<'t>>,
+    active: &mut ActiveScopes<'t>,
+    last_run_outer_scope: &mut RunMergeState,
+) {
+    let Some(position) = active.anchor_position() else {
+        return;
+    };
+    if active.scope_is_pending(position) {
+        return;
+    }
+    emit_segment_copies(output, run, active, last_run_outer_scope);
+    active.kill_from(position);
 }
 
 fn flush_close_run<'t>(
@@ -2529,6 +2816,46 @@ fn elements_end_with_space(elements: &[Element<'_>]) -> bool {
     }
 }
 
+fn align_head_joins_previous_chunk(
+    output: &[Element<'_>],
+    element: &Element<'_>,
+    active: &ActiveScopes<'_>,
+) -> bool {
+    if !matches!(
+        element,
+        Element::Container(container)
+            if matches!(container.ctype(), ContainerType::Align(_))
+    ) {
+        return false;
+    }
+    let Some(position) = active.anchor_position() else {
+        return false;
+    };
+    if !active.scope_is_pending(position) {
+        return false;
+    }
+    let Some(Element::Container(paragraph)) = output.last() else {
+        return false;
+    };
+    if paragraph.ctype() != ContainerType::Paragraph {
+        return false;
+    }
+    let Some(Element::Anchor { elements, .. }) = paragraph.elements().last() else {
+        return false;
+    };
+    matches!(elements.as_slice(), [Element::LineBreak])
+}
+
+fn is_vanished_empty_div(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Container(container)
+            if container.ctype() == ContainerType::Div
+                && container.attributes().get().is_empty()
+                && container.elements().is_empty()
+    )
+}
+
 fn is_empty_paragraph(element: &Element<'_>) -> bool {
     matches!(
         element,
@@ -2615,6 +2942,7 @@ fn lower_children<'t>(
     ordinal: &mut usize,
     active: &mut ActiveScopes<'t>,
     trim_next_break: &mut bool,
+    segment: bool,
 ) -> bool {
     if let Element::Table(table) = element {
         for row in &mut table.rows {
@@ -2630,6 +2958,7 @@ fn lower_children<'t>(
                     ordinal,
                     &mut cell_active,
                     &mut cell_trim,
+                    false,
                     false,
                 );
                 strip_trailing_space_from_vec(&mut cell.elements);
@@ -2654,6 +2983,7 @@ fn lower_children<'t>(
         && matches!(container.ctype(), ContainerType::Header(_))
     {
         let scope_crosses_heading = active.has_active_scope();
+        let entry_positions = active.active_positions();
         lower_sequence(
             container.elements_mut(),
             valid,
@@ -2661,7 +2991,26 @@ fn lower_children<'t>(
             active,
             trim_next_break,
             false,
+            segment,
         );
+        if segment {
+            active.pend_all();
+            let mut kill = Vec::new();
+            for position in active.active_positions() {
+                let scope = &active.scopes[position];
+                if scope.wrapper.tag() == InlineTag::Span {
+                    let opened_inside = !entry_positions.contains(&position);
+                    let produced = opened_inside
+                        || tree_contains_wrapper(container.elements(), &scope.wrapper);
+                    if produced {
+                        kill.push(position);
+                    }
+                }
+            }
+            for position in kill {
+                active.kill_scope(position);
+            }
+        }
         if scope_crosses_heading {
             insert_wikidot_heading_label_span(container.elements_mut());
             *trim_next_break = true;
@@ -2682,7 +3031,10 @@ fn lower_children<'t>(
     let mut lowered = false;
     let mut visit = |children: &mut Vec<Element<'t>>| {
         lowered = true;
-        lower_sequence(children, valid, ordinal, active, trim_next_break, false);
+        lower_sequence(children, valid, ordinal, active, trim_next_break, false, segment);
+        if segment {
+            active.pend_all();
+        }
         if eject {
             eject_segment_trailing_space(children);
             strip_trailing_space_from_vec(children);
@@ -2692,11 +3044,32 @@ fn lower_children<'t>(
     lowered
 }
 
+fn is_scope_wrapper_element(element: &Element<'_>) -> bool {
+    match element {
+        Element::Container(container) => is_inline_scope_ctype(container.ctype()),
+        Element::Color { .. } | Element::Anchor { .. } => true,
+        _ => false,
+    }
+}
+
+fn tree_contains_wrapper(elements: &[Element<'_>], wrapper: &ScopeWrapper<'_>) -> bool {
+    let probe = wrapper.wrap(Vec::new());
+    for element in elements {
+        if same_scope_wrapper(element, &probe) {
+            return true;
+        }
+        if let Some(children) = subtree_children(element)
+            && tree_contains_wrapper(children, wrapper)
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn insert_wikidot_heading_label_span(elements: &mut Vec<Element<'_>>) {
-    if let [Element::Container(container)] = elements.as_mut_slice()
-        && matches!(container.ctype(), ContainerType::Span | ContainerType::Size)
-    {
-        insert_wikidot_heading_label_span(container.elements_mut());
+    if elements.len() == 1 && is_scope_wrapper_element(&elements[0]) {
+        insert_wikidot_heading_label_span(scope_children_mut(&mut elements[0]));
         return;
     }
     let label = mem::take(elements);

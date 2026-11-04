@@ -181,6 +181,11 @@ pub enum Element<'t> {
         /// compatibility wrappers, not authored collapsible attributes.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         wikidot_label_spans: Vec<AttributeMap<'t>>,
+        /// Inline scopes that were pending when this collapsible opened in
+        /// the Wikidot layout materialise as its first children, before the
+        /// folded handle.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        wikidot_block_open_elements: Vec<Element<'t>>,
         attributes: AttributeMap<'t>,
         start_open: bool,
         show_text: Option<Cow<'t, str>>,
@@ -649,6 +654,7 @@ impl Element<'_> {
                 elements,
                 unfolded_tail_start,
                 wikidot_label_spans,
+                wikidot_block_open_elements,
                 attributes,
                 start_open,
                 show_text,
@@ -662,6 +668,9 @@ impl Element<'_> {
                     .iter()
                     .map(AttributeMap::to_owned)
                     .collect(),
+                wikidot_block_open_elements: elements_to_owned(
+                    wikidot_block_open_elements,
+                ),
                 attributes: attributes.to_owned(),
                 start_open: *start_open,
                 show_text: option_string_to_owned(show_text),

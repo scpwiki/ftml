@@ -131,16 +131,24 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
 }
 
 fn has_wikidot_heading_label_span(elements: &[Element]) -> bool {
-    if let [Element::Container(container)] = elements
-        && matches!(
-            container.ctype(),
-            ContainerType::Span | ContainerType::Size | ContainerType::HeadingLabel
-        )
-    {
-        if container.ctype() == ContainerType::HeadingLabel {
-            true
-        } else {
-            has_wikidot_heading_label_span(container.elements())
+    if let [element] = elements {
+        match element {
+            Element::Container(container)
+                if matches!(
+                    container.ctype(),
+                    ContainerType::Span | ContainerType::Size | ContainerType::HeadingLabel
+                ) =>
+            {
+                if container.ctype() == ContainerType::HeadingLabel {
+                    true
+                } else {
+                    has_wikidot_heading_label_span(container.elements())
+                }
+            }
+            Element::Anchor { elements, .. } | Element::Color { elements, .. } => {
+                has_wikidot_heading_label_span(elements)
+            }
+            _ => false,
         }
     } else {
         false

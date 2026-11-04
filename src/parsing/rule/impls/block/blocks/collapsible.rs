@@ -57,6 +57,7 @@ impl<'t> CollapsibleHead<'t> {
             elements,
             unfolded_tail_start,
             wikidot_label_spans: Vec::new(),
+            wikidot_block_open_elements: Vec::new(),
             attributes: self.attributes,
             start_open: self.start_open,
             show_text: self.show_text,
