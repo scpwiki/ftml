@@ -25,7 +25,7 @@ pub(super) struct WikidotState {
     bibliography_body_depth: u16,
     literal_triple_link_depth: u16,
     simple_table_crossed_closers: u16,
-    center_body_depth: u16,
+    center_body_depth: u8,
     flags: u16,
 }
 

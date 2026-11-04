@@ -1462,13 +1462,18 @@ fn lower_sequence<'t>(
                 resolved.is_some_and(|position| active.scope_is_scored(position));
             let empty = !resolved
                 .is_some_and(|position| active.scope_has_content(position))
-                && run.is_empty();
+                && run.iter().all(|element| {
+                    matches!(element, Element::Text(text) if text.trim().is_empty())
+                });
             let trailing_space =
                 !scored && matches!(run.last(), Some(Element::Text(text)) if text == " ");
             let next_starts_with_space = matches!(
                 source.peek(),
                 Some(Element::Text(text)) if text.starts_with(' ')
             );
+            if trailing_space && resolved.is_none() && valid.contains(ordinal) {
+                run.pop();
+            }
             if scored {
                 while matches!(
                     run.last(),
@@ -1491,16 +1496,26 @@ fn lower_sequence<'t>(
                 && matches!(source.peek(), Some(Element::Footnote(_)))
                 && sequence_starts_with_repeated_list_marker(&output, &run)
                 && sequence_ends_with_space(&output, &run);
-            if empty && !scored && !preserve_empty_owner_space {
-                trim_trailing_space(&mut output);
-            }
+            let scope_materialized =
+                resolved.is_some_and(|position| active.scope_has_content(position));
             let current = *ordinal;
             *ordinal += 1;
             if valid.contains(&current) {
-                if !(preserve_empty_owner_space || empty && scored) {
+                if !(preserve_empty_owner_space || empty && scored) && scope_materialized {
                     trim_trailing_space(&mut output);
                 }
                 if let Some(position) = resolved {
+                    if !active.scope_has_content(position) {
+                        run.push(Element::Partial(
+                            PartialElement::WikidotEmptyInlineOwner,
+                        ));
+                        flush_run(
+                            &mut output,
+                            &mut run,
+                            active,
+                            &mut last_run_outer_scope,
+                        );
+                    }
                     active.commit_close_no_reopen(position);
                 }
                 if trailing_space
@@ -1711,11 +1726,12 @@ fn lower_sequence<'t>(
                 lower_children(&mut element, valid, ordinal, active, trim_next_break);
             } else {
                 let block_boundary = is_block_boundary(&element);
+                let anchor_active = active.anchor_position().is_some();
                 let stripped = block_boundary
                     && active.has_active_scope()
                     && strip_trailing_space_from_vec(&mut run);
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
-                if stripped {
+                if stripped && !anchor_active {
                     output.push(text!(" "));
                 }
                 if block_boundary {
@@ -2002,6 +2018,13 @@ fn strip_trailing_space_from_vec(elements: &mut Vec<Element<'_>>) -> bool {
 }
 
 fn eject_segment_trailing_space(elements: &mut Vec<Element<'_>>) {
+    if let Some(Element::Anchor {
+        elements: inner, ..
+    }) = elements.last_mut()
+    {
+        strip_trailing_space_from_vec(inner);
+        return;
+    }
     let stripped = match elements.last_mut() {
         Some(element) => strip_scope_trailing_space(element),
         None => false,
@@ -2232,9 +2255,6 @@ fn trim_trailing_space(elements: &mut Vec<Element<'_>>) {
     } = last
     {
         trim_trailing_space(inner);
-        if inner.is_empty() {
-            elements.pop();
-        }
         return;
     }
     if matches!(last, Element::Text(text) if text == " ") {

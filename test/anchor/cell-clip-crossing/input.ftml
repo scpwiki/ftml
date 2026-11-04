@@ -1,0 +1,6 @@
+[[table]]
+[[row]]
+[[cell]][[a href="https://example.com"]]x[[/cell]]
+[[cell]]y[[/a]][[/cell]]
+[[/row]]
+[[/table]]

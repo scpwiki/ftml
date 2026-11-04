@@ -78,6 +78,19 @@ fn parse_fn<'r, 't>(
         }
         parser.enter_wikidot_anchor_body();
         let anchor = Element::Partial(PartialElement::InlineAnchorOpen(attributes, target));
+        if !in_head {
+            let source = parser.full_text().inner();
+            let leading_separator = source[..parser.current().span.start]
+                .rfind("]]")
+                .map(|close| close + 2)
+                .is_some_and(|body_start| {
+                    source[body_start..].starts_with(is_ascii_separator)
+                        && !follows_separator_or_line_start(&source[..opener_start])
+                });
+            if leading_separator {
+                return ok!(Elements::Multiple(vec![text!(" "), anchor]));
+            }
+        }
         return ok!(anchor);
     }
 
