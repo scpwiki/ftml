@@ -645,6 +645,20 @@ impl<'t> ParagraphStack<'t> {
             self.current.push(element);
             self.current_unwrapped = true;
         } else if paragraph_safe {
+            // Content starting a fresh chunk right after a flat block closer
+            // on the same line is a residual and stays bare (line-start
+            // content is already covered by the break-after-block mark, and
+            // blank lines must start wrapped paragraphs).
+            if self.wikidot
+                && self.current.is_empty()
+                && !self.next_element_started_line
+                && matches!(
+                    self.finished.last(),
+                    Some(Element::Partial(PartialElement::WikidotBlockClose(_)))
+                )
+            {
+                self.mark_next_unwrapped_after_block();
+            }
             // A chunk-leading single space is indentation at a line start and
             // keeps the historical drop everywhere except directly after an
             // inline container flat lowering will literalise: its closer
