@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 use super::Replacer;
 use super::parser_functions::LiteralRegionIndex;
 use regex::{Regex, RegexBuilder};

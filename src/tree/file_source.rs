@@ -28,7 +28,9 @@ use strum_macros::IntoStaticStr;
 pub enum FileSource<'a> {
     Url(Cow<'a, str>),
 
-    File1 { file: Cow<'a, str> },
+    File1 {
+        file: Cow<'a, str>,
+    },
 
     File2 {
         page: Cow<'a, str>,

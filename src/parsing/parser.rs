@@ -303,7 +303,10 @@ impl<'r, 't> Parser<'r, 't> {
 
     #[cfg(test)]
     pub(crate) fn wikidot_block_pairs_for_test(&self) -> block_pairs::WikidotBlockPairs {
-        self.block_end_scan_cache.borrow().wikidot_block_pairs.clone()
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .clone()
     }
 
     #[inline]
@@ -348,7 +351,9 @@ impl<'r, 't> Parser<'r, 't> {
         &self,
         heads: std::collections::BTreeSet<usize>,
     ) {
-        self.block_end_scan_cache.borrow_mut().wikidot_li_paired_heads = heads;
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_li_paired_heads = heads;
     }
 
     pub(crate) fn wikidot_li_head_paired(&self, position: usize) -> bool {

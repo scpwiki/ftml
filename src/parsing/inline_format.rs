@@ -207,10 +207,7 @@ fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
             Element::Container(container)
                 if container.ctype() == ContainerType::Monospace
         ) {
-            visit_children_mut(
-                &mut elements[index],
-                normalize_sequence_inside_monospace,
-            );
+            visit_children_mut(&mut elements[index], normalize_sequence_inside_monospace);
         } else {
             visit_children_mut(&mut elements[index], normalize_sequence);
         }
@@ -2407,9 +2404,8 @@ fn subtree_has_plain_strike(element: &Element<'_>) -> bool {
     if is_plain_strike(element) {
         return true;
     }
-    formatter_children(element).is_some_and(|children| {
-        children.iter().any(subtree_has_plain_strike)
-    })
+    formatter_children(element)
+        .is_some_and(|children| children.iter().any(subtree_has_plain_strike))
 }
 
 enum DashScanUnit {
@@ -3210,8 +3206,7 @@ fn dash_flatten_shell<'t>(element: &Element<'t>) -> Option<FormatShell<'t>> {
         return None;
     }
     let has_dash_material = subtree_has_dash_pair(element)
-        || (shell.kind() == FormatKind::Monospace
-            && subtree_has_plain_strike(element));
+        || (shell.kind() == FormatKind::Monospace && subtree_has_plain_strike(element));
     if !has_dash_material || subtree_has_barrier(element) {
         return None;
     }
@@ -3365,10 +3360,7 @@ fn expand_dash_format_container<'t>(
         flat.push(Some(take_element(input, element_index)));
     }
     let flat_scan = build_dash_scan(
-        &|element_index| {
-            flat.get(element_index)
-                .and_then(|element| element.as_ref())
-        },
+        &|element_index| flat.get(element_index).and_then(|element| element.as_ref()),
         flat.len(),
         0,
         false,
@@ -3439,9 +3431,7 @@ fn emit_dash_pairs_flat<'t>(
                     .expect("text unit holds text")
                     .to_owned();
                 let mut run_start: Option<usize> = None;
-                for (offset, &is_dropped) in
-                    dropped[start..end].iter().enumerate()
-                {
+                for (offset, &is_dropped) in dropped[start..end].iter().enumerate() {
                     let pos = start + offset;
                     if is_dropped {
                         if let Some(run) = run_start.take() {

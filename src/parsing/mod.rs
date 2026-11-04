@@ -308,8 +308,8 @@ where
                 for bibliography in bibliographies.slice_mut() {
                     inline_format::normalize_wikidot_bibliography(bibliography);
                 }
-                let lowered_bibliographies = inline_scope::
-                    lower_wikidot_inline_size_scopes_with_bibliographies(
+                let lowered_bibliographies =
+                    inline_scope::lower_wikidot_inline_size_scopes_with_bibliographies(
                         &mut elements,
                         Some(&mut bibliographies),
                     );
@@ -320,11 +320,7 @@ where
                 for (index, bibliography) in
                     bibliographies.slice_mut().iter_mut().enumerate()
                 {
-                    if !lowered_bibliographies
-                        .get(index)
-                        .copied()
-                        .unwrap_or(false)
-                    {
+                    if !lowered_bibliographies.get(index).copied().unwrap_or(false) {
                         inline_scope::lower_wikidot_bibliography_scopes(bibliography);
                     }
                 }

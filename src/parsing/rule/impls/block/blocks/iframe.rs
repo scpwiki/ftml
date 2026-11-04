@@ -80,11 +80,11 @@ fn wikidot_iframe_url(url: &str) -> bool {
         "news://",
         "mms://",
     ]
-        .iter()
-        .any(|prefix| {
-            url.get(..prefix.len())
-                .is_some_and(|value| value.eq_ignore_ascii_case(prefix))
-        })
+    .iter()
+    .any(|prefix| {
+        url.get(..prefix.len())
+            .is_some_and(|value| value.eq_ignore_ascii_case(prefix))
+    })
 }
 
 #[cfg(test)]

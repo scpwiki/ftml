@@ -303,13 +303,10 @@ fn prepend_head_leftover<'r, 't>(
                     elements.insert(0, Element::Text(Cow::Borrowed("]")));
                     Elements::Multiple(elements)
                 }
-                Elements::Single(element) => Elements::Multiple(vec![
-                    Element::Text(Cow::Borrowed("]")),
-                    element,
-                ]),
-                Elements::None => {
-                    Elements::Single(Element::Text(Cow::Borrowed("]")))
+                Elements::Single(element) => {
+                    Elements::Multiple(vec![Element::Text(Cow::Borrowed("]")), element])
                 }
+                Elements::None => Elements::Single(Element::Text(Cow::Borrowed("]"))),
             };
             Ok(success)
         }
@@ -472,7 +469,8 @@ fn parse_fn<'r, 't>(
     )?;
     let head_fused = matches!(head_close, GateHeadClose::Fused);
 
-    let spaced_head = !head_fused && body_start == BlockBodyStart::Inline
+    let spaced_head = !head_fused
+        && body_start == BlockBodyStart::Inline
         && parser.current().token == Token::Whitespace
         && matches!(
             parser
@@ -482,7 +480,8 @@ fn parse_fn<'r, 't>(
                 .get(parser.current().span.end),
             Some(b'\n') | Some(b'\r'),
         );
-    let whitespace_only_body = !head_fused && body_start == BlockBodyStart::Inline
+    let whitespace_only_body = !head_fused
+        && body_start == BlockBodyStart::Inline
         && parser.current().token == Token::Whitespace
         && matches!(
             parser.look_ahead(0),
@@ -651,9 +650,7 @@ fn parse_fn<'r, 't>(
                     paragraph_safe,
                 ) = body.into();
 
-                if head_fused
-                    && let Some(first) = segments.first_mut()
-                {
+                if head_fused && let Some(first) = segments.first_mut() {
                     first.insert(0, Element::Text(Cow::Borrowed("]")));
                 }
 

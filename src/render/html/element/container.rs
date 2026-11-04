@@ -136,7 +136,9 @@ fn has_wikidot_heading_label_span(elements: &[Element]) -> bool {
             Element::Container(container)
                 if matches!(
                     container.ctype(),
-                    ContainerType::Span | ContainerType::Size | ContainerType::HeadingLabel
+                    ContainerType::Span
+                        | ContainerType::Size
+                        | ContainerType::HeadingLabel
                 ) =>
             {
                 if container.ctype() == ContainerType::HeadingLabel {

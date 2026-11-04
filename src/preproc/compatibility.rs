@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Marker {
     CenterOpen,
@@ -143,7 +142,9 @@ fn crossed_center_close_insertion_line(
         if line_quote_depth < required_quote_depth {
             return None;
         }
-        if marker_line(&lines[index]).is_some_and(|(line_prefix, _)| line_prefix == prefix) {
+        if marker_line(&lines[index])
+            .is_some_and(|(line_prefix, _)| line_prefix == prefix)
+        {
             return None;
         }
         match standalone_div_marker(&lines[index], prefix) {

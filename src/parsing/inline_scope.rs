@@ -1,7 +1,6 @@
 use crate::tree::{
-    AnchorTarget, AttributeMap, Bibliography, BibliographyList,
-    BibliographyScopeWrapper, Container, ContainerType, Element, InlineFormatKind,
-    ListItem, PartialElement,
+    AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
+    Container, ContainerType, Element, InlineFormatKind, ListItem, PartialElement,
 };
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
@@ -80,10 +79,7 @@ impl<'t> ScopeWrapper<'t> {
                 background: *background,
                 elements,
             },
-            ScopeWrapper::Anchor {
-                attributes,
-                target,
-            } => Element::Anchor {
+            ScopeWrapper::Anchor { attributes, target } => Element::Anchor {
                 target: *target,
                 attributes: attributes.clone(),
                 elements,
@@ -765,7 +761,6 @@ impl<'t> ActiveScopes<'t> {
             })
             .collect()
     }
-
 }
 
 struct BibliographyLowering<'b, 't> {
@@ -851,7 +846,14 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
     for (_, elements) in bibliography.slice() {
-        collect_valid_pairs(elements, &mut ordinal, &mut pending, &mut valid, None, false);
+        collect_valid_pairs(
+            elements,
+            &mut ordinal,
+            &mut pending,
+            &mut valid,
+            None,
+            false,
+        );
     }
     pending.finish_weak(&mut valid);
 
@@ -883,7 +885,14 @@ fn collect_valid_scope_pairs(
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
-    collect_valid_pairs(elements, &mut ordinal, &mut pending, &mut valid, None, false);
+    collect_valid_pairs(
+        elements,
+        &mut ordinal,
+        &mut pending,
+        &mut valid,
+        None,
+        false,
+    );
     pending.finish_weak(&mut valid);
 
     (valid, pending.pairs)
@@ -1149,10 +1158,7 @@ fn lower_root_sequence<'t>(
                         .unwrap_or(positions.len());
                     positions[index..].to_vec()
                 };
-                if dying
-                    .iter()
-                    .any(|entry| !active.scope_materialized(*entry))
-                {
+                if dying.iter().any(|entry| !active.scope_materialized(*entry)) {
                     output.append(&mut active.copies_from(position));
                 }
                 active.kill_from(position);
@@ -1310,11 +1316,7 @@ fn scope_break_unit_chain<'t>(
             _ => return None,
         }
     }
-    if chain.is_empty() {
-        None
-    } else {
-        Some(chain)
-    }
+    if chain.is_empty() { None } else { Some(chain) }
 }
 
 fn amend_scope_tail<'t>(
@@ -1532,8 +1534,9 @@ fn collect_valid_pairs(
             Element::BibliographyBlock { index, .. }
                 if !inside_bibliography && bibliographies.is_some() =>
             {
-                if let Some(bibliography) =
-                    bibliographies.expect("checked above").get_bibliography_opt(*index)
+                if let Some(bibliography) = bibliographies
+                    .expect("checked above")
+                    .get_bibliography_opt(*index)
                 {
                     for (_, items) in bibliography.slice() {
                         collect_valid_pairs(
@@ -1793,12 +1796,7 @@ fn lower_sequence<'t>(
             if valid.contains(&current) {
                 if body_separator {
                     run.push(text!(" "));
-                    flush_run(
-                        &mut output,
-                        &mut run,
-                        active,
-                        &mut last_run_outer_scope,
-                    );
+                    flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
                 }
                 let leading_space =
                     matches!(source.peek(), Some(Element::Text(text)) if text == " ");
@@ -1848,16 +1846,12 @@ fn lower_sequence<'t>(
                 .is_some_and(|position| active.scope_has_content(position))
                 && run.is_empty();
             let empty_id_attributes = if empty && !scored {
-                resolved.and_then(|position| {
-                    match &active.scopes[position].wrapper {
-                        ScopeWrapper::Container {
-                            ctype: ContainerType::Span,
-                            attributes,
-                        } if attributes.get().contains_key("id") => {
-                            Some(attributes.clone())
-                        }
-                        _ => None,
-                    }
+                resolved.and_then(|position| match &active.scopes[position].wrapper {
+                    ScopeWrapper::Container {
+                        ctype: ContainerType::Span,
+                        attributes,
+                    } if attributes.get().contains_key("id") => Some(attributes.clone()),
+                    _ => None,
                 })
             } else {
                 None
@@ -1946,8 +1940,10 @@ fn lower_sequence<'t>(
             }
             continue;
         }
-        if let Element::Partial(PartialElement::InlineAnchorOpen(mut attributes, target)) =
-            element
+        if let Element::Partial(PartialElement::InlineAnchorOpen(
+            mut attributes,
+            target,
+        )) = element
         {
             let at_start = output.is_empty() && run.is_empty();
             let scored = attributes.remove(WIKIDOT_SCORE_ANCHOR_ATTRIBUTE).is_some();
@@ -2005,10 +2001,7 @@ fn lower_sequence<'t>(
                 }
                 active.push(
                     ScopeKind::Anchor,
-                    ScopeWrapper::Anchor {
-                        attributes,
-                        target,
-                    },
+                    ScopeWrapper::Anchor { attributes, target },
                     scored,
                 );
                 if scored {
@@ -2020,7 +2013,8 @@ fn lower_sequence<'t>(
             }
             continue;
         }
-        if let Element::Partial(PartialElement::InlineAnchorClose(close_source)) = element {
+        if let Element::Partial(PartialElement::InlineAnchorClose(close_source)) = element
+        {
             let resolved = active.peek_close(InlineTag::Anchor);
             let scored =
                 resolved.is_some_and(|position| active.scope_is_scored(position));
@@ -2065,7 +2059,8 @@ fn lower_sequence<'t>(
             let current = *ordinal;
             *ordinal += 1;
             if valid.contains(&current) {
-                if !(preserve_empty_owner_space || empty && scored) && scope_materialized {
+                if !(preserve_empty_owner_space || empty && scored) && scope_materialized
+                {
                     trim_trailing_space(&mut output);
                 }
                 if let Some(position) = resolved {
@@ -2204,8 +2199,7 @@ fn lower_sequence<'t>(
                     wikidot_explicit_block: true,
                     ..
                 }
-            )
-        {
+            ) {
             let wrappers = active.scope_wrappers();
             if wrappers.is_empty() {
                 None
@@ -2321,7 +2315,15 @@ fn lower_sequence<'t>(
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
-                lower_children(&mut element, valid, ordinal, active, trim_next_break, segment, bib);
+                lower_children(
+                    &mut element,
+                    valid,
+                    ordinal,
+                    active,
+                    trim_next_break,
+                    segment,
+                    bib,
+                );
             } else {
                 let block_boundary = is_block_boundary(&element);
                 if block_boundary && active.has_active_scope() {
@@ -2379,7 +2381,15 @@ fn lower_sequence<'t>(
                 if let Some((tag, wrapper)) = &root_parts {
                     active.istack_push_inline(*tag, wrapper.clone());
                 }
-                lower_children(&mut element, valid, ordinal, active, trim_next_break, segment, bib);
+                lower_children(
+                    &mut element,
+                    valid,
+                    ordinal,
+                    active,
+                    trim_next_break,
+                    segment,
+                    bib,
+                );
                 if root_parts.is_some() {
                     active.istack.pop();
                 }
@@ -2418,12 +2428,7 @@ fn lower_sequence<'t>(
     }
     flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
     if segment && active.any_live_unmaterialized() {
-        emit_segment_copies(
-            &mut output,
-            &mut run,
-            active,
-            &mut last_run_outer_scope,
-        );
+        emit_segment_copies(&mut output, &mut run, active, &mut last_run_outer_scope);
     }
     *elements = output;
     effects
@@ -2673,9 +2678,7 @@ fn empty_inline_scope_vanishes(element: &Element<'_>) -> bool {
 
 fn drop_empty_inline_scopes(elements: &mut Vec<Element>) {
     for element in elements.iter_mut() {
-        visit_children_mut(element, &mut |children| {
-            drop_empty_inline_scopes(children)
-        });
+        visit_children_mut(element, &mut |children| drop_empty_inline_scopes(children));
     }
     let mut index = 0;
     while index < elements.len() {
@@ -2692,9 +2695,7 @@ fn drop_empty_inline_scopes(elements: &mut Vec<Element>) {
 
 fn drop_vanished_paragraphs(elements: &mut Vec<Element>) {
     for element in elements.iter_mut() {
-        visit_children_mut(element, &mut |children| {
-            drop_vanished_paragraphs(children)
-        });
+        visit_children_mut(element, &mut |children| drop_vanished_paragraphs(children));
         if let Element::List { items, .. } = element {
             items.retain(|item| !vanished_list_item(item));
         }
@@ -2917,8 +2918,7 @@ fn close_flattened_scope<'t>(
     }
     flush_close_run(output, run, active, last_run_outer_scope, run_has_content);
     let crossed = resolved.is_some_and(|position| {
-        active.active_tail != Some(position)
-            || active.scopes[position].kind != close_kind
+        active.active_tail != Some(position) || active.scopes[position].kind != close_kind
     });
     let keep_trailing_space = crossed
         && !next_starts_with_space
@@ -3084,12 +3084,8 @@ fn element_has_real_content(element: &Element<'_>) -> bool {
         Element::Container(container) => {
             container.elements().iter().any(element_has_real_content)
         }
-        Element::Color { elements, .. } => {
-            elements.iter().any(element_has_real_content)
-        }
-        Element::Anchor { elements, .. } => {
-            elements.iter().any(element_has_real_content)
-        }
+        Element::Color { elements, .. } => elements.iter().any(element_has_real_content),
+        Element::Anchor { elements, .. } => elements.iter().any(element_has_real_content),
         Element::Partial(_) => false,
         _ => true,
     }
@@ -3397,7 +3393,16 @@ fn lower_children<'t>(
     let mut lowered = false;
     let mut visit = |children: &mut Vec<Element<'t>>| {
         lowered = true;
-        lower_sequence(children, valid, ordinal, active, trim_next_break, false, segment, bib);
+        lower_sequence(
+            children,
+            valid,
+            ordinal,
+            active,
+            trim_next_break,
+            false,
+            segment,
+            bib,
+        );
         if segment {
             active.pend_all();
         }
@@ -3702,7 +3707,10 @@ mod tests {
             ListItem::Elements {
                 attributes: AttributeMap::new(),
                 elements: vec![
-                    Element::Partial(PartialElement::InlineSizeOpen(cow!("170%"), cow!(""))),
+                    Element::Partial(PartialElement::InlineSizeOpen(
+                        cow!("170%"),
+                        cow!(""),
+                    )),
                     text!("partial body"),
                     Element::Partial(PartialElement::InlineSizeClose(cow!("[[/size]]"))),
                 ],
@@ -3742,14 +3750,14 @@ mod tests {
         );
     }
 
-
     #[test]
     fn lowering_caps_active_inline_scope_depth() {
         let mut elements = Vec::new();
         for _ in 0..(MAX_ACTIVE_INLINE_SCOPES + 1) {
-            elements.push(Element::Partial(PartialElement::InlineSizeOpen(cow!(
-                "font-size: larger;"
-            ), cow!(""))));
+            elements.push(Element::Partial(PartialElement::InlineSizeOpen(
+                cow!("font-size: larger;"),
+                cow!(""),
+            )));
         }
         elements.push(text!("bounded"));
         for _ in 0..(MAX_ACTIVE_INLINE_SCOPES + 1) {
@@ -3771,7 +3779,10 @@ mod tests {
         let mut elements = vec![Element::Container(Container::new(
             ContainerType::Paragraph,
             vec![
-                Element::Partial(PartialElement::InlineSizeOpen(cow!("font-size:0%;"), cow!(""))),
+                Element::Partial(PartialElement::InlineSizeOpen(
+                    cow!("font-size:0%;"),
+                    cow!(""),
+                )),
                 text!("literal"),
                 text!(" "),
                 Element::Partial(PartialElement::InlineSizeClose(cow!("[[/size]]"))),
@@ -3811,7 +3822,9 @@ mod tests {
                 ScopeKind::Span => elements.push(Element::Partial(
                     PartialElement::InlineSpanOpen(AttributeMap::new(), cow!(""), false),
                 )),
-                ScopeKind::Format(_) | ScopeKind::Color | ScopeKind::Anchor => unreachable!(),
+                ScopeKind::Format(_) | ScopeKind::Color | ScopeKind::Anchor => {
+                    unreachable!()
+                }
             }
         }
         elements.push(text!("mixed bounded"));
@@ -3825,7 +3838,9 @@ mod tests {
                 ScopeKind::Span => elements.push(Element::Partial(
                     PartialElement::InlineSpanClose(cow!("[[/span]]")),
                 )),
-                ScopeKind::Format(_) | ScopeKind::Color | ScopeKind::Anchor => unreachable!(),
+                ScopeKind::Format(_) | ScopeKind::Color | ScopeKind::Anchor => {
+                    unreachable!()
+                }
             }
         }
 
@@ -3841,9 +3856,10 @@ mod tests {
     fn unmatched_over_limit_inline_scopes_fail_closed() {
         let mut elements = Vec::new();
         for _ in 0..(MAX_ACTIVE_INLINE_SCOPES + 1) {
-            elements.push(Element::Partial(PartialElement::InlineSizeOpen(cow!(
-                "font-size: larger;"
-            ), cow!(""))));
+            elements.push(Element::Partial(PartialElement::InlineSizeOpen(
+                cow!("font-size: larger;"),
+                cow!(""),
+            )));
         }
         elements.push(text!("unmatched"));
 

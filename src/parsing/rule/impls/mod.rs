@@ -76,11 +76,12 @@ mod variable;
 
 pub use self::anchor::RULE_ANCHOR;
 pub use self::bibcite::RULE_BIBCITE;
+pub(crate) use self::block::blocks::wikidot_math_name;
 pub(crate) use self::block::head_word_names_known_block;
+pub use self::block::{RULE_BLOCK, RULE_BLOCK_SKIP_NEWLINE, RULE_BLOCK_STAR};
 pub(crate) use self::block::{
     get_block_rule_with_name_for_layout, head_seam_forms_block, head_word_never_resolves,
 };
-pub use self::block::{RULE_BLOCK, RULE_BLOCK_SKIP_NEWLINE, RULE_BLOCK_STAR};
 pub use self::blockquote::RULE_BLOCKQUOTE;
 pub use self::bold::RULE_BOLD;
 pub use self::center::RULE_CENTER;
@@ -97,7 +98,6 @@ pub use self::delayed::{RULE_DELAYED, RULE_DELAYED_CONDITIONAL};
 pub use self::double_angle::RULE_DOUBLE_ANGLE;
 pub use self::email::RULE_EMAIL;
 pub use self::entity::RULE_ENTITY;
-pub(crate) use self::block::blocks::wikidot_math_name;
 pub(crate) use self::entity::decode_semicolon_entities;
 pub use self::fallback::RULE_FALLBACK;
 pub use self::header::RULE_HEADER;

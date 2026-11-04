@@ -1,6 +1,6 @@
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
-use ftml::render::{text::TextRender, Render};
+use ftml::render::{Render, text::TextRender};
 use ftml::settings::{WikitextMode, WikitextSettings};
 use std::borrow::Cow;
 

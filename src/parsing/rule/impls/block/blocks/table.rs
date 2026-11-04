@@ -596,7 +596,6 @@ fn parse_row<'r, 't>(
     }
 }
 
-
 fn clip_wikidot_table_anchor_scopes(rows: &mut [TableRow<'_>]) {
     let mut pending = 0usize;
     for row in rows.iter_mut() {

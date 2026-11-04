@@ -85,7 +85,8 @@ fn parse_fn<'r, 't>(
             }
         }
         parser.enter_wikidot_anchor_body();
-        let anchor = Element::Partial(PartialElement::InlineAnchorOpen(attributes, target));
+        let anchor =
+            Element::Partial(PartialElement::InlineAnchorOpen(attributes, target));
         if !in_head {
             let source = parser.full_text().inner();
             let leading_separator = source[..parser.current().span.start]

@@ -39,9 +39,7 @@ pub(crate) fn normalize_wikidot_blocks(
         }
 
         let ElementFrame {
-            parent,
-            mut output,
-            ..
+            parent, mut output, ..
         } = stack.pop().expect("normalization stack was not empty");
         if !footnotes_empty {
             normalize_block_sequence(&mut output);
@@ -250,12 +248,12 @@ fn dissolve_footnote_block_containers<'t>(
                                 steps.push(DissolveStep::PushText(Cow::Borrowed(open)));
                             }
                             None => {
-                                let (ctype, attributes) = (
-                                    container.ctype(),
-                                    container.attributes().clone(),
-                                );
+                                let (ctype, attributes) =
+                                    (container.ctype(), container.attributes().clone());
                                 let children: Vec<Element<'t>> = container.into();
-                                steps.push(DissolveStep::FinishContainer(ctype, attributes));
+                                steps.push(DissolveStep::FinishContainer(
+                                    ctype, attributes,
+                                ));
                                 out_stack.push(Vec::new());
                                 steps.extend(
                                     children.into_iter().rev().map(DissolveStep::Process),
@@ -274,7 +272,9 @@ fn dissolve_footnote_block_containers<'t>(
                             format!("##{color}|")
                         };
                         steps.push(DissolveStep::PushText(Cow::Borrowed("##")));
-                        steps.extend(children.into_iter().rev().map(DissolveStep::Process));
+                        steps.extend(
+                            children.into_iter().rev().map(DissolveStep::Process),
+                        );
                         steps.push(DissolveStep::PushText(Cow::Owned(open)));
                     }
                     element => {

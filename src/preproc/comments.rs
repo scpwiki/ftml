@@ -283,8 +283,7 @@ fn iftags_spec_comment_starts(source: &str) -> BTreeSet<usize> {
             }
             if source[at..].starts_with("[!--") {
                 let close_search = at + "[!--".len();
-                let Some(relative_close) = source[close_search..].find("--]")
-                else {
+                let Some(relative_close) = source[close_search..].find("--]") else {
                     break;
                 };
                 at = close_search + relative_close + "--]".len();

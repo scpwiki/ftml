@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 use super::AttributeMap;
 use super::clone::{option_string_to_owned, string_to_owned};
 use std::borrow::Cow;
@@ -47,10 +46,14 @@ pub enum Module<'t> {
     /// Lists all the backlinks on the given page.
     ///
     /// If no page is listed, the backlinks are returned for the current page.
-    Backlinks { page: Option<Cow<'t, str>> },
+    Backlinks {
+        page: Option<Cow<'t, str>>,
+    },
 
     #[serde(rename_all = "kebab-case")]
-    Categories { include_hidden: bool },
+    Categories {
+        include_hidden: bool,
+    },
 
     #[serde(rename_all = "kebab-case")]
     Join {
@@ -96,7 +99,9 @@ pub enum Module<'t> {
     /// mapping, and the no-redirect notice belong to the application layer,
     /// which has the request URL and viewer context.
     #[serde(rename_all = "kebab-case")]
-    Redirect { destination: Option<Cow<'t, str>> },
+    Redirect {
+        destination: Option<Cow<'t, str>>,
+    },
 
     /// A delayed TagCloud module invocation.
     ///

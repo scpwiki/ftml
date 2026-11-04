@@ -19,7 +19,8 @@
  */
 
 use super::{
-    AnchorTarget, AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell, TableRow,
+    AnchorTarget, AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell,
+    TableRow,
 };
 use crate::parsing::ParseErrorKind;
 use std::borrow::Cow;

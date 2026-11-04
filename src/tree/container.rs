@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 use super::clone::elements_to_owned;
 use super::{Alignment, AttributeMap, Element, Heading, HtmlTag};
 use crate::layout::Layout;

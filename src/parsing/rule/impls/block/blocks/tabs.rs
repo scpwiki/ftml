@@ -100,8 +100,8 @@ fn parse_tabview<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let quote_ejection = parser.settings().layout.legacy()
-        && parser.native_blockquote_depth().is_some();
+    let quote_ejection =
+        parser.settings().layout.legacy() && parser.native_blockquote_depth().is_some();
 
     let parser = &mut ParserWrap::new(parser, AcceptsPartial::Tab);
 
@@ -196,9 +196,7 @@ fn parse_tabview<'r, 't>(
     success_elements_with_paragraph_safety(false, tabview, errors)
 }
 
-fn classify_quote_line<'r, 't>(
-    parser: &Parser<'r, 't>,
-) -> Option<(usize, Parser<'r, 't>)>
+fn classify_quote_line<'r, 't>(parser: &Parser<'r, 't>) -> Option<(usize, Parser<'r, 't>)>
 where
     'r: 't,
 {
@@ -303,7 +301,9 @@ where
             Elements::Single(element) => elements.push(element),
             Elements::None => {}
         }
-        if parser.current().span.start >= line_end || parser.current().span.start == before {
+        if parser.current().span.start >= line_end
+            || parser.current().span.start == before
+        {
             break;
         }
     }
@@ -322,9 +322,13 @@ where
     parser.set_quote_body_cursor(None);
     parser.set_native_blockquote_depth(None);
     let rule = parser.rule();
-    let result = gather_paragraphs(parser, rule, Some(|p: &mut Parser<'r, 't>| {
-        Ok(p.start_of_line() && p.current().token == Token::Quote)
-    }));
+    let result = gather_paragraphs(
+        parser,
+        rule,
+        Some(|p: &mut Parser<'r, 't>| {
+            Ok(p.start_of_line() && p.current().token == Token::Quote)
+        }),
+    );
     parser.set_quote_body_cursor(saved_cursor);
     parser.set_native_blockquote_depth(saved_depth);
     let (elements, run_errors, paragraph_safe) = result?.into();
@@ -436,7 +440,9 @@ where
                                 ));
                             } else {
                                 units.push(QuoteEscapedUnit::Row(
-                                    depth, row_elements, row_safe,
+                                    depth,
+                                    row_elements,
+                                    row_safe,
                                 ));
                             }
                         } else {
@@ -1285,7 +1291,8 @@ fn parse_tab<'r, 't>(
         }
     };
 
-    let (mut elements, mut errors, _) = parser.get_body_elements(&BLOCK_TAB, true)?.into();
+    let (mut elements, mut errors, _) =
+        parser.get_body_elements(&BLOCK_TAB, true)?.into();
     if parser.settings().layout.legacy()
         && parser.wikidot_tab_quote_ejection()
         && parser.quote_body_cursor().is_some()

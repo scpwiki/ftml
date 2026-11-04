@@ -155,9 +155,9 @@ fn try_consume_fn<'r, 't>(
     let leading_space = take_edge_space(&mut elements, true);
     let trailing_space = take_edge_space(&mut elements, false);
     if legacy
-        && elements.iter().all(|element| {
-            matches!(element, Element::Text(text) if text.trim().is_empty())
-        })
+        && elements.iter().all(
+            |element| matches!(element, Element::Text(text) if text.trim().is_empty()),
+        )
     {
         elements.clear();
     }
@@ -177,7 +177,10 @@ fn try_consume_fn<'r, 't>(
         );
     let element = color_element(spec, elements);
     let mut output = Vec::with_capacity(3);
-    if !starts_line && !spaces_vanish && let Some(space) = leading_space {
+    if !starts_line
+        && !spaces_vanish
+        && let Some(space) = leading_space
+    {
         output.push(space);
     }
     if space_survives {

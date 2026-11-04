@@ -114,7 +114,13 @@ fn a1_nested_collapsible_in_crossed_tail() {
     assert!(html.contains("z"), "html: {html}");
 }
 
-const A2_MARKERS: &[&str] = &["[[/li]]", "[[/ul]]", "[[/ol]]", "[[/div]]", "[[/collapsible]]"];
+const A2_MARKERS: &[&str] = &[
+    "[[/li]]",
+    "[[/ul]]",
+    "[[/ol]]",
+    "[[/div]]",
+    "[[/collapsible]]",
+];
 
 fn assert_list_closed_before(html: &str, list_close: &str, tail: &str) {
     let list_end = html.find(list_close).expect("list close tag present");

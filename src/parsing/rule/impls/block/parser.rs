@@ -1357,8 +1357,7 @@ where
         let mut queue: VecDeque<usize> = VecDeque::new();
         let mut paired: BTreeSet<usize> = BTreeSet::new();
         loop {
-            if scan.current().token == Token::InputEnd
-                || scan.at_hard_body_end_boundary()
+            if scan.current().token == Token::InputEnd || scan.at_hard_body_end_boundary()
             {
                 break;
             }
@@ -1653,8 +1652,7 @@ where
                                 if end_probe.current().span.start == designated {
                                     let mut close = end_probe.clone();
                                     if close.get_end_block().is_ok() {
-                                        end_span_end =
-                                            Some(close.current().span.start);
+                                        end_span_end = Some(close.current().span.start);
                                     }
                                 }
                                 if let Some(end_span_end) = end_span_end {
@@ -3738,7 +3736,9 @@ where
                     return false;
                 }
                 Token::ParagraphBreak => {
-                    parser.step().expect("tokenization always ends with input-end");
+                    parser
+                        .step()
+                        .expect("tokenization always ends with input-end");
                     continue;
                 }
                 _ => {}
@@ -3771,7 +3771,9 @@ where
                 if token_is_body_boundary(parser.current().token) {
                     break;
                 }
-                parser.step().expect("tokenization always ends with input-end");
+                parser
+                    .step()
+                    .expect("tokenization always ends with input-end");
             }
             match parser.current().token {
                 Token::LineBreak | Token::ParagraphBreak => {

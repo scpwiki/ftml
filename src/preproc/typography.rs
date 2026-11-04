@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 use super::Replacer;
 use super::parser_functions::LiteralRegionIndex;
 use crate::parsing::Token;
@@ -1242,22 +1241,21 @@ fn math_head_protects(
     let attr_led = |chunk: &str| {
         chunk.split_once('=').is_some_and(|(key, _)| {
             !key.is_empty()
-                && key
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+                && key.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
+                })
         })
     };
     let chunks = math_head_chunks(remainder);
     if chunks.iter().all(|chunk| attr_led(chunk)) {
         return true;
     }
-    let name = if !chunks[0].contains('=')
-        && chunks[1..].iter().all(|chunk| attr_led(chunk))
-    {
-        chunks[0]
-    } else {
-        remainder
-    };
+    let name =
+        if !chunks[0].contains('=') && chunks[1..].iter().all(|chunk| attr_led(chunk)) {
+            chunks[0]
+        } else {
+            remainder
+        };
     crate::parsing::wikidot_math_name(name)
 }
 

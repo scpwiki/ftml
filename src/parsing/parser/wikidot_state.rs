@@ -119,14 +119,12 @@ impl Parser<'_, '_> {
 
     #[inline]
     pub(crate) fn enter_wikidot_anchor_body(&mut self) {
-        self.wikidot.anchor_body_depth =
-            self.wikidot.anchor_body_depth.saturating_add(1);
+        self.wikidot.anchor_body_depth = self.wikidot.anchor_body_depth.saturating_add(1);
     }
 
     #[inline]
     pub(crate) fn leave_wikidot_anchor_body(&mut self) {
-        self.wikidot.anchor_body_depth =
-            self.wikidot.anchor_body_depth.saturating_sub(1);
+        self.wikidot.anchor_body_depth = self.wikidot.anchor_body_depth.saturating_sub(1);
     }
 
     #[inline]

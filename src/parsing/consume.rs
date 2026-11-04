@@ -427,9 +427,7 @@ where
         if scored_close {
             Element::Text(close_source_cow.clone())
         } else {
-            Element::Partial(PartialElement::InlineAnchorClose(
-                close_source_cow.clone(),
-            ))
+            Element::Partial(PartialElement::InlineAnchorClose(close_source_cow.clone()))
         }
     } else if !parser.discarding_hidden_body()
         && parser.rule().name() == "block-table-row"

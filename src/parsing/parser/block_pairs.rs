@@ -206,7 +206,11 @@ struct Scanner<'t> {
 }
 
 impl<'t> Scanner<'t> {
-    fn new(tokens: &'t [ExtractedToken<'t>], source: &'t str, page_info: &PageInfo<'t>) -> Self {
+    fn new(
+        tokens: &'t [ExtractedToken<'t>],
+        source: &'t str,
+        page_info: &PageInfo<'t>,
+    ) -> Self {
         let literal = LiteralRegionIndex::new(source);
         let mut zones: Vec<(usize, usize)> = Vec::new();
         for range in literal.ranges() {
@@ -300,10 +304,7 @@ impl<'t> Scanner<'t> {
                 ) {
                     last_content = Some(t);
                     if first_content.is_none()
-                        && !matches!(
-                            token.token,
-                            Token::Quote | Token::InputStart
-                        )
+                        && !matches!(token.token, Token::Quote | Token::InputStart)
                     {
                         first_content = Some(t);
                     }
@@ -355,7 +356,9 @@ impl<'t> Scanner<'t> {
             iftags_closers,
             module_skip_memo: std::cell::RefCell::new(std::collections::HashMap::new()),
             table_measure_memo: std::cell::RefCell::new(std::collections::HashMap::new()),
-            tabview_measure_memo: std::cell::RefCell::new(std::collections::HashMap::new()),
+            tabview_measure_memo: std::cell::RefCell::new(
+                std::collections::HashMap::new(),
+            ),
             measure_guard: std::cell::Cell::new(0),
             measure_guard_trips: std::cell::Cell::new(0),
             tabview_banned_lines: vec![false; line_count],
@@ -394,10 +397,14 @@ impl<'t> Scanner<'t> {
     fn followed_by_break(&self, mut index: usize) -> bool {
         while let Some(token) = self.tokens.get(index) {
             match token.token {
-                Token::Whitespace if token.slice.bytes().all(|b| matches!(b, b' ' | b'\t')) => {
+                Token::Whitespace
+                    if token.slice.bytes().all(|b| matches!(b, b' ' | b'\t')) =>
+                {
                     index += 1;
                 }
-                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return true,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                    return true;
+                }
                 _ => return false,
             }
         }
@@ -420,9 +427,9 @@ impl<'t> Scanner<'t> {
                 .count();
             if trailing_hyphens >= 2
                 && trailing_hyphens < token.slice.len()
-                && tokens
-                    .get(index + 1)
-                    .is_some_and(|next| next.token == Token::RightBracket && next.slice == "]")
+                && tokens.get(index + 1).is_some_and(|next| {
+                    next.token == Token::RightBracket && next.slice == "]"
+                })
             {
                 return Some(index + 2);
             }
@@ -457,8 +464,9 @@ impl<'t> Scanner<'t> {
                 Token::RightBlock => {
                     break (token.span.start, token.span.end);
                 }
-                Token::LineBreak | Token::ParagraphBreak
-                | Token::InputEnd => return None,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                    return None;
+                }
                 _ => index += 1,
             }
         };
@@ -490,28 +498,21 @@ impl<'t> Scanner<'t> {
             match token.token {
                 Token::InputEnd => return None,
                 Token::LeftBlock => {
-                    if let Some((inner, _)) =
-                        segment_head_name(tokens, index, true)
-                    {
-                        if self.source[inner].eq_ignore_ascii_case("iftags")
-                        {
+                    if let Some((inner, _)) = segment_head_name(tokens, index, true) {
+                        if self.source[inner].eq_ignore_ascii_case("iftags") {
                             depth += 1;
                         }
                     }
                 }
                 Token::LeftBlockEnd => {
-                    if let Some((inner, _)) =
-                        segment_head_name(tokens, index, true)
-                    {
-                        if self.source[inner].eq_ignore_ascii_case("iftags")
-                        {
+                    if let Some((inner, _)) = segment_head_name(tokens, index, true) {
+                        if self.source[inner].eq_ignore_ascii_case("iftags") {
                             depth -= 1;
                             if depth == 0 {
                                 let closer_start = token.span.start;
                                 let mut end_index = index;
                                 let closer_end = loop {
-                                    let end_token =
-                                        tokens.get(end_index)?;
+                                    let end_token = tokens.get(end_index)?;
                                     match end_token.token {
                                         Token::RightBlock => {
                                             break end_token.span.end;
@@ -600,14 +601,15 @@ impl<'t> Scanner<'t> {
                             segment.include_body,
                         ));
                         let straddle = self.tokens.get(segment.end.wrapping_sub(1));
-                        let completes = straddle.is_some_and(|token| {
-                            token.token == Token::RightLink
-                                && token.span.start < segment.range_end
-                                && segment.range_end < token.span.end
-                        }) && self.tokens.get(segment.end).is_some_and(|token| {
-                            token.token == Token::RightBracket
-                                && token.span.start == segment.range_end + 1
-                        });
+                        let completes =
+                            straddle.is_some_and(|token| {
+                                token.token == Token::RightLink
+                                    && token.span.start < segment.range_end
+                                    && segment.range_end < token.span.end
+                            }) && self.tokens.get(segment.end).is_some_and(|token| {
+                                token.token == Token::RightBracket
+                                    && token.span.start == segment.range_end + 1
+                            });
                         if completes {
                             fused_completion = Some(segment.end + 1);
                             break (segment.end - 1, Token::RightBlock);
@@ -671,11 +673,7 @@ impl<'t> Scanner<'t> {
         })
     }
 
-    fn head_extent(
-        &self,
-        name_end: usize,
-        terminator: Token,
-    ) -> Option<(usize, bool)> {
+    fn head_extent(&self, name_end: usize, terminator: Token) -> Option<(usize, bool)> {
         match terminator {
             Token::RightBlock | Token::RightLink => return Some((name_end + 1, false)),
             Token::InputEnd => return None,
@@ -744,16 +742,16 @@ impl<'t> Scanner<'t> {
                 Token::LeftBlock if !in_double => {
                     previous = Token::LeftBlock;
                     if let Some(segment) = self.segment_at(j) {
-                        let straddle =
-                            self.tokens.get(segment.end.wrapping_sub(1));
-                        let completes = straddle.is_some_and(|token| {
-                            token.token == Token::RightLink
-                                && token.span.start < segment.range_end
-                                && segment.range_end < token.span.end
-                        }) && self.tokens.get(segment.end).is_some_and(|token| {
-                            token.token == Token::RightBracket
-                                && token.span.start == segment.range_end + 1
-                        });
+                        let straddle = self.tokens.get(segment.end.wrapping_sub(1));
+                        let completes =
+                            straddle.is_some_and(|token| {
+                                token.token == Token::RightLink
+                                    && token.span.start < segment.range_end
+                                    && segment.range_end < token.span.end
+                            }) && self.tokens.get(segment.end).is_some_and(|token| {
+                                token.token == Token::RightBracket
+                                    && token.span.start == segment.range_end + 1
+                            });
                         if completes {
                             return Some((segment.end + 1, has_args));
                         }
@@ -830,7 +828,9 @@ impl<'t> Scanner<'t> {
             "block-tab" => WikidotBlockKind::Tab,
             "block-table" => WikidotBlockKind::Table,
             "block-table-row" => WikidotBlockKind::Row,
-            "block-table-cell-regular" | "block-table-cell-header" => WikidotBlockKind::Cell,
+            "block-table-cell-regular" | "block-table-cell-header" => {
+                WikidotBlockKind::Cell
+            }
             _ => return None,
         })
     }
@@ -873,7 +873,12 @@ impl<'t> Scanner<'t> {
         }
     }
 
-    fn head_valid(&self, kind: WikidotBlockKind, head: &HeadRead, head_index: usize) -> bool {
+    fn head_valid(
+        &self,
+        kind: WikidotBlockKind,
+        head: &HeadRead,
+        head_index: usize,
+    ) -> bool {
         match kind {
             WikidotBlockKind::Div | WikidotBlockKind::Note => {
                 !self.on_heading_line(head_index) && self.followed_by_break(head.head_end)
@@ -899,9 +904,7 @@ impl<'t> Scanner<'t> {
             match self.tokens[t].token {
                 Token::Quote => previous_quote = true,
                 Token::InputStart => {}
-                Token::Whitespace
-                    if previous_quote && self.tokens[t].slice == " " =>
-                {
+                Token::Whitespace if previous_quote && self.tokens[t].slice == " " => {
                     previous_quote = false
                 }
                 _ => return false,
@@ -918,9 +921,7 @@ impl<'t> Scanner<'t> {
             match self.tokens[t].token {
                 Token::Quote => previous_quote = true,
                 Token::InputStart => {}
-                Token::Whitespace if previous_quote
-                    && self.tokens[t].slice == " " =>
-                {
+                Token::Whitespace if previous_quote && self.tokens[t].slice == " " => {
                     previous_quote = false
                 }
                 Token::Whitespace => return true,
@@ -930,7 +931,12 @@ impl<'t> Scanner<'t> {
         false
     }
 
-    fn closer_valid(&self, kind: WikidotBlockKind, closer_index: usize, closer_end: usize) -> bool {
+    fn closer_valid(
+        &self,
+        kind: WikidotBlockKind,
+        closer_index: usize,
+        closer_end: usize,
+    ) -> bool {
         match kind {
             WikidotBlockKind::AlignCenter
             | WikidotBlockKind::AlignRight
@@ -1027,8 +1033,7 @@ impl<'t> Scanner<'t> {
                         flat_flags[i] = true;
                         continue;
                     }
-                    let lo = order
-                        .partition_point(|&j| ranges[j].0 <= a_start);
+                    let lo = order.partition_point(|&j| ranges[j].0 <= a_start);
                     let hi = order.partition_point(|&j| ranges[j].0 < a_end);
                     if lo < hi && range_max(lo, hi) > a_end {
                         flat_flags[i] = true;
@@ -1078,7 +1083,13 @@ impl<'t> Scanner<'t> {
         self.pair_events(events);
     }
 
-    fn walk_range(&mut self, start: usize, end: usize, depth: usize, events: &mut Vec<Event>) {
+    fn walk_range(
+        &mut self,
+        start: usize,
+        end: usize,
+        depth: usize,
+        events: &mut Vec<Event>,
+    ) {
         let mut i = start;
         while i < end {
             if self.head_dropped[i]
@@ -1307,7 +1318,8 @@ impl<'t> Scanner<'t> {
                                 j += 1;
                             }
                             Token::LeftBlock | Token::LeftBlockStar => {
-                                match self.skip_construct_in_body(j, self.tokens.len(), 0) {
+                                match self.skip_construct_in_body(j, self.tokens.len(), 0)
+                                {
                                     Some(next) => j = next,
                                     None => break,
                                 }
@@ -1398,7 +1410,8 @@ impl<'t> Scanner<'t> {
             WikidotBlockKind::AlignJustify,
         ];
         for kind in KINDS {
-            let evs: Vec<&Event> = events.iter().filter(|event| event.kind == kind).collect();
+            let evs: Vec<&Event> =
+                events.iter().filter(|event| event.kind == kind).collect();
             if evs.is_empty() {
                 continue;
             }
@@ -1688,17 +1701,16 @@ impl<'t> Scanner<'t> {
                 return None;
             }
             match self.tokens[pos].token {
-                Token::Whitespace | Token::LineBreak | Token::ParagraphBreak | Token::Quote => {
-                    pos += 1
-                }
+                Token::Whitespace
+                | Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::Quote => pos += 1,
                 Token::LeftComment => pos = self.skip_comment(pos)?,
                 Token::LeftBlock if depth < 32 => {
                     if let Some(segment) = self.segment_at(pos) {
                         if segment.include_body {
-                            let body_first =
-                                self.token_at_or_after(segment.body.start);
-                            let body_last =
-                                self.token_at_or_after(segment.body.end);
+                            let body_first = self.token_at_or_after(segment.body.start);
+                            let body_last = self.token_at_or_after(segment.body.end);
                             if let Some(inner) = self.skip_structure_space_depth(
                                 body_first,
                                 body_last.min(limit),
@@ -1774,15 +1786,24 @@ impl<'t> Scanner<'t> {
         }
         if matches!(
             subname.to_ascii_lowercase().as_str(),
-            "backlinks" | "categories" | "join" | "pagetree" | "rate"
-                | "tagcloud" | "redirect"
+            "backlinks"
+                | "categories"
+                | "join"
+                | "pagetree"
+                | "rate"
+                | "tagcloud"
+                | "redirect"
         ) {
             return Some(head.head_end);
         }
         let next_closer = self
             .module_closers
             .partition_point(|closer| *closer < head.head_end);
-        if self.module_closers.get(next_closer).is_none_or(|closer| *closer >= limit) {
+        if self
+            .module_closers
+            .get(next_closer)
+            .is_none_or(|closer| *closer >= limit)
+        {
             return Some(head.head_end);
         }
         let mut j = head.head_end;
@@ -1896,9 +1917,7 @@ impl<'t> Scanner<'t> {
                 }
                 Token::LeftBlock | Token::LeftBlockStar => {
                     let inner = self.read_head(j, false);
-                    if inner
-                        .as_ref()
-                        .and_then(|inner| self.classify(inner))
+                    if inner.as_ref().and_then(|inner| self.classify(inner))
                         == Some("block-footnote")
                     {
                         count += 1;
@@ -1951,7 +1970,8 @@ impl<'t> Scanner<'t> {
                             Some(WikidotBlockKind::Cell) => {
                                 return Some((j, j, close.head_end));
                             }
-                            Some(WikidotBlockKind::Row) | Some(WikidotBlockKind::Table) => {
+                            Some(WikidotBlockKind::Row)
+                            | Some(WikidotBlockKind::Table) => {
                                 return None;
                             }
                             _ => j = close.head_end,
@@ -2014,11 +2034,7 @@ impl<'t> Scanner<'t> {
         if depth > MAX_SCAN_DEPTH {
             return None;
         }
-        if let Some(cached) = self
-            .table_measure_memo
-            .borrow()
-            .get(&(head_index, limit))
-        {
+        if let Some(cached) = self.table_measure_memo.borrow().get(&(head_index, limit)) {
             return cached.clone();
         }
         if self.measure_guard.get() >= MAX_SCAN_DEPTH {
@@ -2125,10 +2141,7 @@ impl<'t> Scanner<'t> {
         if depth > MAX_SCAN_DEPTH {
             return None;
         }
-        if let Some(cached) = self
-            .tabview_measure_memo
-            .borrow()
-            .get(&(head_index, limit))
+        if let Some(cached) = self.tabview_measure_memo.borrow().get(&(head_index, limit))
         {
             return cached.clone();
         }
@@ -2210,9 +2223,8 @@ impl<'t> Scanner<'t> {
             {
                 name_end += 1;
             }
-            let first_content = (name_end..tab_head.head_end).find(|&t| {
-                self.tokens[t].token != Token::Whitespace
-            });
+            let first_content = (name_end..tab_head.head_end)
+                .find(|&t| self.tokens[t].token != Token::Whitespace);
             if let Some(t) = first_content
                 && matches!(
                     self.tokens[t].token,
@@ -2288,7 +2300,8 @@ mod tests {
             let tokenization = crate::tokenize(source);
             let parser = Parser::new(&tokenization, &info, &settings);
             let via_cache = parser.wikidot_block_pairs_for_test();
-            let direct = compute_wikidot_block_pairs(tokenization.tokens(), source, &info);
+            let direct =
+                compute_wikidot_block_pairs(tokenization.tokens(), source, &info);
             assert_eq!(format!("{via_cache:?}"), format!("{direct:?}"), "{source}");
         }
         let native = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
@@ -2326,7 +2339,8 @@ mod tests {
         let mut state = vec![0_u8; events.len()];
         let mut pairs = BTreeSet::new();
         loop {
-            let Some(head) = (0..events.len()).find(|&k| state[k] == 0 && events[k]) else {
+            let Some(head) = (0..events.len()).find(|&k| state[k] == 0 && events[k])
+            else {
                 break;
             };
             let available: Vec<usize> =
@@ -2372,8 +2386,7 @@ mod tests {
     fn pair_nest_matches_recursive_lazy_matcher() {
         for len in 0..=11_usize {
             for bits in 0..(1_u32 << len) {
-                let events: Vec<bool> =
-                    (0..len).map(|k| bits & (1 << k) != 0).collect();
+                let events: Vec<bool> = (0..len).map(|k| bits & (1 << k) != 0).collect();
                 assert_eq!(
                     production_pair_nest(&events),
                     naive_pair_nest(&events),
@@ -2424,11 +2437,7 @@ mod tests {
         for (name, source) in &cases {
             let tokenization = crate::tokenize(source);
             let start = Instant::now();
-            let pairs = compute_wikidot_block_pairs(
-                tokenization.tokens(),
-                source,
-                &info,
-            );
+            let pairs = compute_wikidot_block_pairs(tokenization.tokens(), source, &info);
             println!(
                 "hostile {name}: {:?} pairs={}",
                 start.elapsed(),
@@ -2458,10 +2467,8 @@ mod tests {
                 } else if path.file_name().is_some_and(|name| name == "input.ftml")
                     && let Ok(source) = std::fs::read_to_string(&path)
                 {
-                    let relative = path
-                        .strip_prefix(&manifest)
-                        .unwrap_or(&path)
-                        .display();
+                    let relative =
+                        path.strip_prefix(&manifest).unwrap_or(&path).display();
                     cases.push(Case {
                         id: format!("corpus-{relative}"),
                         source,
@@ -2493,13 +2500,15 @@ mod tests {
                 let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
                     continue;
                 };
-                if value["layout"].as_str().is_some_and(|layout| layout != "wikidot") {
+                if value["layout"]
+                    .as_str()
+                    .is_some_and(|layout| layout != "wikidot")
+                {
                     continue;
                 }
-                if let (Some(id), Some(source)) = (
-                    value["case_id"].as_str(),
-                    value["source"].as_str(),
-                ) {
+                if let (Some(id), Some(source)) =
+                    (value["case_id"].as_str(), value["source"].as_str())
+                {
                     cases.push(Case {
                         id: format!("{label}-{id}"),
                         source: source.to_string(),
@@ -2532,7 +2541,9 @@ mod tests {
                                 {
                                     if let Some(name) = kind.as_str() {
                                         match name {
-                                            "div" => bump(counts, WikidotBlockKind::Div, 1),
+                                            "div" => {
+                                                bump(counts, WikidotBlockKind::Div, 1)
+                                            }
                                             "note" => {
                                                 bump(counts, WikidotBlockKind::Note, 1)
                                             }
@@ -2629,17 +2640,14 @@ mod tests {
     }
 
     #[test]
-
-
     #[test]
     fn block_pairs_differential() {
-        let findings_set: std::collections::HashSet<(String, String)> =
-            FINDINGS_TEXT
-                .lines()
-                .filter(|line| !line.is_empty())
-                .filter_map(|line| line.split_once('\t'))
-                .map(|(case, detail)| (case.to_string(), detail.to_string()))
-                .collect();
+        let findings_set: std::collections::HashSet<(String, String)> = FINDINGS_TEXT
+            .lines()
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| line.split_once('\t'))
+            .map(|(case, detail)| (case.to_string(), detail.to_string()))
+            .collect();
         let settings = wikidot_settings();
         let info = PageInfo::dummy();
         let cases = load_cases();
@@ -2656,11 +2664,8 @@ mod tests {
             );
             let effective = repaired.as_ref().unwrap_or(&tokenization);
             let tokens = effective.tokens();
-            let scan = compute_wikidot_block_pairs(
-                tokens,
-                effective.full_text().inner(),
-                &info,
-            );
+            let scan =
+                compute_wikidot_block_pairs(tokens, effective.full_text().inner(), &info);
             recorder_enable();
             let outcome = crate::parsing::parse_for_test(effective, &info, &settings);
             let recorded = recorder_take();
@@ -2716,7 +2721,9 @@ mod tests {
                     .collect();
                 if matches!(
                     kind,
-                    WikidotBlockKind::Row | WikidotBlockKind::Cell | WikidotBlockKind::Tab
+                    WikidotBlockKind::Row
+                        | WikidotBlockKind::Cell
+                        | WikidotBlockKind::Tab
                 ) && rec.len() != tree_count
                 {
                     let parent = match kind {
@@ -2775,9 +2782,7 @@ mod tests {
                     scan_of_kind.iter().map(|(s, e, _)| (*s, *e)).collect();
                 for (s, e, flat) in &scan_of_kind {
                     if !flat
-                        && !rec
-                            .iter()
-                            .any(|&(rs, re)| rs == *s && ends_match(*e, re))
+                        && !rec.iter().any(|&(rs, re)| rs == *s && ends_match(*e, re))
                     {
                         let detail = format!("{kind:?}@{s}..{e} scan-only");
                         if findings_set.contains(&(case.id.clone(), detail.clone())) {
