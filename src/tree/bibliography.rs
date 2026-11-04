@@ -18,19 +18,50 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-use super::Element;
 use super::clone::{elements_to_owned, string_to_owned};
+use super::{AttributeMap, ContainerType, Element};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 const RESIDUAL_LABEL: &str = "\0";
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BibliographyScopeWrapper<'t> {
+    Container {
+        ctype: ContainerType,
+        attributes: AttributeMap<'t>,
+    },
+    Color {
+        color: Cow<'t, str>,
+        background: bool,
+    },
+}
+
+impl BibliographyScopeWrapper<'_> {
+    pub fn to_owned(&self) -> BibliographyScopeWrapper<'static> {
+        match self {
+            BibliographyScopeWrapper::Container { ctype, attributes } => {
+                BibliographyScopeWrapper::Container {
+                    ctype: *ctype,
+                    attributes: attributes.to_owned(),
+                }
+            }
+            BibliographyScopeWrapper::Color { color, background } => {
+                BibliographyScopeWrapper::Color {
+                    color: string_to_owned(color),
+                    background: *background,
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Bibliography<'t> {
     entries: Vec<(Cow<'t, str>, Vec<Element<'t>>)>,
     label_index: HashMap<String, IndexedReference>,
+    reopened_wrappers: Vec<Vec<BibliographyScopeWrapper<'t>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +109,7 @@ impl<'t> Bibliography<'t> {
         let mut bibliography = Bibliography {
             entries,
             label_index: HashMap::new(),
+            reopened_wrappers: Vec::new(),
         };
         bibliography.rebuild_label_index();
         bibliography
@@ -155,6 +187,19 @@ impl<'t> Bibliography<'t> {
         found
     }
 
+    pub fn reopened_wrappers(&self, index: usize) -> &[BibliographyScopeWrapper<'t>] {
+        self.reopened_wrappers
+            .get(index)
+            .map_or(&[], |wrappers| wrappers)
+    }
+
+    pub(crate) fn set_reopened_wrappers(
+        &mut self,
+        wrappers: Vec<Vec<BibliographyScopeWrapper<'t>>>,
+    ) {
+        self.reopened_wrappers = wrappers;
+    }
+
     #[inline]
     pub fn slice(&self) -> &[(Cow<'t, str>, Vec<Element<'t>>)] {
         &self.entries
@@ -166,14 +211,25 @@ impl<'t> Bibliography<'t> {
     }
 
     pub fn to_owned(&self) -> Bibliography<'static> {
-        Bibliography::from_entries(
+        let mut bibliography = Bibliography::from_entries(
             self.entries
                 .iter()
                 .map(|(label, elements)| {
                     (string_to_owned(label), elements_to_owned(elements))
                 })
                 .collect(),
-        )
+        );
+        bibliography.reopened_wrappers = self
+            .reopened_wrappers
+            .iter()
+            .map(|wrappers| {
+                wrappers
+                    .iter()
+                    .map(BibliographyScopeWrapper::to_owned)
+                    .collect()
+            })
+            .collect();
+        bibliography
     }
 }
 

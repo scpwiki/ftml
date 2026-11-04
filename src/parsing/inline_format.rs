@@ -2,8 +2,8 @@ use crate::parsing::rule::impls::{
     is_wikidot_only_autolink_url, normalize_wikidot_color,
 };
 use crate::tree::{
-    AnchorTarget, AttributeMap, Container, ContainerType, Element, InlineFormatKind,
-    LinkLabel, LinkLocation, ListItem, PartialElement,
+    AnchorTarget, AttributeMap, Bibliography, Container, ContainerType, Element,
+    InlineFormatKind, LinkLabel, LinkLocation, ListItem, PartialElement,
 };
 use std::borrow::Cow;
 use std::mem;
@@ -189,6 +189,40 @@ fn normalize_sequence_scoped<'t>(
     elements: &mut Vec<Element<'t>>,
     inside_monospace: bool,
 ) {
+    normalize_sequence_passes(elements, inside_monospace);
+    normalize_sequence_children(elements);
+    lower_dash_runs(elements);
+    substitute_number_unit_spaces(elements);
+}
+
+fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
+    for element in elements.iter_mut() {
+        if is_segment_container(element) {
+            normalize_segment_container(element);
+        } else if matches!(
+            element,
+            Element::Container(container)
+                if container.ctype() == ContainerType::Monospace
+        ) {
+            visit_children_mut(element, normalize_sequence_inside_monospace);
+        } else {
+            visit_children_mut(element, normalize_sequence);
+        }
+    }
+}
+
+fn is_segment_container(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::List { .. } | Element::DefinitionList(_) | Element::Table(_)
+    )
+}
+
+fn normalize_sequence_passes<'t>(
+    elements: &mut Vec<Element<'t>>,
+    inside_monospace: bool,
+) -> bool {
+    let mut any_changed = false;
     for _ in 0..MAX_NORMALIZATION_PASSES {
         let mut changed = repair_literal_marker_pairs_pass(elements, inside_monospace)
             | repair_fifo_triples_pass(elements)
@@ -209,22 +243,12 @@ fn normalize_sequence_scoped<'t>(
         }
         changed |=
             repair_wikidot_scheme_star_pass(elements) | repair_dash_runs_pass(elements);
+        any_changed |= changed;
         if !changed {
             break;
         }
     }
-
-    for element in elements.iter_mut() {
-        if matches!(element, Element::Container(container) if container.ctype() == ContainerType::Monospace)
-        {
-            visit_children_mut(element, normalize_sequence_inside_monospace);
-        } else {
-            visit_children_mut(element, normalize_sequence);
-        }
-    }
-
-    lower_dash_runs(elements);
-    substitute_number_unit_spaces(elements);
+    any_changed
 }
 
 fn substitute_number_unit_spaces<'t>(elements: &mut [Element<'t>]) {
@@ -1192,6 +1216,404 @@ const LITERAL_MARKERS: [InlineFormatKind; 3] = [
 const MARKER_TEXTS: [&str; 6] = ["**", "//", "__", "{{", "}}", "##"];
 const MONO_EXPANSION_MARKER_TEXTS: [&str; 4] = ["**", "//", "__", "##"];
 
+pub(crate) fn normalize_wikidot_bibliography<'t>(bibliography: &mut Bibliography<'t>) {
+    let mut segments: Vec<&mut Vec<Element<'t>>> = bibliography
+        .slice_mut()
+        .iter_mut()
+        .map(|(_, elements)| elements)
+        .collect();
+    normalize_segments(&mut segments);
+}
+
+fn normalize_segment_container<'t>(element: &mut Element<'t>) {
+    let mut segments = segment_vecs_mut(element);
+    normalize_segments(&mut segments);
+}
+
+fn normalize_segments<'t>(segments: &mut [&mut Vec<Element<'t>>]) {
+    for _ in 0..MAX_NORMALIZATION_PASSES {
+        let mut changed = repair_literal_marker_pairs_segments(segments, false);
+        changed |= repair_dash_runs_segments(segments);
+        for segment in segments.iter_mut() {
+            changed |= normalize_sequence_passes(segment, false);
+        }
+        if !changed {
+            break;
+        }
+    }
+    for segment in segments.iter_mut() {
+        normalize_sequence_children(segment);
+        lower_dash_runs(segment);
+        substitute_number_unit_spaces(segment);
+    }
+}
+
+fn segment_vecs_mut<'a, 't>(
+    element: &'a mut Element<'t>,
+) -> Vec<&'a mut Vec<Element<'t>>> {
+    let mut segments = Vec::new();
+    match element {
+        Element::List { items, .. } => collect_list_segments(items, &mut segments),
+        Element::DefinitionList(items) => {
+            for item in items {
+                segments.push(&mut item.key_elements);
+                segments.push(&mut item.value_elements);
+            }
+        }
+        Element::Table(table) => {
+            for row in &mut table.rows {
+                for cell in &mut row.cells {
+                    segments.push(table_cell_segment(&mut cell.elements));
+                }
+            }
+        }
+        _ => {}
+    }
+    segments
+}
+
+fn collect_list_segments<'a, 't>(
+    items: &'a mut [ListItem<'t>],
+    segments: &mut Vec<&'a mut Vec<Element<'t>>>,
+) {
+    for item in items {
+        match item {
+            ListItem::Elements { elements, .. } => segments.push(elements),
+            ListItem::SubList { element } => {
+                if let Element::List { items, .. } = &mut **element {
+                    collect_list_segments(items, segments);
+                }
+            }
+        }
+    }
+}
+
+fn table_cell_segment<'a, 't>(
+    elements: &'a mut Vec<Element<'t>>,
+) -> &'a mut Vec<Element<'t>> {
+    if elements.len() == 1
+        && matches!(
+            &elements[0],
+            Element::Container(container)
+                if container.ctype() == ContainerType::Paragraph
+        )
+    {
+        match &mut elements[0] {
+            Element::Container(container) => container.elements_mut(),
+            _ => unreachable!(),
+        }
+    } else {
+        elements
+    }
+}
+
+fn project_marker_stream<'a, 't>(
+    elements: &'a [Element<'t>],
+    projection: &mut Vec<ProjItem<'a>>,
+) {
+    for element in elements {
+        match element {
+            Element::List { items, .. } => {
+                for item in items {
+                    match item {
+                        ListItem::Elements { elements, .. } => {
+                            project_marker_stream(elements, projection);
+                        }
+                        ListItem::SubList { element } => {
+                            project_marker_stream(
+                                std::slice::from_ref(element.as_ref()),
+                                projection,
+                            );
+                        }
+                    }
+                }
+            }
+            _ => project_marker_sequence(std::slice::from_ref(element), projection),
+        }
+    }
+}
+
+fn apply_marker_stream<'t>(
+    elements: Vec<Element<'t>>,
+    roles: &[Option<PairRole<'t>>],
+    cursor: &mut usize,
+) -> Vec<Element<'t>> {
+    let mut output = Vec::with_capacity(elements.len());
+    let mut run: Vec<Element<'t>> = Vec::new();
+    for element in elements {
+        if matches!(element, Element::List { .. }) {
+            if !run.is_empty() {
+                output.extend(apply_marker_roles(
+                    std::mem::take(&mut run),
+                    roles,
+                    cursor,
+                ));
+            }
+            output.push(apply_marker_stream_list(element, roles, cursor));
+        } else {
+            run.push(element);
+        }
+    }
+    if !run.is_empty() {
+        output.extend(apply_marker_roles(run, roles, cursor));
+    }
+    output
+}
+
+fn apply_marker_stream_list<'t>(
+    element: Element<'t>,
+    roles: &[Option<PairRole<'t>>],
+    cursor: &mut usize,
+) -> Element<'t> {
+    match element {
+        Element::List {
+            ltype,
+            attributes,
+            items,
+        } => Element::List {
+            ltype,
+            attributes,
+            items: items
+                .into_iter()
+                .map(|item| match item {
+                    ListItem::Elements {
+                        attributes,
+                        elements,
+                    } => ListItem::Elements {
+                        attributes,
+                        elements: apply_marker_stream(elements, roles, cursor),
+                    },
+                    ListItem::SubList { element } => ListItem::SubList {
+                        element: Box::new(apply_marker_stream_list(
+                            *element, roles, cursor,
+                        )),
+                    },
+                })
+                .collect(),
+        },
+        _ => element,
+    }
+}
+
+fn stream_has_pairing_material(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| match element {
+        Element::List { items, .. } => items.iter().any(|item| match item {
+            ListItem::Elements { elements, .. } => stream_has_pairing_material(elements),
+            ListItem::SubList { element } => {
+                stream_has_pairing_material(std::slice::from_ref(element.as_ref()))
+            }
+        }),
+        _ => sequence_has_pairing_material(std::slice::from_ref(element)),
+    })
+}
+
+fn dash_segment_placeholder<'t>() -> Element<'t> {
+    Element::Container(Container::new(
+        ContainerType::Italics,
+        vec![Element::Text(Cow::Borrowed("\u{FFFC}"))],
+        AttributeMap::new(),
+    ))
+}
+
+fn is_dash_segment_placeholder(element: &Element<'_>) -> bool {
+    match element {
+        Element::Container(container) => {
+            container.ctype() == ContainerType::Italics
+                && container.attributes().get().is_empty()
+                && match container.elements() {
+                    [Element::Text(text)] => text.as_ref() == "\u{FFFC}",
+                    _ => false,
+                }
+        }
+        _ => false,
+    }
+}
+
+fn repair_dash_runs_segments<'t>(segments: &mut [&mut Vec<Element<'t>>]) -> bool {
+    if segments.len() < 2
+        || !segments
+            .iter()
+            .any(|segment| segment.iter().any(subtree_has_dash_pair))
+    {
+        return false;
+    }
+    let mut joined: Vec<Element<'t>> = Vec::new();
+    let mut placeholders: Vec<usize> = Vec::new();
+    for (index, segment) in segments.iter_mut().enumerate() {
+        if index > 0 {
+            placeholders.push(joined.len());
+            joined.push(dash_segment_placeholder());
+        }
+        joined.append(segment);
+    }
+    let mut changed = truncate_dash_run_containers(&mut joined);
+    changed |= pair_crossing_dash_runs(&mut joined, &placeholders);
+    let mut split: Vec<Vec<Element<'t>>> =
+        (0..segments.len()).map(|_| Vec::new()).collect();
+    split_dash_joined(joined, &mut split);
+    for (segment, elements) in segments.iter_mut().zip(split) {
+        **segment = elements;
+    }
+    changed
+}
+
+fn pair_crossing_dash_runs<'t>(
+    elements: &mut Vec<Element<'t>>,
+    placeholders: &[usize],
+) -> bool {
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+
+    while index < input.len() {
+        let scan = build_dash_scan(
+            &|element_index| {
+                input
+                    .get(element_index)
+                    .and_then(|element| element.as_ref())
+            },
+            input.len(),
+            index,
+            false,
+        );
+        if scan.end == index {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        }
+        let boundary_positions: Vec<usize> = scan
+            .units
+            .iter()
+            .filter_map(|unit| match unit {
+                DashScanUnit::Atom { element, pos } if placeholders.contains(element) => {
+                    Some(*pos)
+                }
+                _ => None,
+            })
+            .collect();
+        let pairs: Vec<(usize, usize)> = dash_stream_pairs(&scan.stream)
+            .into_iter()
+            .filter(|&(open, close)| {
+                boundary_positions
+                    .iter()
+                    .any(|&pos| open < pos && pos < close)
+            })
+            .collect();
+        if pairs.is_empty() {
+            for element_index in index..scan.end {
+                output.push(take_element(&mut input, element_index));
+            }
+            index = scan.end;
+            continue;
+        }
+        changed = true;
+        emit_dash_pairs(&mut input, &scan, &pairs, &mut output);
+        index = scan.end;
+    }
+
+    *elements = output;
+    changed
+}
+
+fn split_dash_joined<'t>(joined: Vec<Element<'t>>, segments: &mut [Vec<Element<'t>>]) {
+    let mut current = 0;
+    for element in joined {
+        if is_dash_segment_placeholder(&element) {
+            current += 1;
+            continue;
+        }
+        let splits = matches!(
+            &element,
+            Element::Container(container)
+                if container.ctype() == ContainerType::Strikethrough
+                    && container
+                        .elements()
+                        .iter()
+                        .any(is_dash_segment_placeholder)
+        );
+        if splits {
+            let Element::Container(container) = element else {
+                unreachable!();
+            };
+            let children = Vec::from(container);
+            let mut pieces: Vec<Vec<Element<'t>>> = vec![Vec::new()];
+            for child in children {
+                if is_dash_segment_placeholder(&child) {
+                    pieces.push(Vec::new());
+                } else {
+                    pieces.last_mut().expect("piece exists").push(child);
+                }
+            }
+            let last = pieces.len() - 1;
+            for (index, piece) in pieces.into_iter().enumerate() {
+                let target = &mut segments[current + index];
+                if index == 0 {
+                    target.push(Element::Partial(PartialElement::InlineFormatOpen(
+                        InlineFormatKind::Strikethrough,
+                    )));
+                }
+                target.extend(piece);
+                if index == last {
+                    target.push(Element::Partial(PartialElement::InlineFormatClose(
+                        InlineFormatKind::Strikethrough,
+                    )));
+                }
+            }
+            current += last;
+            continue;
+        }
+        segments[current].push(element);
+    }
+}
+
+fn repair_literal_marker_pairs_segments<'t>(
+    segments: &mut [&mut Vec<Element<'t>>],
+    inside_monospace: bool,
+) -> bool {
+    if !segments
+        .iter()
+        .any(|segment| stream_has_pairing_material(segment))
+    {
+        return false;
+    }
+    let mut originals: Vec<Vec<Element<'t>>> = Vec::with_capacity(segments.len());
+    for segment in segments.iter_mut() {
+        originals.push(
+            take_elements(segment)
+                .into_iter()
+                .map(Option::unwrap)
+                .collect(),
+        );
+    }
+    let mut projection = Vec::new();
+    for original in &originals {
+        project_marker_stream(original, &mut projection);
+    }
+    let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
+    roles.resize_with(projection.len(), || None);
+    let mut found = false;
+    for kind in LITERAL_MARKERS {
+        found |= pair_symmetric_markers(&projection, &mut roles, kind);
+    }
+    if !inside_monospace {
+        found |= pair_monospace_markers(&projection, &mut roles);
+    }
+    found |= pair_color_markers(&projection, &mut roles);
+    if !found {
+        for (segment, original) in segments.iter_mut().zip(originals) {
+            **segment = original;
+        }
+        return false;
+    }
+    let mut cursor = 0;
+    for (segment, original) in segments.iter_mut().zip(originals) {
+        **segment = apply_marker_stream(original, &roles, &mut cursor);
+    }
+    debug_assert_eq!(cursor, roles.len());
+    true
+}
+
 fn repair_literal_marker_pairs_pass<'t>(
     elements: &mut Vec<Element<'t>>,
     inside_monospace: bool,
@@ -1294,9 +1716,8 @@ fn apply_marker_roles<'t>(
             let children = apply_marker_roles(children, roles, cursor);
             let close_index = *cursor;
             *cursor += 1;
-            let subtree_changed = roles[open_index..=close_index]
-                .iter()
-                .any(Option::is_some);
+            let subtree_changed =
+                roles[open_index..=close_index].iter().any(Option::is_some);
             if !subtree_changed {
                 output.push(shell.build(children));
                 continue;
@@ -1326,9 +1747,7 @@ fn apply_marker_roles<'t>(
                 output.push(Element::Partial(PartialElement::InlineFormatOpen(*kind)));
             }
             Some(PairRole::FormatClose(kind)) => {
-                output.push(Element::Partial(PartialElement::InlineFormatClose(
-                    *kind,
-                )));
+                output.push(Element::Partial(PartialElement::InlineFormatClose(*kind)));
             }
             Some(PairRole::ColorOpen(color, background)) => {
                 output.push(Element::Partial(PartialElement::InlineColorOpen(
@@ -1383,16 +1802,12 @@ fn push_edge_replacement<'t>(
             Expansion::Color => {
                 if let FormatShell::Color { color, background } = shell {
                     if open_edge {
-                        output.push(Element::Partial(
-                            PartialElement::InlineColorOpen(
-                                color.clone(),
-                                *background,
-                            ),
-                        ));
+                        output.push(Element::Partial(PartialElement::InlineColorOpen(
+                            color.clone(),
+                            *background,
+                        )));
                     } else {
-                        output.push(Element::Partial(
-                            PartialElement::InlineColorClose,
-                        ));
+                        output.push(Element::Partial(PartialElement::InlineColorClose));
                     }
                 }
             }
@@ -1437,9 +1852,7 @@ fn expansion_of(element: &Element<'_>) -> Option<Expansion> {
             }
             match kind_from_container(container.ctype())? {
                 FormatKind::Bold => Some(Expansion::Format(InlineFormatKind::Bold)),
-                FormatKind::Italics => {
-                    Some(Expansion::Format(InlineFormatKind::Italics))
-                }
+                FormatKind::Italics => Some(Expansion::Format(InlineFormatKind::Italics)),
                 FormatKind::Underline => {
                     Some(Expansion::Format(InlineFormatKind::Underline))
                 }
@@ -1474,9 +1887,8 @@ fn subtree_has_barrier(element: &Element<'_>) -> bool {
     if pairing_barrier(element) {
         return true;
     }
-    formatter_children(element).is_some_and(|children| {
-        children.iter().any(subtree_has_barrier)
-    })
+    formatter_children(element)
+        .is_some_and(|children| children.iter().any(subtree_has_barrier))
 }
 
 fn pairing_barrier(element: &Element<'_>) -> bool {
@@ -1552,15 +1964,13 @@ fn pair_symmetric_markers<'t>(
     let mut segment_start = 0;
     let mut segment_has_literal = false;
     for index in 0..=projection.len() {
-        if index == projection.len() || matches!(projection[index], ProjItem::Barrier)
-        {
+        if index == projection.len() || matches!(projection[index], ProjItem::Barrier) {
             if segment_has_literal {
                 edge_active[segment_start..index].fill(true);
             }
             segment_start = index + 1;
             segment_has_literal = false;
-        } else if matches!(projection[index], ProjItem::Text(value) if value == marker)
-        {
+        } else if matches!(projection[index], ProjItem::Text(value) if value == marker) {
             segment_has_literal = true;
         }
     }
@@ -1618,8 +2028,7 @@ fn pair_symmetric_markers<'t>(
                             if let Some(sibling) = siblings[endpoint]
                                 && roles[sibling].is_none()
                             {
-                                roles[sibling] =
-                                    Some(PairRole::LiteralMarker(kind));
+                                roles[sibling] = Some(PairRole::LiteralMarker(kind));
                             }
                         }
                         for swept in open_index..=index {
@@ -1630,13 +2039,11 @@ fn pair_symmetric_markers<'t>(
                                 if edge_kind == kind
                             );
                             if is_edge && roles[swept].is_none() {
-                                roles[swept] =
-                                    Some(PairRole::LiteralMarker(kind));
+                                roles[swept] = Some(PairRole::LiteralMarker(kind));
                                 if let Some(sibling) = siblings[swept]
                                     && roles[sibling].is_none()
                                 {
-                                    roles[sibling] =
-                                        Some(PairRole::LiteralMarker(kind));
+                                    roles[sibling] = Some(PairRole::LiteralMarker(kind));
                                 }
                             }
                         }
@@ -1733,8 +2140,7 @@ fn pair_color_markers<'t>(
         }
         if pending.is_none() {
             if depth == 0
-                && let Some((color, background, len)) =
-                    color_head_at(projection, index)
+                && let Some((color, background, len)) = color_head_at(projection, index)
             {
                 pending = Some((index, index + len, color, background));
             }
@@ -1838,9 +2244,7 @@ fn subtree_has_dash_pair(element: &Element<'_>) -> bool {
         Element::Container(container) => {
             container.elements().iter().any(subtree_has_dash_pair)
         }
-        Element::Color { elements, .. } => {
-            elements.iter().any(subtree_has_dash_pair)
-        }
+        Element::Color { elements, .. } => elements.iter().any(subtree_has_dash_pair),
         Element::Link { label, .. } => match label {
             LinkLabel::Text(value) | LinkLabel::Slug(value) => value.contains("--"),
             _ => false,
@@ -1941,9 +2345,7 @@ fn dash_stream_close(stream: &[char], content_start: usize) -> Option<usize> {
 
 fn dash_stream_opener(stream: &[char], from: usize) -> Option<usize> {
     (from..stream.len().saturating_sub(2)).find(|&pos| {
-        stream[pos] == '-'
-            && stream[pos + 1] == '-'
-            && !stream[pos + 2].is_whitespace()
+        stream[pos] == '-' && stream[pos + 1] == '-' && !stream[pos + 2].is_whitespace()
     })
 }
 
@@ -1964,10 +2366,7 @@ fn dash_stream_pairs(stream: &[char]) -> Vec<(usize, usize)> {
 }
 
 fn dash_stream_has_unmatched_opener(stream: &[char], pairs: &[(usize, usize)]) -> bool {
-    let from = pairs
-        .last()
-        .map(|&(_, close)| close + 2)
-        .unwrap_or(0);
+    let from = pairs.last().map(|&(_, close)| close + 2).unwrap_or(0);
     let Some(open) = dash_stream_opener(stream, from) else {
         return false;
     };
@@ -1989,13 +2388,9 @@ fn emit_dash_segments<'t>(
                 start,
                 end,
             } => {
-                let value = text(
-                    input[element]
-                        .as_ref()
-                        .expect("unit element present"),
-                )
-                .expect("text unit holds text")
-                .to_owned();
+                let value = text(input[element].as_ref().expect("unit element present"))
+                    .expect("text unit holds text")
+                    .to_owned();
                 let mut pos = start;
                 while pos < end {
                     let owner = char_segment(pos);
@@ -2057,11 +2452,7 @@ fn truncate_dash_run_containers<'t>(elements: &mut Vec<Element<'t>>) -> bool {
             0,
             true,
         );
-        let close = if scan
-            .stream
-            .first()
-            .is_some_and(|ch| !ch.is_whitespace())
-        {
+        let close = if scan.stream.first().is_some_and(|ch| !ch.is_whitespace()) {
             dash_stream_close(&scan.stream, 0)
         } else {
             None
@@ -2207,12 +2598,9 @@ fn pair_dash_run_stream<'t>(elements: &mut Vec<Element<'t>>) -> bool {
         }
         let pairs = dash_stream_pairs(&scan.stream);
         if dash_stream_has_unmatched_opener(&scan.stream, &pairs) {
-            if let Some(next) = expand_dash_strike_container(
-                &mut input,
-                index,
-                &scan,
-                &mut output,
-            ) {
+            if let Some(next) =
+                expand_dash_strike_container(&mut input, index, &scan, &mut output)
+            {
                 changed = true;
                 index = next;
                 continue;
@@ -2249,12 +2637,8 @@ fn expand_dash_strike_container<'t>(
         return None;
     }
     let children = container_ref.elements();
-    let child_scan = build_dash_scan(
-        &|index| children.get(index),
-        children.len(),
-        0,
-        false,
-    );
+    let child_scan =
+        build_dash_scan(&|index| children.get(index), children.len(), 0, false);
     if child_scan.end != children.len() {
         return None;
     }
@@ -2285,22 +2669,23 @@ fn expand_dash_strike_container<'t>(
     for element_index in start..scan.end {
         flat.push(Some(take_element(input, element_index)));
     }
-    flat.push(Some(Element::Text(FormatKind::Strike.close_marker().into())));
+    flat.push(Some(Element::Text(
+        FormatKind::Strike.close_marker().into(),
+    )));
     let container_element = take_element(input, container_index);
     let (_, children) =
         FormatShell::into_parts(container_element).expect("strike container has parts");
     for child in children {
         flat.push(Some(child));
     }
-    flat.push(Some(Element::Text(FormatKind::Strike.close_marker().into())));
+    flat.push(Some(Element::Text(
+        FormatKind::Strike.close_marker().into(),
+    )));
     for element_index in container_index + 1..continuation.end {
         flat.push(Some(take_element(input, element_index)));
     }
     let flat_scan = build_dash_scan(
-        &|element_index| {
-            flat.get(element_index)
-                .and_then(|element| element.as_ref())
-        },
+        &|element_index| flat.get(element_index).and_then(|element| element.as_ref()),
         flat.len(),
         0,
         false,

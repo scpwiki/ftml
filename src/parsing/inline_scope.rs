@@ -1,6 +1,6 @@
 use crate::tree::{
-    AttributeMap, Container, ContainerType, Element, InlineFormatKind, ListItem,
-    PartialElement,
+    AttributeMap, Bibliography, BibliographyScopeWrapper, Container, ContainerType,
+    Element, InlineFormatKind, ListItem, PartialElement,
 };
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
@@ -122,6 +122,7 @@ struct ActiveScopes<'t> {
     close_pairs: BTreeMap<usize, usize>,
     open_instances: BTreeMap<usize, usize>,
     istack: Vec<IstEntry<'t>>,
+    cell_local: bool,
 }
 
 struct ActiveScopeRevIter<'a, 't> {
@@ -268,6 +269,12 @@ impl<'t> ActiveScopes<'t> {
     }
 
     fn resolve_close(&self, close_ordinal: usize, tag: InlineTag) -> Option<usize> {
+        if self.cell_local
+            && let Some(open) = self.close_pairs.get(&close_ordinal)
+            && !self.open_instances.contains_key(open)
+        {
+            return None;
+        }
         let orphaned = self.close_pairs.get(&close_ordinal).is_some_and(|open| {
             self.open_instances
                 .get(open)
@@ -480,6 +487,37 @@ impl<'t> ActiveScopes<'t> {
             .collect()
     }
 
+    fn retire_scope_by_lineage(&mut self, lineage: usize) {
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            if self.scopes[current].origin == lineage {
+                self.unlink(current);
+                return;
+            }
+            position = self.scopes[current].previous_active;
+        }
+    }
+
+    fn bibliography_wrappers(&self) -> Vec<BibliographyScopeWrapper<'t>> {
+        self.active_positions()
+            .into_iter()
+            .map(|position| match &self.scopes[position].wrapper {
+                ScopeWrapper::Container { ctype, attributes } => {
+                    BibliographyScopeWrapper::Container {
+                        ctype: *ctype,
+                        attributes: attributes.clone(),
+                    }
+                }
+                ScopeWrapper::Color { color, background } => {
+                    BibliographyScopeWrapper::Color {
+                        color: color.clone(),
+                        background: *background,
+                    }
+                }
+            })
+            .collect()
+    }
+
     fn label_scope_count(&self) -> usize {
         self.iter_active_rev()
             .filter(|scope| matches!(scope.kind, ScopeKind::Size | ScopeKind::Span))
@@ -525,6 +563,38 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     eject_segment_trailing_space(elements);
 }
 
+pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
+    for (_, elements) in bibliography.slice_mut() {
+        flatten_crossing_inline_containers(elements);
+    }
+    let mut ordinal = 0;
+    let mut pending = PendingScopes::default();
+    let mut valid = BTreeSet::new();
+    for (_, elements) in bibliography.slice() {
+        collect_valid_pairs(elements, &mut ordinal, &mut pending, &mut valid);
+    }
+    pending.finish_weak(&mut valid);
+
+    let mut active = ActiveScopes::default();
+    active.close_pairs = pending.pairs;
+    let mut ordinal = 0;
+    let mut trim_next_break = false;
+    let mut reopened = Vec::with_capacity(bibliography.slice().len());
+    for (_, elements) in bibliography.slice_mut() {
+        reopened.push(active.bibliography_wrappers());
+        lower_sequence(
+            elements,
+            &valid,
+            &mut ordinal,
+            &mut active,
+            &mut trim_next_break,
+            false,
+        );
+        eject_segment_trailing_space(elements);
+    }
+    bibliography.set_reopened_wrappers(reopened);
+}
+
 fn collect_valid_scope_pairs(
     elements: &[Element<'_>],
 ) -> (BTreeSet<usize>, BTreeMap<usize, usize>) {
@@ -532,11 +602,12 @@ fn collect_valid_scope_pairs(
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
     collect_valid_pairs(elements, &mut ordinal, &mut pending, &mut valid);
+    pending.finish_weak(&mut valid);
 
     (valid, pending.pairs)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ScopeClass {
     Size,
     Span,
@@ -552,6 +623,13 @@ struct PendingScopes {
     colors: Vec<PendingScope>,
     active_count: usize,
     pairs: BTreeMap<usize, usize>,
+    weak: Vec<WeakPair>,
+}
+
+struct WeakPair {
+    class: ScopeClass,
+    open: usize,
+    close: usize,
 }
 
 impl PendingScopes {
@@ -581,16 +659,42 @@ impl PendingScopes {
         class: ScopeClass,
         ordinal: &mut usize,
         valid: &mut BTreeSet<usize>,
+        synthetic: bool,
     ) {
         let close = *ordinal;
         *ordinal += 1;
-        if let Some(open) = self.stack_mut(class).pop()
-            && open.accepted
+        if let Some(open) = self.stack_mut(class).pop() {
+            if open.accepted {
+                self.active_count -= 1;
+                if synthetic {
+                    self.weak.push(WeakPair {
+                        class,
+                        open: open.ordinal,
+                        close,
+                    });
+                } else {
+                    valid.insert(open.ordinal);
+                    valid.insert(close);
+                    self.pairs.insert(close, open.ordinal);
+                }
+            }
+            return;
+        }
+        if !synthetic
+            && let Some(index) = self.weak.iter().rposition(|weak| weak.class == class)
         {
-            self.active_count -= 1;
-            valid.insert(open.ordinal);
+            let weak = self.weak.remove(index);
+            valid.insert(weak.open);
             valid.insert(close);
-            self.pairs.insert(close, open.ordinal);
+            self.pairs.insert(close, weak.open);
+        }
+    }
+
+    fn finish_weak(&mut self, valid: &mut BTreeSet<usize>) {
+        for weak in std::mem::take(&mut self.weak) {
+            valid.insert(weak.open);
+            valid.insert(weak.close);
+            self.pairs.insert(weak.close, weak.open);
         }
     }
 }
@@ -868,14 +972,14 @@ fn collect_valid_pairs(
             Element::Partial(PartialElement::InlineSizeOpen(_)) => {
                 pending.open(ScopeClass::Size, ordinal);
             }
-            Element::Partial(PartialElement::InlineSizeClose(_)) => {
-                pending.close(ScopeClass::Size, ordinal, valid);
+            Element::Partial(PartialElement::InlineSizeClose(source)) => {
+                pending.close(ScopeClass::Size, ordinal, valid, source.is_empty());
             }
             Element::Partial(PartialElement::InlineSpanOpen(_)) => {
                 pending.open(ScopeClass::Span, ordinal);
             }
-            Element::Partial(PartialElement::InlineSpanClose(_)) => {
-                pending.close(ScopeClass::Span, ordinal, valid);
+            Element::Partial(PartialElement::InlineSpanClose(source)) => {
+                pending.close(ScopeClass::Span, ordinal, valid, source.is_empty());
             }
             Element::Partial(PartialElement::InlineFormatOpen(kind)) => {
                 pending.open(ScopeClass::Format(format_class_index(*kind)), ordinal);
@@ -885,13 +989,14 @@ fn collect_valid_pairs(
                     ScopeClass::Format(format_class_index(*kind)),
                     ordinal,
                     valid,
+                    false,
                 );
             }
             Element::Partial(PartialElement::InlineColorOpen(..)) => {
                 pending.open(ScopeClass::Color, ordinal);
             }
             Element::Partial(PartialElement::InlineColorClose) => {
-                pending.close(ScopeClass::Color, ordinal, valid);
+                pending.close(ScopeClass::Color, ordinal, valid, false);
             }
             _ => {
                 let mut visit = |children: &[Element<'_>]| {
@@ -1374,8 +1479,8 @@ fn lower_sequence<'t>(
         } else if has_lowerable_children(&element) {
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
-                lower_children(&mut element, valid, ordinal, active, trim_next_break);
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+                lower_children(&mut element, valid, ordinal, active, trim_next_break);
             } else {
                 let block_boundary = is_block_boundary(&element);
                 let stripped = block_boundary
@@ -1993,6 +2098,40 @@ fn lower_children<'t>(
     active: &mut ActiveScopes<'t>,
     trim_next_break: &mut bool,
 ) -> bool {
+    if let Element::Table(table) = element {
+        for row in &mut table.rows {
+            for cell in &mut row.cells {
+                let start = *ordinal;
+                let mut cell_active = ActiveScopes::default();
+                cell_active.close_pairs = active.close_pairs.clone();
+                cell_active.cell_local = true;
+                let mut cell_trim = false;
+                lower_sequence(
+                    &mut cell.elements,
+                    valid,
+                    ordinal,
+                    &mut cell_active,
+                    &mut cell_trim,
+                    false,
+                );
+                strip_trailing_space_from_vec(&mut cell.elements);
+                let end = *ordinal;
+                let retire: Vec<usize> = active
+                    .close_pairs
+                    .iter()
+                    .filter(|(close, open)| {
+                        **open < start && start <= **close && **close < end
+                    })
+                    .filter_map(|(_, open)| active.open_instances.get(open).copied())
+                    .collect();
+                for lineage in retire {
+                    active.retire_scope_by_lineage(lineage);
+                }
+            }
+        }
+        return true;
+    }
+
     if let Element::Container(container) = element
         && matches!(container.ctype(), ContainerType::Header(_))
     {

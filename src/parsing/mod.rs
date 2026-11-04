@@ -280,9 +280,7 @@ where
                     inline_format::normalize_wikidot_inline_formats(footnote);
                 }
                 for bibliography in bibliographies.slice_mut() {
-                    for (_, elements) in bibliography.slice_mut() {
-                        inline_format::normalize_wikidot_inline_formats(elements);
-                    }
+                    inline_format::normalize_wikidot_bibliography(bibliography);
                 }
                 inline_scope::lower_wikidot_inline_size_scopes(&mut elements);
                 heading::normalize_wikidot_headings(&mut elements);
@@ -290,9 +288,7 @@ where
                     inline_scope::lower_wikidot_inline_size_scopes_inline(footnote);
                 }
                 for bibliography in bibliographies.slice_mut() {
-                    for (_, elements) in bibliography.slice_mut() {
-                        inline_scope::lower_wikidot_inline_size_scopes_inline(elements);
-                    }
+                    inline_scope::lower_wikidot_bibliography_scopes(bibliography);
                 }
             }
             debug!(

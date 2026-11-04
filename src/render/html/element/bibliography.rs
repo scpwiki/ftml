@@ -19,7 +19,8 @@
  */
 
 use super::prelude::*;
-use crate::tree::Bibliography;
+use crate::tree::{Bibliography, BibliographyScopeWrapper, Container};
+use std::borrow::Cow;
 
 pub fn render_bibcite(ctx: &mut HtmlContext, label: &str, brackets: bool, inline: bool) {
     debug!("Rendering bibliography citation (label {label}, brackets {brackets})");
@@ -162,6 +163,189 @@ fn render_missing_bibcite(
         });
 }
 
+fn wrap_bibliography_entry_prefix<'t>(
+    elements: &[Element<'t>],
+    wrappers: &[BibliographyScopeWrapper<'t>],
+    prefix: String,
+) -> Vec<Element<'t>> {
+    let output = apply_bibliography_wrappers(elements, wrappers, Some(prefix));
+    merge_bibliography_wrappers(output, wrappers)
+}
+
+fn apply_bibliography_wrappers<'t>(
+    elements: &[Element<'t>],
+    wrappers: &[BibliographyScopeWrapper<'t>],
+    prefix: Option<String>,
+) -> Vec<Element<'t>> {
+    if wrappers.is_empty() {
+        let mut output = Vec::with_capacity(elements.len() + 1);
+        if let Some(prefix) = prefix {
+            output.push(Element::Text(Cow::Owned(prefix)));
+        }
+        output.extend(elements.iter().cloned());
+        return output;
+    }
+    let (first, rest) = wrappers.split_first().expect("wrappers non-empty");
+    if let Some(index) = elements
+        .iter()
+        .position(|element| bibliography_element_matches_wrapper(element, first))
+    {
+        let mut output = Vec::new();
+        let mut inside: Vec<Element<'t>> = Vec::new();
+        if let Some(prefix) = prefix {
+            inside.push(Element::Text(Cow::Owned(prefix)));
+        }
+        inside.extend(elements[..index].iter().cloned());
+        if !inside.is_empty() {
+            output.push(bibliography_wrap_chain(wrappers, inside));
+        }
+        let children = apply_bibliography_wrappers(
+            bibliography_scope_children(&elements[index]),
+            rest,
+            None,
+        );
+        output.push(bibliography_build_wrapper(first, children));
+        output.extend(elements[index + 1..].iter().cloned());
+        return output;
+    }
+    match prefix {
+        Some(prefix) => {
+            let mut output = vec![bibliography_wrap_chain(
+                wrappers,
+                vec![Element::Text(Cow::Owned(prefix.trim_end().to_owned()))],
+            )];
+            let mut rest_elements: Vec<Element<'t>> = elements.to_vec();
+            if let Some(Element::Text(text)) = rest_elements.first_mut() {
+                let trimmed = text.trim_start_matches(|c: char| c.is_whitespace());
+                if trimmed.len() != text.len() {
+                    *text = Cow::Owned(trimmed.to_owned());
+                }
+            }
+            if rest_elements.first().is_some_and(
+                |element| matches!(element, Element::Text(text) if text.is_empty()),
+            ) {
+                rest_elements.remove(0);
+            }
+            if !rest_elements.is_empty() {
+                output.push(Element::Text(Cow::Borrowed(" ")));
+                output.extend(rest_elements);
+            }
+            output
+        }
+        None => elements.to_vec(),
+    }
+}
+
+fn bibliography_wrap_chain<'t>(
+    wrappers: &[BibliographyScopeWrapper<'t>],
+    content: Vec<Element<'t>>,
+) -> Element<'t> {
+    let mut current = content;
+    for wrapper in wrappers.iter().rev() {
+        current = vec![bibliography_build_wrapper(wrapper, current)];
+    }
+    current.into_iter().next().expect("wrappers non-empty")
+}
+
+fn bibliography_build_wrapper<'t>(
+    wrapper: &BibliographyScopeWrapper<'t>,
+    children: Vec<Element<'t>>,
+) -> Element<'t> {
+    match wrapper {
+        BibliographyScopeWrapper::Container { ctype, attributes } => {
+            Element::Container(Container::new(*ctype, children, attributes.clone()))
+        }
+        BibliographyScopeWrapper::Color { color, background } => Element::Color {
+            color: color.clone(),
+            background: *background,
+            elements: children,
+        },
+    }
+}
+
+fn bibliography_element_matches_wrapper(
+    element: &Element<'_>,
+    wrapper: &BibliographyScopeWrapper<'_>,
+) -> bool {
+    match (element, wrapper) {
+        (
+            Element::Container(container),
+            BibliographyScopeWrapper::Container { ctype, attributes },
+        ) => container.ctype() == *ctype && container.attributes() == attributes,
+        (
+            Element::Color {
+                color, background, ..
+            },
+            BibliographyScopeWrapper::Color {
+                color: w_color,
+                background: w_background,
+            },
+        ) => color == w_color && background == w_background,
+        _ => false,
+    }
+}
+
+fn bibliography_scope_children<'a, 't>(element: &'a Element<'t>) -> &'a [Element<'t>] {
+    match element {
+        Element::Container(container) => container.elements(),
+        Element::Color { elements, .. } => elements,
+        _ => &[],
+    }
+}
+
+fn merge_bibliography_wrappers<'t>(
+    elements: Vec<Element<'t>>,
+    wrappers: &[BibliographyScopeWrapper<'t>],
+) -> Vec<Element<'t>> {
+    let mut output: Vec<Element<'t>> = Vec::with_capacity(elements.len());
+    for element in elements {
+        let merged = match output.last_mut() {
+            Some(previous) => {
+                bibliography_merge_into(previous, element.clone(), wrappers)
+            }
+            None => false,
+        };
+        if !merged {
+            output.push(element);
+        }
+    }
+    output
+}
+
+fn bibliography_merge_into<'t>(
+    previous: &mut Element<'t>,
+    next: Element<'t>,
+    wrappers: &[BibliographyScopeWrapper<'t>],
+) -> bool {
+    let shared = wrappers.iter().any(|wrapper| {
+        bibliography_element_matches_wrapper(previous, wrapper)
+            && bibliography_element_matches_wrapper(&next, wrapper)
+    });
+    if !shared {
+        return false;
+    }
+    match (previous, next) {
+        (Element::Container(previous), Element::Container(next)) => {
+            previous.elements_mut().extend(Vec::from(next));
+            true
+        }
+        (
+            Element::Color {
+                elements: previous_elements,
+                ..
+            },
+            Element::Color {
+                elements: next_elements,
+                ..
+            },
+        ) => {
+            previous_elements.extend(next_elements);
+            true
+        }
+        _ => false,
+    }
+}
+
 fn render_wikidot_bibliography(
     ctx: &mut HtmlContext,
     title: &str,
@@ -196,12 +380,25 @@ fn render_wikidot_bibliography(
                     .div()
                     .attr(attr!("class" => "bibitem", "id" => &id))
                     .inner(|ctx| {
-                        if elements.is_empty() {
-                            str_write!(ctx, "{entry_index}.");
+                        let wrappers = bibliography.reopened_wrappers(position);
+                        if wrappers.is_empty() {
+                            if elements.is_empty() {
+                                str_write!(ctx, "{entry_index}.");
+                            } else {
+                                str_write!(ctx, "{entry_index}. ");
+                            }
+                            render_elements(ctx, elements);
                         } else {
-                            str_write!(ctx, "{entry_index}. ");
+                            let prefix = if elements.is_empty() {
+                                format!("{entry_index}.")
+                            } else {
+                                format!("{entry_index}. ")
+                            };
+                            let wrapped = wrap_bibliography_entry_prefix(
+                                elements, wrappers, prefix,
+                            );
+                            render_elements(ctx, &wrapped);
                         }
-                        render_elements(ctx, elements);
                     });
             }
         });
