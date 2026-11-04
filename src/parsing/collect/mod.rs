@@ -20,7 +20,7 @@
 
 mod prelude {
     pub use super::collect;
-    pub use crate::parsing::condition::ParseCondition;
+    pub use crate::parsing::condition::{ParseCondition, SplitDelimiter};
     pub use crate::parsing::consume::consume;
     pub use crate::parsing::error::{ParseError, ParseErrorKind};
     pub use crate::parsing::parser::Parser;
@@ -38,7 +38,7 @@ mod text;
 
 pub(crate) use self::comment::{
     CommentElidedText, collect_comment_elided_keep, collect_comment_elided_keep_from,
-    consume_valid_comment,
+    comment_closer_token_count_at, consume_valid_comment,
 };
 pub use self::consume::{
     CollectSplitEscape, collect_consume, collect_consume_before, collect_consume_keep,
@@ -47,8 +47,8 @@ pub use self::consume::{
 pub use self::container::collect_container;
 pub use self::generic::collect;
 pub(crate) use self::iftags::{
-    complete_fused_bracket_close, consume_iftags_segment, consume_iftags_segment_fused,
-    iftags_segment_fused,
+    SegmentCtx, TokenWindow, complete_fused_bracket_close, consume_iftags_segment,
+    consume_iftags_segment_fused, iftags_segment_fused, split_delimiter_end,
 };
 #[cfg(test)]
 pub(crate) use self::iftags::{

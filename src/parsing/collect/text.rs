@@ -320,6 +320,8 @@ where
                             })
                         }
                         ParseCondition::TokenPair(..) => None,
+                        ParseCondition::SplitClose(_)
+                        | ParseCondition::PaddedSplitClose(_) => None,
                     });
                     if let Some(last) = fused {
                         return Ok((

@@ -20,6 +20,7 @@
 
 use super::prelude::*;
 use crate::delayed::{DelayedElement, GeneratedInput};
+use crate::parsing::collect::{TokenWindow, comment_closer_token_count_at};
 
 pub const RULE_COMMENT: Rule = Rule {
     name: "comment",
@@ -109,51 +110,7 @@ fn try_consume_fn<'r, 't>(
 }
 
 pub(crate) fn comment_closer_token_count(parser: &Parser<'_, '_>) -> Option<usize> {
-    let current = parser.current();
-    let current_is_inert = matches!(
-        current.token,
-        Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
-    );
-    let trailing_hyphens = current
-        .slice
-        .bytes()
-        .rev()
-        .take_while(|byte| *byte == b'-')
-        .count();
-    if !current_is_inert
-        && trailing_hyphens >= 2
-        && trailing_hyphens < current.slice.len()
-        && parser
-            .look_ahead(0)
-            .is_some_and(|token| token.token == Token::RightBracket && token.slice == "]")
-    {
-        return Some(2);
-    }
-
-    let mut hyphens = 0;
-
-    for (index, token) in std::iter::once(parser.current())
-        .chain(parser.remaining())
-        .enumerate()
-    {
-        if matches!(
-            token.token,
-            Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
-        ) {
-            return None;
-        }
-        if !token.slice.is_empty() && token.slice.bytes().all(|byte| byte == b'-') {
-            hyphens += token.slice.len();
-            continue;
-        }
-
-        return (hyphens >= 2
-            && token.token == Token::RightBracket
-            && token.slice == "]")
-            .then_some(index + 1);
-    }
-
-    None
+    comment_closer_token_count_at(TokenWindow::at(parser), 0)
 }
 
 #[cfg(test)]

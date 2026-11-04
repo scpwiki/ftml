@@ -11,11 +11,10 @@
  */
 
 use super::iftags::{
-    bracket_close_text, complete_fused_bracket_close, consume_iftags_segment_fused,
-    iftags_segment_fused,
+    TokenWindow, bracket_close_text, complete_fused_bracket_close,
+    consume_iftags_segment_fused, iftags_segment_fused,
 };
 use super::prelude::*;
-use crate::parsing::rule::impls::comment_closer_token_count;
 use std::borrow::Cow;
 use std::ops::Range;
 
@@ -267,6 +266,8 @@ where
                         })
                     }
                     ParseCondition::TokenPair(..) => None,
+                    ParseCondition::SplitClose(_)
+                    | ParseCondition::PaddedSplitClose(_) => None,
                 });
                 if let Some(last) = fused {
                     let end = comments
@@ -343,7 +344,9 @@ where
         {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
-        if let Some(token_count) = comment_closer_token_count(parser) {
+        if let Some(token_count) =
+            comment_closer_token_count_at(TokenWindow::at(parser), 0)
+        {
             parser.step_n(token_count)?;
             return Ok(start..parser.current().span.start);
         }
@@ -351,5 +354,74 @@ where
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
         }
         parser.step()?;
+    }
+}
+
+pub(crate) fn comment_closer_token_count_at(
+    window: TokenWindow<'_, '_>,
+    start: usize,
+) -> Option<usize> {
+    let current = window.get(start)?;
+    let current_is_inert = matches!(
+        current.token,
+        Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
+    );
+    let trailing_hyphens = current
+        .slice
+        .bytes()
+        .rev()
+        .take_while(|byte| *byte == b'-')
+        .count();
+    if !current_is_inert
+        && trailing_hyphens >= 2
+        && trailing_hyphens < current.slice.len()
+        && window
+            .get(start + 1)
+            .is_some_and(|token| token.token == Token::RightBracket && token.slice == "]")
+    {
+        return Some(2);
+    }
+
+    let mut hyphens = 0;
+    let mut index = start;
+    loop {
+        let token = window.get(index)?;
+        if matches!(
+            token.token,
+            Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
+        ) {
+            return None;
+        }
+
+        if !token.slice.is_empty() && token.slice.bytes().all(|byte| byte == b'-') {
+            hyphens += token.slice.len();
+            index += 1;
+            continue;
+        }
+
+        return (hyphens >= 2
+            && token.token == Token::RightBracket
+            && token.slice == "]")
+            .then_some(index - start + 1);
+    }
+}
+
+pub(crate) fn comment_bridge_end(window: TokenWindow<'_, '_>) -> Option<usize> {
+    let mut index = 1;
+    loop {
+        let token = window.get(index)?;
+        if matches!(
+            token.token,
+            Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks
+        ) {
+            return None;
+        }
+        if let Some(count) = comment_closer_token_count_at(window, index) {
+            return Some(index + count);
+        }
+        if token.token == Token::InputEnd {
+            return None;
+        }
+        index += 1;
     }
 }

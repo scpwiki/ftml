@@ -18,10 +18,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::inline_delimiter::{assert_unpadded_open, validate_reachable_close};
+use super::inline_delimiter::{
+    append_split_close_leftover, assert_unpadded_open, prepend_split_close_leftover,
+    validate_reachable_close,
+};
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
-use crate::parsing::collect::{consume_iftags_segment, consume_valid_comment};
+use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
 use crate::tree::PartialElement;
 
 pub const RULE_BOLD: Rule = Rule {
@@ -37,83 +40,58 @@ fn try_consume_fn<'r, 't>(
     if parser.current().token == Token::BulletItem {
         return try_consume_split_delimiter(parser);
     }
-    validate_reachable_close(parser, Token::Bold)?;
+    validate_reachable_close(parser, Token::Bold, Some(SplitDelimiter::Bold))?;
     assert_unpadded_open(parser, Token::Bold)?;
-    let close = [ParseCondition::current(Token::Bold)];
+    let close = [
+        ParseCondition::current(Token::Bold),
+        ParseCondition::SplitClose(SplitDelimiter::Bold),
+    ];
     let invalid = [
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::token_pair(Token::Bold, Token::Whitespace),
         ParseCondition::token_pair(Token::Whitespace, Token::Bold),
+        ParseCondition::PaddedSplitClose(SplitDelimiter::Bold),
     ];
     let ctype = ContainerType::Bold;
     let collected = collect_container(parser, RULE_BOLD, ctype, &close, &invalid, None)?;
     finish_collected(parser, collected)
 }
 
-/// The two `*`s of a bold opener can be split by an iftags segment
+/// The two `*`s of a bold opener can be split by elided source text
 /// (`*[[iftags -zzz]][[/iftags]]*word**`): live Wikidot resolves the
-/// segment before the delimiter forms, so the pair still opens bold.
-/// The split opener only forms when every segment between the markers
-/// resolves to no text; a segment whose body would be kept puts real
-/// text between the markers, which is not a bold opener on live either.
+/// text before the delimiter forms, so the pair still opens bold.
+/// The shared split scan decides the match on the resolved text: a
+/// kept segment body contributes its text, so a body holding exactly
+/// the second `*` completes the opener, and a body with other text
+/// between the markers is not a bold opener on live either.
 fn try_consume_split_delimiter<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    let mut probe = parser.clone();
-    probe.step()?; // first `*`
-    let mut segments = 0usize;
-    loop {
-        if probe.current().token == Token::LeftBlock {
-            let Some(segment) = consume_iftags_segment(&mut probe)? else {
-                break;
-            };
-            if segment.include_body
-                && !probe.full_text().inner()[segment.body.clone()].is_empty()
-            {
-                return Err(parser.make_err(ParseErrorKind::RuleFailed));
-            }
-            segments += 1;
-        } else if probe.current().token == Token::LeftComment {
-            let mut comment = probe.clone();
-            if consume_valid_comment(&mut comment).is_err() {
-                break;
-            }
-            probe.update(&comment);
-            segments += 1;
-        } else {
-            break;
-        }
-    }
-    if segments == 0 || probe.current().token != Token::BulletItem {
+    let Some(split_match) = split_delimiter_end(
+        TokenWindow::at(parser),
+        SegmentCtx::from_parser(parser),
+        SplitDelimiter::Bold,
+    ) else {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    };
+    validate_reachable_close(parser, Token::Bold, Some(SplitDelimiter::Bold))?;
+    while parser.current().span.start < split_match.consume_end
+        && parser.current().token != Token::InputEnd
+    {
+        parser.step()?;
     }
-
-    validate_reachable_close(parser, Token::Bold)?;
-    parser.step()?; // first `*`
-    loop {
-        if parser.current().token == Token::LeftBlock
-            && consume_iftags_segment(parser)?.is_some()
-        {
-            continue;
-        }
-        if parser.current().token == Token::LeftComment {
-            let mut comment = parser.clone();
-            if consume_valid_comment(&mut comment).is_ok() {
-                parser.update(&comment);
-                continue;
-            }
-        }
-        break;
-    }
-    assert_step(parser, Token::BulletItem)?;
     if parser.current().token == Token::Whitespace {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    let close = [ParseCondition::current(Token::Bold)];
+    let close = [
+        ParseCondition::current(Token::Bold),
+        ParseCondition::SplitClose(SplitDelimiter::Bold),
+    ];
     let invalid = [
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::token_pair(Token::Bold, Token::Whitespace),
         ParseCondition::token_pair(Token::Whitespace, Token::Bold),
+        ParseCondition::PaddedSplitClose(SplitDelimiter::Bold),
     ];
     let collected = collect_container(
         parser,
@@ -123,6 +101,13 @@ fn try_consume_split_delimiter<'r, 't>(
         &invalid,
         None,
     )?;
+    let collected = match &split_match.leftover {
+        Some(range) => {
+            let text = parser.full_text().inner()[range.clone()].to_owned();
+            prepend_split_close_leftover(collected, &text)
+        }
+        None => collected,
+    };
     finish_collected(parser, collected)
 }
 
@@ -130,6 +115,7 @@ fn finish_collected<'r, 't>(
     parser: &mut Parser<'r, 't>,
     collected: ParseSuccess<Elements<'t>>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    let leftover = collected.split_close_leftover.clone();
     let (elements, errors, paragraph_safe) = collected.into();
     if parser.settings().layout.legacy()
         && matches!(
@@ -137,16 +123,21 @@ fn finish_collected<'r, 't>(
             Elements::Single(Element::Container(container)) if container.elements().is_empty()
         )
     {
-        return if super::footnote_first::starts_footnote(parser) {
-            ok!(
-                paragraph_safe;
-                Element::Partial(PartialElement::WikidotEmptyInlineOwner),
-                errors,
-            )
+        let base = if super::footnote_first::starts_footnote(parser) {
+            Elements::Single(Element::Partial(PartialElement::WikidotEmptyInlineOwner))
         } else {
-            ok!(paragraph_safe; Elements::None, errors)
+            Elements::None
         };
+        let elements = match leftover {
+            Some(leftover) => append_split_close_leftover(base, leftover),
+            None => base,
+        };
+        return ok!(paragraph_safe; elements, errors);
     }
+    let elements = match leftover {
+        Some(leftover) => append_split_close_leftover(elements, leftover),
+        None => elements,
+    };
     ok!(paragraph_safe; elements, errors)
 }
 

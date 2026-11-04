@@ -1,5 +1,6 @@
 use super::Parser;
 use crate::parsing::Token;
+use crate::parsing::condition::SplitDelimiter;
 
 const COLLAPSIBLE: u16 = 1 << 0;
 const QUOTE_BOUNDARY_CLOSES_BODY: u16 = 1 << 1;
@@ -287,12 +288,33 @@ impl Parser<'_, '_> {
         self.wikidot.simple_table_crossed_closers |= simple_table_closer_bit(token);
     }
 
+    pub(crate) fn mark_wikidot_simple_table_crossed_split_closer(
+        &mut self,
+        delimiter: SplitDelimiter,
+    ) {
+        self.wikidot.simple_table_crossed_closers |=
+            simple_table_split_closer_bit(delimiter);
+    }
+
     pub(crate) fn take_wikidot_simple_table_crossed_closers(&mut self) -> u16 {
         std::mem::take(&mut self.wikidot.simple_table_crossed_closers)
     }
 
     pub(crate) fn wikidot_simple_table_closer_bit(token: Token) -> u16 {
         simple_table_closer_bit(token)
+    }
+
+    pub(crate) fn wikidot_simple_table_split_closer_bit(
+        delimiter: SplitDelimiter,
+    ) -> u16 {
+        simple_table_split_closer_bit(delimiter)
+    }
+}
+
+fn simple_table_split_closer_bit(delimiter: SplitDelimiter) -> u16 {
+    match delimiter {
+        SplitDelimiter::Bold => 1 << 8,
+        SplitDelimiter::Italics => 1 << 9,
     }
 }
 

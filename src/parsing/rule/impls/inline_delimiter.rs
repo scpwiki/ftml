@@ -19,6 +19,10 @@
  */
 
 use super::prelude::*;
+use crate::parsing::ParseSuccess;
+use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
+use crate::tree::Container;
+use std::borrow::Cow;
 
 pub(super) fn assert_unpadded_open<'r, 't>(
     parser: &mut Parser<'r, 't>,
@@ -54,12 +58,31 @@ pub(super) fn append_wikidot_line_close_space(
 pub(super) fn validate_reachable_close(
     parser: &Parser<'_, '_>,
     token: Token,
+    split: Option<SplitDelimiter>,
 ) -> Result<(), ParseError> {
     let tokens = parser.remaining();
     let mut paragraph_error = None;
     let mut open_blocks: Vec<String> = Vec::new();
     let mut index = 0;
     while index < tokens.len() {
+        if let Some(delimiter) = split
+            && delimiter.is_half(&tokens[index])
+            && tokens.get(index + 1).is_some_and(|next| {
+                matches!(next.token, Token::LeftBlock | Token::LeftComment)
+            })
+            && TokenWindow::from_slice(&tokens[index..]).is_some_and(|window| {
+                split_delimiter_end(window, SegmentCtx::from_parser(parser), delimiter)
+                    .is_some()
+            })
+        {
+            if let Some(error) = paragraph_error {
+                return Err(error);
+            }
+            if index > 0 && tokens[index - 1].token == Token::Whitespace {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            return Ok(());
+        }
         match tokens[index].token {
             Token::InputEnd => {
                 return Err(paragraph_error
@@ -206,4 +229,39 @@ pub(super) fn link_name_at(
         Some(tok) if tok.token == Token::Identifier => Some(tok.slice.to_lowercase()),
         _ => None,
     }
+}
+
+pub(super) fn append_split_close_leftover<'t>(
+    elements: Elements<'t>,
+    leftover: String,
+) -> Elements<'t> {
+    let text = Element::Text(Cow::Owned(leftover));
+    match elements {
+        Elements::None => Elements::Single(text),
+        Elements::Single(element) => Elements::Multiple(vec![element, text]),
+        Elements::Multiple(mut elements) => {
+            elements.push(text);
+            Elements::Multiple(elements)
+        }
+    }
+}
+
+pub(super) fn prepend_split_close_leftover<'r, 't>(
+    collected: ParseSuccess<'r, 't, Elements<'t>>,
+    leftover: &str,
+) -> ParseSuccess<'r, 't, Elements<'t>> {
+    let text = leftover.to_owned();
+    collected.map(|elements| match elements {
+        Elements::Single(Element::Container(container)) => {
+            let mut children = Vec::with_capacity(container.elements().len() + 1);
+            children.push(Element::Text(Cow::Owned(text)));
+            children.extend(container.elements().iter().cloned());
+            Elements::Single(Element::Container(Container::new(
+                container.ctype(),
+                children,
+                container.attributes().clone(),
+            )))
+        }
+        elements => elements,
+    })
 }

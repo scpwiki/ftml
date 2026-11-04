@@ -19,6 +19,7 @@
  */
 
 use super::consume_valid_comment;
+use super::iftags::{SegmentCtx, SplitDelimiterMatch, TokenWindow, split_delimiter_end};
 use super::prelude::*;
 use crate::parsing::parser::QuoteBodyLineStatus;
 use crate::parsing::rule::impls::line_break_skipped_for_own_line_block;
@@ -141,6 +142,23 @@ where
         }
 
         if parser.evaluate_any(close_conditions) {
+            if consume_terminator
+                && let Some(split_match) = split_close_match(parser, close_conditions)
+            {
+                let leftover = split_match
+                    .leftover
+                    .map(|range| parser.full_text().inner()[range].to_owned());
+                let mut last = parser.current();
+                while parser.current().span.start < split_match.consume_end
+                    && parser.current().token != Token::InputEnd
+                {
+                    last = parser.current();
+                    parser.step()?;
+                }
+                let mut success = ParseSuccess::new(last, errors, paragraph_safe);
+                success.split_close_leftover = leftover;
+                return Ok(success);
+            }
             let last = parser.current();
             if consume_terminator && parser.current().token != Token::InputEnd {
                 parser.step()?;
@@ -170,6 +188,15 @@ where
             && simple_table_inline_closer_follows(parser, closer)
         {
             parser.mark_wikidot_simple_table_crossed_closer(closer);
+            return ok!(paragraph_safe; parser.current(), errors);
+        }
+
+        if parser.in_wikidot_simple_table_cell()
+            && is_table_column_token(parser.current().token)
+            && let Some(delimiter) = simple_table_split_delimiter(_rule)
+            && simple_table_split_closer_follows(parser, delimiter)
+        {
+            parser.mark_wikidot_simple_table_crossed_split_closer(delimiter);
             return ok!(paragraph_safe; parser.current(), errors);
         }
 
@@ -300,6 +327,104 @@ where
                     && token == closer =>
             {
                 return true;
+            }
+            _ => {}
+        }
+
+        if scan.step().is_err() {
+            return false;
+        }
+    }
+}
+
+fn split_close_match<'r, 't>(
+    parser: &Parser<'r, 't>,
+    close_conditions: &[ParseCondition],
+) -> Option<SplitDelimiterMatch> {
+    close_conditions
+        .iter()
+        .find_map(|condition| match condition {
+            ParseCondition::SplitClose(delimiter) => split_delimiter_end(
+                TokenWindow::at(parser),
+                SegmentCtx::from_parser(parser),
+                *delimiter,
+            ),
+            _ => None,
+        })
+}
+
+fn simple_table_split_delimiter(rule: Rule) -> Option<SplitDelimiter> {
+    match rule.name() {
+        "bold" => Some(SplitDelimiter::Bold),
+        "italics" => Some(SplitDelimiter::Italics),
+        _ => None,
+    }
+}
+
+fn simple_table_split_closer_follows<'r, 't>(
+    parser: &Parser<'r, 't>,
+    delimiter: SplitDelimiter,
+) -> bool
+where
+    'r: 't,
+{
+    let ctx = SegmentCtx::from_parser(parser);
+    let mut scan = parser.clone();
+    if scan.step().is_err() {
+        return false;
+    }
+
+    let mut raw = false;
+    let mut alternate_raw = false;
+    let mut triple_link_depth = 0usize;
+    loop {
+        if matches!(
+            scan.current().token,
+            Token::ParagraphBreak | Token::InputEnd
+        ) {
+            return false;
+        }
+
+        if scan.current().token == Token::LineBreak {
+            let mut next = scan.clone();
+            if next.step().is_err() || !is_table_column_token(next.current().token) {
+                return false;
+            }
+        }
+
+        if scan.current().token == Token::LeftComment {
+            let mut comment = scan.clone();
+            if let Ok(range) = consume_valid_comment(&mut comment) {
+                let source = &scan.full_text().inner()[range];
+                if source.contains('\n') || source.contains('\r') {
+                    return false;
+                }
+                scan.update(&comment);
+                continue;
+            }
+        }
+
+        if !raw
+            && !alternate_raw
+            && triple_link_depth == 0
+            && delimiter.is_half(scan.current())
+            && scan.look_ahead(0).is_some_and(|token| {
+                matches!(token.token, Token::LeftBlock | Token::LeftComment)
+            })
+            && split_delimiter_end(TokenWindow::at(&scan), ctx, delimiter).is_some()
+        {
+            return true;
+        }
+
+        match scan.current().token {
+            Token::Raw => raw = !raw,
+            Token::LeftRaw if !raw => alternate_raw = true,
+            Token::RightRaw if alternate_raw => alternate_raw = false,
+            Token::LeftLink | Token::LeftLinkStar if !raw && !alternate_raw => {
+                triple_link_depth += 1;
+            }
+            Token::RightLink if triple_link_depth > 0 => {
+                triple_link_depth -= 1;
             }
             _ => {}
         }
