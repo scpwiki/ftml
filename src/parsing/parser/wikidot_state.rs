@@ -345,6 +345,98 @@ fn simple_table_closer_bit(token: Token) -> u16 {
     }
 }
 
+fn div_stream_skip_segment(tokens: &[ExtractedToken<'_>], index: usize) -> Option<usize> {
+    let mut depth = 0_usize;
+    let mut head_closed = false;
+    let mut in_end_head = false;
+    let mut index = index;
+    while let Some(token) = tokens.get(index) {
+        match token.token {
+            Token::LeftBlock => depth += 1,
+            Token::LeftBlockEnd => {
+                if head_closed && depth == 0 {
+                    in_end_head = true;
+                }
+                depth += 1;
+            }
+            Token::RightBlock => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    if in_end_head {
+                        return Some(index + 1);
+                    }
+                    head_closed = true;
+                }
+            }
+            Token::InputEnd => return None,
+            _ => {}
+        }
+        index += 1;
+    }
+    None
+}
+
+fn div_stream_skip_comment(tokens: &[ExtractedToken<'_>], index: usize) -> Option<usize> {
+    let mut index = index + 1;
+    let mut hyphens = 0_usize;
+    while let Some(token) = tokens.get(index) {
+        if token.token == Token::InputEnd {
+            return None;
+        }
+        let trailing_hyphens = token
+            .slice
+            .bytes()
+            .rev()
+            .take_while(|byte| *byte == b'-')
+            .count();
+        if trailing_hyphens >= 2
+            && trailing_hyphens < token.slice.len()
+            && tokens
+                .get(index + 1)
+                .is_some_and(|next| next.token == Token::RightBracket && next.slice == "]")
+        {
+            return Some(index + 2);
+        }
+        if !token.slice.is_empty() && token.slice.bytes().all(|byte| byte == b'-') {
+            hyphens += token.slice.len();
+            index += 1;
+            continue;
+        }
+        if hyphens >= 2 && token.token == Token::RightBracket && token.slice == "]" {
+            return Some(index + 1);
+        }
+        hyphens = 0;
+        index += 1;
+    }
+    None
+}
+
+fn div_stream_resolved_name<'a>(
+    tokens: &[ExtractedToken<'a>],
+    index: usize,
+) -> Option<std::borrow::Cow<'a, str>> {
+    let mut name = std::borrow::Cow::Borrowed("");
+    let mut index = index + 1;
+    while let Some(token) = tokens.get(index) {
+        match token.token {
+            Token::Identifier => {
+                name.to_mut().push_str(token.slice);
+                index += 1;
+            }
+            Token::LeftComment => match div_stream_skip_comment(tokens, index) {
+                Some(next) => index = next,
+                None => break,
+            },
+            Token::LeftBlock => match div_stream_skip_segment(tokens, index) {
+                Some(next) => index = next,
+                None => break,
+            },
+            _ => break,
+        }
+    }
+    (!name.is_empty()).then_some(name)
+}
+
 pub(super) fn compute_wikidot_div_stream_marks(
     tokens: &[ExtractedToken<'_>],
 ) -> BTreeMap<usize, (u32, u32)> {
@@ -352,6 +444,11 @@ pub(super) fn compute_wikidot_div_stream_marks(
         tokens
             .get(index + 1)
             .and_then(|token| (token.token == Token::Identifier).then_some(token.slice))
+    }
+
+    fn is_div_name(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
+        div_stream_resolved_name(tokens, index)
+            .is_some_and(|name| name.eq_ignore_ascii_case("div"))
     }
 
     let mut marks = BTreeMap::new();
@@ -379,7 +476,7 @@ pub(super) fn compute_wikidot_div_stream_marks(
                     }
                     index = scan;
                 }
-                Some(name) if name.eq_ignore_ascii_case("div") => {
+                _ if is_div_name(tokens, index) => {
                     region.push((token.span.start, balance, region_ends));
                     balance += 1;
                 }
@@ -387,8 +484,7 @@ pub(super) fn compute_wikidot_div_stream_marks(
             }
         } else if token.token == Token::LeftBlockEnd
             && balance > 0
-            && block_name(tokens, index)
-                .is_some_and(|name| name.eq_ignore_ascii_case("div"))
+            && is_div_name(tokens, index)
         {
             region_ends += 1;
             balance -= 1;
