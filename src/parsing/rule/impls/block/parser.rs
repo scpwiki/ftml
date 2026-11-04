@@ -3260,6 +3260,33 @@ where
         (Some(tokens[closer].span.start), nested)
     }
 
+    pub(crate) fn skip_raw_segment(&mut self) -> bool {
+        if self.current().token != Token::Raw {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        loop {
+            match probe.current().token {
+                Token::Raw => {
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                    self.update(&probe);
+                    return true;
+                }
+                Token::InputEnd => return false,
+                _ => {
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
     pub fn has_body_end_block(&self, block_rule: &BlockRule) -> bool {
         let mut parser = self.clone();
         let mut first = true;
@@ -3286,6 +3313,11 @@ where
             if block_rule.name != "block-iftags"
                 && parser.skip_discarded_iftags_segment(false)
             {
+                first = false;
+                continue;
+            }
+
+            if parser.skip_raw_segment() {
                 first = false;
                 continue;
             }
@@ -3343,6 +3375,10 @@ where
         let mut owners = vec![(owner_start, true)];
 
         loop {
+            if scan.skip_raw_segment() {
+                continue;
+            }
+
             if scan.current().token == Token::LeftComment {
                 let mut comment = scan.clone();
                 if crate::parsing::collect::consume_valid_comment(&mut comment).is_ok() {
@@ -3545,6 +3581,9 @@ where
             if block_rule.name != "block-iftags"
                 && parser.skip_discarded_iftags_segment(true)
             {
+                continue;
+            }
+            if parser.skip_raw_segment() {
                 continue;
             }
             match parser.current().token {

@@ -246,6 +246,9 @@ where
         if scan.skip_discarded_iftags_segment(true) {
             continue;
         }
+        if scan.skip_raw_segment() {
+            continue;
+        }
         match scan.current().token {
             Token::LeftBlockEnd => {
                 let mut close = scan.clone();
