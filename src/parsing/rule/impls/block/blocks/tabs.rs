@@ -474,7 +474,11 @@ where
             }
             let footnote_count = parser.footnote_count();
             let mut probe = parser.clone();
-            let consumed = match consume(&mut probe) {
+            let outer_fused_end = probe.title_footnote_fused_end();
+            probe.set_title_footnote_fused_end(true);
+            let probe_result = consume(&mut probe);
+            probe.set_title_footnote_fused_end(outer_fused_end);
+            let consumed = match probe_result {
                 Ok(success) => {
                     success
                         .item
