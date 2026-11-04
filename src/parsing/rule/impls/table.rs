@@ -20,6 +20,7 @@
 
 use super::block::blocks::BLOCK_TABLE;
 use super::prelude::*;
+use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
 use crate::tree::{Alignment, PartialElement, Table, TableCell, TableRow, TableType};
 use std::borrow::Cow;
 use std::mem;
@@ -439,6 +440,37 @@ fn try_consume_fn<'r, 't>(
                     early_closed_sizes += sizes;
                     parser.step()?;
                     pending_inline_closers &= !current_closer;
+                    continue;
+                }
+
+                let mut swallowed_split = false;
+                for delimiter in [SplitDelimiter::Bold, SplitDelimiter::Italics] {
+                    let bit = Parser::wikidot_simple_table_split_closer_bit(delimiter);
+                    if pending_inline_closers & bit == 0
+                        || !delimiter.is_half(parser.current())
+                    {
+                        continue;
+                    }
+                    let Some(split_match) = split_delimiter_end(
+                        TokenWindow::at(parser),
+                        SegmentCtx::from_parser(parser),
+                        delimiter,
+                    ) else {
+                        continue;
+                    };
+                    let (spans, sizes) = close_wikidot_inline_scopes(&mut elements);
+                    early_closed_spans += spans;
+                    early_closed_sizes += sizes;
+                    while parser.current().span.start < split_match.consume_end
+                        && parser.current().token != Token::InputEnd
+                    {
+                        parser.step()?;
+                    }
+                    pending_inline_closers &= !bit;
+                    swallowed_split = true;
+                    break;
+                }
+                if swallowed_split {
                     continue;
                 }
 

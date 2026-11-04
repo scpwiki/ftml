@@ -634,9 +634,21 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
         // block collectors intercept their own closer before `consume()`.
         Token::RightBlock => parser.start_of_line(),
 
-        Token::BulletItem | Token::NumberedItem | Token::Equals | Token::Colon => {
+        Token::BulletItem => {
+            // A `*` directly before a block opener or a comment may be
+            // half of a bold opener split by an iftags segment or a
+            // comment; let the rule loop probe it instead of claiming
+            // it as text here. The text rule remains the fallback when
+            // the probe fails.
+            if parser.look_ahead(0).is_some_and(|token| {
+                matches!(token.token, Token::LeftBlock | Token::LeftComment)
+            }) {
+                return false;
+            }
             !parser.start_of_line()
         }
+
+        Token::NumberedItem | Token::Equals | Token::Colon => !parser.start_of_line(),
 
         // Four-or-more hyphen runs can be horizontal rules only at an
         // immediate line boundary, but Wikidot still gives their inline

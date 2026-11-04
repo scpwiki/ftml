@@ -20,6 +20,7 @@
 
 use super::RULE_PAGE;
 use super::body_end::BodyEndBoundary;
+use super::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
 use super::condition::ParseCondition;
 use super::hidden_body::HiddenBodyBoundary;
 use super::prelude::*;
@@ -1447,6 +1448,23 @@ impl<'r, 't> Parser<'r, 't> {
                     Some(actual) => actual.token == next,
                     None => false,
                 }
+            }
+            ParseCondition::SplitClose(delimiter) => split_delimiter_end(
+                TokenWindow::at(self),
+                SegmentCtx::from_parser(self),
+                delimiter,
+            )
+            .is_some(),
+            ParseCondition::PaddedSplitClose(delimiter) => {
+                self.current.token == Token::Whitespace
+                    && TokenWindow::from_slice(self.remaining()).is_some_and(|window| {
+                        split_delimiter_end(
+                            window,
+                            SegmentCtx::from_parser(self),
+                            delimiter,
+                        )
+                        .is_some()
+                    })
             }
         }
     }

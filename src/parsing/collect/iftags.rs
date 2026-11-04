@@ -18,8 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::comment::comment_bridge_end;
 use super::prelude::*;
 use crate::parsing::ElementCondition;
+use std::borrow::Cow;
 use std::ops::Range;
 
 /// A complete `[[iftags ...]]...[[/iftags]]` segment found inside a raw
@@ -130,6 +132,43 @@ impl<'a, 't> TokenWindow<'a, 't> {
             self.rest.get(index - 1)
         }
     }
+
+    pub(crate) fn from_slice(
+        tokens: &'a [ExtractedToken<'t>],
+    ) -> Option<TokenWindow<'a, 't>> {
+        let (first, rest) = tokens.split_first()?;
+        Some(TokenWindow { first, rest })
+    }
+
+    pub(crate) fn offset(&self, index: usize) -> Option<TokenWindow<'a, 't>> {
+        if index == 0 {
+            return Some(*self);
+        }
+        let first = self.rest.get(index - 1)?;
+        Some(TokenWindow {
+            first,
+            rest: &self.rest[index..],
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct SegmentCtx<'a, 't> {
+    source: &'t str,
+    tags: &'a [Cow<'t, str>],
+    legacy: bool,
+    in_iftags_span: bool,
+}
+
+impl<'a, 't> SegmentCtx<'a, 't> {
+    pub(crate) fn from_parser<'r>(parser: &'r Parser<'r, 't>) -> SegmentCtx<'r, 't> {
+        SegmentCtx {
+            source: parser.full_text().inner(),
+            tags: &parser.page_info().tags,
+            legacy: parser.settings().layout.legacy(),
+            in_iftags_span: parser.in_wikidot_iftags_span(),
+        }
+    }
 }
 
 /// Gathers the block name starting at token `start` in `window`,
@@ -205,15 +244,26 @@ fn scan_segment<'r, 't>(
 where
     'r: 't,
 {
-    if parser.settings().layout.legacy() && parser.in_wikidot_iftags_span() {
+    scan_segment_ctx(
+        TokenWindow::at(parser),
+        SegmentCtx::from_parser(parser),
+        allow_fused_closer,
+    )
+}
+
+fn scan_segment_ctx<'a, 't>(
+    window: TokenWindow<'a, 't>,
+    ctx: SegmentCtx<'_, 't>,
+    allow_fused_closer: bool,
+) -> Option<IftagsSegment> {
+    if ctx.legacy && ctx.in_iftags_span {
         return None;
     }
 
-    let window = TokenWindow::at(parser);
     if window.first().token != Token::LeftBlock {
         return None;
     }
-    let source = parser.full_text().inner();
+    let source = ctx.source;
     let segment_start = window.first().span.start;
 
     let (name_range, mut index) = head_name(window, 0, false)?;
@@ -244,7 +294,7 @@ where
     }
     let spec = source[spec_start..spec_end].trim();
 
-    let legacy = parser.settings().layout.legacy();
+    let legacy = ctx.legacy;
     let conditions = if legacy && spec == "-" {
         Vec::new()
     } else if spec.is_empty() {
@@ -257,9 +307,9 @@ where
         ElementCondition::parse(spec)
     };
     let include_body = if conditions.is_empty() && legacy {
-        !parser.page_info().tags.is_empty()
+        !ctx.tags.is_empty()
     } else {
-        ElementCondition::check(&conditions, &parser.page_info().tags)
+        ElementCondition::check(&conditions, ctx.tags)
     };
 
     // Body: scan for the matching closer, counting nested iftags
@@ -428,4 +478,89 @@ pub(crate) fn complete_fused_bracket_close<'r, 't>(
     }
     parser.update(&probe);
     Some(last)
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SplitDelimiterMatch {
+    pub consume_end: usize,
+    pub leftover: Option<Range<usize>>,
+}
+
+pub(crate) fn segment_is_textless(segment: &IftagsSegment) -> bool {
+    !segment.include_body || segment.body.is_empty()
+}
+
+fn segment_token_count(
+    window: TokenWindow<'_, '_>,
+    start: usize,
+    range_end: usize,
+) -> usize {
+    let mut count = 0;
+    while let Some(token) = window.get(start + count) {
+        if token.span.start >= range_end {
+            break;
+        }
+        count += 1;
+    }
+    count
+}
+
+pub(crate) fn split_delimiter_end<'a, 't>(
+    window: TokenWindow<'a, 't>,
+    ctx: SegmentCtx<'_, 't>,
+    delimiter: SplitDelimiter,
+) -> Option<SplitDelimiterMatch> {
+    if !delimiter.is_half(window.first()) {
+        return None;
+    }
+    let half = delimiter.half_char();
+    let mut index = 1usize;
+    let mut bridges = 0usize;
+    loop {
+        let token = window.get(index)?;
+        if token.token == Token::LeftBlock {
+            let segment = scan_segment_ctx(window.offset(index)?, ctx, false)?;
+            bridges += 1;
+            if segment_is_textless(&segment) {
+                index += segment_token_count(window, index, segment.range.end);
+                continue;
+            }
+            let contribution = &ctx.source[segment.body.clone()];
+            let first_char = contribution.chars().next()?;
+            if first_char != half {
+                return None;
+            }
+            let end = segment.body.start + first_char.len_utf8();
+            let leftover = (end < segment.body.end).then_some(end..segment.body.end);
+            return Some(SplitDelimiterMatch {
+                consume_end: segment.range.end,
+                leftover,
+            });
+        }
+        if token.token == Token::LeftComment {
+            let count = comment_bridge_end(window.offset(index)?)?;
+            bridges += 1;
+            index += count;
+            continue;
+        }
+        break;
+    }
+    if bridges == 0 {
+        return None;
+    }
+    let token = window.get(index)?;
+    if delimiter.is_half(token) {
+        return Some(SplitDelimiterMatch {
+            consume_end: token.span.end,
+            leftover: None,
+        });
+    }
+    if token.token == delimiter.delimiter_token() {
+        let mid = token.span.start + half.len_utf8();
+        return Some(SplitDelimiterMatch {
+            consume_end: token.span.end,
+            leftover: Some(mid..token.span.end),
+        });
+    }
+    None
 }

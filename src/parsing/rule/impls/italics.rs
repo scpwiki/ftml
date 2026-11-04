@@ -19,12 +19,12 @@
  */
 
 use super::inline_delimiter::{
-    assert_unpadded_open, block_name_at, is_block_name, link_name_at,
-    validate_reachable_close,
+    append_split_close_leftover, assert_unpadded_open, block_name_at, is_block_name,
+    link_name_at, prepend_split_close_leftover, validate_reachable_close,
 };
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
-use crate::parsing::collect::{consume_iftags_segment, consume_valid_comment};
+use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
 use crate::tree::Container;
 
 pub const RULE_ITALICS: Rule = Rule {
@@ -54,13 +54,17 @@ fn try_consume_fn<'r, 't>(
         return collect_crossed_bold_italics(parser);
     }
 
-    validate_reachable_close(parser, Token::Italics)?;
+    validate_reachable_close(parser, Token::Italics, Some(SplitDelimiter::Italics))?;
     assert_unpadded_open(parser, Token::Italics)?;
-    let close = [ParseCondition::current(Token::Italics)];
+    let close = [
+        ParseCondition::current(Token::Italics),
+        ParseCondition::SplitClose(SplitDelimiter::Italics),
+    ];
     let invalid = [
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::token_pair(Token::Italics, Token::Whitespace),
         ParseCondition::token_pair(Token::Whitespace, Token::Italics),
+        ParseCondition::PaddedSplitClose(SplitDelimiter::Italics),
     ];
     let ctype = ContainerType::Italics;
     let collected =
@@ -68,77 +72,41 @@ fn try_consume_fn<'r, 't>(
     finish_collected(parser, collected)
 }
 
-/// The two `/`s of an italics opener can be split by an iftags segment
-/// (`/[[iftags -zzz]][[/iftags]]/word//`): live Wikidot resolves the
-/// segment before the delimiter forms, so the pair still opens italics.
-/// The split opener only forms when every segment between the markers
-/// resolves to no text; a segment whose body would be kept puts real
-/// text between the markers, which is not an italics opener on live
-/// either.
+/// The two `/`s of an italics opener can be split by elided source
+/// text (`/[[iftags -zzz]][[/iftags]]/word//`): live Wikidot resolves
+/// the text before the delimiter forms, so the pair still opens
+/// italics. The shared split scan decides the match on the resolved
+/// text: a kept segment body contributes its text, so a body holding
+/// exactly the second `/` completes the opener, and a body with other
+/// text between the markers is not an italics opener on live either.
 fn try_consume_split_delimiter<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    if parser.current().token != Token::Other || parser.current().slice != "/" {
+    let Some(split_match) = split_delimiter_end(
+        TokenWindow::at(parser),
+        SegmentCtx::from_parser(parser),
+        SplitDelimiter::Italics,
+    ) else {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
-    }
-    let mut probe = parser.clone();
-    probe.step()?; // first `/`
-    let mut segments = 0usize;
-    loop {
-        if probe.current().token == Token::LeftBlock {
-            let Some(segment) = consume_iftags_segment(&mut probe)? else {
-                break;
-            };
-            if segment.include_body
-                && !probe.full_text().inner()[segment.body.clone()].is_empty()
-            {
-                return Err(parser.make_err(ParseErrorKind::RuleFailed));
-            }
-            segments += 1;
-        } else if probe.current().token == Token::LeftComment {
-            let mut comment = probe.clone();
-            if consume_valid_comment(&mut comment).is_err() {
-                break;
-            }
-            probe.update(&comment);
-            segments += 1;
-        } else {
-            break;
-        }
-    }
-    if segments == 0
-        || probe.current().token != Token::Other
-        || probe.current().slice != "/"
+    };
+    validate_reachable_close(parser, Token::Italics, Some(SplitDelimiter::Italics))?;
+    while parser.current().span.start < split_match.consume_end
+        && parser.current().token != Token::InputEnd
     {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        parser.step()?;
     }
-
-    validate_reachable_close(parser, Token::Italics)?;
-    parser.step()?; // first `/`
-    loop {
-        if parser.current().token == Token::LeftBlock
-            && consume_iftags_segment(parser)?.is_some()
-        {
-            continue;
-        }
-        if parser.current().token == Token::LeftComment {
-            let mut comment = parser.clone();
-            if consume_valid_comment(&mut comment).is_ok() {
-                parser.update(&comment);
-                continue;
-            }
-        }
-        break;
-    }
-    assert_step(parser, Token::Other)?;
     if parser.current().token == Token::Whitespace {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    let close = [ParseCondition::current(Token::Italics)];
+    let close = [
+        ParseCondition::current(Token::Italics),
+        ParseCondition::SplitClose(SplitDelimiter::Italics),
+    ];
     let invalid = [
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::token_pair(Token::Italics, Token::Whitespace),
         ParseCondition::token_pair(Token::Whitespace, Token::Italics),
+        ParseCondition::PaddedSplitClose(SplitDelimiter::Italics),
     ];
     let collected = collect_container(
         parser,
@@ -148,6 +116,13 @@ fn try_consume_split_delimiter<'r, 't>(
         &invalid,
         None,
     )?;
+    let collected = match &split_match.leftover {
+        Some(range) => {
+            let text = parser.full_text().inner()[range.clone()].to_owned();
+            prepend_split_close_leftover(collected, &text)
+        }
+        None => collected,
+    };
     finish_collected(parser, collected)
 }
 
@@ -155,6 +130,7 @@ fn finish_collected<'r, 't>(
     parser: &mut Parser<'r, 't>,
     collected: ParseSuccess<Elements<'t>>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    let leftover = collected.split_close_leftover.clone();
     let (elements, errors, paragraph_safe) = collected.into();
     if parser.settings().layout.legacy()
         && matches!(
@@ -162,8 +138,18 @@ fn finish_collected<'r, 't>(
             Elements::Single(Element::Container(container)) if container.elements().is_empty()
         )
     {
-        return ok!(paragraph_safe; Elements::None, errors);
+        return match leftover {
+            Some(leftover) => {
+                let elements = append_split_close_leftover(Elements::None, leftover);
+                ok!(paragraph_safe; elements, errors)
+            }
+            None => ok!(paragraph_safe; Elements::None, errors),
+        };
     }
+    let elements = match leftover {
+        Some(leftover) => append_split_close_leftover(elements, leftover),
+        None => elements,
+    };
     ok!(paragraph_safe; elements, errors)
 }
 

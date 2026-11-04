@@ -49,12 +49,15 @@ pub fn collect_container<'r, 't>(
     let collection = collect_consume(parser, rule, closes, invalids, kind);
     quote_cursor.uninstall(parser);
     let collection = collection?;
+    let split_close_leftover = collection.split_close_leftover.clone();
     let (elements, errors, paragraph_safe) = collection.into();
 
     let container = Container::new(container_type, elements, AttributeMap::new());
     let element = Element::Container(container);
     let safe = paragraph_safe && container_type.paragraph_safe();
-    Ok(ParseSuccess::new(Elements::Single(element), errors, safe))
+    let mut success = ParseSuccess::new(Elements::Single(element), errors, safe);
+    success.split_close_leftover = split_close_leftover;
+    Ok(success)
 }
 
 struct QuoteBodyCursorInstallation {

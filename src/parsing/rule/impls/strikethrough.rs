@@ -52,7 +52,7 @@ fn try_consume_strikethrough<'r, 't>(
     token: Token,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create a strikethrough (token {})", token.name());
-    validate_reachable_close(parser, token)?;
+    validate_reachable_close(parser, token, None)?;
     if token == Token::DoubleDash {
         assert_unpadded_open(parser, token)?;
     } else {

@@ -1,0 +1,4 @@
+//word/[[iftags -zzz]][[/iftags]]/
+//word/[[iftags +zzz]]YES[[/iftags]]/
+//word/[[iftags -zzz]]/[[/iftags]]
+//word/[[iftags -zzz]][[/iftags]]//

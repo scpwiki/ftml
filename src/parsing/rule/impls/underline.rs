@@ -31,7 +31,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create underline container");
-    validate_reachable_close(parser, Token::Underline)?;
+    validate_reachable_close(parser, Token::Underline, None)?;
     assert_unpadded_open(parser, Token::Underline)?;
     let close = [ParseCondition::current(Token::Underline)];
     let invalid = [

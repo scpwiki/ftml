@@ -91,6 +91,8 @@ where
     /// element.
     pub paragraph_split: Option<Vec<(usize, bool)>>,
 
+    pub split_close_leftover: Option<String>,
+
     #[doc(hidden)]
     _ref_marker: PhantomData<&'r ()>,
     #[doc(hidden)]
@@ -105,6 +107,7 @@ impl<T> ParseSuccess<'_, '_, T> {
             errors,
             paragraph_safe,
             paragraph_split: None,
+            split_close_leftover: None,
             _ref_marker: PhantomData,
             _text_marker: PhantomData,
         }
@@ -135,6 +138,7 @@ impl<'r, 't, T> ParseSuccess<'r, 't, T> {
         let item = self.item;
         let errors = self.errors;
         let paragraph_safe = self.paragraph_safe;
+        let split_close_leftover = self.split_close_leftover;
 
         let new_item = f(item);
 
@@ -145,6 +149,7 @@ impl<'r, 't, T> ParseSuccess<'r, 't, T> {
             // Mapping a result absorbs its elements into a new item, so
             // any paragraph-split layout no longer describes it.
             paragraph_split: None,
+            split_close_leftover,
             _ref_marker: PhantomData,
             _text_marker: PhantomData,
         }

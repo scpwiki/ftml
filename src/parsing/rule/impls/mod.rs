@@ -21,7 +21,7 @@
 mod prelude {
     pub use crate::parsing::check_step::assert_step;
     pub use crate::parsing::collect::*;
-    pub use crate::parsing::condition::ParseCondition;
+    pub use crate::parsing::condition::{ParseCondition, SplitDelimiter};
     pub use crate::parsing::consume::consume;
     pub use crate::parsing::error::{ParseError, ParseErrorKind};
     pub use crate::parsing::parser::Parser;

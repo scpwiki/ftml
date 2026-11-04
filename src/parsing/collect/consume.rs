@@ -97,13 +97,16 @@ pub fn collect_consume_keep<'r, 't>(
             }
         }))
     })?;
+    let split_close_leftover = collection.split_close_leftover.clone();
     let (last, errors, paragraph_safe) = collection.into();
     if parser.settings().layout.legacy() {
         collapse_adjacent_ascii_spaces(&mut all_elements);
     }
 
     let item = (all_elements, last);
-    Ok(ParseSuccess::new(item, errors, paragraph_safe))
+    let mut success = ParseSuccess::new(item, errors, paragraph_safe);
+    success.split_close_leftover = split_close_leftover;
+    Ok(success)
 }
 
 pub struct CollectSplitEscape<'t> {
@@ -261,6 +264,7 @@ pub fn collect_consume_keep_split<'r, 't>(
         }
         Ok(ParseSuccess::new((), errors, step_safe))
     })?;
+    let split_close_leftover = collection.split_close_leftover.clone();
     let (last, errors, paragraph_safe) = collection.into();
     if parser.settings().layout.legacy() {
         collapse_adjacent_ascii_spaces(&mut item_elements);
@@ -276,7 +280,9 @@ pub fn collect_consume_keep_split<'r, 't>(
         last,
         escape.map(|segments| CollectSplitEscape { segments }),
     );
-    Ok(ParseSuccess::new(item, errors, paragraph_safe))
+    let mut success = ParseSuccess::new(item, errors, paragraph_safe);
+    success.split_close_leftover = split_close_leftover;
+    Ok(success)
 }
 
 /// Collect elements up to a closing condition without consuming its token.
@@ -292,16 +298,15 @@ pub fn collect_consume_before<'r, 't>(
     let collection = collect_before(parser, rule, closes, invalids, kind, |parser| {
         consume(parser)?.map_ok(|elements| append_elements(&mut all_elements, elements))
     })?;
+    let split_close_leftover = collection.split_close_leftover.clone();
     let (last, errors, paragraph_safe) = collection.into();
     if parser.settings().layout.legacy() {
         collapse_adjacent_ascii_spaces(&mut all_elements);
     }
 
-    Ok(ParseSuccess::new(
-        (all_elements, last),
-        errors,
-        paragraph_safe,
-    ))
+    let mut success = ParseSuccess::new((all_elements, last), errors, paragraph_safe);
+    success.split_close_leftover = split_close_leftover;
+    Ok(success)
 }
 
 fn collapse_adjacent_ascii_spaces(elements: &mut Vec<Element<'_>>) {
