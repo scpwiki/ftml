@@ -3,7 +3,7 @@ use crate::tree::{
     PartialElement,
 };
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 
 const MAX_ACTIVE_INLINE_SCOPES: usize = 101;
@@ -93,6 +93,9 @@ struct ActiveScopes<'t> {
     scopes: Vec<ActiveScope<'t>>,
     active_tail: Option<usize>,
     watches: Vec<(usize, Vec<InlineTag>)>,
+    space_eject_floor: Option<Option<usize>>,
+    close_pairs: BTreeMap<usize, usize>,
+    open_instances: BTreeMap<usize, usize>,
 }
 
 struct ActiveScopeRevIter<'a, 't> {
@@ -197,6 +200,35 @@ impl<'t> ActiveScopes<'t> {
         }
     }
 
+    fn record_open_instance(&mut self, event_ordinal: usize) {
+        self.open_instances
+            .insert(event_ordinal, self.scopes.len() - 1);
+    }
+
+    fn lineage_is_active(&self, lineage: usize) -> bool {
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            let scope = &self.scopes[current];
+            if scope.origin == lineage {
+                return true;
+            }
+            position = scope.previous_active;
+        }
+        false
+    }
+
+    fn resolve_close(&self, close_ordinal: usize, tag: InlineTag) -> Option<usize> {
+        let orphaned = self.close_pairs.get(&close_ordinal).is_some_and(|open| {
+            self.open_instances
+                .get(open)
+                .is_some_and(|lineage| !self.lineage_is_active(*lineage))
+        });
+        if orphaned {
+            return self.active_tail;
+        }
+        self.peek_close(tag)
+    }
+
     fn peek_close(&self, tag: InlineTag) -> Option<usize> {
         let mut position = self.active_tail;
         while let Some(current) = position {
@@ -233,6 +265,37 @@ impl<'t> ActiveScopes<'t> {
             cursor = self.scopes[current].next_active;
         }
         let below = self.scopes[position].previous_active;
+        if above.len() >= 2 {
+            self.space_eject_floor = Some(Some(position));
+            self.scopes[position].next_active = None;
+            self.active_tail = Some(position);
+            let mut order = Vec::with_capacity(above.len());
+            let (last, rest) = above.split_last().expect("at least two scopes above");
+            order.push(*last);
+            order.extend_from_slice(rest);
+            let mut kept: Vec<usize> = Vec::with_capacity(order.len());
+            for (index, entry) in order.iter().enumerate() {
+                let tag = self.scopes[*entry].wrapper.tag();
+                let shadowed = order[index + 1..]
+                    .iter()
+                    .any(|later| self.scopes[*later].wrapper.tag() == tag);
+                if !shadowed {
+                    kept.push(*entry);
+                }
+            }
+            for entry in kept {
+                let scope = &self.scopes[entry];
+                let wrapper = scope.wrapper.clone();
+                let kind = scope.kind;
+                let scored = scope.scored;
+                let origin = scope.origin;
+                self.push_with_origin(kind, wrapper, scored, origin);
+            }
+            return;
+        }
+        if above.len() == 1 {
+            self.space_eject_floor = Some(below);
+        }
         if let Some(below) = below {
             self.scopes[below].next_active = None;
         }
@@ -245,6 +308,10 @@ impl<'t> ActiveScopes<'t> {
             let origin = scope.origin;
             self.push_with_origin(kind, wrapper, scored, origin);
         }
+    }
+
+    fn take_space_eject_floor(&mut self) -> Option<Option<usize>> {
+        self.space_eject_floor.take()
     }
 
     fn iter_active_rev(&self) -> ActiveScopeRevIter<'_, 't> {
@@ -322,10 +389,11 @@ impl<'t> ActiveScopes<'t> {
 
 pub(crate) fn lower_wikidot_inline_size_scopes<'t>(elements: &mut Vec<Element<'t>>) {
     flatten_crossing_inline_containers(elements);
-    let valid = collect_valid_scope_pairs(elements);
+    let (valid, close_pairs) = collect_valid_scope_pairs(elements);
 
     let mut ordinal = 0;
     let mut active = ActiveScopes::default();
+    active.close_pairs = close_pairs;
     let mut trim_next_break = false;
     lower_root_sequence(
         elements,
@@ -340,10 +408,11 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     elements: &mut Vec<Element<'t>>,
 ) {
     flatten_crossing_inline_containers(elements);
-    let valid = collect_valid_scope_pairs(elements);
+    let (valid, close_pairs) = collect_valid_scope_pairs(elements);
 
     let mut ordinal = 0;
     let mut active = ActiveScopes::default();
+    active.close_pairs = close_pairs;
     let mut trim_next_break = false;
     lower_sequence(
         elements,
@@ -356,13 +425,15 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     eject_segment_trailing_space(elements);
 }
 
-fn collect_valid_scope_pairs(elements: &[Element<'_>]) -> BTreeSet<usize> {
+fn collect_valid_scope_pairs(
+    elements: &[Element<'_>],
+) -> (BTreeSet<usize>, BTreeMap<usize, usize>) {
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
     collect_valid_pairs(elements, &mut ordinal, &mut pending, &mut valid);
 
-    valid
+    (valid, pending.pairs)
 }
 
 #[derive(Clone, Copy)]
@@ -380,6 +451,7 @@ struct PendingScopes {
     formats: [Vec<PendingScope>; 7],
     colors: Vec<PendingScope>,
     active_count: usize,
+    pairs: BTreeMap<usize, usize>,
 }
 
 impl PendingScopes {
@@ -418,6 +490,7 @@ impl PendingScopes {
             self.active_count -= 1;
             valid.insert(open.ordinal);
             valid.insert(close);
+            self.pairs.insert(close, open.ordinal);
         }
     }
 }
@@ -557,6 +630,7 @@ fn lower_root_sequence<'t>(
                 container.elements_mut().insert(0, Element::LineBreak);
             }
             let continued_from_paragraph = paragraph_group.is_some();
+            active.take_space_eject_floor();
             let effects = lower_sequence(
                 container.elements_mut(),
                 valid,
@@ -746,6 +820,43 @@ fn lower_sequence<'t>(
 
     let mut source = mem::take(elements).into_iter().peekable();
     while let Some(mut element) = source.next() {
+        if let Some(floor) = active.take_space_eject_floor() {
+            let starts_with_space = matches!(
+                &element,
+                Element::Text(text) if text.starts_with([' ', '\t'])
+            );
+            if starts_with_space {
+                let Element::Text(text) = mem::replace(&mut element, Element::LineBreak)
+                else {
+                    unreachable!("text element checked above")
+                };
+                let source_text: &str = &text;
+                let rest = source_text.trim_start_matches([' ', '\t']);
+                let ws_len = source_text.len() - rest.len();
+                let whitespace = source_text[..ws_len].to_owned();
+                let remainder = rest.to_owned();
+                drop(text);
+                let saved_tail = active.active_tail;
+                let saved_next = floor.and_then(|f| active.scopes[f].next_active);
+                match floor {
+                    Some(f) => {
+                        active.scopes[f].next_active = None;
+                        active.active_tail = Some(f);
+                    }
+                    None => active.active_tail = None,
+                }
+                run.push(Element::Text(Cow::Owned(whitespace)));
+                flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+                if let Some(f) = floor {
+                    active.scopes[f].next_active = saved_next;
+                }
+                active.active_tail = saved_tail;
+                if remainder.is_empty() {
+                    continue;
+                }
+                element = Element::Text(Cow::Owned(remainder));
+            }
+        }
         if *trim_next_break {
             if matches!(element, Element::LineBreak | Element::LineBreaks(_)) {
                 continue;
@@ -791,11 +902,12 @@ fn lower_sequence<'t>(
                     },
                     false,
                 );
+                active.record_open_instance(current);
             }
             continue;
         }
         if let Element::Partial(PartialElement::InlineSizeClose(close_source)) = element {
-            let resolved = active.peek_close(InlineTag::Span);
+            let resolved = active.resolve_close(*ordinal, InlineTag::Span);
             let empty = !resolved
                 .is_some_and(|position| active.scope_has_content(position))
                 && run.is_empty();
@@ -901,6 +1013,7 @@ fn lower_sequence<'t>(
                     },
                     scored,
                 );
+                active.record_open_instance(current);
                 if scored {
                     effects.scored_span_opened_at_start |= at_start;
                     effects.scored_span_opened_unwrapped_at_start |=
@@ -911,7 +1024,7 @@ fn lower_sequence<'t>(
             continue;
         }
         if let Element::Partial(PartialElement::InlineSpanClose(close_source)) = element {
-            let resolved = active.peek_close(InlineTag::Span);
+            let resolved = active.resolve_close(*ordinal, InlineTag::Span);
             let scored =
                 resolved.is_some_and(|position| active.scope_is_scored(position));
             let empty = !resolved
@@ -992,6 +1105,7 @@ fn lower_sequence<'t>(
                     },
                     false,
                 );
+                active.record_open_instance(current);
             }
             continue;
         }
@@ -1006,6 +1120,7 @@ fn lower_sequence<'t>(
                     &mut last_run_outer_scope,
                     &mut run_has_content,
                     inline_tag_for_ctype(kind.container_type()),
+                    current,
                     source.peek(),
                 );
             } else {
@@ -1025,6 +1140,7 @@ fn lower_sequence<'t>(
                     ScopeWrapper::Color { color, background },
                     false,
                 );
+                active.record_open_instance(current);
             }
             continue;
         }
@@ -1039,6 +1155,7 @@ fn lower_sequence<'t>(
                     &mut last_run_outer_scope,
                     &mut run_has_content,
                     InlineTag::Span,
+                    current,
                     source.peek(),
                 );
             } else {
@@ -1355,12 +1472,13 @@ fn close_flattened_scope<'t>(
     last_run_outer_scope: &mut RunMergeState,
     run_has_content: &mut bool,
     tag: InlineTag,
+    close_ordinal: usize,
     next: Option<&Element<'t>>,
 ) {
     let next_starts_with_space =
         matches!(next, Some(Element::Text(text)) if text.starts_with(' '));
     let has_next = next.is_some();
-    let resolved = active.peek_close(tag);
+    let resolved = active.resolve_close(close_ordinal, tag);
     let empty = !resolved.is_some_and(|position| active.scope_has_content(position))
         && run.is_empty();
     let trailing_space = matches!(run.last(), Some(Element::Text(text)) if text == " ");

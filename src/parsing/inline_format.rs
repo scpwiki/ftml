@@ -2,8 +2,8 @@ use crate::parsing::rule::impls::{
     is_wikidot_only_autolink_url, normalize_wikidot_color,
 };
 use crate::tree::{
-    AnchorTarget, AttributeMap, Container, ContainerType, Element, LinkLabel,
-    LinkLocation, ListItem, PartialElement,
+    AnchorTarget, AttributeMap, Container, ContainerType, Element, InlineFormatKind,
+    LinkLabel, LinkLocation, ListItem, PartialElement,
 };
 use std::borrow::Cow;
 use std::mem;
@@ -190,13 +190,13 @@ fn normalize_sequence_scoped<'t>(
     inside_monospace: bool,
 ) {
     for _ in 0..MAX_NORMALIZATION_PASSES {
-        let mut changed = repair_fifo_triples_pass(elements)
+        let mut changed = repair_literal_marker_pairs_pass(elements, inside_monospace)
+            | repair_fifo_triples_pass(elements)
             | repair_same_family_pass(elements)
             | repair_crossed_pass(elements)
             | repair_strike_split_close_pass(elements)
             | repair_raw_strike_pairs_pass(elements)
             | repair_strike_shed_pairs_pass(elements)
-            | repair_span_crossed_bold_pairs_pass(elements)
             | repair_script_split_close_pass(elements)
             | repair_script_pairs_pass(elements);
         // A monospace container's children are already owned content:
@@ -1088,109 +1088,637 @@ fn repair_wikidot_scheme_star_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool 
     changed
 }
 
-fn repair_span_crossed_bold_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
-    let closes: Vec<Option<(usize, Vec<usize>)>> = (0..elements.len())
-        .map(|index| span_crossed_bold_close(elements, index))
+enum PairRole<'t> {
+    FormatOpen(InlineFormatKind),
+    FormatClose(InlineFormatKind),
+    ColorOpen(Cow<'t, str>, bool),
+    ColorClose,
+    Drop,
+    LiteralMarker(InlineFormatKind),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProjItem<'a> {
+    Text(&'a str),
+    PartialLike,
+    Content,
+    Barrier,
+    EdgeOpen(InlineFormatKind),
+    EdgeClose(InlineFormatKind),
+    LinkContent,
+    FormatEventOpen(InlineFormatKind),
+    FormatEventClose(InlineFormatKind),
+    ColorEventOpen,
+    ColorEventClose,
+}
+
+#[derive(Clone, Copy)]
+enum Expansion {
+    Format(InlineFormatKind),
+    Color,
+}
+
+const LITERAL_MARKERS: [InlineFormatKind; 3] = [
+    InlineFormatKind::Bold,
+    InlineFormatKind::Italics,
+    InlineFormatKind::Underline,
+];
+
+const MARKER_TEXTS: [&str; 6] = ["**", "//", "__", "{{", "}}", "##"];
+const MONO_EXPANSION_MARKER_TEXTS: [&str; 4] = ["**", "//", "__", "##"];
+
+fn repair_literal_marker_pairs_pass<'t>(
+    elements: &mut Vec<Element<'t>>,
+    inside_monospace: bool,
+) -> bool {
+    if !sequence_has_pairing_material(elements) {
+        return false;
+    }
+    let original: Vec<Element<'t>> = take_elements(elements)
+        .into_iter()
+        .map(Option::unwrap)
         .collect();
-    let mut input = take_elements(elements);
-    let mut output = Vec::with_capacity(input.len());
-    let mut changed = false;
-    let mut index = 0;
-
-    while index < input.len() {
-        let Some((close, splits)) = &closes[index] else {
-            output.push(take_element(&mut input, index));
-            index += 1;
-            continue;
-        };
-        discard_range(&mut input, index..index + 1);
-        let mut segment_start = index + 1;
-        for split in splits {
-            let segment = take_range(&mut input, segment_start..*split);
-            push_bold_segment(&mut output, segment);
-            output.push(take_element(&mut input, *split));
-            segment_start = split + 1;
-        }
-        let segment = take_range(&mut input, segment_start..*close);
-        push_bold_segment(&mut output, segment);
-        discard_range(&mut input, *close..*close + 1);
-        index = close + 1;
-        changed = true;
+    let mut projection = Vec::new();
+    project_marker_sequence(&original, &mut projection);
+    let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
+    roles.resize_with(projection.len(), || None);
+    let mut found = false;
+    for kind in LITERAL_MARKERS {
+        found |= pair_symmetric_markers(&projection, &mut roles, kind);
     }
-
+    if !inside_monospace {
+        found |= pair_monospace_markers(&projection, &mut roles);
+    }
+    found |= pair_color_markers(&projection, &mut roles);
+    if !found {
+        *elements = original;
+        return false;
+    }
+    let mut cursor = 0;
+    let output = apply_marker_roles(original, &roles, &mut cursor);
+    debug_assert_eq!(cursor, roles.len());
     *elements = output;
-    changed
+    true
 }
 
-fn push_bold_segment<'t>(output: &mut Vec<Element<'t>>, segment: Vec<Element<'t>>) {
-    let has_content = segment.iter().any(|element| {
-        !matches!(element, Element::Partial(_))
-            && text(element).is_none_or(|value| !value.trim().is_empty())
-    });
-    if has_content {
-        output.push(bold_shell().build(segment));
-    } else {
-        output.extend(segment);
+fn sequence_has_pairing_material(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| {
+        matches!(element, Element::Text(value) if MARKER_TEXTS.contains(&value.as_ref()))
+            || formatter_children(element).is_some()
+    })
+}
+
+fn project_marker_sequence<'a, 't>(
+    elements: &'a [Element<'t>],
+    projection: &mut Vec<ProjItem<'a>>,
+) {
+    for element in elements {
+        if let Some(expansion) = expansion_of(element) {
+            let children = formatter_children(element)
+                .expect("expansion requires formatter children");
+            match expansion {
+                Expansion::Format(kind) if LITERAL_MARKERS.contains(&kind) => {
+                    projection.push(ProjItem::EdgeOpen(kind));
+                    project_marker_sequence(children, projection);
+                    projection.push(ProjItem::EdgeClose(kind));
+                }
+                _ => {
+                    projection.push(ProjItem::PartialLike);
+                    project_marker_sequence(children, projection);
+                    projection.push(ProjItem::PartialLike);
+                }
+            }
+        } else if pairing_barrier(element) {
+            projection.push(ProjItem::Barrier);
+        } else {
+            match element {
+                Element::Text(value) => projection.push(ProjItem::Text(value)),
+                Element::Partial(partial) => projection.push(match partial {
+                    PartialElement::InlineFormatOpen(kind) => {
+                        ProjItem::FormatEventOpen(*kind)
+                    }
+                    PartialElement::InlineFormatClose(kind) => {
+                        ProjItem::FormatEventClose(*kind)
+                    }
+                    PartialElement::InlineColorOpen(..) => ProjItem::ColorEventOpen,
+                    PartialElement::InlineColorClose => ProjItem::ColorEventClose,
+                    _ => ProjItem::PartialLike,
+                }),
+                _ if element_contains_link(element) => {
+                    projection.push(ProjItem::LinkContent)
+                }
+                _ => projection.push(ProjItem::Content),
+            }
+        }
     }
 }
 
-fn span_crossed_bold_close<'t>(
-    elements: &[Element<'t>],
-    open: usize,
-) -> Option<(usize, Vec<usize>)> {
-    if !is_exact_text(&elements[open], "**") {
-        return None;
+fn apply_marker_roles<'t>(
+    elements: Vec<Element<'t>>,
+    roles: &[Option<PairRole<'t>>],
+    cursor: &mut usize,
+) -> Vec<Element<'t>> {
+    let mut output = Vec::with_capacity(elements.len());
+    for element in elements {
+        if let Some(expansion) = expansion_of(&element) {
+            let open_index = *cursor;
+            *cursor += 1;
+            let Some((shell, children)) = FormatShell::into_parts(element) else {
+                unreachable!("expansion requires a formatter shell");
+            };
+            let children = apply_marker_roles(children, roles, cursor);
+            let close_index = *cursor;
+            *cursor += 1;
+            let subtree_changed = roles[open_index..=close_index]
+                .iter()
+                .any(Option::is_some);
+            if !subtree_changed {
+                output.push(shell.build(children));
+                continue;
+            }
+            push_edge_replacement(
+                &mut output,
+                &roles[open_index],
+                expansion,
+                &shell,
+                true,
+            );
+            output.extend(children);
+            push_edge_replacement(
+                &mut output,
+                &roles[close_index],
+                expansion,
+                &shell,
+                false,
+            );
+            continue;
+        }
+        let index = *cursor;
+        *cursor += 1;
+        match &roles[index] {
+            None | Some(PairRole::LiteralMarker(_)) => output.push(element),
+            Some(PairRole::FormatOpen(kind)) => {
+                output.push(Element::Partial(PartialElement::InlineFormatOpen(*kind)));
+            }
+            Some(PairRole::FormatClose(kind)) => {
+                output.push(Element::Partial(PartialElement::InlineFormatClose(
+                    *kind,
+                )));
+            }
+            Some(PairRole::ColorOpen(color, background)) => {
+                output.push(Element::Partial(PartialElement::InlineColorOpen(
+                    color.clone(),
+                    *background,
+                )));
+            }
+            Some(PairRole::ColorClose) => {
+                output.push(Element::Partial(PartialElement::InlineColorClose));
+            }
+            Some(PairRole::Drop) => {}
+        }
     }
-    if elements
-        .get(open + 1)
-        .is_none_or(|element| element_starts_with_ascii_space(element))
+    output
+}
+
+fn push_edge_replacement<'t>(
+    output: &mut Vec<Element<'t>>,
+    role: &Option<PairRole<'t>>,
+    expansion: Expansion,
+    shell: &FormatShell<'t>,
+    open_edge: bool,
+) {
+    match role {
+        Some(PairRole::FormatOpen(kind)) => {
+            output.push(Element::Partial(PartialElement::InlineFormatOpen(*kind)));
+        }
+        Some(PairRole::FormatClose(kind)) => {
+            output.push(Element::Partial(PartialElement::InlineFormatClose(*kind)));
+        }
+        Some(PairRole::ColorOpen(color, background)) => {
+            output.push(Element::Partial(PartialElement::InlineColorOpen(
+                color.clone(),
+                *background,
+            )));
+        }
+        Some(PairRole::ColorClose) => {
+            output.push(Element::Partial(PartialElement::InlineColorClose));
+        }
+        Some(PairRole::Drop) => {}
+        Some(PairRole::LiteralMarker(kind)) => {
+            output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
+        }
+        None => match expansion {
+            Expansion::Format(kind) => {
+                output.push(Element::Partial(if open_edge {
+                    PartialElement::InlineFormatOpen(kind)
+                } else {
+                    PartialElement::InlineFormatClose(kind)
+                }));
+            }
+            Expansion::Color => {
+                if let FormatShell::Color { color, background } = shell {
+                    if open_edge {
+                        output.push(Element::Partial(
+                            PartialElement::InlineColorOpen(
+                                color.clone(),
+                                *background,
+                            ),
+                        ));
+                    } else {
+                        output.push(Element::Partial(
+                            PartialElement::InlineColorClose,
+                        ));
+                    }
+                }
+            }
+        },
+    }
+}
+
+fn expansion_of(element: &Element<'_>) -> Option<Expansion> {
+    if let Element::Container(container) = element
+        && container.attributes().get().is_empty()
+        && !subtree_has_barrier(element)
     {
-        return None;
-    }
-
-    let mut depth = 0usize;
-    for element in &elements[..open] {
-        match element {
-            Element::Partial(PartialElement::InlineSpanOpen(_)) => depth += 1,
-            Element::Partial(PartialElement::InlineSpanClose(_)) => {
-                depth = depth.checked_sub(1)?;
+        match kind_from_container(container.ctype()) {
+            Some(FormatKind::Bold) => {
+                return Some(Expansion::Format(InlineFormatKind::Bold));
+            }
+            Some(FormatKind::Italics) => {
+                return Some(Expansion::Format(InlineFormatKind::Italics));
+            }
+            Some(FormatKind::Underline) => {
+                return Some(Expansion::Format(InlineFormatKind::Underline));
             }
             _ => {}
         }
     }
-
-    let mut floor = depth;
-    let mut crossed = false;
-    let mut has_content = false;
-    let mut splits = Vec::new();
-    let mut index = open + 1;
-    while index < elements.len() {
-        let element = &elements[index];
-        match element {
-            Element::Partial(PartialElement::InlineSpanOpen(_)) => {
-                depth += 1;
-                crossed = true;
+    let marker_texts: &[&str] = match element {
+        Element::Container(container)
+            if container.ctype() == ContainerType::Monospace =>
+        {
+            &MONO_EXPANSION_MARKER_TEXTS
+        }
+        _ => &MARKER_TEXTS,
+    };
+    if !subtree_has_marker_text(element, marker_texts) {
+        return None;
+    }
+    match element {
+        Element::Color { .. } => Some(Expansion::Color),
+        Element::Container(container) => {
+            if !container.attributes().get().is_empty() {
+                return None;
             }
-            Element::Partial(PartialElement::InlineSpanClose(_)) => {
-                if depth == floor {
-                    splits.push(index);
-                    floor = floor.checked_sub(1)?;
+            match kind_from_container(container.ctype())? {
+                FormatKind::Bold => Some(Expansion::Format(InlineFormatKind::Bold)),
+                FormatKind::Italics => {
+                    Some(Expansion::Format(InlineFormatKind::Italics))
                 }
-                depth = depth.checked_sub(1)?;
-                crossed = true;
-            }
-            Element::Partial(_) => return None,
-            _ if is_exact_text(element, "**") => {
-                if element_ends_with_ascii_space(&elements[index - 1]) {
-                    return None;
+                FormatKind::Underline => {
+                    Some(Expansion::Format(InlineFormatKind::Underline))
                 }
-                return (crossed && has_content).then_some((index, splits));
-            }
-            _ => {
-                has_content |= text(element).is_none_or(|value| !value.trim().is_empty());
+                FormatKind::Subscript => {
+                    Some(Expansion::Format(InlineFormatKind::Subscript))
+                }
+                FormatKind::Superscript => {
+                    Some(Expansion::Format(InlineFormatKind::Superscript))
+                }
+                FormatKind::Monospace => {
+                    Some(Expansion::Format(InlineFormatKind::Monospace))
+                }
+                FormatKind::Strike | FormatKind::Color => None,
             }
         }
-        index += 1;
+        _ => None,
+    }
+}
+
+fn subtree_has_marker_text(element: &Element<'_>, marker_texts: &[&str]) -> bool {
+    match element {
+        Element::Text(value) => marker_texts.contains(&value.as_ref()),
+        _ => formatter_children(element).is_some_and(|children| {
+            children
+                .iter()
+                .any(|child| subtree_has_marker_text(child, marker_texts))
+        }),
+    }
+}
+
+fn subtree_has_barrier(element: &Element<'_>) -> bool {
+    if pairing_barrier(element) {
+        return true;
+    }
+    formatter_children(element).is_some_and(|children| {
+        children.iter().any(subtree_has_barrier)
+    })
+}
+
+fn pairing_barrier(element: &Element<'_>) -> bool {
+    match element {
+        Element::Container(container) => kind_from_container(container.ctype()).is_none(),
+        Element::Raw(_)
+        | Element::Anchor { .. }
+        | Element::Collapsible { .. }
+        | Element::Table(_)
+        | Element::TabView(_)
+        | Element::List { .. }
+        | Element::DefinitionList(_)
+        | Element::Include { .. }
+        | Element::HorizontalRule
+        | Element::TableOfContents { .. } => true,
+        Element::Partial(partial) => matches!(
+            partial,
+            PartialElement::ListItem(_)
+                | PartialElement::TableRow(_)
+                | PartialElement::TableCell(_)
+                | PartialElement::Tab(_)
+        ),
+        _ => false,
+    }
+}
+
+fn proj_starts_with_pad(item: &ProjItem<'_>) -> bool {
+    matches!(item, ProjItem::Text(value) if value.starts_with(' ') || value.starts_with('\t'))
+}
+
+fn proj_ends_with_pad(item: &ProjItem<'_>) -> bool {
+    matches!(item, ProjItem::Text(value) if value.ends_with(' ') || value.ends_with('\t'))
+}
+
+fn projection_has_content(items: &[ProjItem<'_>]) -> bool {
+    items.iter().any(|item| match item {
+        ProjItem::Text(value) => !value.trim().is_empty(),
+        ProjItem::Content | ProjItem::LinkContent => true,
+        ProjItem::PartialLike
+        | ProjItem::Barrier
+        | ProjItem::EdgeOpen(_)
+        | ProjItem::EdgeClose(_)
+        | ProjItem::FormatEventOpen(_)
+        | ProjItem::FormatEventClose(_)
+        | ProjItem::ColorEventOpen
+        | ProjItem::ColorEventClose => false,
+    })
+}
+
+fn pair_symmetric_markers<'t>(
+    projection: &[ProjItem<'_>],
+    roles: &mut [Option<PairRole<'t>>],
+    kind: InlineFormatKind,
+) -> bool {
+    let marker = kind.open_marker();
+    let mut siblings: Vec<Option<usize>> = vec![None; projection.len()];
+    let mut edge_stack: Vec<usize> = Vec::new();
+    for (index, item) in projection.iter().enumerate() {
+        match item {
+            ProjItem::EdgeOpen(edge_kind) if *edge_kind == kind => {
+                edge_stack.push(index);
+            }
+            ProjItem::EdgeClose(edge_kind) if *edge_kind == kind => {
+                if let Some(open_index) = edge_stack.pop() {
+                    siblings[open_index] = Some(index);
+                    siblings[index] = Some(open_index);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut edge_active = vec![false; projection.len()];
+    let mut segment_start = 0;
+    let mut segment_has_literal = false;
+    for index in 0..=projection.len() {
+        if index == projection.len() || matches!(projection[index], ProjItem::Barrier)
+        {
+            if segment_has_literal {
+                edge_active[segment_start..index].fill(true);
+            }
+            segment_start = index + 1;
+            segment_has_literal = false;
+        } else if matches!(projection[index], ProjItem::Text(value) if value == marker)
+        {
+            segment_has_literal = true;
+        }
+    }
+    let is_candidate = |index: usize| -> bool {
+        match projection[index] {
+            ProjItem::Text(value) => value == marker,
+            ProjItem::EdgeOpen(edge_kind) | ProjItem::EdgeClose(edge_kind) => {
+                edge_kind == kind && edge_active[index]
+            }
+            _ => false,
+        }
+    };
+    let mut found = false;
+    let mut open: Option<usize> = None;
+    let mut depth = 0usize;
+    for (index, item) in projection.iter().enumerate() {
+        if matches!(item, ProjItem::Barrier) {
+            open = None;
+            continue;
+        }
+        match item {
+            ProjItem::FormatEventOpen(event_kind) if *event_kind == kind => {
+                depth += 1;
+                continue;
+            }
+            ProjItem::FormatEventClose(event_kind) if *event_kind == kind => {
+                depth = depth.saturating_sub(1);
+                continue;
+            }
+            _ => {}
+        }
+        if depth > 0 || !is_candidate(index) {
+            continue;
+        }
+        match open {
+            None => {
+                if projection
+                    .get(index + 1)
+                    .is_some_and(|next| !proj_starts_with_pad(next))
+                {
+                    open = Some(index);
+                }
+            }
+            Some(open_index) => {
+                if !proj_ends_with_pad(&projection[index - 1])
+                    && projection_has_content(&projection[open_index + 1..index])
+                {
+                    if siblings[open_index] != Some(index)
+                        && roles[open_index].is_none()
+                        && roles[index].is_none()
+                    {
+                        roles[open_index] = Some(PairRole::FormatOpen(kind));
+                        roles[index] = Some(PairRole::FormatClose(kind));
+                        for endpoint in [open_index, index] {
+                            if let Some(sibling) = siblings[endpoint]
+                                && roles[sibling].is_none()
+                            {
+                                roles[sibling] =
+                                    Some(PairRole::LiteralMarker(kind));
+                            }
+                        }
+                        for swept in open_index..=index {
+                            let is_edge = matches!(
+                                projection[swept],
+                                ProjItem::EdgeOpen(edge_kind)
+                                    | ProjItem::EdgeClose(edge_kind)
+                                if edge_kind == kind
+                            );
+                            if is_edge && roles[swept].is_none() {
+                                roles[swept] =
+                                    Some(PairRole::LiteralMarker(kind));
+                                if let Some(sibling) = siblings[swept]
+                                    && roles[sibling].is_none()
+                                {
+                                    roles[sibling] =
+                                        Some(PairRole::LiteralMarker(kind));
+                                }
+                            }
+                        }
+                        found = true;
+                    }
+                    open = None;
+                }
+            }
+        }
+    }
+    found
+}
+
+fn pair_monospace_markers<'t>(
+    projection: &[ProjItem<'_>],
+    roles: &mut [Option<PairRole<'t>>],
+) -> bool {
+    let mut found = false;
+    let mut open: Option<usize> = None;
+    let mut depth = 0usize;
+    for (index, item) in projection.iter().enumerate() {
+        if matches!(item, ProjItem::Barrier) {
+            open = None;
+            continue;
+        }
+        match item {
+            ProjItem::FormatEventOpen(InlineFormatKind::Monospace) => {
+                depth += 1;
+                continue;
+            }
+            ProjItem::FormatEventClose(InlineFormatKind::Monospace) => {
+                depth = depth.saturating_sub(1);
+                continue;
+            }
+            _ => {}
+        }
+        if depth > 0 {
+            continue;
+        }
+        match open {
+            None => {
+                if matches!(item, ProjItem::Text(value) if *value == "{{") {
+                    open = Some(index);
+                }
+            }
+            Some(open_index) => {
+                if matches!(item, ProjItem::Text(value) if *value == "}}")
+                    && projection_has_content(&projection[open_index + 1..index])
+                {
+                    if projection[open_index + 1..index]
+                        .iter()
+                        .any(|item| matches!(item, ProjItem::LinkContent))
+                    {
+                        open = None;
+                        continue;
+                    }
+                    if roles[open_index].is_none() && roles[index].is_none() {
+                        roles[open_index] =
+                            Some(PairRole::FormatOpen(InlineFormatKind::Monospace));
+                        roles[index] =
+                            Some(PairRole::FormatClose(InlineFormatKind::Monospace));
+                        found = true;
+                    }
+                    open = None;
+                }
+            }
+        }
+    }
+    found
+}
+
+fn pair_color_markers<'t>(
+    projection: &[ProjItem<'_>],
+    roles: &mut [Option<PairRole<'t>>],
+) -> bool {
+    let mut found = false;
+    let mut pending: Option<(usize, usize, Cow<'t, str>, bool)> = None;
+    let mut depth = 0usize;
+    for index in 0..projection.len() {
+        if matches!(projection[index], ProjItem::Barrier) {
+            pending = None;
+            continue;
+        }
+        match projection[index] {
+            ProjItem::ColorEventOpen => {
+                depth += 1;
+                continue;
+            }
+            ProjItem::ColorEventClose => {
+                depth = depth.saturating_sub(1);
+                continue;
+            }
+            _ => {}
+        }
+        if pending.is_none() {
+            if depth == 0
+                && let Some((color, background, len)) =
+                    color_head_at(projection, index)
+            {
+                pending = Some((index, index + len, color, background));
+            }
+            continue;
+        }
+        let head = pending.as_ref().unwrap().0;
+        let content_start = pending.as_ref().unwrap().1;
+        if depth == 0
+            && index >= content_start
+            && matches!(projection[index], ProjItem::Text(value) if value == "##")
+            && projection_has_content(&projection[content_start..index])
+        {
+            let (_, _, color, background) = pending.take().unwrap();
+            if roles[head].is_none() && roles[index].is_none() {
+                roles[head] = Some(PairRole::ColorOpen(color, background));
+                for slot in &mut roles[head + 1..content_start] {
+                    *slot = Some(PairRole::Drop);
+                }
+                roles[index] = Some(PairRole::ColorClose);
+                found = true;
+            }
+        }
+    }
+    found
+}
+
+fn color_head_at<'t>(
+    projection: &[ProjItem<'_>],
+    start: usize,
+) -> Option<(Cow<'t, str>, bool, usize)> {
+    if !matches!(projection.get(start), Some(ProjItem::Text(value)) if *value == "##") {
+        return None;
+    }
+    let mut color = String::new();
+    let mut background = false;
+    for (offset, item) in projection[start + 1..].iter().enumerate() {
+        let ProjItem::Text(value) = item else {
+            return None;
+        };
+        if *value == "|" {
+            if color.trim().is_empty() && !background {
+                background = true;
+                color.clear();
+                continue;
+            }
+            let color = normalize_wikidot_color(&color)?.into_owned();
+            return Some((Cow::Owned(color), background, offset + 2));
+        }
+        color.push_str(value);
     }
     None
 }
@@ -1951,14 +2479,6 @@ fn kind_from_container(ctype: ContainerType) -> Option<FormatKind> {
         ContainerType::Superscript => Some(FormatKind::Superscript),
         ContainerType::Monospace => Some(FormatKind::Monospace),
         _ => None,
-    }
-}
-
-fn bold_shell<'t>() -> FormatShell<'t> {
-    FormatShell::Container {
-        kind: FormatKind::Bold,
-        ctype: ContainerType::Bold,
-        attributes: AttributeMap::new(),
     }
 }
 
