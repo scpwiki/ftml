@@ -87,6 +87,12 @@ fn try_consume_fn<'r, 't>(
                 {
                     parser.mark_virtual_start_of_line();
                 }
+                if opener_at_line_start
+                    && parser.settings().layout.legacy()
+                    && parser.current().token == Token::Whitespace
+                {
+                    parser.mark_virtual_start_of_line();
+                }
                 return if generated.is_empty() {
                     ok!(Elements::None)
                 } else {

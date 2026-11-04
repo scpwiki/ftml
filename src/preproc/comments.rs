@@ -12,6 +12,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
     let mut copied_until = 0usize;
     let mut scan = 0usize;
     let mut removed = false;
+    let mut break_drops: Vec<std::ops::Range<usize>> = Vec::new();
 
     while let Some(relative_open) = text[scan..].find("[!--") {
         let open = scan + relative_open;
@@ -30,10 +31,15 @@ pub(super) fn substitute_wikidot(text: &mut String) {
             continue;
         }
         if leading_comment_remains_an_owner_barrier(text, open, close) {
+            if line_remainder_splices(text, close, &literal_regions, &block_name_comments)
+                && let Some(drop) = line_start_break_drop(text, open)
+            {
+                break_drops.push(drop);
+            }
             scan = close;
             continue;
         }
-        output.push_str(&text[copied_until..open]);
+        push_copied_range(&mut output, text, copied_until..open, &break_drops);
         if comment_elision_needs_raw_barrier(text, open, close) {
             output.push('\0');
         }
@@ -42,8 +48,8 @@ pub(super) fn substitute_wikidot(text: &mut String) {
         removed = true;
     }
 
-    if removed {
-        output.push_str(&text[copied_until..]);
+    if removed || !break_drops.is_empty() {
+        push_copied_range(&mut output, text, copied_until..text.len(), &break_drops);
         *text = output;
     }
 }
@@ -56,6 +62,145 @@ pub(super) fn substitute_wikidot(text: &mut String) {
 fn comment_contains_iftags_head(comment: &str) -> bool {
     let lower = comment.to_ascii_lowercase();
     lower.contains("[[iftags") || lower.contains("[[/iftags")
+}
+
+fn exposed_line_start_construct(tail: &str) -> bool {
+    let lower = tail
+        .get(..tail.len().min("[[gallery".len()))
+        .unwrap_or(tail);
+    tail.starts_with("~~~~")
+        || tail.starts_with('+')
+        || tail.starts_with("----")
+        || tail.starts_with("* ")
+        || tail.starts_with("# ")
+        || tail.starts_with("====")
+        || lower.eq_ignore_ascii_case("[[gallery")
+}
+
+fn line_remainder_splices(
+    source: &str,
+    mut pos: usize,
+    literal_regions: &LiteralRegionIndex,
+    block_name_comments: &std::collections::BTreeSet<usize>,
+) -> bool {
+    let bytes = source.as_bytes();
+    loop {
+        while pos < source.len() && matches!(bytes[pos], b' ' | b'\t') {
+            pos += 1;
+        }
+        if pos >= source.len() {
+            return false;
+        }
+        if bytes[pos] == b'\r' || bytes[pos] == b'\n' {
+            if bytes[pos] == b'\r' && bytes.get(pos + 1) == Some(&b'\n') {
+                pos += 2;
+            } else {
+                pos += 1;
+            }
+            match chained_comment_close(source, pos, literal_regions, block_name_comments)
+            {
+                Some(close) => {
+                    pos = close;
+                    continue;
+                }
+                None => return false,
+            }
+        }
+        if source[pos..].starts_with("[!--") {
+            match chained_comment_close(source, pos, literal_regions, block_name_comments)
+            {
+                Some(close) => {
+                    pos = close;
+                    continue;
+                }
+                None => return false,
+            }
+        }
+        let line_end = source[pos..]
+            .find('\n')
+            .map_or(source.len(), |newline| pos + newline);
+        return !exposed_line_start_construct(&source[pos..line_end]);
+    }
+}
+
+fn chained_comment_close(
+    source: &str,
+    open: usize,
+    literal_regions: &LiteralRegionIndex,
+    block_name_comments: &std::collections::BTreeSet<usize>,
+) -> Option<usize> {
+    if !source[open..].starts_with("[!--")
+        || literal_regions.contains(open)
+        || block_name_comments.contains(&open)
+    {
+        return None;
+    }
+    let relative_close = source[open + "[!--".len()..].find("--]")?;
+    let close = open + "[!--".len() + relative_close + "--]".len();
+    if comment_contains_iftags_head(&source[open..close]) {
+        return None;
+    }
+    Some(close)
+}
+
+fn push_copied_range(
+    output: &mut String,
+    text: &str,
+    range: std::ops::Range<usize>,
+    break_drops: &[std::ops::Range<usize>],
+) {
+    let mut cursor = range.start;
+    for drop in break_drops {
+        if drop.end <= cursor {
+            continue;
+        }
+        if drop.start >= range.end {
+            break;
+        }
+        if drop.start > cursor {
+            output.push_str(&text[cursor..drop.start]);
+        }
+        cursor = cursor.max(drop.end);
+    }
+    if cursor < range.end {
+        output.push_str(&text[cursor..range.end]);
+    }
+}
+
+fn line_start_break_drop(source: &str, open: usize) -> Option<std::ops::Range<usize>> {
+    let line_start = source[..open].rfind('\n').map_or(0, |newline| newline + 1);
+    if open != line_start || line_start == 0 {
+        return None;
+    }
+
+    let bytes = source.as_bytes();
+    let mut pos = line_start;
+    let mut breaks = 0usize;
+    let mut latest_start = line_start;
+    let mut drop_start = line_start;
+    while pos > 0 {
+        let start = if bytes[pos - 1] == b'\n' {
+            if pos >= 2 && bytes[pos - 2] == b'\r' {
+                pos - 2
+            } else {
+                pos - 1
+            }
+        } else if bytes[pos - 1] == b'\r' {
+            pos - 1
+        } else {
+            break;
+        };
+        breaks += 1;
+        drop_start = latest_start;
+        latest_start = start;
+        pos = start;
+    }
+
+    match breaks {
+        0 => None,
+        1 => Some(latest_start..line_start),
+        _ => Some(drop_start..line_start),
+    }
 }
 
 fn comment_elision_needs_raw_barrier(source: &str, open: usize, close: usize) -> bool {
@@ -81,17 +226,7 @@ fn leading_comment_remains_an_owner_barrier(
     }
 
     let tail = source[close..].trim_start_matches([' ', '\t']);
-    let lower = tail
-        .get(..tail.len().min("[[gallery".len()))
-        .unwrap_or(tail);
-    let exposed = tail.starts_with("~~~~")
-        || tail.starts_with('+')
-        || tail.starts_with("----")
-        || tail.starts_with("* ")
-        || tail.starts_with("# ")
-        || tail.starts_with("====")
-        || lower.eq_ignore_ascii_case("[[gallery");
-    !exposed
+    !exposed_line_start_construct(tail)
 }
 
 fn regular_block_name_comment_starts(source: &str) -> BTreeSet<usize> {
