@@ -87,10 +87,20 @@ fn parse_fn<'r, 't>(
         if opener_text[2..].contains("[[") || opener_text.contains("[!--") {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
+        if parser.in_wikidot_bibliography_speculation() {
+            let body_start = parser.current().span.start;
+            let mut literal = vec![Element::Text(cow!(opener_text))];
+            if &source[opener_end..body_start] == "\n" {
+                literal.push(Element::LineBreak);
+            }
+            return success_elements_with_paragraph_safety(false, literal, Vec::new());
+        }
         let body_start = parser.current().span.start;
         let mutable_state = parser.get_mutable_state();
         let snapshot = parser.clone();
+        parser.set_wikidot_bibliography_speculation(true);
         let body = parser.get_body_elements(&BLOCK_BIBLIOGRAPHY, false);
+        parser.set_wikidot_bibliography_speculation(false);
         let body = body?;
         let (mut body_elements, errors, _) = body.into();
         let mut literal = vec![Element::Text(cow!(&source[opener_start..opener_end]))];

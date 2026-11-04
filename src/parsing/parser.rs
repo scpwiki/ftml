@@ -141,6 +141,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_tab_quote_ejection: Cell<bool>,
     wikidot_body_soft_ended: Cell<bool>,
     colon_line_vanished: Cell<bool>,
+    wikidot_bibliography_speculation: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
@@ -387,6 +388,22 @@ impl<'r, 't> Parser<'r, 't> {
     #[inline]
     pub(crate) fn gate_items_allowed(&self) -> bool {
         self.block_end_scan_cache.borrow().gate_items_allowed.get()
+    }
+
+    #[inline]
+    pub(crate) fn in_wikidot_bibliography_speculation(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_bibliography_speculation
+            .get()
+    }
+
+    #[inline]
+    pub(crate) fn set_wikidot_bibliography_speculation(&self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_bibliography_speculation
+            .set(value);
     }
 
     #[inline]

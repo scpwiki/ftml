@@ -1,0 +1,100 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "bibliography"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "unterminated"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "0"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "bibliography"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "unterminated"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "1"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "bibliography"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "unterminated"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "2"
+                    }
+                ]
+            }
+        }
+    ]
+}
