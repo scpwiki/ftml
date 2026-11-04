@@ -1065,6 +1065,18 @@ where
         }
     }
 
+    fn at_wikidot_code_close_terminator(&self) -> bool {
+        // The parser sits on the token after a `[[/code]]` end block. Live
+        // Wikidot ends the code body there when the byte after the marker
+        // is whitespace (the text after it is outer content) or the input
+        // ends; a byte like a letter or `[` leaves the marker as body text.
+        let source = self.full_text().inner();
+        match source[self.current().span.start..].bytes().next() {
+            None => true,
+            Some(byte) => matches!(byte, b' ' | b'\t' | b'\r' | b'\n'),
+        }
+    }
+
     fn at_blank_line_remainder(&self) -> bool {
         if self.current().token != Token::Whitespace {
             return false;
@@ -1242,7 +1254,9 @@ where
                         && !(matches!(
                             parser.current().token,
                             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
-                        ) || parser.at_blank_line_remainder())
+                        ) || parser.at_blank_line_remainder()
+                            || (block_rule.name == "block-code"
+                                && parser.at_wikidot_code_close_terminator()))
                     {
                         return Ok(false);
                     }
@@ -3282,7 +3296,9 @@ where
         let mut parser = self.clone();
 
         loop {
-            if block_rule.name != "block-iftags" && parser.skip_discarded_iftags_segment(true) {
+            if block_rule.name != "block-iftags"
+                && parser.skip_discarded_iftags_segment(true)
+            {
                 continue;
             }
             match parser.current().token {

@@ -252,6 +252,11 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
+            let code_has_same_line_residual = elements_end_with_code(&elements)
+                && !matches!(
+                    parser.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                );
             let div_has_same_line_residual = div_opener
                 && active_div
                 && !matches!(
@@ -355,6 +360,9 @@ where
             }
             if div_has_same_line_residual {
                 stack.mark_wikidot_same_line_div_residual();
+            }
+            if code_has_same_line_residual {
+                stack.mark_wikidot_same_line_code_residual();
             }
             if embed_error_has_same_line_residual {
                 stack.mark_wikidot_same_line_embed_residual();
@@ -525,6 +533,16 @@ fn elements_contain_div(elements: &Elements<'_>) -> bool {
         Elements::None => false,
         Elements::Single(element) => is_div(element),
         Elements::Multiple(elements) => elements.iter().any(is_div),
+    }
+}
+
+fn elements_end_with_code(elements: &Elements<'_>) -> bool {
+    match elements {
+        Elements::Single(element) => matches!(element, Element::Code(_)),
+        Elements::Multiple(elements) => {
+            matches!(elements.last(), Some(Element::Code(_)))
+        }
+        Elements::None => false,
     }
 }
 

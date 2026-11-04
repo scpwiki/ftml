@@ -1,0 +1,29 @@
+[
+    {
+        "token": "identifier",
+        "rule": "block-footnote",
+        "span": [
+            74,
+            79
+        ],
+        "kind": "footnotes-nested"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            62,
+            64
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            72,
+            74
+        ],
+        "kind": "no-rules-match"
+    }
+]
