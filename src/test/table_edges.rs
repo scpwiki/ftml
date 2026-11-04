@@ -459,3 +459,104 @@ fn simple_table_crossed_closer_ends_span_opened_in_later_cell() {
         assert_text_content(rest, " c");
     });
 }
+
+fn top_level_tables<'a>(
+    tree: &'a crate::tree::SyntaxTree<'a>,
+) -> Vec<&'a crate::tree::Table<'a>> {
+    tree.elements
+        .iter()
+        .filter_map(|element| match element {
+            Element::Table(table) => Some(table),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn simple_table_unterminated_sole_cell_row_renders_empty_cell_in_both_layouts() {
+    enable_test_logging();
+
+    let page_info = PageInfo::dummy();
+    for layout in [Layout::Wikidot, Layout::Wikijump] {
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
+
+        let tokenization = crate::tokenize(
+            "|| outer A1 ||\n|| [[table]]\n|| inner B2 ||\n[[/table]] ||\n|| outer C3 ||",
+        );
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let tables = top_level_tables(&tree);
+        assert_eq!(tables.len(), 2, "{layout:?}");
+        assert_eq!(tables[0].rows.len(), 3, "{layout:?}");
+        assert_text_content(&tables[0].rows[0].cells[0].elements, "outer A1");
+        assert_eq!(tables[0].rows[1].cells.len(), 1, "{layout:?}");
+        assert!(tables[0].rows[1].cells[0].elements.is_empty(), "{layout:?}");
+        assert!(!tables[0].rows[1].cells[0].header, "{layout:?}");
+        assert_text_content(&tables[0].rows[2].cells[0].elements, "inner B2");
+        assert_eq!(tables[1].rows.len(), 1, "{layout:?}");
+        assert_text_content(&tables[1].rows[0].cells[0].elements, "outer C3");
+
+        let tokenization = crate::tokenize("|| A1 ||\n|| hello\n|| B2 ||");
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let tables = top_level_tables(&tree);
+        assert_eq!(tables.len(), 1, "{layout:?}");
+        assert_eq!(tables[0].rows.len(), 3, "{layout:?}");
+        assert!(tables[0].rows[1].cells[0].elements.is_empty(), "{layout:?}");
+    }
+}
+
+#[test]
+fn simple_table_advanced_table_spanning_lines_in_row_does_not_form_in_both_layouts() {
+    enable_test_logging();
+
+    let page_info = PageInfo::dummy();
+    for layout in [Layout::Wikidot, Layout::Wikijump] {
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
+
+        let tokenization = crate::tokenize(
+            "|| outer A1 ||\n|| [[table]]\n[[row]]\n[[cell]]X[[/cell]]\n[[/row]]\n[[/table]]\n|| outer C3 ||",
+        );
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let tables = top_level_tables(&tree);
+        assert_eq!(tables.len(), 2, "{layout:?}");
+        assert!(
+            tables
+                .iter()
+                .all(|table| table.table_type == TableType::Simple),
+            "{layout:?}",
+        );
+        assert_eq!(tables[0].rows.len(), 2, "{layout:?}");
+        assert!(tables[0].rows[1].cells[0].elements.is_empty(), "{layout:?}");
+        assert_text_content(&tables[1].rows[0].cells[0].elements, "outer C3");
+
+        let tokenization = crate::tokenize("|| [[table]]\n[[/table]] ||");
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let tables = top_level_tables(&tree);
+        assert_eq!(tables.len(), 1, "{layout:?}");
+        assert_eq!(tables[0].table_type, TableType::Simple, "{layout:?}");
+        assert_eq!(tables[0].rows.len(), 1, "{layout:?}");
+        assert!(tables[0].rows[0].cells[0].elements.is_empty(), "{layout:?}");
+    }
+}
+
+#[test]
+fn simple_table_closed_cell_keeps_single_line_advanced_table_in_both_layouts() {
+    enable_test_logging();
+
+    let page_info = PageInfo::dummy();
+    for layout in [Layout::Wikidot, Layout::Wikijump] {
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
+        let tokenization =
+            crate::tokenize("|| [[table]][[row]][[cell]]X[[/cell]][[/row]][[/table]] ||");
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let tables = top_level_tables(&tree);
+        assert_eq!(tables.len(), 1, "{layout:?}");
+        let cell = &tables[0].rows[0].cells[0];
+        assert!(
+            cell.elements.iter().any(|element| matches!(
+                element,
+                Element::Table(table) if table.table_type == TableType::Advanced
+            )),
+            "{layout:?}: {cell:?}",
+        );
+    }
+}

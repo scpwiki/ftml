@@ -19,30 +19,22 @@
             }
         },
         {
-            "element": "container",
+            "element": "table",
             "data": {
-                "type": "paragraph",
+                "type": "simple",
                 "attributes": {},
-                "elements": [
+                "rows": [
                     {
-                        "element": "text",
-                        "data": "||"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "Missing"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "end"
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": []
+                            }
+                        ]
                     }
                 ]
             }
@@ -103,22 +95,22 @@
             }
         },
         {
-            "element": "container",
+            "element": "table",
             "data": {
-                "type": "paragraph",
+                "type": "simple",
                 "attributes": {},
-                "elements": [
+                "rows": [
                     {
-                        "element": "text",
-                        "data": "||>"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "blueberry"
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": []
+                            }
+                        ]
                     }
                 ]
             }

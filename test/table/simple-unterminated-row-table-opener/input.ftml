@@ -1,0 +1,5 @@
+|| outer A1 ||
+|| [[table]]
+|| inner B2 ||
+[[/table]] ||
+|| outer C3 ||
