@@ -600,6 +600,18 @@ where
         &mut self,
         kind: ParseErrorKind,
     ) -> Result<(Cow<'t, str>, bool), ParseError> {
+        if !self.settings().layout.legacy() {
+            while self.current().token == Token::LeftComment {
+                let mut probe = self.clone();
+                if consume_valid_comment(&mut probe).is_err() {
+                    break;
+                }
+                self.update(&probe);
+                if self.current().token == Token::Whitespace {
+                    self.step()?;
+                }
+            }
+        }
         let end_conditions = [
             ParseCondition::current(Token::Whitespace),
             ParseCondition::current(Token::LineBreak),
@@ -621,7 +633,9 @@ where
             Cow::Borrowed(name) => Cow::Borrowed(trim_head_word(name, legacy)),
             Cow::Owned(name) => Cow::Owned(trim_head_word(&name, legacy).to_owned()),
         };
-        if name.contains(char::is_whitespace) || name.contains("]]") {
+        if matches!(name, Cow::Owned(_))
+            && (name.contains(char::is_whitespace) || name.contains("]]"))
+        {
             return Err(self.make_err(ParseErrorKind::RuleFailed));
         }
         let in_head = !matches!(last.token, Token::RightBlock | Token::RightBracket);
@@ -2821,9 +2835,17 @@ where
         &mut self,
         block_rule: &BlockRule,
         in_head: bool,
-    ) -> Result<(&'t str, Arguments<'t>), ParseError> {
-        self.get_head_name_map_with_body_start(block_rule, in_head)
-            .map(|(name, arguments, _)| (name, arguments))
+    ) -> Result<(Cow<'t, str>, Arguments<'t>), ParseError> {
+        if !in_head {
+            return Err(self.make_err(ParseErrorKind::BlockMissingName));
+        }
+
+        let missing_name = ParseErrorKind::ModuleMissingName;
+        let (subname, in_head) = self.get_head_word(missing_name)?;
+
+        let (arguments, _) = self.get_head_map_with_body_start(block_rule, in_head)?;
+
+        Ok((subname, arguments))
     }
 
     pub(crate) fn get_head_name_map_with_body_start(
@@ -2878,7 +2900,7 @@ where
         &mut self,
         block_rule: &BlockRule,
         in_head: bool,
-    ) -> Result<(&'t str, Arguments<'t>), ParseError> {
+    ) -> Result<(Cow<'t, str>, Arguments<'t>), ParseError> {
         if !self.settings().layout.legacy() {
             return self.get_head_name_map(block_rule, in_head);
         }
@@ -2887,7 +2909,7 @@ where
         }
 
         let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
+        let (subname, in_head) = self.get_head_word(missing_name)?;
         let arguments = self.get_head_map_wikidot(block_rule, in_head)?;
 
         Ok((subname, arguments))

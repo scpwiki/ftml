@@ -21,7 +21,6 @@
 use super::prelude::*;
 use crate::parsing::discard_wikidot_controls;
 use crate::tree::{AttributeMap, LinkLabel, LinkLocation, LinkType};
-use std::borrow::Cow;
 
 pub const BLOCK_IFRAME: BlockRule = BlockRule {
     name: "block-iframe",
@@ -47,9 +46,9 @@ fn parse_fn<'r, 't>(
 
     let (url, arguments) = parser.get_head_name_map_wikidot(&BLOCK_IFRAME, in_head)?;
     let url = if parser.settings().layout.legacy() {
-        discard_wikidot_controls(Cow::Borrowed(url))
+        discard_wikidot_controls(url)
     } else {
-        Cow::Borrowed(url)
+        url
     };
     if !(if parser.settings().layout.legacy() {
         wikidot_iframe_url(&url)

@@ -45,7 +45,7 @@ fn parse_fn<'r, 't>(
     parser.get_optional_space()?;
 
     let element = Element::RadioButton {
-        name: std::borrow::Cow::Borrowed(name),
+        name,
         checked: flag_star,
         attributes: arguments.to_attribute_map(parser.settings()),
     };
