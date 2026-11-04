@@ -349,15 +349,52 @@ where
         ParseCondition::current(Token::InputEnd),
         ParseCondition::token_pair(Token::LeftBlockEnd, Token::Identifier),
     ];
-    let collected =
-        collect_consume_before(parser, RULE_DEFINITION_LIST, &close, &[], None)?;
-    let (mut value_elements, last) = collected.chain(errors, paragraph_safe);
+    let mut value_elements = Vec::new();
+    let mut last;
+    loop {
+        let collected =
+            collect_consume_before(parser, RULE_DEFINITION_LIST, &close, &[], None)?;
+        let (mut elements, terminator) = collected.chain(errors, paragraph_safe);
+        value_elements.append(&mut elements);
+        last = terminator;
+        if terminator.token != Token::LeftBlockEnd
+            || parser.discarding_hidden_body()
+            || parser.at_body_end_boundary()
+            || wikidot_end_block_is_bibliography(parser)
+        {
+            break;
+        }
+        let before = parser.remaining();
+        let elements = consume(parser)?.chain(errors, paragraph_safe);
+        match elements {
+            Elements::None => {}
+            Elements::Single(element) => value_elements.push(element),
+            Elements::Multiple(mut elements) => value_elements.append(&mut elements),
+        }
+        if parser.same_pointer(before) {
+            parser.step()?;
+        }
+    }
     if matches!(last.token, Token::LineBreak | Token::ParagraphBreak) {
         parser.step()?;
     }
     prefix.append(&mut value_elements);
     strip_wikidot_ascii_padding(&mut prefix);
     Ok(prefix)
+}
+
+fn wikidot_end_block_is_bibliography<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    match probe.get_wikidot_end_block_with_residual() {
+        Ok((name, _)) => {
+            let name = name.strip_suffix('_').unwrap_or(name);
+            name.eq_ignore_ascii_case("bibliography")
+        }
+        Err(_) => false,
+    }
 }
 
 fn has_definition_separator<'r, 't>(parser: &Parser<'r, 't>) -> bool {
