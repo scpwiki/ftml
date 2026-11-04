@@ -1,0 +1,36 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Apple"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "Banana"
+            }
+        ]
+    ]
+}

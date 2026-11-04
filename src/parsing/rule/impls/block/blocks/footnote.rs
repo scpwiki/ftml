@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use crate::parsing::parse_boolean;
 use std::ops::{Deref, DerefMut};
 
 pub const BLOCK_FOOTNOTE: BlockRule = BlockRule {
@@ -141,7 +142,12 @@ fn parse_footnote_block<'r, 't>(
     let mut arguments = parser.get_head_map_wikidot(&BLOCK_FOOTNOTE_BLOCK, in_head)?;
 
     let title = arguments.get("title");
-    let hide = arguments.get_bool(parser, "hide")?.unwrap_or(false);
+    // Wikidot does not reject the block over an unrecognized `hide`
+    // value; anything outside the boolean vocabulary acts as false.
+    let hide = arguments
+        .get("hide")
+        .map(|value| parse_boolean(value.as_ref()).unwrap_or(false))
+        .unwrap_or(false);
 
     if !arguments.is_empty() {
         warn!("Invalid argument keys found");
