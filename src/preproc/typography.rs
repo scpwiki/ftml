@@ -95,7 +95,7 @@ static NUMBER_UNITS: LazyLock<Regex> = LazyLock::new(|| {
             |
             ¢|&cent;|&\#0*162;|&\#[xX]0*[Aa]2;
             |
-            M?(?:£|&pound;|&\#0*163;|&\#[xX]0*[Aa]3;|¥|&yen;|&\#0*165;|&\#[xX]0*[Aa]5;|€|&euro;|&\#0*8364;|&\#[xX]0*20[Aa][Cc];|\$)
+            M?(?:£|&pound;|&\#0*163;|&\#[xX]0*[Aa]3;|¥|&yen;|&\#0*165;|&\#[xX]0*[Aa]5;|€|&euro;|&\#0*8364;|&\#[xX]0*20[Aa][Cc])
             |
             (?:°|&deg;|&\#0*176;|&\#[xX]0*[Bb]0;)[CF]?
             |
@@ -354,12 +354,18 @@ fn wikidot_head_value_ranges(text: &str) -> Vec<Range<usize>> {
             cursor = open + 2;
             continue;
         }
-        let name_start = open + 2;
+        let mut name_start = open + 2;
+        while matches!(text.as_bytes().get(name_start), Some(b' ' | b'\t')) {
+            name_start += 1;
+        }
         let name_end = text[name_start..]
             .find(|character: char| character.is_whitespace() || character == ']')
             .map_or(text.len(), |relative| name_start + relative);
         if name_end > name_start {
-            ranges.push(name_start..name_end);
+            let span_end = text[name_start..]
+                .find(']')
+                .map_or(text.len(), |relative| name_start + relative);
+            ranges.push(name_start..span_end);
         }
         cursor = name_end.max(open + 2);
         if cursor >= text.len() {
@@ -519,6 +525,31 @@ fn replace_unit_spaces(text: &mut String, protected: &[Range<usize>]) {
         buffer.push_str(&text[last_copied..]);
         *text = buffer;
     }
+}
+
+pub(crate) fn wikidot_nbsp_space_positions(text: &str) -> Vec<usize> {
+    let mut positions = Vec::new();
+    for space_index in digit_space_positions(text) {
+        if text
+            .as_bytes()
+            .get(space_index + 1)
+            .is_some_and(u8::is_ascii_digit)
+        {
+            positions.push(space_index);
+        }
+    }
+    for captures in NUMBER_UNITS.captures_iter(text) {
+        let full_match = captures.get(0).unwrap();
+        let following = text[full_match.end()..].chars().next();
+        if following.is_some_and(|character| character.is_ascii_alphanumeric()) {
+            continue;
+        }
+        let number = captures.name("number").unwrap();
+        positions.push(number.end());
+    }
+    positions.sort_unstable();
+    positions.dedup();
+    positions
 }
 
 pub fn substitute(text: &mut String) {

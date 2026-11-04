@@ -1024,7 +1024,13 @@ fn lower_sequence<'t>(
             continue;
         }
         if let Element::Partial(PartialElement::InlineSpanClose(close_source)) = element {
-            let resolved = active.resolve_close(*ordinal, InlineTag::Span);
+            let current = *ordinal;
+            *ordinal += 1;
+            if !valid.contains(&current) {
+                run.push(Element::Text(close_source));
+                continue;
+            }
+            let resolved = active.resolve_close(current, InlineTag::Span);
             let scored =
                 resolved.is_some_and(|position| active.scope_is_scored(position));
             let empty = !resolved
@@ -1061,35 +1067,29 @@ fn lower_sequence<'t>(
             if empty && !scored && !preserve_empty_owner_space {
                 trim_trailing_space(&mut output);
             }
-            let current = *ordinal;
-            *ordinal += 1;
-            if valid.contains(&current) {
-                if !(preserve_empty_owner_space || empty && scored) {
-                    trim_trailing_space(&mut output);
-                }
-                if let Some(position) = resolved {
-                    active.commit_close(position);
-                }
-                if trailing_space
-                    && !next_starts_with_space
-                    && !matches!(
-                        source.peek(),
-                        Some(Element::LineBreak | Element::LineBreaks(_))
-                    )
-                    && !empty
-                    && !scored
-                    && source.peek().is_some()
-                {
-                    output.push(text!(" "));
-                }
-                if scored {
-                    effects.scored_span_closed = true;
-                    *trim_next_break = true;
-                }
-                preserve_space_before_footnote |= preserve_empty_owner_space;
-            } else {
-                run.push(Element::Text(close_source));
+            if !(preserve_empty_owner_space || empty && scored) {
+                trim_trailing_space(&mut output);
             }
+            if let Some(position) = resolved {
+                active.commit_close(position);
+            }
+            if trailing_space
+                && !next_starts_with_space
+                && !matches!(
+                    source.peek(),
+                    Some(Element::LineBreak | Element::LineBreaks(_))
+                )
+                && !empty
+                && !scored
+                && source.peek().is_some()
+            {
+                output.push(text!(" "));
+            }
+            if scored {
+                effects.scored_span_closed = true;
+                *trim_next_break = true;
+            }
+            preserve_space_before_footnote |= preserve_empty_owner_space;
             continue;
         }
         if let Element::Partial(PartialElement::InlineFormatOpen(kind)) = element {
