@@ -1,0 +1,61 @@
+{
+    "elements": [
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "key",
+                [
+                    {
+                        "element": "text",
+                        "data": "Value"
+                    }
+                ]
+            ],
+            [
+                "\u0000",
+                [
+                    {
+                        "element": "tab-view",
+                        "data": [
+                            {
+                                "label": "One",
+                                "elements": [
+                                    {
+                                        "element": "container",
+                                        "data": {
+                                            "type": "paragraph",
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "Body"
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": " "
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": "one"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            ]
+        ]
+    ]
+}

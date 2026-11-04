@@ -20,6 +20,7 @@
 
 use super::prelude::*;
 use crate::parsing::parse_boolean;
+use crate::parsing::rule::impls::comment_closer_token_count;
 use std::ops::{Deref, DerefMut};
 
 pub const BLOCK_FOOTNOTE: BlockRule = BlockRule {
@@ -65,6 +66,10 @@ fn parse_footnote_ref<'r, 't>(
     assert_block_name(&BLOCK_FOOTNOTE, name);
 
     parser.get_head_none(&BLOCK_FOOTNOTE, in_head)?;
+
+    if parser.settings().layout.legacy() {
+        parser.arm_footnote_zone();
+    }
 
     let body = parser.get_body_elements(&BLOCK_FOOTNOTE, true)?;
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_FOOTNOTE);
@@ -207,6 +212,7 @@ fn wikidot_footnote_block_has_inline_prefix(parser: &Parser<'_, '_>) -> bool {
 #[derive(Debug)]
 struct ParserWrap<'p, 'r, 't> {
     parser: &'p mut Parser<'r, 't>,
+    zone_restore: Option<Option<usize>>,
 }
 
 impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
@@ -214,7 +220,16 @@ impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
     fn new(parser: &'p mut Parser<'r, 't>) -> Self {
         parser.set_footnote_flag(true);
 
-        ParserWrap { parser }
+        ParserWrap {
+            parser,
+            zone_restore: None,
+        }
+    }
+
+    fn arm_footnote_zone(&mut self) {
+        let until = wikidot_footnote_zone_end(self.parser);
+        self.zone_restore = Some(self.parser.wikidot_footnote_zone_until());
+        self.parser.set_wikidot_footnote_zone_until(Some(until));
     }
 }
 
@@ -237,6 +252,79 @@ impl<'r, 't> DerefMut for ParserWrap<'_, 'r, 't> {
 impl Drop for ParserWrap<'_, '_, '_> {
     fn drop(&mut self) {
         self.parser.set_footnote_flag(false);
+        if let Some(previous) = self.zone_restore {
+            self.parser.set_wikidot_footnote_zone_until(previous);
+        }
+    }
+}
+
+fn wikidot_footnote_zone_end(parser: &Parser<'_, '_>) -> usize {
+    let mut scan = parser.clone();
+    let mut line_has_content = false;
+    let mut in_comment = false;
+
+    loop {
+        if in_comment && let Some(count) = comment_closer_token_count(&scan) {
+            if scan.step_n(count).is_err() {
+                return usize::MAX;
+            }
+            in_comment = false;
+            continue;
+        }
+
+        let token = scan.current();
+        match token.token {
+            Token::InputEnd => return usize::MAX,
+            Token::LineBreak | Token::ParagraphBreak => {
+                if !in_comment && line_has_content {
+                    return token.span.end;
+                }
+            }
+            Token::Whitespace | Token::DiscardedControl => {}
+            Token::LeftComment => {
+                in_comment = true;
+            }
+            Token::LeftBlockEnd => {
+                if !in_comment
+                    && scan.look_ahead(0).is_some_and(|next| {
+                        next.token == Token::Identifier
+                            && next.slice.eq_ignore_ascii_case("footnote")
+                    })
+                {
+                    return usize::MAX;
+                }
+                if !in_comment {
+                    line_has_content = true;
+                }
+            }
+            _ => {
+                if !in_comment {
+                    let slice = token.slice;
+                    if slice.contains('\n') {
+                        let mut offset = 0usize;
+                        let mut segments = slice.split('\n').peekable();
+                        while let Some(line) = segments.next() {
+                            let line_content =
+                                line.chars().any(|character| !character.is_whitespace());
+                            if segments.peek().is_some() {
+                                if line_has_content || line_content {
+                                    return token.span.start + offset + line.len() + 1;
+                                }
+                                offset += line.len() + 1;
+                            } else if line_content {
+                                line_has_content = true;
+                            }
+                        }
+                    } else {
+                        line_has_content = true;
+                    }
+                }
+            }
+        }
+
+        if scan.step().is_err() {
+            return usize::MAX;
+        }
     }
 }
 

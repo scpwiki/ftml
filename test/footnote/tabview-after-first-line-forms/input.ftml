@@ -1,0 +1,7 @@
+a[[footnote]]body text
+[[tabview]]
+[[tab One]]
+Body one
+[[/tab]]
+[[/tabview]]
+[[/footnote]]

@@ -211,6 +211,10 @@ fn indented_after_quote_marker(parser: &Parser<'_, '_>) -> bool {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    if parser.wikidot_footnote_zone_blocks(parser.current().span.start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     if parser.settings().layout.legacy()
         && parser.in_native_blockquote_line()
         && indented_after_quote_marker(parser)

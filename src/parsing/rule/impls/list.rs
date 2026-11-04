@@ -58,6 +58,10 @@ pub const RULE_LIST: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    if parser.wikidot_footnote_zone_blocks(parser.current().span.start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     // Wikidot only starts a native-list run at the root depth. An indented
     // marker after another block is literal text until a root marker starts
     // a new run.
