@@ -1,0 +1,118 @@
+{
+    "elements": [
+        {
+            "element": "table-of-contents",
+            "data": {
+                "attributes": {},
+                "align": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor-name",
+                        "data": "toc1"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "header": {
+                        "level": 1,
+                        "has-toc": true
+                    }
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "One"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "header": {
+                        "level": 1,
+                        "has-toc": true
+                    }
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Two"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor-name",
+                        "data": "toc0"
+                    }
+                ]
+            }
+        }
+    ],
+    "table-of-contents": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc0",
+                                    "label": {
+                                        "text": "One"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc1",
+                                    "label": {
+                                        "text": "Two"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
