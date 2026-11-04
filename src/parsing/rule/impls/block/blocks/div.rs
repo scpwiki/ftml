@@ -20,12 +20,18 @@
 
 use super::BLOCK_SPAN;
 use super::prelude::*;
+use super::{
+    consume_wikidot_flat_head_break, wikidot_flat_pair_for_head, wikidot_scan_pairs_head,
+};
 use crate::delayed::DelayedElement;
 use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal};
 use crate::parsing::consume::consume;
+use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::settings::WikitextMode;
-use crate::tree::{AcceptsPartial, AttributeMap, ListItem, ListType};
+use crate::tree::{
+    AcceptsPartial, AttributeMap, ListItem, ListType, PartialElement, WikidotBlockShell,
+};
 use std::borrow::Cow;
 
 const WIKIJUMP_DIV_FAILURE_CACHE: &str = "wikijump-div-parse-failure";
@@ -633,6 +639,18 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy() && body_start == BlockBodyStart::Inline {
         body_start = skip_trailing_head_space(parser, body_start)?;
     }
+    if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
+        && pair.kind == WikidotBlockKind::Div
+    {
+        consume_wikidot_flat_head_break(parser, false)?;
+        let attributes = wikidot_div_head_attributes(parser, &mut arguments);
+        let shell = WikidotBlockShell::Div {
+            head: opener_start,
+            attributes,
+            scored: flag_score,
+        };
+        return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
+    }
     let cacheable_wikijump_failure = !parser.settings().layout.legacy();
     if cacheable_wikijump_failure
         && parser.block_end_scan_outcome((
@@ -772,6 +790,13 @@ fn parse_fn<'r, 't>(
         return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
     }
 
+    if !in_head
+        && !wikidot_scan_pairs_head(parser, opener_start)
+        && parser.wikidot_div_opener_is_excess(opener_start)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let wrap_paragraphs = !flag_score;
     if parser.settings().layout.legacy() {
         parser.enter_wikidot_div_body();
@@ -809,19 +834,7 @@ fn parse_fn<'r, 't>(
         normalize_wikidot_div_elements(&mut elements, flag_score);
     }
 
-    let mut attributes = arguments.to_attribute_map(parser.settings());
-    if parser.settings().layout.legacy()
-        && !attributes.get().contains_key("class")
-        && let Some(class) = arguments.take_normalized_wikidot_class()
-    {
-        attributes.insert("class", class);
-    }
-    if parser.settings().layout.legacy()
-        && let Some(class) = attributes.remove("class")
-    {
-        let class = class.trim_end_matches([' ', '\t']).to_owned();
-        attributes.insert("class", Cow::Owned(class));
-    }
+    let attributes = wikidot_div_head_attributes(parser, &mut arguments);
     let element =
         Element::Container(Container::new(ContainerType::Div, elements, attributes));
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_DIV);
@@ -846,6 +859,26 @@ fn parse_fn<'r, 't>(
     } else {
         ok!(element, errors)
     }
+}
+
+fn wikidot_div_head_attributes<'r, 't>(
+    parser: &Parser<'r, 't>,
+    arguments: &mut Arguments<'t>,
+) -> AttributeMap<'t> {
+    let mut attributes = arguments.to_attribute_map(parser.settings());
+    if parser.settings().layout.legacy()
+        && !attributes.get().contains_key("class")
+        && let Some(class) = arguments.take_normalized_wikidot_class()
+    {
+        attributes.insert("class", class);
+    }
+    if parser.settings().layout.legacy()
+        && let Some(class) = attributes.remove("class")
+    {
+        let class = class.trim_end_matches([' ', '\t']).to_owned();
+        attributes.insert("class", Cow::Owned(class));
+    }
+    attributes
 }
 
 fn wikidot_crossed_ol_tail<'t>() -> Element<'t> {

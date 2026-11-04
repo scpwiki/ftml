@@ -156,7 +156,8 @@ impl<'t> ParseSuccess<'_, 't, Elements<'t>> {
     pub fn check_partials(&self, parser: &Parser) -> Result<(), ParseError> {
         for element in &self.item {
             if let Element::Partial(partial) = element {
-                if partial.is_inline_format_control() {
+                if partial.is_inline_format_control() || partial.is_wikidot_block_control()
+                {
                     continue;
                 }
                 if !parser.accepts_partial().matches(partial) {

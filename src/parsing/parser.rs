@@ -329,6 +329,28 @@ impl<'r, 't> Parser<'r, 't> {
             .clone()
     }
 
+    pub(crate) fn wikidot_block_pair_at_head_byte(
+        &self,
+        head_byte: usize,
+    ) -> Option<block_pairs::WikidotBlockPair> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .pair_at_head_byte(head_byte)
+            .copied()
+    }
+
+    pub(crate) fn wikidot_block_pair_at_closer_byte(
+        &self,
+        closer_byte: usize,
+    ) -> Option<block_pairs::WikidotBlockPair> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .pair_at_closer_byte(closer_byte)
+            .copied()
+    }
+
     #[inline]
     pub(crate) fn wikidot_iftags_body_end(&self) -> Option<usize> {
         self.block_end_scan_cache

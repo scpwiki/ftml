@@ -20,6 +20,7 @@
 
 mod audio;
 mod bibliography;
+mod block_frame;
 mod button;
 mod clear_float;
 mod collapsible;
@@ -59,6 +60,7 @@ mod prelude {
 
 use self::audio::render_audio;
 use self::bibliography::{render_bibcite, render_bibliography};
+use self::block_frame::{BlockFrame, render_block_frame};
 use self::button::render_standalone_button;
 use self::clear_float::render_clear_float;
 use self::collapsible::{Collapsible, render_collapsible};
@@ -244,6 +246,20 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
                 show_bottom: *show_bottom,
             },
         ),
+        Element::WikidotBlockFrame {
+            attributes,
+            children,
+            collapsible_link,
+            omit_close,
+        } => render_block_frame(
+            ctx,
+            BlockFrame {
+                attributes,
+                children,
+                collapsible_link: collapsible_link.as_ref(),
+                omit_close: *omit_close,
+            },
+        ),
         Element::TableOfContents { align, attributes } => {
             render_table_of_contents(ctx, *align, attributes)
         }
@@ -387,6 +403,8 @@ fn render_partial(ctx: &mut HtmlContext, partial: &PartialElement) {
 
     match partial {
         PartialElement::WikidotEmptyInlineOwner
+        | PartialElement::WikidotBlockOpen(_)
+        | PartialElement::WikidotBlockClose(_)
         | PartialElement::InlineSizeOpen(..)
         | PartialElement::InlineSizeClose(_)
         | PartialElement::InlineSpanOpen(..)

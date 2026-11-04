@@ -145,6 +145,9 @@ where
         | Element::Include { elements, .. } => {
             rewrite_elements(elements, apply_typography, classify)?;
         }
+        Element::WikidotBlockFrame { children, .. } => {
+            rewrite_elements(children, apply_typography, classify)?;
+        }
         Element::Partial(partial) => match partial {
             PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
                 rewrite_elements(elements, apply_typography, classify)?;
@@ -167,6 +170,8 @@ where
                 rewrite_elements(&mut text.elements, apply_typography, classify)?;
             }
             PartialElement::WikidotEmptyInlineOwner
+            | PartialElement::WikidotBlockOpen(_)
+            | PartialElement::WikidotBlockClose(_)
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)

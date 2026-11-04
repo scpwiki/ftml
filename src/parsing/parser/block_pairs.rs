@@ -42,6 +42,19 @@ impl WikidotBlockKind {
     fn is_first_fit(self) -> bool {
         matches!(self, WikidotBlockKind::Collapsible | WikidotBlockKind::Note)
     }
+
+    pub(crate) fn emits_flat(self) -> bool {
+        matches!(
+            self,
+            WikidotBlockKind::Div
+                | WikidotBlockKind::Collapsible
+                | WikidotBlockKind::Note
+                | WikidotBlockKind::AlignCenter
+                | WikidotBlockKind::AlignRight
+                | WikidotBlockKind::AlignLeft
+                | WikidotBlockKind::AlignJustify
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +63,7 @@ pub(crate) struct WikidotBlockPair {
     pub scored: bool,
     pub head: usize,
     pub head_end: usize,
+    pub head_byte: usize,
     pub closer: usize,
     pub closer_end: usize,
     pub flat: bool,
@@ -59,6 +73,8 @@ pub(crate) struct WikidotBlockPair {
 pub(crate) struct WikidotBlockPairs {
     pairs: Vec<WikidotBlockPair>,
     by_head: BTreeMap<usize, usize>,
+    by_head_byte: BTreeMap<usize, usize>,
+    by_closer_byte: BTreeMap<usize, usize>,
 }
 
 impl WikidotBlockPairs {
@@ -68,6 +84,21 @@ impl WikidotBlockPairs {
 
     pub(crate) fn pair_at_head(&self, head: usize) -> Option<&WikidotBlockPair> {
         self.by_head.get(&head).map(|index| &self.pairs[*index])
+    }
+
+    pub(crate) fn pair_at_head_byte(&self, head_byte: usize) -> Option<&WikidotBlockPair> {
+        self.by_head_byte
+            .get(&head_byte)
+            .map(|index| &self.pairs[*index])
+    }
+
+    pub(crate) fn pair_at_closer_byte(
+        &self,
+        closer_byte: usize,
+    ) -> Option<&WikidotBlockPair> {
+        self.by_closer_byte
+            .get(&closer_byte)
+            .map(|index| &self.pairs[*index])
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -378,6 +409,10 @@ impl<'t> Scanner<'t> {
 
     fn token_at_or_after(&self, byte: usize) -> usize {
         self.tokens.partition_point(|token| token.span.start < byte)
+    }
+
+    fn head_byte(&self, head: usize) -> usize {
+        self.tokens[head].span.start
     }
 
     fn on_heading_line(&self, index: usize) -> bool {
@@ -1068,9 +1103,25 @@ impl<'t> Scanner<'t> {
             .enumerate()
             .map(|(index, pair)| (pair.head, index))
             .collect();
+        let by_head_byte = self
+            .pairs
+            .iter()
+            .enumerate()
+            .map(|(index, pair)| (pair.head_byte, index))
+            .collect();
+        let by_closer_byte = self
+            .pairs
+            .iter()
+            .enumerate()
+            .map(|(index, pair)| {
+                (self.tokens[pair.closer].span.start, index)
+            })
+            .collect();
         WikidotBlockPairs {
             pairs: self.pairs,
             by_head,
+            by_head_byte,
+            by_closer_byte,
         }
     }
 
@@ -1421,11 +1472,13 @@ impl<'t> Scanner<'t> {
                 pair_first(&evs)
             };
             for (h, c) in found {
+                let head_byte = self.head_byte(evs[h].head);
                 self.pairs.push(WikidotBlockPair {
                     kind,
                     scored: evs[h].scored,
                     head: evs[h].head,
                     head_end: evs[h].head_end,
+                    head_byte,
                     closer: evs[c].closer,
                     closer_end: evs[c].closer_end,
                     flat: false,
@@ -2077,11 +2130,13 @@ impl<'t> Scanner<'t> {
                 if rows == 0 {
                     return None;
                 }
+                let head_byte = self.head_byte(head_index);
                 measure.pairs.push(WikidotBlockPair {
                     kind: WikidotBlockKind::Table,
                     scored: false,
                     head: head_index,
                     head_end: head.head_end,
+                    head_byte,
                     closer: pos,
                     closer_end: close.head_end,
                     flat: false,
@@ -2107,22 +2162,26 @@ impl<'t> Scanner<'t> {
                 let (body_end, cell_closer, cell_closer_end) =
                     self.find_cell_end(cell_head.head_end, limit, depth)?;
                 measure.children.push((cell_head.head_end, body_end));
+                let head_byte = self.head_byte(rpos);
                 measure.pairs.push(WikidotBlockPair {
                     kind: WikidotBlockKind::Cell,
                     scored: false,
                     head: rpos,
                     head_end: cell_head.head_end,
+                    head_byte,
                     closer: cell_closer,
                     closer_end: cell_closer_end,
                     flat: false,
                 });
                 rpos = cell_closer_end;
             };
+            let head_byte = self.head_byte(row_index);
             measure.pairs.push(WikidotBlockPair {
                 kind: WikidotBlockKind::Row,
                 scored: false,
                 head: row_index,
                 head_end: row_head.head_end,
+                head_byte,
                 closer: row_closer,
                 closer_end: row_closer_end,
                 flat: false,
@@ -2193,11 +2252,13 @@ impl<'t> Scanner<'t> {
                 if self.quote_depth_outside(pos, head_depth) {
                     return None;
                 }
+                let head_byte = self.head_byte(head_index);
                 measure.pairs.push(WikidotBlockPair {
                     kind: WikidotBlockKind::TabView,
                     scored: false,
                     head: head_index,
                     head_end: head.head_end,
+                    head_byte,
                     closer: pos,
                     closer_end: close.head_end,
                     flat: false,
@@ -2257,11 +2318,13 @@ impl<'t> Scanner<'t> {
                 return None;
             }
             measure.children.push((tab_head.head_end, body_end));
+            let head_byte = self.head_byte(pos);
             measure.pairs.push(WikidotBlockPair {
                 kind: WikidotBlockKind::Tab,
                 scored: false,
                 head: pos,
                 head_end: tab_head.head_end,
+                head_byte,
                 closer: tab_closer,
                 closer_end: tab_closer_end,
                 flat: false,

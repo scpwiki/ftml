@@ -20,6 +20,7 @@
 
 use super::Parser;
 use super::parser::QuoteBodyLineStatus;
+use super::parser::block_pairs::WikidotBlockKind;
 use super::prelude::*;
 use super::rule::{
     get_rules_for_token,
@@ -28,7 +29,7 @@ use super::rule::{
         starts_wikidot_only_scheme_url, try_consume_wikidot_end_block_link, url_elements,
     },
 };
-use crate::tree::{LinkLabel, LinkLocation, LinkType, PartialElement};
+use crate::tree::{LinkLabel, LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind};
 use std::{borrow::Cow, mem};
 
 fn try_consume_wikidot_parser_function_anchor_fallback<'r, 't>(
@@ -300,6 +301,36 @@ fn line_has_unmatched_wikidot_owner_opener(
     last_open.is_some_and(|open| last_close.is_none_or(|close| open > close))
 }
 
+fn wikidot_flat_close_kind_at(
+    parser: &Parser<'_, '_>,
+    closer_byte: usize,
+) -> Option<WikidotBlockCloseKind> {
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return None;
+    }
+    let pair = parser.wikidot_block_pair_at_closer_byte(closer_byte)?;
+    if !pair.flat || !pair.kind.emits_flat() {
+        return None;
+    }
+    Some(match pair.kind {
+        WikidotBlockKind::Div => WikidotBlockCloseKind::Div {
+            head: pair.head_byte,
+            scored: pair.scored,
+        },
+        WikidotBlockKind::Collapsible => WikidotBlockCloseKind::Collapsible {
+            head: pair.head_byte,
+        },
+        WikidotBlockKind::Note => WikidotBlockCloseKind::Note { head: pair.head_byte },
+        WikidotBlockKind::AlignCenter
+        | WikidotBlockKind::AlignRight
+        | WikidotBlockKind::AlignLeft
+        | WikidotBlockKind::AlignJustify => {
+            WikidotBlockCloseKind::Align { head: pair.head_byte }
+        }
+        _ => return None,
+    })
+}
+
 fn try_consume_structural_close<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<Elements<'t>>, ParseError>
@@ -435,6 +466,8 @@ where
             || normalized.eq_ignore_ascii_case("hcell"))
     {
         Element::Text(close_source_cow.clone())
+    } else if let Some(kind) = wikidot_flat_close_kind_at(parser, start) {
+        Element::Partial(PartialElement::WikidotBlockClose(kind))
     } else {
         return Ok(None);
     };

@@ -19,6 +19,11 @@
  */
 
 use super::prelude::*;
+use super::{
+    consume_wikidot_flat_head_break, wikidot_flat_pair_for_head, wikidot_scan_pairs_head,
+};
+use crate::parsing::parser::block_pairs::WikidotBlockKind;
+use crate::tree::{PartialElement, WikidotBlockShell};
 
 pub const BLOCK_NOTE: BlockRule = BlockRule {
     name: "block-note",
@@ -32,7 +37,7 @@ pub const BLOCK_NOTE: BlockRule = BlockRule {
 fn parse_note_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -52,8 +57,20 @@ fn parse_note_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
+        && pair.kind == WikidotBlockKind::Note
+    {
+        consume_wikidot_flat_head_break(parser, false)?;
+        let shell = WikidotBlockShell::Note { head: opener_start };
+        return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
+    }
+
     if !parser.start_of_line() {
         return Err(parser.make_err(ParseErrorKind::NotSupportedInline));
+    }
+
+    if !in_head && !wikidot_scan_pairs_head(parser, opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
     let legacy = parser.settings().layout.legacy();

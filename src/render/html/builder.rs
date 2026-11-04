@@ -137,6 +137,7 @@ where
     tag: &'t str,
     in_tag: bool,
     in_contents: bool,
+    omit_close: bool,
 }
 
 impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
@@ -149,7 +150,13 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
             tag,
             in_tag: true,
             in_contents: false,
+            omit_close: false,
         }
+    }
+
+    pub fn omit_close(&mut self) -> &mut Self {
+        self.omit_close = true;
+        self.chain()
     }
 
     fn chain(&mut self) -> &mut Self {
@@ -280,7 +287,7 @@ impl Drop for HtmlBuilderTag<'_, '_, '_, '_, '_> {
             self.ctx.push_raw('>');
         }
 
-        if should_close_tag(self.tag) {
+        if should_close_tag(self.tag) && !self.omit_close {
             self.ctx.push_raw_str("</");
             self.ctx.push_raw_str(self.tag);
             self.ctx.push_raw('>');

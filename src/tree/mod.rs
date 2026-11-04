@@ -350,6 +350,9 @@ fn collect_page_references(
             | Element::Include { elements, .. } => {
                 collect_page_references(elements, references, seen);
             }
+            Element::WikidotBlockFrame { children, .. } => {
+                collect_page_references(children, references, seen);
+            }
             Element::List { items, .. } => {
                 for item in items {
                     match item {
@@ -398,6 +401,8 @@ fn collect_page_references(
                     collect_page_references(&ruby_text.elements, references, seen);
                 }
                 PartialElement::WikidotEmptyInlineOwner
+                | PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_)
                 | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(..)
@@ -449,6 +454,9 @@ fn collect_user_references(
             | Element::Include { elements, .. } => {
                 collect_user_references(elements, references, seen);
             }
+            Element::WikidotBlockFrame { children, .. } => {
+                collect_user_references(children, references, seen);
+            }
             Element::List { items, .. } => {
                 for item in items {
                     match item {
@@ -497,6 +505,8 @@ fn collect_user_references(
                     collect_user_references(&ruby_text.elements, references, seen);
                 }
                 PartialElement::WikidotEmptyInlineOwner
+                | PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_)
                 | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(..)

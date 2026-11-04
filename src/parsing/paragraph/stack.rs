@@ -19,7 +19,10 @@
  */
 
 use crate::parsing::prelude::*;
-use crate::tree::{AttributeMap, Container, ContainerType, ListItem, TableType};
+use crate::tree::{
+    AttributeMap, Container, ContainerType, ListItem, PartialElement, TableType,
+    WikidotBlockCloseKind, WikidotBlockShell,
+};
 use std::borrow::Cow;
 use std::mem;
 
@@ -123,6 +126,15 @@ impl<'t> ParagraphStack<'t> {
                                 | ContainerType::Align(_)
                         )
                 ) || matches!(element, Element::Code(_) | Element::Collapsible { .. })
+                    || matches!(
+                        element,
+                        Element::Partial(
+                            PartialElement::WikidotBlockClose(_)
+                                | PartialElement::WikidotBlockOpen(
+                                    WikidotBlockShell::Div { scored: true, .. }
+                                )
+                        )
+                    )
             })
     }
 
@@ -516,11 +528,16 @@ impl<'t> ParagraphStack<'t> {
                 Element::Table(table) if table.table_type == TableType::Simple
             );
         let wikidot_alignment = self.wikidot
-            && matches!(
+            && (matches!(
                 &element,
                 Element::Container(container)
                     if matches!(container.ctype(), ContainerType::Align(_))
-            );
+            ) || matches!(
+                &element,
+                Element::Partial(PartialElement::WikidotBlockOpen(
+                    WikidotBlockShell::Align { .. }
+                ))
+            ));
 
         let wikidot_collapsible =
             self.wikidot && matches!(element, Element::Collapsible { .. });
@@ -538,6 +555,22 @@ impl<'t> ParagraphStack<'t> {
         if wikidot_collapsible
             && !self.current.is_empty()
             && !self.next_element_started_line
+        {
+            self.current_unwrapped = true;
+        }
+
+        if self.wikidot
+            && !self.current.is_empty()
+            && !self.next_element_started_line
+            && matches!(
+                element,
+                Element::Partial(
+                    PartialElement::WikidotBlockOpen(_)
+                        | PartialElement::WikidotBlockClose(
+                            WikidotBlockCloseKind::Div { scored: true, .. }
+                        )
+                )
+            )
         {
             self.current_unwrapped = true;
         }
@@ -612,9 +645,17 @@ impl<'t> ParagraphStack<'t> {
             self.current.push(element);
             self.current_unwrapped = true;
         } else if paragraph_safe {
+            // A chunk-leading single space is indentation at a line start and
+            // keeps the historical drop everywhere except directly after an
+            // inline container flat lowering will literalise: its closer
+            // ended the previous chunk mid-line, so the space is content the
+            // rejoined run must keep.
+            let chunk_leading_line_start = self.current.is_empty()
+                && (self.next_element_started_line
+                    || !self.wikidot_finished_is_literalise_bound_container());
             if self.wikidot
                 && matches!(element, Element::Text(ref text) if text == " ")
-                && (self.current.is_empty()
+                && (chunk_leading_line_start
                     || self.current.iter().all(|element| {
                         matches!(
                             element,
@@ -875,6 +916,33 @@ impl<'t> ParagraphStack<'t> {
         let container = Container::new(ContainerType::Paragraph, elements, attributes);
         let element = Element::Container(container);
         Some(element)
+    }
+
+    fn wikidot_finished_is_literalise_bound_container(&self) -> bool {
+        let Some(Element::Container(container)) = self.finished.last() else {
+            return false;
+        };
+        if !matches!(
+            container.ctype(),
+            ContainerType::Bold
+                | ContainerType::Italics
+                | ContainerType::Underline
+                | ContainerType::Superscript
+                | ContainerType::Subscript
+                | ContainerType::Strikethrough
+                | ContainerType::Monospace
+        ) {
+            return false;
+        }
+        container.elements().iter().any(|element| {
+            matches!(
+                element,
+                Element::Partial(
+                    PartialElement::WikidotBlockOpen(_)
+                        | PartialElement::WikidotBlockClose(_)
+                )
+            )
+        })
     }
 
     fn trim_trailing_ascii_space(&mut self) {
