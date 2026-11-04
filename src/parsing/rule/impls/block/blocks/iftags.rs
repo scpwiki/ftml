@@ -720,6 +720,10 @@ fn parse_fn<'r, 't>(
             }
             Err(error) => Err(error),
         }
+    } else if designated_end.is_some()
+        && let Some(required_depth) = parser.native_blockquote_depth()
+    {
+        gather_iftags_body_in_quote(parser, required_depth, body_start)
     } else {
         match parser.get_body_elements_with_literal_quote_context(
             &BLOCK_IFTAGS,
@@ -790,6 +794,176 @@ fn parse_fn<'r, 't>(
         parser.mark_virtual_start_of_line();
     }
     result
+}
+
+fn flush_quote_gate_block<'t>(
+    units: &mut Vec<crate::parsing::parser::QuoteEscapedUnit<'t>>,
+    open: &mut Option<(usize, bool, crate::parsing::paragraph::ParagraphStack<'t>)>,
+    required_depth: usize,
+) {
+    use crate::parsing::parser::QuoteEscapedUnit;
+    use crate::tree::{AttributeMap, Container, ContainerType};
+
+    if let Some((_, stripped, mut stack)) = open.take() {
+        stack.pop_line_break();
+        let mut elements = stack.into_elements();
+        if !elements.is_empty() {
+            let wraps = if stripped { required_depth } else { 0 };
+            for _ in 0..wraps {
+                elements = vec![Element::Container(Container::new(
+                    ContainerType::Blockquote,
+                    elements,
+                    AttributeMap::new(),
+                ))];
+            }
+            units.push(QuoteEscapedUnit::Elements(elements, false));
+        }
+    }
+}
+
+fn gather_iftags_body_in_quote<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    required_depth: usize,
+    body_start: BlockBodyStart,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    use crate::parsing::paragraph::ParagraphStack;
+    use crate::parsing::parser::QuoteEscapedUnit;
+    use crate::parsing::rule::impls::block::parser::{
+        QuoteGateBoundary, QuoteGateSegmentKind,
+    };
+
+    let previous_cursor = parser.quote_body_cursor();
+    match body_start {
+        BlockBodyStart::NextPhysicalLine => {
+            parser.install_quote_body_cursor_with_literal_residuals(required_depth);
+        }
+        BlockBodyStart::Inline => {
+            parser.install_quote_body_cursor_at_current_line_with_literal_residuals(
+                required_depth,
+            );
+        }
+    }
+    let gathered =
+        parser.get_body_element_segments_iftags_in_quote(&BLOCK_IFTAGS, required_depth);
+    parser.set_quote_body_cursor(previous_cursor);
+    let body = gathered?;
+    let ((gate_segments, _trailing), errors, _body_safe) = body.into();
+
+    let mut in_run = Vec::new();
+    let mut escaped = Vec::new();
+    let mut seen_escape = false;
+    for segment in gate_segments {
+        if segment.kind != QuoteGateSegmentKind::InRun {
+            seen_escape = true;
+        }
+        if seen_escape {
+            escaped.push(segment);
+        } else {
+            in_run.push(segment);
+        }
+    }
+
+    let escaped_present = !escaped.is_empty();
+    if escaped_present {
+        let mut units: Vec<QuoteEscapedUnit<'t>> = Vec::new();
+        let mut open: Option<(usize, bool, ParagraphStack<'t>)> = None;
+        for segment in escaped {
+            match segment.kind {
+                QuoteGateSegmentKind::EscapedPlain => {
+                    flush_quote_gate_block(&mut units, &mut open, required_depth);
+                    let mut elements = segment.elements;
+                    while matches!(elements.last(), Some(Element::LineBreak)) {
+                        elements.pop();
+                    }
+                    if !elements.is_empty() {
+                        units.push(QuoteEscapedUnit::Elements(
+                            elements,
+                            segment.paragraph_safe,
+                        ));
+                    }
+                }
+                QuoteGateSegmentKind::EscapedQuote { depth, stripped } => {
+                    let continues = segment.boundary == QuoteGateBoundary::SameRun
+                        && matches!(
+                            &open,
+                            Some((open_depth, open_stripped, _))
+                                if *open_depth == depth
+                                    && *open_stripped == stripped
+                        );
+                    if !continues {
+                        flush_quote_gate_block(&mut units, &mut open, required_depth);
+                        open = Some((depth, stripped, ParagraphStack::new_wikidot()));
+                    }
+                    let stack = &mut open.as_mut().expect("open quote block present").2;
+                    let safe = segment.paragraph_safe;
+                    for element in segment.elements {
+                        stack.push_element(element, safe);
+                    }
+                }
+                QuoteGateSegmentKind::QuoteRow(depth) => {
+                    flush_quote_gate_block(&mut units, &mut open, required_depth);
+                    if !segment.elements.is_empty() {
+                        units.push(QuoteEscapedUnit::Row(
+                            depth,
+                            segment.elements,
+                            segment.paragraph_safe,
+                        ));
+                    }
+                }
+                QuoteGateSegmentKind::InRun => {
+                    flush_quote_gate_block(&mut units, &mut open, required_depth);
+                }
+            }
+        }
+        flush_quote_gate_block(&mut units, &mut open, required_depth);
+        for unit in units {
+            parser.push_quote_escaped_unit(unit);
+        }
+    }
+
+    let paragraph_safe = in_run.iter().all(|segment| segment.paragraph_safe);
+    let in_run_all_empty = in_run.iter().all(|segment| segment.elements.is_empty());
+    if in_run_all_empty && escaped_present {
+        return ok!(paragraph_safe; Elements::None, errors);
+    }
+    if in_run.len() == 1 {
+        let segment = in_run.into_iter().next().expect("single segment present");
+        let mut bounded = Vec::with_capacity(segment.elements.len() + 2);
+        bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
+        bounded.extend(segment.elements);
+        bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
+        return ok!(paragraph_safe; Elements::Multiple(bounded), errors);
+    }
+    if in_run.is_empty() {
+        return ok!(paragraph_safe; Elements::None, errors);
+    }
+    let last_index = in_run.len() - 1;
+    let mut batch = Vec::new();
+    let mut counts = Vec::with_capacity(in_run.len());
+    batch.push(Element::Delayed(DelayedElement::typography_boundary()));
+    for (index, segment) in in_run.into_iter().enumerate() {
+        let mut count = segment.elements.len();
+        if index == 0 {
+            count += 1;
+        }
+        batch.extend(segment.elements);
+        if index < last_index {
+            batch.push(Element::LineBreak);
+            count += 1;
+        }
+        if index == last_index {
+            count += 1;
+        }
+        counts.push((count, segment.paragraph_safe, segment.split_kind));
+    }
+    batch.push(Element::Delayed(DelayedElement::typography_boundary()));
+    let mut success = crate::parsing::ParseSuccess::new(
+        Elements::Multiple(batch),
+        errors,
+        paragraph_safe,
+    );
+    success.paragraph_split = Some(counts);
+    Ok(success)
 }
 
 pub fn check_iftags(info: &PageInfo, conditions: &[ElementCondition]) -> bool {

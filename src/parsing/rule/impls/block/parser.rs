@@ -563,6 +563,100 @@ fn wikidot_attribute_key<'t>(
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum QuoteGateSegmentKind {
+    InRun,
+    EscapedPlain,
+    EscapedQuote { depth: usize, stripped: bool },
+    QuoteRow(usize),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum QuoteGateBoundary {
+    Start,
+    SameRun,
+    NewRun,
+}
+
+#[derive(Debug)]
+pub(crate) struct QuoteGateSegment<'t> {
+    pub(crate) elements: Vec<Element<'t>>,
+    pub(crate) paragraph_safe: bool,
+    pub(crate) kind: QuoteGateSegmentKind,
+    pub(crate) boundary: QuoteGateBoundary,
+    pub(crate) split_kind: ParagraphSplitKind,
+}
+
+fn quote_line_depth(text: &str, position: usize) -> usize {
+    let line_start = text[..position]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let bytes = &text.as_bytes()[line_start..];
+    let mut depth = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'>' => {
+                depth += 1;
+                index += 1;
+            }
+            b' ' | b'\t' if depth > 0 => {
+                let mut next = index;
+                while next < bytes.len() && matches!(bytes[next], b' ' | b'\t') {
+                    next += 1;
+                }
+                if next < bytes.len() && bytes[next] == b'>' {
+                    index = next;
+                } else {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+    depth
+}
+
+fn distribute_quote_gate_split<'t>(
+    segments: &mut Vec<QuoteGateSegment<'t>>,
+    elements: Vec<Element<'t>>,
+    counts: &[ParagraphSplitEntry],
+) {
+    if counts.iter().map(|entry| entry.0).sum::<usize>() != elements.len() {
+        let current = segments
+            .last_mut()
+            .expect("segments always has a current segment");
+        current.elements.extend(elements);
+        for (_, safe, _) in counts {
+            current.paragraph_safe &= safe;
+        }
+        return;
+    }
+
+    let kind = segments
+        .last()
+        .expect("segments always has a current segment")
+        .kind;
+    let mut elements = elements.into_iter();
+    for (index, (count, safe, split_kind)) in counts.iter().enumerate() {
+        if index > 0 {
+            segments.push(QuoteGateSegment {
+                elements: Vec::new(),
+                paragraph_safe: true,
+                kind,
+                boundary: QuoteGateBoundary::SameRun,
+                split_kind: *split_kind,
+            });
+        }
+        let current = segments
+            .last_mut()
+            .expect("segments always has a current segment");
+        current.elements.extend(elements.by_ref().take(*count));
+        current.paragraph_safe &= safe;
+    }
+}
+
 /// Whether an element is blank content that a paragraph break absorbs
 /// at a segment edge: a line break, or text holding only spaces and tabs.
 fn segment_edge_blank(element: &Element) -> bool {
@@ -2406,6 +2500,364 @@ where
 
         Ok(crate::parsing::ParseSuccess::new(
             ((segments, segment_safe, segment_kinds), trailing),
+            all_errors,
+            paragraph_safe,
+        ))
+    }
+
+    pub(crate) fn get_body_element_segments_iftags_in_quote(
+        &mut self,
+        block_rule: &BlockRule,
+        required_depth: usize,
+    ) -> ParseResult<'r, 't, (Vec<QuoteGateSegment<'t>>, bool)> {
+        let original_cursor = self.quote_body_cursor();
+        let mut segments: Vec<QuoteGateSegment<'t>> = vec![QuoteGateSegment {
+            elements: Vec::new(),
+            paragraph_safe: true,
+            kind: QuoteGateSegmentKind::InRun,
+            boundary: QuoteGateBoundary::Start,
+            split_kind: ParagraphSplitKind::Paragraph,
+        }];
+        let mut all_errors = Vec::new();
+        let mut paragraph_safe = true;
+        let mut first = true;
+        let trailing = false;
+        let mut escaped = false;
+        let mut consumed_any = false;
+        let mut resolve_kind = false;
+        let mut resolve_from_blank = false;
+        let mut row_depth: Option<usize> = None;
+
+        loop {
+            if self.current().token == Token::ParagraphBreak {
+                let current_kind = segments
+                    .last()
+                    .expect("segments always has a current segment")
+                    .kind;
+                let same_run = consumed_any
+                    && matches!(
+                        current_kind,
+                        QuoteGateSegmentKind::InRun
+                            | QuoteGateSegmentKind::QuoteRow(_)
+                            | QuoteGateSegmentKind::EscapedQuote { .. }
+                    )
+                    && self.quote_body_close_allowed_here();
+                self.step()?;
+                first = false;
+                if same_run {
+                    segments.push(QuoteGateSegment {
+                        elements: Vec::new(),
+                        paragraph_safe: true,
+                        kind: current_kind,
+                        boundary: QuoteGateBoundary::SameRun,
+                        split_kind: ParagraphSplitKind::Paragraph,
+                    });
+                } else {
+                    if row_depth.is_some() {
+                        self.set_quote_body_cursor(original_cursor);
+                        row_depth = None;
+                    }
+                    escaped = true;
+                    resolve_kind = true;
+                    resolve_from_blank = true;
+                    segments.push(QuoteGateSegment {
+                        elements: Vec::new(),
+                        paragraph_safe: true,
+                        kind: QuoteGateSegmentKind::EscapedPlain,
+                        boundary: QuoteGateBoundary::NewRun,
+                        split_kind: ParagraphSplitKind::Paragraph,
+                    });
+                }
+                continue;
+            }
+
+            let position_before = self.current().span.start;
+            let status = self.prepare_quote_body_line()?;
+            let moved = self.current().span.start != position_before;
+            let scan_depth =
+                quote_line_depth(self.full_text().inner(), self.current().span.start);
+            let line_kind = match status {
+                QuoteBodyLineStatus::Boundary => {
+                    if scan_depth == 0 {
+                        Some(QuoteGateSegmentKind::EscapedPlain)
+                    } else if resolve_from_blank {
+                        Some(QuoteGateSegmentKind::EscapedQuote {
+                            depth: scan_depth,
+                            stripped: false,
+                        })
+                    } else if let Some(depth) = row_depth {
+                        if scan_depth < depth {
+                            Some(QuoteGateSegmentKind::QuoteRow(scan_depth))
+                        } else {
+                            Some(QuoteGateSegmentKind::EscapedQuote {
+                                depth: scan_depth,
+                                stripped: false,
+                            })
+                        }
+                    } else if scan_depth < required_depth {
+                        Some(QuoteGateSegmentKind::QuoteRow(scan_depth))
+                    } else {
+                        Some(QuoteGateSegmentKind::EscapedQuote {
+                            depth: scan_depth,
+                            stripped: false,
+                        })
+                    }
+                }
+                QuoteBodyLineStatus::Prepared if moved => {
+                    if let Some(depth) = row_depth {
+                        Some(QuoteGateSegmentKind::QuoteRow(depth))
+                    } else if escaped {
+                        Some(QuoteGateSegmentKind::EscapedQuote {
+                            depth: scan_depth,
+                            stripped: true,
+                        })
+                    } else {
+                        Some(QuoteGateSegmentKind::InRun)
+                    }
+                }
+                _ => None,
+            };
+
+            let mut restart_line = false;
+            if resolve_kind {
+                if let Some(kind) = line_kind {
+                    segments
+                        .last_mut()
+                        .expect("segments always has a current segment")
+                        .kind = kind;
+                    match kind {
+                        QuoteGateSegmentKind::QuoteRow(depth) => {
+                            self.install_quote_body_cursor_with_literal_residuals(depth);
+                            row_depth = Some(depth);
+                            restart_line = true;
+                        }
+                        _ => {
+                            row_depth = None;
+                        }
+                    }
+                    if !matches!(
+                        kind,
+                        QuoteGateSegmentKind::InRun | QuoteGateSegmentKind::QuoteRow(_)
+                    ) {
+                        escaped = true;
+                    }
+                    resolve_kind = false;
+                    resolve_from_blank = false;
+                }
+            } else if let Some(kind) = line_kind {
+                let current_kind = segments
+                    .last()
+                    .expect("segments always has a current segment")
+                    .kind;
+                if kind != current_kind {
+                    let segment = segments
+                        .last_mut()
+                        .expect("segments always has a current segment");
+                    if matches!(segment.elements.last(), Some(Element::LineBreak)) {
+                        segment.elements.pop();
+                    }
+                    if row_depth.is_some() {
+                        self.set_quote_body_cursor(original_cursor);
+                        row_depth = None;
+                    }
+                    if let QuoteGateSegmentKind::QuoteRow(depth) = kind {
+                        self.install_quote_body_cursor_with_literal_residuals(depth);
+                        row_depth = Some(depth);
+                        restart_line = true;
+                    }
+                    if !matches!(
+                        kind,
+                        QuoteGateSegmentKind::InRun | QuoteGateSegmentKind::QuoteRow(_)
+                    ) {
+                        escaped = true;
+                    }
+                    segments.push(QuoteGateSegment {
+                        elements: Vec::new(),
+                        paragraph_safe: true,
+                        kind,
+                        boundary: QuoteGateBoundary::NewRun,
+                        split_kind: ParagraphSplitKind::Paragraph,
+                    });
+                }
+            }
+            if restart_line {
+                continue;
+            }
+
+            if self.current().token == Token::ParagraphBreak {
+                continue;
+            }
+
+            if self.current().token == Token::LineBreak
+                && matches!(
+                    segments
+                        .last()
+                        .expect("segments always has a current segment")
+                        .kind,
+                    QuoteGateSegmentKind::InRun
+                        | QuoteGateSegmentKind::QuoteRow(_)
+                        | QuoteGateSegmentKind::EscapedQuote { .. }
+                )
+                && self.quote_body_close_allowed_here()
+            {
+                let kind = segments
+                    .last()
+                    .expect("segments always has a current segment")
+                    .kind;
+                self.step()?;
+                first = false;
+                segments.push(QuoteGateSegment {
+                    elements: Vec::new(),
+                    paragraph_safe: true,
+                    kind,
+                    boundary: QuoteGateBoundary::SameRun,
+                    split_kind: ParagraphSplitKind::Paragraph,
+                });
+                continue;
+            }
+
+            if self
+                .verify_end_block(first, block_rule, false, false)
+                .is_some()
+            {
+                break;
+            }
+
+            if self.terminate_at_wikidot_list_close(block_rule, first) {
+                break;
+            }
+
+            if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if let Some(designated) = self.wikidot_iftags_body_end()
+                && self.current().span.start > designated
+            {
+                break;
+            }
+
+            if self.current().token == Token::InputEnd
+                && self.settings().layout.legacy()
+                && !self.discarding_hidden_body()
+            {
+                break;
+            }
+
+            first = false;
+            let before = self.remaining();
+            let before_token = self.current().token;
+            let clear_cursor = matches!(
+                segments
+                    .last()
+                    .expect("segments always has a current segment")
+                    .kind,
+                QuoteGateSegmentKind::EscapedPlain
+                    | QuoteGateSegmentKind::EscapedQuote {
+                        stripped: false,
+                        ..
+                    }
+            );
+            let saved_cursor = self.quote_body_cursor();
+            if clear_cursor {
+                self.set_quote_body_cursor(None);
+            }
+            let consume_result = consume(self);
+            if clear_cursor {
+                self.set_quote_body_cursor(saved_cursor);
+            }
+            match consume_result {
+                Ok(consumed) => {
+                    self.take_wikidot_mixed_paragraph_ownership();
+                    let crate::parsing::ParseSuccess {
+                        item,
+                        errors,
+                        paragraph_safe: safe,
+                        paragraph_split,
+                        ..
+                    } = consumed;
+                    all_errors.extend(errors);
+                    paragraph_safe &= safe;
+                    let elements = match item {
+                        Elements::Multiple(elements) => elements,
+                        Elements::Single(element) => vec![element],
+                        Elements::None => Vec::new(),
+                    };
+                    let steps = before.len() - self.remaining().len();
+                    if steps > 0 || !elements.is_empty() {
+                        consumed_any = true;
+                    }
+                    let absorbed_trailing_break = paragraph_split.is_none()
+                        && match steps {
+                            0 => false,
+                            1 => before_token == Token::ParagraphBreak,
+                            _ => before[steps - 2].token == Token::ParagraphBreak,
+                        };
+                    match paragraph_split {
+                        Some(counts) => {
+                            distribute_quote_gate_split(&mut segments, elements, &counts);
+                        }
+                        None => {
+                            let current = segments
+                                .last_mut()
+                                .expect("segments always has a current segment");
+                            current.paragraph_safe &= safe;
+                            current.elements.extend(elements);
+                            if segments.len() > 1
+                                && self.take_wikidot_div_literal_recovered()
+                                && !segments
+                                    .last()
+                                    .expect("segments always has a current segment")
+                                    .paragraph_safe
+                            {
+                                let segment = segments
+                                    .last_mut()
+                                    .expect("segments always has a current segment");
+                                if segment.elements.len() == 1
+                                    && let Some(Element::Text(text)) =
+                                        segment.elements.first_mut()
+                                {
+                                    if let Some(stripped) = text.strip_prefix('\n') {
+                                        *text = Cow::Owned(stripped.to_owned());
+                                    }
+                                    segment.paragraph_safe = true;
+                                }
+                            }
+                        }
+                    }
+                    if absorbed_trailing_break {
+                        if row_depth.is_some() {
+                            self.set_quote_body_cursor(original_cursor);
+                            row_depth = None;
+                        }
+                        resolve_kind = true;
+                        segments.push(QuoteGateSegment {
+                            elements: Vec::new(),
+                            paragraph_safe: true,
+                            kind: QuoteGateSegmentKind::EscapedPlain,
+                            boundary: QuoteGateBoundary::NewRun,
+                            split_kind: ParagraphSplitKind::Paragraph,
+                        });
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        if segments.len() > 1 {
+            let last_index = segments.len() - 1;
+            for (index, segment) in segments.iter_mut().enumerate() {
+                if index > 0 {
+                    trim_segment_leading_blanks(&mut segment.elements);
+                }
+                if index < last_index {
+                    trim_segment_trailing_blanks(&mut segment.elements);
+                }
+            }
+        }
+
+        Ok(crate::parsing::ParseSuccess::new(
+            (segments, trailing),
             all_errors,
             paragraph_safe,
         ))

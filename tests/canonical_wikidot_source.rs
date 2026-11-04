@@ -287,8 +287,9 @@ fn wikidot_false_quoted_iftags_between_visible_rows_adds_no_blank_row() {
     assert!(text.contains("OMEGA_BEFORE"), "{text}");
     assert!(text.contains("OMEGA_AFTER"), "{text}");
     assert!(!text.contains("OMEGA_HIDDEN"), "{text}");
-    assert!(html.contains("OMEGA_BEFORE<br>\nOMEGA_AFTER"), "{html}");
-    assert!(!html.contains("<br>\n<br>"), "{html}");
+    assert!(html.contains("<p>OMEGA_BEFORE</p>"), "{html}");
+    assert!(html.contains("<p>OMEGA_AFTER</p>"), "{html}");
+    assert!(!html.contains("OMEGA_BEFORE<br>"), "{html}");
 }
 
 #[test]
