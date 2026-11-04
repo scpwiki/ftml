@@ -259,7 +259,11 @@ fn render_partial(ctx: &mut TextContext, partial: &PartialElement) {
         | PartialElement::InlineSizeOpen(_)
         | PartialElement::InlineSizeClose(_)
         | PartialElement::InlineSpanOpen(_)
-        | PartialElement::InlineSpanClose(_) => {}
+        | PartialElement::InlineSpanClose(_)
+        | PartialElement::InlineFormatOpen(_)
+        | PartialElement::InlineFormatClose(_)
+        | PartialElement::InlineColorOpen(..)
+        | PartialElement::InlineColorClose => {}
         PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
             if elements.is_empty() {
                 return;

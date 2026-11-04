@@ -448,7 +448,11 @@ impl Element<'_> {
                 | PartialElement::InlineSizeOpen(_)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(_)
-                | PartialElement::InlineSpanClose(_) => {}
+                | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose => {}
             },
             _ => {}
         }
