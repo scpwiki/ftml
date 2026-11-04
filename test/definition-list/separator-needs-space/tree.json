@@ -1,0 +1,51 @@
+{
+    "elements": [
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "A :1\n: B",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "A"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "text",
+                            "data": "1"
+                        },
+                        {
+                            "element": "line-break"
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": "B"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "2"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

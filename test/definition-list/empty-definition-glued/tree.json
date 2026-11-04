@@ -1,0 +1,62 @@
+{
+    "elements": [
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "A",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "A"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "1"
+                        }
+                    ]
+                },
+                {
+                    "key_string": "Term :\n: B",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "Term"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "line-break"
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": "B"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "2"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
