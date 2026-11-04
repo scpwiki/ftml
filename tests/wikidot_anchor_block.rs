@@ -168,7 +168,7 @@ fn wikidot_a_block_family_matches_live_grammar_with_safe_urls() {
         (
             "a-nesting-same-feature",
             "[[a]][[a]]nested[[/a]][[/a]]",
-            "<p><a href><a href>nested</a></a></p>",
+            "<p><a href></a><a href>nested</a></p>",
         ),
         (
             "a-nesting-different-feature",

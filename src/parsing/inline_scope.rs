@@ -1423,6 +1423,26 @@ fn lower_sequence<'t>(
             *ordinal += 1;
             if valid.contains(&current) {
                 if let Some(position) = active.anchor_position() {
+                    if !active.scope_has_content(position)
+                        && run.iter().all(|element| {
+                            matches!(element, Element::Text(text) if text.trim().is_empty())
+                        })
+                    {
+                        run.clear();
+                        run.push(Element::Partial(
+                            PartialElement::WikidotEmptyInlineOwner,
+                        ));
+                    }
+                    flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+                    let anchor_trailing_space = matches!(
+                        output.last(),
+                        Some(Element::Anchor { elements: inner, .. })
+                            if matches!(inner.last(), Some(Element::Text(text)) if text == " ")
+                    );
+                    if anchor_trailing_space {
+                        trim_trailing_space(&mut output);
+                        output.push(text!(" "));
+                    }
                     active.commit_close_no_reopen(position);
                 }
                 let leading_space =
