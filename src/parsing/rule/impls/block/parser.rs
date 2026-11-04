@@ -715,11 +715,12 @@ where
         restrict_quote_close: bool,
         allow_inline_quote_close: bool,
     ) -> Option<&'r ExtractedToken<'t>> {
-        // Wikidot iftags pairing (#792): while a matched iftags body is
-        // gathered, only the end block the pairing search designated may
-        // close it. Any other `[[/iftags]]` in the span is literal text.
+        // IfTags pairing (#792): while a matched iftags body is gathered,
+        // only the end block the pairing search designated may close it.
+        // Any other `[[/iftags]]` in the span is literal text. The
+        // designated end is only ever set under the pairing model, which
+        // both layouts now use, so no layout check is needed here.
         if block_rule.name == "block-iftags"
-            && self.settings().layout.legacy()
             && let Some(designated) = self.wikidot_iftags_body_end()
             && !self.at_designated_iftags_end(designated)
         {

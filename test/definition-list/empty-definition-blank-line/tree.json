@@ -1,0 +1,44 @@
+{
+    "elements": [
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "Term :: B",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "Term"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": "B"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "2"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
