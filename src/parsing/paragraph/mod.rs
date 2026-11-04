@@ -295,6 +295,7 @@ where
                         Elements::Single(element) => vec![element],
                         Elements::None => Vec::new(),
                     };
+                    let seam_bounded = batch_is_seam_bounded(&elements);
                     let mut elements = elements.into_iter();
                     let last_index = counts.len() - 1;
                     for (index, (count, segment_safe, _)) in counts.iter().enumerate() {
@@ -313,8 +314,22 @@ where
                         {
                             slice.pop();
                         }
+                        let per_element = seam_bounded
+                            && !*segment_safe
+                            && slice.iter().any(|element| {
+                                !element.paragraph_safe()
+                                    && !matches!(
+                                        element,
+                                        Element::List { .. } | Element::DefinitionList(_)
+                                    )
+                            });
                         for element in slice {
-                            push_element(&mut stack, element, *segment_safe);
+                            let element_safe = if per_element {
+                                element.paragraph_safe()
+                            } else {
+                                *segment_safe
+                            };
+                            push_element(&mut stack, element, element_safe);
                         }
                     }
                 } else if mixed_paragraph_ownership {
@@ -587,6 +602,12 @@ fn paragraph_split_batch<'t>(
     Some(counts)
 }
 
+pub(crate) fn batch_is_seam_bounded(elements: &[Element]) -> bool {
+    elements.iter().any(|element| {
+        matches!(element, Element::Delayed(delayed) if delayed.is_typography_boundary())
+    })
+}
+
 fn push_elements<'t>(
     stack: &mut ParagraphStack<'t>,
     elements: Elements<'t>,
@@ -606,8 +627,15 @@ fn push_elements<'t>(
             {
                 stack.mark_wikidot_tabview_boundary();
             }
+            let per_element = batch_is_seam_bounded(&elements)
+                && elements.iter().any(|element| !element.paragraph_safe());
             for element in elements {
-                push_element(stack, element, paragraph_safe);
+                let element_safe = if per_element {
+                    element.paragraph_safe()
+                } else {
+                    paragraph_safe
+                };
+                push_element(stack, element, element_safe);
             }
         }
     }

@@ -298,6 +298,10 @@ impl<'t> DelayedElement<'t> {
         }
     }
 
+    pub(crate) fn is_typography_boundary(&self) -> bool {
+        matches!(&self.node, DelayedNode::TypographyBoundary)
+    }
+
     pub(crate) fn is_suppression_seam(&self) -> bool {
         matches!(
             &self.node,

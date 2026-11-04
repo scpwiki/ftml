@@ -1012,6 +1012,8 @@ fn push_native_quote_row<'t>(
                     if table.table_type == crate::tree::TableType::Simple
             )
         });
+        let seam_bounded =
+            crate::parsing::paragraph::batch_is_seam_bounded(&row.elements);
         let last_index = counts.len() - 1;
         let mut iter = row.elements.into_iter();
         for (index, (count, safe, _)) in counts.iter().enumerate() {
@@ -1022,8 +1024,22 @@ fn push_native_quote_row<'t>(
             if index < last_index && matches!(slice.last(), Some(Element::LineBreak)) {
                 slice.pop();
             }
+            let per_element = seam_bounded
+                && !*safe
+                && slice.iter().any(|element| {
+                    !element.paragraph_safe()
+                        && !matches!(
+                            element,
+                            Element::List { .. } | Element::DefinitionList(_)
+                        )
+                });
             for element in slice {
-                stack.push_element(element, *safe);
+                let element_safe = if per_element {
+                    element.paragraph_safe()
+                } else {
+                    *safe
+                };
+                stack.push_element(element, element_safe);
             }
         }
         if has_simple_table {
@@ -1061,8 +1077,16 @@ fn push_native_quote_row<'t>(
             Element::Table(table) if table.table_type == crate::tree::TableType::Simple
         )
     });
+    let per_element = !row.paragraph_safe
+        && crate::parsing::paragraph::batch_is_seam_bounded(&row.elements)
+        && row.elements.iter().any(|element| !element.paragraph_safe());
     for element in row.elements {
-        stack.push_element(element, row.paragraph_safe);
+        let paragraph_safe = if per_element {
+            element.paragraph_safe()
+        } else {
+            row.paragraph_safe
+        };
+        stack.push_element(element, paragraph_safe);
     }
     if has_simple_table {
         stack.merge_wikidot_adjacent_simple_tables();

@@ -548,6 +548,7 @@ fn parse_fn<'r, 't>(
                 .any(|byte| !matches!(byte, b' ' | b'\t'))
         };
         let lead_line_break = head_line_break && !at_line_start;
+        let outer_gate_items_allowed = parser.gate_items_allowed();
         match parser.get_body_element_segments_iftags(&BLOCK_IFTAGS) {
             Ok(body) => {
                 let (
@@ -696,23 +697,46 @@ fn parse_fn<'r, 't>(
                         batch.push(Element::LineBreak);
                     }
                     for (index, segment) in segments.into_iter().enumerate() {
-                        let mut count = segment.len();
-                        if index == 0 {
-                            count += 1;
-                            if lead_line_break {
-                                count += 1;
+                        let mut runs: Vec<(usize, bool)> = Vec::new();
+                        if !outer_gate_items_allowed
+                            && !segment_safe[index]
+                            && segment_kinds[index] == ParagraphSplitKind::Paragraph
+                        {
+                            for element in &segment {
+                                let safe = element.paragraph_safe();
+                                match runs.last_mut() {
+                                    Some((len, run_safe)) if *run_safe == safe => {
+                                        *len += 1;
+                                    }
+                                    _ => runs.push((1, safe)),
+                                }
                             }
                         }
+                        if runs.len() <= 1 {
+                            runs = vec![(segment.len(), segment_safe[index])];
+                        }
+                        let run_count = runs.len();
                         batch.extend(segment);
                         if index < last_index {
                             batch.push(Element::LineBreak);
-                            count += 1;
                         }
-                        if index == last_index {
-                            count += 1;
-                            count += trail_elements.len();
+                        for (run_index, (len, safe)) in runs.into_iter().enumerate() {
+                            let mut count = len;
+                            if index == 0 && run_index == 0 {
+                                count += 1;
+                                if lead_line_break {
+                                    count += 1;
+                                }
+                            }
+                            if index < last_index && run_index == run_count - 1 {
+                                count += 1;
+                            }
+                            if index == last_index && run_index == run_count - 1 {
+                                count += 1;
+                                count += trail_elements.len();
+                            }
+                            counts.push((count, safe, segment_kinds[index]));
                         }
-                        counts.push((count, segment_safe[index], segment_kinds[index]));
                     }
                     batch.extend(trail_elements);
                     batch.push(Element::Delayed(DelayedElement::typography_boundary()));
