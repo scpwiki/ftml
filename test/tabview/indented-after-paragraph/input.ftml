@@ -1,0 +1,6 @@
+foo
+ [[tabview]]
+[[tab "t"]]
+x
+[[/tab]]
+[[/tabview]]

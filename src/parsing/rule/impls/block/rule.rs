@@ -434,7 +434,12 @@ fn wikidot_block_has_physical_line_ownership(
 
     let needs_line_owner = matches!(
         block.name,
-        "block-code" | "block-math" | "block-module" | "block-bibliography" | "block-toc"
+        "block-code"
+            | "block-math"
+            | "block-module"
+            | "block-bibliography"
+            | "block-tabview"
+            | "block-toc"
     );
     if !needs_line_owner {
         return true;

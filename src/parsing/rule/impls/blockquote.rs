@@ -38,6 +38,7 @@ struct NativeQuoteRow<'t> {
     paragraph_safe: bool,
     empty_spaced: bool,
     indent: usize,
+    source_line: Option<&'t str>,
 }
 
 fn consume_deeper_collapsible_close<'r, 't>(
@@ -147,6 +148,21 @@ fn try_consume_fn<'r, 't>(
         // paragraphs, from an empty `>` row, which has no rendering effect.
         let single_space_after_marker = parser.current().slice == " ";
         let spaced_after_marker = parser.current().token == Token::Whitespace;
+        let pre_space = parser.clone();
+        let leave_indented_whitespace = parser.settings().layout.legacy()
+            && spaced_after_marker
+            && !single_space_after_marker
+            && parser.look_ahead(0).is_some_and(|token| {
+                !matches!(
+                    token.token,
+                    Token::Quote
+                        | Token::LineBreak
+                        | Token::ParagraphBreak
+                        | Token::InputEnd
+                        | Token::BulletItem
+                        | Token::NumberedItem
+                )
+            });
         parser.get_optional_space()?;
         if parser.current().token != Token::Quote {
             // Wikidot only counts contiguous quote markers toward native depth.
@@ -178,6 +194,7 @@ fn try_consume_fn<'r, 't>(
                         paragraph_safe: false,
                         empty_spaced: false,
                         indent: row_indent,
+                        source_line: None,
                     },
                 ));
             } else {
@@ -190,6 +207,10 @@ fn try_consume_fn<'r, 't>(
             break;
         }
 
+        if leave_indented_whitespace {
+            parser.update(&pre_space);
+        }
+
         let close_conditions = [
             ParseCondition::current(Token::LineBreak),
             ParseCondition::current(Token::ParagraphBreak),
@@ -198,21 +219,35 @@ fn try_consume_fn<'r, 't>(
         let close = &close_conditions;
         let mut paragraph_safe = true;
         let original_depth = parser.native_blockquote_depth();
-        let (physical_line_end, ends_quote_run) = std::iter::once(parser.current())
-            .chain(parser.remaining().iter())
-            .find(|token| {
-                matches!(
-                    token.token,
-                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
-                )
-            })
-            .map(|token| (token.span.end, token.token == Token::ParagraphBreak))
-            .expect("tokenization always ends with input-end");
+        let (physical_line_end, line_text_end, ends_quote_run) =
+            std::iter::once(parser.current())
+                .chain(parser.remaining().iter())
+                .find(|token| {
+                    matches!(
+                        token.token,
+                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                    )
+                })
+                .map(|token| {
+                    (
+                        token.span.end,
+                        token.span.start,
+                        token.token == Token::ParagraphBreak,
+                    )
+                })
+                .expect("tokenization always ends with input-end");
         parser.set_native_blockquote_depth(Some(absolute_depth));
         let result = collect_native_blockquote_line(parser, close);
         parser.set_native_blockquote_depth(original_depth);
         let errors_before = errors.len();
         let mut elements = result?.chain(&mut errors, &mut paragraph_safe);
+        if leave_indented_whitespace
+            && elements.len() > 1
+            && matches!(elements.first(), Some(Element::Text(text)) if text.chars().all(|c| c.is_whitespace()))
+            && !matches!(elements.get(1), Some(Element::Text(_)))
+        {
+            elements.remove(0);
+        }
         if parser.settings().layout.legacy()
             && unowned_footnote_first(parser, content_start, physical_line_end, &elements)
         {
@@ -313,11 +348,17 @@ fn try_consume_fn<'r, 't>(
             elements.push(Element::LineBreak);
         }
 
+        let source_line = if row_indent > 0 {
+            Some(&parser.full_text().inner()[content_start..line_text_end])
+        } else {
+            None
+        };
         let row = NativeQuoteRow {
             elements,
             paragraph_safe,
             empty_spaced: empty_spaced_row,
             indent: row_indent,
+            source_line,
         };
         if flatten_following_rows {
             escaped_rows.push(row);
@@ -459,7 +500,7 @@ fn build_blockquote_element(
     wikidot: bool,
 ) -> Option<Element> {
     let list = if wikidot {
-        merge_adjacent_native_list_rows(list)
+        merge_adjacent_native_list_rows(demote_ungrounded_indented_list_rows(list))
     } else {
         list
     };
@@ -492,6 +533,50 @@ fn build_blockquote_element(
         elements,
         AttributeMap::new(),
     )))
+}
+
+fn demote_ungrounded_indented_list_rows(
+    list: DepthList<(), NativeQuoteRow>,
+) -> DepthList<(), NativeQuoteRow> {
+    let mut demoted = Vec::with_capacity(list.len());
+    let mut previous_grounded = false;
+    for item in list {
+        match item {
+            DepthItem::Item(mut row) => {
+                if row.empty_spaced {
+                    previous_grounded = false;
+                } else if native_list_element(&mut row).is_some() {
+                    if row.indent == 0 {
+                        previous_grounded = true;
+                    } else if !previous_grounded {
+                        demote_indented_list_row(&mut row);
+                    }
+                } else {
+                    previous_grounded = false;
+                }
+                demoted.push(DepthItem::Item(row));
+            }
+            DepthItem::List((), nested) => {
+                previous_grounded = false;
+                demoted.push(DepthItem::List(
+                    (),
+                    demote_ungrounded_indented_list_rows(nested),
+                ));
+            }
+        }
+    }
+    demoted
+}
+
+fn demote_indented_list_row(row: &mut NativeQuoteRow<'_>) {
+    let Some(source_line) = row.source_line else {
+        return;
+    };
+    row.elements.clear();
+    row.elements
+        .push(Element::Text(std::borrow::Cow::Borrowed(source_line)));
+    row.elements.push(Element::LineBreak);
+    row.paragraph_safe = true;
 }
 
 fn merge_adjacent_native_list_rows(
