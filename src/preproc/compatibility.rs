@@ -258,7 +258,7 @@ fn canonicalize_extra_block_head_closers(lines: &mut [String], literal_lines: &[
             })
             .unwrap_or(head.len());
         let name = &head[..name_end];
-        if head.as_bytes().get(name_end) == Some(&b'_') {
+        if head[name_end..].starts_with("_]]]") {
             continue;
         }
         if !OWNERS.iter().any(|owner| name.eq_ignore_ascii_case(owner)) {
