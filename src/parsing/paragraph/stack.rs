@@ -213,6 +213,14 @@ impl<'t> ParagraphStack<'t> {
     }
 
     #[inline]
+    pub(crate) fn mark_wikidot_same_line_code_residual(&mut self) {
+        if self.wikidot {
+            self.current.push(text!("\n"));
+            self.current_unwrapped = true;
+            self.unwrapped_after_block_line = true;
+        }
+    }
+
     pub(crate) fn mark_wikidot_same_line_embed_residual(&mut self) {
         if self.wikidot {
             self.current.push(text!("\n"));

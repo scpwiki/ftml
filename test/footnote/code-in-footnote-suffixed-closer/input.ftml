@@ -1,0 +1,4 @@
+A[[footnote]]intro
+[[code]]
+code line[[/footnote]]
+[[/code]] B[[footnote]]plain[[/footnote]]

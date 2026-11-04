@@ -38,98 +38,15 @@ pub(crate) fn candidate_at(
 pub(crate) fn candidate_at_owned_opener(
     source: &str,
     opener_start: usize,
+    allow_inner: bool,
 ) -> Option<WikidotCodeCandidate> {
     if has_physical_line_ownership(source, opener_start) {
         return candidate_at(source, opener_start);
     }
-    candidate_at_inner(source, opener_start, false)
-}
-
-pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> {
-    #[derive(Debug)]
-    struct OpenCode {
-        opener_start: usize,
-        body_start: usize,
-        nested_closes: usize,
-        suppress_nested_openers: bool,
-        fallback_closer: Option<(usize, usize)>,
+    if allow_inner {
+        return candidate_at_inner(source, opener_start, false);
     }
-
-    let mut output = BTreeMap::new();
-    let mut stack = Vec::<OpenCode>::new();
-    let mut cursor = 0usize;
-    while let Some(relative_marker) = source[cursor..].find("[[") {
-        let marker_start = cursor + relative_marker;
-        if let Some(marker_end) = code_closer_marker_end(source, marker_start) {
-            if code_closer_owns_physical_line(source, marker_end) {
-                if let Some(open) = stack.pop() {
-                    let candidate = WikidotCodeCandidate {
-                        body: open.body_start..marker_start,
-                        owner_end: marker_end,
-                        end_blocks_to_skip: open.nested_closes,
-                    };
-                    if !crosses_bold_closer(
-                        &source[candidate.body.clone()],
-                        &source[marker_end..],
-                    ) {
-                        output.insert(open.opener_start, candidate);
-                    }
-                    if let Some(parent) = stack.last_mut() {
-                        parent.nested_closes += 1 + open.nested_closes;
-                        parent.fallback_closer = Some((marker_start, marker_end));
-                    }
-                }
-            } else if let Some(open) = stack.last_mut() {
-                // A crossed/suffixed `[[/code]]` remains body text. Once this
-                // happens, Wikidot also treats later same-family openers as
-                // body text until a standalone closer terminates this owner.
-                open.suppress_nested_openers = true;
-            }
-            cursor = marker_end;
-            continue;
-        }
-
-        if let Some(body_start) = code_opener_end(source, marker_start, true)
-            && (stack.is_empty()
-                || !stack
-                    .last()
-                    .is_some_and(|open| open.suppress_nested_openers))
-        {
-            stack.push(OpenCode {
-                opener_start: marker_start,
-                body_start,
-                nested_closes: 0,
-                suppress_nested_openers: false,
-                fallback_closer: None,
-            });
-            // The opener head is one lexical owner. Do not rescan `[[`
-            // lookalikes inside it as independent block markers; otherwise
-            // a malformed head can observe a closer before its body starts.
-            cursor = body_start;
-            continue;
-        }
-        cursor = marker_start + 2;
-    }
-
-    while let Some(open) = stack.pop() {
-        let Some((closer_start, closer_end)) = open.fallback_closer else {
-            continue;
-        };
-        let candidate = WikidotCodeCandidate {
-            body: open.body_start..closer_start,
-            owner_end: closer_end,
-            end_blocks_to_skip: open.nested_closes - 1,
-        };
-        if !crosses_bold_closer(&source[candidate.body.clone()], &source[closer_end..]) {
-            output.insert(open.opener_start, candidate);
-        }
-        if let Some(parent) = stack.last_mut() {
-            parent.nested_closes += open.nested_closes;
-            parent.fallback_closer = Some((closer_start, closer_end));
-        }
-    }
-
-    output
+    None
 }
 
 fn candidate_at_inner(
@@ -172,6 +89,84 @@ fn candidate_at_inner(
     }
 
     None
+}
+
+pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> {
+    #[derive(Debug)]
+    struct OpenCode {
+        opener_start: usize,
+        body_start: usize,
+        nested_closes: usize,
+        fallback_closer: Option<(usize, usize)>,
+    }
+
+    let mut output = BTreeMap::new();
+    let mut stack = Vec::<OpenCode>::new();
+    let mut cursor = 0usize;
+    while let Some(relative_marker) = source[cursor..].find("[[") {
+        let marker_start = cursor + relative_marker;
+        if let Some(marker_end) = code_closer_marker_end(source, marker_start) {
+            if code_closer_terminates(source, marker_end) {
+                if let Some(open) = stack.pop() {
+                    let candidate = WikidotCodeCandidate {
+                        body: open.body_start..marker_start,
+                        owner_end: marker_end,
+                        end_blocks_to_skip: open.nested_closes,
+                    };
+                    if !crosses_bold_closer(
+                        &source[candidate.body.clone()],
+                        &source[marker_end..],
+                    ) {
+                        output.insert(open.opener_start, candidate);
+                    }
+                    if let Some(parent) = stack.last_mut() {
+                        parent.nested_closes += 1 + open.nested_closes;
+                        parent.fallback_closer = Some((marker_start, marker_end));
+                    }
+                }
+            }
+            // A `[[/code]]` not followed by whitespace or the end of the
+            // source is body text; scanning resumes after it and later
+            // openers still nest.
+            cursor = marker_end;
+            continue;
+        }
+
+        if let Some(body_start) = code_opener_end(source, marker_start, true) {
+            stack.push(OpenCode {
+                opener_start: marker_start,
+                body_start,
+                nested_closes: 0,
+                fallback_closer: None,
+            });
+            // The opener head is one lexical owner. Do not rescan `[[`
+            // lookalikes inside it as independent block markers; otherwise
+            // a malformed head can observe a closer before its body starts.
+            cursor = body_start;
+            continue;
+        }
+        cursor = marker_start + 2;
+    }
+
+    while let Some(open) = stack.pop() {
+        let Some((closer_start, closer_end)) = open.fallback_closer else {
+            continue;
+        };
+        let candidate = WikidotCodeCandidate {
+            body: open.body_start..closer_start,
+            owner_end: closer_end,
+            end_blocks_to_skip: open.nested_closes - 1,
+        };
+        if !crosses_bold_closer(&source[candidate.body.clone()], &source[closer_end..]) {
+            output.insert(open.opener_start, candidate);
+        }
+        if let Some(parent) = stack.last_mut() {
+            parent.nested_closes += open.nested_closes;
+            parent.fallback_closer = Some((closer_start, closer_end));
+        }
+    }
+
+    output
 }
 
 pub(crate) fn active_ranges(source: &str) -> Vec<Range<usize>> {
@@ -261,7 +256,7 @@ fn head_has_malformed_nested_marker(head: &str) -> bool {
 
 fn code_closer_end(source: &str, closer_start: usize) -> Option<usize> {
     let closer_end = code_closer_marker_end(source, closer_start)?;
-    code_closer_owns_physical_line(source, closer_end).then_some(closer_end)
+    code_closer_terminates(source, closer_end).then_some(closer_end)
 }
 
 fn code_closer_marker_end(source: &str, closer_start: usize) -> Option<usize> {
@@ -280,16 +275,16 @@ fn code_closer_marker_end(source: &str, closer_start: usize) -> Option<usize> {
     Some(head_end + 2)
 }
 
-fn code_closer_owns_physical_line(source: &str, closer_end: usize) -> bool {
-    let line_end = source[closer_end..]
-        .find(['\r', '\n'])
-        .map_or(source.len(), |offset| closer_end + offset);
-    // Wikidot tolerates trailing spaces/tabs after a code closer
-    // (scp-9844's blocks render and are hosted despite `[[/code]] `),
-    // but any other suffix leaves the marker as body text.
-    source[closer_end..line_end]
-        .bytes()
-        .all(|byte| matches!(byte, b' ' | b'\t'))
+fn code_closer_terminates(source: &str, closer_end: usize) -> bool {
+    // Live Wikidot closes a code block at the first `[[/code]]` followed by
+    // whitespace or the end of the source; whatever follows the whitespace
+    // is outer content (scp-9844's `[[/code]] ` blocks render, and a closer
+    // followed by ` x` closes the same way). A closer followed directly by
+    // any other byte (a letter, `[[`, `]`) is body text instead.
+    match source[closer_end..].bytes().next() {
+        None => true,
+        Some(byte) => matches!(byte, b' ' | b'\t' | b'\r' | b'\n'),
+    }
 }
 
 fn has_physical_line_ownership(source: &str, opener_start: usize) -> bool {
@@ -427,14 +422,31 @@ mod tests {
     }
 
     #[test]
-    fn candidate_rejects_closer_followed_by_non_whitespace() {
-        // Only blank trailing whitespace is tolerated: a real suffix still
-        // leaves the closer as body text.
+    fn candidate_closes_at_a_closer_followed_by_whitespace_and_text() {
+        // The closer terminates the block; the text after the whitespace
+        // is outer content, not part of the body.
         let source = "[[code]]\nbody\n[[/code]] x\n";
-        assert!(
-            candidates(source).is_empty(),
-            "suffixed closer must not close"
-        );
+        let candidate = candidate_at(source, 0).expect("code candidate");
+
+        assert_eq!(&source[candidate.body.clone()], "\nbody\n");
+        assert_eq!(candidate.end_blocks_to_skip, 0);
+    }
+
+    #[test]
+    fn candidate_rejects_closer_followed_directly_by_text() {
+        // A closer followed immediately by a non-whitespace byte is body
+        // text, so the block never closes.
+        for source in [
+            "[[code]]\nbody\n[[/code]]x\n",
+            "[[code]]\nbody\n[[/code]], x\n",
+            "[[code]]\nbody\n[[/code]]]\n",
+            "[[code]]\nbody\n[[/code]][[div]]\nx\n[[/div]]",
+        ] {
+            assert!(
+                candidates(source).is_empty(),
+                "directly suffixed closer must not close: {source:?}"
+            );
+        }
     }
 
     #[test]

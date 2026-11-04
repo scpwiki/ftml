@@ -1,0 +1,49 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "a",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "x"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "b",
+                "language": null,
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "a",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "b",
+            "language": null,
+            "name": null
+        }
+    ]
+}

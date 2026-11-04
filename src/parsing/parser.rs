@@ -1167,7 +1167,11 @@ impl<'r, 't> Parser<'r, 't> {
             .bytes()
             .all(|byte| matches!(byte, b' ' | b'\t' | b'\0'));
         if !line_owned {
-            return crate::wikidot_code::candidate_at_owned_opener(source, opener_start);
+            return crate::wikidot_code::candidate_at_owned_opener(
+                source,
+                opener_start,
+                self.settings().mode == crate::settings::WikitextMode::List,
+            );
         }
 
         let mut cache = self.wikidot_code_candidate_cache.borrow_mut();
