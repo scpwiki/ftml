@@ -53,11 +53,25 @@ fn wikidot_div_head_started_physical_line(
     let line_start = source[..head_line_end]
         .rfind('\n')
         .map_or(0, |offset| offset + 1);
-    wikidot_line_head_resolves_to_div(&source[line_start..head_line_end])
+    let physical_line_end = if body_start == BlockBodyStart::NextPhysicalLine {
+        head_line_end
+    } else {
+        source[head_end..]
+            .find('\n')
+            .map_or(source.len(), |offset| head_end + offset)
+    };
+    wikidot_line_head_resolves_to_div(&source[line_start..physical_line_end])
 }
 
 fn wikidot_line_head_resolves_to_div(line: &str) -> bool {
-    let mut rest = line.trim_start_matches([' ', '\t']);
+    let trimmed = line.trim_start_matches([' ', '\t']);
+    if trimmed
+        .get(..5)
+        .is_some_and(|head| head.eq_ignore_ascii_case("[[div"))
+    {
+        return true;
+    }
+    let mut rest = trimmed;
     if !rest.starts_with("[[") {
         return false;
     }
@@ -105,7 +119,16 @@ fn wikidot_line_head_resolves_to_div(line: &str) -> bool {
             _ => break,
         }
     }
-    name.eq_ignore_ascii_case("div")
+    if !name.eq_ignore_ascii_case("div") {
+        return false;
+    }
+    let rest = rest.strip_prefix(['_', '=']).unwrap_or(rest);
+    let Some(head_end) = rest.find("]]") else {
+        return false;
+    };
+    rest[head_end + 2..]
+        .chars()
+        .all(|ch| matches!(ch, ' ' | '\t'))
 }
 
 fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
