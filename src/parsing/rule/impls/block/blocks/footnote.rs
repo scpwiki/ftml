@@ -66,6 +66,7 @@ fn parse_footnote_ref<'r, 't>(
     parser.get_head_none(&BLOCK_FOOTNOTE, in_head)?;
 
     let body = parser.get_body_elements(&BLOCK_FOOTNOTE, true)?;
+    let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_FOOTNOTE);
     let (mut elements, errors, _) = body.into();
 
     if elements.len() == 1 {
@@ -112,7 +113,11 @@ fn parse_footnote_ref<'r, 't>(
 
     let index = parser.push_footnote(elements);
 
-    ok!(Element::Footnote(index), errors)
+    if fused_close {
+        ok!(true; vec![Element::Footnote(index), text!("]")], errors)
+    } else {
+        ok!(Element::Footnote(index), errors)
+    }
 }
 
 fn parse_footnote_block<'r, 't>(

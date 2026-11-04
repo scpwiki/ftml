@@ -473,8 +473,13 @@ fn parse_table<'r, 't>(
         table_type,
     };
     let element = Element::Table(table);
+    let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_TABLE);
     if residuals.is_empty() {
-        ok!(false; element, errors)
+        if fused_close {
+            ok!(false; vec![element, text!("]")], errors)
+        } else {
+            ok!(false; element, errors)
+        }
     } else {
         let mut elements = Vec::with_capacity(residuals.len() * 2 + 1);
         for (index, residual) in residuals.into_iter().enumerate() {
@@ -485,6 +490,9 @@ fn parse_table<'r, 't>(
         }
         elements.push(text!("\n"));
         elements.push(element);
+        if fused_close {
+            elements.push(text!("]"));
+        }
         ok!(false; Elements::Multiple(elements), errors)
     }
 }

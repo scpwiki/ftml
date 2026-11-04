@@ -158,6 +158,7 @@ fn parse_fn<'r, 't>(
     } else {
         None
     };
+    let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_COLLAPSIBLE);
     parser.set_in_wikidot_collapsible(previous_collapsible_context);
     if parser.settings().layout.legacy()
         && parser.pending_wikidot_collapsible_closer()
@@ -169,6 +170,9 @@ fn parse_fn<'r, 't>(
     let element = head.into_element_with_unfolded_tail(elements, unfolded_tail_start);
 
     let mut output = vec![element];
+    if fused_close {
+        output.push(text!("]"));
+    }
     if parser.take_wikidot_crossed_ol_tail_sentinel()? {
         output.push(wikidot_crossed_ol_tail());
         return ok!(false; output, errors);

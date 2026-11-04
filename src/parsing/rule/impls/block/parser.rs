@@ -647,19 +647,45 @@ where
         Ok(name)
     }
 
-    pub(crate) fn wikidot_link_owned_inline_end_block_ahead(&self) -> bool {
+    pub(crate) fn wikidot_fused_end_block_ahead(&self, block_rule: &BlockRule) -> bool {
         let source = &self.full_text().inner()[self.current().span.start..];
-        ["[[/span]]]", "[[/span_]]]", "[[/size]]]", "[[/size_]]]"]
-            .iter()
-            .any(|prefix| {
-                source
-                    .get(..prefix.len())
-                    .is_some_and(|source| source.eq_ignore_ascii_case(prefix))
-            })
+        let Some(rest) = source.strip_prefix("[[/") else {
+            return false;
+        };
+        block_rule_end_names(block_rule, true).iter().any(|name| {
+            let Some(after) = rest
+                .get(..name.len())
+                .filter(|part| part.eq_ignore_ascii_case(name))
+                .map(|_| &rest[name.len()..])
+            else {
+                return false;
+            };
+            after.starts_with("]]]")
+                || after
+                    .strip_prefix('_')
+                    .is_some_and(|stripped| stripped.starts_with("]]]"))
+        })
     }
 
-    pub(crate) fn get_wikidot_link_owned_inline_end_block(
+    pub(crate) fn wikidot_body_closed_with_fused_close(
+        &self,
+        block_rule: &BlockRule,
+    ) -> bool {
+        let source = &self.full_text().inner()[..self.current().span.start];
+        block_rule_end_names(block_rule, true).iter().any(|name| {
+            [&format!("[[/{name}]]]"), &format!("[[/{name}_]]]")]
+                .iter()
+                .any(|close| {
+                    source
+                        .get(source.len().saturating_sub(close.len())..)
+                        .is_some_and(|tail| tail.eq_ignore_ascii_case(close))
+                })
+        })
+    }
+
+    pub(crate) fn get_wikidot_fused_end_block(
         &mut self,
+        block_rule: &BlockRule,
     ) -> Result<&'t str, ParseError> {
         self.get_token(Token::LeftBlockEnd, ParseErrorKind::BlockExpectedEnd)?;
         self.get_optional_space()?;
@@ -681,8 +707,9 @@ where
         )?;
         let name = name.trim_matches([' ', '\t', '\r', '\n']);
 
+        let base_name = name.strip_suffix('_').unwrap_or(name);
         if last.token == Token::RightLink
-            && (name.eq_ignore_ascii_case("span") || name.eq_ignore_ascii_case("size"))
+            && block_rule_accepts_end_name(block_rule, base_name, true)
         {
             Ok(name)
         } else {
@@ -796,11 +823,23 @@ where
                     return Ok(false);
                 }
             }
-            let link_owned_inline_close = parser.settings().layout.legacy()
-                && matches!(block_rule.name, "block-span" | "block-size")
-                && parser.wikidot_link_owned_inline_end_block_ahead();
-            let name = if link_owned_inline_close {
-                parser.get_wikidot_link_owned_inline_end_block()?
+            let fused_close = parser.settings().layout.legacy()
+                && matches!(
+                    block_rule.name,
+                    "block-span"
+                        | "block-size"
+                        | "block-anchor"
+                        | "block-footnote"
+                        | "block-div"
+                        | "block-collapsible"
+                        | "block-table"
+                        | "block-list-unordered"
+                        | "block-list-ordered"
+                        | "block-list-item"
+                )
+                && parser.wikidot_fused_end_block_ahead(block_rule);
+            let name = if fused_close {
+                parser.get_wikidot_fused_end_block(block_rule)?
             } else {
                 parser.get_end_block()?
             };
@@ -813,6 +852,7 @@ where
             }
 
             if parser.settings().layout.legacy()
+                && !fused_close
                 && !parser.discarding_hidden_body()
                 && block_rule.name.starts_with("block-list-")
             {

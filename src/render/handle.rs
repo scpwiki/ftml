@@ -99,8 +99,10 @@ impl Handle {
         }
 
         let mut info = UserInfo::fallback();
-        info.user_name = Cow::Owned(name.to_owned());
-        info.user_profile_url = Cow::Owned(format!("/user:info/{name}"));
+        let canonical = name.to_lowercase();
+        info.user_name = Cow::Owned(canonical.clone());
+        info.user_profile_url =
+            Cow::Owned(format!("/user:info/{}", canonical.replace(' ', "-")));
         Some(info)
     }
 
@@ -341,8 +343,8 @@ fn handle_fallbacks_cover_rendering_helpers() {
     assert!(!handle.get_page_exists("sandbox", "missing"));
 
     let user = handle.get_user_info("ExampleUser").unwrap();
-    assert_eq!(user.user_name, "ExampleUser");
-    assert_eq!(user.user_profile_url, "/user:info/ExampleUser");
+    assert_eq!(user.user_name, "exampleuser");
+    assert_eq!(user.user_profile_url, "/user:info/exampleuser");
     assert!(handle.get_user_info("missing").is_none());
 
     assert_eq!(

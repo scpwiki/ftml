@@ -469,7 +469,7 @@ where
             }
             Token::LeftBlockEnd => {
                 let mut close = scan.clone();
-                if let Ok((name, residual)) = close.get_wikidot_end_block_with_residual()
+                if let Ok((name, _residual)) = close.get_wikidot_end_block_with_residual()
                 {
                     if span_open && name.eq_ignore_ascii_case("span") {
                         parser.cache_single_link_label_owner_scan_outcomes(
@@ -489,8 +489,7 @@ where
                         );
                         return true;
                     }
-                    if footnote_open && !residual && name.eq_ignore_ascii_case("footnote")
-                    {
+                    if footnote_open && name.eq_ignore_ascii_case("footnote") {
                         parser.cache_single_link_label_owner_scan_outcomes(
                             &traversed, true,
                         );

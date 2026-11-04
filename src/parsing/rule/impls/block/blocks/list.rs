@@ -104,6 +104,7 @@ fn parse_list_block<'r, 't>(
     }
 
     let body = parser.get_body_elements(block_rule, false)?;
+    let fused_close = parser.wikidot_body_closed_with_fused_close(block_rule);
     let closer_has_same_line_residual = !matches!(
         parser.current().token,
         Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
@@ -114,6 +115,9 @@ fn parse_list_block<'r, 't>(
     // list wrapper. It keeps the parsed body as an unwrapped block line.
     if wikidot && name != block_rule.accepts_names[0] {
         strip_newlines(&mut elements);
+        if fused_close {
+            elements.push(text!("]"));
+        }
         if !closer_has_same_line_residual {
             elements.push(Element::LineBreak);
         }
@@ -222,13 +226,19 @@ fn parse_list_block<'r, 't>(
         items,
         attributes,
     };
-
     if parser.settings().layout.legacy()
         && !nested
         && !flag_score
         && !closer_has_same_line_residual
     {
-        ok!(false; vec![element, Element::LineBreak], errors)
+        let mut output = vec![element];
+        if fused_close {
+            output.push(text!("]"));
+        }
+        output.push(Element::LineBreak);
+        ok!(false; output, errors)
+    } else if fused_close {
+        ok!(false; vec![element, text!("]")], errors)
     } else {
         success_elements_with_paragraph_safety(false, element, errors)
     }
@@ -393,6 +403,7 @@ fn parse_list_item<'r, 't>(
 
     let body = parser.get_body_elements(&BLOCK_LI, false)?;
     let source_end = parser.current().span.start;
+    let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_LI);
     let (mut elements, errors, _) = body.into();
 
     if flag_score {
@@ -416,6 +427,10 @@ fn parse_list_item<'r, 't>(
             elements.pop();
         }
         trim_wikidot_block_gaps(&mut elements);
+    }
+
+    if fused_close {
+        elements.push(text!("]"));
     }
 
     let element = Element::Partial(PartialElement::ListItem(ListItem::Elements {
