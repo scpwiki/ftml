@@ -25,6 +25,10 @@ pub(super) fn substitute_wikidot(text: &mut String) {
             break;
         };
         let close = close_search + relative_close + "--]".len();
+        if comment_contains_iftags_head(&text[open..close]) {
+            scan = close;
+            continue;
+        }
         if leading_comment_remains_an_owner_barrier(text, open, close) {
             scan = close;
             continue;
@@ -42,6 +46,16 @@ pub(super) fn substitute_wikidot(text: &mut String) {
         output.push_str(&text[copied_until..]);
         *text = output;
     }
+}
+
+/// Whether a comment's text carries an iftags head. Live Wikidot
+/// pairs gates with closers inside comments, so eliding such a
+/// comment would remove a gate's closer (or a nested gate's opener)
+/// before the parser can pair with it; the comment stays in the text
+/// and the comment rule consumes it as usual.
+fn comment_contains_iftags_head(comment: &str) -> bool {
+    let lower = comment.to_ascii_lowercase();
+    lower.contains("[[iftags") || lower.contains("[[/iftags")
 }
 
 fn comment_elision_needs_raw_barrier(source: &str, open: usize, close: usize) -> bool {

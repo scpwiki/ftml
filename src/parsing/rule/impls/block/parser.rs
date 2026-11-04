@@ -117,7 +117,36 @@ fn iftags_block_head_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option
 }
 
 fn iftags_end_head_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<usize> {
-    named_block_end_head_end(tokens, start, "iftags")
+    if let Some(end) = named_block_end_head_end(tokens, start, "iftags") {
+        return Some(end);
+    }
+
+    // A fused close (`[[/iftags]]]`) lexes its three brackets as one
+    // RightLink token. Live Wikidot's pairing scan is text-level and
+    // matches the `[[/iftags]]` prefix, closing the gate and leaving
+    // the extra bracket as following text, so the walk designates the
+    // fused head as an end as well.
+    if tokens.get(start)?.token != Token::LeftBlockEnd {
+        return None;
+    }
+    let mut i = start + 1;
+    if tokens.get(i)?.token == Token::Whitespace {
+        i += 1;
+    }
+    let ident = tokens.get(i)?;
+    if ident.token != Token::Identifier || !ident.slice.eq_ignore_ascii_case("iftags") {
+        return None;
+    }
+    i += 1;
+    if tokens.get(i)?.token == Token::Whitespace {
+        i += 1;
+    }
+    let close = tokens.get(i)?;
+    if close.token == Token::RightLink && close.slice == "]]]" {
+        Some(i + 1)
+    } else {
+        None
+    }
 }
 
 /// Token index just past a region the Wikidot iftags pairing walk cannot
@@ -202,6 +231,17 @@ fn raw_block_span_end(tokens: &[&ExtractedToken<'_>], start: usize) -> Option<us
         i += 1;
     }
     None
+}
+
+/// Whether a byte offset sits inside a `[!-- --]` comment, judging by
+/// the nearest comment opener and closer before it in the source.
+fn offset_inside_comment(source: &str, offset: usize) -> bool {
+    let before = &source[..offset.min(source.len())];
+    match (before.rfind("[!--"), before.rfind("--]")) {
+        (Some(open), Some(close)) => open > close,
+        (Some(_), None) => true,
+        _ => false,
+    }
 }
 
 fn token_ends_argument_key(token: Token) -> bool {
@@ -444,19 +484,17 @@ fn trim_segment_trailing_blanks(segment: &mut Vec<Element>) {
 
 /// Distributes the elements of a nested block result that itself split
 /// at paragraph breaks into the segment list being collected: the first
-/// segment's container joins the current segment, and each subsequent
-/// segment starts a new segment here, so a nested inline container
-/// splits its ancestors' bodies at the same breaks. Falls back to
-/// appending every element to the current segment if the slot layout
-/// does not match the element batch (defensive; well-formed batches
-/// always match).
+/// segment's elements join the current segment, and each subsequent
+/// segment starts a new segment here, so a nested split splits its
+/// ancestors' bodies at the same breaks. Falls back to appending every
+/// element to the current segment if the counts do not match the
+/// element batch (defensive; well-formed batches always match).
 fn distribute_paragraph_split<'t>(
     segments: &mut Vec<Vec<Element<'t>>>,
     elements: Vec<Element<'t>>,
-    slots: &[bool],
+    counts: &[usize],
 ) {
-    let present = slots.iter().filter(|slot| **slot).count();
-    if present != elements.len() {
+    if counts.iter().sum::<usize>() != elements.len() {
         segments
             .last_mut()
             .expect("segments always has a current segment")
@@ -465,19 +503,14 @@ fn distribute_paragraph_split<'t>(
     }
 
     let mut elements = elements.into_iter();
-    for (index, slot) in slots.iter().enumerate() {
+    for (index, count) in counts.iter().enumerate() {
         if index > 0 {
             segments.push(Vec::new());
         }
-        if *slot {
-            let element = elements
-                .next()
-                .expect("slot count checked against element batch");
-            segments
-                .last_mut()
-                .expect("segments always has a current segment")
-                .push(element);
-        }
+        segments
+            .last_mut()
+            .expect("segments always has a current segment")
+            .extend(elements.by_ref().take(*count));
     }
 }
 
@@ -823,7 +856,13 @@ where
                     return Ok(false);
                 }
             }
-            let fused_close = parser.settings().layout.legacy()
+            // IfTags takes the fused path in either layout: its
+            // pairing model (which designates fused closes as ends)
+            // is layout-independent, unlike the legacy-only blocks
+            // below whose fused acceptance live Wikidot grants per
+            // block type.
+            let fused_close = (parser.settings().layout.legacy()
+                || block_rule.name == "block-iftags")
                 && matches!(
                     block_rule.name,
                     "block-span"
@@ -836,6 +875,7 @@ where
                         | "block-list-unordered"
                         | "block-list-ordered"
                         | "block-list-item"
+                        | "block-iftags"
                 )
                 && parser.wikidot_fused_end_block_ahead(block_rule);
             let name = if fused_close {
@@ -1752,8 +1792,8 @@ where
                         Elements::None => Vec::new(),
                     };
                     match paragraph_split {
-                        Some(slots) => {
-                            distribute_paragraph_split(&mut segments, elements, &slots);
+                        Some(counts) => {
+                            distribute_paragraph_split(&mut segments, elements, &counts);
                         }
                         None => {
                             segments
@@ -1778,6 +1818,122 @@ where
         ))
     }
 
+    /// Collects the body of an iftags gate whose pairing designated an
+    /// end, splitting at top-level paragraph breaks like
+    /// `get_body_element_segments` but in either layout: live Wikidot
+    /// splices a kept gate body into the text before paragraph
+    /// formation, so the body's breaks are real paragraph breaks in
+    /// both layouts, and the caller re-establishes them through the
+    /// split layout on its result. Apart from the split, the gather
+    /// mirrors `consume_body_no_paragraphs` (end verification, list
+    /// close, hidden-body boundaries, the legacy input-end return), so
+    /// a kept body gathers exactly as it did unsplit.
+    pub(crate) fn get_body_element_segments_iftags(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> ParseResult<'r, 't, Vec<Vec<Element<'t>>>> {
+        let mut segments: Vec<Vec<Element<'t>>> = vec![Vec::new()];
+        let mut all_errors = Vec::new();
+        let mut paragraph_safe = true;
+        let mut first = true;
+
+        loop {
+            if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                return Err(self.make_err(ParseErrorKind::EndOfInput));
+            }
+
+            if self
+                .verify_end_block(first, block_rule, false, false)
+                .is_some()
+            {
+                break;
+            }
+
+            if self.terminate_at_wikidot_list_close(block_rule, first) {
+                break;
+            }
+
+            if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            // The designated end sat inside a construct the previous
+            // iteration consumed whole (a comment holding the closer):
+            // the body is complete, with the end absorbed into that
+            // construct's elements.
+            if let Some(designated) = self.wikidot_iftags_body_end()
+                && self.current().span.start > designated
+            {
+                break;
+            }
+
+            if self.current().token == Token::InputEnd
+                && self.settings().layout.legacy()
+                && !self.discarding_hidden_body()
+            {
+                break;
+            }
+
+            if self.current().token == Token::ParagraphBreak {
+                self.step()?;
+                first = false;
+                segments.push(Vec::new());
+                continue;
+            }
+
+            first = false;
+            match consume(self) {
+                Ok(consumed) => {
+                    self.take_wikidot_mixed_paragraph_ownership();
+                    let crate::parsing::ParseSuccess {
+                        item,
+                        errors,
+                        paragraph_safe: safe,
+                        paragraph_split,
+                        ..
+                    } = consumed;
+                    all_errors.extend(errors);
+                    paragraph_safe &= safe;
+                    let elements = match item {
+                        Elements::Multiple(elements) => elements,
+                        Elements::Single(element) => vec![element],
+                        Elements::None => Vec::new(),
+                    };
+                    match paragraph_split {
+                        Some(counts) => {
+                            distribute_paragraph_split(&mut segments, elements, &counts);
+                        }
+                        None => {
+                            segments
+                                .last_mut()
+                                .expect("segments always has a current segment")
+                                .extend(elements);
+                        }
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        if segments.len() > 1 {
+            let last_index = segments.len() - 1;
+            for (index, segment) in segments.iter_mut().enumerate() {
+                if index > 0 {
+                    trim_segment_leading_blanks(segment);
+                }
+                if index < last_index {
+                    trim_segment_trailing_blanks(segment);
+                }
+            }
+        }
+
+        Ok(crate::parsing::ParseSuccess::new(
+            segments,
+            all_errors,
+            paragraph_safe,
+        ))
+    }
+
     /// Wraps body segments collected by `get_body_element_segments` into
     /// one inline container per non-empty segment, returning the segment
     /// layout (see `ParseSuccess::paragraph_split`) alongside the wrapped
@@ -1791,7 +1947,7 @@ where
         segments: Vec<Vec<Element<'t>>>,
         ctype: ContainerType,
         attributes: AttributeMap<'t>,
-    ) -> (Elements<'t>, Option<Vec<bool>>) {
+    ) -> (Elements<'t>, Option<Vec<usize>>) {
         if segments.len() == 1 {
             let elements = segments.into_iter().next().expect("single segment present");
             let container = Container::new(ctype, elements, attributes);
@@ -1799,7 +1955,7 @@ where
         }
 
         let last_index = segments.len() - 1;
-        let mut slots = Vec::with_capacity(segments.len());
+        let mut counts = Vec::with_capacity(segments.len());
         let mut containers = Vec::new();
         for (index, mut segment) in segments.into_iter().enumerate() {
             // Content blank at a segment edge adjacent to a paragraph
@@ -1816,9 +1972,9 @@ where
             }
 
             if segment.is_empty() {
-                slots.push(false);
+                counts.push(0);
             } else {
-                slots.push(true);
+                counts.push(1);
                 containers.push(Element::Container(Container::new(
                     ctype,
                     segment,
@@ -1837,7 +1993,7 @@ where
             ),
             _ => Elements::Multiple(containers),
         };
-        (elements, Some(slots))
+        (elements, Some(counts))
     }
 
     /// Collects the body of an inline container block and wraps it,
@@ -1902,6 +2058,18 @@ where
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
 
+            // An iftags gather whose designated end sat inside a
+            // construct an earlier iteration consumed whole (a comment
+            // holding the closer) is complete once the parser has moved
+            // past the designated end: the end was absorbed into that
+            // construct, and live Wikidot ends the gate there.
+            if block_rule.name == "block-iftags"
+                && let Some(designated) = self.wikidot_iftags_body_end()
+                && self.current().span.start > designated
+            {
+                return Ok(());
+            }
+
             let wikidot_input_end = self.current().token == Token::InputEnd
                 && self.settings().layout.legacy()
                 && !self.discarding_hidden_body();
@@ -1915,6 +2083,24 @@ where
                     self.take_wikidot_mixed_paragraph_ownership();
                     process(consumed);
                 }
+                // A comment that stopped at the designated iftags end
+                // while discarding ends the hidden body there: the
+                // next loop iteration verifies and consumes the
+                // designated end block, and the comment's remainder
+                // past the closer is ordinary following content, as on
+                // live Wikidot. The stop is only honored when the
+                // designated end is comment-internal; any other
+                // construct's error at the same position (an unclosed
+                // raw block, above all) still fails the discard closed.
+                Err(_error)
+                    if self.discarding_hidden_body()
+                        && self.wikidot_iftags_body_end().is_some_and(|designated| {
+                            self.at_designated_iftags_end(designated)
+                                && offset_inside_comment(
+                                    self.full_text().inner(),
+                                    designated,
+                                )
+                        }) => {}
                 Err(_error)
                     if self.discarding_hidden_body()
                         && self.at_hidden_body_boundary() => {}
@@ -1926,7 +2112,7 @@ where
     /// Whether the end block at the current position (after the one line
     /// break `verify_end_block` may step over) is the designated
     /// `[[/iftags]]` at byte offset `designated`.
-    fn at_designated_iftags_end(&self, designated: usize) -> bool {
+    pub(crate) fn at_designated_iftags_end(&self, designated: usize) -> bool {
         let mut probe = self.clone();
         if probe.current().token == Token::LineBreak && probe.step().is_err() {
             return false;

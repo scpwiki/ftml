@@ -1,0 +1,7 @@
+before
+
+[[iftags -zzz]]A
+
+B[[/iftags]]
+
+after

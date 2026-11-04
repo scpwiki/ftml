@@ -61,14 +61,8 @@
             "data": "Cherry"
         },
         {
-            "element": "line-break"
-        },
-        {
             "element": "style",
             "data": "body { color: red; }"
-        },
-        {
-            "element": "line-break"
         }
     ]
 }

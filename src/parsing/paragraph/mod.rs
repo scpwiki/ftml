@@ -211,7 +211,19 @@ where
                 && errors
                     .iter()
                     .any(|error| error.kind() == ParseErrorKind::ListItemOutsideList);
-            defer_suppression_seams(&mut stack, &mut elements);
+            // A paragraph-split layout describes the batch exactly as
+            // produced, so validate it before suppression seams are
+            // deferred out of the batch: a producer whose batch carries
+            // seams of its own (an iftags body bounded by typography
+            // seams) would otherwise never validate, and its breaks
+            // would flatten. When the layout validates, distribution
+            // below pushes the raw batch and deferral is skipped; for
+            // the container batches this changes nothing, as deferral
+            // retains them untouched.
+            let split_batch = paragraph_split_batch(&elements, paragraph_split);
+            if split_batch.is_none() {
+                defer_suppression_seams(&mut stack, &mut elements);
+            }
             let active_div = elements_contain_div(&elements);
             let list_has_same_line_residual = explicit_list_opener
                 && !paragraph_safe
@@ -268,26 +280,36 @@ where
                 {
                     stack.mark_wikidot_empty_list_break();
                 }
-                if let Some(slots) = paragraph_split_batch(&elements, paragraph_split) {
-                    // An inline container whose body crossed paragraph
-                    // breaks returns one container per body segment;
-                    // re-establish the breaks between them so the
-                    // segments land in separate paragraphs, exactly as
-                    // if the block had not consumed the break tokens.
+                if let Some(counts) = split_batch {
+                    // A block whose body crossed paragraph breaks
+                    // returns its elements laid out by segment;
+                    // re-establish the breaks between the segments so
+                    // they land in separate paragraphs, exactly as if
+                    // the block had not consumed the break tokens.
                     let elements = match elements {
                         Elements::Multiple(elements) => elements,
                         Elements::Single(element) => vec![element],
                         Elements::None => Vec::new(),
                     };
                     let mut elements = elements.into_iter();
-                    for (index, present) in slots.iter().enumerate() {
+                    let last_index = counts.len() - 1;
+                    for (index, count) in counts.iter().enumerate() {
                         if index > 0 {
                             stack.end_paragraph_at_break();
                         }
-                        if *present {
-                            let element = elements
-                                .next()
-                                .expect("split batch checked against slots");
+                        let mut slice: Vec<Element<'t>> =
+                            elements.by_ref().take(*count).collect();
+                        // A producer may end each non-final segment
+                        // with a synthetic line break so receivers
+                        // that flatten the batch reproduce the unsplit
+                        // render; where the paragraph really breaks,
+                        // the break itself replaces it.
+                        if index < last_index
+                            && matches!(slice.last(), Some(Element::LineBreak))
+                        {
+                            slice.pop();
+                        }
+                        for element in slice {
                             push_element(&mut stack, element, paragraph_safe);
                         }
                     }
@@ -543,25 +565,23 @@ fn finish_hidden_boundary(
     }
 }
 
-/// Validates a recorded paragraph-split slot layout against the element
-/// batch it was recorded for, returning the layout when it is well-formed
-/// (at least two segments, and exactly one batch element per present
-/// segment). A malformed layout is dropped and the batch is pushed
-/// normally; well-formed batches produced by inline container blocks
-/// always validate.
+/// Validates a recorded paragraph-split layout against the element
+/// batch it was recorded for, returning the layout when it is
+/// well-formed (at least two segments, and segment counts summing to
+/// the batch length). A malformed layout is dropped and the batch is
+/// pushed normally; well-formed batches always validate.
 fn paragraph_split_batch<'t>(
     elements: &Elements<'t>,
-    slots: Option<Vec<bool>>,
-) -> Option<Vec<bool>> {
-    let slots = slots?;
-    if slots.len() < 2 {
+    counts: Option<Vec<usize>>,
+) -> Option<Vec<usize>> {
+    let counts = counts?;
+    if counts.len() < 2 {
         return None;
     }
-    let present = slots.iter().filter(|slot| **slot).count();
-    if present != elements.len() {
+    if counts.iter().sum::<usize>() != elements.len() {
         return None;
     }
-    Some(slots)
+    Some(counts)
 }
 
 fn push_elements<'t>(
