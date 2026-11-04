@@ -314,42 +314,78 @@ where
 
     parser.get_optional_space()?;
 
-    let cache_wikijump_failure = !parser.settings().layout.legacy()
-        && parser.settings().mode == WikitextMode::Page
-        && !parser.discarding_hidden_body();
-    let cache_wikidot_tabview_failure = parser.settings().layout.legacy()
-        && parser.settings().mode == WikitextMode::Page
-        && block.name == BLOCK_TABVIEW.name
-        && !parser.discarding_hidden_body()
-        && !parser.in_footnote()
-        && parser.native_blockquote_depth().is_none()
-        && !parser.in_wikidot_center_body();
-    let cache_wikidot_collapsible_failure = parser.settings().layout.legacy()
-        && parser.settings().mode == WikitextMode::Page
-        && block.name == BLOCK_COLLAPSIBLE.name
-        && !parser.discarding_hidden_body()
-        && !parser.in_footnote()
-        && parser.native_blockquote_depth().is_none()
-        && !parser.in_wikidot_center_body()
-        && !parser.in_wikidot_collapsible();
-    if cache_wikijump_failure
-        && let Some(error) = parser.deterministic_block_failure(block.name, opener_start)
-    {
-        return Err(error);
-    }
-    if cache_wikidot_tabview_failure
-        && let Some(error) = parser.wikidot_tabview_failure(opener_start)
-    {
-        return Err(error);
-    }
-    if cache_wikidot_collapsible_failure
-        && let Some(error) = parser.wikidot_collapsible_failure(opener_start)
-    {
+    let memoization = BlockFailureMemoization::for_block(parser, block);
+    if let Some(error) = memoization.cached_failure(parser, block, opener_start) {
         return Err(error);
     }
 
     let result = (block.parse_fn)(parser, name, flag_star, flag_score, in_head);
     if let Err(error) = &result {
+        memoization.record_failure(parser, block, opener_start, error);
+    }
+    result
+}
+
+#[derive(Clone, Copy)]
+struct BlockFailureMemoization {
+    wikijump_deterministic: bool,
+    wikidot_tabview: bool,
+    wikidot_collapsible: bool,
+}
+
+impl BlockFailureMemoization {
+    fn for_block(parser: &Parser<'_, '_>, block: &BlockRule) -> Self {
+        let page_mode = parser.settings().mode == WikitextMode::Page;
+        let visible_body = !parser.discarding_hidden_body();
+        let wikidot_cache_context = parser.settings().layout.legacy()
+            && page_mode
+            && visible_body
+            && !parser.in_footnote()
+            && parser.native_blockquote_depth().is_none()
+            && !parser.in_wikidot_center_body();
+        BlockFailureMemoization {
+            wikijump_deterministic: !parser.settings().layout.legacy()
+                && page_mode
+                && visible_body,
+            wikidot_tabview: wikidot_cache_context && block.name == BLOCK_TABVIEW.name,
+            wikidot_collapsible: wikidot_cache_context
+                && block.name == BLOCK_COLLAPSIBLE.name
+                && !parser.in_wikidot_collapsible(),
+        }
+    }
+
+    fn cached_failure(
+        &self,
+        parser: &Parser<'_, '_>,
+        block: &BlockRule,
+        opener_start: usize,
+    ) -> Option<ParseError> {
+        if self.wikijump_deterministic
+            && let Some(error) =
+                parser.deterministic_block_failure(block.name, opener_start)
+        {
+            return Some(error);
+        }
+        if self.wikidot_tabview
+            && let Some(error) = parser.wikidot_tabview_failure(opener_start)
+        {
+            return Some(error);
+        }
+        if self.wikidot_collapsible
+            && let Some(error) = parser.wikidot_collapsible_failure(opener_start)
+        {
+            return Some(error);
+        }
+        None
+    }
+
+    fn record_failure(
+        &self,
+        parser: &mut Parser<'_, '_>,
+        block: &BlockRule,
+        opener_start: usize,
+        error: &ParseError,
+    ) {
         let deterministic_failure = error.kind() == ParseErrorKind::EndOfInput
             || block.name == "block-table-row"
                 && error.kind() == ParseErrorKind::TableRowContainsNonCell
@@ -358,18 +394,16 @@ where
                     error.kind(),
                     ParseErrorKind::TabViewEmpty | ParseErrorKind::TabViewContainsNonTab
                 );
-        if cache_wikijump_failure && deterministic_failure {
+        if self.wikijump_deterministic && deterministic_failure {
             parser.cache_deterministic_block_failure(block.name, opener_start, error);
         }
-        if cache_wikidot_tabview_failure && deterministic_failure {
+        if self.wikidot_tabview && deterministic_failure {
             parser.cache_wikidot_tabview_failure(opener_start, error);
         }
-        if cache_wikidot_collapsible_failure && error.kind() == ParseErrorKind::EndOfInput
-        {
+        if self.wikidot_collapsible && error.kind() == ParseErrorKind::EndOfInput {
             parser.cache_wikidot_collapsible_failure(opener_start, error);
         }
     }
-    result
 }
 
 fn wikidot_block_has_physical_line_ownership(

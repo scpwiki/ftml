@@ -129,8 +129,7 @@ fn parse_fn<'r, 't>(
         name,
     };
 
-    let element = Element::Code(code_block.clone());
-    parser.push_code_block(code_block);
+    let element = parser.push_code_block_element(code_block);
     ok!(element)
 }
 

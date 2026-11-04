@@ -192,49 +192,73 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
     Err(DateParseError)
 }
 
-fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
-    static TIMEZONE_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"^(\+|-)?([0-9]{1,2}):?([0-9]{2})?$").unwrap());
+enum TimezoneNotation {
+    HourMinute { sign: i32, hour: i32, minute: i32 },
+    BareSeconds(i32),
+}
 
-    debug!("Parsing possible timezone value '{value}'");
+impl TimezoneNotation {
+    fn parse(value: &str) -> Result<Self, DateParseError> {
+        static TIMEZONE_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"^(\+|-)?([0-9]{1,2}):?([0-9]{2})?$").unwrap());
 
-    if let Some(captures) = TIMEZONE_REGEX.captures(value) {
-        let sign = match captures.get(1) {
-            None => 1,
-            Some(mtch) => match mtch.as_str() {
-                "+" => 1,
-                "-" => -1,
-                _ => unreachable!(),
-            },
-        };
+        if let Some(captures) = TIMEZONE_REGEX.captures(value) {
+            let sign = match captures.get(1) {
+                None => 1,
+                Some(mtch) => match mtch.as_str() {
+                    "+" => 1,
+                    "-" => -1,
+                    _ => unreachable!(),
+                },
+            };
 
-        let hour = captures
-            .get(2)
-            .expect("No hour in timezone despite match")
-            .as_str()
-            .parse::<i32>()
-            .expect("Hour wasn't integer despite match");
-
-        let minute = match captures.get(3) {
-            None => 0,
-            Some(mtch) => mtch
+            let hour = captures
+                .get(2)
+                .expect("No hour in timezone despite match")
                 .as_str()
                 .parse::<i32>()
-                .expect("Minute wasn't integer despite match"),
-        };
+                .expect("Hour wasn't integer despite match");
 
-        let seconds = sign * (hour * 3600 + minute * 60);
+            let minute = match captures.get(3) {
+                None => 0,
+                Some(mtch) => mtch
+                    .as_str()
+                    .parse::<i32>()
+                    .expect("Minute wasn't integer despite match"),
+            };
 
-        trace!("Was offset via +HH:MM (sign {sign}, hour {hour}, minute {minute})");
-        return get_offset(seconds);
+            return Ok(TimezoneNotation::HourMinute { sign, hour, minute });
+        }
+
+        match value.parse::<i32>() {
+            Ok(seconds) => Ok(TimezoneNotation::BareSeconds(seconds)),
+            Err(_) => Err(DateParseError),
+        }
     }
 
-    if let Ok(seconds) = value.parse::<i32>() {
-        trace!("Was offset in seconds ({seconds})");
-        return get_offset(seconds);
+    fn offset_seconds(self) -> i32 {
+        match self {
+            TimezoneNotation::HourMinute { sign, hour, minute } => {
+                sign * (hour * 3600 + minute * 60)
+            }
+            TimezoneNotation::BareSeconds(seconds) => seconds,
+        }
     }
+}
 
-    Err(DateParseError)
+fn parse_timezone(value: &str) -> Result<UtcOffset, DateParseError> {
+    debug!("Parsing possible timezone value '{value}'");
+
+    let notation = TimezoneNotation::parse(value)?;
+    match notation {
+        TimezoneNotation::HourMinute { sign, hour, minute } => {
+            trace!("Was offset via +HH:MM (sign {sign}, hour {hour}, minute {minute})");
+        }
+        TimezoneNotation::BareSeconds(seconds) => {
+            trace!("Was offset in seconds ({seconds})");
+        }
+    }
+    get_offset(notation.offset_seconds())
 }
 
 fn parse_wikidot_timezone(value: &str) -> Result<UtcOffset, DateParseError> {

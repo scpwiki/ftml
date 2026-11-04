@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::inline_delimiter::assert_unpadded_open;
+use super::inline_delimiter::{assert_unpadded_open, validate_reachable_close_strict};
 use super::prelude::*;
 
 pub const RULE_STRIKETHROUGH_DASH: Rule = Rule {
@@ -52,7 +52,7 @@ fn try_consume_strikethrough<'r, 't>(
     token: Token,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create a strikethrough (token {})", token.name());
-    validate_reachable_close(parser, token)?;
+    validate_reachable_close_strict(parser, token)?;
     if token == Token::DoubleDash {
         assert_unpadded_open(parser, token)?;
     } else {
@@ -67,43 +67,6 @@ fn try_consume_strikethrough<'r, 't>(
     ];
     let ctype = ContainerType::Strikethrough;
     collect_container(parser, rule, ctype, &close, &invalid, None)
-}
-
-fn validate_reachable_close(
-    parser: &Parser<'_, '_>,
-    token: Token,
-) -> Result<(), ParseError> {
-    let mut scan = parser.clone();
-    scan.step()?;
-    let mut previous = parser.clone();
-    let mut paragraph_error = None;
-    loop {
-        match scan.current().token {
-            Token::InputEnd => {
-                return Err(paragraph_error
-                    .unwrap_or_else(|| scan.make_err(ParseErrorKind::EndOfInput)));
-            }
-            Token::ParagraphBreak => {
-                paragraph_error
-                    .get_or_insert_with(|| scan.make_err(ParseErrorKind::RuleFailed));
-            }
-            Token::LeftBlockEnd => {
-                return Err(scan.make_err(ParseErrorKind::RuleFailed));
-            }
-            current if current == token => {
-                if let Some(error) = paragraph_error {
-                    return Err(error);
-                }
-                if previous.current().token == Token::Whitespace {
-                    return Err(previous.make_err(ParseErrorKind::RuleFailed));
-                }
-                return Ok(());
-            }
-            _ => {}
-        }
-        previous = scan.clone();
-        scan.step()?;
-    }
 }
 
 #[cfg(test)]

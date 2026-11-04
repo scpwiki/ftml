@@ -910,16 +910,7 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
 }
 
 fn hidden_failure_must_close_to_eof(kind: ParseErrorKind) -> bool {
-    matches!(
-        kind,
-        ParseErrorKind::RecursionDepthExceeded
-            | ParseErrorKind::EndOfInput
-            | ParseErrorKind::BlockDisallowsStar
-            | ParseErrorKind::BlockDisallowsScore
-            | ParseErrorKind::BlockMissingCloseBrackets
-            | ParseErrorKind::BlockMalformedArguments
-            | ParseErrorKind::BlockMissingArguments
-    )
+    kind.must_close_hidden_body_through_end_of_input()
 }
 
 #[cfg(test)]

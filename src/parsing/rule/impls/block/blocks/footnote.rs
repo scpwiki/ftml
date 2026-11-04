@@ -157,12 +157,33 @@ fn parse_footnote_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    let inline_prose = parser.settings().layout.legacy()
-        && wikidot_footnote_block_has_inline_prefix(parser);
+    let line_prefix = footnote_block_line_prefix(parser);
 
     parser.set_footnote_block();
 
-    ok!(inline_prose; Element::FootnoteBlock { title, hide })
+    ok!(line_prefix.is_inline_prose(); Element::FootnoteBlock { title, hide })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FootnoteBlockLinePrefix {
+    OwnLine,
+    InlineProse,
+}
+
+impl FootnoteBlockLinePrefix {
+    fn is_inline_prose(self) -> bool {
+        self == FootnoteBlockLinePrefix::InlineProse
+    }
+}
+
+fn footnote_block_line_prefix(parser: &Parser<'_, '_>) -> FootnoteBlockLinePrefix {
+    if parser.settings().layout.legacy()
+        && wikidot_footnote_block_has_inline_prefix(parser)
+    {
+        FootnoteBlockLinePrefix::InlineProse
+    } else {
+        FootnoteBlockLinePrefix::OwnLine
+    }
 }
 
 fn wikidot_footnote_block_has_inline_prefix(parser: &Parser<'_, '_>) -> bool {

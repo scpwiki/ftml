@@ -105,6 +105,43 @@ pub(super) fn validate_reachable_close(
     Err(parser.make_err(ParseErrorKind::EndOfInput))
 }
 
+pub(super) fn validate_reachable_close_strict(
+    parser: &Parser<'_, '_>,
+    token: Token,
+) -> Result<(), ParseError> {
+    let mut scan = parser.clone();
+    scan.step()?;
+    let mut previous = parser.clone();
+    let mut paragraph_error = None;
+    loop {
+        match scan.current().token {
+            Token::InputEnd => {
+                return Err(paragraph_error
+                    .unwrap_or_else(|| scan.make_err(ParseErrorKind::EndOfInput)));
+            }
+            Token::ParagraphBreak => {
+                paragraph_error
+                    .get_or_insert_with(|| scan.make_err(ParseErrorKind::RuleFailed));
+            }
+            Token::LeftBlockEnd => {
+                return Err(scan.make_err(ParseErrorKind::RuleFailed));
+            }
+            current if current == token => {
+                if let Some(error) = paragraph_error {
+                    return Err(error);
+                }
+                if previous.current().token == Token::Whitespace {
+                    return Err(previous.make_err(ParseErrorKind::RuleFailed));
+                }
+                return Ok(());
+            }
+            _ => {}
+        }
+        previous = scan.clone();
+        scan.step()?;
+    }
+}
+
 pub(super) fn block_name_at(tokens: &[ExtractedToken<'_>], index: usize) -> String {
     let mut name = String::new();
     for tok in &tokens[index + 1..] {

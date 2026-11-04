@@ -37,7 +37,15 @@ pub struct Rule {
     try_consume_fn: TryConsumeFn,
 }
 
-const MEMOIZED_FAILURE_MIN_TOKENS: usize = 16;
+struct FailedAttemptMemoizationPolicy;
+
+impl FailedAttemptMemoizationPolicy {
+    const MIN_TOKENS_CONSUMED: usize = 16;
+
+    fn memoizes(consumed_tokens: usize) -> bool {
+        consumed_tokens >= Self::MIN_TOKENS_CONSUMED
+    }
+}
 
 impl Rule {
     pub fn name(self) -> &'static str {
@@ -72,8 +80,9 @@ impl Rule {
         let result = (self.try_consume_fn)(&mut sub_parser);
         let height = parser.finish_rule_attempt(enclosing_peak);
         if let Err(error) = &result
-            && parser.remaining().len() - sub_parser.remaining().len()
-                >= MEMOIZED_FAILURE_MIN_TOKENS
+            && FailedAttemptMemoizationPolicy::memoizes(
+                parser.remaining().len() - sub_parser.remaining().len(),
+            )
         {
             parser.cache_rule_attempt_failure(self.name, error, height);
         }

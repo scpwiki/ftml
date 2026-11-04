@@ -219,7 +219,7 @@ fn parse_fn<'r, 't>(
         match parser
             .discard_body_elements_with_literal_quote_context(&BLOCK_IFTAGS, body_start)
         {
-            Ok(()) => {
+            Ok(_) => {
                 let hidden_end = parser.current().span.start;
                 let generated = parser.generated_in_range(hidden_start..hidden_end);
                 ok!(true; Element::Delayed(DelayedElement::suppressed(&generated)), Vec::new())
