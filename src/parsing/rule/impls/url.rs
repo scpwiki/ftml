@@ -76,19 +76,123 @@ where
     let source = parser.full_text().inner();
     let start = token.span.start;
     let starred = token.token == Token::UrlStar;
-    let url = &source[start + usize::from(starred)..token.span.end];
+    let url_start = start + usize::from(starred);
+    let mut advanced = false;
+    let url = if parser.look_ahead(0).is_some_and(|next| {
+        next.token == Token::LeftComment && next.span.start == token.span.end
+    }) {
+        match strict_url_past_comments(parser, source, url_start, token.span.end) {
+            Some((url, probe)) => {
+                parser.update(&probe);
+                advanced = true;
+                url
+            }
+            None => Cow::Borrowed(&source[url_start..token.span.end]),
+        }
+    } else {
+        Cow::Borrowed(&source[url_start..token.span.end])
+    };
+
     let link = Element::Link {
         ltype: LinkType::Direct,
-        link: LinkLocation::Url(cow!(url)),
+        link: LinkLocation::Url(url),
         label: LinkLabel::Url,
         target: None,
     };
 
-    parser.step()?;
+    if !advanced {
+        parser.step()?;
+    }
     if starred {
         return Ok(Elements::Multiple(vec![text!("*"), link]));
     }
     Ok(Elements::Single(link))
+}
+
+fn strict_url_past_comments<'r, 't>(
+    parser: &Parser<'r, 't>,
+    source: &'t str,
+    url_start: usize,
+    first_end: usize,
+) -> Option<(Cow<'t, str>, Parser<'r, 't>)>
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    probe.step().ok()?;
+
+    let mut comments = Vec::new();
+    let mut end = first_end;
+    let mut scan_pos = first_end;
+    let mut last_char = source[..first_end].chars().next_back();
+
+    loop {
+        let current = probe.current();
+        if probe.current_generated().is_some() {
+            break;
+        }
+        if current.token == Token::LeftComment && current.span.start == scan_pos {
+            match consume_valid_comment(&mut probe) {
+                Ok(range) => {
+                    scan_pos = range.end;
+                    comments.push(range);
+                    continue;
+                }
+                Err(_) => break,
+            }
+        }
+        if current.span.start != scan_pos
+            || current.token == Token::InputEnd
+            || !strict_url_token_continues(source, current.span.clone(), last_char)
+        {
+            break;
+        }
+        end = current.span.end;
+        scan_pos = end;
+        last_char = current.slice.chars().next_back();
+        probe.step().ok()?;
+    }
+
+    if comments.is_empty() || end == first_end {
+        return None;
+    }
+    let field = CommentElidedText::new(source, url_start..end, comments);
+    Some((field.into_cow(), probe))
+}
+
+fn strict_url_token_continues(
+    source: &str,
+    span: std::ops::Range<usize>,
+    last_char: Option<char>,
+) -> bool {
+    let first = source[span.clone()].chars().next();
+    if matches!(
+        (last_char, first),
+        (Some('>'), Some('@')) | (Some('@'), Some('@'))
+    ) {
+        return false;
+    }
+    let bytes = source.as_bytes();
+    let mut pos = span.start;
+    while pos < span.end {
+        let byte = bytes[pos];
+        let character = source[pos..]
+            .chars()
+            .next()
+            .expect("token slice is valid UTF-8");
+        if matches!(
+            byte,
+            b'\n' | b'\r' | b' ' | b'\t' | b'"' | b'\'' | b'|' | b'[' | b']'
+        ) || character.is_whitespace()
+            || matches!(byte, 0x00..=0x08 | 0x0b..=0x0c | 0x0e..=0x1a | 0x1c..=0x1f)
+            || source[pos..].starts_with(">@")
+            || source[pos..].starts_with("@@")
+        {
+            return false;
+        }
+        pos += character.len_utf8();
+    }
+    true
 }
 
 fn wikidot_url_elements<'r, 't>(
