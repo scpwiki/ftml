@@ -1,0 +1,3 @@
+Sentence start A1 [[div]]block B2[[/div]] sentence end C3
+
+ATTRIBUTED Sentence start A1 [[div class="x"]]block B2[[/div]] sentence end C3
