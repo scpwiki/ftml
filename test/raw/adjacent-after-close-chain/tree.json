@@ -1,0 +1,33 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "raw",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": "@@b"
+                    },
+                    {
+                        "element": "raw",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "c"
+                    },
+                    {
+                        "element": "text",
+                        "data": "@@"
+                    }
+                ]
+            }
+        }
+    ]
+}

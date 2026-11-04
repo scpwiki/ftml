@@ -369,7 +369,6 @@ where
                 stack.mark_wikidot_terminal_backslash();
             }
             if comment_started_line
-                && parser.settings().layout.legacy()
                 && !stack.current_empty()
                 && matches!(
                     parser.current().token,

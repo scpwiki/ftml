@@ -285,6 +285,9 @@ fn build_separate<'r, 't>(
             }
         }
     } else {
+        if native_label_raw_forbids_link(parser)? {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
         collect_text_resolved_fused(parser, rule, &label_close, label_invalid, None)?.0
     };
 
@@ -335,6 +338,97 @@ fn build_separate<'r, 't>(
     };
 
     success_elements(element)
+}
+
+fn native_label_raw_forbids_link<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> Result<bool, ParseError>
+where
+    'r: 't,
+{
+    use super::raw::RULE_RAW;
+
+    let mut probe = parser.clone();
+    let mut no_raw_close = false;
+    let mut no_alt_raw_close = false;
+
+    loop {
+        match probe.current().token {
+            Token::RightLink => return Ok(false),
+
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                return Ok(false);
+            }
+
+            Token::LeftBlock if iftags_segment_fused(&probe).is_some() => {
+                consume_iftags_segment_fused(&mut probe)?;
+            }
+
+            Token::LeftComment => {
+                let mut comment_probe = probe.clone();
+                if consume_valid_comment(&mut comment_probe).is_err() {
+                    return Ok(false);
+                }
+                probe.update(&comment_probe);
+            }
+
+            Token::Raw | Token::LeftRaw => {
+                let alternate = probe.current().token == Token::LeftRaw;
+                let known_unclosed = if alternate {
+                    no_alt_raw_close
+                } else {
+                    no_raw_close
+                };
+                if known_unclosed {
+                    probe.step()?;
+                    continue;
+                }
+
+                let terminator = if alternate {
+                    Token::RightRaw
+                } else {
+                    Token::Raw
+                };
+                let mut close_probe = probe.clone();
+                close_probe.step()?;
+                let mut has_close = false;
+                loop {
+                    match close_probe.current().token {
+                        token if token == terminator => {
+                            has_close = true;
+                            break;
+                        }
+                        Token::RightLink
+                        | Token::LineBreak
+                        | Token::ParagraphBreak
+                        | Token::InputEnd => break,
+                        _ => {
+                            close_probe.step()?;
+                        }
+                    }
+                }
+                if !has_close {
+                    if alternate {
+                        no_alt_raw_close = true;
+                    } else {
+                        no_raw_close = true;
+                    }
+                    probe.step()?;
+                    continue;
+                }
+
+                let mut raw_probe = probe.clone();
+                if RULE_RAW.try_consume(&mut raw_probe).is_ok() {
+                    return Ok(true);
+                }
+                probe.step()?;
+            }
+
+            _ => {
+                probe.step()?;
+            }
+        }
+    }
 }
 
 fn collect_wikidot_separate_label<'r, 't>(
