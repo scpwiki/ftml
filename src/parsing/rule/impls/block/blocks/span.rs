@@ -187,9 +187,25 @@ fn parse_fn<'r, 't>(
             }
         }
         let span = Element::Partial(PartialElement::InlineSpanOpen(attributes));
+        let leading_separator = !in_head
+            && !flag_score
+            && wikidot_body_leading_separator(parser, opener_start);
+        if flag_score && in_head && parser.current().token == Token::Whitespace {
+            parser.step()?;
+        }
         parser.enter_wikidot_span_body(flag_score);
         return if generated.is_empty() {
-            ok!(span)
+            if leading_separator {
+                ok!(Elements::Multiple(vec![text!(" "), span]))
+            } else {
+                ok!(span)
+            }
+        } else if leading_separator {
+            ok!(Elements::Multiple(vec![
+                text!(" "),
+                span,
+                Element::Delayed(DelayedElement::suppressed(&generated)),
+            ]))
         } else {
             ok!(Elements::Multiple(vec![
                 span,
@@ -290,6 +306,57 @@ fn delayed_attribute_key<'a>(
         .map_or(0, |position| position + 1);
     let key = &prefix[key_start..equals];
     (!key.is_empty()).then_some(key)
+}
+
+fn wikidot_body_leading_separator(parser: &Parser<'_, '_>, opener_start: usize) -> bool {
+    if wikidot_separator_hits_segment_edge(parser) {
+        return false;
+    }
+    let source = parser.full_text().inner();
+    source[..parser.current().span.start]
+        .rfind("]]")
+        .map(|close| close + 2)
+        .is_some_and(|body_start| {
+            source[body_start..].starts_with(is_ascii_separator)
+                && !follows_separator_or_line_start(&source[..opener_start])
+        })
+}
+
+fn wikidot_separator_hits_segment_edge(parser: &Parser<'_, '_>) -> bool {
+    match parser.current().token {
+        Token::ParagraphBreak => true,
+        Token::LineBreak => matches!(
+            parser.look_ahead(0).map(|token| token.token),
+            Some(
+                Token::BulletItem
+                    | Token::NumberedItem
+                    | Token::TableColumn
+                    | Token::TableColumnRight
+                    | Token::TableColumnCenter
+                    | Token::TableColumnTitle
+                    | Token::Heading
+                    | Token::Quote
+            )
+        ),
+        _ => false,
+    }
+}
+
+fn is_ascii_separator(ch: char) -> bool {
+    matches!(ch, ' ' | '\t')
+}
+
+fn follows_separator_or_line_start(before: &str) -> bool {
+    match before.chars().next_back() {
+        None | Some('\n') => true,
+        Some(ch) if is_ascii_separator(ch) => true,
+        Some(']') => before
+            .strip_suffix("]]")
+            .and_then(|head| head.rfind("[[/").map(|start| &head[..start]))
+            .and_then(|body| body.chars().next_back())
+            .is_some_and(is_ascii_separator),
+        Some(_) => false,
+    }
 }
 
 #[cfg(test)]
@@ -562,3 +629,4 @@ mod tests {
         assert_eq!(html, "<p><span>one</span><span>two</span></p>");
     }
 }
+

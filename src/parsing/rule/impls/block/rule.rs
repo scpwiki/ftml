@@ -180,6 +180,7 @@ where
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     parser.set_block(&BLOCK_SPAN);
+    let ate_separator = parser.current().token == Token::Whitespace;
     parser.get_optional_space()?;
 
     (BLOCK_SPAN.parse_fn)(parser, name, opener_start, false, true, false).map(|parsed| {
@@ -194,7 +195,11 @@ where
             {
                 attributes.insert(WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE, cow!(""));
             }
-            elements.insert(1.min(elements.len()), text!("]"));
+            let bracket = 1.min(elements.len());
+            elements.insert(bracket, text!("]"));
+            if ate_separator {
+                elements.insert(bracket + 1, text!(" "));
+            }
             Elements::Multiple(elements)
         })
     })

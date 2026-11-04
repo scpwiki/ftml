@@ -1000,7 +1000,7 @@ fn flush_root_pending<'t>(
         trim_next_break,
         false,
     );
-    eject_segment_trailing_space(&mut sequence);
+    drop_segment_trailing_space(&mut sequence);
     let scope_continues =
         scope_before.is_some() && scope_before == active.outer_active_position();
     append_root_sequence(output, &mut sequence, scope_continues);
@@ -1241,7 +1241,23 @@ fn lower_sequence<'t>(
                     &mut last_run_outer_scope,
                     &mut run_has_content,
                 );
-                trim_trailing_space(&mut output);
+                let (last_is_space, rest_ends_with_space) = match output.split_last() {
+                    Some((Element::Text(text), rest)) if text == " " => {
+                        (true, elements_end_with_space(rest))
+                    }
+                    _ => (false, false),
+                };
+                let keep_empty_space = empty
+                    && last_is_space
+                    && !next_starts_with_space
+                    && !matches!(
+                        source.peek(),
+                        None | Some(Element::LineBreak | Element::LineBreaks(_))
+                    )
+                    && !rest_ends_with_space;
+                if !keep_empty_space {
+                    trim_trailing_space(&mut output);
+                }
                 if resolved.is_some() || active.has_active_scope() {
                     active.tidy_close(InlineTag::Span);
                 }
@@ -1392,10 +1408,25 @@ fn lower_sequence<'t>(
                 && matches!(source.peek(), Some(Element::Footnote(_)))
                 && sequence_starts_with_repeated_list_marker(&output, &run)
                 && sequence_ends_with_space(&output, &run);
-            if empty && !scored && !preserve_empty_owner_space {
+            let (last_is_space, rest_ends_with_space) = match output.split_last() {
+                Some((Element::Text(text), rest)) if text == " " => {
+                    (true, elements_end_with_space(rest))
+                }
+                _ => (false, false),
+            };
+            let keep_empty_space = empty
+                && !scored
+                && last_is_space
+                && !next_starts_with_space
+                && !matches!(
+                    source.peek(),
+                    None | Some(Element::LineBreak | Element::LineBreaks(_))
+                )
+                && !rest_ends_with_space;
+            if empty && !scored && !preserve_empty_owner_space && !keep_empty_space {
                 trim_trailing_space(&mut output);
             }
-            if !(preserve_empty_owner_space || empty && scored) {
+            if !(preserve_empty_owner_space || empty && scored) && !keep_empty_space {
                 trim_trailing_space(&mut output);
             }
             if resolved.is_some() || active.has_active_scope() {
@@ -1771,14 +1802,10 @@ fn lower_sequence<'t>(
                 lower_children(&mut element, valid, ordinal, active, trim_next_break);
             } else {
                 let block_boundary = is_block_boundary(&element);
-                let anchor_active = active.anchor_position().is_some();
-                let stripped = block_boundary
-                    && active.has_active_scope()
-                    && strip_trailing_space_from_vec(&mut run);
-                flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
-                if stripped && !anchor_active {
-                    output.push(text!(" "));
+                if block_boundary && active.has_active_scope() {
+                    strip_trailing_space_from_vec(&mut run);
                 }
+                flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
                 if block_boundary {
                     active.drop_anchor_scopes();
                 }
@@ -2117,6 +2144,23 @@ fn strip_trailing_space_from_vec(elements: &mut Vec<Element<'_>>) -> bool {
         }
     }
     stripped
+}
+
+fn drop_segment_trailing_space(elements: &mut Vec<Element<'_>>) {
+    if let Some(Element::Anchor {
+        elements: inner, ..
+    }) = elements.last_mut()
+    {
+        strip_trailing_space_from_vec(inner);
+        return;
+    }
+    let stripped = match elements.last_mut() {
+        Some(element) => strip_scope_trailing_space(element),
+        None => false,
+    };
+    if stripped && elements.last().is_some_and(scope_wrapper_is_empty) {
+        elements.pop();
+    }
 }
 
 fn eject_segment_trailing_space(elements: &mut Vec<Element<'_>>) {
