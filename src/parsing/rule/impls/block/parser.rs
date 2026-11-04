@@ -2440,12 +2440,19 @@ where
             } else {
                 let start = self.current();
                 let mut elisions = Vec::new();
+                // A code head is raw on Wikidot: it ends at the first
+                // close marker, even when that marker closes an iftags
+                // segment opener, and the truncated head text is what
+                // getAttrs sees. Segments in a code head are therefore
+                // stepped over raw rather than resolved.
+                let raw_head = block_rule.name == "block-code";
                 while !matches!(self.current().token, Token::RightBlock | Token::InputEnd)
                 {
                     // An iftags segment in the head is consumed whole:
                     // its own `]]` must not end the head early, and its
                     // elisions resolve the segment in the parsed values.
-                    if self.current().token == Token::LeftBlock
+                    if !raw_head
+                        && self.current().token == Token::LeftBlock
                         && let Some(segment) = consume_iftags_segment(self)?
                     {
                         elisions.extend(segment.elisions());

@@ -265,6 +265,50 @@ mod tests {
     }
 
     #[test]
+    fn wikidot_code_head_ends_at_an_iftags_segment_close() {
+        // Live Wikidot scans a code head raw: the head ends at the first
+        // close marker, which may be the segment opener's own, the
+        // truncated head text is what its attribute parser sees, and the
+        // rest of the line becomes the body. The gate is never evaluated.
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        for (source, expected) in [
+            (
+                "[[code type=\"python\"[[iftags -zzz]][[/iftags]]]]x = 1[[/code]]",
+                concat!(
+                    "<div class=\"code\"><div class=\"hl-main\"><pre>",
+                    "<span class=\"hl-identifier\">[[/iftags]]]]x</span>",
+                    "<span class=\"hl-code\"> </span>",
+                    "<span class=\"hl-identifier\">=</span>",
+                    "<span class=\"hl-code\"> </span>",
+                    "<span class=\"hl-identifier\">1</span>",
+                    "</pre></div></div>",
+                ),
+            ),
+            (
+                "[[code [[iftags -zzz]][[/iftags]]]]x = 1[[/code]]",
+                "<div class=\"code\"><pre><code>[[/iftags]]]]x = 1</code></pre></div>",
+            ),
+            (
+                "[[code [[iftags +zzz]]zzz[[/iftags]]]]x = 1[[/code]]",
+                "<div class=\"code\"><pre><code>zzz[[/iftags]]]]x = 1</code></pre></div>",
+            ),
+            (
+                "[[code [[iftags -zzz]]type=\"python\"[[/iftags]]]]x = 1[[/code]]",
+                "<div class=\"code\"><pre><code>type=&quot;python&quot;[[/iftags]]]]x = 1</code></pre></div>",
+            ),
+        ] {
+            let tokenization = crate::tokenize(source);
+            let (tree, errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+            assert!(errors.is_empty(), "{source}: {errors:#?}");
+            assert_eq!(html, expected, "{source}");
+        }
+    }
+
+    #[test]
     fn wikidot_code_accepts_bare_and_unbalanced_type_values() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);

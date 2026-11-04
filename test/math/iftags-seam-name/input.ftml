@@ -1,0 +1,21 @@
+[[math alp[[iftags -zzz]]ha[[/iftags]]]]
+a^2
+[[/math]]
+
+[[math bet[[iftags +zzz]]a[[/iftags]]]]
+a^2
+[[/math]]
+
+[[math gam[[iftags -zzz]][[/iftags]]ma]]
+a^2
+[[/math]]
+
+[[math [[iftags -zzz]][[/iftags]]]]
+a^2
+[[/math]]
+
+[[eref alpha]]
+
+[[eref bet]]
+
+[[eref gamma]]
