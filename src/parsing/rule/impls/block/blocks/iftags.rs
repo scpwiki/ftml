@@ -21,8 +21,8 @@
 use super::prelude::*;
 use crate::data::PageInfo;
 use crate::delayed::DelayedElement;
-use crate::parsing::ElementCondition;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
+use crate::parsing::{ElementCondition, ParagraphSplitEntry, ParagraphSplitKind};
 use std::borrow::Cow;
 
 pub const BLOCK_IFTAGS: BlockRule = BlockRule {
@@ -177,7 +177,7 @@ fn literal_unit_elements<'t>(
     start: usize,
     end: usize,
     line_breaks: &[(usize, usize, bool)],
-) -> (Elements<'t>, Option<Vec<(usize, bool)>>) {
+) -> (Elements<'t>, Option<Vec<ParagraphSplitEntry>>) {
     if line_breaks.is_empty() {
         return (
             Elements::Single(Element::Text(Cow::Borrowed(&source[start..end]))),
@@ -186,7 +186,7 @@ fn literal_unit_elements<'t>(
     }
 
     let mut elements = Vec::with_capacity(line_breaks.len() * 2 + 1);
-    let mut counts: Vec<(usize, bool)> = Vec::new();
+    let mut counts: Vec<ParagraphSplitEntry> = Vec::new();
     let mut segment_count = 0_usize;
     let mut segment_split = false;
     // Whether the element batch currently ends with the separator of a
@@ -207,13 +207,13 @@ fn literal_unit_elements<'t>(
                 // A further paragraph break in the same run closes an
                 // empty segment, matching how a body gather segments
                 // consecutive breaks.
-                counts.push((0, true));
+                counts.push((0, true, ParagraphSplitKind::Paragraph));
             } else {
                 if !matches!(elements.last(), Some(Element::LineBreak)) {
                     elements.push(Element::LineBreak);
                     segment_count += 1;
                 }
-                counts.push((segment_count, true));
+                counts.push((segment_count, true, ParagraphSplitKind::Paragraph));
                 segment_count = 0;
                 at_break_run_end = true;
             }
@@ -229,7 +229,7 @@ fn literal_unit_elements<'t>(
         elements.push(Element::Text(Cow::Borrowed(&source[chunk_start..end])));
         segment_count += 1;
     }
-    counts.push((segment_count, true));
+    counts.push((segment_count, true, ParagraphSplitKind::Paragraph));
 
     let paragraph_split = if segment_split && counts.len() >= 2 {
         Some(counts)
@@ -465,7 +465,10 @@ fn parse_fn<'r, 't>(
                         Vec::new(),
                         true,
                     );
-                    success.paragraph_split = Some(vec![(1, true), (0, true)]);
+                    success.paragraph_split = Some(vec![
+                        (1, true, ParagraphSplitKind::Paragraph),
+                        (0, true, ParagraphSplitKind::Paragraph),
+                    ]);
                     Ok(success)
                 } else if pre_break
                     && !matches!(
@@ -541,7 +544,7 @@ fn parse_fn<'r, 't>(
         match parser.get_body_element_segments_iftags(&BLOCK_IFTAGS) {
             Ok(body) => {
                 let (
-                    ((mut segments, mut segment_safe), trailing),
+                    ((mut segments, mut segment_safe, mut segment_kinds), trailing),
                     errors,
                     paragraph_safe,
                 ) = body.into();
@@ -615,6 +618,7 @@ fn parse_fn<'r, 't>(
                         Element::LineBreak,
                     ]);
                     segment_safe.push(true);
+                    segment_kinds.push(ParagraphSplitKind::Paragraph);
                     parser.step()?;
                 } else if !trail_paragraph_break
                     && segments.last().is_some_and(|segment| segment.is_empty())
@@ -646,10 +650,12 @@ fn parse_fn<'r, 't>(
                 if lead_paragraph_break {
                     segments.insert(0, Vec::new());
                     segment_safe.insert(0, true);
+                    segment_kinds.insert(0, ParagraphSplitKind::Paragraph);
                 }
                 if trail_paragraph_break {
                     segments.push(Vec::new());
                     segment_safe.push(true);
+                    segment_kinds.push(ParagraphSplitKind::Paragraph);
                 }
                 if spaced_head && at_line_start {
                     if prev_line_contentful {
@@ -699,7 +705,7 @@ fn parse_fn<'r, 't>(
                             count += 1;
                             count += trail_elements.len();
                         }
-                        counts.push((count, segment_safe[index]));
+                        counts.push((count, segment_safe[index], segment_kinds[index]));
                     }
                     batch.extend(trail_elements);
                     batch.push(Element::Delayed(DelayedElement::typography_boundary()));

@@ -160,7 +160,12 @@ where
                 return Ok(success);
             }
             let last = parser.current();
-            if consume_terminator && parser.current().token != Token::InputEnd {
+            if consume_terminator
+                && !matches!(
+                    parser.current().token,
+                    Token::InputEnd | Token::BulletItem | Token::NumberedItem,
+                )
+            {
                 parser.step()?;
             }
 

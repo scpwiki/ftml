@@ -30,8 +30,8 @@ use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
 use crate::parsing::parser::{QuoteBodyLineStatus, QuoteScanOutcome};
 use crate::parsing::{
-    ExtractedToken, ParseError, ParseErrorKind, ParseResult, Parser, Token,
-    gather_paragraphs,
+    ExtractedToken, ParagraphSplitEntry, ParagraphSplitKind, ParseError, ParseErrorKind,
+    ParseResult, Parser, Token, gather_paragraphs,
 };
 use crate::tree::{AttributeMap, Container, ContainerType, Element, Elements};
 use regex::Regex;
@@ -597,10 +597,11 @@ fn trim_segment_trailing_blanks(segment: &mut Vec<Element>) {
 fn distribute_paragraph_split<'t>(
     segments: &mut Vec<Vec<Element<'t>>>,
     mut segment_safe: Option<&mut Vec<bool>>,
+    mut segment_kinds: Option<&mut Vec<ParagraphSplitKind>>,
     elements: Vec<Element<'t>>,
-    counts: &[(usize, bool)],
+    counts: &[ParagraphSplitEntry],
 ) {
-    if counts.iter().map(|(count, _)| count).sum::<usize>() != elements.len() {
+    if counts.iter().map(|(count, _, _)| count).sum::<usize>() != elements.len() {
         segments
             .last_mut()
             .expect("segments always has a current segment")
@@ -608,7 +609,7 @@ fn distribute_paragraph_split<'t>(
         if let Some(segment_safe) = segment_safe.as_deref_mut()
             && let Some(current) = segment_safe.last_mut()
         {
-            for (_, safe) in counts {
+            for (_, safe, _) in counts {
                 *current &= safe;
             }
         }
@@ -616,11 +617,14 @@ fn distribute_paragraph_split<'t>(
     }
 
     let mut elements = elements.into_iter();
-    for (index, (count, safe)) in counts.iter().enumerate() {
+    for (index, (count, safe, _)) in counts.iter().enumerate() {
         if index > 0 {
             segments.push(Vec::new());
             if let Some(segment_safe) = segment_safe.as_deref_mut() {
                 segment_safe.push(true);
+            }
+            if let Some(segment_kinds) = segment_kinds.as_deref_mut() {
+                segment_kinds.push(ParagraphSplitKind::Paragraph);
             }
         }
         segments
@@ -2070,6 +2074,7 @@ where
                             distribute_paragraph_split(
                                 &mut segments,
                                 None,
+                                None,
                                 elements,
                                 &counts,
                             );
@@ -2110,13 +2115,33 @@ where
     pub(crate) fn get_body_element_segments_iftags(
         &mut self,
         block_rule: &BlockRule,
-    ) -> ParseResult<'r, 't, ((Vec<Vec<Element<'t>>>, Vec<bool>), bool)> {
+    ) -> ParseResult<
+        'r,
+        't,
+        (
+            (Vec<Vec<Element<'t>>>, Vec<bool>, Vec<ParagraphSplitKind>),
+            bool,
+        ),
+    > {
         let mut segments: Vec<Vec<Element<'t>>> = vec![Vec::new()];
         let mut segment_safe: Vec<bool> = vec![true];
+        let mut segment_kinds: Vec<ParagraphSplitKind> =
+            vec![ParagraphSplitKind::Paragraph];
         let mut all_errors = Vec::new();
         let mut paragraph_safe = true;
         let mut first = true;
         let mut trailing = false;
+        let gate_items_allowed = self.gate_items_allowed();
+        self.set_gate_items_allowed(false);
+        let items_context = self.settings().layout.legacy()
+            && !self.discarding_hidden_body()
+            && (self.in_wikidot_single_line_content()
+                || self.in_wikidot_definition_list_line())
+            && gate_items_allowed;
+        let mut items_open = items_context;
+        let mut after_item = false;
+        let mut escape_split: Option<usize> = None;
+        let mut line_began = self.start_of_line();
 
         loop {
             if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
@@ -2162,10 +2187,110 @@ where
                 first = false;
                 segments.push(Vec::new());
                 segment_safe.push(true);
+                segment_kinds.push(ParagraphSplitKind::Paragraph);
+                after_item = false;
+                items_open = false;
+                line_began = true;
                 continue;
             }
 
             first = false;
+            let marker_here = if line_began {
+                crate::parsing::rule::impls::list_item_marker_here(self)
+            } else {
+                None
+            };
+            if let Some(list_type) = marker_here {
+                if items_open {
+                    segments.push(Vec::new());
+                    segment_safe.push(true);
+                    segment_kinds.push(ParagraphSplitKind::Item(list_type));
+                    let line_consumed =
+                        crate::parsing::rule::impls::collect_gate_body_list_line(self)?;
+                    let crate::parsing::ParseSuccess {
+                        item: (line_elements, line_ends_run, line_escape),
+                        errors: line_errors,
+                        paragraph_safe: line_safe,
+                        ..
+                    } = line_consumed;
+                    all_errors.extend(line_errors);
+                    paragraph_safe &= line_safe;
+                    segments
+                        .last_mut()
+                        .expect("segments always has a current segment")
+                        .extend(line_elements);
+                    match line_escape {
+                        Some(escape) => {
+                            let (flat, entries, escape_safe) = escape.into_layout();
+                            paragraph_safe &= escape_safe;
+                            segments.push(Vec::new());
+                            segment_safe.push(true);
+                            segment_kinds.push(ParagraphSplitKind::Paragraph);
+                            distribute_paragraph_split(
+                                &mut segments,
+                                Some(&mut segment_safe),
+                                Some(&mut segment_kinds),
+                                flat,
+                                &entries,
+                            );
+                            items_open = false;
+                            after_item = false;
+                        }
+                        None => {
+                            after_item = true;
+                            if line_ends_run {
+                                items_open = false;
+                            }
+                        }
+                    }
+                    continue;
+                }
+                if after_item {
+                    segments.push(Vec::new());
+                    segment_safe.push(true);
+                    segment_kinds.push(ParagraphSplitKind::Paragraph);
+                    after_item = false;
+                } else if segments.len() == 1 {
+                    match escape_split {
+                        Some(position) if position < segments[0].len() => {
+                            let tail = segments[0].split_off(position);
+                            segments.push(tail);
+                            segment_safe.push(true);
+                            segment_kinds.push(ParagraphSplitKind::Paragraph);
+                            segments.push(Vec::new());
+                            segment_safe.push(true);
+                            segment_kinds.push(ParagraphSplitKind::Paragraph);
+                        }
+                        Some(_) => {
+                            segments.push(Vec::new());
+                            segment_safe.push(true);
+                            segment_kinds.push(ParagraphSplitKind::Paragraph);
+                        }
+                        None => {}
+                    }
+                } else if !segments
+                    .last()
+                    .expect("segments always has a current segment")
+                    .is_empty()
+                {
+                    segments.push(Vec::new());
+                    segment_safe.push(true);
+                    segment_kinds.push(ParagraphSplitKind::Paragraph);
+                }
+            } else if line_began {
+                if items_open {
+                    items_open = false;
+                    if segments.len() == 1 && !after_item {
+                        escape_split = Some(segments[0].len());
+                    }
+                }
+                if after_item {
+                    segments.push(Vec::new());
+                    segment_safe.push(true);
+                    segment_kinds.push(ParagraphSplitKind::Paragraph);
+                    after_item = false;
+                }
+            }
             let before = self.remaining();
             let before_token = self.current().token;
             match consume(self) {
@@ -2204,6 +2329,7 @@ where
                             distribute_paragraph_split(
                                 &mut segments,
                                 Some(&mut segment_safe),
+                                Some(&mut segment_kinds),
                                 elements,
                                 &counts,
                             );
@@ -2250,6 +2376,16 @@ where
                     if absorbed_trailing_break {
                         segments.push(Vec::new());
                         segment_safe.push(true);
+                        segment_kinds.push(ParagraphSplitKind::Paragraph);
+                    }
+                    if steps >= 1 {
+                        let last_token = if steps == 1 {
+                            before_token
+                        } else {
+                            before[steps - 1].token
+                        };
+                        line_began = last_token == Token::LineBreak
+                            || last_token == Token::ParagraphBreak;
                     }
                 }
                 Err(error) => return Err(error),
@@ -2269,7 +2405,7 @@ where
         }
 
         Ok(crate::parsing::ParseSuccess::new(
-            ((segments, segment_safe), trailing),
+            ((segments, segment_safe, segment_kinds), trailing),
             all_errors,
             paragraph_safe,
         ))
@@ -2289,7 +2425,7 @@ where
         ctype: ContainerType,
         attributes: AttributeMap<'t>,
         paragraph_safe: bool,
-    ) -> (Elements<'t>, Option<Vec<(usize, bool)>>) {
+    ) -> (Elements<'t>, Option<Vec<ParagraphSplitEntry>>) {
         if segments.len() == 1 {
             let elements = segments.into_iter().next().expect("single segment present");
             let container = Container::new(ctype, elements, attributes);
@@ -2314,9 +2450,9 @@ where
             }
 
             if segment.is_empty() {
-                counts.push((0, paragraph_safe));
+                counts.push((0, paragraph_safe, ParagraphSplitKind::Paragraph));
             } else {
-                counts.push((1, paragraph_safe));
+                counts.push((1, paragraph_safe, ParagraphSplitKind::Paragraph));
                 containers.push(Element::Container(Container::new(
                     ctype,
                     segment,

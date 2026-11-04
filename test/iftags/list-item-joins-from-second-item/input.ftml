@@ -1,0 +1,3 @@
+* A
+* [[iftags +fruit]] B
+* C [[/iftags]]

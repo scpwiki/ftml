@@ -108,6 +108,9 @@ pub use self::link_single::{
 };
 pub use self::link_triple::{RULE_LINK_TRIPLE, RULE_LINK_TRIPLE_NEW_TAB};
 pub use self::list::RULE_LIST;
+pub(crate) use self::list::{
+    build_list_element, collect_gate_body_list_line, list_item_marker_here,
+};
 pub use self::math::RULE_MATH;
 pub use self::monospace::RULE_MONOSPACE;
 pub use self::null::RULE_NULL;
