@@ -24,7 +24,8 @@ use super::prelude::*;
 use super::rule::{
     get_rules_for_token,
     impls::{
-        RULE_FALLBACK, starts_own_line_rule, starts_wikidot_only_scheme_url, url_elements,
+        RULE_FALLBACK, glued_scheme_url_start, starts_own_line_rule,
+        starts_wikidot_only_scheme_url, url_elements,
     },
 };
 use crate::tree::{LinkLabel, LinkLocation, LinkType, PartialElement};
@@ -547,10 +548,15 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
     match parser.current().token {
         Token::Identifier => {
             !(parser.settings().layout.legacy()
-                && starts_wikidot_only_scheme_url(
+                && (starts_wikidot_only_scheme_url(
                     parser.full_text().inner(),
                     parser.current().span.start,
-                ))
+                ) || glued_scheme_url_start(
+                    parser.full_text().inner(),
+                    parser.current().span.start,
+                    parser.current().span.end,
+                )
+                .is_some()))
         }
 
         Token::RightBracket

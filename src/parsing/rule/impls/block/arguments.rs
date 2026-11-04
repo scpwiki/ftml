@@ -324,28 +324,24 @@ impl<'t> Arguments<'t> {
         let mut map =
             self.attribute_map_from_entries(settings, |_, value| !value.is_empty());
         map.remove("title");
-        if let Some(href) = self.inner.get(&self.key("href")).filter(|value| {
-            matches!(
-                crate::url::classify_href(value),
-                crate::url::HrefKind::Invalid
-            ) || (value.contains(':')
-                && matches!(
-                    crate::url::classify_href(value),
-                    crate::url::HrefKind::Relative
-                ))
-        }) {
-            map.insert_wikidot_relative_href(normalize_wikidot_unsafe_anchor_href(href));
-        }
-        let href = self.inner.get(&self.key("href")).filter(|value| {
-            matches!(
-                crate::url::classify_href(value),
-                crate::url::HrefKind::Relative
-            ) && !value.contains(':')
-        });
-        if let Some(href) = href {
-            map.insert_wikidot_relative_href(normalize_wikidot_html_attribute_value(
-                href,
-            ));
+        if let Some(href) = self
+            .inner
+            .get(&self.key("href"))
+            .filter(|value| !contains_unresolved_wikidot_variable(value))
+        {
+            if *href == "javascript:;" {
+            } else if wikidot_anchor_href_is_verbatim(href) {
+                let value = normalize_wikidot_html_attribute_value(href);
+                if value.contains(' ') {
+                    map.insert_wikidot_relative_href(Cow::Owned(
+                        value.replace(' ', "%20"),
+                    ));
+                }
+            } else {
+                map.insert_wikidot_relative_href(normalize_wikidot_unsafe_anchor_href(
+                    href,
+                ));
+            }
         }
         map.isolate_id(settings);
         map
@@ -399,6 +395,28 @@ impl<'t> Arguments<'t> {
     }
 }
 
+fn wikidot_anchor_href_is_verbatim(value: &str) -> bool {
+    value.starts_with('#')
+        || value.starts_with('/')
+        || [
+            "http://",
+            "https://",
+            "ftp://",
+            "mailto:",
+            "gopher://",
+            "news://",
+            "mms://",
+            "git://",
+            "sftp://",
+            "ssh://",
+            "svn://",
+            "telnet://",
+            "cvs://",
+        ]
+        .iter()
+        .any(|scheme| value.starts_with(scheme))
+}
+
 fn normalize_wikidot_unsafe_anchor_href<'t>(value: &Cow<'t, str>) -> Cow<'t, str> {
     let value = normalize_wikidot_html_attribute_value(value);
     let nbsp_padded = value.starts_with('\u{00a0}') || value.ends_with('\u{00a0}');
@@ -410,11 +428,7 @@ fn normalize_wikidot_unsafe_anchor_href<'t>(value: &Cow<'t, str>) -> Cow<'t, str
     let mut output = String::with_capacity(value.len());
     let mut pending_dash = false;
     for character in value.chars() {
-        if matches!(character, ' ' | '(' | ')' | '.') {
-            pending_dash = !output.is_empty();
-            continue;
-        }
-        if character == '\\' || (nbsp_padded && character == '/') {
+        if character == '\\' || character == '\u{00a0}' {
             continue;
         }
         if character == ':' {
@@ -425,19 +439,18 @@ fn normalize_wikidot_unsafe_anchor_href<'t>(value: &Cow<'t, str>) -> Cow<'t, str
             pending_dash = false;
             continue;
         }
-        if pending_dash && !output.ends_with(':') && !output.ends_with('-') {
-            output.push('-');
+        if character.is_ascii_alphanumeric() {
+            if pending_dash && !output.ends_with(':') && !output.ends_with('-') {
+                output.push('-');
+            }
+            pending_dash = false;
+            output.push(character.to_ascii_lowercase());
+            continue;
         }
-        pending_dash = false;
-        output.push(character);
+        pending_dash = !output.is_empty();
     }
     while output.ends_with('-') {
         output.pop();
-    }
-    if let Some((scheme, rest)) = output.split_once(':')
-        && scheme.eq_ignore_ascii_case("javascript")
-    {
-        output = format!("javascript:{rest}");
     }
     Cow::Owned(output)
 }

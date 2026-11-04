@@ -121,6 +121,7 @@ pub use self::underline::RULE_UNDERLINE;
 pub use self::underscore_line_break::RULE_UNDERSCORE_LINE_BREAK;
 pub use self::url::{RULE_URL, RULE_WIKIDOT_SCHEME_URL};
 pub(crate) use self::url::{
+    glued_scheme_url_start, identifier_may_start_wikidot_url,
     is_wikidot_only_autolink_url, starts_wikidot_only_scheme_url, url_elements,
 };
 pub use self::variable::RULE_VARIABLE;

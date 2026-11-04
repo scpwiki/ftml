@@ -1,0 +1,66 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor",
+                        "data": {
+                            "target": null,
+                            "attributes": {
+                                "href": "https://example.com/a b"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "anchor",
+                        "data": {
+                            "target": null,
+                            "attributes": {
+                                "href": "#Section Name"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "y"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "anchor",
+                        "data": {
+                            "target": null,
+                            "attributes": {
+                                "href": "/Foo Bar"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "z"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,284 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Go"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "ssh"
+                    },
+                    {
+                        "element": "text",
+                        "data": ":"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "italics",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "example"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "."
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "com"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "and"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "git"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": ":"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "example"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "text",
+                        "data": "com"
+                    },
+                    {
+                        "element": "text",
+                        "data": "/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "b"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "and"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "sftp"
+                    },
+                    {
+                        "element": "text",
+                        "data": ":"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "italics",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "example"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "."
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "com"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "c"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "and"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "svn"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": ":"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "example"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "text",
+                        "data": "com"
+                    },
+                    {
+                        "element": "text",
+                        "data": "/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "d"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "and"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "telnet"
+                    },
+                    {
+                        "element": "text",
+                        "data": ":"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "italics",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "example"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "."
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "com"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "e"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "and"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "cvs"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": ":"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "example"
+                    },
+                    {
+                        "element": "text",
+                        "data": "."
+                    },
+                    {
+                        "element": "text",
+                        "data": "com"
+                    },
+                    {
+                        "element": "text",
+                        "data": "/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "f"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "here"
+                    }
+                ]
+            }
+        }
+    ]
+}
