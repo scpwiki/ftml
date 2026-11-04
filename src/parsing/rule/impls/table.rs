@@ -436,6 +436,25 @@ fn try_consume_fn<'r, 't>(
                     continue;
                 }
 
+                if !parser.discarding_hidden_body() && parser.at_body_end_boundary() {
+                    if cells.is_empty() {
+                        elements.clear();
+                        push_cell(
+                            &mut cells,
+                            &mut elements,
+                            TableCellStart {
+                                align: None,
+                                header: false,
+                                column_span: NonZeroU32::new(1).unwrap(),
+                                literal_prefix: None,
+                            },
+                            &mut pending_inline_scopes,
+                        );
+                    }
+                    push_row(&mut rows, &mut cells);
+                    return finish_simple_table(rows, errors);
+                }
+
                 match parser.next_two_tokens() {
                     (current, Some(next)) if is_table_column_token(current) => {
                         let (r, c, e) = (&mut rows, &mut cells, &mut elements);
