@@ -143,7 +143,7 @@ pub(super) fn bind_labels(
         if targets.contains(&entry_index) {
             labels.insert(
                 entry_index,
-                TextRender.render_partial(elements, page_info, settings, 0),
+                TextRender.render_partial_title(elements, page_info, settings, 0),
             );
         }
         entry_index += 1;

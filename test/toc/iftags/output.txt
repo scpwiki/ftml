@@ -1,0 +1,9 @@
+Alpha
+
+Bed
+
+Start of line
+
+Tail segment here
+
+Plain heading

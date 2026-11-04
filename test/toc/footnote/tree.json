@@ -1,0 +1,129 @@
+{
+    "elements": [
+        {
+            "element": "table-of-contents",
+            "data": {
+                "attributes": {},
+                "align": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "header": {
+                        "level": 1,
+                        "has-toc": true
+                    }
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Head"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "tail"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "header": {
+                        "level": 1,
+                        "has-toc": true
+                    }
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Plain"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "heading"
+                    }
+                ]
+            }
+        }
+    ],
+    "table-of-contents": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc0",
+                                    "label": {
+                                        "text": "Head1 tail"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc1",
+                                    "label": {
+                                        "text": "Plain heading"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "note"
+            },
+            {
+                "element": "text",
+                "data": " "
+            },
+            {
+                "element": "text",
+                "data": "text"
+            }
+        ]
+    ],
+    "needs-footnote-block": true
+}

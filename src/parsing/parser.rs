@@ -24,7 +24,9 @@ use super::hidden_body::HiddenBodyBoundary;
 use super::prelude::*;
 use super::rule::Rule;
 use crate::data::PageInfo;
-use crate::delayed::{GeneratedInput, elements_contain_delayed};
+use crate::delayed::{
+    GeneratedInput, elements_contain_delayed, resolve_static_suppressions,
+};
 use crate::preproc::LiteralRegionIndex;
 use crate::render::text::TextRender;
 use crate::tokenizer::{DelayedMarker, Tokenization};
@@ -1198,9 +1200,32 @@ impl<'r, 't> Parser<'r, 't> {
         let level = usize::from(heading.value()) - 1;
 
         let name = if elements_contain_delayed(name_elements) {
-            String::new()
+            // The heading contains delayed elements. Ones that resolve
+            // statically (iftags suppression seams, typography boundaries)
+            // carry no generated content, so render the name from the
+            // statically resolved elements instead of dropping it. Anything
+            // still delayed afterwards is a generated value whose label is
+            // bound once the values are known (see the label binding in
+            // delayed::toc), so it keeps the empty placeholder.
+            let mut resolved = name_elements.to_vec();
+            resolve_static_suppressions(&mut resolved, self.settings.layout.legacy());
+            if elements_contain_delayed(&resolved) {
+                String::new()
+            } else {
+                TextRender.render_partial_title(
+                    &resolved,
+                    self.page_info,
+                    self.settings,
+                    0,
+                )
+            }
         } else {
-            TextRender.render_partial(name_elements, self.page_info, self.settings, 0)
+            TextRender.render_partial_title(
+                name_elements,
+                self.page_info,
+                self.settings,
+                0,
+            )
         };
 
         self.table_of_contents.borrow_mut().push((level, name));
@@ -1806,6 +1831,60 @@ fn parser_mutable_state_helpers_reset_and_remove_collections() {
     let bibliographies = parser.remove_bibliographies();
     assert_eq!(bibliographies.next_index(), 1);
     assert!(parser.remove_bibliographies().is_empty());
+}
+
+#[test]
+fn parser_table_of_contents_entry_resolves_static_delayed_markers() {
+    use crate::delayed::{DelayedElement, GeneratedKind, SlotId};
+    use crate::layout::Layout;
+    use crate::settings::WikitextMode;
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let tokenization = crate::tokenize("body");
+    let mut parser = Parser::new(&tokenization, &page_info, &settings);
+
+    // A visible iftags segment leaves typography-boundary markers around
+    // its body; the entry name is rendered from the resolved elements
+    // rather than dropped.
+    parser.push_table_of_contents_entry(
+        HeadingLevel::One,
+        &[
+            text!("Alp"),
+            Element::Delayed(DelayedElement::typography_boundary()),
+            text!("ha"),
+            Element::Delayed(DelayedElement::typography_boundary()),
+        ],
+    );
+
+    // A hidden (suppressed) segment contributes no text to the name.
+    parser.push_table_of_contents_entry(
+        HeadingLevel::Two,
+        &[
+            text!("Be"),
+            Element::Delayed(DelayedElement::suppressed(&[])),
+            text!("d"),
+        ],
+    );
+
+    // A generated value is not known at parse time, so its entry keeps the
+    // empty placeholder that bind-time label replacement fills in.
+    parser.push_table_of_contents_entry(
+        HeadingLevel::One,
+        &[Element::Delayed(DelayedElement::active(
+            SlotId::new(1),
+            GeneratedKind::PageLink,
+        ))],
+    );
+
+    assert_eq!(
+        parser.remove_table_of_contents(),
+        vec![
+            (0, String::from("Alpha")),
+            (1, String::from("Bed")),
+            (0, String::new()),
+        ],
+    );
 }
 
 #[test]

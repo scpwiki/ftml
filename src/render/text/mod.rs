@@ -42,6 +42,30 @@ impl TextRender {
         settings: &WikitextSettings,
         wikitext_len: usize,
     ) -> String {
+        self.render_partial_mode(elements, page_info, settings, wikitext_len, false)
+    }
+
+    /// Render elements as a heading title, as used for table-of-contents
+    /// entries. Unlike a plain text render, a footnote reference reads as
+    /// its number, matching the text the rendered heading shows.
+    pub fn render_partial_title(
+        &self,
+        elements: &[Element],
+        page_info: &PageInfo,
+        settings: &WikitextSettings,
+        wikitext_len: usize,
+    ) -> String {
+        self.render_partial_mode(elements, page_info, settings, wikitext_len, true)
+    }
+
+    fn render_partial_mode(
+        &self,
+        elements: &[Element],
+        page_info: &PageInfo,
+        settings: &WikitextSettings,
+        wikitext_len: usize,
+        title: bool,
+    ) -> String {
         let bibliographies = BibliographyList::new();
         let partial = RenderPartial {
             elements,
@@ -51,6 +75,7 @@ impl TextRender {
             footnotes: &[],
             bibliographies: &bibliographies,
             wikitext_len,
+            title,
         };
         if elements_require_bounded_tree_stack(elements) {
             run_on_bounded_tree_stack("ftml-text-render", || {
@@ -78,6 +103,7 @@ impl TextRender {
             partial.bibliographies,
             partial.wikitext_len,
         );
+        ctx.set_title_mode(partial.title);
         render_elements(&mut ctx, partial.elements);
 
         trim_outer_newlines(ctx.buffer());
@@ -135,6 +161,7 @@ struct RenderPartial<'a> {
     footnotes: &'a [Vec<Element<'a>>],
     bibliographies: &'a BibliographyList<'a>,
     wikitext_len: usize,
+    title: bool,
 }
 
 impl<'a> RenderPartial<'a> {
@@ -151,6 +178,7 @@ impl<'a> RenderPartial<'a> {
             footnotes: &tree.footnotes,
             bibliographies: &tree.bibliographies,
             wikitext_len: tree.wikitext_len,
+            title: false,
         }
     }
 }
@@ -186,6 +214,22 @@ mod tests {
         let mut categorized = PageInfo::dummy();
         categorized.category = Some(cow!("system"));
         assert_eq!(TextRender.render(&tree, &categorized, &settings), "body");
+    }
+
+    #[test]
+    fn text_render_footnote_reference_is_its_number_in_titles_only() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
+        let elements = vec![text!("Head"), Element::Footnote(1), text!(" tail")];
+
+        assert_eq!(
+            TextRender.render_partial_title(&elements, &page_info, &settings, 9),
+            "Head1 tail",
+        );
+        assert_eq!(
+            TextRender.render_partial(&elements, &page_info, &settings, 9),
+            "Head tail",
+        );
     }
 
     #[test]
