@@ -100,6 +100,19 @@ fn link_new_tab<'r, 't>(
     if parser.settings().layout.legacy() && parser.current().slice == "#" {
         return super::link_anchor::try_consume_wikidot_star_anchor(parser);
     }
+    if parser.settings().layout.legacy() {
+        let mut attempt = parser.clone();
+        return match try_consume_wikidot_link(&mut attempt, Some(AnchorTarget::NewTab)) {
+            Ok(success) => {
+                parser.update(&attempt);
+                Ok(success)
+            }
+            Err(error) => match super::url::wikidot_star_link_fallback(parser) {
+                Some(result) => result,
+                None => Err(error),
+            },
+        };
+    }
     try_consume_link(parser, RULE_LINK_SINGLE_NEW_TAB, Some(AnchorTarget::NewTab))
 }
 

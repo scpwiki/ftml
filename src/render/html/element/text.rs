@@ -222,6 +222,11 @@ fn wikidot_highlight_token(language: &str, input: &str) -> (&'static str, usize)
         })
         .count();
     let token = &input[..length];
+    if language == "css"
+        && let Some(split) = css_pseudo_split(token)
+    {
+        return ("hl-identifier", split);
+    }
     let class = match language {
         "css" if token.ends_with(':') => "hl-reserved",
         "css" if token == "none" => "hl-string",
@@ -233,6 +238,18 @@ fn wikidot_highlight_token(language: &str, input: &str) -> (&'static str, usize)
         _ => "hl-identifier",
     };
     (class, length)
+}
+
+fn css_pseudo_split(token: &str) -> Option<usize> {
+    let split = token.bytes().position(|byte| byte == b':')?;
+    if split == 0
+        || token.ends_with(':')
+        || token.as_bytes()[split + 1] == b'/'
+        || token[..split].contains(['"', '\''])
+    {
+        return None;
+    }
+    Some(split)
 }
 
 #[cfg(test)]

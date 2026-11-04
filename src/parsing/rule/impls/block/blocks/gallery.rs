@@ -400,7 +400,9 @@ fn finish_gallery<'r, 't>(
             parser.clear_fused_name_residual();
         }
         let mut elements = vec![gallery, text!("]")];
-        if matches!(source.as_bytes().get(head_end + 1), Some(b'\r' | b'\n')) {
+        if matches!(source.as_bytes().get(head_end + 1), Some(b'\r' | b'\n'))
+            && !gallery_following_line_blank(source, head_end + 1)
+        {
             elements.push(Element::LineBreak);
             if entries_consumed {
                 elements.push(text!(""));
@@ -421,6 +423,17 @@ fn finish_gallery<'r, 't>(
     } else {
         success_elements(gallery)
     }
+}
+
+fn gallery_following_line_blank(source: &str, terminator: usize) -> bool {
+    let bytes = source.as_bytes();
+    let mut index = terminator;
+    if bytes.get(index) == Some(&b'\r') && bytes.get(index + 1) == Some(&b'\n') {
+        index += 2;
+    } else {
+        index += 1;
+    }
+    matches!(bytes.get(index), Some(b'\r' | b'\n'))
 }
 
 fn gallery_line_continues(source: &str, start: usize) -> bool {

@@ -84,6 +84,7 @@ pub use self::result::{
     success_elements_with_paragraph_safety, success_value,
 };
 pub(crate) use self::rule::impls::decode_semicolon_entities;
+pub(crate) use self::rule::impls::wikidot_math_name;
 pub use self::token::{ExtractedToken, Token};
 pub(crate) use self::wikidot_text::{
     discard_wikidot_controls, trim_wikidot_ascii, trim_wikidot_ascii_cow,

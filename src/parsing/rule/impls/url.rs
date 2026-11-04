@@ -212,6 +212,28 @@ where
     wikidot_url_elements_rest(parser, source, start, url_start, end, starred, comments)
 }
 
+pub(super) fn wikidot_star_link_fallback<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if parser.current().token != Token::Url {
+        return None;
+    }
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start;
+    let end = parser.current().span.end;
+    parser.step().ok()?;
+    let rest =
+        wikidot_url_elements_rest(parser, source, start, start, end, true, Vec::new())
+            .ok()?;
+    let mut elements = vec![text!("[")];
+    match rest {
+        Elements::None => {}
+        Elements::Single(element) => elements.push(element),
+        Elements::Multiple(mut rest) => elements.append(&mut rest),
+    }
+    Some(ok!(Elements::Multiple(elements)))
+}
+
 fn wikidot_scheme_url<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
