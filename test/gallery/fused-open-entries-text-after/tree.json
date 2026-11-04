@@ -1,0 +1,46 @@
+{
+    "elements": [
+        {
+            "element": "text",
+            "data": "[["
+        },
+        {
+            "element": "text",
+            "data": "gallery"
+        },
+        {
+            "element": "text",
+            "data": "]]]"
+        },
+        {
+            "element": "line-break"
+        },
+        {
+            "element": "text",
+            "data": "[[/"
+        },
+        {
+            "element": "text",
+            "data": "gallery"
+        },
+        {
+            "element": "text",
+            "data": "]]"
+        },
+        {
+            "element": "line-break"
+        },
+        {
+            "element": "text",
+            "data": "After"
+        },
+        {
+            "element": "text",
+            "data": " "
+        },
+        {
+            "element": "text",
+            "data": "text"
+        }
+    ]
+}

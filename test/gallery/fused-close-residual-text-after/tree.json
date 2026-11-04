@@ -1,0 +1,58 @@
+{
+    "elements": [
+        {
+            "element": "gallery",
+            "data": {
+                "source": "[[gallery]]\n: https://example.com/a.png\n: https://example.com/b.png\n[[/gallery]]",
+                "arguments": [],
+                "selection": {
+                    "type": "explicit",
+                    "entries": [
+                        {
+                            "source": ": https://example.com/a.png",
+                            "image": {
+                                "type": "http-url",
+                                "source": "https://example.com/a.png"
+                            },
+                            "arguments": []
+                        },
+                        {
+                            "source": ": https://example.com/b.png",
+                            "image": {
+                                "type": "http-url",
+                                "source": "https://example.com/b.png"
+                            },
+                            "arguments": []
+                        }
+                    ]
+                },
+                "source-sha256": "aa0c4f361a7d4209eb32467fe1beddc248f46ddcd912edee84e6b39bb6730261"
+            }
+        },
+        {
+            "element": "text",
+            "data": "]"
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "After"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    }
+                ]
+            }
+        }
+    ]
+}

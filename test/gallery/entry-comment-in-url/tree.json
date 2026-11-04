@@ -1,0 +1,41 @@
+{
+    "elements": [
+        {
+            "element": "gallery",
+            "data": {
+                "source": "[[gallery]]\n: https://example.com/a.png\n: https://example.com/a[!--x--].png\n: https://example.com/b.png\n[[/gallery]]",
+                "arguments": [],
+                "selection": {
+                    "type": "explicit",
+                    "entries": [
+                        {
+                            "source": ": https://example.com/a.png",
+                            "image": {
+                                "type": "http-url",
+                                "source": "https://example.com/a.png"
+                            },
+                            "arguments": []
+                        },
+                        {
+                            "source": ": https://example.com/a[!--x--].png",
+                            "image": {
+                                "type": "http-url",
+                                "source": "https://example.com/a[!--x--].png"
+                            },
+                            "arguments": []
+                        },
+                        {
+                            "source": ": https://example.com/b.png",
+                            "image": {
+                                "type": "http-url",
+                                "source": "https://example.com/b.png"
+                            },
+                            "arguments": []
+                        }
+                    ]
+                },
+                "source-sha256": "6d93c81d61beb0b323a425a130e856ec70e2b1f6196d89a13fde978a34dbd0a9"
+            }
+        }
+    ]
+}

@@ -423,6 +423,21 @@ pub(crate) fn parse_explicit_gallery_entries<'t>(
     }
 }
 
+pub(crate) fn parse_gallery_entry_owned(line: String) -> Option<GalleryEntry<'static>> {
+    let entry = parse_gallery_entry(&line)?;
+    let image = entry.image.to_owned();
+    let arguments = entry
+        .arguments
+        .iter()
+        .map(GalleryArgument::to_owned)
+        .collect();
+    Some(GalleryEntry {
+        source: Cow::Owned(line),
+        image,
+        arguments,
+    })
+}
+
 pub(crate) fn parse_gallery_entry(line: &str) -> Option<GalleryEntry<'_>> {
     let content = line.trim_start_matches([' ', '\t']);
     let tail = content.strip_prefix(':')?.trim_start_matches([' ', '\t']);
