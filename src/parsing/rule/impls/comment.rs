@@ -32,6 +32,7 @@ fn try_consume_fn<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming tokens until end of comment");
 
+    let opener_at_line_start = parser.start_of_line();
     assert_step(parser, Token::LeftComment)?;
     let mut generated = Vec::<GeneratedInput>::new();
 
@@ -58,6 +59,17 @@ fn try_consume_fn<'r, 't>(
             _ if let Some(token_count) = comment_closer_token_count(parser) => {
                 trace!("Reached Wikidot comment closer, returning");
                 parser.step_n(token_count)?;
+                if opener_at_line_start
+                    && matches!(
+                        parser.current().token,
+                        Token::BulletItem
+                            | Token::NumberedItem
+                            | Token::Heading
+                            | Token::LeftComment
+                    )
+                {
+                    parser.mark_virtual_start_of_line();
+                }
                 return if generated.is_empty() {
                     ok!(Elements::None)
                 } else {

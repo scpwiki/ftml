@@ -24,7 +24,8 @@ use super::prelude::*;
 use super::rule::{
     get_rules_for_token,
     impls::{
-        RULE_FALLBACK, starts_own_line_rule, starts_wikidot_only_scheme_url, url_elements,
+        RULE_FALLBACK, glued_scheme_url_start, starts_own_line_rule,
+        starts_wikidot_only_scheme_url, url_elements,
     },
 };
 use crate::tree::{LinkLabel, LinkLocation, LinkType, PartialElement};
@@ -145,7 +146,10 @@ where
     let marker_end = start + relative_marker_end + 2;
     let name = source[start + "[[/".len()..start + relative_marker_end]
         .trim_matches([' ', '\t']);
-    if !matches!(name.to_ascii_lowercase().as_str(), "div" | "span") {
+    if !matches!(
+        name.to_ascii_lowercase().as_str(),
+        "div" | "span" | "footnote"
+    ) {
         return Ok(None);
     }
     if line_has_unmatched_wikidot_owner_opener(source, start, name) {
@@ -153,6 +157,8 @@ where
     }
     if (name.eq_ignore_ascii_case("span") && parser.rule().name() == "block-span")
         || (name.eq_ignore_ascii_case("div") && parser.rule().name() == "block-div")
+        || (name.eq_ignore_ascii_case("footnote")
+            && parser.rule().name() == "block-footnote")
     {
         return Ok(None);
     }
@@ -180,6 +186,9 @@ where
     };
     let close = label_start + relative_close;
     let raw_label = &source[label_start..close];
+    if wikidot_label_region_has_owner_opener(&source[label_start..close]) {
+        return Ok(None);
+    }
     let label = raw_label.trim_matches([' ', '\t']);
     if label.is_empty() {
         return Ok(None);
@@ -227,6 +236,28 @@ where
         elements.push(text!(residual_closer));
     }
     Ok(Some(Elements::Multiple(elements)))
+}
+
+fn wikidot_label_region_has_owner_opener(region: &str) -> bool {
+    let bytes = region.as_bytes();
+    let mut offset = 0;
+    while let Some(found) = region[offset..].find("[[") {
+        let name_start = offset + found + 2;
+        let name_end = bytes[name_start..]
+            .iter()
+            .position(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_'))
+            .map_or(bytes.len(), |pos| name_start + pos);
+        let name = &region[name_start..name_end];
+        let name = name.strip_suffix('_').unwrap_or(name);
+        if matches!(
+            name.to_ascii_lowercase().as_str(),
+            "footnote" | "span" | "size" | "a"
+        ) {
+            return true;
+        }
+        offset = name_start;
+    }
+    false
 }
 
 fn line_has_unmatched_wikidot_owner_opener(
@@ -444,11 +475,27 @@ where
     }
     let second_start = scan.current().span.start;
     let second_is_close = scan.current().token == Token::LeftBlockEnd;
+    let mut second_opener_name = None;
     let second_valid = if second_is_close {
         scan.get_end_block().is_ok()
     } else {
-        scan.get_block_name(false).is_ok()
+        match scan.get_block_name(false) {
+            Ok((name, _)) => {
+                second_opener_name = Some(name);
+                true
+            }
+            Err(_) => false,
+        }
     };
+    if let Some(name) = second_opener_name {
+        let name = name.strip_suffix('_').unwrap_or(name);
+        if matches!(
+            name.to_ascii_lowercase().as_str(),
+            "footnote" | "span" | "size" | "a"
+        ) {
+            return Ok(None);
+        }
+    }
     if !second_valid
         || second_is_close
             && !matches!(
@@ -501,10 +548,15 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
     match parser.current().token {
         Token::Identifier => {
             !(parser.settings().layout.legacy()
-                && starts_wikidot_only_scheme_url(
+                && (starts_wikidot_only_scheme_url(
                     parser.full_text().inner(),
                     parser.current().span.start,
-                ))
+                ) || glued_scheme_url_start(
+                    parser.full_text().inner(),
+                    parser.current().span.start,
+                    parser.current().span.end,
+                )
+                .is_some()))
         }
 
         Token::RightBracket
@@ -515,14 +567,15 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
         | Token::EscapedBackslash => true,
 
         Token::Other => {
-            // A "/" directly before a block opener may be half of an
-            // italics opener split by an iftags segment; let the rule
-            // loop probe it instead of claiming it as text here. The
-            // text rule remains the fallback when the probe fails.
+            // A "/" directly before a block opener or a comment may be
+            // half of an italics opener split by an iftags segment or a
+            // comment; let the rule loop probe it instead of claiming
+            // it as text here. The text rule remains the fallback when
+            // the probe fails.
             if parser.current().slice == "/"
-                && parser
-                    .look_ahead(0)
-                    .is_some_and(|token| token.token == Token::LeftBlock)
+                && parser.look_ahead(0).is_some_and(|token| {
+                    matches!(token.token, Token::LeftBlock | Token::LeftComment)
+                })
             {
                 return false;
             }

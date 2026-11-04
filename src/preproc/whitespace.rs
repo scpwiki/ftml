@@ -55,7 +55,7 @@ static WHITESPACE_ONLY_LINE: LazyLock<Replacer> =
 // emit that authored content instead of manufacturing a paragraph break.
 static WIKIDOT_WHITESPACE_ONLY_LINE: LazyLock<Replacer> =
     LazyLock::new(|| Replacer::RegexReplace {
-        regex: RegexBuilder::new(r"^[ \t\r\n]+$")
+        regex: RegexBuilder::new(r"^[ \t\r\n\x0B\x0C]+$")
             .multi_line(true)
             .build()
             .unwrap(),
@@ -184,7 +184,7 @@ pub(super) fn preserve_wikidot_document_indentation_barrier(text: &mut String) {
         && ((indented
             && matches!(
                 structural,
-                Some(b'>' | b'=' | b'+' | b'|' | b'[' | b'_' | b'*' | b'#' | b'~')
+                Some(b'>' | b'=' | b'+' | b'|' | b'[' | b'_' | b'*' | b'#' | b'~' | b'-')
             ))
             || (structural == Some(b':') && colon_line_indented))
     {

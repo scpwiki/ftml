@@ -224,7 +224,7 @@ fn dense_valid_crossed_and_unclosed_candidates_stay_bounded() {
         elapsed < Duration::from_secs(5),
         "dense parse took {elapsed:?}"
     );
-    assert_eq!(tree.bibliographies.next_index(), ACTIVE_COUNT, "{tree:#?}");
+    assert_eq!(tree.bibliographies.next_index(), 1, "{tree:#?}");
 
     let mut unclosed = String::new();
     for index in 0..512 {

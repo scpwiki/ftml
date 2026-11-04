@@ -128,6 +128,7 @@ struct BlockScanCache {
     // Designated `[[/iftags]]` byte offset for the Wikidot pairing gather
     // currently in progress (#792); see `Parser::wikidot_iftags_body_end`.
     wikidot_iftags_body_end: Cell<Option<usize>>,
+    inline_container_body_names: Vec<&'static str>,
 }
 
 fn token_starts_line(token: Token) -> bool {
@@ -285,6 +286,103 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_iftags_body_end
             .set(value);
+    }
+
+    #[inline]
+    pub(crate) fn push_inline_container_body(&self, name: &'static str) -> usize {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let len = cache.inline_container_body_names.len();
+        cache.inline_container_body_names.push(name);
+        len
+    }
+
+    #[inline]
+    pub(crate) fn restore_inline_container_body(&self, len: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .inline_container_body_names
+            .truncate(len);
+    }
+
+    #[inline]
+    pub(crate) fn inline_container_body_depth(&self, name: &'static str) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .inline_container_body_names
+            .iter()
+            .filter(|&&recorded| recorded == name)
+            .count()
+    }
+
+    pub(crate) fn block_head_name_here(&self) -> Option<String> {
+        if self.current.token != Token::LeftBlock {
+            return None;
+        }
+        let remaining = self.remaining();
+        let mut scan = 0;
+        if remaining
+            .first()
+            .is_some_and(|token| token.token == Token::Whitespace)
+        {
+            scan = 1;
+        }
+        let mut name = String::new();
+        loop {
+            let token = remaining.get(scan)?;
+            match token.token {
+                Token::Whitespace | Token::RightBlock => break,
+                Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::InputEnd
+                | Token::LeftBlock
+                | Token::LeftBlockEnd => return None,
+                _ => name.push_str(token.slice),
+            }
+            scan += 1;
+        }
+        if name.is_empty() {
+            return None;
+        }
+        Some(name.strip_suffix('_').unwrap_or(&name).to_ascii_lowercase())
+    }
+
+    pub(crate) fn take_block_head_text(
+        &mut self,
+    ) -> Result<Option<Element<'t>>, ParseError> {
+        if self.current.token != Token::LeftBlock {
+            return Ok(None);
+        }
+        let remaining = self.remaining();
+        let mut scan = 1;
+        let head_end = loop {
+            let Some(token) = remaining.get(scan - 1) else {
+                return Ok(None);
+            };
+            match token.token {
+                Token::RightBlock => break token.span.end,
+                Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::InputEnd
+                | Token::LeftBlock
+                | Token::LeftBlockEnd => return Ok(None),
+                _ => {}
+            }
+            scan += 1;
+        };
+        let text = &self.full_text().inner()[self.current.span.start..head_end];
+        for _ in 0..=scan {
+            self.step()?;
+        }
+        Ok(Some(Element::Text(Cow::Borrowed(text))))
+    }
+
+    #[inline]
+    pub(crate) fn inside_inline_container_body(&self) -> bool {
+        !self
+            .block_end_scan_cache
+            .borrow()
+            .inline_container_body_names
+            .is_empty()
     }
 
     // Whether this parser is currently consuming blockquote body content
@@ -715,6 +813,7 @@ impl<'r, 't> Parser<'r, 't> {
             || !self.hidden_body_boundaries.is_empty()
             || self.native_blockquote_depth.is_some()
             || self.quote_body_cursor.is_some()
+            || self.inside_inline_container_body()
         {
             return None;
         }
@@ -1276,6 +1375,10 @@ impl<'r, 't> Parser<'r, 't> {
     pub fn push_code_block_element(&mut self, code_block: CodeBlock<'t>) -> Element<'t> {
         self.push_code_block(code_block.clone());
         Element::Code(code_block)
+    }
+
+    pub fn has_bibliography(&self) -> bool {
+        !self.bibliographies.borrow().is_empty()
     }
 
     pub fn push_bibliography(&mut self, bibliography: Bibliography<'t>) -> usize {

@@ -647,19 +647,45 @@ where
         Ok(name)
     }
 
-    pub(crate) fn wikidot_link_owned_inline_end_block_ahead(&self) -> bool {
+    pub(crate) fn wikidot_fused_end_block_ahead(&self, block_rule: &BlockRule) -> bool {
         let source = &self.full_text().inner()[self.current().span.start..];
-        ["[[/span]]]", "[[/span_]]]", "[[/size]]]", "[[/size_]]]"]
-            .iter()
-            .any(|prefix| {
-                source
-                    .get(..prefix.len())
-                    .is_some_and(|source| source.eq_ignore_ascii_case(prefix))
-            })
+        let Some(rest) = source.strip_prefix("[[/") else {
+            return false;
+        };
+        block_rule_end_names(block_rule, true).iter().any(|name| {
+            let Some(after) = rest
+                .get(..name.len())
+                .filter(|part| part.eq_ignore_ascii_case(name))
+                .map(|_| &rest[name.len()..])
+            else {
+                return false;
+            };
+            after.starts_with("]]]")
+                || after
+                    .strip_prefix('_')
+                    .is_some_and(|stripped| stripped.starts_with("]]]"))
+        })
     }
 
-    pub(crate) fn get_wikidot_link_owned_inline_end_block(
+    pub(crate) fn wikidot_body_closed_with_fused_close(
+        &self,
+        block_rule: &BlockRule,
+    ) -> bool {
+        let source = &self.full_text().inner()[..self.current().span.start];
+        block_rule_end_names(block_rule, true).iter().any(|name| {
+            [&format!("[[/{name}]]]"), &format!("[[/{name}_]]]")]
+                .iter()
+                .any(|close| {
+                    source
+                        .get(source.len().saturating_sub(close.len())..)
+                        .is_some_and(|tail| tail.eq_ignore_ascii_case(close))
+                })
+        })
+    }
+
+    pub(crate) fn get_wikidot_fused_end_block(
         &mut self,
+        block_rule: &BlockRule,
     ) -> Result<&'t str, ParseError> {
         self.get_token(Token::LeftBlockEnd, ParseErrorKind::BlockExpectedEnd)?;
         self.get_optional_space()?;
@@ -681,8 +707,9 @@ where
         )?;
         let name = name.trim_matches([' ', '\t', '\r', '\n']);
 
+        let base_name = name.strip_suffix('_').unwrap_or(name);
         if last.token == Token::RightLink
-            && (name.eq_ignore_ascii_case("span") || name.eq_ignore_ascii_case("size"))
+            && block_rule_accepts_end_name(block_rule, base_name, true)
         {
             Ok(name)
         } else {
@@ -796,11 +823,23 @@ where
                     return Ok(false);
                 }
             }
-            let link_owned_inline_close = parser.settings().layout.legacy()
-                && matches!(block_rule.name, "block-span" | "block-size")
-                && parser.wikidot_link_owned_inline_end_block_ahead();
-            let name = if link_owned_inline_close {
-                parser.get_wikidot_link_owned_inline_end_block()?
+            let fused_close = parser.settings().layout.legacy()
+                && matches!(
+                    block_rule.name,
+                    "block-span"
+                        | "block-size"
+                        | "block-anchor"
+                        | "block-footnote"
+                        | "block-div"
+                        | "block-collapsible"
+                        | "block-table"
+                        | "block-list-unordered"
+                        | "block-list-ordered"
+                        | "block-list-item"
+                )
+                && parser.wikidot_fused_end_block_ahead(block_rule);
+            let name = if fused_close {
+                parser.get_wikidot_fused_end_block(block_rule)?
             } else {
                 parser.get_end_block()?
             };
@@ -813,6 +852,7 @@ where
             }
 
             if parser.settings().layout.legacy()
+                && !fused_close
                 && !parser.discarding_hidden_body()
                 && block_rule.name.starts_with("block-list-")
             {
@@ -1577,13 +1617,72 @@ where
             );
         }
 
+        let body_names_len = self.push_inline_container_body(block_rule.name);
         let result = self.get_body_element_segments_internal(block_rule);
+        self.restore_inline_container_body(body_names_len);
 
         if track_boundary {
             self.pop_hidden_body_boundary();
         }
 
         result
+    }
+
+    fn literal_block_head_in_inline_body(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<Option<Element<'t>>, ParseError> {
+        if self.settings().layout.legacy() {
+            return Ok(None);
+        }
+        let Some(name) = self.block_head_name_here() else {
+            return Ok(None);
+        };
+        let literal = match block_rule.name {
+            "block-hidden" | "block-invisible" => false,
+            _ => {
+                matches!(name.as_str(), "div" | "blockquote" | "code")
+                    || (matches!(block_rule.name, "block-span" | "block-size")
+                        && block_rule
+                            .accepts_names
+                            .iter()
+                            .any(|accepted| accepted.eq_ignore_ascii_case(&name))
+                        && !self.inline_body_same_name_may_form(block_rule, &name))
+            }
+        };
+        if !literal {
+            return Ok(None);
+        }
+        self.take_block_head_text()
+    }
+
+    fn inline_body_same_name_may_form(&self, block_rule: &BlockRule, name: &str) -> bool {
+        let needed = self.inline_container_body_depth(block_rule.name) + 1;
+        let remaining = self.remaining();
+        let mut closers = 0_usize;
+        let mut index = 0;
+        while let Some(token) = remaining.get(index) {
+            if token.token == Token::LeftBlockEnd {
+                let mut probe = index + 1;
+                if remaining
+                    .get(probe)
+                    .is_some_and(|token| token.token == Token::Whitespace)
+                {
+                    probe += 1;
+                }
+                if let Some(name_token) = remaining.get(probe) {
+                    let candidate = name_token
+                        .slice
+                        .strip_suffix('_')
+                        .unwrap_or(name_token.slice);
+                    if candidate.eq_ignore_ascii_case(name) {
+                        closers += 1;
+                    }
+                }
+            }
+            index += 1;
+        }
+        closers >= needed
     }
 
     fn get_body_element_segments_internal(
@@ -1628,6 +1727,14 @@ where
             }
 
             first = false;
+            if let Some(element) = self.literal_block_head_in_inline_body(block_rule)? {
+                segments
+                    .last_mut()
+                    .expect("segments always has a current segment")
+                    .push(element);
+                continue;
+            }
+
             match consume(self) {
                 Ok(consumed) => {
                     let crate::parsing::ParseSuccess {
@@ -2891,6 +2998,38 @@ mod tests {
             parser.block_end_scan_token_visits(),
             tokenization.tokens().len(),
         );
+    }
+
+    #[test]
+    fn segment_scan_operation_count_scales_with_input_tokens() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+
+        for repeat in [32, 64, 128, 256, 512] {
+            for input in [
+                "[[iftags -zzz]]body[[/iftags]] ".repeat(repeat),
+                "[[x]] ".repeat(repeat),
+            ] {
+                let tokenization = crate::tokenize(&input);
+                let mut parser = Parser::new(&tokenization, &page_info, &settings);
+                crate::parsing::collect::reset_segment_scan_token_visits();
+
+                while parser.current().token != Token::InputEnd {
+                    if parser.current().token == Token::LeftBlock {
+                        let _ = crate::parsing::collect::iftags_segment(&parser);
+                    }
+                    parser.step().expect("input end must remain available");
+                }
+
+                assert!(
+                    crate::parsing::collect::segment_scan_token_visits()
+                        <= tokenization.tokens().len() * 4,
+                    "{repeat} repeats visited {} tokens for {} input tokens",
+                    crate::parsing::collect::segment_scan_token_visits(),
+                    tokenization.tokens().len(),
+                );
+            }
+        }
     }
 
     #[test]

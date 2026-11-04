@@ -99,8 +99,10 @@ impl Handle {
         }
 
         let mut info = UserInfo::fallback();
-        info.user_name = Cow::Owned(name.to_owned());
-        info.user_profile_url = Cow::Owned(format!("/user:info/{name}"));
+        let canonical = name.to_lowercase();
+        info.user_name = Cow::Owned(canonical.clone());
+        info.user_profile_url =
+            Cow::Owned(format!("/user:info/{}", canonical.replace(' ', "-")));
         Some(info)
     }
 
@@ -341,8 +343,8 @@ fn handle_fallbacks_cover_rendering_helpers() {
     assert!(!handle.get_page_exists("sandbox", "missing"));
 
     let user = handle.get_user_info("ExampleUser").unwrap();
-    assert_eq!(user.user_name, "ExampleUser");
-    assert_eq!(user.user_profile_url, "/user:info/ExampleUser");
+    assert_eq!(user.user_name, "exampleuser");
+    assert_eq!(user.user_profile_url, "/user:info/exampleuser");
     assert!(handle.get_user_info("missing").is_none());
 
     assert_eq!(
@@ -539,7 +541,8 @@ fn handle_fallbacks_cover_rendering_helpers() {
         ("footnote-block-title", "Footnotes"),
         ("bibliography-reference", "Reference"),
         ("bibliography-block-title", "Bibliography"),
-        ("bibliography-cite-not-found", "Bibliography item not found"),
+        ("bibliography-cite-not-found-pre", "Bibliography item "),
+        ("bibliography-cite-not-found-post", " not found."),
         (
             "bibliography-block-not-found",
             "Bibliography block not found",
@@ -610,10 +613,8 @@ fn handle_localizes_all_render_messages_to_japanese() {
         ("footnote-block-title", "脚注"),
         ("bibliography-reference", "参照"),
         ("bibliography-block-title", "参考文献"),
-        (
-            "bibliography-cite-not-found",
-            "参考文献項目が見つかりません",
-        ),
+        ("bibliography-cite-not-found-pre", "参考文献項目 "),
+        ("bibliography-cite-not-found-post", " が見つかりません"),
         (
             "bibliography-block-not-found",
             "参考文献ブロックが見つかりません",

@@ -1,0 +1,11 @@
+Cite ((bibcite a)) and ((bibcite b)).
+
+[[bibliography]]
+: a : Entry A text.
+[[/bibliography]]
+
+Middle text.
+
+[[bibliography]]
+: b : Entry B text.
+[[/bibliography]]

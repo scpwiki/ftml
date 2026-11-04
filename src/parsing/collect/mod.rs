@@ -46,6 +46,10 @@ pub(crate) use self::iftags::{
     complete_fused_bracket_close, consume_iftags_segment, consume_iftags_segment_fused,
     iftags_segment_fused,
 };
+#[cfg(test)]
+pub(crate) use self::iftags::{
+    iftags_segment, reset_segment_scan_token_visits, segment_scan_token_visits,
+};
 pub use self::text::{
     collect_text, collect_text_keep, collect_text_resolved, collect_text_resolved_fused,
 };

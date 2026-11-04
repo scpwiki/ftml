@@ -67,22 +67,88 @@ impl IftagsSegment {
     }
 }
 
-/// Gathers the block name starting at token `start` in `tokens`, where
-/// `tokens[start]` is the opening token (`[[` or `[[/`). Returns the
-/// name's source range and the index of the first token after the name.
+#[cfg(test)]
+thread_local! {
+    static SEGMENT_SCAN_TOKEN_VISITS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// The number of tokens segment scans have examined on this thread.
+/// Test-only instrumentation, kept out of `Parser` because the
+/// parser's size is budgeted for deep recursive parsing.
+#[cfg(test)]
+pub(crate) fn segment_scan_token_visits() -> usize {
+    SEGMENT_SCAN_TOKEN_VISITS.with(|visits| visits.get())
+}
+
+#[cfg(test)]
+pub(crate) fn reset_segment_scan_token_visits() {
+    SEGMENT_SCAN_TOKEN_VISITS.with(|visits| visits.set(0));
+}
+
+#[cfg(test)]
+fn add_segment_scan_token_visits(count: usize) {
+    SEGMENT_SCAN_TOKEN_VISITS.with(|visits| visits.set(visits.get() + count));
+}
+
+#[cfg(test)]
+fn increment_segment_scan_token_visits() {
+    add_segment_scan_token_visits(1);
+}
+
+/// A borrowed window over the token stream: the token at some
+/// position plus every token after it. Segment scans index into a
+/// window instead of collecting the remaining tokens into a fresh
+/// vector per call, so a scan costs only the tokens it examines.
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct TokenWindow<'a, 't> {
+    first: &'a ExtractedToken<'t>,
+    rest: &'a [ExtractedToken<'t>],
+}
+
+impl<'a, 't> TokenWindow<'a, 't> {
+    /// The window starting at the parser's current token:
+    /// `remaining()` starts after the current token, so the window
+    /// is the current token followed by the remaining ones.
+    pub(crate) fn at<'r>(parser: &Parser<'r, 't>) -> TokenWindow<'r, 't> {
+        TokenWindow {
+            first: parser.current(),
+            rest: parser.remaining(),
+        }
+    }
+
+    /// The first token in the window.
+    pub(crate) fn first(&self) -> &'a ExtractedToken<'t> {
+        self.first
+    }
+
+    /// The token at `index` within the window, if it exists.
+    pub(crate) fn get(&self, index: usize) -> Option<&'a ExtractedToken<'t>> {
+        if index == 0 {
+            Some(self.first)
+        } else {
+            self.rest.get(index - 1)
+        }
+    }
+}
+
+/// Gathers the block name starting at token `start` in `window`,
+/// where the token at `start` is the opening token (`[[` or `[[/`).
+/// Returns the name's source range and the index of the first token
+/// after the name.
 fn head_name(
-    tokens: &[&ExtractedToken<'_>],
+    window: TokenWindow<'_, '_>,
     start: usize,
     break_at_right_link: bool,
 ) -> Option<(Range<usize>, usize)> {
     let mut index = start + 1;
-    while tokens.get(index)?.token == Token::Whitespace {
+    while window.get(index)?.token == Token::Whitespace {
         index += 1;
     }
-    let name_start = tokens.get(index)?.span.start;
+    let name_start = window.get(index)?.span.start;
     let mut name_end = name_start;
     loop {
-        let token = tokens.get(index)?;
+        let token = window.get(index)?;
         match token.token {
             Token::Whitespace
             | Token::LineBreak
@@ -143,29 +209,28 @@ where
         return None;
     }
 
-    // `remaining()` starts after the current token, so the scan window
-    // is the current token followed by the remaining ones.
-    let tokens: Vec<&ExtractedToken<'t>> = std::iter::once(parser.current())
-        .chain(parser.remaining().iter())
-        .collect();
-    let tokens = tokens.as_slice();
-    if tokens.first()?.token != Token::LeftBlock {
+    let window = TokenWindow::at(parser);
+    if window.first().token != Token::LeftBlock {
         return None;
     }
     let source = parser.full_text().inner();
-    let segment_start = tokens[0].span.start;
+    let segment_start = window.first().span.start;
 
-    let (name_range, mut index) = head_name(tokens, 0, false)?;
+    let (name_range, mut index) = head_name(window, 0, false)?;
+    #[cfg(test)]
+    add_segment_scan_token_visits(index);
     if !source[name_range].eq_ignore_ascii_case("iftags") {
         return None;
     }
 
     // Opener head: the spec runs until the head's `]]`.
-    let spec_start = tokens.get(index)?.span.start;
+    let spec_start = window.get(index)?.span.start;
     let head_end;
     let spec_end;
     loop {
-        let token = tokens.get(index)?;
+        #[cfg(test)]
+        increment_segment_scan_token_visits();
+        let token = window.get(index)?;
         match token.token {
             Token::RightBlock => {
                 spec_end = token.span.start;
@@ -200,45 +265,55 @@ where
     // Body: scan for the matching closer, counting nested iftags
     // openers. Segments in raw fields are single-line; a line break
     // before the closer means this is not a segment of the field.
-    let body_start = tokens.get(index).map_or(head_end, |token| token.span.start);
+    let body_start = window.get(index).map_or(head_end, |token| token.span.start);
     let mut depth = 1usize;
     let mut fused_closer = false;
     let (body_end, closer_end) = loop {
-        let token = tokens.get(index)?;
+        #[cfg(test)]
+        increment_segment_scan_token_visits();
+        let token = window.get(index)?;
         match token.token {
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return None,
             Token::LeftBlock => {
-                if let Some((name_range, _)) =
-                    head_name(tokens, index, allow_fused_closer)
-                    && source[name_range].eq_ignore_ascii_case("iftags")
+                if let Some((name_range, _after_name)) =
+                    head_name(window, index, allow_fused_closer)
                 {
-                    depth += 1;
+                    #[cfg(test)]
+                    add_segment_scan_token_visits(_after_name - index);
+                    if source[name_range].eq_ignore_ascii_case("iftags") {
+                        depth += 1;
+                    }
                 }
             }
             Token::LeftBlockEnd => {
-                if let Some((name_range, _)) =
-                    head_name(tokens, index, allow_fused_closer)
-                    && source[name_range].eq_ignore_ascii_case("iftags")
+                if let Some((name_range, _after_name)) =
+                    head_name(window, index, allow_fused_closer)
                 {
-                    depth -= 1;
-                    if depth == 0 {
-                        let closer_start = token.span.start;
-                        let mut end_index = index;
-                        let closer_end = loop {
-                            let token = tokens.get(end_index)?;
-                            match token.token {
-                                Token::RightBlock => break token.span.end,
-                                Token::RightLink if allow_fused_closer => {
-                                    fused_closer = true;
-                                    break token.span.start + 2;
+                    #[cfg(test)]
+                    add_segment_scan_token_visits(_after_name - index);
+                    if source[name_range].eq_ignore_ascii_case("iftags") {
+                        depth -= 1;
+                        if depth == 0 {
+                            let closer_start = token.span.start;
+                            let mut end_index = index;
+                            let closer_end = loop {
+                                #[cfg(test)]
+                                increment_segment_scan_token_visits();
+                                let token = window.get(end_index)?;
+                                match token.token {
+                                    Token::RightBlock => break token.span.end,
+                                    Token::RightLink if allow_fused_closer => {
+                                        fused_closer = true;
+                                        break token.span.start + 2;
+                                    }
+                                    Token::LineBreak
+                                    | Token::ParagraphBreak
+                                    | Token::InputEnd => return None,
+                                    _ => end_index += 1,
                                 }
-                                Token::LineBreak
-                                | Token::ParagraphBreak
-                                | Token::InputEnd => return None,
-                                _ => end_index += 1,
-                            }
-                        };
-                        break (closer_start, closer_end);
+                            };
+                            break (closer_start, closer_end);
+                        }
                     }
                 }
             }

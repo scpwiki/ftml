@@ -469,7 +469,7 @@ where
             }
             Token::LeftBlockEnd => {
                 let mut close = scan.clone();
-                if let Ok((name, residual)) = close.get_wikidot_end_block_with_residual()
+                if let Ok((name, _residual)) = close.get_wikidot_end_block_with_residual()
                 {
                     if span_open && name.eq_ignore_ascii_case("span") {
                         parser.cache_single_link_label_owner_scan_outcomes(
@@ -489,8 +489,7 @@ where
                         );
                         return true;
                     }
-                    if footnote_open && !residual && name.eq_ignore_ascii_case("footnote")
-                    {
+                    if footnote_open && name.eq_ignore_ascii_case("footnote") {
                         parser.cache_single_link_label_owner_scan_outcomes(
                             &traversed, true,
                         );
@@ -726,6 +725,12 @@ fn wikidot_link_disposition(url: &str) -> WikidotLinkDisposition {
         || url.starts_with("gopher://")
         || url.starts_with("news://")
         || url.starts_with("mms://")
+        || url.starts_with("ssh://")
+        || url.starts_with("git://")
+        || url.starts_with("sftp://")
+        || url.starts_with("svn://")
+        || url.starts_with("telnet://")
+        || url.starts_with("cvs://")
         || url.starts_with("mailto:")
     {
         return WikidotLinkDisposition::Link;

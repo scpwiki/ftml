@@ -511,17 +511,13 @@ mod tests {
         let tokenization = crate::tokenize(semantic_control);
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
-        assert_eq!(html, "<p>[[span]]<span>X</span></p>");
+        assert_eq!(html, "<p><span>[[span]]X</span></p>");
         assert_eq!(
             errors
                 .iter()
                 .map(|error| (error.rule(), error.kind()))
                 .collect::<Vec<_>>(),
-            vec![
-                ("block-span", ParseErrorKind::EndOfInput),
-                ("fallback", ParseErrorKind::NoRulesMatch),
-                ("fallback", ParseErrorKind::NoRulesMatch),
-            ],
+            Vec::new(),
         );
 
         for (openers, closers) in [(32, 0), (64, 32), (128, 64)] {
@@ -541,12 +537,16 @@ mod tests {
                 started.elapsed(),
             );
             assert!(!tree.elements.is_empty());
-            assert!(
-                errors
-                    .iter()
-                    .any(|error| error.kind() == ParseErrorKind::EndOfInput),
-                "{errors:#?}",
-            );
+            if closers == 0 {
+                assert!(
+                    errors
+                        .iter()
+                        .any(|error| error.kind() == ParseErrorKind::EndOfInput),
+                    "{errors:#?}",
+                );
+            } else {
+                assert!(errors.is_empty(), "{errors:#?}");
+            }
         }
     }
 

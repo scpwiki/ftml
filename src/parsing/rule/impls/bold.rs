@@ -21,7 +21,7 @@
 use super::inline_delimiter::{assert_unpadded_open, validate_reachable_close};
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
-use crate::parsing::collect::consume_iftags_segment;
+use crate::parsing::collect::{consume_iftags_segment, consume_valid_comment};
 use crate::tree::PartialElement;
 
 pub const RULE_BOLD: Rule = Rule {
@@ -62,16 +62,27 @@ fn try_consume_split_delimiter<'r, 't>(
     let mut probe = parser.clone();
     probe.step()?; // first `*`
     let mut segments = 0usize;
-    while probe.current().token == Token::LeftBlock {
-        let Some(segment) = consume_iftags_segment(&mut probe)? else {
+    loop {
+        if probe.current().token == Token::LeftBlock {
+            let Some(segment) = consume_iftags_segment(&mut probe)? else {
+                break;
+            };
+            if segment.include_body
+                && !probe.full_text().inner()[segment.body.clone()].is_empty()
+            {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            segments += 1;
+        } else if probe.current().token == Token::LeftComment {
+            let mut comment = probe.clone();
+            if consume_valid_comment(&mut comment).is_err() {
+                break;
+            }
+            probe.update(&comment);
+            segments += 1;
+        } else {
             break;
-        };
-        if segment.include_body
-            && !probe.full_text().inner()[segment.body.clone()].is_empty()
-        {
-            return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
-        segments += 1;
     }
     if segments == 0 || probe.current().token != Token::BulletItem {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -79,9 +90,21 @@ fn try_consume_split_delimiter<'r, 't>(
 
     validate_reachable_close(parser, Token::Bold)?;
     parser.step()?; // first `*`
-    while parser.current().token == Token::LeftBlock
-        && consume_iftags_segment(parser)?.is_some()
-    {}
+    loop {
+        if parser.current().token == Token::LeftBlock
+            && consume_iftags_segment(parser)?.is_some()
+        {
+            continue;
+        }
+        if parser.current().token == Token::LeftComment {
+            let mut comment = parser.clone();
+            if consume_valid_comment(&mut comment).is_ok() {
+                parser.update(&comment);
+                continue;
+            }
+        }
+        break;
+    }
     assert_step(parser, Token::BulletItem)?;
     if parser.current().token == Token::Whitespace {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));

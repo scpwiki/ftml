@@ -1,0 +1,50 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "SomeUser",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "SomeUser",
+                            "show-avatar": true
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "SOMEUSER",
+                            "show-avatar": false
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "user",
+                        "data": {
+                            "name": "John Smith",
+                            "show-avatar": false
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -598,7 +598,8 @@ fn recursive_bibcite_tooltips_render_error_instead_of_recursing() {
         let output = render_html(&tree, Layout::Wikijump);
 
         assert!(output.contains("wj-error-inline"));
-        assert!(output.contains("Bibliography item not found"));
+        assert!(output.contains("Bibliography item <em>"));
+        assert!(output.contains("</em> not found."));
         assert!(output.len() < 20_000);
     }
 }

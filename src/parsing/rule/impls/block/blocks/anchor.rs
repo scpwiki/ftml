@@ -75,6 +75,7 @@ fn parse_fn<'r, 't>(
         .and_then(|source| source.rfind("]]"))
         .map(|close| close + 2);
     let body = parser.get_body_elements(&BLOCK_ANCHOR, false)?;
+    let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_ANCHOR);
     let (mut elements, errors, paragraph_safe) = body.into();
     let body_source = anchor_body_start.and_then(|start| {
         let close_end = parser.current().span.start;
@@ -125,6 +126,19 @@ fn parse_fn<'r, 't>(
         (true, false) => Elements::Multiple(vec![text!(" "), element]),
         (false, true) => Elements::Multiple(vec![element, text!(" ")]),
         (true, true) => Elements::Multiple(vec![text!(" "), element, text!(" ")]),
+    };
+
+    let output = if fused_close {
+        match output {
+            Elements::Single(element) => Elements::Multiple(vec![element, text!("]")]),
+            Elements::Multiple(mut elements) => {
+                elements.push(text!("]"));
+                Elements::Multiple(elements)
+            }
+            Elements::None => Elements::Multiple(vec![text!("]")]),
+        }
+    } else {
+        output
     };
 
     success_elements_with_paragraph_safety(

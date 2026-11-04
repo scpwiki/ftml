@@ -1,0 +1,8 @@
+[[[ #my-anchor | Label ]]]
+[[[*#my-anchor|Label]]]
+[[[ #my-anchor]]]
+[[[*#my-anchor]]]
+[[[ #My-Anchor | Label ]]]
+[[[ # | Label ]]]
+[[[*#my-anchor | Label]]]
+[[[ #123 | Label ]]]
