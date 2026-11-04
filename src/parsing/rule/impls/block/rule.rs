@@ -89,6 +89,32 @@ fn block_for_head_word<'r, 't>(
     actionable.then_some(block)
 }
 
+pub(crate) fn head_word_names_known_block<'r, 't>(parser: &mut Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    let Ok((name, _, segment)) = parser.get_block_name(false) else {
+        return false;
+    };
+    let lookup_name: Cow<'t, str> = if name.ends_with('_') {
+        match name {
+            Cow::Borrowed(name) => {
+                Cow::Borrowed(name.strip_suffix('_').unwrap_or(name))
+            }
+            Cow::Owned(mut name) => {
+                name.pop();
+                Cow::Owned(name)
+            }
+        }
+    } else {
+        name
+    };
+    if lookup_name.ends_with('_') {
+        return false;
+    }
+    block_for_head_word(parser, &lookup_name, segment).is_some()
+}
+
 fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     let current = parser.step()?;
     let flag_star = current.token == Token::LeftBlockStar;
