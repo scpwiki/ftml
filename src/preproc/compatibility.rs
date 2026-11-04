@@ -810,6 +810,9 @@ fn split_list_item_collapsible_close(
 }
 
 fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
+    if std::env::var("L83NOSYNTH").is_ok() {
+        return;
+    }
     let literal_lines = resplit_lines(lines);
     let mut div_depth = 0usize;
     let mut baselines: Vec<usize> = Vec::new();

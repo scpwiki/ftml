@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
 use crate::data::PageInfo;
@@ -75,6 +75,8 @@ pub(crate) struct WikidotBlockPairs {
     by_head: BTreeMap<usize, usize>,
     by_head_byte: BTreeMap<usize, usize>,
     by_closer_byte: BTreeMap<usize, usize>,
+    head_event_bytes: BTreeSet<usize>,
+    closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
 }
 
 impl WikidotBlockPairs {
@@ -109,6 +111,20 @@ impl WikidotBlockPairs {
         self.by_closer_byte.iter().any(|(closer_start, index)| {
             *closer_start > byte && self.pairs[*index].head_byte < byte
         })
+    }
+
+    pub(crate) fn shows_stolen_head(
+        &self,
+        kind: WikidotBlockKind,
+        head_byte: usize,
+    ) -> bool {
+        if !self.head_event_bytes.contains(&head_byte) {
+            return false;
+        }
+        self.closer_event_bytes
+            .range((kind, head_byte.saturating_add(1))..)
+            .next()
+            .is_some_and(|(found, _)| *found == kind)
     }
 }
 
@@ -240,6 +256,8 @@ struct Scanner<'t> {
     tabview_banned_lines: Vec<bool>,
     bib_ranges: Vec<(usize, usize)>,
     pairs: Vec<WikidotBlockPair>,
+    head_event_bytes: BTreeSet<usize>,
+    closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
 }
 
 impl<'t> Scanner<'t> {
@@ -401,6 +419,8 @@ impl<'t> Scanner<'t> {
             tabview_banned_lines: vec![false; line_count],
             bib_ranges: Vec::new(),
             pairs: Vec::new(),
+            head_event_bytes: BTreeSet::new(),
+            closer_event_bytes: BTreeSet::new(),
         }
     }
 
@@ -1128,6 +1148,8 @@ impl<'t> Scanner<'t> {
             by_head,
             by_head_byte,
             by_closer_byte,
+            head_event_bytes: self.head_event_bytes,
+            closer_event_bytes: self.closer_event_bytes,
         }
     }
 
@@ -1280,6 +1302,9 @@ impl<'t> Scanner<'t> {
                         is_close: false,
                     });
                 } else {
+                    // Read but rejected (heading-line, mid-line): the scan
+                    // saw this head, so descent may still judge it stolen.
+                    self.head_event_bytes.insert(self.tokens[i].span.start);
                     self.reprocess_head_segments(&head, end, depth, events);
                 }
                 head.head_end
@@ -1457,6 +1482,15 @@ impl<'t> Scanner<'t> {
     }
 
     fn pair_events(&mut self, events: Vec<Event>) {
+        for event in &events {
+            if event.is_close {
+                let byte = self.tokens[event.closer].span.start;
+                self.closer_event_bytes.insert((event.kind, byte));
+            } else {
+                let byte = self.tokens[event.head].span.start;
+                self.head_event_bytes.insert(byte);
+            }
+        }
         const KINDS: [WikidotBlockKind; 7] = [
             WikidotBlockKind::Div,
             WikidotBlockKind::Collapsible,

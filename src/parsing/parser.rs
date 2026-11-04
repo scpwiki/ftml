@@ -358,6 +358,17 @@ impl<'r, 't> Parser<'r, 't> {
             .byte_inside_any_span(closer_byte)
     }
 
+    pub(crate) fn wikidot_scan_shows_stolen_head(
+        &self,
+        kind: block_pairs::WikidotBlockKind,
+        head_byte: usize,
+    ) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .shows_stolen_head(kind, head_byte)
+    }
+
     pub(crate) fn wikidot_flat_pair_head_before(
         &self,
         kind: block_pairs::WikidotBlockKind,

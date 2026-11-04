@@ -227,7 +227,8 @@ pub(crate) fn wikidot_flat_pair_for_head(
         .wikidot_block_pair_at_head_byte(opener_start)
         .filter(|pair| pair.flat && pair.kind.emits_flat());
     if std::env::var("L83DUMP").is_ok() {
-        eprintln!("L83DUMP flat_pair_for_head byte={opener_start} pair={pair:?}");
+        let raw = parser.wikidot_block_pair_at_head_byte(opener_start);
+        eprintln!("L83DUMP flat_pair_for_head byte={opener_start} pair={pair:?} raw={raw:?}");
     }
     pair
 }
