@@ -255,6 +255,9 @@ pub(crate) fn head_seam_forms_block(block: &BlockRule, layout: Layout) -> bool {
                 | "block-list-unordered"
                 | "block-list-ordered"
                 | "block-list-item"
+                | "block-user"
+                | "block-date"
+                | "block-toc"
         )
 }
 

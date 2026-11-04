@@ -231,8 +231,11 @@ fn canonicalize_extra_block_head_closers(lines: &mut [String], literal_lines: &[
         "footnote",
         "iframe",
         "image",
+        "ol",
         "size",
+        "span",
         "toc",
+        "ul",
         "user",
     ];
     const BARRIER: &str = "]][!--ftml-residual-bracket--]]";
@@ -255,6 +258,9 @@ fn canonicalize_extra_block_head_closers(lines: &mut [String], literal_lines: &[
             })
             .unwrap_or(head.len());
         let name = &head[..name_end];
+        if head[name_end..].starts_with("_]]]") {
+            continue;
+        }
         if !OWNERS.iter().any(|owner| name.eq_ignore_ascii_case(owner)) {
             continue;
         }

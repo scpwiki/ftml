@@ -365,6 +365,55 @@ fn repair_bracket_run_tokenization<'t>(
     let mut repaired = false;
     let mut index = 0;
     while index + 1 < tokens.len() {
+        let comment_head = tokens[index].token == Token::LeftLink
+            && tokens[index].span.end - tokens[index].span.start == 3
+            && source[tokens[index].span.start..].starts_with("[[[!--")
+            && tokens.get(index + 1).is_some_and(|token| {
+                token.token == Token::Other
+                    && token.slice == "!"
+                    && token.span.start == tokens[index].span.start + 3
+                    && token.span.end == tokens[index].span.start + 4
+            })
+            && tokens.get(index + 2).is_some_and(|token| {
+                token.token == Token::DoubleDash
+                    && token.slice == "--"
+                    && token.span.start == tokens[index].span.start + 4
+                    && token.span.end == tokens[index].span.start + 6
+            });
+        if comment_head {
+            let start = tokens[index].span.start;
+            let token_at = |token: Token, span: std::ops::Range<usize>| ExtractedToken {
+                token,
+                slice: &source[span.clone()],
+                span,
+            };
+            let mut candidate = tokens.clone();
+            candidate.splice(
+                index..index + 3,
+                [
+                    token_at(Token::LeftBlock, start..start + 2),
+                    token_at(Token::LeftComment, start + 2..start + 6),
+                ],
+            );
+            if bracket_run_block_parses(
+                &candidate,
+                index,
+                tokenization,
+                page_info,
+                settings,
+            ) || bracket_run_comment_head_resolves(
+                &candidate,
+                index,
+                tokenization,
+                page_info,
+                settings,
+            ) {
+                tokens = candidate;
+                repaired = true;
+                index += 2;
+                continue;
+            }
+        }
         let pair = tokens[index].token == Token::LeftBracket
             && tokens[index + 1].token == Token::LeftLink
             && tokens[index + 1].span.start == tokens[index].span.end
@@ -452,6 +501,24 @@ fn bracket_run_block_parses<'t>(
         && self::rule::impls::RULE_BLOCK
             .try_consume(&mut parser)
             .is_ok()
+}
+
+fn bracket_run_comment_head_resolves<'t>(
+    tokens: &[ExtractedToken<'t>],
+    target: usize,
+    tokenization: &Tokenization<'t>,
+    page_info: &PageInfo<'t>,
+    settings: &WikitextSettings,
+) -> bool {
+    let candidate = tokenization.with_tokens(tokens.to_vec());
+    let mut parser = Parser::new(&candidate, page_info, settings);
+    for _ in 0..target {
+        if parser.step().is_err() {
+            return false;
+        }
+    }
+    parser.current().token == Token::LeftBlock
+        && self::rule::impls::head_word_names_known_block(&mut parser)
 }
 
 fn bracket_run_segment_prefix<'t>(
