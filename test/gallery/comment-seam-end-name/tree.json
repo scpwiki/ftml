@@ -1,0 +1,33 @@
+{
+    "elements": [
+        {
+            "element": "gallery",
+            "data": {
+                "source": "[[gallery]]\n: a.png\n: b.png\n[[/gallery]]",
+                "arguments": [],
+                "selection": {
+                    "type": "explicit",
+                    "entries": [
+                        {
+                            "source": ": a.png",
+                            "image": {
+                                "type": "file",
+                                "source": "a.png"
+                            },
+                            "arguments": []
+                        },
+                        {
+                            "source": ": b.png",
+                            "image": {
+                                "type": "file",
+                                "source": "b.png"
+                            },
+                            "arguments": []
+                        }
+                    ]
+                },
+                "source-sha256": "e3a8280634b153e420ff0cbc56382c4cb2feaac39eb137f5ec76697ae1fcf49a"
+            }
+        }
+    ]
+}

@@ -210,16 +210,17 @@ impl GalleryEntrySourceData {
 }
 
 impl<'t> Gallery<'t> {
-    pub(crate) fn new(
-        source: &'t str,
+    pub(crate) fn new_cow(
+        source: Cow<'t, str>,
         arguments: Vec<GalleryArgument<'t>>,
         selection: GallerySelection<'t>,
     ) -> Self {
+        let source_sha256 = SourceSha256::digest(&source);
         Self {
-            source: Cow::Borrowed(source),
+            source,
             arguments,
             selection,
-            source_sha256: SourceSha256::digest(source),
+            source_sha256,
         }
     }
 
@@ -266,7 +267,7 @@ impl<'t> GalleryArgument<'t> {
         &self.value
     }
 
-    fn to_owned(&self) -> GalleryArgument<'static> {
+    pub(crate) fn to_owned(&self) -> GalleryArgument<'static> {
         GalleryArgument {
             source: string_to_owned(&self.source),
             name: string_to_owned(&self.name),
@@ -422,7 +423,7 @@ pub(crate) fn parse_explicit_gallery_entries<'t>(
     }
 }
 
-fn parse_gallery_entry(line: &str) -> Option<GalleryEntry<'_>> {
+pub(crate) fn parse_gallery_entry(line: &str) -> Option<GalleryEntry<'_>> {
     let content = line.trim_start_matches([' ', '\t']);
     let tail = content.strip_prefix(':')?.trim_start_matches([' ', '\t']);
     let (image_source, arguments_source) = split_gallery_entry_source(tail)?;

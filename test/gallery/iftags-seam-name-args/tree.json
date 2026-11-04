@@ -1,0 +1,39 @@
+{
+    "elements": [
+        {
+            "element": "gallery",
+            "data": {
+                "source": "[[gallery size=\"thumbnail\"]]\n: a.png\n: b.png\n[[/gallery]]",
+                "arguments": [
+                    {
+                        "source": "size=\"thumbnail\"",
+                        "name": "size",
+                        "value": "thumbnail"
+                    }
+                ],
+                "selection": {
+                    "type": "explicit",
+                    "entries": [
+                        {
+                            "source": ": a.png",
+                            "image": {
+                                "type": "file",
+                                "source": "a.png"
+                            },
+                            "arguments": []
+                        },
+                        {
+                            "source": ": b.png",
+                            "image": {
+                                "type": "file",
+                                "source": "b.png"
+                            },
+                            "arguments": []
+                        }
+                    ]
+                },
+                "source-sha256": "fc442983b94c8d9922b942620d812b6b6d2abbf40b47e0973a9a305a9409ff3f"
+            }
+        }
+    ]
+}

@@ -269,6 +269,7 @@ pub(crate) fn head_seam_forms_block(block: &BlockRule, layout: Layout) -> bool {
                 | "block-iframe"
                 | "block-image"
                 | "block-bibliography"
+                | "block-gallery"
                 | "block-list-unordered"
                 | "block-list-ordered"
                 | "block-list-item"

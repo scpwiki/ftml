@@ -322,8 +322,8 @@ mod tests {
     #[test]
     fn gallery_requirement_serializes_typed_source_and_generated_id() {
         let id = "wj-gallery-0123456789abcdef0123456789abcdef";
-        let gallery = Gallery::new(
-            "[[gallery]]",
+        let gallery = Gallery::new_cow(
+            std::borrow::Cow::Borrowed("[[gallery]]"),
             Vec::new(),
             crate::tree::GallerySelection::CurrentPageFiles,
         );
@@ -350,8 +350,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "gallery requirement id must be renderer-generated")]
     fn gallery_requirement_rejects_authored_script_data() {
-        let gallery = Gallery::new(
-            "[[gallery]]",
+        let gallery = Gallery::new_cow(
+            std::borrow::Cow::Borrowed("[[gallery]]"),
             Vec::new(),
             crate::tree::GallerySelection::CurrentPageFiles,
         );
