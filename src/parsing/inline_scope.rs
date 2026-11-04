@@ -1854,6 +1854,7 @@ fn lower_sequence<'t>(
                     &mut last_run_outer_scope,
                     &mut run_has_content,
                     inline_tag_for_ctype(kind.container_type()),
+                    ScopeKind::Format(kind),
                     current,
                     source.peek(),
                 );
@@ -1889,6 +1890,7 @@ fn lower_sequence<'t>(
                     &mut last_run_outer_scope,
                     &mut run_has_content,
                     InlineTag::Span,
+                    ScopeKind::Color,
                     current,
                     source.peek(),
                 );
@@ -2562,6 +2564,7 @@ fn close_flattened_scope<'t>(
     last_run_outer_scope: &mut RunMergeState,
     run_has_content: &mut bool,
     tag: InlineTag,
+    close_kind: ScopeKind,
     close_ordinal: usize,
     next: Option<&Element<'t>>,
 ) {
@@ -2579,7 +2582,16 @@ fn close_flattened_scope<'t>(
         run.pop();
     }
     flush_close_run(output, run, active, last_run_outer_scope, run_has_content);
-    trim_trailing_space(output);
+    let crossed = resolved.is_some_and(|position| {
+        active.active_tail != Some(position)
+            || active.scopes[position].kind != close_kind
+    });
+    let keep_trailing_space = crossed
+        && !next_starts_with_space
+        && output.last().is_some_and(element_has_real_content);
+    if !keep_trailing_space {
+        trim_trailing_space(output);
+    }
     if resolved.is_some() {
         active.tidy_close(tag);
     }
@@ -2730,6 +2742,23 @@ fn flush_run<'t>(
     }
     output.extend(wrapped);
     last_run_outer_scope.reset();
+}
+
+fn element_has_real_content(element: &Element<'_>) -> bool {
+    match element {
+        Element::Text(text) => !text.trim().is_empty(),
+        Element::Container(container) => {
+            container.elements().iter().any(element_has_real_content)
+        }
+        Element::Color { elements, .. } => {
+            elements.iter().any(element_has_real_content)
+        }
+        Element::Anchor { elements, .. } => {
+            elements.iter().any(element_has_real_content)
+        }
+        Element::Partial(_) => false,
+        _ => true,
+    }
 }
 
 fn trim_trailing_space(elements: &mut Vec<Element<'_>>) {

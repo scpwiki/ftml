@@ -2328,7 +2328,11 @@ fn dash_unit(element: &Element<'_>, admit_link: bool) -> DashUnit {
             let Some(shell) = FormatShell::from_element(element) else {
                 return DashUnit::Barrier;
             };
-            if shell.kind() == FormatKind::Strike || subtree_has_dash_pair(element) {
+            if shell.kind() == FormatKind::Strike
+                || subtree_has_dash_pair(element)
+                || (shell.kind() == FormatKind::Monospace
+                    && subtree_has_plain_strike(element))
+            {
                 DashUnit::Barrier
             } else {
                 DashUnit::Atom(DASH_ATOM_CHAR)
@@ -2350,6 +2354,15 @@ fn subtree_has_dash_pair(element: &Element<'_>) -> bool {
         },
         _ => false,
     }
+}
+
+fn subtree_has_plain_strike(element: &Element<'_>) -> bool {
+    if is_plain_strike(element) {
+        return true;
+    }
+    formatter_children(element).is_some_and(|children| {
+        children.iter().any(subtree_has_plain_strike)
+    })
 }
 
 enum DashScanUnit {
@@ -3149,7 +3162,10 @@ fn dash_flatten_shell<'t>(element: &Element<'t>) -> Option<FormatShell<'t>> {
     if shell.kind() == FormatKind::Strike {
         return None;
     }
-    if !subtree_has_dash_pair(element) || subtree_has_barrier(element) {
+    let has_dash_material = subtree_has_dash_pair(element)
+        || (shell.kind() == FormatKind::Monospace
+            && subtree_has_plain_strike(element));
+    if !has_dash_material || subtree_has_barrier(element) {
         return None;
     }
     Some(shell)
@@ -3192,6 +3208,13 @@ fn dash_flatten_edge<'t>(shell: &FormatShell<'t>, open: bool) -> Element<'t> {
 fn dash_flatten_scan(children: &[Element<'_>]) -> Option<Vec<char>> {
     let mut stream = Vec::new();
     for child in children {
+        if is_plain_strike(child) {
+            let inner = formatter_children(child)?;
+            stream.extend(['-', '-']);
+            stream.extend(dash_flatten_scan(inner)?);
+            stream.extend(['-', '-']);
+            continue;
+        }
         if dash_flatten_shell(child).is_some() {
             let inner = formatter_children(child)?;
             stream.extend(dash_flatten_scan(inner)?);
@@ -3214,6 +3237,18 @@ fn dash_flatten_apply<'t>(
     flat: &mut Vec<Option<Element<'t>>>,
 ) {
     for child in children {
+        if is_plain_strike(&child) {
+            flat.push(Some(Element::Text(
+                FormatKind::Strike.close_marker().into(),
+            )));
+            let (_, grandchildren) =
+                FormatShell::into_parts(child).expect("strike container has parts");
+            dash_flatten_apply(grandchildren, flat);
+            flat.push(Some(Element::Text(
+                FormatKind::Strike.close_marker().into(),
+            )));
+            continue;
+        }
         if let Some(shell) = dash_flatten_shell(&child) {
             flat.push(Some(dash_flatten_edge(&shell, true)));
             let (_, grandchildren) =
@@ -3254,9 +3289,13 @@ fn expand_dash_format_container<'t>(
     let mut stream = scan.stream.clone();
     stream.extend(child_stream.iter());
     stream.extend(continuation.stream.iter());
-    let pairs = dash_stream_pairs(&stream);
     let open_edge = scan.stream.len();
     let close_edge = open_edge + child_stream.len();
+    let mut pair_stream = stream.clone();
+    if open_edge > 0 && pair_stream[open_edge - 1].is_whitespace() {
+        pair_stream[open_edge - 1] = '\u{1}';
+    }
+    let pairs = dash_stream_pairs(&pair_stream);
     if !pairs.iter().any(|&(open, close)| {
         (open < open_edge && close >= open_edge)
             || (open < close_edge && close >= close_edge)
