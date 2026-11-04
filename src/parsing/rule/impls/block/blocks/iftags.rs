@@ -182,6 +182,13 @@ fn parse_fn<'r, 't>(
     // closers sit inside regions the search cannot see into all keep the
     // legacy guards and gathers (hidden bodies discard one gate at a time,
     // fail-closed).
+    //
+    // The wikijump layout takes the missing-closer guard as well (below):
+    // a gate with no closer is not a gate at all, so the rule fails and
+    // the opener renders literally, matching live Wikidot, which renders
+    // both unclosed forms as plain text. Without the guard, the wikijump
+    // false-condition path discarded elements to the end of the input
+    // and reported success, silently swallowing the rest of the document.
     let legacy = parser.settings().layout.legacy();
     let mut designated_end = None;
     if legacy && !parser.discarding_hidden_body() && !parser.in_quote_body() {
@@ -204,6 +211,15 @@ fn parse_fn<'r, 't>(
         } else if !parser.has_body_end_block(&BLOCK_IFTAGS) {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
+    } else if !parser.discarding_hidden_body()
+        && !parser.has_body_end_block(&BLOCK_IFTAGS)
+    {
+        // A gate parsed while a hidden body is discarded needs no guard:
+        // the discard machinery consumes fail-closed (an unterminated
+        // discard runs to the end of the input), so nothing can leak
+        // through it, and imposing the guard there would change which
+        // closer the enclosing discard treats as its end.
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
     let previous_body_end = parser.wikidot_iftags_body_end();
