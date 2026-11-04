@@ -48,6 +48,12 @@ pub(crate) enum BlockBodyStart {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GateHeadClose {
+    Block,
+    Fused,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscardedBodyOutcome {
     Discarded,
     FailedClosedThroughInputEnd,
@@ -3825,6 +3831,54 @@ where
 
         let body_start = self.get_head_block_with_body_start(block_rule, false)?;
         Ok((value, body_start))
+    }
+
+    pub(crate) fn get_gate_head_with_body_start<F, T>(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+        convert: F,
+    ) -> Result<(T, BlockBodyStart, GateHeadClose), ParseError>
+    where
+        F: FnOnce(&Self, Option<&'t str>) -> Result<T, ParseError>,
+    {
+        let (argument, close) = if in_head {
+            let end_conditions = [
+                ParseCondition::current(Token::RightBlock),
+                ParseCondition::current(Token::RightLink),
+            ];
+            let reject_conditions = [
+                ParseCondition::current(Token::ParagraphBreak),
+                ParseCondition::current(Token::LineBreak),
+            ];
+            let rule = self.rule();
+            let (slice, last) = collect_text_keep(
+                self,
+                rule,
+                &end_conditions,
+                &reject_conditions,
+                Some(ParseErrorKind::BlockMalformedArguments),
+            )?;
+            match last.token {
+                Token::RightLink => (Some(slice), GateHeadClose::Fused),
+                _ => match slice.strip_suffix(']') {
+                    Some(trimmed) => (Some(trimmed), GateHeadClose::Fused),
+                    None => (Some(slice), GateHeadClose::Block),
+                },
+            }
+        } else {
+            (None, GateHeadClose::Block)
+        };
+
+        let value = convert(self, argument)?;
+
+        let body_start = match close {
+            GateHeadClose::Fused => BlockBodyStart::Inline,
+            GateHeadClose::Block => {
+                self.get_head_block_with_body_start(block_rule, false)?
+            }
+        };
+        Ok((value, body_start, close))
     }
 
     pub fn get_head_none(

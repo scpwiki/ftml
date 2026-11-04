@@ -8,6 +8,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
 
     let literal_regions = LiteralRegionIndex::new(text);
     let block_name_comments = regular_block_name_comment_starts(text);
+    let spec_comments = iftags_spec_comment_starts(text);
     let mut output = String::with_capacity(text.len());
     let mut copied_until = 0usize;
     let mut scan = 0usize;
@@ -16,7 +17,10 @@ pub(super) fn substitute_wikidot(text: &mut String) {
 
     while let Some(relative_open) = text[scan..].find("[!--") {
         let open = scan + relative_open;
-        if literal_regions.contains(open) || block_name_comments.contains(&open) {
+        if literal_regions.contains(open)
+            || block_name_comments.contains(&open)
+            || spec_comments.contains(&open)
+        {
             scan = open + "[!--".len();
             continue;
         }
@@ -227,6 +231,63 @@ fn leading_comment_remains_an_owner_barrier(
 
     let tail = source[close..].trim_start_matches([' ', '\t']);
     !exposed_line_start_construct(tail)
+}
+
+fn iftags_spec_comment_starts(source: &str) -> BTreeSet<usize> {
+    let mut comments = BTreeSet::new();
+    let mut cursor = 0usize;
+    while let Some(relative_open) = source[cursor..].find("[[") {
+        let open = cursor + relative_open;
+        let mut at = open + 2;
+        if source.as_bytes().get(at) == Some(&b'[') {
+            cursor = at + 1;
+            continue;
+        }
+        while matches!(source.as_bytes().get(at), Some(b' ' | b'\t')) {
+            at += 1;
+        }
+        let mut name = String::new();
+        loop {
+            if at >= source.len() {
+                break;
+            }
+            if source[at..].starts_with("[!--") {
+                let close_search = at + "[!--".len();
+                let Some(relative_close) = source[close_search..].find("--]")
+                else {
+                    break;
+                };
+                at = close_search + relative_close + "--]".len();
+                continue;
+            }
+            let ch = source[at..]
+                .chars()
+                .next()
+                .expect("name scan remains on a character boundary");
+            if !(ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_')) {
+                break;
+            }
+            name.push(ch);
+            at += ch.len_utf8();
+        }
+        if name.eq_ignore_ascii_case("iftags") {
+            let region_end = source[at..]
+                .find("]]")
+                .map(|relative| at + relative)
+                .unwrap_or(source.len());
+            let mut pos = at;
+            while pos < region_end {
+                let Some(relative) = source[pos..region_end].find("[!--") else {
+                    break;
+                };
+                let comment = pos + relative;
+                comments.insert(comment);
+                pos = comment + "[!--".len();
+            }
+        }
+        cursor = open + 2;
+    }
+    comments
 }
 
 fn regular_block_name_comment_starts(source: &str) -> BTreeSet<usize> {

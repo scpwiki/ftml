@@ -21,7 +21,7 @@
 use super::prelude::*;
 use crate::data::PageInfo;
 use crate::delayed::DelayedElement;
-use crate::parsing::rule::impls::block::parser::BlockBodyStart;
+use crate::parsing::rule::impls::block::parser::{BlockBodyStart, GateHeadClose};
 use crate::parsing::{ElementCondition, ParagraphSplitEntry, ParagraphSplitKind};
 use std::borrow::Cow;
 
@@ -276,6 +276,47 @@ fn result_is_invisible(result: &ParseResult<'_, '_, Elements<'_>>) -> bool {
     }
 }
 
+fn spec_contains_complete_comment(spec: &str) -> bool {
+    let mut pos = 0;
+    while let Some(relative) = spec[pos..].find("[!--") {
+        let open = pos + relative;
+        if spec[open + "[!--".len()..].contains("--]") {
+            return true;
+        }
+        pos = open + "[!--".len();
+    }
+    false
+}
+
+fn prepend_head_leftover<'r, 't>(
+    result: ParseResult<'r, 't, Elements<'t>>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    match result {
+        Ok(mut success) => {
+            if let Some(counts) = &mut success.paragraph_split
+                && let Some(first) = counts.first_mut()
+            {
+                first.0 += 1;
+            }
+            success.item = match success.item {
+                Elements::Multiple(mut elements) => {
+                    elements.insert(0, Element::Text(Cow::Borrowed("]")));
+                    Elements::Multiple(elements)
+                }
+                Elements::Single(element) => Elements::Multiple(vec![
+                    Element::Text(Cow::Borrowed("]")),
+                    element,
+                ]),
+                Elements::None => {
+                    Elements::Single(Element::Text(Cow::Borrowed("]")))
+                }
+            };
+            Ok(success)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -295,13 +336,21 @@ fn parse_fn<'r, 't>(
         return literal_span_gate(parser, name);
     }
 
-    let (conditions, body_start) = parser.get_head_value_with_body_start(
+    let (conditions, body_start, head_close) = parser.get_gate_head_with_body_start(
         &BLOCK_IFTAGS,
         in_head,
-        parse_conditions,
+        |parser, spec| {
+            if let Some(spec) = spec
+                && spec_contains_complete_comment(spec)
+            {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            parse_conditions(parser, spec)
+        },
     )?;
+    let head_fused = matches!(head_close, GateHeadClose::Fused);
 
-    let spaced_head = body_start == BlockBodyStart::Inline
+    let spaced_head = !head_fused && body_start == BlockBodyStart::Inline
         && parser.current().token == Token::Whitespace
         && matches!(
             parser
@@ -311,13 +360,14 @@ fn parse_fn<'r, 't>(
                 .get(parser.current().span.end),
             Some(b'\n') | Some(b'\r'),
         );
-    let whitespace_only_body = body_start == BlockBodyStart::Inline
+    let whitespace_only_body = !head_fused && body_start == BlockBodyStart::Inline
         && parser.current().token == Token::Whitespace
         && matches!(
             parser.look_ahead(0),
             Some(next) if next.token == Token::LeftBlockEnd,
         );
-    if body_start == BlockBodyStart::Inline
+    if !head_fused
+        && body_start == BlockBodyStart::Inline
         && parser.current().token == Token::Whitespace
         && !spaced_head
         && !whitespace_only_body
@@ -478,6 +528,12 @@ fn parse_fn<'r, 't>(
                     errors,
                     paragraph_safe,
                 ) = body.into();
+
+                if head_fused
+                    && let Some(first) = segments.first_mut()
+                {
+                    first.insert(0, Element::Text(Cow::Borrowed("]")));
+                }
 
                 trace!(
                     "IfTags parsed {} conditions and {} body segments",
@@ -676,7 +732,12 @@ fn parse_fn<'r, 't>(
     } else if designated_end.is_some()
         && let Some(required_depth) = parser.native_blockquote_depth()
     {
-        gather_iftags_body_in_quote(parser, required_depth, body_start)
+        let result = gather_iftags_body_in_quote(parser, required_depth, body_start);
+        if head_fused {
+            prepend_head_leftover(result)
+        } else {
+            result
+        }
     } else {
         match parser.get_body_elements_with_literal_quote_context(
             &BLOCK_IFTAGS,
@@ -684,7 +745,7 @@ fn parse_fn<'r, 't>(
             body_start,
         ) {
             Ok(body) => {
-                let (elements, errors, paragraph_safe) = body.into();
+                let (mut elements, errors, paragraph_safe) = body.into();
 
                 trace!(
                     "IfTags parsed {} conditions and {} elements",
@@ -693,6 +754,9 @@ fn parse_fn<'r, 't>(
                 );
 
                 trace!("Conditions passed, including elements");
+                if head_fused {
+                    elements.insert(0, Element::Text(Cow::Borrowed("]")));
+                }
                 let mut bounded = Vec::with_capacity(elements.len() + 2);
                 bounded.push(Element::Delayed(DelayedElement::typography_boundary()));
                 bounded.extend(elements);

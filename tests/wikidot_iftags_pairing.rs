@@ -1,7 +1,6 @@
-
 use ftml::data::{PageInfo, ScoreValue};
 use ftml::layout::Layout;
-use ftml::render::{Render, text::TextRender};
+use ftml::render::{text::TextRender, Render};
 use ftml::settings::{WikitextMode, WikitextSettings};
 use std::borrow::Cow;
 
@@ -289,4 +288,27 @@ fn native_layout_pairs_the_same_way() {
         ),
         "d",
     );
+}
+
+#[test]
+fn spec_comment_straddle_reads_raw() {
+    let fruit = vec![Cow::Borrowed("fruit")];
+    for layout in [Layout::Wikidot, Layout::Wikijump] {
+        assert_eq!(
+            render_layout(
+                "[[iftags +fruit [!--x--]]]KEPT[[/iftags]]",
+                layout,
+                fruit.clone(),
+            ),
+            "",
+        );
+        assert_eq!(
+            render_layout(
+                "[[iftags -fruit[!--x--]]]KEPT[[/iftags]]",
+                layout,
+                fruit.clone(),
+            ),
+            "]KEPT",
+        );
+    }
 }
