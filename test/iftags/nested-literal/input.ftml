@@ -1,0 +1,5 @@
+[[iftags -zzz]]
+outer-visible[[iftags +zzz]]
+hidden
+[[/iftags]]
+[[/iftags]]

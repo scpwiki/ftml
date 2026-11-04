@@ -292,14 +292,35 @@ fn false_pair_keeps_trailing_token_literal() {
 }
 
 #[test]
-fn native_layout_still_nests() {
-    // The Wikijump layout keeps proper nesting; pairing is legacy-only.
+fn native_layout_pairs_the_same_way() {
+    // The #792-era assumption that the native layout keeps proper
+    // nesting was superseded by saved-page probes (2026-11-04): live
+    // never evaluates a nested gate, in either layout, so the native
+    // layout designates pairs exactly like the legacy one.
     assert_eq!(
         render_layout(
             &format!("x[[iftags {T}]]a[[iftags {T}]]b[[/iftags]]c[[/iftags]]y"),
             Layout::Wikijump,
             Vec::new(),
         ),
-        "xabcy",
+        format!("xa[[iftags {T}]]b[[/iftags]]cy"),
+    );
+    assert_eq!(
+        render_layout(
+            &format!("x[[iftags {F}]]a[[iftags {T}]]b[[/iftags]]c[[/iftags]]y"),
+            Layout::Wikijump,
+            Vec::new(),
+        ),
+        "xy",
+    );
+    // A false outer gate whose only closer belongs to a nested gate
+    // ends at that closer; text after it is outside the span.
+    assert_eq!(
+        render_layout(
+            &format!("[[iftags {F}]]a[[iftags {T}]]b[[/iftags]]d"),
+            Layout::Wikijump,
+            Vec::new(),
+        ),
+        "d",
     );
 }
