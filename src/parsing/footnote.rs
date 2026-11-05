@@ -10,7 +10,7 @@
  * (at your option) any later version.
  */
 
-use crate::tree::{AttributeMap, Container, ContainerType, Element};
+use crate::tree::{AttributeMap, Container, ContainerType, Element, ListItem, ListType};
 use std::borrow::Cow;
 use std::vec::IntoIter;
 
@@ -45,6 +45,9 @@ pub(crate) fn normalize_wikidot_blocks(
             normalize_block_sequence(&mut output);
         }
         let Some(mut parent) = parent else {
+            if !footnotes_empty && needs_footnote_block_hoist(&output) {
+                hoist_wikidot_footnote_blocks(&mut output);
+            }
             *elements = output;
             break;
         };
@@ -375,6 +378,299 @@ fn remove_empty_inline_blocks(elements: &mut Vec<Element<'_>>) {
     }
 
     *elements = output;
+}
+
+fn needs_footnote_block_hoist(elements: &[Element<'_>]) -> bool {
+    let mut stack: Vec<&[Element<'_>]> = vec![elements];
+    while let Some(elements) = stack.pop() {
+        for element in elements {
+            match element {
+                Element::Container(container)
+                    if hoistable_line_container(container.ctype()) =>
+                {
+                    if container
+                        .elements()
+                        .iter()
+                        .any(|child| matches!(child, Element::FootnoteBlock { .. }))
+                    {
+                        return true;
+                    }
+                    stack.push(container.elements());
+                }
+                Element::List {
+                    items,
+                    wikidot_explicit_block: false,
+                    ..
+                } => {
+                    for item in items {
+                        let ListItem::Elements { elements, .. } = item else {
+                            continue;
+                        };
+                        if elements
+                            .iter()
+                            .any(|child| matches!(child, Element::FootnoteBlock { .. }))
+                        {
+                            return true;
+                        }
+                        stack.push(elements);
+                    }
+                }
+                Element::Container(container) => stack.push(container.elements()),
+                Element::Collapsible { elements, .. }
+                | Element::Anchor { elements, .. }
+                | Element::Color { elements, .. }
+                | Element::Include { elements, .. } => stack.push(elements),
+                Element::List { items, .. } => {
+                    for item in items {
+                        match item {
+                            ListItem::Elements { elements, .. } => stack.push(elements),
+                            ListItem::SubList { element } => {
+                                stack.push(std::slice::from_ref(element.as_ref()))
+                            }
+                        }
+                    }
+                }
+                Element::WikidotBlockFrame { children, .. } => stack.push(children),
+                _ => {}
+            }
+        }
+    }
+    false
+}
+
+/// Live Wikidot hoists a `[[footnoteblock]]` out of the line container it
+/// was authored in: a native list splits around it (same-depth remainder items
+/// become a second list after the footer), and a blockquote, header or
+/// definition list keeps only the content before the footer.
+fn hoist_wikidot_footnote_blocks(elements: &mut Vec<Element<'_>>) {
+    let taken = std::mem::take(elements);
+    *elements = hoist_block_sequence(taken);
+}
+
+fn hoist_block_sequence<'t>(elements: Vec<Element<'t>>) -> Vec<Element<'t>> {
+    let mut output = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            Element::Container(mut container)
+                if hoistable_line_container(container.ctype()) =>
+            {
+                let children =
+                    hoist_block_sequence(std::mem::take(container.elements_mut()));
+                let mut children = children;
+                let footer_position = children
+                    .iter()
+                    .position(|element| matches!(element, Element::FootnoteBlock { .. }));
+                let Some(footer_position) = footer_position else {
+                    *container.elements_mut() = children;
+                    output.push(Element::Container(container));
+                    continue;
+                };
+
+                let after = children.split_off(footer_position + 1);
+                let footer = children
+                    .pop()
+                    .expect("footnote block position is the final element");
+                let suffix_inline = matches!(
+                    &footer,
+                    Element::FootnoteBlock {
+                        wikidot_inline_suffix: true,
+                        ..
+                    }
+                );
+                trim_hoisted_before(&mut children);
+                let ctype = container.ctype();
+                let attributes = container.attributes().clone();
+                *container.elements_mut() = children;
+                output.push(Element::Container(container));
+                output.push(footer);
+                if suffix_inline {
+                    output.extend(after);
+                } else if !after.is_empty() {
+                    output.push(Element::Container(Container::new(
+                        ctype, after, attributes,
+                    )));
+                }
+            }
+
+            Element::List {
+                ltype,
+                attributes,
+                items,
+                wikidot_explicit_block,
+            } => {
+                let (list, hoisted) = hoist_list_footnote_block(
+                    ltype,
+                    attributes,
+                    items,
+                    wikidot_explicit_block,
+                );
+                if let Some(list) = list {
+                    output.push(list);
+                }
+                if let Some((footer, after)) = hoisted {
+                    output.push(footer);
+                    output.extend(after);
+                }
+            }
+
+            other => output.push(hoist_nested_footnote_blocks(other)),
+        }
+    }
+    output
+}
+
+fn hoistable_line_container(ctype: ContainerType) -> bool {
+    matches!(ctype, ContainerType::Blockquote | ContainerType::Header(_))
+}
+
+fn hoist_nested_footnote_blocks<'t>(mut element: Element<'t>) -> Element<'t> {
+    match &mut element {
+        Element::Container(container) => {
+            let children = hoist_block_sequence(std::mem::take(container.elements_mut()));
+            *container.elements_mut() = children;
+        }
+        Element::Collapsible { elements, .. }
+        | Element::Anchor { elements, .. }
+        | Element::Color { elements, .. }
+        | Element::Include { elements, .. } => {
+            let children = hoist_block_sequence(std::mem::take(elements));
+            *elements = children;
+        }
+        Element::WikidotBlockFrame { children, .. } => {
+            let hoisted = hoist_block_sequence(std::mem::take(children));
+            *children = hoisted;
+        }
+        _ => {}
+    }
+    element
+}
+
+fn hoist_list_footnote_block<'t>(
+    ltype: ListType,
+    attributes: AttributeMap<'t>,
+    mut items: Vec<ListItem<'t>>,
+    wikidot_explicit_block: bool,
+) -> (Option<Element<'t>>, Option<(Element<'t>, Vec<Element<'t>>)>) {
+    let rebuild =
+        |items: Vec<ListItem<'t>>, attributes: AttributeMap<'t>| Element::List {
+            ltype,
+            attributes,
+            items,
+            wikidot_explicit_block,
+        };
+
+    if wikidot_explicit_block {
+        return (Some(rebuild(items, attributes)), None);
+    }
+
+    let mut found = None;
+    for index in 0..items.len() {
+        let ListItem::Elements { elements, .. } = &mut items[index] else {
+            continue;
+        };
+        let Some(position) = elements
+            .iter()
+            .position(|element| matches!(element, Element::FootnoteBlock { .. }))
+        else {
+            continue;
+        };
+
+        let after = elements.split_off(position + 1);
+        let footer = elements
+            .pop()
+            .expect("footnote block position is the final element");
+        found = Some((index, footer, after));
+        break;
+    }
+
+    let Some((index, footer, after)) = found else {
+        return (Some(rebuild(items, attributes)), None);
+    };
+
+    let suffix_inline = matches!(
+        &footer,
+        Element::FootnoteBlock {
+            wikidot_inline_suffix: true,
+            ..
+        }
+    );
+    let mut after_elements = Vec::new();
+    if suffix_inline && !after.is_empty() {
+        after_elements.push(Element::LineBreak);
+        after_elements.extend(after);
+    } else {
+        after_elements.extend(after);
+    }
+
+    let remainder_items = items.split_off(index + 1);
+    let current_item_empty = matches!(&items[index], ListItem::Elements { elements, .. } if elements.is_empty());
+    if current_item_empty {
+        items.pop();
+    }
+
+    let first_list = if items.is_empty() {
+        None
+    } else {
+        Some(rebuild(items, attributes.clone()))
+    };
+    if !remainder_items.is_empty() {
+        after_elements.push(rebuild(remainder_items, attributes));
+    }
+
+    (first_list, Some((footer, after_elements)))
+}
+
+enum HoistTrim {
+    Pop,
+    TrimSpace,
+    Paragraph,
+    Stop,
+}
+
+fn hoist_trim_kind(element: &Element<'_>) -> HoistTrim {
+    match element {
+        Element::LineBreak => HoistTrim::Pop,
+        Element::Container(container)
+            if container.ctype() == ContainerType::Paragraph =>
+        {
+            HoistTrim::Paragraph
+        }
+        Element::Text(text) if text.chars().all(char::is_whitespace) => HoistTrim::Pop,
+        Element::Text(text) if text.ends_with([' ', '\t']) => HoistTrim::TrimSpace,
+        _ => HoistTrim::Stop,
+    }
+}
+
+fn trim_hoisted_before(elements: &mut Vec<Element<'_>>) {
+    loop {
+        let kind = elements
+            .last()
+            .map(hoist_trim_kind)
+            .unwrap_or(HoistTrim::Stop);
+        match kind {
+            HoistTrim::Pop => {
+                elements.pop();
+            }
+            HoistTrim::TrimSpace => {
+                if let Some(Element::Text(text)) = elements.last_mut() {
+                    let trimmed = text.trim_end_matches([' ', '\t']).to_owned();
+                    *text = Cow::Owned(trimmed);
+                }
+                break;
+            }
+            HoistTrim::Paragraph => {
+                let Some(Element::Container(mut container)) = elements.pop() else {
+                    break;
+                };
+                trim_hoisted_before(container.elements_mut());
+                if !container.elements().is_empty() {
+                    elements.push(Element::Container(container));
+                }
+                break;
+            }
+            HoistTrim::Stop => break,
+        }
+    }
 }
 
 #[cfg(test)]
