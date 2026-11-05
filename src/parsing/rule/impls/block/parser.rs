@@ -796,6 +796,110 @@ fn wikidot_stripslashes(value: Cow<'_, str>) -> Cow<'_, str> {
 
 type WikidotHeadArgumentsFn = for<'t> fn(&CommentElidedText<'t>) -> Arguments<'t>;
 
+/// How a Wikidot block head ends, derived from live Wikidot.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum WikidotHeadScan {
+    /// The opener must be alone on its line: the head closes at the first `]]`
+    /// whose line remainder is whitespace, so a `]]` inside a value (or the
+    /// middle of a longer line) is kept as head text.
+    LineEndGreedy,
+    /// Double-quoted values run to their closing quote; the head closes at the
+    /// first `]]` outside them.
+    QuotedValuesAreLiteral,
+    /// A lone `]` in the head ends it early, which invalidates the opener.
+    EndsAtSingleBracket,
+    /// The head ends at the first `]]`, whatever the quoting.
+    Plain,
+}
+
+fn wikidot_head_scan(block_rule: &BlockRule) -> WikidotHeadScan {
+    match block_rule.name() {
+        "block-div" => WikidotHeadScan::LineEndGreedy,
+        "block-table" | "block-toc" => WikidotHeadScan::QuotedValuesAreLiteral,
+        "block-span"
+        | "block-code"
+        | "block-gallery"
+        | "block-list-unordered"
+        | "block-list-ordered" => WikidotHeadScan::EndsAtSingleBracket,
+        _ => WikidotHeadScan::Plain,
+    }
+}
+
+/// Whether the token after the current one leaves only whitespace before the
+/// next line break.
+fn wikidot_head_terminator_ends_line(parser: &Parser<'_, '_>) -> bool {
+    let mut offset = 0;
+    loop {
+        match parser.look_ahead(offset) {
+            None => return true,
+            Some(token) => match token.token {
+                Token::Whitespace => offset += 1,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                    return true;
+                }
+                _ => return false,
+            },
+        }
+    }
+}
+
+/// Whether live's line-end-greedy div opener can close on this line before any
+/// `[[/` closer: live pairs the block first, so a head that would swallow its
+/// own closer instead falls back to the plain first-`]]` scan.
+fn wikidot_line_greedy_head_is_usable(parser: &Parser<'_, '_>) -> bool {
+    let mut probe = parser.clone();
+    loop {
+        match probe.current().token {
+            Token::InputEnd => return true,
+            Token::LeftBlockEnd | Token::LeftLink => return false,
+            Token::RightBlock | Token::RightLink => {
+                if wikidot_head_terminator_ends_line(&probe) {
+                    return true;
+                }
+                if probe.step().is_err() {
+                    return true;
+                }
+            }
+            _ => {
+                if probe.step().is_err() {
+                    return true;
+                }
+            }
+        }
+    }
+}
+
+/// Whether a quoted Wikidot attribute value contains complete raw inline
+/// markup (`@@...@@` or `@<...>@`), which live evaluates to an empty value.
+fn wikidot_attribute_value_raw_elides(value: &str) -> bool {
+    let mut rest = value;
+    while let Some(offset) = rest.find('@') {
+        rest = &rest[offset..];
+        if rest.starts_with("@@") {
+            if let Some(end) = rest[2..].find("@@") {
+                let inner = &rest[2..2 + end];
+                if !inner.contains('\n') && !inner.contains('\r') {
+                    return true;
+                }
+            }
+            rest = &rest[2..];
+            continue;
+        }
+        if rest.starts_with("@<") {
+            if let Some(end) = rest[2..].find(">@") {
+                let inner = &rest[2..2 + end];
+                if !inner.contains('\n') && !inner.contains('\r') {
+                    return true;
+                }
+            }
+            rest = &rest[2..];
+            continue;
+        }
+        rest = &rest[1..];
+    }
+    false
+}
+
 pub(crate) fn parse_wikidot_attributes(value: &str) -> Arguments<'_> {
     let field = CommentElidedText::new(value, 0..value.len(), Vec::new());
     parse_wikidot_attribute_field(&field)
@@ -864,10 +968,19 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
         };
         let value_range = span.start + value_range.start..span.start + value_range.end;
         let value = field.elide_range(value_range);
+        let raw_elided = wikidot_attribute_value_raw_elides(&value);
         if key.is_empty() {
             arguments.mark_empty_key_present();
         } else {
-            arguments.insert_cow(key, wikidot_stripslashes(value));
+            let value = if raw_elided {
+                Cow::Borrowed("")
+            } else {
+                wikidot_stripslashes(value)
+            };
+            arguments.insert_cow(key.clone(), value);
+            if raw_elided {
+                arguments.mark_explicit_empty(key);
+            }
         }
         key = wikidot_attribute_key(field, &comment_mask, next_key_range);
     }
@@ -5881,7 +5994,11 @@ where
                         | Token::RuntimeText
                 )
             });
-            if head_has_comment && !head_has_non_authored_input {
+            let scan = wikidot_head_scan(block_rule);
+            if head_has_comment
+                && !head_has_non_authored_input
+                && scan == WikidotHeadScan::Plain
+            {
                 let closes = [
                     ParseCondition::current(Token::RightBlock),
                     ParseCondition::current(Token::RightLink),
@@ -5903,36 +6020,111 @@ where
                 (parse_arguments(&head), true)
             } else {
                 let start = self.current();
+                let mut comments = Vec::new();
                 let mut elisions = Vec::new();
                 let raw_head = block_rule.name == "block-code";
+                let scan = wikidot_head_scan(block_rule);
+                let scan = if !same_line
+                    && scan == WikidotHeadScan::LineEndGreedy
+                    && !wikidot_line_greedy_head_is_usable(self)
+                {
+                    WikidotHeadScan::Plain
+                } else {
+                    scan
+                };
                 let mut in_quote = false;
                 loop {
-                    if self.current().token == Token::InputEnd {
+                    let current = self.current();
+                    if current.token == Token::InputEnd {
                         break;
                     }
-                    if self.current().token == Token::RightLink {
+
+                    if !same_line {
+                        match scan {
+                            WikidotHeadScan::LineEndGreedy => match current.token {
+                                Token::LeftComment => {
+                                    comments.push(consume_valid_comment(self)?);
+                                    continue;
+                                }
+                                Token::RightBlock | Token::RightLink => {
+                                    if !wikidot_head_terminator_ends_line(self) {
+                                        self.step()?;
+                                        continue;
+                                    }
+                                    break;
+                                }
+                                _ => {}
+                            },
+                            WikidotHeadScan::QuotedValuesAreLiteral => {
+                                match current.token {
+                                    Token::LeftComment => {
+                                        comments.push(consume_valid_comment(self)?);
+                                        continue;
+                                    }
+                                    Token::DoubleQuote => {
+                                        in_quote = !in_quote;
+                                        self.step()?;
+                                        continue;
+                                    }
+                                    Token::RightBlock | Token::RightLink if in_quote => {
+                                        self.step()?;
+                                        continue;
+                                    }
+                                    // A quoted value may run over a line break.
+                                    Token::LineBreak | Token::ParagraphBreak
+                                        if in_quote =>
+                                    {
+                                        self.step()?;
+                                        continue;
+                                    }
+                                    Token::RightBlock | Token::RightLink => break,
+                                    _ => {}
+                                }
+                            }
+                            WikidotHeadScan::EndsAtSingleBracket => match current.token {
+                                Token::LeftComment => {
+                                    comments.push(consume_valid_comment(self)?);
+                                    continue;
+                                }
+                                Token::RightBlock
+                                | Token::RightLink
+                                | Token::RightBracket => break,
+                                _ => {}
+                            },
+                            WikidotHeadScan::Plain => match current.token {
+                                Token::RightBlock | Token::RightLink => break,
+                                _ => {}
+                            },
+                        }
+                        if !raw_head
+                            && current.token == Token::LeftBlock
+                            && let Some(segment) = consume_iftags_segment(self)?
+                        {
+                            elisions.extend(segment.elisions());
+                            continue;
+                        }
+                        self.step()?;
+                        continue;
+                    }
+
+                    if current.token == Token::RightLink {
                         break;
                     }
-                    if self.current().token == Token::RightBlock {
+                    if current.token == Token::RightBlock {
                         if !(same_line && in_quote) {
                             break;
                         }
                         self.step()?;
                         continue;
                     }
-                    if same_line
-                        && matches!(
-                            self.current().token,
-                            Token::LineBreak | Token::ParagraphBreak
-                        )
-                    {
+                    if matches!(current.token, Token::LineBreak | Token::ParagraphBreak) {
                         break;
                     }
-                    if same_line && self.current().token == Token::DoubleQuote {
+                    if current.token == Token::DoubleQuote {
                         in_quote = !in_quote;
                     }
                     if !raw_head
-                        && self.current().token == Token::LeftBlock
+                        && current.token == Token::LeftBlock
                         && let Some(segment) = consume_iftags_segment(self)?
                     {
                         elisions.extend(segment.elisions());
@@ -5941,8 +6133,17 @@ where
                     self.step()?;
                 }
                 let span = start.span.start..self.current().span.start;
+                let head_begins_with_close =
+                    matches!(start.token, Token::RightBlock | Token::RightLink);
+                if !same_line
+                    && scan == WikidotHeadScan::LineEndGreedy
+                    && head_begins_with_close
+                    && !span.is_empty()
+                {
+                    return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
+                }
                 let head =
-                    CommentElidedText::new(self.full_text().inner(), span, Vec::new())
+                    CommentElidedText::new(self.full_text().inner(), span, comments)
                         .with_segments(elisions);
                 let fused_close = self.current().token == Token::RightLink;
                 if fused_close {

@@ -93,6 +93,9 @@ pub(crate) const WIKIDOT_GENERATED_EMPTY_CLASS_MARKER: &str =
 /// Marks the empty blockquote runs live leaves behind after a tab eject so the
 /// tree cleanup keeps them; stripped when rendered.
 pub(crate) const WIKIDOT_EMPTY_QUOTE_MARKER: &str = "data-ftml-empty-quote";
+/// Lists the attributes whose Wikidot head value evaluated to empty, so the
+/// renderer emits `key=""` for them the way live does; stripped when rendered.
+pub(crate) const WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER: &str = "data-ftml-empty-value";
 pub(crate) const WIKIDOT_WS_MONO_VANISH_MARKER: &str = "data-ftml-ws-mono-vanish";
 use std::borrow::Cow;
 use std::collections::HashSet;

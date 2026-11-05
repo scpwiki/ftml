@@ -226,10 +226,13 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
             return self.chain();
         };
         let attribute_map = attribute_map.get();
+        let legacy = self.ctx.layout().legacy();
 
         if attributes.entries.is_empty() {
             for (key, value) in attribute_map {
-                if omit_empty_user_class(key, value) {
+                if omit_internal_attribute_marker(key, legacy)
+                    || omit_empty_user_class(key, value)
+                {
                     continue;
                 }
                 self.attr_single(key, &[value]);
@@ -266,7 +269,10 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         }
 
         for (key, value) in attribute_map {
-            if !merged.contains(key.as_ref()) && !omit_empty_user_class(key, value) {
+            if !merged.contains(key.as_ref())
+                && !omit_internal_attribute_marker(key, legacy)
+                && !omit_empty_user_class(key, value)
+            {
                 self.attr_single(key, &[value]);
             }
         }
@@ -330,6 +336,12 @@ fn filter_attribute_entries<'a>(
 
 fn omit_empty_user_class(key: &str, value: &str) -> bool {
     key == "class" && value.is_empty()
+}
+
+/// Internal `data-ftml-*` markers ride along in Wikidot attribute maps to keep
+/// tree state; they are never authored output.
+fn omit_internal_attribute_marker(key: &str, legacy: bool) -> bool {
+    legacy && key.starts_with("data-ftml-")
 }
 
 #[inline]
