@@ -1,0 +1,20 @@
+[
+    {
+        "token": "input-end",
+        "rule": "color",
+        "span": [
+            17,
+            17
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            9,
+            11
+        ],
+        "kind": "no-rules-match"
+    }
+]

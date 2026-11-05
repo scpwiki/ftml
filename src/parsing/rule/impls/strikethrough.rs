@@ -19,8 +19,8 @@
  */
 
 use super::inline_delimiter::{
-    ReachableCloseMode, assert_unpadded_open, inline_body_padded_through_seams,
-    validate_reachable_close,
+    ReachableCloseMode, append_wikidot_line_close_space, assert_unpadded_open,
+    inline_body_padded_through_seams, validate_reachable_close,
 };
 use super::prelude::*;
 
@@ -79,6 +79,8 @@ fn try_consume_strikethrough<'r, 't>(
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    let elements =
+        append_wikidot_line_close_space(elements, parser.settings().layout.legacy());
     ok!(paragraph_safe; elements, errors)
 }
 

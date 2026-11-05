@@ -601,7 +601,7 @@ mod tests {
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
         assert_eq!(
             html,
-            "<p><span>mango</span></p><p><span>pineapple<br>\n</span></p>",
+            "<p><span>mango</span></p><p><span>pineapple<br></span></p>",
         );
     }
 

@@ -1,7 +1,8 @@
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, InlineFormatKind, ListItem, PartialElement,
-    WikidotBlockCloseKind, WikidotBlockShell, WikidotFrameLink,
+    WIKIDOT_WS_MONO_VANISH_MARKER, WikidotBlockCloseKind, WikidotBlockShell,
+    WikidotFrameLink,
 };
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -2036,6 +2037,8 @@ fn lower_sequence<'t>(
             };
             let trailing_space =
                 !scored && matches!(run.last(), Some(Element::Text(text)) if text == " ");
+            let trailing_break =
+                !scored && matches!(run.last(), Some(Element::LineBreak));
             let next_starts_with_space = matches!(
                 source.peek(),
                 Some(Element::Text(text)) if text.starts_with(' ')
@@ -2094,6 +2097,18 @@ fn lower_sequence<'t>(
                 active.tidy_close(InlineTag::Span);
             }
             if trailing_space
+                && !next_starts_with_space
+                && !matches!(
+                    source.peek(),
+                    Some(Element::LineBreak | Element::LineBreaks(_))
+                )
+                && !empty
+                && !scored
+                && source.peek().is_some()
+            {
+                output.push(text!(" "));
+            }
+            if trailing_break
                 && !next_starts_with_space
                 && !matches!(
                     source.peek(),
@@ -2886,20 +2901,32 @@ fn empty_inline_scope_vanishes(element: &Element<'_>) -> bool {
 }
 
 fn drop_empty_inline_scopes(elements: &mut Vec<Element>) {
+    hoist_closed_container_leading_spaces(elements);
     for element in elements.iter_mut() {
         visit_children_mut(element, &mut |children| drop_empty_inline_scopes(children));
         strip_leading_run_for_block_parent(element);
     }
+    hoist_closed_container_leading_spaces(elements);
     let mut index = 0;
     while index < elements.len() {
         if empty_inline_scope_vanishes(&elements[index])
             || emptied_block_vanishes(&elements[index])
         {
             let dropped_color = matches!(&elements[index], Element::Color { .. });
-            let forward_deletes =
-                dropped_color && vanished_color_deletes_preceding_run(elements, index);
+            let dropped_empty_mono = matches!(
+                &elements[index],
+                Element::Container(container)
+                    if container.ctype() == ContainerType::Monospace
+                        && container.elements().is_empty()
+                        && container
+                            .attributes()
+                            .get()
+                            .contains_key(WIKIDOT_WS_MONO_VANISH_MARKER)
+            );
+            let forward_deletes = (dropped_color || dropped_empty_mono)
+                && vanished_scope_deletes_preceding_run(elements, index);
             elements.remove(index);
-            if dropped_color && index > 0 {
+            if (dropped_color || dropped_empty_mono) && index > 0 {
                 let preceding_is_text = matches!(&elements[index - 1], Element::Text(_));
                 if !preceding_is_text || forward_deletes {
                     strip_vanish_run_tail(&mut elements[index - 1]);
@@ -2930,6 +2957,34 @@ fn is_separator_run(element: &Element) -> bool {
     matches!(element, Element::Text(text) if !text.is_empty() && text.chars().all(|c| c == ' ' || c == '\t'))
 }
 
+fn hoist_closed_container_leading_spaces(elements: &mut Vec<Element>) {
+    let mut index = 0;
+    while index < elements.len() {
+        let hoist = matches!(
+            &elements[index],
+            Element::Container(container)
+                if matches!(
+                    container.ctype(),
+                    ContainerType::Bold
+                        | ContainerType::Italics
+                        | ContainerType::Monospace
+                        | ContainerType::Strikethrough
+                        | ContainerType::Superscript
+                        | ContainerType::Subscript
+                        | ContainerType::Underline
+                ) && container.elements().first().is_some_and(is_separator_run)
+        );
+        if hoist {
+            let Element::Container(container) = &mut elements[index] else {
+                unreachable!("hoist check requires a container");
+            };
+            container.elements_mut().remove(0);
+            elements.insert(index, Element::Text(Cow::Borrowed(" ")));
+        }
+        index += 1;
+    }
+}
+
 fn strip_vanish_run_tail(element: &mut Element) {
     match element {
         Element::Text(_) => strip_trailing_separators(element),
@@ -2957,7 +3012,7 @@ fn strip_scope_run_tail(elements: &mut Vec<Element>) {
     }
 }
 
-fn vanished_color_deletes_preceding_run(elements: &[Element], index: usize) -> bool {
+fn vanished_scope_deletes_preceding_run(elements: &[Element], index: usize) -> bool {
     let mut next = index + 1;
     while next < elements.len()
         && matches!(
@@ -3455,9 +3510,18 @@ fn trim_trailing_space(elements: &mut Vec<Element<'_>>) {
     if let Element::Container(container) = last
         && is_inline_scope_ctype(container.ctype())
     {
+        let was_empty_mono = container.elements().is_empty()
+            && container.ctype() == ContainerType::Monospace
+            && container
+                .attributes()
+                .get()
+                .contains_key(WIKIDOT_WS_MONO_VANISH_MARKER);
         trim_trailing_space(container.elements_mut());
         if container.elements().is_empty() {
             elements.pop();
+            if was_empty_mono && let Some(previous) = elements.last_mut() {
+                strip_vanish_run_tail(previous);
+            }
         }
         return;
     }

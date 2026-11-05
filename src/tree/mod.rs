@@ -90,6 +90,7 @@ use crate::parsing::{ParseError, ParseOutcome};
 
 pub(crate) const WIKIDOT_GENERATED_EMPTY_CLASS_MARKER: &str =
     "data-ftml-generated-empty-class";
+pub(crate) const WIKIDOT_WS_MONO_VANISH_MARKER: &str = "data-ftml-ws-mono-vanish";
 use std::borrow::Cow;
 use std::collections::HashSet;
 

@@ -19,9 +19,9 @@
  */
 
 use super::inline_delimiter::{
-    ReachableCloseMode, append_split_close_leftover, assert_unpadded_open, block_name_at,
-    inline_body_padded_through_seams, is_block_name, link_name_at,
-    prepend_split_close_leftover, validate_reachable_close,
+    ReachableCloseMode, append_split_close_leftover, append_wikidot_line_close_space,
+    assert_unpadded_open, block_name_at, inline_body_padded_through_seams, is_block_name,
+    link_name_at, prepend_split_close_leftover, validate_reachable_close,
 };
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
@@ -166,6 +166,8 @@ fn finish_collected<'r, 't>(
             None => ok!(paragraph_safe; Elements::None, errors),
         };
     }
+    let elements =
+        append_wikidot_line_close_space(elements, parser.settings().layout.legacy());
     let elements = match leftover {
         Some(leftover) => append_split_close_leftover(elements, leftover),
         None => elements,

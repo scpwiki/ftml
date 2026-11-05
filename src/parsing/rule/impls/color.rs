@@ -136,6 +136,7 @@ fn try_consume_fn<'r, 't>(
         &[ParseCondition::current(Token::Color)][..]
     };
     let invalid = [ParseCondition::current(Token::ParagraphBreak)];
+    let body_start = parser.current().span.start;
     let body = if table_owned {
         collect_consume_before(parser, RULE_COLOR, close, &invalid, None)?
     } else {
@@ -155,6 +156,12 @@ fn try_consume_fn<'r, 't>(
         parser.mark_wikidot_simple_table_crossed_closer(Token::Color);
     }
 
+    let split_tail = if legacy && !table_owned && terminator.token == Token::Color {
+        split_swallowed_mono_close(&mut elements)
+    } else {
+        None
+    };
+
     let body_was_empty = elements.is_empty();
     let leading_space = if unformed_dash {
         None
@@ -170,6 +177,10 @@ fn try_consume_fn<'r, 't>(
         elements.clear();
     }
     if legacy && body_was_empty {
+        let body_had_tokens = terminator.span.start != body_start;
+        if body_had_tokens && !table_owned && terminator.token == Token::Color {
+            return ok!(paragraph_safe; Elements::None, errors);
+        }
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
@@ -186,6 +197,7 @@ fn try_consume_fn<'r, 't>(
     let trailing_break_space = legacy
         && !spaces_vanish
         && terminator.token == Token::Color
+        && split_tail.is_none()
         && matches!(elements.last(), Some(Element::LineBreak))
         && trailing_break_space_survives(
             parser.full_text().inner(),
@@ -225,6 +237,10 @@ fn try_consume_fn<'r, 't>(
         } else if trailing_break_space {
             output.push(text!(" "));
         }
+    }
+    if let Some(tail) = split_tail {
+        output.extend(tail);
+        output.push(text!("##"));
     }
     if unformed_dash {
         output.push(text!("--"));
@@ -288,6 +304,63 @@ fn is_table_column_token(token: Token) -> bool {
             | Token::TableColumnCenter
             | Token::TableColumnRight
     )
+}
+
+fn split_swallowed_mono_close<'t>(
+    elements: &mut Vec<Element<'t>>,
+) -> Option<Vec<Element<'t>>> {
+    let mono_index = elements.iter().position(|element| {
+        matches!(
+            element,
+            Element::Container(container)
+                if container.ctype() == ContainerType::Monospace
+                    && container.attributes().get().is_empty()
+                    && container.elements().iter().any(|child| matches!(
+                        child,
+                        Element::Text(text) if text.contains("##")
+                    ))
+        )
+    })?;
+    let Element::Container(mono) = elements.remove(mono_index) else {
+        unreachable!("split search requires a monospace container");
+    };
+    let children: Vec<Element<'t>> = mono.into();
+    let hash_at = children
+        .iter()
+        .position(|child| matches!(child, Element::Text(text) if text.contains("##")))?;
+    let Element::Text(hash_text) = &children[hash_at] else {
+        unreachable!("split search requires hash text");
+    };
+    let hash_offset = hash_text.find("##")?;
+    let (before, after) = hash_text.split_at(hash_offset);
+    let after = &after["##".len()..];
+    let mut pre: Vec<Element<'t>> = children[..hash_at].to_vec();
+    if !before.is_empty() {
+        pre.push(Element::Text(Cow::Owned(before.to_owned())));
+    }
+    let mut post: Vec<Element<'t>> = Vec::new();
+    if !after.is_empty() {
+        post.push(Element::Text(Cow::Owned(after.to_owned())));
+    }
+    post.extend(children[hash_at + 1..].iter().cloned());
+    elements.insert(
+        mono_index,
+        Element::Container(Container::new(
+            ContainerType::Monospace,
+            pre,
+            AttributeMap::new(),
+        )),
+    );
+    let mut tail: Vec<Element<'t>> = Vec::new();
+    if !post.is_empty() {
+        tail.push(Element::Container(Container::new(
+            ContainerType::Monospace,
+            post,
+            AttributeMap::new(),
+        )));
+    }
+    tail.extend(elements.drain(mono_index + 1..));
+    Some(tail)
 }
 
 fn unform_strike_ate_close<'t>(elements: &mut Vec<Element<'t>>) -> bool {

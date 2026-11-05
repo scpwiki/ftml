@@ -91,8 +91,8 @@ mod tests {
 
     #[test]
     fn wikidot_line_started_subscript_and_superscript_closers_add_space() {
-        assert_eq!(render("a,,x\n,,.b"), "<p>a<sub>x<br>\n</sub> .b</p>");
-        assert_eq!(render("a^^x\n^^.b"), "<p>a<sup>x<br>\n</sup> .b</p>");
+        assert_eq!(render("a,,x\n,,.b"), "<p>a<sub>x<br></sub> .b</p>");
+        assert_eq!(render("a^^x\n^^.b"), "<p>a<sup>x<br></sup> .b</p>");
         assert_eq!(render("a,,x,,.b"), "<p>a<sub>x</sub>.b</p>");
     }
 }
