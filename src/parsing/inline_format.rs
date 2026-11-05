@@ -380,6 +380,7 @@ fn normalize_sequence_passes<'t>(
             | repair_raw_strike_pairs_pass(elements)
             | repair_strike_shed_pairs_pass(elements)
             | repair_deferred_strike_trailing_dash_pass(elements)
+            | repair_deferred_strike_shell_stream_pass(elements)
             | repair_script_split_close_pass(elements)
             | repair_script_pairs_pass(elements);
         // A monospace container's children are already owned content:
@@ -1275,6 +1276,441 @@ fn repair_deferred_strike_trailing_dash_pass<'t>(
 
     *elements = output;
     changed
+}
+
+/// Flat inline shell used by the istack repair below.
+#[derive(Clone)]
+enum FlatShell<'t> {
+    Format(InlineFormatKind),
+    Color(Cow<'t, str>, bool),
+}
+
+impl<'t> FlatShell<'t> {
+    fn tag(&self) -> &'static str {
+        match self {
+            FlatShell::Format(kind) => match kind {
+                InlineFormatKind::Bold => "strong",
+                InlineFormatKind::Italics => "em",
+                InlineFormatKind::Underline | InlineFormatKind::Strikethrough => "span",
+                InlineFormatKind::Subscript => "sub",
+                InlineFormatKind::Superscript => "sup",
+                InlineFormatKind::Monospace => "tt",
+            },
+            FlatShell::Color(..) => "span",
+        }
+    }
+
+    fn build(&self, children: Vec<Element<'t>>) -> Element<'t> {
+        match self {
+            FlatShell::Format(kind) => Element::Container(Container::new(
+                kind.container_type(),
+                children,
+                AttributeMap::new(),
+            )),
+            FlatShell::Color(color, background) => Element::Color {
+                color: color.clone(),
+                background: *background,
+                elements: children,
+            },
+        }
+    }
+}
+
+struct FlatFrame<'t> {
+    shell: FlatShell<'t>,
+    children: Vec<Element<'t>>,
+}
+
+fn flat_close_frame<'t>(dom: &mut Vec<FlatFrame<'t>>, output: &mut Vec<Element<'t>>) {
+    let Some(frame) = dom.pop() else {
+        return;
+    };
+    if frame.children.is_empty() {
+        return;
+    }
+    let element = frame.shell.build(frame.children);
+    match dom.last_mut() {
+        Some(parent) => parent.children.push(element),
+        None => output.push(element),
+    }
+}
+
+fn flat_reopen<'t>(dom: &mut Vec<FlatFrame<'t>>, istack: &[FlatShell<'t>], at: usize) {
+    for shell in &istack[at..] {
+        dom.push(FlatFrame {
+            shell: shell.clone(),
+            children: Vec::new(),
+        });
+    }
+}
+
+fn flat_close_shell<'t>(
+    dom: &mut Vec<FlatFrame<'t>>,
+    output: &mut Vec<Element<'t>>,
+    istack: &mut Vec<FlatShell<'t>>,
+    insert_at: &mut Option<usize>,
+    tag: &'static str,
+) {
+    loop {
+        let Some(top) = dom.last() else {
+            return;
+        };
+        let top_tag = top.shell.tag();
+        if top_tag == tag {
+            flat_close_frame(dom, output);
+            istack.pop();
+            return;
+        }
+        let close_index = istack.iter().position(|entry| entry.tag() == tag);
+        let element_index = istack.iter().rposition(|entry| entry.tag() == top_tag);
+        match (close_index, element_index) {
+            (Some(close), Some(element)) if close < element => {
+                istack.swap(close, element);
+                flat_close_frame(dom, output);
+                *insert_at = Some(close);
+            }
+            _ => {
+                istack.pop();
+                flat_close_frame(dom, output);
+                return;
+            }
+        }
+    }
+}
+
+/// Lower a flat inline event stream the way live Wikidot's inline repair
+/// nests it: a close tag closes the innermost open element whose HTML tag
+/// name matches; a close of an outer tag above the current element swaps the
+/// stack, closes the current element and reopens the deferred copies at the
+/// next text or opener. Empty inline elements are dropped.
+
+fn flatten_nested_inline_stream<'t>(nested: Vec<Element<'t>>) -> Vec<Element<'t>> {
+    let mut output = Vec::with_capacity(nested.len());
+    for element in nested {
+        match element {
+            Element::Container(container)
+                if kind_from_container(container.ctype()).is_some() =>
+            {
+                let kind = kind_from_container(container.ctype())
+                    .expect("container kind checked above");
+                let inline_kind = match kind {
+                    FormatKind::Bold => InlineFormatKind::Bold,
+                    FormatKind::Italics => InlineFormatKind::Italics,
+                    FormatKind::Underline => InlineFormatKind::Underline,
+                    FormatKind::Strike => InlineFormatKind::Strikethrough,
+                    FormatKind::Subscript => InlineFormatKind::Subscript,
+                    FormatKind::Superscript => InlineFormatKind::Superscript,
+                    FormatKind::Monospace => InlineFormatKind::Monospace,
+                    FormatKind::Color => unreachable!("colors are not containers"),
+                };
+                let children: Vec<Element<'t>> = Vec::from(container);
+                output.push(Element::Partial(PartialElement::InlineFormatOpen(
+                    inline_kind,
+                )));
+                output.extend(flatten_nested_inline_stream(children));
+                output.push(Element::Partial(PartialElement::InlineFormatClose(
+                    inline_kind,
+                )));
+            }
+            Element::Color {
+                color,
+                background,
+                elements,
+            } => {
+                output.push(Element::Partial(PartialElement::InlineColorOpen(
+                    color, background,
+                )));
+                output.extend(flatten_nested_inline_stream(elements));
+                output.push(Element::Partial(PartialElement::InlineColorClose));
+            }
+            element => output.push(element),
+        }
+    }
+    output
+}
+
+fn nest_flat_inline_stream<'t>(events: Vec<Element<'t>>) -> Vec<Element<'t>> {
+    let mut output = Vec::new();
+    let mut dom: Vec<FlatFrame<'t>> = Vec::new();
+    let mut istack: Vec<FlatShell<'t>> = Vec::new();
+    let mut insert_at: Option<usize> = None;
+
+    for event in events {
+        match event {
+            Element::Partial(PartialElement::InlineFormatOpen(kind)) => {
+                if let Some(at) = insert_at.take() {
+                    flat_reopen(&mut dom, &istack, at);
+                }
+                let shell = FlatShell::Format(kind);
+                if !istack.iter().any(|entry| entry.tag() == shell.tag()) {
+                    istack.push(shell.clone());
+                }
+                dom.push(FlatFrame {
+                    shell,
+                    children: Vec::new(),
+                });
+            }
+            Element::Partial(PartialElement::InlineFormatClose(kind)) => {
+                let shell = FlatShell::Format(kind);
+                flat_close_shell(
+                    &mut dom,
+                    &mut output,
+                    &mut istack,
+                    &mut insert_at,
+                    shell.tag(),
+                );
+            }
+            Element::Partial(PartialElement::InlineColorOpen(color, background)) => {
+                if let Some(at) = insert_at.take() {
+                    flat_reopen(&mut dom, &istack, at);
+                }
+                let shell = FlatShell::Color(color, background);
+                if !istack.iter().any(|entry| entry.tag() == shell.tag()) {
+                    istack.push(shell.clone());
+                }
+                dom.push(FlatFrame {
+                    shell,
+                    children: Vec::new(),
+                });
+            }
+            Element::Partial(PartialElement::InlineColorClose) => {
+                flat_close_shell(
+                    &mut dom,
+                    &mut output,
+                    &mut istack,
+                    &mut insert_at,
+                    "span",
+                );
+            }
+            element => {
+                if let Some(at) = insert_at.take() {
+                    flat_reopen(&mut dom, &istack, at);
+                }
+                match dom.last_mut() {
+                    Some(parent) => parent.children.push(element),
+                    None => output.push(element),
+                }
+            }
+        }
+    }
+
+    while !dom.is_empty() {
+        flat_close_frame(&mut dom, &mut output);
+    }
+    output
+}
+
+fn flat_format_open_kind(element: &Element<'_>) -> Option<InlineFormatKind> {
+    match element {
+        Element::Partial(PartialElement::InlineFormatOpen(kind)) => Some(*kind),
+        _ => None,
+    }
+}
+
+fn flat_is_strike_close(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Partial(PartialElement::InlineFormatClose(
+            InlineFormatKind::Strikethrough
+        ))
+    )
+}
+
+fn flat_is_typography_dash(element: &Element<'_>) -> bool {
+    is_exact_text(element, "--") || is_exact_text(element, "\u{2014}")
+}
+
+/// Deferred-strike shell inversion (live Wikidot).
+///
+/// The parser lowers a crossed run like `--a##red|xb**//--c##--//**##` to the
+/// flat stream `[sO a colorO xb S1o sC S2o c S2c S1c colorC -- ##]`, which is
+/// tree order, not the source order live repairs. Reorder the events to their
+/// source positions and run the istack repair, which yields live's nesting:
+/// the later-opened shell ends up outermost, the color closes after it and the
+/// strike close is deferred to the end of the sequence.
+fn repair_deferred_strike_shell_stream_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    // Cheap pre-gate: the pattern requires a strike close.
+    if !elements.iter().any(flat_is_strike_close) {
+        return false;
+    }
+
+    let input = take_elements(elements);
+    let len = input.len();
+    let mut match_info: Option<(usize, usize, usize, usize, Vec<usize>, Vec<usize>)> =
+        None;
+
+    'search: for strike_close in 1..len {
+        let Some(close_element) = input[strike_close].as_ref() else {
+            continue;
+        };
+        if !flat_is_strike_close(close_element) {
+            continue;
+        }
+        let Some(first_shell_kind) = input[strike_close - 1]
+            .as_ref()
+            .and_then(flat_format_open_kind)
+        else {
+            continue;
+        };
+        if first_shell_kind == InlineFormatKind::Strikethrough {
+            continue;
+        }
+        // Prefix must hold an open strike and, if it opened a color, the color
+        // must still be open at the strike close.
+        let mut strike_open = None;
+        let mut color_open = false;
+        for (index, element) in input[..strike_close].iter().enumerate() {
+            let Some(element) = element.as_ref() else {
+                continue;
+            };
+            match element {
+                Element::Partial(PartialElement::InlineFormatOpen(
+                    InlineFormatKind::Strikethrough,
+                )) => strike_open = Some(index),
+                Element::Partial(PartialElement::InlineFormatClose(
+                    InlineFormatKind::Strikethrough,
+                )) => strike_open = None,
+                Element::Partial(PartialElement::InlineColorOpen(..)) => {
+                    color_open = true
+                }
+                Element::Partial(PartialElement::InlineColorClose) => color_open = false,
+                _ => {}
+            }
+        }
+        if strike_open.is_none() {
+            continue;
+        }
+
+        // Shells opened after the deferred strike close.
+        let mut shells = Vec::new();
+        let mut cursor = strike_close + 1;
+        while let Some(kind) = input
+            .get(cursor)
+            .and_then(Option::as_ref)
+            .and_then(flat_format_open_kind)
+        {
+            if kind == InlineFormatKind::Strikethrough {
+                continue 'search;
+            }
+            shells.push(cursor);
+            cursor += 1;
+        }
+        if shells.is_empty() {
+            continue;
+        }
+
+        // Content run.
+        let content_start = cursor;
+        while input
+            .get(cursor)
+            .and_then(Option::as_ref)
+            .is_some_and(|element| !matches!(element, Element::Partial(_)))
+        {
+            cursor += 1;
+        }
+        if cursor == content_start {
+            continue;
+        }
+        let content_end = cursor;
+
+        // Tail: shell closes, the color close, and the typography dash, in any
+        // interleaving; all shell closes must be present.
+        let needed_closes = shells.len() + 1;
+        let mut closes = Vec::new();
+        let mut color_close = None;
+        let mut tail_end = cursor;
+        while tail_end < len {
+            let Some(element) = input[tail_end].as_ref() else {
+                break;
+            };
+            match element {
+                Element::Partial(PartialElement::InlineFormatClose(kind))
+                    if *kind != InlineFormatKind::Strikethrough =>
+                {
+                    closes.push(tail_end);
+                }
+                Element::Partial(PartialElement::InlineColorClose)
+                    if color_close.is_none() =>
+                {
+                    color_close = Some(tail_end);
+                }
+                element if flat_is_typography_dash(element) => {}
+                _ => break,
+            }
+            tail_end += 1;
+            if closes.len() == needed_closes && (color_close.is_some() || !color_open) {
+                break;
+            }
+        }
+        if closes.len() != needed_closes {
+            continue;
+        }
+        if color_open && color_close.is_none() {
+            continue;
+        }
+
+        match_info = Some((
+            strike_close,
+            content_start,
+            content_end,
+            tail_end,
+            shells,
+            closes,
+        ));
+        break;
+    }
+
+    let Some((strike_close, content_start, content_end, tail_end, shells, closes)) =
+        match_info
+    else {
+        *elements = input.into_iter().flatten().collect();
+        return false;
+    };
+
+    // Source order: prefix (through the first shell open), the later shells,
+    // the strike close, the content, the color close, the typography dash,
+    // then the shell closes in their stream order, then the remainder.
+    let mut order: Vec<usize> = Vec::with_capacity(len);
+    order.extend(0..strike_close);
+    order.extend(shells.iter().copied());
+    order.push(strike_close);
+    order.extend(content_start..content_end);
+    if let Some(color_close) = (content_end..tail_end).find(|index| {
+        matches!(
+            input.get(*index).and_then(Option::as_ref),
+            Some(Element::Partial(PartialElement::InlineColorClose))
+        )
+    }) {
+        order.push(color_close);
+    }
+    for index in (content_end..tail_end).filter(|index| {
+        input
+            .get(*index)
+            .and_then(Option::as_ref)
+            .is_some_and(flat_is_typography_dash)
+    }) {
+        order.push(index);
+    }
+    let mut dash_start = tail_end;
+    while dash_start < len
+        && input
+            .get(dash_start)
+            .and_then(Option::as_ref)
+            .is_some_and(flat_is_typography_dash)
+    {
+        order.push(dash_start);
+        dash_start += 1;
+    }
+    order.extend(closes.iter().copied());
+    order.extend(dash_start..len);
+
+    let mut taken = input;
+    let mut stage1 = Vec::with_capacity(order.len());
+    for index in order {
+        stage1.push(take_element(&mut taken, index));
+    }
+    *elements = flatten_nested_inline_stream(nest_flat_inline_stream(stage1));
+    true
 }
 
 fn script_shell<'t>(kind: FormatKind) -> FormatShell<'t> {
