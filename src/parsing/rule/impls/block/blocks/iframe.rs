@@ -21,13 +21,16 @@
 use super::prelude::*;
 use crate::parsing::discard_wikidot_controls;
 use crate::tree::AttributeMap;
+use std::borrow::Cow;
 
 pub const BLOCK_IFRAME: BlockRule = BlockRule {
     name: "block-iframe",
     accepts_names: &["iframe"],
     accepts_star: false,
     accepts_score: false,
-    accepts_newlines_outside_body: true,
+    // Live Wikidot renders the iframe inline: a newline next to the head
+    // becomes a line break instead of being swallowed as block glue.
+    accepts_newlines_outside_body: false,
     parse_fn,
 };
 
@@ -44,7 +47,11 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "iframe doesn't allow score flag");
     assert_block_name(&BLOCK_IFRAME, name);
 
-    let (url, arguments) = parser.get_head_name_map_wikidot(&BLOCK_IFRAME, in_head)?;
+    let (url, arguments) = if parser.settings().layout.legacy() {
+        parse_wikidot_head(parser, in_head)?
+    } else {
+        parser.get_head_name_map(&BLOCK_IFRAME, in_head)?
+    };
     let url = if parser.settings().layout.legacy() {
         discard_wikidot_controls(url)
     } else {
@@ -68,6 +75,153 @@ fn parse_fn<'r, 't>(
     let element = Element::Iframe { url, attributes };
 
     ok!(parser.settings().layout.legacy(); element)
+}
+
+fn parse_wikidot_head<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    in_head: bool,
+) -> Result<(Cow<'t, str>, Arguments<'t>), ParseError>
+where
+    'r: 't,
+{
+    if !in_head {
+        return Err(parser.make_err(ParseErrorKind::BlockMissingName));
+    }
+    let (url, url_in_head) = parser.get_head_word(ParseErrorKind::ModuleMissingName)?;
+    if !url_in_head && let Some((tail, match_end)) = greedy_url_extension(parser, &url) {
+        consume_greedy_tail(parser, match_end)?;
+        let mut extended = url.into_owned();
+        extended.push_str(&tail);
+        return Ok((Cow::Owned(extended), Arguments::new_case_sensitive()));
+    }
+    let arguments = parser.get_head_map_wikidot(&BLOCK_IFRAME, url_in_head)?;
+    Ok((url, arguments))
+}
+
+fn consume_greedy_tail(
+    parser: &mut Parser<'_, '_>,
+    match_end: usize,
+) -> Result<(), ParseError> {
+    loop {
+        let current = parser.current();
+        if current.token == Token::InputEnd || current.span.start >= match_end {
+            break;
+        }
+        let position = current.span.start;
+        parser.step()?;
+        if parser.current().span.start <= position {
+            break;
+        }
+    }
+    Ok(())
+}
+
+fn greedy_url_extension(parser: &Parser<'_, '_>, url: &str) -> Option<(String, usize)> {
+    if !wikidot_iframe_url(&discard_wikidot_controls(Cow::Borrowed(url))) {
+        return None;
+    }
+    let source = parser.full_text().inner();
+    let after_head = parser.current().span.start;
+    let head_end = after_head.checked_sub("]]".len())?;
+    if source.get(head_end..after_head) != Some("]]") {
+        return None;
+    }
+    let rest = source.get(head_end..)?;
+    let (tail, match_end) = greedy_tail(rest)?;
+    Some((tail, head_end + match_end))
+}
+
+/// Extend a bare iframe URL the way live Wikidot does.
+///
+/// When the head is exactly `[[iframe URL]]`, live keeps scanning past the
+/// head close while the following text (up to the last `[[/name]]` closer)
+/// contains no spaces or tabs. Newlines in the absorbed span are dropped.
+/// Closed `[[code]]` spans are opaque to the scan, matching live extracting
+/// code blocks before iframes. Returns the absorbed tail starting at the
+/// head close (newlines removed) and the match end, both relative to the
+/// head close.
+fn greedy_tail(rest: &str) -> Option<(String, usize)> {
+    debug_assert!(rest.starts_with("]]"));
+    let tail = rest.get(2..)?;
+    let spans = code_spans(tail);
+    let bytes = tail.as_bytes();
+    let mut candidates = Vec::new();
+    let mut index = 0;
+    while index + 3 <= bytes.len() {
+        if bytes[index] == b'[' && bytes[index + 1] == b'[' && bytes[index + 2] == b'/' {
+            let mut name_end = index + 3;
+            while name_end < bytes.len()
+                && !matches!(bytes[name_end], b' ' | b'\t' | b'\r' | b'\n' | b']' | b'[')
+            {
+                name_end += 1;
+            }
+            if !spans
+                .iter()
+                .any(|&(start, end)| index >= start && index < end)
+            {
+                candidates.push((index, name_end));
+            }
+        }
+        index += 1;
+    }
+    for (_, name_end) in candidates.iter().rev() {
+        let name_end = *name_end;
+        let segment = rest.get(..2 + name_end)?;
+        if segment.bytes().any(|byte| byte == b' ' || byte == b'\t') {
+            continue;
+        }
+        if spans.iter().any(|&(start, _)| start + 2 < 2 + name_end) {
+            continue;
+        }
+        let after = rest.get(2 + name_end..)?;
+        if after.starts_with("]]") {
+            let src_end = 2 + name_end;
+            return Some((filter_tail(&rest[..src_end]), src_end + "]]".len()));
+        }
+        if let Some(close) = after.find("]]") {
+            let src_end = 2 + name_end;
+            return Some((filter_tail(&rest[..src_end]), src_end + close + "]]".len()));
+        }
+    }
+    None
+}
+
+fn code_spans(tail: &str) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let lower = tail.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(offset) = lower[from..].find("[[code") {
+        let open = from + offset;
+        let after_name = open + "[[code".len();
+        if !matches!(
+            tail.as_bytes().get(after_name).copied(),
+            Some(b' ' | b'\t' | b'\r' | b'\n' | b']')
+        ) {
+            from = after_name;
+            continue;
+        }
+        let Some(open_end) = tail[after_name..].find("]]") else {
+            break;
+        };
+        let open_end = after_name + open_end + "]]".len();
+        let Some(close) = lower[open_end..].find("[[/code]]") else {
+            from = open_end;
+            continue;
+        };
+        let close_end = open_end + close + "[[/code]]".len();
+        spans.push((open, close_end));
+        from = close_end;
+    }
+    spans
+}
+
+fn filter_tail(tail: &str) -> String {
+    if !tail.bytes().any(|byte| byte == b'\r' || byte == b'\n') {
+        return tail.to_owned();
+    }
+    tail.chars()
+        .filter(|character| !matches!(character, '\r' | '\n'))
+        .collect()
 }
 
 fn wikidot_iframe_url(url: &str) -> bool {

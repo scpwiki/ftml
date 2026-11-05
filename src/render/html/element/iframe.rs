@@ -25,7 +25,7 @@ use crate::url::normalize_href;
 pub fn render_iframe(ctx: &mut HtmlContext, url: &str, attributes: &AttributeMap) {
     debug!("Rendering iframe block (url '{url}')");
     let src = if ctx.layout().legacy() {
-        std::borrow::Cow::Borrowed(url)
+        crate::url::percent_encode_non_ascii(url)
     } else {
         normalize_href(url, None)
     };

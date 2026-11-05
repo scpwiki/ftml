@@ -1,0 +1,11 @@
+{
+    "elements": [
+        {
+            "element": "iframe",
+            "data": {
+                "url": "http://example.com/?q=日本語#frag日",
+                "attributes": {}
+            }
+        }
+    ]
+}
