@@ -78,6 +78,10 @@ pub fn parse_alignment_block<'r, 't>(
     assert!(!flag_score, "Alignment block doesn't allow score flag");
     assert_block_name(block_rule, name);
 
+    if parser.wikidot_footnote_zone_blocks(opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let source = parser.full_text().inner();
     let escaped_owner = parser.settings().layout.legacy()
         && source[..opener_start]

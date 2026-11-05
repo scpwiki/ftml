@@ -499,6 +499,12 @@ fn parse_table<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    // Live Wikidot cannot start a table block on a native list-item line: the
+    // markers stay literal text in the item.
+    if parser.settings().layout.legacy() && parser.in_wikidot_single_line_content() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let owner_start = table_opener_start(parser, opener_start);
     if let Some(error) =
         cached_underclosed_table_error(parser, BLOCK_TABLE.name, owner_start)

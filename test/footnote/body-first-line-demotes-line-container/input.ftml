@@ -1,0 +1,15 @@
+[[div]]
+[[footnote]]a[[/footnote]]
+[[/div]]
+
+[[note]]
+[[footnote]]b[[/footnote]]
+[[/note]]
+
+[[=]]
+[[footnote]]c[[/footnote]]
+[[/=]]
+
+[[table]]
+[[footnote]]d[[/footnote]]
+[[/table]]

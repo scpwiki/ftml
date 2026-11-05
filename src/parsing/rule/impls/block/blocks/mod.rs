@@ -164,6 +164,7 @@ pub(crate) use self::collapsible::{CollapsibleHead, parse_collapsible_head};
 pub use self::date::BLOCK_DATE;
 pub use self::del::BLOCK_DEL;
 pub use self::div::BLOCK_DIV;
+pub(crate) use self::div::wikidot_div_head_attributes;
 pub use self::embed::BLOCK_EMBED;
 pub use self::embed_audio::BLOCK_EMBED_AUDIO;
 pub use self::embed_video::BLOCK_EMBED_VIDEO;

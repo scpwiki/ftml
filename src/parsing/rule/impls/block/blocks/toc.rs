@@ -33,13 +33,16 @@ pub const BLOCK_TABLE_OF_CONTENTS: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Parsing table-of-contents block (name '{name}', in-head {in_head})");
     parser.check_page_syntax()?;
+    if parser.wikidot_footnote_zone_blocks(opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     assert!(!flag_star, "Table of Contents doesn't allow star flag");
     assert!(!flag_score, "Table of Contents doesn't allow score flag");
     assert_block_name(&BLOCK_TABLE_OF_CONTENTS, name);
