@@ -497,6 +497,17 @@ fn collect_wikidot_target_inner<'r, 't>(
 where
     'r: 't,
 {
+    // The target walk only stops early at whitespace, a line break, a
+    // paragraph break, a valid comment, or a fused segment; the last two
+    // need a later `]`. With none of those left, the walk is certain to
+    // reach `InputEnd` and fail with `EndOfInput`, so reproduce that
+    // error instead of walking (a long unclosed `[` run used to walk the
+    // rest of the document once per opener).
+    if !link_memo
+        && parser.link_target_reaches_input_end(parser.current().span.start, false)
+    {
+        return Err(parser.make_end_of_input_err());
+    }
     let closes: &[ParseCondition] = if line_break_separator {
         &[
             ParseCondition::current(Token::Whitespace),
@@ -1042,6 +1053,16 @@ where
     'r: 't,
 {
     use super::raw::RULE_RAW;
+
+    // The probe walk only ever returns `true` through a successful
+    // `RULE_RAW` attempt at a `Raw`/`LeftRaw` token, and the tokenizer
+    // only produces those from `@@`/`@<` bytes. With no `@` left the walk
+    // can only step to `InputEnd` (or to a token that already returns
+    // `false`), so skip it: for a long run of `[` that walk used to scan
+    // the rest of the document once per opener.
+    if parser.raw_forbids_link_reaches_input_end(parser.current().span.start) {
+        return Ok(false);
+    }
 
     let mut probe = parser.clone();
     let mut no_raw_close = false;
