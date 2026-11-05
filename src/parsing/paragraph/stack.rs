@@ -777,6 +777,26 @@ impl<'t> ParagraphStack<'t> {
 
     #[inline]
     pub fn push_element(&mut self, element: Element<'t>, paragraph_safe: bool) {
+        // L85: a lone leading break before an explicit list vanishes (live
+        // keeps real breaks only with content: R1 keeps, para-start drops).
+        if self.wikidot
+            && matches!(
+                &element,
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            )
+            && matches!(self.current.last(), Some(Element::LineBreak))
+            && self.current.iter().rev().skip(1).all(|element| {
+                matches!(
+                    element,
+                    Element::Delayed(delayed) if delayed.is_suppression_seam()
+                )
+            })
+        {
+            self.current.pop();
+        }
         let paragraph_break_separated = self.paragraph_break_since_element;
         if element != Element::LineBreak {
             self.paragraph_break_since_element = false;
@@ -1298,6 +1318,16 @@ impl<'t> ParagraphStack<'t> {
     #[inline]
     pub fn push_errors(&mut self, errors: &mut Vec<ParseError>) {
         self.errors.append(errors);
+    }
+
+    pub(crate) fn wikidot_finished_ends_with_explicit_list(&self) -> bool {
+        matches!(
+            self.finished.last(),
+            Some(Element::List {
+                wikidot_explicit_block: true,
+                ..
+            })
+        )
     }
 
     #[inline]

@@ -74,6 +74,7 @@ pub(crate) struct WikidotBlockPair {
     pub head_byte: usize,
     pub closer: usize,
     pub closer_end: usize,
+    pub closer_byte: usize,
     pub flat: bool,
 }
 
@@ -143,6 +144,152 @@ impl WikidotBlockPairs {
             .next()
             .is_some_and(|(found, _)| *found == kind)
     }
+
+    pub(crate) fn has_closer_byte_in_range(&self, start: usize, end: usize) -> bool {
+        self.by_closer_byte.range(start..end).next().is_some()
+    }
+}
+
+/// L85: outcome of the explicit-list cross scan (one outer `[[ul]]`/`[[ol]]`
+/// region). Records div/collapsible closers paired through list structure,
+/// redundant list closers live drops, and `[[li]]` openers needing an
+/// implicit nested list. Empty (all collections vacant) for div-free regions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WikidotLiCrossKind {
+    Div,
+    Collapsible,
+}
+
+impl WikidotLiCrossKind {
+    pub(crate) fn boundary_name(self) -> &'static str {
+        match self {
+            WikidotLiCrossKind::Div => "div",
+            WikidotLiCrossKind::Collapsible => "collapsible",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct WikidotLiCrossScan {
+    /// div/collapsible closer byte -> (paired kind, crossed through list
+    /// structure). Breached-outer pairs are always crossed.
+    pub(crate) divcoll_pairs: BTreeMap<usize, (WikidotLiCrossKind, bool)>,
+    /// `li`/`ul`/`ol` closer bytes live drops as redundant.
+    pub(crate) redundant: BTreeSet<usize>,
+    /// `[[li]]` open bytes needing an implicit nested list.
+    pub(crate) implicit_li: BTreeSet<usize>,
+    /// Scanned region (after the outer head through its closer or input end).
+    pub(crate) region_start: usize,
+    pub(crate) region_end: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct WikidotLineRuns {
+    line_starts: Vec<usize>,
+    quote_run: Vec<Option<u32>>,
+    list_run: Vec<Option<u32>>,
+    table_row: Vec<bool>,
+}
+
+pub(crate) fn compute_wikidot_line_runs(source: &str) -> WikidotLineRuns {
+    let mut line_starts = Vec::new();
+    let mut quote_run = Vec::new();
+    let mut list_run = Vec::new();
+    let mut table_row = Vec::new();
+    let mut quote_id = 0u32;
+    let mut quote_open = false;
+    let mut list_id = 0u32;
+    let mut list_open = false;
+    let mut offset = 0usize;
+    for fragment in source.split('\n') {
+        let line = fragment.strip_suffix('\r').unwrap_or(fragment);
+        line_starts.push(offset);
+        offset += fragment.len() + 1;
+        if line.starts_with('>') {
+            if !quote_open {
+                quote_open = true;
+            }
+            quote_run.push(Some(quote_id));
+        } else {
+            if quote_open {
+                quote_open = false;
+                quote_id = quote_id.saturating_add(1);
+            }
+            quote_run.push(None);
+        }
+        if is_native_list_item_line(line) {
+            if !list_open {
+                list_open = true;
+            }
+            list_run.push(Some(list_id));
+        } else {
+            if list_open {
+                list_open = false;
+                list_id = list_id.saturating_add(1);
+            }
+            list_run.push(None);
+        }
+        table_row.push(is_simple_table_row_line(line));
+    }
+    WikidotLineRuns {
+        line_starts,
+        quote_run,
+        list_run,
+        table_row,
+    }
+}
+
+fn is_native_list_item_line(line: &str) -> bool {
+    let stripped = line.trim_start_matches([' ', '\t']);
+    let Some(marker) = stripped.as_bytes().first() else {
+        return false;
+    };
+    if *marker != b'*' && *marker != b'#' {
+        return false;
+    }
+    stripped[1..].starts_with([' ', '\t'])
+}
+
+fn is_simple_table_row_line(line: &str) -> bool {
+    if line.starts_with("||") {
+        return true;
+    }
+    let mut rest = line;
+    let mut stripped_quote = false;
+    while let Some(tail) = rest.strip_prefix('>') {
+        rest = tail;
+        stripped_quote = true;
+    }
+    if !stripped_quote {
+        return false;
+    }
+    rest = rest.trim_start_matches([' ', '\t']);
+    rest.starts_with("||")
+}
+
+impl WikidotLineRuns {
+    pub(crate) fn line_of(&self, byte: usize) -> usize {
+        self.line_starts.partition_point(|start| *start <= byte).saturating_sub(1)
+    }
+
+    pub(crate) fn line_start(&self, line: usize) -> usize {
+        self.line_starts.get(line).copied().unwrap_or(0)
+    }
+
+    pub(crate) fn on_list_item_line(&self, byte: usize) -> bool {
+        let line = self.line_of(byte);
+        self.list_run.get(line).copied().flatten().is_some()
+    }
+
+    pub(crate) fn quote_run_id(&self, byte: usize) -> Option<u32> {
+        let line = self.line_of(byte);
+        self.quote_run.get(line).copied().flatten()
+    }
+
+    pub(crate) fn on_table_row_line(&self, byte: usize) -> bool {
+        let line = self.line_of(byte);
+        self.table_row.get(line).copied().unwrap_or(false)
+    }
 }
 
 #[cfg(test)]
@@ -194,6 +341,26 @@ struct Event {
     closer: usize,
     closer_end: usize,
     is_close: bool,
+}
+
+fn line_prefix_before(source: &str, byte: usize) -> &str {
+    let line_start = source[..byte.min(source.len())]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    &source[line_start..byte.min(source.len())]
+}
+
+fn pipe_rowstart_head_prefix(source: &str, head_byte: usize) -> bool {
+    let prefix = line_prefix_before(source, head_byte);
+    prefix
+        .strip_prefix("||")
+        .is_some_and(|rest| rest.trim_matches([' ', '\t']).is_empty())
+}
+
+fn own_line_marker_prefix(source: &str, marker_byte: usize) -> bool {
+    line_prefix_before(source, marker_byte)
+        .trim_matches([' ', '\t'])
+        .is_empty()
 }
 
 fn non_opaque_literal_start(text: &str) -> bool {
@@ -392,7 +559,25 @@ impl<'t> Scanner<'t> {
             }
             for t in start..end {
                 if tokens[t].span.start >= frag_start {
-                    head_dropped[t] = true;
+                    // L8.5: fragment-row div/collapsible heads stay visible
+                    // so the pairing matrix can bind them (render-interior
+                    // flat); every other head on the fragment keeps the
+                    // legacy drop. Downstream head_valid still enforces
+                    // div-EOL-only.
+                    let keep = matches!(
+                        tokens[t].token,
+                        Token::LeftBlock | Token::LeftBlockStar
+                    ) && segment_head_name(tokens, t, false).is_some_and(
+                        |(name, _)| {
+                            let name = &source[name];
+                            let base = name.strip_suffix('_').unwrap_or(name);
+                            base.eq_ignore_ascii_case("div")
+                                || base.eq_ignore_ascii_case("collapsible")
+                        },
+                    );
+                    if !keep {
+                        head_dropped[t] = true;
+                    }
                 }
             }
         }
@@ -1048,6 +1233,36 @@ impl<'t> Scanner<'t> {
         self.pairs.dedup_by(|a, b| {
             a.kind == b.kind && a.head == b.head && a.closer == b.closer
         });
+        // L8.5: live drops the interior only for collapsible rowstart-head
+        // x own-line-close pairs (st-open shape). Keep those pairs out of
+        // the scan so the legacy descend-and-clear path owns them bit for
+        // bit; every other pipe-head pair renders its interior.
+        let mut dropped_heads = Vec::new();
+        self.pairs.retain(|pair| {
+            // closer_byte is populated below; read the span directly.
+            let closer_byte = self.tokens[pair.closer].span.start;
+            let head_end_byte = self.tokens[pair.head_end - 1].span.end;
+            let head_line_end = self.source[head_end_byte..]
+                .find('\n')
+                .map_or(self.source.len(), |offset| head_end_byte + offset);
+            let head_suffix_blank = self.source[head_end_byte..head_line_end]
+                .trim_matches([' ', '\t'])
+                .is_empty();
+            let drop = pair.kind == WikidotBlockKind::Collapsible
+                && pipe_rowstart_head_prefix(self.source, pair.head_byte)
+                && head_suffix_blank
+                && own_line_marker_prefix(self.source, closer_byte);
+            if drop {
+                dropped_heads.push(pair.head_byte);
+            }
+            !drop
+        });
+        for head in dropped_heads {
+            self.head_event_bytes.remove(&head);
+        }
+        for pair in &mut self.pairs {
+            pair.closer_byte = self.tokens[pair.closer].span.start;
+        }
         let ranges: Vec<(usize, usize)> = self
             .pairs
             .iter()
@@ -1617,6 +1832,7 @@ impl<'t> Scanner<'t> {
                     closer: evs[c].closer,
                     closer_end: evs[c].closer_end,
                     flat: false,
+                    closer_byte: 0,
                 });
             }
         }
@@ -2275,6 +2491,7 @@ impl<'t> Scanner<'t> {
                     closer: pos,
                     closer_end: close.head_end,
                     flat: false,
+                    closer_byte: 0,
                 });
                 measure.end = close.head_end;
                 return Some(measure);
@@ -2319,6 +2536,7 @@ impl<'t> Scanner<'t> {
                     closer: cell_closer,
                     closer_end: cell_closer_end,
                     flat: false,
+                    closer_byte: 0,
                 });
                 rpos = cell_closer_end;
             };
@@ -2331,6 +2549,7 @@ impl<'t> Scanner<'t> {
                 head_byte,
                 closer: row_closer,
                 closer_end: row_closer_end,
+                closer_byte: 0,
                 flat: false,
             });
             pos = row_closer_end;
@@ -2637,6 +2856,7 @@ impl<'t> Scanner<'t> {
                     closer: pos,
                     closer_end: close.head_end,
                     flat: false,
+                    closer_byte: 0,
                 });
                 measure.end = close.head_end;
                 return Some(measure);
@@ -2701,6 +2921,7 @@ impl<'t> Scanner<'t> {
                     head_byte,
                     closer: tab_closer,
                     closer_end: tab_closer_end,
+                    closer_byte: 0,
                     flat: false,
                 });
             }

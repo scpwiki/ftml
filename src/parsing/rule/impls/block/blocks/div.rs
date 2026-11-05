@@ -789,7 +789,20 @@ fn parse_fn<'r, 't>(
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
         && pair.kind == WikidotBlockKind::Div
     {
-        consume_wikidot_flat_head_break(parser, false)?;
+        // L8.5: a flat div head on a native list line keeps its
+        // break so the item collector ends the item instead of
+        // swallowing the following lines; only trailing spaces go.
+        if parser.wikidot_byte_on_list_item_line(opener_start) {
+            if parser.current().token == Token::Whitespace {
+                let mut lookahead = parser.clone();
+                lookahead.step()?;
+                if lookahead.current().token == Token::LineBreak {
+                    parser.step()?;
+                }
+            }
+        } else {
+            consume_wikidot_flat_head_break(parser, false)?;
+        }
         let attributes = wikidot_div_head_attributes(parser, &mut arguments);
         let shell = WikidotBlockShell::Div {
             head: opener_start,

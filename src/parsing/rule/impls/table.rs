@@ -526,12 +526,14 @@ fn try_consume_inner<'r, 't>(
     let mut paragraph_break = false;
     let mut pending_inline_closers = 0u16;
     let mut pending_inline_scopes = PendingInlineScopes::default();
+    parser.clear_wikidot_table_cut_boundary();
 
     loop {
         if parser.native_blockquote_depth().is_some() && !rows.is_empty() {
             return finish_simple_table(rows, errors);
         }
         let mut cells = Vec::new();
+        let mut saw_open = false;
 
         'row: loop {
             let mut elements = Vec::new();
@@ -710,6 +712,24 @@ fn try_consume_inner<'r, 't>(
                                 .look_ahead(0)
                                 .is_some_and(|token| is_table_column_token(token.token))
                         {
+                            if saw_open {
+                                parser.set_wikidot_table_cut_boundary();
+                                elements.clear();
+                                let empty_cell_start = TableCellStart {
+                                    align: None,
+                                    header: false,
+                                    column_span: NonZeroU32::new(1).unwrap(),
+                                    literal_prefix: None,
+                                };
+                                push_cell(
+                                    &mut cells,
+                                    &mut elements,
+                                    empty_cell_start,
+                                    &mut pending_inline_scopes,
+                                );
+                                push_row(&mut rows, &mut cells);
+                                return finish_simple_table(rows, errors);
+                            }
                             elements.clear();
                             let empty_cell_start = TableCellStart {
                                 align: None,
@@ -725,6 +745,9 @@ fn try_consume_inner<'r, 't>(
                             );
                             parser.step()?;
                             break 'row;
+                        }
+                        if saw_open {
+                            parser.set_wikidot_table_cut_boundary();
                         }
                         elements.clear();
                         let empty_cell_start = TableCellStart {
@@ -750,8 +773,16 @@ fn try_consume_inner<'r, 't>(
                                     is_table_column_token(token.token)
                                 })
                             {
+                                if saw_open {
+                                    parser.set_wikidot_table_cut_boundary();
+                                    push_row(&mut rows, &mut cells);
+                                    return finish_simple_table(rows, errors);
+                                }
                                 parser.step()?;
                                 break 'row;
+                            }
+                            if saw_open {
+                                parser.set_wikidot_table_cut_boundary();
                             }
                             push_row(&mut rows, &mut cells);
                             return finish_simple_table(rows, errors);
@@ -761,6 +792,57 @@ fn try_consume_inner<'r, 't>(
 
                     _ => {
                         let wikidot = parser.settings().layout.legacy();
+                        if wikidot
+                            && parser.current().token == Token::LeftBlockEnd
+                            && wikidot_table_closer_cuts(parser)
+                        {
+                            if cells.is_empty() {
+                                elements.clear();
+                                let empty_cell_start = TableCellStart {
+                                    align: None,
+                                    header: false,
+                                    column_span: NonZeroU32::new(1).unwrap(),
+                                    literal_prefix: None,
+                                };
+                                push_cell(
+                                    &mut cells,
+                                    &mut elements,
+                                    empty_cell_start,
+                                    &mut pending_inline_scopes,
+                                );
+                            }
+                            push_row(&mut rows, &mut cells);
+                            parser.set_wikidot_table_cut_boundary();
+                            return finish_simple_table(rows, errors);
+                        }
+                        if wikidot
+                            && parser.current().token == Token::LeftBlock
+                            && wikidot_table_head_abandons(parser)
+                        {
+                            parser.set_in_wikidot_simple_table_cell(true);
+                            let consumed = consume(parser);
+                            parser.set_in_wikidot_simple_table_cell(false);
+                            let _ = consumed?.chain(&mut errors, &mut paragraph_break);
+                            elements.clear();
+                            saw_open = true;
+                            if cells.is_empty() {
+                                let empty_cell_start = TableCellStart {
+                                    align: None,
+                                    header: false,
+                                    column_span: NonZeroU32::new(1).unwrap(),
+                                    literal_prefix: None,
+                                };
+                                push_cell(
+                                    &mut cells,
+                                    &mut elements,
+                                    empty_cell_start,
+                                    &mut pending_inline_scopes,
+                                );
+                            }
+                            push_row(&mut rows, &mut cells);
+                            parser.set_wikidot_table_cut_boundary();
+                            return finish_simple_table(rows, errors);
+                        }
                         let comment = parser.current().token == Token::LeftComment;
                         let consumed = if table_block_head_crosses_line(parser) {
                             let literal = parser.current().slice;
@@ -782,6 +864,44 @@ fn try_consume_inner<'r, 't>(
                                 parser.take_wikidot_simple_table_crossed_closers();
                         }
                         let new_items = consumed.chain(&mut errors, &mut paragraph_break);
+                        if wikidot && !saw_open && cell_holds_flat_open(&new_items) {
+                            saw_open = true;
+                            // L8.5: a cross-line pipe-head pair renders its
+                            // interior as normal siblings. Finish the prefix
+                            // row now (the parser sits right after the head)
+                            // so the head-line suffix and body parse outside
+                            // the table. Same-line pairs keep legacy flow.
+                            if let Some(head_byte) = flat_open_head_byte(&new_items)
+                                && let Some(pair) =
+                                    parser.wikidot_block_pair_at_head_byte(head_byte)
+                                && pair.head_byte < pair.closer_byte
+                                && parser.full_text().inner()
+                                    [pair.head_byte..pair.closer_byte]
+                                    .contains('\n')
+                            {
+                                if cells.is_empty() {
+                                    elements.clear();
+                                    let empty_cell_start = TableCellStart {
+                                        align: None,
+                                        header: false,
+                                        column_span: NonZeroU32::new(1).unwrap(),
+                                        literal_prefix: None,
+                                    };
+                                    push_cell(
+                                        &mut cells,
+                                        &mut elements,
+                                        empty_cell_start,
+                                        &mut pending_inline_scopes,
+                                    );
+                                }
+                                push_row(&mut rows, &mut cells);
+                                if parser.current().token == Token::LineBreak {
+                                    parser.step()?;
+                                }
+                                parser.set_wikidot_table_cut_boundary();
+                                return finish_simple_table(rows, errors);
+                            }
+                        }
 
                         if comment
                             && comment_left_nothing(&new_items)
@@ -822,6 +942,96 @@ fn try_consume_inner<'r, 't>(
         }
 
         push_row(&mut rows, &mut cells);
+    }
+}
+
+fn wikidot_table_closer_cuts(parser: &Parser<'_, '_>) -> bool {
+    let byte = parser.current().span.start;
+    let Some(pair) = parser.wikidot_block_pair_at_closer_byte(byte) else {
+        return false;
+    };
+    if !pair.kind.emits_flat() {
+        return false;
+    }
+    parser.wikidot_head_on_table_row_line(pair.head_byte)
+}
+
+fn wikidot_table_head_abandons(parser: &Parser<'_, '_>) -> bool {
+    let byte = parser.current().span.start;
+    let Some(pair) = parser.wikidot_block_pair_at_head_byte(byte) else {
+        return false;
+    };
+    if !pair.kind.emits_flat() {
+        return false;
+    }
+    let mut depth = 1u32;
+    let mut index = 0usize;
+    loop {
+        let Some(token) = parser.look_ahead(index) else {
+            return false;
+        };
+        index += 1;
+        match token.token {
+            Token::LeftBlock | Token::LeftBlockEnd => depth += 1,
+            Token::RightBlock => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
+                }
+            }
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return false,
+            _ => {}
+        }
+    }
+    loop {
+        let Some(token) = parser.look_ahead(index) else {
+            return false;
+        };
+        index += 1;
+        match token.token {
+            Token::TableColumn
+            | Token::TableColumnTitle
+            | Token::TableColumnCenter
+            | Token::TableColumnRight => return true,
+            Token::LeftBlockEnd => {
+                if parser
+                    .wikidot_block_pair_at_closer_byte(token.span.start)
+                    .is_some()
+                {
+                    return true;
+                }
+            }
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return false,
+            _ => {}
+        }
+    }
+}
+
+fn flat_open_head_byte(elements: &Elements<'_>) -> Option<usize> {
+    let head = |element: &Element| match element {
+        Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+            Some(shell.head_byte())
+        }
+        _ => None,
+    };
+    match elements {
+        Elements::None => None,
+        Elements::Single(element) => head(element),
+        Elements::Multiple(items) => items.iter().find_map(head),
+    }
+}
+
+fn cell_holds_flat_open(elements: &Elements<'_>) -> bool {
+    let holds = |element: &Element| {
+        matches!(
+            element,
+            Element::Partial(PartialElement::WikidotBlockOpen(_))
+        )
+    };
+    match elements {
+        Elements::None => false,
+        Elements::Single(element) => holds(element),
+        Elements::Multiple(items) => items.iter().any(holds),
     }
 }
 

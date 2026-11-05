@@ -135,7 +135,14 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
                 && block_rule_enabled(parser, block_rule)
                 && !(parser.settings().layout.legacy()
                     && (block_rule.name == BLOCK_EMBED.name
-                        || block_rule.name == BLOCK_EMBED_AUDIO.name))),
+                        || block_rule.name == BLOCK_EMBED_AUDIO.name))
+                // L85: a break before an explicit list survives (live keeps
+                // it: R1, l-ul-li-closein); native lists still skip.
+                && !(parser.settings().layout.legacy()
+                    && matches!(
+                        block_rule.name,
+                        "block-list-unordered" | "block-list-ordered"
+                    ))),
             None => Ok(false),
         }
     });

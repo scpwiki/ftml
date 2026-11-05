@@ -185,6 +185,7 @@ pub use self::italics::BLOCK_ITALICS;
 pub use self::later::BLOCK_LATER;
 pub use self::lines::BLOCK_LINES;
 pub use self::list::{BLOCK_LI, BLOCK_OL, BLOCK_UL};
+pub(crate) use self::list::parse_wikidot_implicit_list_block;
 pub use self::mark::BLOCK_MARK;
 pub use self::math::BLOCK_MATH;
 pub(crate) use self::math::wikidot_math_name;
@@ -227,7 +228,7 @@ pub(crate) fn wikidot_flat_pair_for_head(
     }
     parser
         .wikidot_block_pair_at_head_byte(opener_start)
-        .filter(|pair| pair.flat && pair.kind.emits_flat())
+        .filter(|pair| parser.wikidot_pair_goes_flat(pair))
 }
 
 pub(crate) fn wikidot_scored_div_close_compatible<'r, 't>(
@@ -258,6 +259,12 @@ pub(crate) fn consume_wikidot_flat_head_break<'r, 't>(
 where
     'r: 't,
 {
+    if parser.in_wikidot_simple_table_cell()
+        || (parser.in_wikidot_single_line_content()
+            && parser.accepts_partial() != crate::tree::AcceptsPartial::ListItem)
+    {
+        return Ok(());
+    }
     if parser.current().token == Token::Whitespace {
         let mut lookahead = parser.clone();
         lookahead.step()?;

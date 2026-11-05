@@ -98,6 +98,15 @@ pub enum WikidotBlockShell<'t> {
 }
 
 impl<'t> WikidotBlockShell<'t> {
+    pub fn head_byte(&self) -> usize {
+        match self {
+            WikidotBlockShell::Div { head, .. }
+            | WikidotBlockShell::Collapsible { head, .. }
+            | WikidotBlockShell::Note { head }
+            | WikidotBlockShell::Align { head, .. } => *head,
+        }
+    }
+
     pub fn to_owned(&self) -> WikidotBlockShell<'static> {
         match self {
             WikidotBlockShell::Div {
