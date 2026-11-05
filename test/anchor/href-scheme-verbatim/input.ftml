@@ -1,0 +1,29 @@
+[[a href="http://x"]]a[[/a]]
+
+[[a href="https://x/Y"]]a[[/a]]
+
+[[a href="//host/x"]]a[[/a]]
+
+[[a href="/x/a b"]]a[[/a]]
+
+[[a href="#frag"]]a[[/a]]
+
+[[a href="#a b"]]a[[/a]]
+
+[[a href="mailto:a@b.c"]]a[[/a]]
+
+[[a href="ftp://x"]]a[[/a]]
+
+[[a href="gopher://x"]]a[[/a]]
+
+[[a href="news://x"]]a[[/a]]
+
+[[a href="mms://x"]]a[[/a]]
+
+[[a href="git://x"]]a[[/a]]
+
+[[a href="telnet://x"]]a[[/a]]
+
+[[a href="https://x/%E6%97%A5%E6%9C%AC%E8%AA%9E"]]a[[/a]]
+
+[[a href="/x?a=1&b=2"]]a[[/a]]

@@ -36,11 +36,21 @@ pub use self::safe::{
     is_safe_attribute,
 };
 
-#[derive(Serialize, Default, Clone, PartialEq, Eq)]
+#[derive(Serialize, Default, Clone)]
 pub struct AttributeMap<'t> {
     #[serde(flatten)]
     inner: BTreeMap<Cow<'t, str>, Cow<'t, str>>,
+    #[serde(skip)]
+    order: Vec<Cow<'t, str>>,
 }
+
+impl PartialEq for AttributeMap<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl Eq for AttributeMap<'_> {}
 
 impl<'t> AttributeMap<'t> {
     #[inline]
@@ -74,12 +84,29 @@ impl<'t> AttributeMap<'t> {
         };
 
         let key = attribute.to_ascii_lowercase();
-        self.inner.insert(Cow::Owned(key), value);
+        self.insert_key(Cow::Owned(key), value);
         true
     }
 
+    pub(crate) fn insert_raw(&mut self, key: Cow<'t, str>, value: Cow<'t, str>) {
+        self.insert_key(key, value);
+    }
+
     pub(crate) fn insert_wikidot_relative_href(&mut self, value: Cow<'t, str>) {
-        self.inner.insert(cow!("href"), value);
+        self.insert_key(cow!("href"), value);
+    }
+
+    fn insert_key(&mut self, key: Cow<'t, str>, value: Cow<'t, str>) {
+        if !self.inner.contains_key(&key) {
+            self.order.push(key.clone());
+        }
+        self.inner.insert(key, value);
+    }
+
+    pub(crate) fn ordered_keys(&self) -> impl Iterator<Item = &Cow<'t, str>> {
+        self.order
+            .iter()
+            .filter(|key| self.inner.contains_key(*key))
     }
 
     pub(crate) fn insert_wikidot_iframe_attribute(
@@ -119,7 +146,9 @@ impl<'t> AttributeMap<'t> {
             inner.insert(key, value);
         }
 
-        AttributeMap { inner }
+        let order = self.order.iter().map(|key| string_to_owned(key)).collect();
+
+        AttributeMap { inner, order }
     }
 }
 

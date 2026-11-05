@@ -26,6 +26,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
+const WIKIDOT_ANCHOR_ATTRIBUTE_KEYS: [&str; 6] =
+    ["class", "id", "role", "style", "target", "type"];
+
 macro_rules! make_err {
     ($parser:expr) => {
         $parser.make_err(ParseErrorKind::BlockMalformedArguments)
@@ -327,18 +330,52 @@ impl<'t> Arguments<'t> {
         &self,
         settings: &WikitextSettings,
     ) -> AttributeMap<'t> {
-        let mut map =
-            self.attribute_map_from_entries(settings, |_, value| !value.is_empty());
-        map.remove("title");
+        let mut map = AttributeMap::new();
+        let mut seen: Vec<&str> = Vec::new();
+        for argument in &self.raw {
+            let name = argument.name.as_ref();
+            if seen.contains(&name) {
+                continue;
+            }
+            seen.push(name);
+            let Some(value) = self.inner.get(&self.key_cow(argument.name.clone())) else {
+                continue;
+            };
+            if name.eq_ignore_ascii_case("href") {
+                continue;
+            }
+            if settings.layout.legacy() && name.eq_ignore_ascii_case("hidden") {
+                continue;
+            }
+            if name.starts_with("data-") {
+                map.insert_raw(
+                    Cow::Owned(name.to_ascii_lowercase()),
+                    normalize_wikidot_html_attribute_value(value),
+                );
+                continue;
+            }
+            if self.case_sensitive && name.bytes().any(|byte| byte.is_ascii_uppercase()) {
+                continue;
+            }
+            if !WIKIDOT_ANCHOR_ATTRIBUTE_KEYS.contains(&name) {
+                continue;
+            }
+            let value = normalize_wikidot_html_attribute_value(value);
+            if value.is_empty() {
+                continue;
+            }
+            map.insert(name, value);
+        }
         if let Some(href) = self.inner.get(&self.key("href")) {
-            if *href == "javascript:;" {
-            } else if wikidot_anchor_href_is_verbatim(href) {
+            if wikidot_anchor_href_is_verbatim(href) {
                 let value = normalize_wikidot_html_attribute_value(href);
                 let spaced = value.replace(' ', "%20");
                 let encoded = crate::url::percent_encode_non_ascii(&spaced);
-                if encoded != value {
-                    map.insert_wikidot_relative_href(Cow::Owned(encoded.into_owned()));
-                }
+                map.insert_wikidot_relative_href(if encoded != value {
+                    Cow::Owned(encoded.into_owned())
+                } else {
+                    value
+                });
             } else {
                 map.insert_wikidot_relative_href(normalize_wikidot_unsafe_anchor_href(
                     href,
@@ -434,31 +471,23 @@ fn normalize_wikidot_unsafe_anchor_href<'t>(value: &Cow<'t, str>) -> Cow<'t, str
         value
     };
     let mut output = String::with_capacity(value.len());
-    let mut pending_dash = false;
+    let mut separator = false;
+    let mut separator_colon = false;
     for character in value.chars() {
         if character == '\\' || character == '\u{00a0}' {
             continue;
         }
-        if character == ':' {
-            while output.ends_with('-') {
-                output.pop();
-            }
-            output.push(':');
-            pending_dash = false;
-            continue;
-        }
         if character.is_ascii_alphanumeric() {
-            if pending_dash && !output.ends_with(':') && !output.ends_with('-') {
-                output.push('-');
+            if separator && !output.is_empty() {
+                output.push(if separator_colon { ':' } else { '-' });
             }
-            pending_dash = false;
+            separator = false;
+            separator_colon = false;
             output.push(character.to_ascii_lowercase());
             continue;
         }
-        pending_dash = !output.is_empty();
-    }
-    while output.ends_with('-') {
-        output.pop();
+        separator = true;
+        separator_colon |= character == ':';
     }
     Cow::Owned(output)
 }

@@ -258,84 +258,88 @@ mod tests {
             (
                 "leading space inside second anchor",
                 "[[a]]one[[/a]][[a]] two[[/a]]",
-                "<p><a href>one</a> <a href>two</a></p>",
+                "<p><a href=\"\">one</a> <a href=\"\">two</a></p>",
             ),
             (
                 "leading space after text",
                 "x[[a]] one[[/a]]y",
-                "<p>x <a href>one</a>y</p>",
+                "<p>x <a href=\"\">one</a>y</p>",
             ),
             (
                 "leading space merges with authored space",
                 "x [[a]]  two[[/a]]",
-                "<p>x <a href>two</a></p>",
+                "<p>x <a href=\"\">two</a></p>",
             ),
             (
                 "leading space at line start is dropped",
                 "[[a]] one [[/a]]",
-                "<p><a href>one</a></p>",
+                "<p><a href=\"\">one</a></p>",
             ),
             (
                 "trailing space before text",
                 "x [[a]]one [[/a]]y",
-                "<p>x <a href>one</a> y</p>",
+                "<p>x <a href=\"\">one</a> y</p>",
             ),
             (
                 "repeated trailing whitespace collapses once",
                 "x [[a]]one \t[[/a]]y",
-                "<p>x <a href>one</a> y</p>",
+                "<p>x <a href=\"\">one</a> y</p>",
             ),
             (
                 "trailing space merges with authored space",
                 "x [[a]]one [[/a]] y",
-                "<p>x <a href>one</a> y</p>",
+                "<p>x <a href=\"\">one</a> y</p>",
             ),
             (
                 "trailing space at line end is dropped",
                 "x [[a]]one [[/a]]\ny",
-                "<p>x <a href>one</a><br>\ny</p>",
+                "<p>x <a href=\"\">one</a><br>\ny</p>",
             ),
             (
                 "adjacent anchors share one separator",
                 "[[a]]x[[/a]][[a]] one [[/a]][[a]] two [[/a]]",
-                "<p><a href>x</a> <a href>one</a> <a href>two</a></p>",
+                "<p><a href=\"\">x</a> <a href=\"\">one</a> <a href=\"\">two</a></p>",
             ),
             (
                 "space between anchors",
                 "[[a]]one[[/a]] [[a]]two[[/a]]",
-                "<p><a href>one</a> <a href>two</a></p>",
+                "<p><a href=\"\">one</a> <a href=\"\">two</a></p>",
             ),
             (
                 "truly adjacent anchors",
                 "[[a]]one[[/a]][[a]]two[[/a]]",
-                "<p><a href>one</a><a href>two</a></p>",
+                "<p><a href=\"\">one</a><a href=\"\">two</a></p>",
             ),
             (
                 "formatting before trailing space",
                 "x [[a]]**one** [[/a]]y",
-                "<p>x <a href><strong>one</strong></a> y</p>",
+                "<p>x <a href=\"\"><strong>one</strong></a> y</p>",
             ),
             (
                 "nested formatting after leading space",
                 "x[[a]] **two**[[/a]]",
-                "<p>x <a href><strong>two</strong></a></p>",
+                "<p>x <a href=\"\"><strong>two</strong></a></p>",
             ),
             (
                 "CJK label after leading space",
                 "x[[a]] 日本語[[/a]]",
-                "<p>x <a href>日本語</a></p>",
+                "<p>x <a href=\"\">日本語</a></p>",
             ),
             (
                 "whitespace-only body",
                 "x [[a]] [[/a]]y",
-                "<p>x <a href></a>y</p>",
+                "<p>x <a href=\"\"></a>y</p>",
             ),
             (
                 "nonbreaking spaces stay inside",
                 "x [[a]]\u{a0}two\u{a0}[[/a]]y",
-                "<p>x <a href>\u{a0}two\u{a0}</a>y</p>",
+                "<p>x <a href=\"\">\u{a0}two\u{a0}</a>y</p>",
             ),
-            ("tab", "x[[a]]\ttwo\t[[/a]]y", "<p>x <a href>two</a> y</p>"),
+            (
+                "tab",
+                "x[[a]]\ttwo\t[[/a]]y",
+                "<p>x <a href=\"\">two</a> y</p>",
+            ),
         ];
 
         for (case, source, expected) in cases {
@@ -427,7 +431,7 @@ mod tests {
         assert_eq!(
             html,
             concat!(
-                "<p>EMPTY <a href></a>",
+                "<p>EMPTY <a href=\"\"></a>",
                 "BASIC <a href=\"some-page\">click</a>",
                 "ATTRS <a href=\"https://example.com\">my link</a>",
                 "<strong>BOTH</strong></p>",
