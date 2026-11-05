@@ -28,7 +28,7 @@ pub fn render_table_of_contents(
 ) {
     debug!("Creating table of contents");
     if ctx.layout().legacy() {
-        render_wikidot_table_of_contents(ctx, align);
+        render_wikidot_table_of_contents(ctx, align, attributes);
         return;
     }
     let use_true_ids = ctx.settings().use_true_ids;
@@ -77,7 +77,11 @@ pub fn render_table_of_contents(
         });
 }
 
-fn render_wikidot_table_of_contents(ctx: &mut HtmlContext, align: Option<Alignment>) {
+fn render_wikidot_table_of_contents(
+    ctx: &mut HtmlContext,
+    align: Option<Alignment>,
+    attributes: &AttributeMap,
+) {
     if align.is_none() {
         ctx.html()
             .table()
@@ -87,15 +91,19 @@ fn render_wikidot_table_of_contents(ctx: &mut HtmlContext, align: Option<Alignme
                     ctx.html()
                         .table_cell(false)
                         .attr(attr!("style" => "margin:0; padding:0"))
-                        .inner(|ctx| render_wikidot_toc_box(ctx, align));
+                        .inner(|ctx| render_wikidot_toc_box(ctx, align, attributes));
                 });
             });
     } else {
-        render_wikidot_toc_box(ctx, align);
+        render_wikidot_toc_box(ctx, align, attributes);
     }
 }
 
-fn render_wikidot_toc_box(ctx: &mut HtmlContext, align: Option<Alignment>) {
+fn render_wikidot_toc_box(
+    ctx: &mut HtmlContext,
+    align: Option<Alignment>,
+    attributes: &AttributeMap,
+) {
     let class_value =
         align.map(|align| FloatAlignment { align, float: true }.wd_html_class());
     ctx.html()
@@ -125,9 +133,12 @@ fn render_wikidot_toc_box(ctx: &mut HtmlContext, align: Option<Alignment>) {
                         ))
                         .contents("Unfold");
                 });
-            let title = ctx
-                .handle()
-                .get_message(ctx.language(), "table-of-contents");
+            let title = match attributes.get().get("title") {
+                Some(title) => title.as_ref(),
+                None => ctx
+                    .handle()
+                    .get_message(ctx.language(), "table-of-contents"),
+            };
             ctx.html()
                 .div()
                 .attr(attr!("class" => "title"))
@@ -218,8 +229,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn wikidot_table_of_contents_uses_legacy_controls_and_ignores_attributes() {
+    fn wikidot_toc_body(
+        align: Option<Alignment>,
+        attributes: &AttributeMap<'_>,
+    ) -> String {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let toc_entries: [Element<'static>; 0] = [];
@@ -234,20 +247,63 @@ mod tests {
             &bibliographies,
             0,
         );
+        render_table_of_contents(&mut ctx, align, attributes);
+        HtmlOutput::from(ctx).body
+    }
+
+    #[test]
+    fn wikidot_table_of_contents_uses_legacy_controls_and_default_title() {
         let mut attributes = AttributeMap::new();
         assert!(attributes.insert("id", cow!("u-contents")));
 
-        render_table_of_contents(&mut ctx, Some(Alignment::Right), &attributes);
+        let body = wikidot_toc_body(Some(Alignment::Right), &attributes);
 
-        let output = HtmlOutput::from(ctx);
         assert_eq!(
-            output.body,
+            body,
             concat!(
                 r#"<div id="toc" class="floatright"><div id="toc-action-bar">"#,
                 r#"<a href="javascript:;" onclick="WIKIDOT.page.listeners.foldToc(event)">Fold</a>"#,
                 r#"<a style="display: none" href="javascript:;" onclick="WIKIDOT.page.listeners.unfoldToc(event)">Unfold</a>"#,
                 r#"</div><div class="title">Table of Contents</div><div id="toc-list"></div></div>"#,
             ),
+        );
+    }
+
+    #[test]
+    fn wikidot_table_of_contents_uses_title_attribute() {
+        let mut attributes = AttributeMap::new();
+        assert!(attributes.insert("title", cow!("Contents")));
+
+        let body = wikidot_toc_body(None, &attributes);
+
+        assert!(
+            body.contains(r#"<div class="title">Contents</div>"#),
+            "{body}"
+        );
+        assert!(!body.contains("Table of Contents"), "{body}");
+    }
+
+    #[test]
+    fn wikidot_table_of_contents_uses_empty_title_attribute() {
+        let mut attributes = AttributeMap::new();
+        assert!(attributes.insert("title", cow!("")));
+
+        let body = wikidot_toc_body(None, &attributes);
+
+        assert!(body.contains(r#"<div class="title"></div>"#), "{body}");
+        assert!(!body.contains("Table of Contents"), "{body}");
+    }
+
+    #[test]
+    fn wikidot_table_of_contents_escapes_title_attribute() {
+        let mut attributes = AttributeMap::new();
+        assert!(attributes.insert("title", cow!("目次 & <notes>")));
+
+        let body = wikidot_toc_body(None, &attributes);
+
+        assert!(
+            body.contains(r#"<div class="title">目次 &amp; &lt;notes&gt;</div>"#),
+            "{body}"
         );
     }
 
