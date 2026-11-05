@@ -783,6 +783,9 @@ fn parse_fn<'r, 't>(
     debug!("Parsing div block (name '{name}', in-head {in_head}, score {flag_score})");
     assert!(!flag_star, "Div doesn't allow star flag");
     assert_block_name(&BLOCK_DIV, name);
+    if parser.settings().layout.legacy() && parser.in_wikidot_heading_line() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let source = parser.full_text().inner();
 
     let head = parser.get_head_map_with_body_start_wikidot(&BLOCK_DIV, in_head)?;

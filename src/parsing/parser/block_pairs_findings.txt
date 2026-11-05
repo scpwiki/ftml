@@ -158,3 +158,6 @@ corpus-test/div/scored-body-first-line-tabview/input.ftml	TabView@9..54 scan-onl
 corpus-test/div/scored-body-first-line-tabview/input.ftml	Tab@21..41 scan-only
 corpus-test/list/wikidot-li-cross-closeout/input.ftml	Div@15..50 scan-only
 corpus-test/list/wikidot-li-cross-closeout/input.ftml	Div@15..32 descent-only
+corpus-test/definition-list/div-head-keeps-close-tail/input.ftml	Div@2..20 scan-only
+corpus-test/definition-list/div-head-loses-line/input.ftml	Div@2..20 scan-only
+corpus-test/definition-list/note-head-loses-line/input.ftml	Note@2..22 scan-only
