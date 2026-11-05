@@ -143,6 +143,7 @@ struct ActiveScopes<'t> {
     open_instances: BTreeMap<usize, usize>,
     consumed: BTreeSet<usize>,
     istack: Vec<IstEntry<'t>>,
+    deferred_closes: Vec<usize>,
     cell_local: bool,
 }
 
@@ -334,6 +335,22 @@ impl<'t> ActiveScopes<'t> {
         });
     }
 
+    /// End scopes left open by a deferred crossed close. Called once the
+    /// enclosing paragraph has been flushed, so the scope's own close has
+    /// already been rendered and it must not reopen in the next paragraph.
+    fn drop_deferred_closes(&mut self) {
+        if self.deferred_closes.is_empty() {
+            return;
+        }
+        for position in mem::take(&mut self.deferred_closes) {
+            let linked = self.active_tail == Some(position)
+                || self.scopes[position].next_active.is_some();
+            if linked {
+                self.kill_scope(position);
+            }
+        }
+    }
+
     fn record_open_instance(&mut self, event_ordinal: usize) {
         self.open_instances
             .insert(event_ordinal, self.scopes.len() - 1);
@@ -490,6 +507,19 @@ impl<'t> ActiveScopes<'t> {
                     ended.push(top);
                 }
                 _ => {
+                    // The close target sits above the current element in the
+                    // istack, so its own close is deferred: the scope stays
+                    // open to wrap the reopened elements, and is ended at the
+                    // enclosing paragraph boundary instead of leaking into the
+                    // next paragraph.
+                    if let Some(close) = close_index
+                        && let IstEntry::Scope { position, .. } = &self.istack[close]
+                    {
+                        let position = *position;
+                        if !self.deferred_closes.contains(&position) {
+                            self.deferred_closes.push(position);
+                        }
+                    }
                     self.istack.pop();
                     self.end_scope(top);
                     ended.push(top);
@@ -1388,6 +1418,7 @@ fn lower_root_sequence<'t>(
 
             if !joins_previous {
                 flush_paragraph_group(&mut output, &mut paragraph_group);
+                active.drop_deferred_closes();
             }
             let group = paragraph_group.get_or_insert_with(|| ParagraphGroup {
                 wrapped: follows_table

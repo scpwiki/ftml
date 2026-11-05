@@ -1,0 +1,275 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "red",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "bold",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "italics",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "b"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "##"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "c"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "red",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "italics",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "bold",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "b"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "##"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "c"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "red",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "bold",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "b"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "##"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "c"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "d"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "red",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "italics",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "b"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "##"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "c"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "d"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "—"
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "red",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "xb"
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "bold",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "italics",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "container",
+                                                            "data": {
+                                                                "type": "strikethrough",
+                                                                "attributes": {},
+                                                                "elements": [
+                                                                    {
+                                                                        "element": "text",
+                                                                        "data": "c"
+                                                                    },
+                                                                    {
+                                                                        "element": "text",
+                                                                        "data": "##"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "f"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
