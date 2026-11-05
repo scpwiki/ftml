@@ -63,6 +63,34 @@ mod tests {
     use crate::tree::Alignment;
 
     #[test]
+    fn table_of_contents_block_carries_title_attribute() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+
+        for (source, expected_title) in [
+            (r#"[[toc title="Contents"]]"#, Some("Contents")),
+            (r#"[[toc title=""]]"#, Some("")),
+            ("[[toc]]", None),
+        ] {
+            let tokenization = crate::tokenize(source);
+            let (tree, errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+
+            assert!(errors.is_empty(), "{source}: {errors:?}");
+            let [Element::TableOfContents { attributes, .. }] = tree.elements.as_slice()
+            else {
+                panic!("expected one table of contents for {source:?}");
+            };
+
+            assert_eq!(
+                attributes.get().get("title").map(|value| value.as_ref()),
+                expected_title,
+                "{source}",
+            );
+        }
+    }
+
+    #[test]
     fn table_of_contents_block_parses_float_alignment_and_attributes() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
