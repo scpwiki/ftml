@@ -1413,6 +1413,17 @@ where
         Ok(name)
     }
 
+    /// Whether the byte directly after the just-parsed close marker is ASCII
+    /// whitespace or the end of input, which is what makes a Wikidot
+    /// `[[/html]]` marker a real block close rather than body text.
+    pub(crate) fn wikidot_html_closer_boundary_ahead(&self) -> bool {
+        let text = self.full_text().inner();
+        match text.as_bytes().get(self.current().span.start) {
+            None => true,
+            Some(byte) => byte.is_ascii_whitespace(),
+        }
+    }
+
     pub(crate) fn wikidot_fused_end_block_ahead(&self, block_rule: &BlockRule) -> bool {
         let source = &self.full_text().inner()[self.current().span.start..];
         let Some(rest) = source.strip_prefix("[[/") else {
@@ -1634,6 +1645,19 @@ where
             } else {
                 parser.get_end_block()?
             };
+
+            // A Wikidot [[html]] closer only ends the block when the next byte
+            // is ASCII whitespace or the end of input; otherwise the closer text
+            // is part of the raw captured body. Pinned by the saved-page
+            // end-of-block matrix ([[html]]x[[/html]][[/html]] captures
+            // "x[[/html]]").
+            if parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && block_rule.name == "block-html"
+                && !parser.wikidot_html_closer_boundary_ahead()
+            {
+                return Ok(false);
+            }
 
             if parser.settings().layout.legacy()
                 && !parser.discarding_hidden_body()
