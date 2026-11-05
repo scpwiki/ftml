@@ -1575,10 +1575,7 @@ struct WikidotTabHeadToken<'t> {
     raw: &'t str,
 }
 
-fn wikidot_tab_head_argument_at(
-    text: &str,
-    start: usize,
-) -> Option<(&str, &str, usize)> {
+fn wikidot_tab_head_argument_at(text: &str, start: usize) -> Option<(&str, &str, usize)> {
     let bytes = text.as_bytes();
     let mut index = start;
     while index < bytes.len()
@@ -1598,7 +1595,10 @@ fn wikidot_tab_head_argument_at(
         return None;
     }
     let end = value_end + 1;
-    if bytes.get(end).is_some_and(|byte| !byte.is_ascii_whitespace()) {
+    if bytes
+        .get(end)
+        .is_some_and(|byte| !byte.is_ascii_whitespace())
+    {
         return None;
     }
     Some((&text[start..index], &text[value_start..value_end], end))
@@ -1675,18 +1675,14 @@ fn wikidot_tab_head_label(text: &str) -> String {
     let rest = &tokens[..suffix_start];
 
     let title = if rest.is_empty()
-        && let Some((key, value)) = suffix.first().and_then(|token| token.key)
-        && key == "title"
+        && let Some(("title", value)) = suffix.first().and_then(|token| token.key)
     {
         Some(value)
     } else {
-        suffix
-            .iter()
-            .rev()
-            .find_map(|token| match token.key {
-                Some((key, value)) if key == "title" => Some(value),
-                _ => None,
-            })
+        suffix.iter().rev().find_map(|token| match token.key {
+            Some(("title", value)) => Some(value),
+            _ => None,
+        })
     };
     if let Some(title) = title {
         return wikidot_tab_head_normalize(title);
@@ -1702,7 +1698,31 @@ fn wikidot_tab_head_label(text: &str) -> String {
         }
         joined.push_str(token.raw);
     }
-    wikidot_tab_head_normalize(&joined)
+    let joined = wikidot_tab_head_normalize(&joined);
+    if wikidot_tab_head_has_raw_construct(&joined) {
+        return String::new();
+    }
+    joined
+}
+
+fn wikidot_tab_head_has_raw_construct(text: &str) -> bool {
+    let mut search = 0;
+    while let Some(offset) = text[search..].find("@@") {
+        let close = offset + 2;
+        if text[close..].contains("@@") {
+            return true;
+        }
+        search = close;
+    }
+    let mut search = 0;
+    while let Some(offset) = text[search..].find("@<") {
+        let close = offset + 2;
+        if text[close..].contains(">@") {
+            return true;
+        }
+        search = close;
+    }
+    false
 }
 
 /// The line break that ends the last quoted row of a tab body is the row
@@ -1789,26 +1809,26 @@ fn parse_tab<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let head_start = parser.current().span.start;
-    let head_has_construct = legacy
-        && in_head
-        && {
-            let mut end = head_start;
-            for token in std::iter::once(parser.current()).chain(parser.remaining()) {
-                if matches!(
-                    token.token,
-                    Token::RightBlock
-                        | Token::RightLink
-                        | Token::LineBreak
-                        | Token::ParagraphBreak
-                        | Token::InputEnd
-                ) {
-                    end = token.span.start;
-                    break;
-                }
+    let head_has_elided_footnoteblock = legacy && in_head && {
+        let head_start = parser.current().span.start;
+        let mut end = head_start;
+        for token in std::iter::once(parser.current()).chain(parser.remaining()) {
+            if matches!(
+                token.token,
+                Token::RightBlock
+                    | Token::RightLink
+                    | Token::LineBreak
+                    | Token::ParagraphBreak
+                    | Token::InputEnd
+            ) {
+                end = token.span.start;
+                break;
             }
-            parser.full_text().inner()[head_start..end].contains("[[")
-        };
+        }
+        parser.full_text().inner()[head_start..end]
+            .to_ascii_lowercase()
+            .contains("[[footnoteblock")
+    };
 
     let (label, leftover, saw_title_unit) = if in_head {
         let checkpoint = parser.clone();
@@ -1845,7 +1865,7 @@ fn parse_tab<'r, 't>(
         match label {
             None => std::borrow::Cow::Borrowed("untitled"),
             Some(value) => {
-                if saw_title_unit || head_has_construct {
+                if saw_title_unit || head_has_elided_footnoteblock {
                     value
                 } else {
                     std::borrow::Cow::Owned(wikidot_tab_head_label(&value))

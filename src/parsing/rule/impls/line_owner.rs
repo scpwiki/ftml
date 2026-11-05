@@ -540,8 +540,7 @@ where
             let end = source[start..]
                 .find('\n')
                 .map_or(source.len(), |offset| start + offset);
-            *close_tail =
-                Some(Cow::Borrowed(source[start..end].trim_end_matches('\r')));
+            *close_tail = Some(Cow::Borrowed(source[start..end].trim_end_matches('\r')));
             while close.current().span.start < end
                 && close.current().token != Token::InputEnd
             {

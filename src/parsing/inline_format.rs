@@ -3976,7 +3976,10 @@ fn discard_range(elements: &mut [Option<Element<'_>>], range: Range<usize>) {
 }
 
 pub(crate) fn lower_wikidot_root_dash_runs(elements: &mut Vec<Element<'_>>) {
-    if !elements.iter().any(|element| dash_run_len(element).is_some()) {
+    if !elements
+        .iter()
+        .any(|element| dash_run_len(element).is_some())
+    {
         return;
     }
     let mut output = Vec::with_capacity(elements.len());
