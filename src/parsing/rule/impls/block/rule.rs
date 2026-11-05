@@ -268,6 +268,24 @@ where
     }
 }
 
+fn wikidot_note_head_with_arguments_fails<'r, 't>(
+    parser: &Parser<'r, 't>,
+    opener_start: usize,
+    flag_star: bool,
+    flag_score: bool,
+) -> bool
+where
+    'r: 't,
+{
+    if flag_star || flag_score {
+        return false;
+    }
+    matches!(
+        parser.wikidot_head_region_is_empty(opener_start),
+        Some(false)
+    )
+}
+
 fn parse_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
     flag_star: bool,
@@ -454,6 +472,19 @@ where
             block.name,
             block_opener_start,
             flag_star,
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if block.name == "block-note"
+        && parser.settings().layout.legacy()
+        && in_head
+        && !parser.discarding_hidden_body()
+        && wikidot_note_head_with_arguments_fails(
+            parser,
+            block_opener_start,
+            flag_star,
+            flag_score,
         )
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));

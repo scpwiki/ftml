@@ -4740,6 +4740,72 @@ where
         }
     }
 
+    pub(crate) fn wikidot_head_region_is_empty(
+        &self,
+        opener_start: usize,
+    ) -> Option<bool> {
+        let source = self.full_text().inner();
+        let bytes = source.as_bytes();
+        let mut word_end = opener_start + 2;
+        while matches!(bytes.get(word_end), Some(b' ' | b'\t')) {
+            word_end += 1;
+        }
+        while let Some(&byte) = bytes.get(word_end) {
+            if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b']' | b'[') {
+                break;
+            }
+            word_end += 1;
+        }
+        let mut probe = self.clone();
+        let head_end = loop {
+            match probe.current().token {
+                Token::Whitespace | Token::LineBreak | Token::ParagraphBreak => {
+                    if probe.step().is_err() {
+                        return None;
+                    }
+                }
+                Token::LeftComment => {
+                    let mut candidate = probe.clone();
+                    if consume_valid_comment(&mut candidate).is_err() {
+                        return None;
+                    }
+                    probe.update(&candidate);
+                }
+                Token::RightBlock => break probe.current().span.start,
+                Token::RightLink
+                | Token::LeftBlock
+                | Token::LeftBlockStar
+                | Token::LeftBlockEnd
+                | Token::InputEnd => return None,
+                _ => {
+                    if probe.step().is_err() {
+                        return None;
+                    }
+                }
+            }
+        };
+        if head_end < word_end {
+            return None;
+        }
+        let mut region = String::new();
+        let mut rest = &source[word_end..head_end];
+        loop {
+            match rest.find("[!--") {
+                None => {
+                    region.push_str(rest);
+                    break;
+                }
+                Some(open) => {
+                    region.push_str(&rest[..open]);
+                    let after = &rest[open + 4..];
+                    let close = after.find("--]")?;
+                    rest = &after[close + 3..];
+                }
+            }
+        }
+        Some(region.is_empty())
+    }
+
     pub fn get_head_none(
         &mut self,
         block_rule: &BlockRule,
