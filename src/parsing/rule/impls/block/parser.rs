@@ -75,6 +75,267 @@ pub(crate) enum WikidotLiCloseDisposition {
     Literal,
 }
 
+/// Token window the `[[iftags]]` pairing scan may look at, matching the
+/// window the previous pairing dynamic program was built over.
+const IFTAGS_PAIRING_WINDOW: usize = 8192;
+
+#[cfg(test)]
+thread_local! {
+    static IFTAGS_PAIRING_SCAN_STEPS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn reset_iftags_pairing_scan_steps() {
+    IFTAGS_PAIRING_SCAN_STEPS.with(|steps| steps.set(0));
+}
+
+#[cfg(test)]
+fn iftags_pairing_scan_steps() -> usize {
+    IFTAGS_PAIRING_SCAN_STEPS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+fn count_iftags_pairing_scan_step() {
+    IFTAGS_PAIRING_SCAN_STEPS.with(|steps| steps.set(steps.get() + 1));
+}
+
+/// The token window `[[iftags]]` pairing scans, materialized lazily.
+///
+/// The pairing scan walks the body left to right and only needs the tokens it
+/// visits, so the window grows on demand instead of copying the whole
+/// 8192-token window once per gate head. Extension stops at exactly the same
+/// places the old eager window did (input end, the 8192-token cap, or a failed
+/// step), so truncated windows keep behaving identically.
+struct IftagsPairingWindow<'r, 't> {
+    tokens: Vec<&'r ExtractedToken<'t>>,
+    scan: Parser<'r, 't>,
+    done: bool,
+}
+
+impl<'r, 't> IftagsPairingWindow<'r, 't> {
+    fn new(parser: &Parser<'r, 't>) -> Self {
+        Self {
+            tokens: Vec::new(),
+            scan: parser.clone(),
+            done: false,
+        }
+    }
+
+    /// Append tokens until `index` is inside the window or it cannot grow.
+    fn extend_to(&mut self, index: usize) {
+        while self.tokens.len() <= index && !self.done {
+            let token = self.scan.current();
+            let at_end = token.token == Token::InputEnd;
+            self.tokens.push(token);
+            #[cfg(test)]
+            count_iftags_pairing_scan_step();
+            if at_end || self.tokens.len() >= IFTAGS_PAIRING_WINDOW {
+                self.done = true;
+            } else if self.scan.step().is_err() {
+                self.done = true;
+            }
+        }
+    }
+
+    /// Materialize the rest of the window, for the span probes that scan it.
+    fn fill(&mut self) {
+        self.extend_to(usize::MAX);
+    }
+
+    /// Materialize token `index` when the window can still grow; true if
+    /// the token is inside the window afterwards.
+    fn ensure(&mut self, index: usize) -> bool {
+        self.extend_to(index);
+        self.tokens.get(index).is_some()
+    }
+
+    fn token(&self, index: usize) -> &'r ExtractedToken<'t> {
+        self.tokens[index]
+    }
+}
+
+/// [`named_block_head_end`] over a lazily materialized window.
+///
+/// The head probe walks until the head closes (or until a token that cannot
+/// appear in a head), so its lookahead is not bounded by a fixed constant;
+/// the window grows with it instead of being copied up front.
+fn lazy_named_block_head_end<'r, 't>(
+    window: &mut IftagsPairingWindow<'r, 't>,
+    start: usize,
+    name: &str,
+) -> Option<usize> {
+    if !window.ensure(start) || window.token(start).token != Token::LeftBlock {
+        return None;
+    }
+    let mut i = start + 1;
+    if !window.ensure(i) {
+        return None;
+    }
+    if window.token(i).token == Token::Whitespace {
+        i += 1;
+    }
+    if !window.ensure(i) {
+        return None;
+    }
+    let ident = window.token(i);
+    if ident.token != Token::Identifier || !ident.slice.eq_ignore_ascii_case(name) {
+        return None;
+    }
+    i += 1;
+    loop {
+        if !window.ensure(i) {
+            return None;
+        }
+        match window.token(i).token {
+            Token::RightBlock => return Some(i + 1),
+            Token::LeftBlock
+            | Token::LeftBlockEnd
+            | Token::InputEnd
+            | Token::ParagraphBreak => return None,
+            _ => i += 1,
+        }
+    }
+}
+
+/// [`named_block_end_head_end`] over a lazily materialized window.
+fn lazy_named_block_end_head_end<'r, 't>(
+    window: &mut IftagsPairingWindow<'r, 't>,
+    start: usize,
+    name: &str,
+) -> Option<usize> {
+    if !window.ensure(start) || window.token(start).token != Token::LeftBlockEnd {
+        return None;
+    }
+    let mut i = start + 1;
+    if !window.ensure(i) {
+        return None;
+    }
+    if window.token(i).token == Token::Whitespace {
+        i += 1;
+    }
+    if !window.ensure(i) {
+        return None;
+    }
+    let ident = window.token(i);
+    if ident.token != Token::Identifier || !ident.slice.eq_ignore_ascii_case(name) {
+        return None;
+    }
+    i += 1;
+    if !window.ensure(i) {
+        return None;
+    }
+    if window.token(i).token == Token::Whitespace {
+        i += 1;
+    }
+    if !window.ensure(i) {
+        return None;
+    }
+    if window.token(i).token == Token::RightBlock {
+        Some(i + 1)
+    } else {
+        None
+    }
+}
+
+/// [`iftags_end_head_end`] over a lazily materialized window.
+fn lazy_iftags_end_head_end<'r, 't>(
+    window: &mut IftagsPairingWindow<'r, 't>,
+    start: usize,
+) -> Option<usize> {
+    if let Some(end) = lazy_named_block_end_head_end(window, start, "iftags") {
+        return Some(end);
+    }
+    if !window.ensure(start) || window.token(start).token != Token::LeftBlockEnd {
+        return None;
+    }
+    let mut i = start + 1;
+    if !window.ensure(i) {
+        return None;
+    }
+    if window.token(i).token == Token::Whitespace {
+        i += 1;
+    }
+    if !window.ensure(i) {
+        return None;
+    }
+    let ident = window.token(i);
+    if ident.token != Token::Identifier || !ident.slice.eq_ignore_ascii_case("iftags") {
+        return None;
+    }
+    i += 1;
+    if !window.ensure(i) {
+        return None;
+    }
+    if window.token(i).token == Token::Whitespace {
+        i += 1;
+    }
+    if !window.ensure(i) {
+        return None;
+    }
+    let close = window.token(i);
+    if close.token == Token::RightLink && close.slice == "]]]" {
+        Some(i + 1)
+    } else {
+        None
+    }
+}
+
+/// [`protected_span_end`] over a lazily materialized window.
+///
+/// Only raw spans (and raw block heads) scan ahead, and those need the whole
+/// window; every other token ends the span check immediately, so a gate-heavy
+/// page never pays for the window it does not look at.
+fn lazy_protected_span_end<'r, 't>(
+    source: &str,
+    window: &mut IftagsPairingWindow<'r, 't>,
+    start: usize,
+) -> Option<usize> {
+    if !window.ensure(start) {
+        return None;
+    }
+    match window.token(start).token {
+        Token::Raw | Token::LeftRaw => {
+            window.fill();
+            protected_span_end(source, &window.tokens, start)
+        }
+        Token::LeftBlock => {
+            if !raw_block_span_name(window, start) {
+                return None;
+            }
+            window.fill();
+            protected_span_end(source, &window.tokens, start)
+        }
+        _ => None,
+    }
+}
+
+/// Whether the block head at `start` opens one of the raw block spans
+/// [`raw_block_span_end`] handles (same name test, without the span scan).
+fn raw_block_span_name<'r, 't>(
+    window: &mut IftagsPairingWindow<'r, 't>,
+    start: usize,
+) -> bool {
+    let mut i = start + 1;
+    if !window.ensure(i) {
+        return false;
+    }
+    if window.token(i).token == Token::Whitespace {
+        i += 1;
+    }
+    if !window.ensure(i) {
+        return false;
+    }
+    let ident = window.token(i);
+    if ident.token != Token::Identifier {
+        return false;
+    }
+    let name = ident.slice;
+    name.eq_ignore_ascii_case("code")
+        || name.eq_ignore_ascii_case("html")
+        || name.eq_ignore_ascii_case("module")
+}
+
 fn named_block_head_end(
     tokens: &[&ExtractedToken<'_>],
     start: usize,
@@ -3696,8 +3957,102 @@ where
             && probe.current().span.start == designated
     }
 
+    /// The end head that designates where the current `[[iftags]]` body ends,
+    /// plus whether a nested `[[iftags]]` head was crossed before it.
+    ///
+    /// The body is scanned once, left to right, over the same token chain the
+    /// pairing used to walk (raw and line-owned block spans are skipped whole,
+    /// exactly as `protected_span_end` decides). The designated end head is the
+    /// first `[[/iftags]]` that closes the body at nesting depth zero; nested
+    /// heads raise the depth and their own end heads lower it. If the body
+    /// never returns to depth zero inside the window, the last reachable end
+    /// head designates the end, which is the gate-transparency case: an
+    /// unclosed body keeps the closer it can still reach.
+    ///
+    /// That is exactly the first element of the ordered set of reachable end
+    /// heads the previous pairing dynamic program materialized at every token.
+    /// The diffusion it computed is one left-to-right balance walk; the DP's
+    /// ordering put the depth-zero end head first and the last reachable end
+    /// head first when no depth-zero one existed. Because the set was
+    /// materialized per token (and paired again per nested head) pairing cost
+    /// was cubic in the gate count; the walk below is linear.
+    ///
+    /// `wikidot_iftags_pairing_end_reference` keeps the DP verbatim. It is the
+    /// fallback for the one shape the walk cannot reproduce (a protected span
+    /// that crosses a gate head, see its doc comment) and the reference for
+    /// the differential test that locks the equivalence.
     pub(crate) fn wikidot_iftags_pairing_end(&self) -> (Option<usize>, bool) {
-        const WINDOW: usize = 8192;
+        let source = self.full_text().inner();
+        let mut window = IftagsPairingWindow::new(self);
+        let mut depth = 0_usize;
+        let mut last_end_head = None;
+        let mut nested = false;
+        let mut nested_at_last_end_head = false;
+        let mut open_head_end = None;
+        let mut index = 0_usize;
+
+        loop {
+            if !window.ensure(index) {
+                break;
+            }
+            #[cfg(test)]
+            count_iftags_pairing_scan_step();
+            let token = window.token(index);
+            if open_head_end.is_some_and(|head_end| index >= head_end) {
+                open_head_end = None;
+            }
+
+            if lazy_iftags_end_head_end(&mut window, index).is_some() {
+                if depth == 0 {
+                    return (Some(token.span.start), nested);
+                }
+                depth -= 1;
+                last_end_head = Some(token.span.start);
+                nested_at_last_end_head = nested;
+            } else if let Some(head_end) =
+                lazy_named_block_head_end(&mut window, index, "iftags")
+            {
+                depth += 1;
+                nested = true;
+                open_head_end = Some(head_end);
+            }
+
+            let step_to =
+                lazy_protected_span_end(source, &mut window, index).unwrap_or(index + 1);
+            // A protected span that opens inside an `[[iftags]]` head and
+            // closes past that head's `]]` makes the tokens reachable from
+            // inside the head differ from the ones reachable from the body
+            // start, so the balance walk no longer reproduces the reference
+            // dynamic program. That corner needs the general program; it is a
+            // bounded, documented fallback (see its doc comment).
+            if open_head_end.is_some_and(|head_end| step_to > head_end) {
+                return self.wikidot_iftags_pairing_end_reference();
+            }
+            index = step_to;
+        }
+
+        match last_end_head {
+            Some(end_head) => (Some(end_head), nested_at_last_end_head),
+            None => (None, false),
+        }
+    }
+
+    /// The cubic reachable-end-head dynamic program.
+    ///
+    /// `wikidot_iftags_pairing_end` uses it as the exact fallback for the one
+    /// shape its linear walk cannot reproduce: a protected span (`@@`/`@<`)
+    /// that opens inside an `[[iftags ...]]` head and closes after that head's
+    /// `]]`. There the components reachable from inside the head differ from
+    /// the ones reachable from the body start, so the pairing reachable from
+    /// the head is the concatenation of two different suffixes. The corner is
+    /// bounded by the 8192-token window (at most one window scan and one
+    /// reachable-end-head table per affected call), so a crafted page needs an
+    /// `@@`/`@<` inside a gate head to reach it.
+    ///
+    /// The differential test `pairing_scan_matches_reference_dynamic_program`
+    /// also uses it as the reference for every other shape.
+    fn wikidot_iftags_pairing_end_reference(&self) -> (Option<usize>, bool) {
+        const WINDOW: usize = IFTAGS_PAIRING_WINDOW;
 
         let mut tokens: Vec<&ExtractedToken<'t>> = Vec::new();
         let mut scan = self.clone();
@@ -5579,6 +5934,254 @@ mod tests {
         assert_eq!(
             head_word("[[foot[[iftags -zzz]]note[[/iftags]]]]", Layout::Wikidot),
             Ok(("footnote".to_owned(), true, false)),
+        );
+    }
+
+    /// Fixed hand-picked bodies plus deterministic random gate streams, used
+    /// by the differential pairing test.
+    fn pairing_sources() -> Vec<String> {
+        let mut sources: Vec<String> = [
+            "",
+            "plain",
+            "[[iftags -x]]shown[[/iftags]]",
+            "[[iftags +x]]hidden[[/iftags]]",
+            "[[iftags -x]]a[[iftags -y]]b[[/iftags]]c[[/iftags]]",
+            "[[iftags -x]]a[[iftags -y]]b[[/iftags]]c",
+            "[[iftags -x]]a[[iftags -y]]b",
+            "a[[iftags +x]]b[[/iftags]]c [[iftags +y]][[/iftags]] ",
+            "[[iftags +x]]\n[[ifcategory y]]\n[[/iftags]]\n[[/ifcategory]]\n",
+            "[[iftags -x]][[/iftags]][[/iftags]]",
+            "[[iftags -x]][[code]]x[[/code]][[/iftags]]",
+            "[[iftags -x]][[code]]x[[/code]]",
+            "[[iftags -x]][[code]]x\n[[/iftags]]",
+            "[[iftags -x]][[html]]x[[/html]][[/iftags]]",
+            "[[iftags -x]][[module]]x[[/module]][[/iftags]]",
+            "[[iftags -x]]@@raw@@[[/iftags]]",
+            "[[iftags -x]]@<raw@>[[/iftags]]",
+            "[[iftags -x]][!-- [[/iftags]] --][[/iftags]]",
+            "[[/iftags]][[iftags -x]][[/iftags]]",
+            "[[iftags -x]][[/ iftags ]][[iftags -y]]",
+            "[[iftags -x]][[/iftags]]]",
+            "[[iftags -x]][[iftags -y]][[/iftags]][[/iftags]][[/iftags]]",
+            "[[iftags -x]]\n[[module]]x[[/module]]\n[[/iftags]]",
+            "[[iftags -x]]\n[[html]]x\n[[/html]]\n[[/iftags]]",
+            "[[iftags -x]][[div]]x[[/div]][[/iftags]]",
+            "[[iftags -x]][[iftags]]x[[/iftags]][[/iftags]]",
+            "[[iftags -x]][[iftagsx]]x[[/iftagsx]][[/iftags]]",
+            "[[iftags -x]][[ iftags -y]]x[[/iftags]][[/iftags]]",
+            "[[iftags -x]][[iftags -y]][[iftags -z]][[/iftags]][[/iftags]][[/iftags]]",
+            "\n[[iftags -x]]\nshown\n[[/iftags]]\n",
+            "[[iftags -zz-no-such-tag]][[iftags @@]][[/iftags]]",
+            "[[iftags -zz-no-such-tag]][[iftags @@]][[/iftags]]@@",
+            "[[iftags @@]][[/iftags]]@@",
+            "[[iftags -x]][[iftags @<a]][[/iftags]]@>",
+            "[[iftags -x]][[iftags @<a]][[/iftags]]",
+            "[[iftags @@]]x[[/iftags]]@@y[[/iftags]]",
+            "[[iftags -zzz]]A[[iftags -zzz]]B[[/iftags]]C[[/iftags]]",
+            "[[iftags -zzz]]\nouter-visible[[iftags +zzz]]\nhidden\n[[/iftags]]\n[[/iftags]]\n",
+            "[[iftags -zzz]]A[[iftags +zzz]]B\n\nC[[/iftags]]D[[/iftags]]",
+            "[[math]]\na[[iftags -zzz]]b[[iftags -zzz]]c\n[[/math]]\nd[[/iftags]]e[[/iftags]]f",
+            "[[math]]\na[[iftags -zzz]]b[[iftags +zzz]]c[[/iftags]]d[[/iftags]]e\n[[/math]]\nf",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+
+        let vocabulary = [
+            "[[iftags -x]]",
+            "[[iftags +y]]",
+            "[[iftags]]",
+            "[[/iftags]]",
+            "[[/ iftags ]]",
+            "[[/iftags]]]",
+            "text",
+            "\n",
+            " ",
+            "[[code]]",
+            "[[/code]]",
+            "[[html]]",
+            "[[/html]]",
+            "[[module]]",
+            "[[/module]]",
+            "[[div]]",
+            "[[/div]]",
+            "@@raw@@",
+            "@<x@>",
+            "[!--c--]",
+            "]]",
+            "[[",
+        ];
+        let mut state = 0x2545_f491_4f6c_dd1d_u64;
+        for _ in 0..600 {
+            let mut next = || {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state
+            };
+            let length = 1 + (next() % 9) as usize;
+            let mut source = String::new();
+            for _ in 0..length {
+                let pick = (next() % vocabulary.len() as u64) as usize;
+                source.push_str(vocabulary[pick]);
+            }
+            sources.push(source);
+        }
+        sources
+    }
+
+    #[test]
+    fn pairing_scan_matches_reference_dynamic_program() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        for source in pairing_sources() {
+            let tokenization = crate::tokenize(&source);
+            let mut parser = Parser::new(&tokenization, &page_info, &settings);
+            loop {
+                let scan = parser.wikidot_iftags_pairing_end();
+                let reference = parser.wikidot_iftags_pairing_end_reference();
+                assert_eq!(
+                    scan,
+                    reference,
+                    "{source:?} at {:?}",
+                    parser.current().span.start,
+                );
+                if parser.current().token == Token::InputEnd || parser.step().is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pairing_scan_matches_reference_for_crossing_protected_spans() {
+        // A raw span that opens inside an [[iftags]] head and closes after that
+        // head makes the tokens reachable from inside the head differ from the
+        // ones reachable from the body start. Those bodies must fall back to
+        // the reference program and stay identical, at every position.
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut sources = Vec::new();
+        for opener in ["@@", "@<a"] {
+            let closer = if opener == "@@" { "@@" } else { "@>" };
+            for head in [
+                format!("[[iftags -x]]{opener}[[iftags -y]]"),
+                format!("[[iftags {opener}]]"),
+                format!("[[iftags -x{opener}]]"),
+                format!("[[iftags -x]]a{opener}[[iftags -y]]b"),
+            ] {
+                for middle in ["[[/iftags]]", "[[/iftags]]x", "x[[/iftags]]", ""] {
+                    for tail in [closer.to_owned(), format!("{closer}[[/iftags]]")] {
+                        sources.push(format!("{head}{middle}{tail}"));
+                    }
+                }
+            }
+        }
+        assert!(sources.len() >= 32);
+        for source in sources {
+            let tokenization = crate::tokenize(&source);
+            let mut parser = Parser::new(&tokenization, &page_info, &settings);
+            loop {
+                assert_eq!(
+                    parser.wikidot_iftags_pairing_end(),
+                    parser.wikidot_iftags_pairing_end_reference(),
+                    "{source:?} at {:?}",
+                    parser.current().span.start,
+                );
+                if parser.current().token == Token::InputEnd || parser.step().is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pairing_scan_work_is_linear_in_gate_count() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let mut previous = None;
+        for count in [64_usize, 256, 1024] {
+            let input = "[[iftags -x]]\nshown\n[[/iftags]]\n".repeat(count);
+            let tokenization = crate::tokenize(&input);
+            reset_iftags_pairing_scan_steps();
+            let (_, errors): (_, Vec<ParseError>) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            assert!(errors.is_empty(), "{count}: {errors:?}");
+            let steps = iftags_pairing_scan_steps();
+            assert!(
+                steps <= input.len() * 2,
+                "{count} gates took {steps} scan steps for {} bytes",
+                input.len(),
+            );
+            if let Some(previous) = previous {
+                assert!(
+                    steps <= previous * 6,
+                    "{count} gates took {steps} scan steps after {previous}",
+                );
+            }
+            previous = Some(steps);
+        }
+    }
+
+    /// The pairing result for a body that starts at byte offset.
+    fn pairing_at(source: &str, offset: usize) -> (Option<usize>, bool) {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(source);
+        let mut parser = Parser::new(&tokenization, &page_info, &settings);
+        while parser.current().span.start < offset {
+            parser.step().expect("body start must be inside the source");
+        }
+        assert_eq!(parser.current().span.start, offset, "{source:?}");
+        let result = parser.wikidot_iftags_pairing_end();
+        assert_eq!(
+            result,
+            parser.wikidot_iftags_pairing_end_reference(),
+            "{source:?}",
+        );
+        result
+    }
+
+    #[test]
+    fn iftags_pairing_designates_the_balanced_end_head() {
+        // A nested gate consumes its own end head; the outer body pairs with
+        // the next balanced one.
+        let source = "[[iftags -x]]a[[iftags -y]]b[[/iftags]]c[[/iftags]]";
+        let body = source.find("a[[iftags -y]]").unwrap();
+        assert_eq!(
+            pairing_at(source, body),
+            (Some(source.rfind("[[/iftags]]").unwrap()), true),
+        );
+
+        // Two gate levels need two end heads.
+        let source =
+            "[[iftags -x]]a[[iftags -y]]b[[iftags -z]]c[[/iftags]][[/iftags]][[/iftags]]";
+        let body = source.find("a[[iftags -y]]").unwrap();
+        assert_eq!(
+            pairing_at(source, body),
+            (Some(source.rfind("[[/iftags]]").unwrap()), true),
+        );
+
+        // An unclosed nested gate leaves the body with the last end head it
+        // can reach (gate transparency).
+        let source = "[[iftags -x]]a[[iftags -y]]b[[/iftags]]c";
+        let body = source.find("a[[iftags -y]]").unwrap();
+        assert_eq!(
+            pairing_at(source, body),
+            (Some(source.rfind("[[/iftags]]").unwrap()), true),
+        );
+
+        // A body with no reachable end head has no designated end.
+        let source = "[[iftags -x]]a[[iftags -y]]b";
+        let body = source.find("a[[iftags -y]]").unwrap();
+        assert_eq!(pairing_at(source, body), (None, false));
+
+        // The body of a closed gate is not marked nested.
+        let source = "[[iftags -x]]a[[/iftags]]";
+        let body = source.find("a[[/iftags]]").unwrap();
+        assert_eq!(
+            pairing_at(source, body),
+            (Some(source.find("[[/iftags]]").unwrap()), false),
         );
     }
 }

@@ -128,6 +128,78 @@ fn closed_body_blocks_are_unchanged() {
 }
 
 #[test]
+fn iftags_gate_pairing_stays_linear_in_gate_count() {
+    // Pairing a gate body used to materialize the ordered set of reachable
+    // end heads at every token of the body window, then pair it again per
+    // nested gate head: cubic in the gate count. Closed gates, inline gates
+    // and mixed iftags/ifcategory crossings were all affected (16 KB took
+    // 6.6-8.1 s in release builds before the fix).
+    let families = [
+        (
+            "iftags_closed_true",
+            "[[iftags -x]]\nshown\n[[/iftags]]\n",
+            "shown",
+        ),
+        ("iftags_inline", "a[[iftags +x]]b[[/iftags]]c ", ""),
+        (
+            "if_mixed_cross",
+            "[[iftags +x]]\n[[ifcategory y]]\n[[/iftags]]\n[[/ifcategory]]\n",
+            "",
+        ),
+    ];
+    for (name, unit, visible) in families {
+        for count in [512usize, 1024] {
+            let input = unit.repeat(count);
+            let (html, elapsed) = render_timed(&input);
+            assert!(
+                elapsed < Duration::from_secs(5),
+                "{name} x {count} ({} bytes) took {elapsed:?}",
+                input.len(),
+            );
+            if !visible.is_empty() {
+                assert!(
+                    html.contains(visible),
+                    "{name} x {count} no longer renders its kept body",
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn nested_iftags_gates_keep_their_balanced_end_head() {
+    // Gate bodies still pair with the end head that balances their nesting:
+    // the outer body keeps the content after a nested gate closes, so both
+    // gates render their bodies and nothing leaks past the final end head.
+    let input = "[[iftags -x]]outer[[iftags -y]]inner[[/iftags]]tail[[/iftags]]";
+    let (html, elapsed) = render_timed(input);
+    assert!(elapsed < Duration::from_secs(5), "took {elapsed:?}");
+    assert!(html.contains("outer"), "{html:?}");
+    assert!(
+        html.contains("tail"),
+        "outer body must continue after the nested gate: {html:?}",
+    );
+
+    // An unclosed nested gate leaves the body with the last end head it can
+    // reach (gate transparency).
+    for input in [
+        "[[iftags -x]]outer[[iftags -y]]inner[[/iftags]]",
+        "[[iftags -x]]outer[[iftags -y]]inner",
+        "[[iftags -x]]outer",
+    ] {
+        let (html, elapsed) = render_timed(input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{input:?} took {elapsed:?}"
+        );
+        assert!(
+            html.contains("outer"),
+            "{input:?} should render literally or as a kept body: {html:?}",
+        );
+    }
+}
+
+#[test]
 fn div_line_scans_stay_linear_in_opener_count() {
     // Each `[[div]]` opener asks whether a `[[/div]]` starts on its physical
     // line. With no line break in the document that scan used to run to the
