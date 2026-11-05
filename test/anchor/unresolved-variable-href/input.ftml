@@ -1,0 +1,3 @@
+[[a href="{$url}"]]link[[/a]]
+
+[[a href="pre{$x}post" class="{$c}"]]link[[/a]]

@@ -1,0 +1,3 @@
+[[span class="{$a}" style="color:{$c}" id="{$i}" data-v="{$d}" title="{$t}"]]X[[/span]]
+
+BEGIN [[span class="{$a}" type="t"]]X[[/span]] END

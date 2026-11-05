@@ -166,7 +166,7 @@ fn parse_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
         let mut attributes = arguments.to_attribute_map(parser.settings());
-        retain_wikidot_span_attributes(&mut attributes);
+        super::super::arguments::retain_wikidot_html_attributes(&mut attributes);
         for key in generated_attributes {
             match key {
                 "title" => {
@@ -290,22 +290,6 @@ where
             );
             return false;
         }
-    }
-}
-
-fn retain_wikidot_span_attributes(attributes: &mut crate::tree::AttributeMap<'_>) {
-    let rejected = attributes
-        .get()
-        .keys()
-        .filter(|key| {
-            !matches!(key.as_ref(), "class" | "id" | "style" | "role")
-                && !key.starts_with("data-")
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-
-    for key in rejected {
-        attributes.remove(&key);
     }
 }
 

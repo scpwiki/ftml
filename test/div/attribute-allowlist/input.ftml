@@ -1,0 +1,11 @@
+[[div class="card" id="panel" style="color: red" role="note" type="t" title="tip" lang="en" aria-label="label" data-Foo="one" data-bar="two" foo="baz"]]
+Body
+[[/div]]
+
+[[div CLASS="upper" ID="upper" TYPE="u" DATA-Mixed="three" data-Mixed="four"]]
+Body
+[[/div]]
+
+[[div_ class="strip" title="tip" role="note" data-x="y"]]
+Body
+[[/div]]

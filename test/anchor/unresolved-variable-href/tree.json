@@ -1,0 +1,53 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor",
+                        "data": {
+                            "target": null,
+                            "attributes": {
+                                "href": "/{$url}"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "link"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor",
+                        "data": {
+                            "target": null,
+                            "attributes": {
+                                "class": "{$c}",
+                                "href": "/pre{$x}post"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "link"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
