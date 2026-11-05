@@ -1,0 +1,38 @@
+[[math]]
+x
+[[/math]] tail
+
+[[math]]
+
+
+y
+
+
+[[/math]]
+
+[[eref late]]
+
+[[math late]]
+z
+[[/math]]
+
+[[math dup]]
+p
+[[/math]]
+
+[[math dup]]
+q
+[[/math]]
+
+[[eref dup]]
+
+[[math]]
+[[math]]
+x
+[[/math]] tail
+[[/math]]
+
+[[math]]
+[[math]]
+x
+[[/math]] tail

@@ -1,0 +1,23 @@
+[[math type=align]]
+x
+[[/math]]
+
+[[math a b]]
+x
+[[/math]]
+
+[[math "a" type="align"]]
+x
+[[/math]]
+
+[[math type = "align"]]
+x
+[[/math]]
+
+[[math type='align']]
+x
+[[/math]]
+
+[[math a-b]]
+x
+[[/math]]

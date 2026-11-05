@@ -79,7 +79,10 @@ use self::include::{render_include, render_variable};
 use self::input::{render_checkbox, render_radio_button};
 use self::link::{render_anchor, render_anchor_target, render_link};
 use self::list::render_list;
-use self::math::{render_equation_reference, render_math_block, render_math_inline};
+pub(crate) use self::math::{
+    preregister_wikidot_equations, render_equation_reference, render_math_block,
+    render_math_inline,
+};
 use self::module::render_module;
 use self::social::render_social_buttons;
 use self::style::render_style;
@@ -324,12 +327,14 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
         Element::Math {
             name,
             latex_source,
+            environment,
             wikidot_block_open_elements,
             wikidot_label_spans,
         } => render_math_block(
             ctx,
             ref_cow!(name),
             latex_source,
+            ref_cow!(environment),
             wikidot_block_open_elements,
             wikidot_label_spans,
         ),

@@ -1,0 +1,45 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"a&b\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"a<b\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"a>b\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "a type=\"foo\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "equation-reference",
+                        "data": "a"
+                    }
+                ]
+            }
+        }
+    ]
+}

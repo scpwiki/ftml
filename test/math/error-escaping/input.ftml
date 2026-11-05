@@ -1,0 +1,17 @@
+[[math type="a&b"]]
+x
+[[/math]]
+
+[[math type="a<b"]]
+x
+[[/math]]
+
+[[math type="a>b"]]
+x
+[[/math]]
+
+[[math a type="foo"]]
+x
+[[/math]]
+
+[[eref a]]

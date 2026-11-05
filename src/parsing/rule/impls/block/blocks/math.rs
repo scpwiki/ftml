@@ -33,7 +33,7 @@ pub const BLOCK_MATH: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -47,9 +47,19 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let name = get_math_head(parser, in_head)?;
     if parser.settings().layout.legacy()
-        && name.as_deref().is_some_and(|name| !wikidot_math_name(name))
+        && parser.in_footnote()
+        && !math_opener_starts_line(parser, opener_start)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    let head = get_math_head(parser, in_head)?;
+    if parser.settings().layout.legacy()
+        && head
+            .name
+            .as_deref()
+            .is_some_and(|name| !wikidot_math_name(name))
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -68,8 +78,9 @@ fn parse_fn<'r, 't>(
     }
 
     let element = Element::Math {
-        name,
+        name: head.name,
         latex_source,
+        environment: head.environment,
         wikidot_block_open_elements: Vec::new(),
         wikidot_label_spans: Vec::new(),
     };
@@ -77,36 +88,161 @@ fn parse_fn<'r, 't>(
     success_elements(element)
 }
 
+fn math_opener_starts_line(parser: &Parser<'_, '_>, opener_start: usize) -> bool {
+    opener_start == 0
+        || parser.full_text().inner().as_bytes().get(opener_start - 1) == Some(&b'\n')
+}
+
+struct MathHead<'t> {
+    name: Option<Cow<'t, str>>,
+    environment: Option<Cow<'t, str>>,
+}
+
 fn get_math_head<'r, 't>(
     parser: &mut Parser<'r, 't>,
     in_head: bool,
-) -> Result<Option<Cow<'t, str>>, ParseError>
+) -> Result<MathHead<'t>, ParseError>
 where
     'r: 't,
 {
-    if parser.settings().layout.legacy() && in_head {
-        let mut attribute_candidate = parser.clone();
-        if let Ok(arguments) = attribute_candidate.get_head_map(&BLOCK_MATH, in_head)
-            && arguments.has_source()
-            && !arguments.has_bare_source()
-        {
-            parser.update(&attribute_candidate);
-            return Ok(None);
-        }
+    if !parser.settings().layout.legacy() {
+        let name = parser.get_head_value_resolved(&BLOCK_MATH, in_head, |_, value| {
+            Ok(value.and_then(|source| match source {
+                Cow::Borrowed(text) => {
+                    let name = text.trim();
+                    (!name.is_empty()).then_some(Cow::Borrowed(name))
+                }
+                Cow::Owned(text) => {
+                    let name = text.trim();
+                    (!name.is_empty()).then_some(Cow::Owned(name.to_owned()))
+                }
+            }))
+        })?;
+        return Ok(MathHead {
+            name,
+            environment: None,
+        });
+    }
+
+    if !in_head {
+        return Ok(MathHead {
+            name: None,
+            environment: None,
+        });
     }
 
     parser.get_head_value_resolved(&BLOCK_MATH, in_head, |_, value| {
-        Ok(value.and_then(|source| match source {
-            Cow::Borrowed(text) => {
-                let name = text.trim();
-                (!name.is_empty()).then_some(Cow::Borrowed(name))
-            }
-            Cow::Owned(text) => {
-                let name = text.trim();
-                (!name.is_empty()).then_some(Cow::Owned(name.to_owned()))
-            }
-        }))
+        let Some(source) = value else {
+            return Ok(MathHead {
+                name: None,
+                environment: None,
+            });
+        };
+        Ok(match source {
+            Cow::Borrowed(text) => match parse_wikidot_math_head(text.trim()) {
+                Some((name, environment)) => MathHead {
+                    name: name.map(Cow::Borrowed),
+                    environment: environment.map(Cow::Borrowed),
+                },
+                None => MathHead {
+                    name: Some(Cow::Borrowed(text.trim())),
+                    environment: None,
+                },
+            },
+            Cow::Owned(text) => match parse_wikidot_math_head(text.trim()) {
+                Some((name, environment)) => MathHead {
+                    name: name.map(|name| Cow::Owned(name.to_owned())),
+                    environment: environment
+                        .map(|environment| Cow::Owned(environment.to_owned())),
+                },
+                None => MathHead {
+                    name: Some(Cow::Owned(text.trim().to_owned())),
+                    environment: None,
+                },
+            },
+        })
     })
+}
+
+/// Parse a resolved legacy `[[math ...]]` head.
+///
+/// The head holds an optional bare equation name followed by
+/// double-quoted `key="value"` arguments separated by spaces or tabs.
+/// Unknown arguments are ignored. The `type` argument selects the math
+/// environment only when it is the last item in the head. Anything else
+/// (a second bare word, a quoted or unquoted name, spaces around `=`,
+/// single-quoted or bare values) leaves the whole opener literal, so the
+/// caller is told the raw text and rejects it as a name instead.
+fn parse_wikidot_math_head(text: &str) -> Option<(Option<&str>, Option<&str>)> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Some((None, None));
+    }
+
+    let mut rest = text;
+    let mut name = None;
+    let mut last_key = None;
+    let mut last_value = None;
+
+    if rest
+        .bytes()
+        .next()
+        .is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        let length = rest
+            .bytes()
+            .take_while(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+            .count();
+        let word = &rest[..length];
+        let after = &rest[length..];
+        if after.is_empty() {
+            return Some((Some(word), None));
+        }
+        if after.starts_with(' ') || after.starts_with('\t') {
+            name = Some(word);
+            rest = after;
+        }
+    }
+
+    loop {
+        rest = rest.trim_start_matches([' ', '\t']);
+        if rest.is_empty() {
+            break;
+        }
+        let key_length = rest
+            .bytes()
+            .take_while(|byte| {
+                byte.is_ascii_alphanumeric() || *byte == b'_' || *byte == b'-'
+            })
+            .count();
+        if key_length == 0 {
+            return None;
+        }
+        let key = &rest[..key_length];
+        rest = &rest[key_length..];
+        if !rest.starts_with('=') {
+            return None;
+        }
+        rest = &rest[1..];
+        if !rest.starts_with('"') {
+            return None;
+        }
+        rest = &rest[1..];
+        let end = rest.find('"')?;
+        let value = &rest[..end];
+        rest = &rest[end + 1..];
+        if !rest.is_empty() && !(rest.starts_with(' ') || rest.starts_with('\t')) {
+            return None;
+        }
+        last_key = Some(key);
+        last_value = Some(value);
+    }
+
+    let environment = match (last_key, last_value) {
+        (Some("type"), Some(value)) => Some(value),
+        _ => None,
+    };
+    Some((name, environment))
 }
 
 fn wikidot_math_crosses_bold_owner(parser: &Parser<'_, '_>, body: &str) -> bool {
@@ -155,6 +291,73 @@ pub(crate) fn wikidot_math_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+#[cfg(test)]
+mod head_tests {
+    use super::parse_wikidot_math_head;
+
+    #[test]
+    fn math_head_grammar() {
+        assert_eq!(parse_wikidot_math_head(""), Some((None, None)));
+        assert_eq!(parse_wikidot_math_head("   "), Some((None, None)));
+        assert_eq!(parse_wikidot_math_head("a"), Some((Some("a"), None)));
+        assert_eq!(
+            parse_wikidot_math_head("valid_name"),
+            Some((Some("valid_name"), None)),
+        );
+        assert_eq!(parse_wikidot_math_head("type"), Some((Some("type"), None)),);
+        assert_eq!(
+            parse_wikidot_math_head("type=\"align\""),
+            Some((None, Some("align"))),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("a type=\"align\""),
+            Some((Some("a"), Some("align"))),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("  a   type=\"align\"  "),
+            Some((Some("a"), Some("align"))),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("type=\"align\" type=\"gather\""),
+            Some((None, Some("gather"))),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("a foo=\"bar\""),
+            Some((Some("a"), None)),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("foo=\"bar\" type=\"gather\""),
+            Some((None, Some("gather"))),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("type=\"gather\" foo=\"bar\""),
+            Some((None, None)),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("type=\"gather\" label=\"x\""),
+            Some((None, None)),
+        );
+        assert_eq!(
+            parse_wikidot_math_head("TYPE=\"align\""),
+            Some((None, None)),
+        );
+        assert_eq!(parse_wikidot_math_head("type=\"\""), Some((None, Some(""))));
+        // Anything else leaves the whole opener literal.
+        assert_eq!(parse_wikidot_math_head("a b"), None);
+        assert_eq!(parse_wikidot_math_head("type=\"align\" a"), None);
+        assert_eq!(parse_wikidot_math_head("a type=\"align\" b"), None);
+        assert_eq!(parse_wikidot_math_head("\"a\" type=\"align\""), None);
+        assert_eq!(parse_wikidot_math_head("type=align"), None);
+        assert_eq!(parse_wikidot_math_head("type='align'"), None);
+        assert_eq!(parse_wikidot_math_head("type = \"align\""), None);
+        assert_eq!(parse_wikidot_math_head("type\t=\t\"align\""), None);
+        assert_eq!(parse_wikidot_math_head("type=\"unterminated"), None);
+        assert_eq!(parse_wikidot_math_head("navier-stokes"), None);
+        assert_eq!(parse_wikidot_math_head("a.b"), None);
+        assert_eq!(parse_wikidot_math_head("a\tb"), None);
+    }
 }
 
 #[cfg(test)]
@@ -249,7 +452,79 @@ mod tests {
         assert_eq!(html.matches("math-equation").count(), 1, "{html}");
 
         let (html, _) = render(Layout::Wikidot, "[[math]]\nx\n[[/math]] y\n\nz");
-        assert_eq!(html.matches("math-equation").count(), 0, "{html}");
+        assert_eq!(html.matches("math-equation").count(), 1, "{html}");
+        assert!(
+            html.contains("\\begin{equation} x \\end{equation}"),
+            "{html}"
+        );
+        assert!(html.contains("<p>y</p>"), "{html}");
+        assert!(html.contains("<p>z</p>"), "{html}");
+    }
+
+    #[test]
+    fn wikidot_math_environment_selection() {
+        let cases = [
+            ("{x}", "equation"),
+            ("x_{2}", "equation"),
+            ("x^2", "equation"),
+            ("x   y", "equation"),
+            ("a&b", "align"),
+            ("a&lt;b", "align"),
+            ("\\alpha", "align"),
+            ("\\", "align"),
+            ("\\begin{matrix}a\\end{matrix}", "matrix"),
+            ("\\begin{equation}x\\end{equation}", "equation"),
+        ];
+        for (body, environment) in cases {
+            let source = format!("[[math]]\n{body}\n[[/math]]");
+            let (html, errors) = render_wikidot(&source);
+            assert!(errors.is_empty(), "{body}: {errors:#?}");
+            assert!(
+                html.contains(&format!("\\begin{{{environment}}}")),
+                "{body}: {html}"
+            );
+        }
+
+        let (html, errors) =
+            render_wikidot("[[math]]\n\\begin{foo}x\\end{foo}\n[[/math]]");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            html.contains(
+                "<div class=\"error-block\">Unsupported math environment \"foo\"</div>"
+            ),
+            "{html}",
+        );
+
+        let (html, errors) = render_wikidot("[[math type=\"align\"]]\nx\n[[/math]]");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(html.contains("\\begin{align} x \\end{align}"), "{html}");
+
+        let (html, errors) =
+            render_wikidot("[[math a type=\"gather\"]]\nx\n[[/math]]\n[[eref a]]");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(html.contains("\\begin{gather} x \\end{gather}"), "{html}");
+        assert!(html.contains(">1</a>"), "{html}");
+
+        let (html, errors) = render_wikidot("[[math type=\"equation\"]]\nA&B\n[[/math]]");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            html.contains("\\begin{align} A&amp;B \\end{align}"),
+            "{html}"
+        );
+
+        let (html, errors) = render_wikidot("[[math type=\"foo\"]]\nx\n[[/math]]");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            html.contains(
+                "<div class=\"error-block\">Unsupported math environment \"foo\"</div>"
+            ),
+            "{html}",
+        );
+        assert!(!html.contains("math-equation"), "{html}");
+
+        let (html, errors) = render_wikidot("[[eref a]]\n[[math a]]\nx\n[[/math]]");
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(html.contains(">1</a>"), "{html}");
     }
 
     fn render_wikidot(source: &str) -> (String, Vec<crate::parsing::ParseError>) {

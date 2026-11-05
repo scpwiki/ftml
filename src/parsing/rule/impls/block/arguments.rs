@@ -119,7 +119,6 @@ pub struct Arguments<'t> {
     inner: HashMap<ArgumentKey<'t>, Cow<'t, str>>,
     raw: Vec<RawModuleArgument<'t>>,
     bare: HashSet<ArgumentKey<'t>>,
-    bare_source_present: bool,
     case_sensitive: bool,
     empty_key_present: bool,
     source_present: bool,
@@ -169,7 +168,6 @@ impl<'t> Arguments<'t> {
 
     pub fn insert_bare(&mut self, key: &'t str, value: Cow<'t, str>) {
         self.insert(key, value);
-        self.bare_source_present = true;
         self.bare.insert(self.key(key));
     }
 
@@ -187,7 +185,6 @@ impl<'t> Arguments<'t> {
     pub fn insert_bare_cow(&mut self, key: Cow<'t, str>, value: Cow<'t, str>) {
         let argument_key = self.key_cow(key.clone());
         self.insert_cow(key, value);
-        self.bare_source_present = true;
         self.bare.insert(argument_key);
     }
 
@@ -259,11 +256,6 @@ impl<'t> Arguments<'t> {
     #[inline]
     pub(crate) fn has_source(&self) -> bool {
         self.source_present
-    }
-
-    #[inline]
-    pub(crate) fn has_bare_source(&self) -> bool {
-        self.bare_source_present
     }
 
     #[inline]
