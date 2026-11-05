@@ -475,7 +475,6 @@ fn rendered_div_and_span_apply_their_element_specific_attribute_contracts() {
         r#"id="u-panel""#,
         r#"style="color: red""#,
         r#"data-value="42""#,
-        r#"aria-label="Panel""#,
         r#"class="badge""#,
         r#"id="u-tag""#,
         r#"style="font-weight: bold""#,
@@ -489,6 +488,7 @@ fn rendered_div_and_span_apply_their_element_specific_attribute_contracts() {
         "onmouseover",
         r#"data-="bad""#,
         r#"aria-="bad""#,
+        r#"aria-label="Panel""#,
         r#"aria-live="polite""#,
         "alert(1)",
     ] {

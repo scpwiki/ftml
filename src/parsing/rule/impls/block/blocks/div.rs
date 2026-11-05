@@ -1073,17 +1073,17 @@ fn wikidot_div_head_attributes<'r, 't>(
     arguments: &mut Arguments<'t>,
 ) -> AttributeMap<'t> {
     let mut attributes = arguments.to_attribute_map(parser.settings());
-    if parser.settings().layout.legacy()
-        && !attributes.get().contains_key("class")
-        && let Some(class) = arguments.take_normalized_wikidot_class()
-    {
-        attributes.insert("class", class);
-    }
-    if parser.settings().layout.legacy()
-        && let Some(class) = attributes.remove("class")
-    {
-        let class = class.trim_end_matches([' ', '\t']).to_owned();
-        attributes.insert("class", Cow::Owned(class));
+    if parser.settings().layout.legacy() {
+        super::super::arguments::retain_wikidot_html_attributes(&mut attributes);
+        if !attributes.get().contains_key("class")
+            && let Some(class) = arguments.take_normalized_wikidot_class()
+        {
+            attributes.insert("class", class);
+        }
+        if let Some(class) = attributes.remove("class") {
+            let class = class.trim_end_matches([' ', '\t']).to_owned();
+            attributes.insert("class", Cow::Owned(class));
+        }
     }
     attributes
 }

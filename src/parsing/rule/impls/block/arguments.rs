@@ -314,11 +314,7 @@ impl<'t> Arguments<'t> {
         let mut map =
             self.attribute_map_from_entries(settings, |_, value| !value.is_empty());
         map.remove("title");
-        if let Some(href) = self
-            .inner
-            .get(&self.key("href"))
-            .filter(|value| !contains_unresolved_wikidot_variable(value))
-        {
+        if let Some(href) = self.inner.get(&self.key("href")) {
             if *href == "javascript:;" {
             } else if wikidot_anchor_href_is_verbatim(href) {
                 let value = normalize_wikidot_html_attribute_value(href);
@@ -361,24 +357,30 @@ impl<'t> Arguments<'t> {
                 continue;
             }
 
-            if settings.layout.legacy() && contains_unresolved_wikidot_variable(value) {
-                continue;
-            }
-
             let key = key.as_str();
             if settings.layout.legacy() && key.eq_ignore_ascii_case("hidden") {
                 continue;
             }
-            if self.case_sensitive && key.bytes().any(|byte| byte.is_ascii_uppercase()) {
-                continue;
-            }
+            let key = if self.case_sensitive
+                && key.bytes().any(|byte| byte.is_ascii_uppercase())
+            {
+                if settings.layout.legacy()
+                    && let Some(key) = wikidot_lowercased_data_attribute_key(key)
+                {
+                    key
+                } else {
+                    continue;
+                }
+            } else {
+                Cow::Borrowed(key)
+            };
 
             let value = if settings.layout.legacy() {
                 normalize_wikidot_html_attribute_value(value)
             } else {
                 value.clone()
             };
-            attributes.insert(key, value);
+            attributes.insert(&key, value);
         }
 
         attributes
@@ -445,38 +447,28 @@ fn normalize_wikidot_unsafe_anchor_href<'t>(value: &Cow<'t, str>) -> Cow<'t, str
     Cow::Owned(output)
 }
 
-fn contains_unresolved_wikidot_variable(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    let mut index = 0;
-    while index + 3 < bytes.len() {
-        if bytes[index] != b'{' || bytes[index + 1] != b'$' {
-            index += 1;
-            continue;
-        }
-
-        let escaped = bytes[..index]
-            .iter()
-            .rev()
-            .take_while(|byte| **byte == b'\\')
-            .count()
-            % 2
-            == 1;
-        if escaped {
-            index += 2;
-            continue;
-        }
-
-        let name_start = index + 2;
-        let mut end = name_start;
-        while bytes.get(end).is_some_and(u8::is_ascii_alphanumeric) {
-            end += 1;
-        }
-        if end > name_start && bytes.get(end) == Some(&b'}') {
-            return true;
-        }
-        index += 2;
+fn wikidot_lowercased_data_attribute_key(key: &str) -> Option<Cow<'_, str>> {
+    if key.starts_with("data-") {
+        Some(Cow::Owned(key.to_ascii_lowercase()))
+    } else {
+        None
     }
-    false
+}
+
+pub(crate) fn retain_wikidot_html_attributes(attributes: &mut AttributeMap<'_>) {
+    let rejected = attributes
+        .get()
+        .keys()
+        .filter(|key| {
+            !matches!(key.as_ref(), "class" | "id" | "style" | "role" | "type")
+                && !key.starts_with("data-")
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    for key in rejected {
+        attributes.remove(&key);
+    }
 }
 
 #[cfg(test)]
@@ -484,12 +476,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wikidot_attribute_maps_drop_only_complete_unescaped_variables() {
+    fn wikidot_attribute_maps_keep_literal_values_and_lowercase_data_names() {
         let settings = WikitextSettings::from_mode(
             crate::settings::WikitextMode::Page,
             crate::layout::Layout::Wikidot,
         );
-        let mut arguments = Arguments::new();
+        let mut arguments = Arguments::new_case_sensitive();
         arguments.insert("title", cow!("{$x}"));
         arguments.insert("class", cow!("prefix {$X1} suffix"));
         arguments.insert("data-malformed", cow!("{$x"));
@@ -497,10 +489,16 @@ mod tests {
         arguments.insert("data-dash", cow!("{$foo-bar}"));
         arguments.insert("data-underscore", cow!("{$foo_bar}"));
         arguments.insert("data-double-dollar", cow!("{$$x}"));
+        arguments.insert("data-Mixed", cow!("lowered"));
+        arguments.insert("DATA-UPPER", cow!("dropped"));
+        arguments.insert("hidden", cow!("true"));
 
         let attributes = arguments.to_attribute_map(&settings);
-        assert!(!attributes.get().contains_key("title"));
-        assert!(!attributes.get().contains_key("class"));
+        assert_eq!(attributes.get().get("title").map(Cow::as_ref), Some("{$x}"));
+        assert_eq!(
+            attributes.get().get("class").map(Cow::as_ref),
+            Some("prefix {$X1} suffix"),
+        );
         assert_eq!(
             attributes.get().get("data-malformed").map(Cow::as_ref),
             Some("{$x"),
@@ -521,6 +519,12 @@ mod tests {
             attributes.get().get("data-double-dollar").map(Cow::as_ref),
             Some("{$$x}"),
         );
+        assert_eq!(
+            attributes.get().get("data-mixed").map(Cow::as_ref),
+            Some("lowered"),
+        );
+        assert!(!attributes.get().contains_key("data-upper"));
+        assert!(!attributes.get().contains_key("hidden"));
     }
     use crate::data::PageInfo;
     use crate::layout::Layout;

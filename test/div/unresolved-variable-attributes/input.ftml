@@ -1,0 +1,7 @@
+[[div class="{$a}" style="color:{$c}" id="{$i}" data-v="{$d}" title="{$t}"]]
+Body
+[[/div]]
+
+[[div class="pre{$a}post"]]
+Body
+[[/div]]

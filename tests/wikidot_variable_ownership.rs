@@ -39,10 +39,14 @@ fn render(source: &str) -> String {
 }
 
 #[test]
-fn wikidot_variables_keep_text_authority_but_not_attribute_authority() {
+fn wikidot_variables_keep_text_authority_and_literal_attribute_values() {
     assert_eq!(
         render(r#"[[span title="{$x}"]]A[[/span]]"#),
         "<p><span>A</span></p>",
+    );
+    assert_eq!(
+        render(r#"[[span class="{$x}"]]A[[/span]]"#),
+        r#"<p><span class="{$x}">A</span></p>"#,
     );
     assert_eq!(render("A{$x}B"), "<p>A{$x}B</p>");
     assert_eq!(
@@ -92,24 +96,40 @@ fn wikidot_div_literal_variable_class_normalizes_whitespace() {
 }
 
 #[test]
-fn wikidot_div_literal_class_recovery_stays_local() {
-    for source in [
-        "[[div CLASS=\"{$class}\"]]\n1\n[[/div]]",
-        r#"[[span class="{$class}"]]1[[/span]]"#,
-        r#"[[ul class="{$class}"]][[li]]1[[/li]][[/ul]]"#,
-        r#"[[a href="some-page" class="{$class}"]]1[[/a]]"#,
-        r#"[[table class="{$class}"]][[row]][[cell]]1[[/cell]][[/row]][[/table]]"#,
-    ] {
-        let html = render(source);
-        assert!(!html.contains(r#"class="{$class}"#), "{source}: {html}");
-    }
+fn wikidot_literal_variable_attributes_render_verbatim() {
+    assert_eq!(
+        render("[[div class=\"{$class}\"]]\n1\n[[/div]]"),
+        r#"<div class="{$class}"><p>1</p></div>"#,
+    );
+    assert_eq!(
+        render("[[div data-probe=\"{$class}\"]]\n1\n[[/div]]"),
+        r#"<div data-probe="{$class}"><p>1</p></div>"#,
+    );
+    assert_eq!(
+        render(r#"[[span class="{$class}"]]1[[/span]]"#),
+        r#"<p><span class="{$class}">1</span></p>"#,
+    );
+    assert_eq!(
+        render(r#"[[ul class="{$class}"]][[li]]1[[/li]][[/ul]]"#),
+        "<ul class=\"{$class}\">\n<li>1</li>\n</ul><br>\n",
+    );
+    assert_eq!(
+        render(r#"[[a href="some-page" class="{$class}"]]1[[/a]]"#),
+        r#"<p><a class="{$class}" href="some-page">1</a></p>"#,
+    );
+    assert_eq!(
+        render(
+            r#"[[table class="{$class}"]][[row]][[cell]]1[[/cell]][[/row]][[/table]]"#,
+        ),
+        "<table class=\"{$class}\">\n<tr>\n<td>1</td>\n</tr>\n</table>",
+    );
 
     for source in [
-        "[[div data-probe=\"{$class}\"]]\n1\n[[/div]]",
+        "[[div CLASS=\"{$class}\"]]\n1\n[[/div]]",
         "[[div onclick=\"alert(1)\"]]\n1\n[[/div]]",
     ] {
         let html = render(source);
-        assert!(!html.contains("<div data-probe="), "{source}: {html}");
+        assert!(!html.contains("class=\"{$class}\""), "{source}: {html}");
         assert!(!html.contains("<div onclick="), "{source}: {html}");
     }
 

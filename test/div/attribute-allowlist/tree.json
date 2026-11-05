@@ -1,0 +1,82 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {
+                    "aria-label": "label",
+                    "class": "card",
+                    "data-bar": "two",
+                    "data-foo": "one",
+                    "id": "panel",
+                    "lang": "en",
+                    "role": "note",
+                    "style": "color: red",
+                    "title": "tip",
+                    "type": "t"
+                },
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Body"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {
+                    "class": "upper",
+                    "data-mixed": "four",
+                    "id": "upper",
+                    "type": "u"
+                },
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "Body"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {
+                    "class": "strip",
+                    "data-x": "y",
+                    "role": "note",
+                    "title": "tip"
+                },
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "Body"
+                    }
+                ]
+            }
+        }
+    ]
+}

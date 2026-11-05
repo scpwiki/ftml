@@ -1,0 +1,73 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "class": "{$a}",
+                                "data-v": "{$d}",
+                                "id": "{$i}",
+                                "style": "color:{$c}",
+                                "title": "{$t}"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "X"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "BEGIN"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "class": "{$a}",
+                                "type": "t"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "X"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "END"
+                    }
+                ]
+            }
+        }
+    ]
+}
