@@ -51,6 +51,21 @@ impl WikidotBlockKind {
         )
     }
 
+    /// Blocks the parser refuses inside a footnote body's first content line
+    /// (the legacy footnote zone), so the scan must not pair them either.
+    fn footnote_zone_gated(self) -> bool {
+        matches!(
+            self,
+            WikidotBlockKind::AlignCenter
+                | WikidotBlockKind::AlignRight
+                | WikidotBlockKind::AlignLeft
+                | WikidotBlockKind::AlignJustify
+                | WikidotBlockKind::TabView
+                | WikidotBlockKind::Tab
+                | WikidotBlockKind::Table
+        )
+    }
+
     pub(crate) fn emits_flat(self) -> bool {
         matches!(
             self,
@@ -447,6 +462,7 @@ struct Scanner<'t> {
     measure_guard: std::cell::Cell<usize>,
     measure_guard_trips: std::cell::Cell<usize>,
     tabview_banned_lines: Vec<bool>,
+    footnote_zones: Vec<(usize, usize)>,
     bib_ranges: Vec<(usize, usize)>,
     pairs: Vec<WikidotBlockPair>,
     head_event_bytes: BTreeSet<usize>,
@@ -608,7 +624,7 @@ impl<'t> Scanner<'t> {
             }
         }
 
-        Scanner {
+        let mut scanner = Scanner {
             tokens,
             source,
             tags: page_info.tags.clone(),
@@ -629,12 +645,187 @@ impl<'t> Scanner<'t> {
             measure_guard: std::cell::Cell::new(0),
             measure_guard_trips: std::cell::Cell::new(0),
             tabview_banned_lines: vec![false; line_count],
+            footnote_zones: Vec::new(),
             bib_ranges: Vec::new(),
             pairs: Vec::new(),
             head_event_bytes: BTreeSet::new(),
             closer_event_bytes: BTreeSet::new(),
             greedy_ranges: Vec::new(),
+        };
+        scanner.footnote_zones = scanner.compute_footnote_zones();
+        scanner
+    }
+
+    /// Byte ranges of each footnote body's first content line, mirroring
+    /// `wikidot_footnote_zone_end()`: line-start blocks cannot own a line
+    /// there, matching live.
+    fn compute_footnote_zones(&self) -> Vec<(usize, usize)> {
+        let mut zones = Vec::new();
+        let mut index = 0usize;
+        while index < self.tokens.len() {
+            if matches!(
+                self.tokens[index].token,
+                Token::LeftBlock | Token::LeftBlockStar
+            ) && let Some((name, name_end)) =
+                segment_head_name(self.tokens, index, false)
+                && self.source[name].eq_ignore_ascii_case("footnote")
+            {
+                let mut cursor = name_end;
+                while cursor < self.tokens.len()
+                    && !matches!(
+                        self.tokens[cursor].token,
+                        Token::RightBlock | Token::LineBreak | Token::ParagraphBreak
+                    )
+                {
+                    cursor += 1;
+                }
+                if cursor < self.tokens.len()
+                    && self.tokens[cursor].token == Token::RightBlock
+                {
+                    let zone_end = self.footnote_zone_end_from(cursor + 1);
+                    let closer_byte = self
+                        .footnote_closer_byte(cursor + 1)
+                        .unwrap_or(self.source.len());
+                    zones
+                        .push((self.tokens[index].span.start, zone_end.min(closer_byte)));
+                    index = cursor + 1;
+                    continue;
+                }
+            }
+            index += 1;
         }
+        zones.sort_unstable();
+        let mut merged: Vec<(usize, usize)> = Vec::with_capacity(zones.len());
+        for (start, end) in zones {
+            if let Some(previous) = merged.last_mut()
+                && start <= previous.1
+            {
+                previous.1 = previous.1.max(end);
+                continue;
+            }
+            merged.push((start, end));
+        }
+        merged
+    }
+
+    fn footnote_closer_byte(&self, mut index: usize) -> Option<usize> {
+        while let Some(token) = self.tokens.get(index) {
+            match token.token {
+                Token::InputEnd => return None,
+                Token::LeftComment => {
+                    index = self.skip_comment(index)?;
+                    continue;
+                }
+                Token::LeftBlock | Token::LeftBlockStar => {
+                    if let Some((name, name_end)) =
+                        segment_head_name(self.tokens, index, false)
+                        && self.source[name].eq_ignore_ascii_case("footnote")
+                    {
+                        // Nested footnote heads cannot close this body.
+                        index = name_end + 1;
+                        continue;
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    if let Some((name, _)) = segment_head_name(self.tokens, index, true)
+                        && self.source[name].eq_ignore_ascii_case("footnote")
+                    {
+                        return Some(token.span.start);
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        None
+    }
+
+    fn footnote_zone_end_from(&self, mut index: usize) -> usize {
+        let mut line_has_content = false;
+        while let Some(token) = self.tokens.get(index) {
+            match token.token {
+                Token::InputEnd => return usize::MAX,
+                Token::LeftComment => match self.skip_comment(index) {
+                    Some(next) => {
+                        index = next;
+                        continue;
+                    }
+                    None => return usize::MAX,
+                },
+                Token::LineBreak | Token::ParagraphBreak => {
+                    if line_has_content {
+                        return token.span.end;
+                    }
+                }
+                Token::Whitespace | Token::DiscardedControl | Token::InputStart => {}
+                Token::LeftBlockEnd => {
+                    if let Some((name, _)) = segment_head_name(self.tokens, index, true)
+                        && self.source[name].eq_ignore_ascii_case("footnote")
+                    {
+                        return usize::MAX;
+                    }
+                    line_has_content = true;
+                }
+                _ => {
+                    let slice = token.slice;
+                    if slice.contains('\n') {
+                        let mut offset = 0usize;
+                        let mut segments = slice.split('\n').peekable();
+                        while let Some(line) = segments.next() {
+                            let line_content =
+                                line.chars().any(|character| !character.is_whitespace());
+                            if segments.peek().is_some() {
+                                if line_has_content || line_content {
+                                    return token.span.start + offset + line.len() + 1;
+                                }
+                                offset += line.len() + 1;
+                            } else if line_content {
+                                line_has_content = true;
+                            }
+                        }
+                    } else {
+                        line_has_content = true;
+                    }
+                }
+            }
+            index += 1;
+        }
+        usize::MAX
+    }
+
+    fn in_footnote_first_line(&self, byte: usize) -> bool {
+        let index = self
+            .footnote_zones
+            .partition_point(|(start, _)| *start < byte);
+        index > 0 && byte < self.footnote_zones[index - 1].1
+    }
+
+    /// Whether the parser collects this line as single-line content (a native
+    /// list item or heading line), where a legacy table head cannot form.
+    fn on_single_line_content_line(&self, index: usize) -> bool {
+        if self.on_heading_line(index) {
+            return true;
+        }
+        let byte = self.tokens[index].span.start;
+        let line_start = self.source[..byte]
+            .rfind('\n')
+            .map_or(0, |offset| offset + 1);
+        let line = self.source[line_start..]
+            .split('\n')
+            .next()
+            .unwrap_or_default();
+        let mut rest = line;
+        loop {
+            let trimmed = rest.trim_start_matches([' ', '\t']);
+            let Some(after) = trimmed.strip_prefix('>') else {
+                rest = trimmed;
+                break;
+            };
+            rest = after;
+        }
+        let mut bytes = rest.bytes();
+        matches!(bytes.next(), Some(b'*' | b'#'))
+            && matches!(bytes.next(), Some(b' ' | b'\t'))
     }
 
     fn zone_end(&self, index: usize) -> Option<usize> {
@@ -1585,8 +1776,17 @@ impl<'t> Scanner<'t> {
             self.greedy_ranges.push(range);
             return self.token_at_or_after(range.1);
         }
+        if let Some(kind) = Self::kind_of(rule_name)
+            && kind.footnote_zone_gated()
+            && self.in_footnote_first_line(self.tokens[i].span.start)
+        {
+            return head.head_end;
+        }
         match Self::kind_of(rule_name) {
             Some(WikidotBlockKind::Table) => {
+                if self.on_single_line_content_line(i) {
+                    return head.head_end;
+                }
                 if let Some(measure) = self.measure_table(i, &head, end, depth) {
                     let next = measure.end;
                     self.apply_measure(measure, depth, events, true);

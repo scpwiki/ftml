@@ -1,0 +1,47 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-table",
+        "span": [
+            180,
+            180
+        ],
+        "kind": "table-contains-non-row"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            133,
+            135
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            140,
+            142
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            170,
+            173
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            178,
+            180
+        ],
+        "kind": "no-rules-match"
+    }
+]
