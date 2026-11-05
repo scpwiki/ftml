@@ -1,9 +1,6 @@
 [[include component:fruit class=box| apple=1| banana=2 ]]
 [[include component:fruit class=box	| apple=1	| banana=2]]
-[[include component:fruit
- class=box |
- apple=1 |
- banana=2
-]]
+[[include component:fruit class=box| apple=1 
+| banana=2]]
 [[ include component:fruit]]
 [[	include component:fruit]]
