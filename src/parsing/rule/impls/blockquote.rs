@@ -967,6 +967,7 @@ fn push_native_quote_row<'t>(
         stack.pop_line_break();
         stack.end_paragraph();
         stack.mark_wikidot_simple_table_boundary();
+        stack.record_next_element_line_start(true);
         return;
     }
     let alignment_block = row.elements.iter().any(|element| {
@@ -999,6 +1000,9 @@ fn push_native_quote_row<'t>(
                 Element::Partial(PartialElement::WikidotBlockClose(_))
             )
         });
+    if wikidot_block_close_row {
+        stack.record_next_element_line_start(false);
+    }
     if let Some(counts) = split_counts {
         let leaves_following_content_unwrapped = row
             .elements
