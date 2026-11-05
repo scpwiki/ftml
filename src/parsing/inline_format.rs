@@ -4238,6 +4238,8 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             }
             PartialElement::TableCell(cell) => visit(&mut cell.elements),
             PartialElement::WikidotFoster(elements) => visit(elements),
+            PartialElement::WikidotCollapsibleTail(elements) => visit(elements),
+            PartialElement::WikidotCollapsibleHeadingEnd => {}
             PartialElement::Tab(tab) => visit(&mut tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&mut ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner

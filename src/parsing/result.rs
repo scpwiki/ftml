@@ -158,7 +158,12 @@ impl<'t> ParseSuccess<'_, 't, Elements<'t>> {
             if let Element::Partial(partial) = element {
                 if partial.is_inline_format_control()
                     || partial.is_wikidot_block_control()
-                    || matches!(partial, PartialElement::WikidotFoster(_))
+                    || matches!(
+                        partial,
+                        PartialElement::WikidotFoster(_)
+                            | PartialElement::WikidotCollapsibleTail(_)
+                            | PartialElement::WikidotCollapsibleHeadingEnd
+                    )
                 {
                     continue;
                 }

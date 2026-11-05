@@ -342,6 +342,8 @@ pub struct WikidotFrameLink<'t> {
     pub text: Option<Cow<'t, str>>,
     pub show: bool,
     pub spans: Vec<AttributeMap<'t>>,
+    /// A reopened heading that wraps the link inside the frame.
+    pub heading: Option<crate::tree::HeadingReopen<'t>>,
 }
 
 impl WikidotFrameLink<'_> {
@@ -350,6 +352,10 @@ impl WikidotFrameLink<'_> {
             text: option_string_to_owned(&self.text),
             show: self.show,
             spans: self.spans.iter().map(AttributeMap::to_owned).collect(),
+            heading: self
+                .heading
+                .as_ref()
+                .map(crate::tree::HeadingReopen::to_owned),
         }
     }
 }
@@ -495,6 +501,10 @@ impl Element<'_> {
                 }
                 PartialElement::TableCell(cell) => offset_elements(&mut cell.elements),
                 PartialElement::WikidotFoster(elements) => offset_elements(elements),
+                PartialElement::WikidotCollapsibleTail(elements) => {
+                    offset_elements(elements)
+                }
+                PartialElement::WikidotCollapsibleHeadingEnd => {}
                 PartialElement::Tab(tab) => offset_elements(&mut tab.elements),
                 PartialElement::RubyText(ruby_text) => {
                     offset_elements(&mut ruby_text.elements);

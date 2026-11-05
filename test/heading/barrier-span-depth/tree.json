@@ -1,0 +1,122 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": {
+                                "header": {
+                                    "level": 1,
+                                    "has-toc": true
+                                }
+                            },
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "span",
+                                        "attributes": {
+                                            "class": "k1"
+                                        },
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "a"
+                                            },
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "span",
+                                                    "attributes": {
+                                                        "class": "k2"
+                                                    },
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "b"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "[[/"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "div"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "]]"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "c"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "e"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "f"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "After"
+                    }
+                ]
+            }
+        }
+    ],
+    "table-of-contents": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc0",
+                                    "label": {
+                                        "text": "ab[[/div]]cef"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

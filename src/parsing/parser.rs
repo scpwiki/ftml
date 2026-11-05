@@ -149,6 +149,8 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_li_body_boundaries: Vec<usize>,
     wikidot_table_cut_boundary: Cell<bool>,
     wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
+    wikidot_heading_barrier: Option<usize>,
+    wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
@@ -468,6 +470,97 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_block_pairs
             .has_greedy_tail_within(from, to)
+    }
+
+    // INLINE-L86-HEADING-METHODS-START
+    /// The reopen state a heading line leaves for a collapsible head that ends
+    /// it: the head byte and the heading to reopen inside the shell frames.
+    pub(crate) fn set_wikidot_heading_reopen(
+        &self,
+        value: Option<(usize, crate::tree::HeadingReopen<'t>)>,
+    ) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_heading_reopen = value;
+    }
+
+    pub(crate) fn take_wikidot_heading_reopen(
+        &self,
+    ) -> Option<(usize, crate::tree::HeadingReopen<'t>)> {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_heading_reopen
+            .take()
+    }
+
+    pub(crate) fn table_of_contents_len(&self) -> usize {
+        self.table_of_contents.borrow().len()
+    }
+
+    /// While a Wikidot heading line is being split at a flat block closer,
+    /// this holds the closer byte so nested collections stop there too.
+    pub(crate) fn set_wikidot_heading_barrier(&self, value: Option<usize>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_heading_barrier = value;
+    }
+
+    pub(crate) fn wikidot_heading_barrier(&self) -> Option<usize> {
+        self.block_end_scan_cache.borrow().wikidot_heading_barrier
+    }
+
+    /// The byte range of the heading line containing the byte, if any.
+    pub(crate) fn wikidot_heading_line_range(
+        &self,
+        byte: usize,
+    ) -> Option<(usize, usize)> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .heading_line_range(byte)
+    }
+
+    /// Whether the byte is on a heading line (the scan's definition).
+    pub(crate) fn wikidot_byte_on_heading_line(&self, byte: usize) -> bool {
+        self.wikidot_heading_line_range(byte).is_some()
+    }
+
+    /// Flat closers at or after the byte on the same heading line, as
+    /// (closer start, closer end, kind), in source order.
+    pub(crate) fn wikidot_heading_flat_closers(
+        &self,
+        from_byte: usize,
+    ) -> Vec<(usize, usize, block_pairs::WikidotBlockKind)> {
+        let cache = self.block_end_scan_cache.borrow();
+        let pairs = &cache.wikidot_block_pairs;
+        let Some((line_start, line_end)) = pairs.heading_line_range(from_byte) else {
+            return Vec::new();
+        };
+        let closers: Vec<(usize, usize, block_pairs::WikidotBlockKind)> = pairs
+            .closers_between(from_byte, line_end)
+            .filter(|(_, pair)| pair.head_byte < line_start)
+            .filter(|(_, pair)| self.wikidot_pair_goes_flat(pair))
+            .filter_map(|(closer_byte, pair)| {
+                pairs
+                    .closer_end_byte(closer_byte)
+                    .map(|end| (closer_byte, end, pair.kind))
+            })
+            .collect();
+        closers
+    }
+
+    /// The leftmost collapsible head on the heading line at or after the byte.
+    pub(crate) fn wikidot_heading_collapsible_head(
+        &self,
+        from_byte: usize,
+    ) -> Option<usize> {
+        let cache = self.block_end_scan_cache.borrow();
+        let pairs = &cache.wikidot_block_pairs;
+        let (_, line_end) = pairs.heading_line_range(from_byte)?;
+        pairs
+            .heads_between(from_byte, line_end)
+            .find(|pair| pair.kind == block_pairs::WikidotBlockKind::Collapsible)
+            .map(|pair| pair.head_byte)
     }
 
     pub(crate) fn wikidot_scan_shows_stolen_head(
@@ -2365,6 +2458,7 @@ impl<'r, 't> Parser<'r, 't> {
                     None => false,
                 }
             }
+            ParseCondition::AtSourceByte(byte) => self.current.span.start >= byte,
             ParseCondition::SplitClose(delimiter) => split_delimiter_end(
                 TokenWindow::at(self),
                 SegmentCtx::from_parser(self),

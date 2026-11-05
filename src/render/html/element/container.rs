@@ -22,6 +22,7 @@ use super::prelude::*;
 use crate::tree::{
     Container, ContainerType, HtmlTag, WIKIDOT_EMPTY_QUOTE_MARKER,
     WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER, WIKIDOT_GENERATED_EMPTY_CLASS_MARKER,
+    WIKIDOT_HEADING_BARRIER_MARKER, WIKIDOT_HEADING_REOPEN_MARKER,
 };
 
 pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
@@ -120,7 +121,23 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
     let preserve_explicit_empty_values = explicit_empty_value_names
         .as_ref()
         .is_some_and(|names| !names.is_empty());
-    let attributes = if preserve_generated_empty_class {
+    let heading_barrier = layout.legacy()
+        && matches!(container.ctype(), ContainerType::Header(_))
+        && (container
+            .attributes()
+            .get()
+            .contains_key(WIKIDOT_HEADING_BARRIER_MARKER)
+            || container
+                .attributes()
+                .get()
+                .contains_key(WIKIDOT_HEADING_REOPEN_MARKER));
+    let mut heading_barrier_attributes = None;
+    let attributes = if heading_barrier {
+        let mut attributes = container.attributes().clone();
+        attributes.remove(WIKIDOT_HEADING_BARRIER_MARKER);
+        attributes.remove(WIKIDOT_HEADING_REOPEN_MARKER);
+        heading_barrier_attributes.insert(attributes)
+    } else if preserve_generated_empty_class {
         let mut attributes = container.attributes().clone();
         attributes.remove(WIKIDOT_GENERATED_EMPTY_CLASS_MARKER);
         generated_class_attributes.insert(attributes)
@@ -166,6 +183,7 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
 
     if layout.legacy() && matches!(container.ctype(), ContainerType::Header(_)) {
         if container.elements().is_empty()
+            || heading_barrier
             || has_wikidot_heading_label_span(container.elements())
         {
             tag.contents(container.elements());

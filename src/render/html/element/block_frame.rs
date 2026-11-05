@@ -51,7 +51,27 @@ pub fn render_block_frame(ctx: &mut HtmlContext, frame: BlockFrame) {
     }
     tag.inner(|ctx| {
         if let Some(link) = collapsible_link {
-            render_wikidot_frame_link(ctx, link.text.as_deref(), link.show, &link.spans);
+            if let Some(heading) = &link.heading {
+                let mut tag = ctx.html().tag(heading.level.html_tag());
+                if let Some(id) = &heading.id {
+                    tag.attr(attr!("id" => id.as_ref()));
+                }
+                tag.inner(|ctx| {
+                    render_wikidot_frame_link(
+                        ctx,
+                        link.text.as_deref(),
+                        link.show,
+                        &link.spans,
+                    );
+                });
+            } else {
+                render_wikidot_frame_link(
+                    ctx,
+                    link.text.as_deref(),
+                    link.show,
+                    &link.spans,
+                );
+            }
         }
         render_elements(ctx, children);
     });

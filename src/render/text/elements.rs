@@ -377,6 +377,10 @@ fn render_partial(ctx: &mut TextContext, partial: &PartialElement) {
         }
         PartialElement::TableCell(cell) => render_elements(ctx, &cell.elements),
         PartialElement::WikidotFoster(elements) => render_elements(ctx, elements),
+        PartialElement::WikidotCollapsibleTail(elements) => {
+            render_elements(ctx, elements)
+        }
+        PartialElement::WikidotCollapsibleHeadingEnd => {}
         PartialElement::Tab(tab) => {
             if !ctx.ends_with_newline() {
                 ctx.add_newline();
