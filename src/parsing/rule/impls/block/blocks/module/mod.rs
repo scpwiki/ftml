@@ -40,6 +40,10 @@ pub struct ModuleRule {
 
     accepts_names: &'static [&'static str],
 
+    pub(crate) reads_body: bool,
+
+    pub(crate) owns_opener_line: bool,
+
     parse_fn: ModuleParseFn,
 }
 

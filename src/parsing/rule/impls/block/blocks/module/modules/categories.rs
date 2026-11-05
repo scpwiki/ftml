@@ -24,6 +24,8 @@ pub const MODULE_CATEGORIES: ModuleRule = ModuleRule {
     name: "module-categories",
     accepts_names: &["Categories"],
     parse_fn,
+    reads_body: false,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(

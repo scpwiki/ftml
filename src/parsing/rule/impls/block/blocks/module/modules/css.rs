@@ -24,6 +24,8 @@ pub const MODULE_CSS: ModuleRule = ModuleRule {
     name: "module-css",
     accepts_names: &["CSS"],
     parse_fn: parse_with_wikidot_boundary,
+    reads_body: true,
+    owns_opener_line: true,
 };
 
 fn parse_fn<'r, 't>(
@@ -51,6 +53,9 @@ fn parse_with_wikidot_boundary<'r, 't>(
     assert_module_name(&MODULE_CSS, name);
 
     if parser.settings().layout.legacy() {
+        if parser.take_wikidot_module_empty_body() {
+            return ok!(false; ModuleParseOutput::None);
+        }
         if parser.current().token == Token::InputEnd {
             return parse_fn(parser, name, arguments);
         }

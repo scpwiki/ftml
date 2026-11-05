@@ -639,6 +639,16 @@ fn block_rule_end_names(
     }
 }
 
+fn wikidot_body_starts_nested_module(body: &str) -> bool {
+    body.lines().any(|line| {
+        let Some(head) = line.get(.."[[module".len()) else {
+            return false;
+        };
+        head.eq_ignore_ascii_case("[[module")
+            && line["[[module".len()..].starts_with([' ', '\t'])
+    })
+}
+
 fn block_rule_accepts_end_name(
     block_rule: &BlockRule,
     name: &str,
@@ -784,6 +794,8 @@ fn wikidot_stripslashes(value: Cow<'_, str>) -> Cow<'_, str> {
     Cow::Owned(output)
 }
 
+type WikidotHeadArgumentsFn = for<'t> fn(&CommentElidedText<'t>) -> Arguments<'t>;
+
 pub(crate) fn parse_wikidot_attributes(value: &str) -> Arguments<'_> {
     let field = CommentElidedText::new(value, 0..value.len(), Vec::new());
     parse_wikidot_attribute_field(&field)
@@ -861,6 +873,91 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
     }
     if key.starts_with('=') {
         arguments.mark_empty_key_present();
+    }
+
+    arguments
+}
+
+fn parse_wikidot_module_argument_field<'t>(
+    field: &CommentElidedText<'t>,
+) -> Arguments<'t> {
+    let source = field.source();
+    let span = field.span();
+    let mut mask = vec![false; source.len()];
+    for comment in field.comment_ranges() {
+        let start = comment.start.saturating_sub(span.start).min(source.len());
+        let end = comment.end.saturating_sub(span.start).min(source.len());
+        mask[start..end].fill(true);
+    }
+    for segment in field.segment_ranges() {
+        let start = segment.start.saturating_sub(span.start).min(source.len());
+        let end = segment.end.saturating_sub(span.start).min(source.len());
+        mask[start..end].fill(true);
+    }
+
+    let bytes = source.as_bytes();
+    let mut arguments = Arguments::new();
+    let trimmed_source = wikidot_trim_argument_fragment(source);
+    if !trimmed_source.is_empty() {
+        arguments.mark_source_present();
+    }
+    if trimmed_source.starts_with('=') {
+        arguments.mark_empty_key_present();
+    }
+
+    let mut index = 0;
+    while index + 1 < bytes.len() {
+        let quote_open = bytes[index] == b'='
+            && bytes[index + 1] == b'"'
+            && !mask[index]
+            && !mask[index + 1];
+        if !quote_open {
+            index += 1;
+            continue;
+        }
+
+        let mut key_start = index;
+        while key_start > 0 {
+            let byte = bytes[key_start - 1];
+            let key_byte = byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-');
+            if !key_byte || mask[key_start - 1] {
+                break;
+            }
+            key_start -= 1;
+        }
+        if key_start == index {
+            index += 1;
+            continue;
+        }
+
+        let mut cursor = index + 2;
+        let mut closing = None;
+        while cursor < bytes.len() {
+            if mask[cursor] {
+                cursor += 1;
+                continue;
+            }
+            if bytes[cursor] == b'\\' && cursor + 1 < bytes.len() {
+                cursor += 2;
+                continue;
+            }
+            if bytes[cursor] == b'"' {
+                closing = Some(cursor);
+                break;
+            }
+            cursor += 1;
+        }
+
+        let Some(closing) = closing else {
+            index += 1;
+            continue;
+        };
+
+        let key: &'t str = &source[key_start..index];
+        let value_range = span.start + index + 2..span.start + closing;
+        let value = field.elide_range(value_range);
+        arguments.insert_cow(Cow::Borrowed(key), wikidot_stripslashes(value));
+        index = closing + 1;
     }
 
     arguments
@@ -3008,6 +3105,125 @@ where
         let (start, end) = self.get_body_generic(block_rule, |_| Ok(()))?;
         let slice = self.full_text().slice_partial(start, end);
         Ok(Cow::Borrowed(slice))
+    }
+
+    pub(crate) fn get_wikidot_module_optional_body(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<Cow<'t, str>, ParseError> {
+        if self.take_wikidot_module_empty_body() {
+            return Ok(Cow::Borrowed(""));
+        }
+        if !self.has_body_end_block(block_rule) {
+            return Ok(Cow::Borrowed(""));
+        }
+        let mut probe = self.clone();
+        match probe.get_body_text(block_rule) {
+            Ok(body)
+                if body.trim().is_empty() || wikidot_body_starts_nested_module(&body) =>
+            {
+                Ok(Cow::Borrowed(""))
+            }
+            Ok(body) => {
+                self.update(&probe);
+                Ok(body)
+            }
+            Err(error) if error.kind() == ParseErrorKind::EndOfInput => {
+                Ok(Cow::Borrowed(""))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub(crate) fn skip_wikidot_module_body(&mut self, block_rule: &BlockRule) {
+        if self.take_wikidot_module_empty_body() {
+            return;
+        }
+        if !self.has_body_end_block(block_rule) {
+            return;
+        }
+        let mut probe = self.clone();
+        if let Ok(body) = probe.get_body_text(block_rule)
+            && !body.trim().is_empty()
+            && !wikidot_body_starts_nested_module(&body)
+        {
+            self.update(&probe);
+        }
+    }
+
+    pub(crate) fn wikidot_module_head_has_separator(
+        &self,
+        opener_start: usize,
+        name: &str,
+        subname: &str,
+    ) -> bool {
+        let source = self.full_text().inner();
+        let head_end = self.current().span.start;
+        let Some(inner) = source
+            .get(opener_start..head_end)
+            .and_then(|head| head.strip_prefix("[["))
+            .and_then(|head| head.strip_suffix("]]"))
+        else {
+            return false;
+        };
+        let Some(keyword) = inner.get(..name.len()) else {
+            return false;
+        };
+        if !keyword.eq_ignore_ascii_case(name) {
+            return false;
+        }
+        let rest = inner[name.len()..].trim_start_matches([' ', '\t']);
+        let Some(rest) = rest.strip_prefix(subname) else {
+            return false;
+        };
+        !rest.is_empty()
+    }
+
+    pub(crate) fn wikidot_module_head_rest_is_line_end(
+        &self,
+    ) -> Result<bool, ParseError> {
+        let mut probe = self.clone();
+        while probe.current().token == Token::Whitespace {
+            probe.step()?;
+        }
+        Ok(matches!(
+            probe.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ))
+    }
+
+    pub(crate) fn consume_wikidot_module_same_line_close(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<bool, ParseError> {
+        let mut probe = self.clone();
+        while probe.current().token == Token::Whitespace {
+            probe.step()?;
+        }
+        if probe.current().token != Token::LeftBlockEnd {
+            return Ok(false);
+        }
+        let Ok(close_name) = probe.get_end_block() else {
+            return Ok(false);
+        };
+        let close_name = close_name.strip_suffix('_').unwrap_or(&close_name);
+        if !block_rule_accepts_end_name(block_rule, close_name, true) {
+            return Ok(false);
+        }
+        while probe.current().token == Token::Whitespace {
+            probe.step()?;
+        }
+        if !matches!(
+            probe.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            return Ok(false);
+        }
+        if probe.current().token == Token::LineBreak {
+            probe.step()?;
+        }
+        self.update(&probe);
+        Ok(true)
     }
 
     /// Extracts a block body that must keep a trailing escaped line break.
@@ -5607,6 +5823,43 @@ where
         block_rule: &BlockRule,
         in_head: bool,
     ) -> Result<(Arguments<'t>, BlockBodyStart), ParseError> {
+        self.get_head_map_with_body_start_wikidot_custom(
+            block_rule,
+            in_head,
+            parse_wikidot_attribute_field,
+            false,
+        )
+    }
+
+    pub(crate) fn get_module_head_name_map_with_body_start_wikidot(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+    ) -> Result<(&'t str, Arguments<'t>, BlockBodyStart), ParseError> {
+        if !self.settings().layout.legacy() {
+            return self.get_head_name_map_with_body_start(block_rule, in_head);
+        }
+        if !in_head {
+            return Err(self.make_err(ParseErrorKind::BlockMissingName));
+        }
+        let missing_name = ParseErrorKind::ModuleMissingName;
+        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
+        let (arguments, body_start) = self.get_head_map_with_body_start_wikidot_custom(
+            block_rule,
+            in_head,
+            parse_wikidot_module_argument_field,
+            true,
+        )?;
+        Ok((subname, arguments, body_start))
+    }
+
+    fn get_head_map_with_body_start_wikidot_custom(
+        &mut self,
+        block_rule: &BlockRule,
+        in_head: bool,
+        parse_arguments: WikidotHeadArgumentsFn,
+        same_line: bool,
+    ) -> Result<(Arguments<'t>, BlockBodyStart), ParseError> {
         if !self.settings().layout.legacy() {
             return self.get_head_map_with_body_start(block_rule, in_head);
         }
@@ -5632,21 +5885,51 @@ where
                 let closes = [
                     ParseCondition::current(Token::RightBlock),
                     ParseCondition::current(Token::RightLink),
+                    ParseCondition::current(Token::LineBreak),
+                    ParseCondition::current(Token::ParagraphBreak),
                 ];
+                let closes: &[ParseCondition] =
+                    if same_line { &closes } else { &closes[..2] };
                 let (head, last) =
-                    collect_comment_elided_keep(self, &closes, &[], None, None)?;
+                    collect_comment_elided_keep(self, closes, &[], None, None)?;
                 if last.token == Token::RightLink {
                     self.note_fused_name_residual(last.span.end);
                 }
-                (parse_wikidot_attribute_field(&head), true)
+                if same_line
+                    && matches!(last.token, Token::LineBreak | Token::ParagraphBreak)
+                {
+                    return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
+                }
+                (parse_arguments(&head), true)
             } else {
                 let start = self.current();
                 let mut elisions = Vec::new();
                 let raw_head = block_rule.name == "block-code";
-                while !matches!(self.current().token, Token::RightBlock | Token::InputEnd)
-                {
+                let mut in_quote = false;
+                loop {
+                    if self.current().token == Token::InputEnd {
+                        break;
+                    }
                     if self.current().token == Token::RightLink {
                         break;
+                    }
+                    if self.current().token == Token::RightBlock {
+                        if !(same_line && in_quote) {
+                            break;
+                        }
+                        self.step()?;
+                        continue;
+                    }
+                    if same_line
+                        && matches!(
+                            self.current().token,
+                            Token::LineBreak | Token::ParagraphBreak
+                        )
+                    {
+                        break;
+                    }
+                    if same_line && self.current().token == Token::DoubleQuote {
+                        in_quote = !in_quote;
                     }
                     if !raw_head
                         && self.current().token == Token::LeftBlock
@@ -5666,7 +5949,7 @@ where
                     self.note_fused_name_residual(self.current().span.end);
                     self.step()?;
                 }
-                (parse_wikidot_attribute_field(&head), fused_close)
+                (parse_arguments(&head), fused_close)
             }
         } else {
             (Arguments::new_case_sensitive(), false)
@@ -5710,34 +5993,6 @@ where
         let (arguments, body_start) =
             self.get_head_map_with_body_start(block_rule, in_head)?;
 
-        Ok((subname, arguments, body_start))
-    }
-
-    pub(crate) fn get_head_name_map_with_body_start_wikidot(
-        &mut self,
-        block_rule: &BlockRule,
-        in_head: bool,
-    ) -> Result<(&'t str, Arguments<'t>, BlockBodyStart), ParseError> {
-        if !self.settings().layout.legacy() {
-            return self.get_head_name_map_with_body_start(block_rule, in_head);
-        }
-        if !in_head {
-            return Err(self.make_err(ParseErrorKind::BlockMissingName));
-        }
-        let head_has_comment = std::iter::once(self.current())
-            .chain(self.remaining())
-            .take_while(|token| {
-                !matches!(token.token, Token::RightBlock | Token::InputEnd)
-            })
-            .any(|token| token.token == Token::LeftComment);
-        if !head_has_comment {
-            return self.get_head_name_map_with_body_start(block_rule, in_head);
-        }
-
-        let missing_name = ParseErrorKind::ModuleMissingName;
-        let (subname, in_head) = self.get_head_word_raw(missing_name)?;
-        let (arguments, body_start) =
-            self.get_head_map_with_body_start_wikidot(block_rule, in_head)?;
         Ok((subname, arguments, body_start))
     }
 

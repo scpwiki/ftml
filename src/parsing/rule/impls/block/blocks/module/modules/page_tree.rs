@@ -24,6 +24,8 @@ pub const MODULE_PAGE_TREE: ModuleRule = ModuleRule {
     name: "module-page-tree",
     accepts_names: &["PageTree"],
     parse_fn,
+    reads_body: false,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(

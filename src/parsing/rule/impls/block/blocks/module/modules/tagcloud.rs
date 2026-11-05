@@ -24,6 +24,8 @@ pub const MODULE_TAGCLOUD: ModuleRule = ModuleRule {
     name: "module-tagcloud",
     accepts_names: &["TagCloud"],
     parse_fn,
+    reads_body: false,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(

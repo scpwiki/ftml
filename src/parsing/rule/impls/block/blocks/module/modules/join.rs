@@ -24,6 +24,8 @@ pub const MODULE_JOIN: ModuleRule = ModuleRule {
     name: "module-join",
     accepts_names: &["Join"],
     parse_fn,
+    reads_body: false,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(

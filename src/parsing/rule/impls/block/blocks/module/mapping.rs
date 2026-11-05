@@ -86,6 +86,8 @@ fn module_rule_map_accepts_case_insensitive_names() {
         name: "module-custom",
         accepts_names: &["CustomModule"],
         parse_fn: MODULE_BACKLINKS.parse_fn,
+        reads_body: false,
+        owns_opener_line: false,
     }];
 
     let map = build_module_rule_map(&MODULE_RULES);
@@ -103,6 +105,8 @@ fn module_rule_map_accepts_valid_rule_name_prefix() {
         name: "module-custom",
         accepts_names: &["custom"],
         parse_fn: MODULE_BACKLINKS.parse_fn,
+        reads_body: false,
+        owns_opener_line: false,
     }];
 
     let map = build_module_rule_map(&MODULE_RULES);
@@ -116,6 +120,8 @@ fn module_rule_map_rejects_empty_accepted_names() {
         name: "module-empty",
         accepts_names: &[],
         parse_fn: MODULE_BACKLINKS.parse_fn,
+        reads_body: false,
+        owns_opener_line: false,
     }];
 
     build_module_rule_map(&MODULE_RULES);
@@ -128,6 +134,8 @@ fn module_rule_map_rejects_invalid_rule_name_prefix() {
         name: "custom",
         accepts_names: &["custom"],
         parse_fn: MODULE_BACKLINKS.parse_fn,
+        reads_body: false,
+        owns_opener_line: false,
     }];
 
     build_module_rule_map(&MODULE_RULES);
@@ -141,11 +149,15 @@ fn module_rule_map_rejects_duplicate_names() {
             name: "module-first",
             accepts_names: &["duplicate"],
             parse_fn: MODULE_BACKLINKS.parse_fn,
+            reads_body: false,
+            owns_opener_line: false,
         },
         ModuleRule {
             name: "module-second",
             accepts_names: &["DUPLICATE"],
             parse_fn: MODULE_BACKLINKS.parse_fn,
+            reads_body: false,
+            owns_opener_line: false,
         },
     ];
 

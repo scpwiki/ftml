@@ -24,6 +24,8 @@ pub const MODULE_LIST_PAGES: ModuleRule = ModuleRule {
     name: "module-list-pages",
     accepts_names: &["ListPages"],
     parse_fn,
+    reads_body: true,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(
@@ -35,7 +37,11 @@ fn parse_fn<'r, 't>(
     debug!("Parsing ListPages module");
     assert_module_name(&MODULE_LIST_PAGES, name);
 
-    let body = parser.get_body_text(&BLOCK_MODULE)?;
+    let body = if parser.settings().layout.legacy() {
+        parser.get_wikidot_module_optional_body(&BLOCK_MODULE)?
+    } else {
+        parser.get_body_text(&BLOCK_MODULE)?
+    };
     ok!(false; Module::ListPages {
         arguments: arguments.into_raw_vec(),
         body,

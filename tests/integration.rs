@@ -25,6 +25,9 @@ mod suppressed_conditional_typography;
 #[path = "wikidot_content_separators.rs"]
 mod wikidot_content_separators;
 
+#[path = "wikidot_module_head_grammar.rs"]
+mod wikidot_module_head_grammar;
+
 #[path = "wikidot_cross_owner_boundaries.rs"]
 mod wikidot_cross_owner_boundaries;
 
