@@ -107,6 +107,11 @@ head = "value+map"
 body = "none"
 html-output = "html,div,wj-embed"
 
+[embedaudio]
+head = "none"
+body = "raw"
+html-output = "html,div"
+
 [embedvideo]
 head = "none"
 body = "raw"

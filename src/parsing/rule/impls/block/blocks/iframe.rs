@@ -224,7 +224,7 @@ fn filter_tail(tail: &str) -> String {
         .collect()
 }
 
-fn wikidot_iframe_url(url: &str) -> bool {
+pub(crate) fn wikidot_iframe_url(url: &str) -> bool {
     [
         "http://",
         "https://",

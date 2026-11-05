@@ -26,8 +26,8 @@ use super::parser::{
 use super::{
     BlockRule,
     blocks::{
-        BLOCK_COLLAPSIBLE, BLOCK_EMBED, BLOCK_EMBED_VIDEO, BLOCK_HTML, BLOCK_SPAN,
-        BLOCK_TABVIEW,
+        BLOCK_COLLAPSIBLE, BLOCK_EMBED, BLOCK_EMBED_AUDIO, BLOCK_EMBED_VIDEO, BLOCK_HTML,
+        BLOCK_SPAN, BLOCK_TABVIEW,
     },
 };
 use crate::parsing::inline_scope::WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE;
@@ -134,7 +134,8 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
             Some(block_rule) => Ok(block_rule.accepts_newlines_outside_body
                 && block_rule_enabled(parser, block_rule)
                 && !(parser.settings().layout.legacy()
-                    && block_rule.name == BLOCK_EMBED.name)),
+                    && (block_rule.name == BLOCK_EMBED.name
+                        || block_rule.name == BLOCK_EMBED_AUDIO.name))),
             None => Ok(false),
         }
     });
@@ -220,7 +221,9 @@ fn wikidot_literal_css_module(elements: &Elements<'_>) -> bool {
 }
 
 fn block_rule_enabled(parser: &Parser<'_, '_>, block_rule: &BlockRule) -> bool {
-    if block_rule.name == BLOCK_EMBED_VIDEO.name {
+    if block_rule.name == BLOCK_EMBED_VIDEO.name
+        || block_rule.name == BLOCK_EMBED_AUDIO.name
+    {
         return parser.settings().layout.legacy();
     }
     block_rule.name != BLOCK_HTML.name

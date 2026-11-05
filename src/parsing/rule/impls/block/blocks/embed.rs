@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::iframe::wikidot_iframe_url;
 use super::prelude::*;
 use crate::tree::{AttributeMap, Embed};
 use std::borrow::Cow;
@@ -50,7 +51,7 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_EMBED, name);
 
     if parser.settings().layout.legacy() {
-        return parse_wikidot_embed(parser, in_head);
+        return parse_wikidot_embed_body(parser, &BLOCK_EMBED, in_head);
     }
 
     let (name, mut arguments) = parser.get_head_name_map(&BLOCK_EMBED, in_head)?;
@@ -59,17 +60,17 @@ fn parse_fn<'r, 't>(
     ok!(Element::Embed(embed))
 }
 
-fn parse_wikidot_embed<'r, 't>(
+pub(crate) fn parse_wikidot_embed_body<'r, 't>(
     parser: &mut Parser<'r, 't>,
+    rule: &BlockRule,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    let (arguments, _) =
-        parser.get_head_map_with_body_start_wikidot(&BLOCK_EMBED, in_head)?;
+    let (arguments, _) = parser.get_head_map_with_body_start_wikidot(rule, in_head)?;
     if !arguments.is_empty() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let body = parser.get_body_text(&BLOCK_EMBED)?;
+    let body = parser.get_body_text(rule)?;
     match wikidot_embed_iframe(&body) {
         Some(embed) => ok!(true; Element::Embed(embed)),
         None => {
@@ -199,10 +200,7 @@ fn wikidot_embed_iframe(body: &str) -> Option<Embed<'static>> {
         .iter()
         .find(|(name, _)| name == "src")
         .map(|(_, value)| value.trim())?;
-    if !src
-        .get(..8)
-        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("https://"))
-    {
+    if !wikidot_iframe_url(src) {
         return None;
     }
 
@@ -384,7 +382,7 @@ fn wikidot_embed_unmatched_body_renders_error_block() {
 }
 
 #[test]
-fn wikidot_embed_non_https_iframe_renders_error_block() {
+fn wikidot_embed_iframe_allow_list_matches_live() {
     use crate::data::PageInfo;
     use crate::layout::Layout;
     use crate::render::Render;
@@ -392,19 +390,50 @@ fn wikidot_embed_non_https_iframe_renders_error_block() {
 
     let page_info = PageInfo::dummy();
     let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-    let tokenization = crate::tokenize(
-        "[[embed]]<iframe src=\"http://example.com/x\"></iframe>[[/embed]]",
-    );
-    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
-    let html = crate::render::html::HtmlRender
-        .render(&tree, &page_info, &settings)
-        .body;
 
-    assert!(errors.is_empty(), "{errors:#?}");
-    assert_eq!(
-        html,
-        "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
-    );
+    for (source, expected) in [
+        (
+            "[[embed]]<iframe src=\"http://example.com/x\"></iframe>[[/embed]]",
+            "<p><iframe src=\"http://example.com/x\"></iframe></p>",
+        ),
+        (
+            "[[embed]]<iframe src=\"HTTP://example.com/x\"></iframe>[[/embed]]",
+            "<p><iframe src=\"HTTP://example.com/x\"></iframe></p>",
+        ),
+        (
+            "[[embed]]<iframe src=\"ftp://example.com/x\"></iframe>[[/embed]]",
+            "<p><iframe src=\"ftp://example.com/x\"></iframe></p>",
+        ),
+        (
+            "[[embed]]<iframe src=\"gopher://example.com/x\"></iframe>[[/embed]]",
+            "<p><iframe src=\"gopher://example.com/x\"></iframe></p>",
+        ),
+        (
+            "[[embed]]<iframe src=\"mailto:a@example.com\"></iframe>[[/embed]]",
+            "<p><iframe src=\"mailto:a@example.com\"></iframe></p>",
+        ),
+        (
+            "[[embed]]<iframe src=\"https://example.com/x\"></iframe>[[/embed]]",
+            "<p><iframe src=\"https://example.com/x\"></iframe></p>",
+        ),
+        (
+            "[[embed]]<script src=\"https://example.com/a.js\"></script>[[/embed]]",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+        ),
+        (
+            "[[embed]]<object data=\"x\"></object>[[/embed]]",
+            "<div class=\"error-block\">Sorry, no match for the embedded content.</div>",
+        ),
+    ] {
+        let tokenization = crate::tokenize(source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = crate::render::html::HtmlRender
+            .render(&tree, &page_info, &settings)
+            .body;
+
+        assert!(errors.is_empty(), "{source:?}: {errors:#?}");
+        assert_eq!(html, expected, "{source:?}");
+    }
 }
 
 #[test]
