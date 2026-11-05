@@ -4308,7 +4308,8 @@ where
                     ParseCondition::current(Token::RightBlock),
                     ParseCondition::current(Token::RightLink),
                 ];
-                let (head, last) = collect_comment_elided_keep(self, &closes, &[], None)?;
+                let (head, last) =
+                    collect_comment_elided_keep(self, &closes, &[], None, None)?;
                 if last.token == Token::RightLink {
                     self.note_fused_name_residual(last.span.end);
                 }
@@ -4457,6 +4458,7 @@ where
             &closes,
             &invalids,
             Some(ParseErrorKind::recoverable_local_failure()),
+            None,
         )?;
         let head_ended = matches!(last.token, Token::RightBlock | Token::RightBracket);
         let arguments = self.get_head_map_wikidot(block_rule, !head_ended)?;

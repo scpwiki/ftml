@@ -58,6 +58,13 @@ impl<'r, 't> Parser<'r, 't> {
             .clone()
     }
 
+    pub(crate) fn body_end_boundaries_is_empty(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .body_end_boundaries
+            .is_empty()
+    }
+
     pub(crate) fn wikidot_li_inside_item_body(&self) -> bool {
         for boundary in self.body_end_boundaries().iter().rev() {
             if boundary.confined {
@@ -137,9 +144,10 @@ impl<'r, 't> Parser<'r, 't> {
         let source = self.full_text().inner();
         let start = self.current().span.start;
         let ahead = &source[start..];
-        let Some(close_offset) = ahead.find("]]") else {
+        let Some(close_found) = self.cached_close_marker(source, start) else {
             return false;
         };
+        let close_offset = close_found - start;
         if ahead[..close_offset]
             .chars()
             .last()

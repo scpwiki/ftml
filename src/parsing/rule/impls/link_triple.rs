@@ -129,7 +129,7 @@ fn try_consume_link<'r, 't>(
     };
     let (url, last, authored_url_prefix_is_url) = if parser.settings().layout.legacy() {
         let (url, last) =
-            collect_comment_elided_keep(parser, &url_close, url_invalid, None)?;
+            collect_comment_elided_keep(parser, &url_close, url_invalid, None, None)?;
         let authored_url_prefix_is_url =
             is_url(url.prefix_before_first_comment().trim_start());
         (
