@@ -432,7 +432,7 @@ fn delayed_and_runtime_values_keep_their_provenance() {
     let html = render_delayed(&generated, &bindings);
     assert!(!html.contains("math-inline"), "{html}");
     assert!(html.contains("[[$OUTER "), "{html}");
-    assert!(html.contains("Generated reference"), "{html}");
+    assert!(html.contains("Generated&#32;reference"), "{html}");
     assert!(html.contains(" TAIL$]]"), "{html}");
 
     let direct_source = "[[$A %%page%% B$]]";

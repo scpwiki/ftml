@@ -110,7 +110,12 @@ fn live_backed_twenty_case_inline_bibcite_family_stays_fixed() {
             "<p>beta))</p>",
             0,
         ),
-        ("raw-owner", "@@((bibcite alpha))@@", "((bibcite alpha))", 0),
+        (
+            "raw-owner",
+            "@@((bibcite alpha))@@",
+            "((bibcite&#32;alpha))",
+            0,
+        ),
         (
             "single-newline",
             "((bibcite alpha\nbeta))",

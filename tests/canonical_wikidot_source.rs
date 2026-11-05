@@ -445,7 +445,7 @@ fn wikidot_raw_space_lines_keep_both_physical_breaks_at_block_boundaries() {
             "OMEGA_A\n@@ @@\nOMEGA_B",
             concat!(
                 "<p>OMEGA_A<br>\n",
-                "<span style=\"white-space: pre-wrap;\"> </span><br>\n",
+                "<span style=\"white-space: pre-wrap;\">&#32;</span><br>\n",
                 "OMEGA_B</p>",
             ),
         ),
@@ -453,7 +453,7 @@ fn wikidot_raw_space_lines_keep_both_physical_breaks_at_block_boundaries() {
             "OMEGA_A\n@@ @@\n[[=]]\nOMEGA_CENTER\n[[/=]]",
             concat!(
                 "<p>OMEGA_A<br>\n",
-                "<span style=\"white-space: pre-wrap;\"> </span><br>\n</p>",
+                "<span style=\"white-space: pre-wrap;\">&#32;</span><br>\n</p>",
                 "<div style=\"text-align: center;\"><p>OMEGA_CENTER</p></div>",
             ),
         ),
@@ -461,7 +461,7 @@ fn wikidot_raw_space_lines_keep_both_physical_breaks_at_block_boundaries() {
             "[[=]]\nOMEGA_CENTER\n[[/=]]\n@@ @@\nOMEGA_B",
             concat!(
                 "<div style=\"text-align: center;\"><p>OMEGA_CENTER</p></div>",
-                "<br>\n<span style=\"white-space: pre-wrap;\"> </span><br>\n",
+                "<br>\n<span style=\"white-space: pre-wrap;\">&#32;</span><br>\n",
                 "OMEGA_B",
             ),
         ),
@@ -573,7 +573,7 @@ fn wikidot_unwrapped_line_after_alignment_uses_a_newline_at_a_paragraph_break() 
             ),
             concat!(
                 "<div style=\"text-align: center;\"><p>OMEGA_CENTER</p></div>",
-                "<br>\n<span style=\"white-space: pre-wrap;\"> </span><br>\n",
+                "<br>\n<span style=\"white-space: pre-wrap;\">&#32;</span><br>\n",
                 "OMEGA_DESCRIPTION\n<p>OMEGA_HISTORY</p>",
             ),
         ),

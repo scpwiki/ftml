@@ -159,7 +159,7 @@ fn live_backed_nineteen_case_anchor_family_keeps_its_control_contracts() {
         (
             "raw-owner",
             "@@[[# alpha]]@@",
-            r#"<p><span style="white-space: pre-wrap;">[[# alpha]]</span></p>"#,
+            r#"<p><span style="white-space: pre-wrap;">[[#&#32;alpha]]</span></p>"#,
             "[[# alpha]]",
         ),
         (

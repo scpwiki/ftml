@@ -173,7 +173,7 @@ fn crossed_color_monospace_prompts_in_blocks_stay_bounded() {
     assert_eq!(
         html.matches(concat!(
             r#"<div style="text-align: right;"><p><span style="color: #63ff54"><tt>"#,
-            r#"<span style="white-space: pre-wrap;"> &gt;  </span>boot</tt></span></p></div>"#,
+            r#"<span style="white-space: pre-wrap;">&#32;&gt;&#32;&#32;</span>boot</tt></span></p></div>"#,
         ))
         .count(),
         PROMPT_COUNT,
