@@ -1,0 +1,11 @@
+[[tabview]]
+[[tab One]]
+first
+[[/tab]]
+[[tab Two]]
+second
+[[/tab]]
+[[tab Three]]
+third
+[[/tab]]
+[[/tabview]]
