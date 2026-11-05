@@ -1,0 +1,4 @@
+[[math]]
+a[[iftags -zzz]]b[[iftags -zzz]]c
+[[/math]]
+d[[/iftags]]e[[/iftags]]f

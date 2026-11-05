@@ -105,6 +105,10 @@ fn parse_list_block<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let depth = parser.wikidot_li_pairing_depth();
     parser.set_wikidot_li_pairing_depth(depth + 1);
+    let track_collect = parser.settings().layout.legacy();
+    if track_collect {
+        parser.push_wikidot_li_collect(None);
+    }
     let result = parse_list_block_impl(
         (block_rule, list_type),
         parser,
@@ -114,6 +118,9 @@ fn parse_list_block<'r, 't>(
         flag_score,
         in_head,
     );
+    if track_collect {
+        parser.pop_wikidot_li_collect();
+    }
     parser.set_wikidot_li_pairing_depth(depth);
     result
 }
@@ -447,6 +454,29 @@ fn parse_list_item<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    if wikidot
+        && parser.wikidot_li_pairing_depth() > 0
+        && !parser.discarding_hidden_body()
+    {
+        parser.push_wikidot_li_collect(Some(opener_start));
+        let body = parser.get_wikidot_li_body_segments(&BLOCK_LI);
+        parser.pop_wikidot_li_collect();
+        let body = body?;
+        let source_end = parser.current().span.start;
+        let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_LI);
+        let (segments, errors, _) = body.into();
+        let source = &parser.full_text().inner()[body_start..source_end];
+        let mut elements = assemble_wikidot_li_segments(segments, source);
+        if fused_close {
+            elements.push(text!("]"));
+        }
+        let element = Element::Partial(PartialElement::ListItem(ListItem::Elements {
+            elements,
+            attributes,
+        }));
+        return success_elements_with_paragraph_safety(false, element, errors);
+    }
+
     let body = parser.get_body_elements(&BLOCK_LI, false)?;
     let source_end = parser.current().span.start;
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_LI);
@@ -485,6 +515,104 @@ fn parse_list_item<'r, 't>(
     }));
 
     success_elements_with_paragraph_safety(false, element, errors)
+}
+
+fn wikidot_li_segment_is_blank(segment: &[Element]) -> bool {
+    segment.iter().all(Element::is_whitespace)
+}
+
+fn assemble_wikidot_li_segments<'t>(
+    mut segments: Vec<Vec<Element<'t>>>,
+    source: &str,
+) -> Vec<Element<'t>> {
+    let mut had_trailing_empty = false;
+    while segments
+        .last()
+        .is_some_and(|segment| wikidot_li_segment_is_blank(segment))
+    {
+        segments.pop();
+        had_trailing_empty = true;
+    }
+    let mut had_leading_empty = false;
+    while segments
+        .first()
+        .is_some_and(|segment| wikidot_li_segment_is_blank(segment))
+    {
+        segments.remove(0);
+        had_leading_empty = true;
+    }
+    for segment in &mut segments {
+        let mut index = 1;
+        while index < segment.len() {
+            if segment[index] == Element::LineBreak
+                && !segment[index - 1].paragraph_safe()
+            {
+                segment.remove(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+    if let Some(first) = segments.first_mut() {
+        while matches!(first.first(), Some(Element::LineBreak)) {
+            first.remove(0);
+        }
+    }
+    let mut kept: Vec<Vec<Element<'t>>> = Vec::with_capacity(segments.len());
+    let last_index = segments.len().saturating_sub(1);
+    for (index, segment) in segments.into_iter().enumerate() {
+        if index > 0 && index < last_index && wikidot_li_segment_is_blank(&segment) {
+            continue;
+        }
+        kept.push(segment);
+    }
+    let mut joins: Vec<bool> = Vec::new();
+    for pair in kept.windows(2) {
+        let boundary = pair[0]
+            .last()
+            .is_some_and(|element| !element.paragraph_safe())
+            && pair[1].first().is_some_and(Element::paragraph_safe);
+        joins.push(boundary);
+    }
+    let mut elements: Vec<Element<'t>> = Vec::new();
+    let kept_last = kept.len().saturating_sub(1);
+    for (index, segment) in kept.into_iter().enumerate() {
+        if index > 0 && joins[index - 1] {
+            elements.push(Element::LineBreak);
+        }
+        if index > 0 && index < kept_last && segment.iter().all(Element::paragraph_safe) {
+            elements.push(Element::Container(Container::new(
+                ContainerType::Paragraph,
+                segment,
+                AttributeMap::new(),
+            )));
+        } else {
+            elements.extend(segment);
+        }
+    }
+    if had_leading_empty || had_trailing_empty {
+        strip_newlines(&mut elements);
+    }
+    if had_trailing_empty
+        && elements
+            .last()
+            .is_some_and(|element| !element.paragraph_safe())
+    {
+        elements.push(Element::LineBreak);
+    } else if !had_trailing_empty {
+        let body = source
+            .to_ascii_lowercase()
+            .rfind("[[/li")
+            .map(|index| &source[..index])
+            .unwrap_or(source);
+        if body.ends_with('\n') && !matches!(elements.last(), Some(Element::LineBreak)) {
+            elements.push(Element::LineBreak);
+        }
+    }
+    while matches!(elements.last(), Some(Element::Text(text)) if text == " ") {
+        elements.pop();
+    }
+    elements
 }
 
 fn trim_wikidot_block_gaps(elements: &mut Vec<Element<'_>>) {

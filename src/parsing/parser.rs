@@ -137,6 +137,9 @@ pub(super) struct BlockScanCache<'t> {
     pending_iftags_end_swallows: Vec<usize>,
     wikidot_li_paired_heads: std::collections::BTreeSet<usize>,
     wikidot_li_pairing_depth: Cell<usize>,
+    wikidot_li_heads: Vec<WikidotLiHead>,
+    wikidot_li_closes: Vec<WikidotLiClose>,
+    wikidot_li_collect_stack: Vec<Option<usize>>,
     gate_items_allowed: Cell<bool>,
     title_footnote_fused_end: Cell<bool>,
     degraded_title_records: Vec<usize>,
@@ -156,6 +159,20 @@ pub(super) struct BlockScanCache<'t> {
 pub(crate) enum QuoteEscapedUnit<'t> {
     Elements(Vec<Element<'t>>, bool),
     Row(usize, Vec<Element<'t>>, bool),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WikidotLiHead {
+    pub(crate) pos: usize,
+    pub(crate) depth: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WikidotLiClose {
+    pub(crate) pos: usize,
+    pub(crate) depth: usize,
+    pub(crate) paired: Option<usize>,
+    pub(crate) prev_paired: Option<usize>,
 }
 
 fn token_starts_line(token: Token) -> bool {
@@ -378,6 +395,98 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_li_pairing_depth
             .set(depth);
+    }
+
+    pub(crate) fn set_wikidot_li_stream(
+        &self,
+        heads: Vec<WikidotLiHead>,
+        closes: Vec<WikidotLiClose>,
+    ) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        cache.wikidot_li_heads = heads;
+        cache.wikidot_li_closes = closes;
+    }
+
+    pub(crate) fn wikidot_li_close_record(
+        &self,
+        position: usize,
+    ) -> Option<WikidotLiClose> {
+        let cache = self.block_end_scan_cache.borrow();
+        cache
+            .wikidot_li_closes
+            .binary_search_by_key(&position, |close| close.pos)
+            .ok()
+            .map(|index| cache.wikidot_li_closes[index])
+    }
+
+    pub(crate) fn wikidot_li_head_depth(&self, position: usize) -> Option<usize> {
+        let cache = self.block_end_scan_cache.borrow();
+        cache
+            .wikidot_li_heads
+            .binary_search_by_key(&position, |head| head.pos)
+            .ok()
+            .map(|index| cache.wikidot_li_heads[index].depth)
+    }
+
+    pub(crate) fn wikidot_li_last_paired_close(&self) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_closes
+            .iter()
+            .rev()
+            .find_map(|close| close.paired.map(|_| close.pos))
+    }
+
+    pub(crate) fn wikidot_li_head_between(
+        &self,
+        lower: usize,
+        upper: usize,
+        depth: usize,
+    ) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let start = cache
+            .wikidot_li_heads
+            .partition_point(|head| head.pos <= lower);
+        cache.wikidot_li_heads[start..]
+            .iter()
+            .take_while(|head| head.pos < upper)
+            .any(|head| head.depth == depth)
+    }
+
+    pub(crate) fn wikidot_li_paired_head_after(
+        &self,
+        position: usize,
+        depth: usize,
+    ) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let start = cache
+            .wikidot_li_heads
+            .partition_point(|head| head.pos <= position);
+        cache.wikidot_li_heads[start..].iter().any(|head| {
+            head.depth == depth && cache.wikidot_li_paired_heads.contains(&head.pos)
+        })
+    }
+
+    pub(crate) fn push_wikidot_li_collect(&self, head: Option<usize>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_li_collect_stack
+            .push(head);
+    }
+
+    pub(crate) fn pop_wikidot_li_collect(&self) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_li_collect_stack
+            .pop();
+    }
+
+    pub(crate) fn wikidot_li_collect_top(&self) -> Option<Option<usize>> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_collect_stack
+            .last()
+            .copied()
     }
 
     pub(crate) fn fused_name_residual(&self) -> Option<usize> {

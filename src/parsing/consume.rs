@@ -981,6 +981,34 @@ fn try_consume_pending_iftags_end_swallow<'r, 't>(
     Some(consume_past_iftags_end(parser, fused))
 }
 
+fn try_consume_wikidot_li_listbody_silent_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if !parser.settings().layout.legacy() {
+        return None;
+    }
+    if parser.discarding_hidden_body() {
+        return None;
+    }
+    if parser.current().token != Token::LeftBlockEnd {
+        return None;
+    }
+    if !matches!(parser.wikidot_li_collect_top(), Some(None)) {
+        return None;
+    }
+    let position = parser.current().span.start;
+    parser.exact_wikidot_li_close_end()?;
+    if !parser.wikidot_li_listbody_close_silent(position) {
+        return None;
+    }
+    step_over_wikidot_designated_end(parser)?;
+    Some(Ok(crate::parsing::ParseSuccess::new(
+        Elements::None,
+        Vec::new(),
+        true,
+    )))
+}
+
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     if parser.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
         return Err(parser.make_err(ParseErrorKind::EndOfInput));
@@ -991,6 +1019,10 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     if let Some(result) = try_consume_pending_iftags_end_swallow(parser) {
+        return result;
+    }
+
+    if let Some(result) = try_consume_wikidot_li_listbody_silent_close(parser) {
         return result;
     }
 

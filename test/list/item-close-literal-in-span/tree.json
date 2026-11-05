@@ -1,0 +1,59 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "a"
+                            },
+                            {
+                                "element": "container",
+                                "data": {
+                                    "type": "span",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "x"
+                                        },
+                                        {
+                                            "element": "partial",
+                                            "data": {
+                                                "ListItem": {
+                                                    "item-type": "elements",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "b"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": "y"
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "element": "text",
+                                "data": "c"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -28,7 +28,9 @@ use crate::parsing::collect::{
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
-use crate::parsing::parser::{QuoteBodyLineStatus, QuoteScanOutcome};
+use crate::parsing::parser::{
+    QuoteBodyLineStatus, QuoteScanOutcome, WikidotLiClose, WikidotLiHead,
+};
 use crate::parsing::{
     ExtractedToken, ParagraphSplitEntry, ParagraphSplitKind, ParseError, ParseErrorKind,
     ParseResult, Parser, Token, gather_paragraphs,
@@ -64,6 +66,13 @@ pub(crate) enum GateHeadClose {
 pub enum DiscardedBodyOutcome {
     Discarded,
     FailedClosedThroughInputEnd,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WikidotLiCloseDisposition {
+    End,
+    Silent,
+    Literal,
 }
 
 fn named_block_head_end(
@@ -1356,6 +1365,8 @@ where
         let mut depth = 0usize;
         let mut queue: VecDeque<usize> = VecDeque::new();
         let mut paired: BTreeSet<usize> = BTreeSet::new();
+        let mut heads: Vec<WikidotLiHead> = Vec::new();
+        let mut closes: Vec<WikidotLiClose> = Vec::new();
         loop {
             if scan.current().token == Token::InputEnd || scan.at_hard_body_end_boundary()
             {
@@ -1376,6 +1387,7 @@ where
                             depth += 1;
                         } else if name.eq_ignore_ascii_case("li") {
                             queue.push_back(start);
+                            heads.push(WikidotLiHead { pos: start, depth });
                         }
                     }
                     if scan.step().is_err() {
@@ -1396,9 +1408,17 @@ where
                                 depth -= 1;
                                 scan.update(&probe);
                             } else if name.eq_ignore_ascii_case("li") {
-                                if let Some(head) = queue.pop_front() {
+                                let close_pos = scan.current().span.start;
+                                let paired_head = queue.pop_front();
+                                if let Some(head) = paired_head {
                                     paired.insert(head);
                                 }
+                                closes.push(WikidotLiClose {
+                                    pos: close_pos,
+                                    depth,
+                                    paired: paired_head,
+                                    prev_paired: None,
+                                });
                                 scan.update(&probe);
                             } else if scan.step().is_err() {
                                 break;
@@ -1452,7 +1472,312 @@ where
                 }
             }
         }
+        let mut prev_paired = None;
+        for close in &mut closes {
+            close.prev_paired = prev_paired;
+            if close.paired.is_some() {
+                prev_paired = Some(close.pos);
+            }
+        }
         self.set_wikidot_li_paired_heads(paired);
+        self.set_wikidot_li_stream(heads, closes);
+    }
+
+    pub(crate) fn wikidot_li_close_disposition_for_item(
+        &self,
+        head_pos: usize,
+        close_pos: usize,
+    ) -> WikidotLiCloseDisposition {
+        let Some(record) = self.wikidot_li_close_record(close_pos) else {
+            return WikidotLiCloseDisposition::End;
+        };
+        let Some(pair) = record.paired else {
+            return WikidotLiCloseDisposition::Literal;
+        };
+        let Some(head_depth) = self.wikidot_li_head_depth(head_pos) else {
+            return WikidotLiCloseDisposition::End;
+        };
+        if record.depth != head_depth {
+            return WikidotLiCloseDisposition::End;
+        }
+        let Some(pair_depth) = self.wikidot_li_head_depth(pair) else {
+            return WikidotLiCloseDisposition::End;
+        };
+        if pair_depth < record.depth {
+            return WikidotLiCloseDisposition::Silent;
+        }
+        if self.wikidot_li_last_paired_close() == Some(close_pos) {
+            return WikidotLiCloseDisposition::End;
+        }
+        let base = record.prev_paired.unwrap_or(0).max(head_pos);
+        let intervening = self.wikidot_li_head_between(base, close_pos, head_depth);
+        if pair == head_pos {
+            if intervening {
+                return WikidotLiCloseDisposition::Literal;
+            }
+            return WikidotLiCloseDisposition::End;
+        }
+        if intervening {
+            return WikidotLiCloseDisposition::Literal;
+        }
+        if self.wikidot_li_paired_head_after(close_pos, head_depth) {
+            return WikidotLiCloseDisposition::End;
+        }
+        WikidotLiCloseDisposition::Literal
+    }
+
+    pub(crate) fn wikidot_li_listbody_close_silent(&self, close_pos: usize) -> bool {
+        let Some(record) = self.wikidot_li_close_record(close_pos) else {
+            return false;
+        };
+        let Some(pair) = record.paired else {
+            return false;
+        };
+        self.wikidot_li_head_depth(pair)
+            .is_some_and(|pair_depth| pair_depth < record.depth)
+    }
+
+    pub(crate) fn exact_wikidot_li_close_end(&self) -> Option<usize> {
+        if self.current().token != Token::LeftBlockEnd {
+            return None;
+        }
+        let start = self.current().span.start;
+        let mut probe = self.clone();
+        let name = probe.get_end_block().ok()?;
+        if !matches!(name, Cow::Borrowed(_)) {
+            return None;
+        }
+        if !name.eq_ignore_ascii_case("li") {
+            return None;
+        }
+        let end = probe.current().span.start;
+        if !self.full_text().inner()[start..end].eq_ignore_ascii_case("[[/li]]") {
+            return None;
+        }
+        Some(end)
+    }
+
+    pub(crate) fn wikidot_nested_list_opener_ahead(&self) -> bool {
+        if self.current().token != Token::LineBreak {
+            return false;
+        }
+        if !matches!(
+            self.look_ahead(0).map(|token| token.token),
+            Some(Token::LeftBlock)
+        ) {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        let Ok((name, _, _)) = probe.get_block_name(false) else {
+            return false;
+        };
+        let name = name.strip_suffix('_').unwrap_or(&name);
+        name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+    }
+
+    fn wikidot_li_non_ending_close_here(&self) -> Option<WikidotLiCloseDisposition> {
+        if self.discarding_hidden_body() {
+            return None;
+        }
+        if self.current().token != Token::LeftBlockEnd {
+            return None;
+        }
+        let close_pos = self.current().span.start;
+        self.exact_wikidot_li_close_end()?;
+        let Some(Some(head)) = self.wikidot_li_collect_top() else {
+            return None;
+        };
+        match self.wikidot_li_close_disposition_for_item(head, close_pos) {
+            WikidotLiCloseDisposition::End => None,
+            disposition => Some(disposition),
+        }
+    }
+
+    fn wikidot_li_non_ending_close_past_break(&self) -> bool {
+        if self.discarding_hidden_body() {
+            return false;
+        }
+        if self.current().token != Token::LineBreak {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        if probe.current().token != Token::LeftBlockEnd {
+            return false;
+        }
+        let close_pos = probe.current().span.start;
+        if probe.exact_wikidot_li_close_end().is_none() {
+            return false;
+        }
+        let Some(Some(head)) = self.wikidot_li_collect_top() else {
+            return false;
+        };
+        !matches!(
+            self.wikidot_li_close_disposition_for_item(head, close_pos),
+            WikidotLiCloseDisposition::End
+        )
+    }
+
+    pub(crate) fn get_wikidot_li_body_segments(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> ParseResult<'r, 't, Vec<Vec<Element<'t>>>> {
+        self.push_body_end_boundary(
+            block_rule_end_names(block_rule, self.settings().layout.legacy()),
+            block_rule.name == "block-footnote",
+        );
+        let result = self.consume_wikidot_li_body_segments(block_rule);
+        self.pop_body_end_boundary();
+        result
+    }
+
+    fn consume_wikidot_li_body_segments(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> ParseResult<'r, 't, Vec<Vec<Element<'t>>>> {
+        let mut segments: Vec<Vec<Element<'t>>> = vec![Vec::new()];
+        let mut all_errors = Vec::new();
+        let mut paragraph_safe = true;
+        let mut first = true;
+
+        loop {
+            if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                return Err(self.make_err(ParseErrorKind::EndOfInput));
+            }
+
+            if self.current().token == Token::ParagraphBreak
+                && !self.discarding_hidden_body()
+                && !self.in_wikidot_span_body()
+                && !self.in_wikidot_literal_alias_body()
+                && !self.in_wikidot_anchor_body()
+            {
+                self.step()?;
+                first = false;
+                segments.push(Vec::new());
+                continue;
+            }
+
+            if !self.discarding_hidden_body() && self.wikidot_nested_list_opener_ahead() {
+                self.step()?;
+                first = false;
+                segments
+                    .last_mut()
+                    .expect("segments always has a current segment")
+                    .push(Element::LineBreak);
+                continue;
+            }
+
+            if let Some(disposition) = self.wikidot_li_non_ending_close_here() {
+                match disposition {
+                    WikidotLiCloseDisposition::Silent => {
+                        if self.get_end_block().is_err() {
+                            self.step()?;
+                        }
+                        first = false;
+                        continue;
+                    }
+                    WikidotLiCloseDisposition::Literal => {
+                        let start = self.current().span.start;
+                        let Some(end) = self.exact_wikidot_li_close_end() else {
+                            return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+                        };
+                        if self.get_end_block().is_err() {
+                            self.step()?;
+                            first = false;
+                            continue;
+                        }
+                        first = false;
+                        segments
+                            .last_mut()
+                            .expect("segments always has a current segment")
+                            .push(Element::Text(Cow::Borrowed(
+                                &self.full_text().inner()[start..end],
+                            )));
+                        continue;
+                    }
+                    WikidotLiCloseDisposition::End => {}
+                }
+            }
+
+            if !self.wikidot_li_non_ending_close_past_break() {
+                let result = self.verify_end_block(first, block_rule, false, false);
+                if result.is_some() {
+                    return Ok(crate::parsing::ParseSuccess::new(
+                        segments,
+                        all_errors,
+                        paragraph_safe,
+                    ));
+                }
+            }
+
+            if self.terminate_at_wikidot_list_close(block_rule, first) {
+                return Ok(crate::parsing::ParseSuccess::new(
+                    segments,
+                    all_errors,
+                    paragraph_safe,
+                ));
+            }
+
+            if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if block_rule.name == "block-iftags"
+                && let Some(designated) = self.wikidot_iftags_body_end()
+                && self.current().span.start > designated
+            {
+                return Ok(crate::parsing::ParseSuccess::new(
+                    segments,
+                    all_errors,
+                    paragraph_safe,
+                ));
+            }
+
+            if !self.discarding_hidden_body() && self.at_ancestor_body_end_boundary() {
+                return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            let wikidot_input_end = self.current().token == Token::InputEnd
+                && self.settings().layout.legacy()
+                && !self.discarding_hidden_body();
+            if wikidot_input_end {
+                return Ok(crate::parsing::ParseSuccess::new(
+                    segments,
+                    all_errors,
+                    paragraph_safe,
+                ));
+            }
+
+            first = false;
+            match consume(self) {
+                Ok(consumed) => {
+                    self.take_wikidot_mixed_paragraph_ownership();
+                    let elements = consumed.chain(&mut all_errors, &mut paragraph_safe);
+                    segments
+                        .last_mut()
+                        .expect("segments always has a current segment")
+                        .extend(elements);
+                }
+                Err(_error)
+                    if self.discarding_hidden_body()
+                        && self.wikidot_iftags_body_end().is_some_and(|designated| {
+                            self.at_designated_iftags_end(designated)
+                                && offset_inside_comment(
+                                    self.full_text().inner(),
+                                    designated,
+                                )
+                        }) => {}
+                Err(_error)
+                    if self.discarding_hidden_body()
+                        && self.at_hidden_body_boundary() => {}
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     fn get_body_generic<F>(
@@ -1601,6 +1926,7 @@ where
         let body_start = start.span.start;
         let body_end = end.span.start;
         let mut removals: Vec<(usize, usize)> = Vec::new();
+        let mut gated: Vec<(usize, usize)> = Vec::new();
         let mut walk = walk_start;
         loop {
             let token = walk.current();
@@ -1609,6 +1935,15 @@ where
             }
             if token.token == Token::LeftBlock {
                 let head_start = token.span.start;
+                if gated
+                    .iter()
+                    .any(|&(lo, hi)| head_start >= lo && head_start < hi)
+                {
+                    if walk.step().is_err() {
+                        break;
+                    }
+                    continue;
+                }
                 let mut probe = walk.clone();
                 if probe.skip_discarded_iftags_segment(false) {
                     let segment_end = probe.current().span.start;
@@ -1657,9 +1992,15 @@ where
                                 }
                                 if let Some(end_span_end) = end_span_end {
                                     removals.push((designated, end_span_end));
+                                    gated.push((head_start, end_span_end));
+                                } else {
+                                    gated.push((head_start, designated));
                                 }
                             } else if designated > body_end {
                                 self.push_pending_iftags_end_swallow(designated);
+                                gated.push((head_start, designated));
+                            } else {
+                                gated.push((head_start, designated));
                             }
                         }
                     }
