@@ -615,6 +615,12 @@ impl<'t> ParagraphStack<'t> {
             if self.wikidot
                 && matches!(element, Element::Text(ref text) if text == " ")
                 && (self.current.is_empty()
+                    || self.current.iter().all(|element| {
+                        matches!(
+                            element,
+                            Element::Delayed(delayed) if delayed.is_suppression_seam()
+                        )
+                    })
                     || matches!(
                         self.current.last(),
                         Some(Element::Text(text)) if text == " "
@@ -872,11 +878,16 @@ impl<'t> ParagraphStack<'t> {
     }
 
     fn trim_trailing_ascii_space(&mut self) {
-        if let Some(index) = self.current.iter().rposition(|element| {
+        while let Some(index) = self.current.iter().rposition(|element| {
             !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
-        }) && matches!(&self.current[index], Element::Text(text) if text == " ")
-        {
+        }) {
+            if !matches!(&self.current[index], Element::Text(text) if text == " ") {
+                break;
+            }
             self.current.remove(index);
+            if !self.wikidot {
+                break;
+            }
         }
     }
 

@@ -4,20 +4,23 @@
 # Classes found only with a larger bound are not listed.
 # Live Wikidot evidence (evidence/wikidot-2026-11-01.json): Wikidot renders a hidden block between two
 # segments exactly as if the block were absent, so the oracle is right for these classes.
-# Every remaining class involves a `>` token; the harness prefixes those class names with
-# `right-angle:` so no other class can hide among them. They are the deferred right-angle gap:
-# a segment typographed with `]` as its left context converts `>>` pairs that the joined text,
-# whose real left context differs, would group differently (or not convert at all). A fix needs
-# tree left-context in the seam code and live evidence first; see the verify-seam-typography skill.
-right-angle:text-differs: >- »+|2|2886
-right-angle:text-differs:|4|261
-right-angle:text-differs: >+ »-|5|18
-# The three classes below and the count shift above (2887 -> 2886) are the seam whitespace rule:
-# a space run that crosses a seam collapses to a single space, matching live, where text around
-# suppressed content renders as if the suppressed content had never been in the source (the source
-# lexer never produces adjacent space runs). The typography-only oracle retains the full run, so
-# the resolved text shows a deficit of exactly one space (the ` -` component), alone or combined
-# with a right-angle class. Live evidence: the fix-seam-spaces lane probes, 2026-11-04.
+# The remaining right-angle class is the run-at-zero family: every one of its 3,239 inputs
+# resolves exactly to the oracle of "x" + joined (verified by exhaustive autopsy 2026-11-05),
+# so the seam code differs from the string oracle only in `>>` eligibility at position zero.
+# At parse level that position is a paragraph start, where the deferred raw `>>` meets the
+# virtual start of line left by the invisible gate and parses as blockquote markup —
+# live renders that shape as an (empty) blockquote too (evidence/wikidot-2026-11-05.json,
+# case gate-at-start-angle), so the string-oracle gap has no render-level remainder.
+# Fixed 2026-11-05 and deleted here: right-angle:text-differs:|4|261 (odd-split mispairing,
+# now paired left-to-right across the seam) and right-angle:text-differs: >+ »-|5|18
+# (under-conversion). The end-to-end seam check asserts all three counters at zero.
+right-angle:text-differs: >- »+|2|3239
+# The three classes below are the seam whitespace rule: a space run that crosses a seam
+# collapses to a single space, matching live, where text around suppressed content renders
+# as if the suppressed content had never been in the source (the source lexer never produces
+# adjacent space runs). The typography-only oracle retains the full run, so the resolved text
+# shows a deficit of exactly one space (the ` -` component), alone or combined with a
+# right-angle class. Live evidence: the fix-seam-spaces lane probes, 2026-11-04.
 text-differs:  -|3|342
 right-angle:text-differs:  -|4|139
 right-angle:text-differs:  - >- »+|5|1

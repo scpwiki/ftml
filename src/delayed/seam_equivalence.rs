@@ -278,6 +278,14 @@ fn seams_are_transparent_end_to_end() {
         println!("E2E-FAIL {failure}");
     }
     assert!(
+        right_angle_failures == 0,
+        "{right_angle_failures} end-to-end seam mismatches in the right-angle classes"
+    );
+    assert!(
+        whitespace_failures == 0,
+        "{whitespace_failures} end-to-end seam mismatches in the whitespace class"
+    );
+    assert!(
         other_failures == 0,
         "{other_failures} end-to-end seam mismatches outside the right-angle classes: {failures:?}"
     );
