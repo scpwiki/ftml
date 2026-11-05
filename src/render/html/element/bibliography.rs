@@ -372,7 +372,6 @@ fn render_wikidot_bibliography(
                     .inner(|ctx| render_elements(ctx, &wrapped));
             }
 
-            let mut entry_index = 0;
             for (position, (label, elements)) in bibliography.slice().iter().enumerate() {
                 if Bibliography::is_residual(label) {
                     ctx.push_raw('\n');
@@ -386,7 +385,11 @@ fn render_wikidot_bibliography(
                     continue;
                 }
 
-                entry_index += 1;
+                // Live numbers each definition by the distinct labels
+                // defined before it, so a duplicate label reuses the next
+                // number and repeats that number for the following entries
+                // too (captured 2026-11-05; the duplicate `id` is live's).
+                let entry_index = bibliography.citation_at(position);
                 let id = format!("bibitem-{entry_index}");
                 ctx.html()
                     .div()
