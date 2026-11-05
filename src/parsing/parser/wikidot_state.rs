@@ -19,6 +19,7 @@ const DIV_LITERAL_RECOVERED: u16 = 1 << 10;
 pub(super) struct WikidotState {
     div_body_depth: u16,
     scored_div_body_depth: u16,
+    scored_div_direct: Option<(usize, usize)>,
     scored_span_body_depth: u32,
     span_body_depth: u32,
     anchor_body_depth: u32,
@@ -90,6 +91,51 @@ impl Parser<'_, '_> {
     pub(crate) fn leave_wikidot_scored_div_body(&mut self) {
         self.wikidot.scored_div_body_depth =
             self.wikidot.scored_div_body_depth.saturating_sub(1);
+    }
+
+    #[inline]
+    pub(crate) fn enter_wikidot_scored_div_direct_body(
+        &mut self,
+        body_start: usize,
+        boundary_depth: usize,
+    ) -> Option<(usize, usize)> {
+        let saved = self.wikidot.scored_div_direct;
+        self.wikidot.scored_div_direct = Some((body_start, boundary_depth));
+        saved
+    }
+
+    #[inline]
+    pub(crate) fn leave_wikidot_scored_div_direct_body(
+        &mut self,
+        saved: Option<(usize, usize)>,
+    ) {
+        self.wikidot.scored_div_direct = saved;
+    }
+
+    pub(crate) fn wikidot_scored_div_first_line_suppresses_at(&self, pos: usize) -> bool {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return false;
+        }
+        let Some((body_start, _)) = self.wikidot.scored_div_direct else {
+            return false;
+        };
+        if pos < body_start {
+            return false;
+        }
+        self.full_text().inner().get(body_start..pos).is_some_and(|gap| {
+            gap.bytes()
+                .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+        })
+    }
+
+    pub(crate) fn wikidot_in_scored_div_direct_body(&self) -> bool {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return false;
+        }
+        let Some((_, boundary_depth)) = self.wikidot.scored_div_direct else {
+            return false;
+        };
+        self.body_end_boundary_depth() == boundary_depth + 1
     }
 
     #[inline]

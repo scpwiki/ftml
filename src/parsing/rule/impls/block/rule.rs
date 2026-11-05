@@ -289,6 +289,29 @@ where
     )
 }
 
+fn wikidot_scored_div_body_suppresses_block(
+    parser: &Parser<'_, '_>,
+    block_name: &str,
+    opener_start: usize,
+) -> bool {
+    if matches!(
+        block_name,
+        "block-align-left"
+            | "block-align-right"
+            | "block-align-center"
+            | "block-align-justify"
+    ) {
+        return parser.wikidot_in_scored_div_direct_body();
+    }
+    if matches!(
+        block_name,
+        "block-tabview" | "block-tab" | "block-gallery"
+    ) {
+        return parser.wikidot_scored_div_first_line_suppresses_at(opener_start);
+    }
+    false
+}
+
 fn parse_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
     flag_star: bool,
@@ -465,6 +488,9 @@ where
         && block.name == "block-user"
         && spaced_name
     {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if wikidot_scored_div_body_suppresses_block(parser, block.name, block_opener_start) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 

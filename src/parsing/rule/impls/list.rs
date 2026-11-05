@@ -24,11 +24,12 @@ use super::line_owner::{
 };
 use super::prelude::*;
 use crate::parsing::collect::collect_consume_keep_split;
+use crate::parsing::paragraph::ParagraphStack;
 use crate::parsing::{
     DepthItem, DepthList, ParagraphSplitEntry, ParagraphSplitKind, ParseSuccess,
     process_depths,
 };
-use crate::tree::{AttributeMap, ListItem, ListType};
+use crate::tree::{AttributeMap, Element, ListItem, ListType};
 
 const MAX_LIST_DEPTH: usize = 128;
 
@@ -69,6 +70,14 @@ fn try_consume_fn<'r, 't>(
     if parser.wikidot_footnote_zone_blocks(parser.current().span.start) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+
+    if parser
+        .wikidot_scored_div_first_line_suppresses_at(parser.current().span.start)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    let entry_parser = parser.clone();
+    let entry_state = parser.get_mutable_state();
 
     let mut start_parser = parser.clone();
     if let Some(start_depth) = parse_list_depth(&mut start_parser)? {
@@ -138,6 +147,18 @@ fn try_consume_fn<'r, 't>(
     }
 
     if escaped_elements.is_empty()
+        && wikidot_list_ends_with_scored_alias(
+            parser,
+            entry_parser.current().span.start,
+            &depths,
+        )
+    {
+        parser.update(&entry_parser);
+        parser.reset_mutable_state(entry_state);
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    if escaped_elements.is_empty()
         && parser.settings().layout.legacy()
         && starts_footnote(parser)
     {
@@ -199,6 +220,37 @@ fn try_consume_fn<'r, 't>(
         }
     }
     Ok(result)
+}
+
+fn wikidot_list_ends_with_scored_alias(
+    parser: &Parser<'_, '_>,
+    entry_start: usize,
+    depths: &[(usize, ListType, Vec<Element<'_>>)],
+) -> bool {
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return false;
+    }
+    let Some((_, _, elements)) = depths.last() else {
+        return false;
+    };
+    if !ParagraphStack::wikidot_run_ends_with_scored_alias(elements) {
+        return false;
+    }
+    // A trailing space after the close re-enables the list; live only
+    // rejects when the close is followed by a bare line end.
+    let source = parser.full_text().inner();
+    let after = parser.current().span.start.min(source.len());
+    let entry_start = entry_start.min(after);
+    let tail = source[entry_start..after]
+        .trim_end_matches(|ch| ch == '\r' || ch == '\n');
+    if tail.ends_with(' ') || tail.ends_with('\t') {
+        return false;
+    }
+    // Live rejects only at end of input; a following block (such as a
+    // div closer) or line lets the list form.
+    source[after..]
+        .bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
 }
 
 fn retain_active_nested_list_types<T>(

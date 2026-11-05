@@ -88,6 +88,7 @@ pub struct ParagraphStack<'t> {
     wikidot_bare_after_explicit_list: bool,
     wikidot_explicit_pre_candidate: bool,
     wikidot_post_empty_list_break: bool,
+    wikidot_scored_close_end_len: Option<usize>,
 
     finished: Vec<Element<'t>>,
 
@@ -322,6 +323,82 @@ impl<'t> ParagraphStack<'t> {
         self.wikidot_bare_after_explicit_list = false;
         self.wikidot_explicit_pre_candidate = false;
         self.wikidot_post_empty_list_break = false;
+    }
+
+    fn wikidot_element_contains_unaligned_image(element: &Element<'_>) -> bool {
+        match element {
+            Element::Image { alignment: None, .. } => true,
+            Element::Delayed(delayed) => delayed.image_alignment() == Some(None),
+            Element::Container(container) => container
+                .elements()
+                .iter()
+                .any(Self::wikidot_element_contains_unaligned_image),
+            Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+                elements
+                    .iter()
+                    .any(Self::wikidot_element_contains_unaligned_image)
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn wikidot_run_ends_with_scored_alias(elements: &[Element<'_>]) -> bool {
+        let mut rest = elements;
+        while let Some(last) = rest.last() {
+            let skip = match last {
+                Element::LineBreak | Element::LineBreaks(_) => true,
+                Element::Delayed(delayed) => delayed.is_suppression_seam(),
+                _ => false,
+            };
+            if !skip {
+                break;
+            }
+            rest = &rest[..rest.len() - 1];
+        }
+        let scored_kind = match rest.last() {
+            Some(Element::Partial(PartialElement::InlineSpanClose(_))) => 0,
+            Some(Element::Partial(PartialElement::InlineAnchorClose(_))) => 1,
+            _ => return false,
+        };
+        let mut depth = 0usize;
+        for element in rest.iter().rev() {
+            match element {
+                Element::Partial(PartialElement::InlineSpanClose(_)) if scored_kind == 0 => {
+                    depth += 1
+                }
+                Element::Partial(PartialElement::InlineAnchorClose(_))
+                    if scored_kind == 1 =>
+                {
+                    depth += 1
+                }
+                Element::Partial(PartialElement::InlineSpanOpen(attributes, ..))
+                    if scored_kind == 0 =>
+                {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        return attributes.get().contains_key("data-ftml-score-span");
+                    }
+                }
+                Element::Partial(PartialElement::InlineAnchorOpen(attributes, ..))
+                    if scored_kind == 1 =>
+                {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        return attributes.get().contains_key(
+                            crate::parsing::inline_scope::WIKIDOT_SCORE_ANCHOR_ATTRIBUTE,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     fn wikidot_element_has_run_content(element: &Element<'_>) -> bool {
@@ -922,6 +999,9 @@ impl<'t> ParagraphStack<'t> {
             {
                 self.wikidot_absorb_post_list_break_for_prose(!paragraph_break_separated);
             }
+            if self.wikidot && Self::wikidot_element_contains_unaligned_image(&element) {
+                self.current_unwrapped = true;
+            }
             self.current.push(element);
         } else {
             let invisible_block_line = self.wikidot && element == Element::LineBreak;
@@ -1135,6 +1215,13 @@ impl<'t> ParagraphStack<'t> {
 
     pub fn push_paragraph_safe_elements(&mut self, mut elements: Vec<Element<'t>>) {
         if self.wikidot
+            && elements
+                .iter()
+                .any(Self::wikidot_element_contains_unaligned_image)
+        {
+            self.current_unwrapped = true;
+        }
+        if self.wikidot
             && !self.wikidot_current_has_run_content()
             && elements.iter().any(Self::wikidot_element_has_run_content)
         {
@@ -1242,6 +1329,7 @@ impl<'t> ParagraphStack<'t> {
     }
 
     fn trim_trailing_ascii_space(&mut self) {
+        let mut removed = false;
         while let Some(index) = self.current.iter().rposition(|element| {
             !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
         }) {
@@ -1249,10 +1337,39 @@ impl<'t> ParagraphStack<'t> {
                 break;
             }
             self.current.remove(index);
+            removed = true;
             if !self.wikidot {
                 break;
             }
         }
+        if removed
+            && self.wikidot
+            && Self::wikidot_run_ends_with_scored_alias(&self.current)
+        {
+            self.wikidot_scored_close_end_len = Some(self.current.len());
+        }
+    }
+
+    /// Record that the current run ends softly (a break or enclosing-block
+    /// boundary follows the scored close rather than a hard end of input).
+    /// Live keeps the paragraph wrapped in that case.
+    pub(crate) fn note_wikidot_scored_close_soft_end(&mut self) {
+        if self.wikidot {
+            self.wikidot_scored_close_end_len = Some(self.current.len());
+        }
+    }
+
+    /// Whether a run ending with a paired scored span/anchor close stays
+    /// unwrapped: only when nothing (not even whitespace or a break) has
+    /// followed the close since. Always consumes any recorded soft end.
+    fn wikidot_scored_close_end_unwrapped(&mut self) -> bool {
+        let suppressed = self
+            .wikidot_scored_close_end_len
+            .is_some_and(|len| len == self.current.len());
+        self.wikidot_scored_close_end_len = None;
+        self.wikidot
+            && !suppressed
+            && Self::wikidot_run_ends_with_scored_alias(&self.current)
     }
 
     fn remove_pending_aligned_image_separator(&mut self) {
@@ -1265,6 +1382,9 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn end_paragraph(&mut self) {
+        if self.wikidot_scored_close_end_unwrapped() {
+            self.current_unwrapped = true;
+        }
         if self.wikidot_bare_after_explicit_list && !self.current.is_empty() {
             self.current_unwrapped = true;
             self.unwrapped_after_block_line = true;

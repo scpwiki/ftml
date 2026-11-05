@@ -186,6 +186,9 @@ where
     if matches!(owner, LineOwner::List { .. }) && matches!(head, BlockHead::Align(_)) {
         return Ok(None);
     }
+    if matches!(head, BlockHead::Align(_)) && parser.wikidot_in_scored_div_direct_body() {
+        return Ok(None);
+    }
     if let LineOwner::Quote { depth } = owner
         && current_line_has_quote_owner(parser, depth)
     {
