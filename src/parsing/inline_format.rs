@@ -379,6 +379,7 @@ fn normalize_sequence_passes<'t>(
             | repair_strike_split_close_pass(elements)
             | repair_raw_strike_pairs_pass(elements)
             | repair_strike_shed_pairs_pass(elements)
+            | repair_deferred_strike_trailing_dash_pass(elements)
             | repair_script_split_close_pass(elements)
             | repair_script_pairs_pass(elements);
         // A monospace container's children are already owned content:
@@ -1106,6 +1107,174 @@ pub(crate) fn monospace_close_split(value: &str) -> Option<(&str, &str)> {
         index = run_end;
     }
     None
+}
+
+/// Triage2 D1: a strike close deferred across a shell-in-color span extends
+/// past a trailing `--` (em-dash) on live. The default lowering lands the
+/// deferred close before it (`--a##red|xb**--c##--**##` family, each
+/// deterministic x2 on live).
+///
+/// At this point the stream is flattened: the strike close sits right after
+/// the shell open (empty shell head), then shell content, the shell close,
+/// the color close, and the unpaired `--`. Rewriting the edge order to
+/// live's resolves both the close extent and the shell/color nesting:
+///
+/// * Other shells split and escape the color:
+///   `[sO A+ colorO B+ shellO sC C+ shellC colorC --]` becomes
+///   `[sO A+ colorO B+ colorC shellO C+ shellC -- sC]`.
+/// * Underline unwraps in place (cf. the crossed-underline tail behavior):
+///   `[sO A+ colorO B+ uO sC C+ uC colorC --]` becomes
+///   `[sO A+ colorO B+ C+ colorC -- sC]`.
+///
+/// Only an exact `--` (dash origin) extends: a literal em-dash (live r16)
+/// or any non-text shell content (e.g. the triple-nesting inversion quirk)
+/// does not match and keeps the default lowering.
+fn repair_deferred_strike_trailing_dash_pass<'t>(
+    elements: &mut Vec<Element<'t>>,
+) -> bool {
+    fn is_d1_shell_open(element: &Element<'_>) -> bool {
+        matches!(
+            element,
+            Element::Partial(PartialElement::InlineFormatOpen(
+                InlineFormatKind::Bold
+                    | InlineFormatKind::Italics
+                    | InlineFormatKind::Subscript
+                    | InlineFormatKind::Underline
+                    | InlineFormatKind::Monospace,
+            ))
+        )
+    }
+
+    fn match_back_run(output: &[Element<'_>], mut start: usize) -> Option<usize> {
+        let mut len = 0;
+        while start > 0 && text(&output[start - 1]).is_some() {
+            start -= 1;
+            len += 1;
+        }
+        (len > 0).then_some(start)
+    }
+
+    // Cheap pre-gate: the pattern requires a strike close. Without one
+    // there is nothing to do (and adversarial inputs must not pay for the
+    // backward scan below).
+    if !elements.iter().any(|element| {
+        matches!(
+            element,
+            Element::Partial(PartialElement::InlineFormatClose(
+                InlineFormatKind::Strikethrough,
+            ))
+        )
+    }) {
+        return false;
+    }
+    let mut input = take_elements(elements);
+    let mut output = Vec::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+
+    while index < input.len() {
+        let forward = (|| {
+            let shell_open = input[index].as_ref()?;
+            if !is_d1_shell_open(shell_open) {
+                return None;
+            }
+            let shell_kind = match shell_open {
+                Element::Partial(PartialElement::InlineFormatOpen(kind)) => *kind,
+                _ => return None,
+            };
+            if !matches!(
+                input.get(index + 1)?.as_ref()?,
+                Element::Partial(PartialElement::InlineFormatClose(
+                    InlineFormatKind::Strikethrough,
+                ))
+            ) {
+                return None;
+            }
+            let mut content_end = index + 2;
+            while input
+                .get(content_end)
+                .and_then(Option::as_ref)
+                .is_some_and(|element| text(element).is_some())
+            {
+                content_end += 1;
+            }
+            if content_end == index + 2 {
+                return None;
+            }
+            if !matches!(
+                input.get(content_end)?.as_ref()?,
+                Element::Partial(PartialElement::InlineFormatClose(kind))
+                    if *kind == shell_kind
+            ) {
+                return None;
+            }
+            if !matches!(
+                input.get(content_end + 1)?.as_ref()?,
+                Element::Partial(PartialElement::InlineColorClose)
+            ) {
+                return None;
+            }
+            if !input
+                .get(content_end + 2)
+                .and_then(Option::as_ref)
+                .is_some_and(|element| is_exact_text(element, "--"))
+            {
+                return None;
+            }
+            Some((shell_kind, content_end))
+        })();
+        let Some((shell_kind, content_end)) = forward else {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        };
+        // Backward check runs only on a forward match: scanning back over
+        // the output for every index would be quadratic on long runs.
+        let backward = (|| {
+            let color_open = match_back_run(&output, output.len())?;
+            if !matches!(
+                output.get(color_open.checked_sub(1)?)?,
+                Element::Partial(PartialElement::InlineColorOpen(..))
+            ) {
+                return None;
+            }
+            let strike_open = match_back_run(&output, color_open - 1)?;
+            matches!(
+                output.get(strike_open.checked_sub(1)?)?,
+                Element::Partial(PartialElement::InlineFormatOpen(
+                    InlineFormatKind::Strikethrough,
+                ))
+            )
+            .then_some(())
+        })();
+        if backward.is_none() {
+            output.push(take_element(&mut input, index));
+            index += 1;
+            continue;
+        }
+        let shell_open = take_element(&mut input, index);
+        let strike_close = take_element(&mut input, index + 1);
+        let content = take_range(&mut input, index + 2..content_end);
+        let shell_close = take_element(&mut input, content_end);
+        let color_close = take_element(&mut input, content_end + 1);
+        let dash = take_element(&mut input, content_end + 2);
+        if shell_kind == InlineFormatKind::Underline {
+            output.extend(content);
+            output.push(color_close);
+        } else {
+            output.push(color_close);
+            output.push(shell_open);
+            output.extend(content);
+            output.push(shell_close);
+        }
+        output.push(dash);
+        output.push(strike_close);
+        index = content_end + 3;
+        changed = true;
+    }
+
+    *elements = output;
+    changed
 }
 
 fn script_shell<'t>(kind: FormatKind) -> FormatShell<'t> {
@@ -2480,10 +2649,19 @@ fn dash_unit(element: &Element<'_>, admit_link: bool) -> DashUnit {
             let Some(shell) = FormatShell::from_element(element) else {
                 return DashUnit::Barrier;
             };
+            // Triage2: mirrors the dash_flatten_shell material clause. Bold,
+            // Italics, and Underline shells holding a sole nested
+            // strikethrough are Barriers (flatten candidates), not
+            // transparent Atoms, so `--a **--b--**` pairs across the shell.
             if shell.kind() == FormatKind::Strike
                 || subtree_has_dash_pair(element)
-                || (shell.kind() == FormatKind::Monospace
-                    && subtree_has_plain_strike(element))
+                || (matches!(
+                    shell.kind(),
+                    FormatKind::Monospace
+                        | FormatKind::Bold
+                        | FormatKind::Italics
+                        | FormatKind::Underline
+                ) && subtree_has_plain_strike(element))
             {
                 DashUnit::Barrier
             } else {
@@ -3313,8 +3491,22 @@ fn dash_flatten_shell<'t>(element: &Element<'t>) -> Option<FormatShell<'t>> {
     if shell.kind() == FormatKind::Strike {
         return None;
     }
+    // Triage2 (live D2, r6-r11): Bold, Italics, and Underline shells behave
+    // like Monospace when their body is a sole nested strikethrough.
+    // `--a **--b--**` pairs the outer dashes across the shell (the shell
+    // then splits, preserving the inner dash as em-dash); `--a __--b--__`
+    // extends the outer pair to the underline close (lowering already
+    // extends strike-close inside Underline, and splits inside Bold/Italics,
+    // per the crossed-underline-close-inside and strike-close-inside-bold
+    // pins).
     let has_dash_material = subtree_has_dash_pair(element)
-        || (shell.kind() == FormatKind::Monospace && subtree_has_plain_strike(element));
+        || (matches!(
+            shell.kind(),
+            FormatKind::Monospace
+                | FormatKind::Bold
+                | FormatKind::Italics
+                | FormatKind::Underline
+        ) && subtree_has_plain_strike(element));
     if !has_dash_material || subtree_has_barrier(element) {
         return None;
     }

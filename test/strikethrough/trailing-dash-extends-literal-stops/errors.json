@@ -1,0 +1,20 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            27,
+            29
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            16,
+            18
+        ],
+        "kind": "no-rules-match"
+    }
+]
