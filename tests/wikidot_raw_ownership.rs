@@ -127,7 +127,7 @@ fn raw_precedence_controls_keep_their_existing_owners() {
         ),
         (
             "@@[[#if 1 | A | B ]]@@",
-            r#"<p><span style="white-space: pre-wrap;">[[#if 1 | A | B ]]</span></p>"#,
+            r#"<p><span style="white-space: pre-wrap;">[[#if&#32;1&#32;|&#32;A&#32;|&#32;B&#32;]]</span></p>"#,
         ),
         (
             "[[code]]\n@@A@@\n[[/code]]",
@@ -190,7 +190,7 @@ fn inline_math_and_raw_composition_matches_live_owner_transfer() {
             "[[$OUTER @@INNER$]] TAIL@@",
             concat!(
                 r#"<p>[[$OUTER <span style="white-space: pre-wrap;">"#,
-                "INNER$]] TAIL</span></p>",
+                "INNER$]]&#32;TAIL</span></p>",
             ),
             "[[$OUTER INNER$]] TAIL",
             true,

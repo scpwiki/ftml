@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "body",
+                "language": null,
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "body",
+            "language": null,
+            "name": null
+        }
+    ]
+}

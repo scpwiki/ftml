@@ -112,7 +112,7 @@ fn wikidot_css_module_scope_matrix_matches_live_dom() {
         (
             "scout-css-scope-raw-inline",
             "@@[[module CSS]]x{}[[/module]]@@",
-            "<p><span style=\"white-space: pre-wrap;\">[[module CSS]]x{}[[/module]]</span></p>",
+            "<p><span style=\"white-space: pre-wrap;\">[[module&#32;CSS]]x{}[[/module]]</span></p>",
         ),
         (
             "scout-css-scope-comment",

@@ -149,6 +149,8 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_tab_quote_ejection: Cell<bool>,
     wikidot_body_soft_ended: Cell<bool>,
     colon_line_vanished: Cell<bool>,
+    line_follows_block: Cell<bool>,
+    bare_div_literal: Cell<bool>,
     wikidot_bibliography_speculation: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,

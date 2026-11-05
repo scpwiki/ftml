@@ -615,7 +615,7 @@ fn delayed_page_link_uses_legacy_source_projection_inside_inline_raw() {
         render("BEGIN|@@%%title_linked%%@@|END"),
         concat!(
             "<p>BEGIN|<span style=\"white-space: pre-wrap;\">",
-            "[[[component:image-block | Standard Image Block]]]",
+            "[[[component:image-block&#32;|&#32;Standard&#32;Image&#32;Block]]]",
             "</span>|END</p>",
         ),
     );
@@ -1416,8 +1416,8 @@ fn delayed_raw_decodes_entities_and_div_shell_keeps_the_parsed_opener() {
     assert_eq!(
         render("@@&amp; %%title_linked%%@@"),
         concat!(
-            r#"<p><span style="white-space: pre-wrap;">&amp; "#,
-            "[[[component:image-block | Standard Image Block]]]",
+            r#"<p><span style="white-space: pre-wrap;">&amp;&#32;"#,
+            "[[[component:image-block&#32;|&#32;Standard&#32;Image&#32;Block]]]",
             "</span></p>",
         ),
     );
@@ -1462,7 +1462,9 @@ fn delayed_raw_adjacency_does_not_flatten_generated_or_runtime_values() {
         "{generated}",
     );
     assert!(
-        generated.contains("[[[component:image-block | Standard Image Block]]]"),
+        generated.contains(
+            "[[[component:image-block&#32;|&#32;Standard&#32;Image&#32;Block]]]"
+        ),
         "{generated}",
     );
 
@@ -1480,7 +1482,9 @@ fn delayed_raw_inside_math_rolls_back_without_erasing_values() {
     let generated = render("[[$OUTER @@%%title_linked%%@@ TAIL$]]");
     assert!(!generated.contains("math-inline"), "{generated}");
     assert!(
-        generated.contains("[[[component:image-block | Standard Image Block]]]"),
+        generated.contains(
+            "[[[component:image-block&#32;|&#32;Standard&#32;Image&#32;Block]]]"
+        ),
         "{generated}",
     );
     assert!(generated.contains("[[$OUTER "), "{generated}");
@@ -1566,7 +1570,7 @@ fn recovery_projections_preserve_complete_page_references() {
             "@@%%title_linked%%@@",
             concat!(
                 r#"<p><span style="white-space: pre-wrap;">"#,
-                "[[[:other-wiki:target-page#toc2 | Remote Target]]]",
+                "[[[:other-wiki:target-page#toc2&#32;|&#32;Remote&#32;Target]]]",
                 "</span></p>",
             ),
         ),

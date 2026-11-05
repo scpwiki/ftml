@@ -200,6 +200,10 @@ where
                             stack.mark_wikidot_invisible_line_occupancy();
                         }
                     }
+                    parser.set_wikidot_line_follows_block(
+                        stack.wikidot_line_break_follows_block(),
+                    );
+                    parser.take_wikidot_bare_div_literal();
                     match consume(parser) {
                         Ok(consumed) => Some(consumed),
                         Err(error)
@@ -351,6 +355,9 @@ where
                 } else {
                     push_elements(&mut stack, elements, paragraph_safe);
                 }
+            }
+            if parser.take_wikidot_bare_div_literal() {
+                stack.mark_next_unwrapped();
             }
             if colon_line_vanished && parser.settings().layout.legacy() {
                 stack.mark_current_unwrapped();

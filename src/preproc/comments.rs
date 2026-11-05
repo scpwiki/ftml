@@ -9,6 +9,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
     let literal_regions = LiteralRegionIndex::new(text);
     let block_name_comments = regular_block_name_comment_starts(text);
     let spec_comments = iftags_spec_comment_starts(text);
+    let code_closer_comments = code_closer_comment_starts(text);
     let mut output = String::with_capacity(text.len());
     let mut copied_until = 0usize;
     let mut scan = 0usize;
@@ -21,6 +22,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
         if literal_regions.contains(open)
             || block_name_comments.contains(&open)
             || spec_comments.contains(&open)
+            || code_closer_comments.contains(&open)
         {
             scan = open + "[!--".len();
             continue;
@@ -261,6 +263,41 @@ fn leading_comment_remains_an_owner_barrier(
 
     let tail = source[close..].trim_start_matches([' ', '\t']);
     !exposed_line_start_construct(tail)
+}
+
+fn code_closer_comment_starts(source: &str) -> BTreeSet<usize> {
+    let mut comments = BTreeSet::new();
+    let mut cursor = 0usize;
+    while let Some(relative_open) = source[cursor..].find("[!--") {
+        let open = cursor + relative_open;
+        cursor = open + "[!--".len();
+        let before = &source[..open];
+        if !before.ends_with("]]") {
+            continue;
+        }
+        let Some(marker) = before.rfind("[[") else {
+            continue;
+        };
+        if !source[marker..].starts_with("[[/") {
+            continue;
+        }
+        let head = &source[marker + "[[/".len()..open - "]]".len()];
+        if !head.eq_ignore_ascii_case("code") {
+            continue;
+        }
+        let close_search = open + "[!--".len();
+        let Some(relative_close) = source[close_search..].find("--]") else {
+            continue;
+        };
+        let rest = &source[close_search + relative_close + "--]".len()..];
+        if rest.is_empty()
+            || rest.starts_with([' ', '\t', '\r', '\n'])
+            || rest.starts_with("[!--")
+        {
+            comments.insert(open);
+        }
+    }
+    comments
 }
 
 fn iftags_spec_comment_starts(source: &str) -> BTreeSet<usize> {

@@ -305,6 +305,31 @@ impl Parser<'_, '_> {
         marked
     }
 
+    pub(crate) fn set_wikidot_line_follows_block(&mut self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .line_follows_block
+            .set(value);
+    }
+
+    pub(crate) fn wikidot_line_follows_block(&self) -> bool {
+        self.block_end_scan_cache.borrow().line_follows_block.get()
+    }
+
+    pub(crate) fn mark_wikidot_bare_div_literal(&mut self) {
+        self.block_end_scan_cache
+            .borrow()
+            .bare_div_literal
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_bare_div_literal(&mut self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .bare_div_literal
+            .replace(false)
+    }
+
     pub(crate) fn mark_wikidot_colon_line_vanished(&mut self) {
         self.block_end_scan_cache
             .borrow()
