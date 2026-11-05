@@ -193,6 +193,86 @@ pub(super) fn preserve_wikidot_document_indentation_barrier(text: &mut String) {
     }
 }
 
+/// Live Wikidot drops the ASCII whitespace that directly precedes a
+/// `[[footnote]]` reference before line-oriented block parsing, so a block
+/// head written on the previous line no longer owns its line and falls back to
+/// literal text. Literal regions keep their authored whitespace.
+pub(super) fn remove_wikidot_space_before_footnote(text: &mut String) {
+    const FOOTNOTE: &str = "[[footnote]]";
+
+    if !text.contains(FOOTNOTE) {
+        return;
+    }
+
+    let literal = LiteralRegionIndex::new(text);
+    let mut removals: Vec<Range<usize>> = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(relative) = text[cursor..].find(FOOTNOTE) {
+        let start = cursor + relative;
+        cursor = start + FOOTNOTE.len();
+        if literal.contains(start) {
+            continue;
+        }
+
+        let mut space_start = start;
+        while space_start > 0
+            && matches!(
+                text.as_bytes()[space_start - 1],
+                b' ' | b'\t' | b'\r' | b'\n'
+            )
+        {
+            space_start -= 1;
+        }
+        if space_start == start {
+            continue;
+        }
+        if wikidot_line_end_required_closer(&text[..space_start]) {
+            // Live keeps a code or math closer's own line ending: joining it
+            // to the footnote would turn the whole block into literal text.
+            // Only the blank whitespace after that line ending is dropped, so
+            // the reference renders bare like live instead of paragraph-wrapped.
+            if let Some(newline) = text[space_start..start].find('\n') {
+                let removal_start = space_start + newline + 1;
+                if removal_start < start {
+                    removals.push(removal_start..start);
+                }
+            }
+            continue;
+        }
+        if !removals
+            .last()
+            .is_some_and(|previous| previous.end >= space_start)
+        {
+            removals.push(space_start..start);
+        }
+    }
+
+    if removals.is_empty() {
+        return;
+    }
+
+    let mut output = String::with_capacity(text.len());
+    let mut last_copied = 0;
+    for removal in removals {
+        output.push_str(&text[last_copied..removal.start]);
+        last_copied = removal.end;
+    }
+    output.push_str(&text[last_copied..]);
+    *text = output;
+}
+
+fn wikidot_line_end_required_closer(text: &str) -> bool {
+    let trimmed = text.trim_end_matches([' ', '\t', '\r', '\n']);
+    let Some(close_start) = trimmed.rfind("[[/") else {
+        return false;
+    };
+    let Some(name) = trimmed[close_start + 3..].strip_suffix("]]") else {
+        return false;
+    };
+    let name = name.split_ascii_whitespace().next().unwrap_or_default();
+    name.eq_ignore_ascii_case("code") || name.eq_ignore_ascii_case("math")
+}
+
 pub(super) fn preserve_wikidot_terminal_backslash_run(text: &mut String) {
     let trailing_newline_start = text.trim_end_matches(['\r', '\n']).len();
     if trailing_newline_start < text.len()

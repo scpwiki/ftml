@@ -192,6 +192,7 @@ fn preprocess_internal(text: &mut String, wikidot_compatibility: bool) {
 
     debug!("Beginning preprocessing of text ({} bytes)", text.len());
     if wikidot_compatibility {
+        whitespace::remove_wikidot_space_before_footnote(text);
         whitespace::preserve_wikidot_document_indentation_barrier(text);
         whitespace::expose_wikidot_replacement_markers(text);
         whitespace::preserve_wikidot_terminal_backslash_run(text);
