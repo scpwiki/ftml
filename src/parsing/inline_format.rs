@@ -190,6 +190,7 @@ fn normalize_sequence_scoped<'t>(
     inside_monospace: bool,
 ) {
     normalize_sequence_passes(elements, inside_monospace);
+    hoist_kept_leading_space_pass(elements);
     normalize_sequence_children(elements);
     lower_dash_runs(elements);
     substitute_number_unit_spaces(elements);
@@ -257,6 +258,112 @@ fn is_segment_container(element: &Element<'_>) -> bool {
         element,
         Element::List { .. } | Element::DefinitionList(_) | Element::Table(_)
     )
+}
+
+fn hoist_kept_leading_space_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut changed = false;
+    let mut index = 0;
+    while index < elements.len() {
+        if hoist_kept_leading_space_at(elements, index) {
+            changed = true;
+            if kept_space_separator_before(elements, index) {
+                elements.insert(index, Element::Text(Cow::Borrowed(" ")));
+                index += 1;
+            }
+        }
+        index += 1;
+    }
+    changed
+}
+
+fn hoist_kept_leading_space_at<'t>(
+    elements: &mut Vec<Element<'t>>,
+    index: usize,
+) -> bool {
+    if matches!(
+        &elements[index],
+        Element::Partial(PartialElement::InlineFormatOpen(
+            InlineFormatKind::Monospace
+        )) | Element::Partial(PartialElement::InlineColorOpen(..))
+    ) {
+        return strip_partial_leading_run(elements, index);
+    }
+    match &mut elements[index] {
+        Element::Container(container)
+            if container.ctype() == ContainerType::Monospace =>
+        {
+            strip_kept_leading_run(container.elements_mut())
+        }
+        Element::Color { elements, .. } => strip_kept_leading_run(elements),
+        _ => false,
+    }
+}
+
+fn strip_kept_leading_run(children: &mut Vec<Element<'_>>) -> bool {
+    let Some(Element::Text(first)) = children.first() else {
+        return false;
+    };
+    let run = leading_pad_run_len(first);
+    if run == 0 {
+        return false;
+    }
+    if run < first.len() {
+        if !first[run..].starts_with("--") {
+            return false;
+        }
+        let rest = first[run..].to_owned();
+        children[0] = Element::Text(Cow::Owned(rest));
+        return true;
+    }
+    if !children.get(1).is_some_and(kept_space_dash_follows) {
+        return false;
+    }
+    children.remove(0);
+    true
+}
+
+fn strip_partial_leading_run<'t>(elements: &mut Vec<Element<'t>>, index: usize) -> bool {
+    let Some(Element::Text(next)) = elements.get(index + 1) else {
+        return false;
+    };
+    let run = leading_pad_run_len(next);
+    if run == 0 {
+        return false;
+    }
+    if run < next.len() {
+        let rest = next[run..].to_owned();
+        elements[index + 1] = Element::Text(Cow::Owned(rest));
+    } else {
+        elements.remove(index + 1);
+    }
+    true
+}
+
+fn leading_pad_run_len(text: &str) -> usize {
+    text.bytes()
+        .take_while(|byte| matches!(byte, b' ' | b'\t'))
+        .count()
+}
+
+fn kept_space_dash_follows(element: &Element<'_>) -> bool {
+    if is_plain_strike(element) {
+        return true;
+    }
+    matches!(element, Element::Text(text) if text.starts_with("--"))
+}
+
+fn kept_space_separator_before(elements: &[Element<'_>], index: usize) -> bool {
+    let Some(previous) = index.checked_sub(1).and_then(|prev| elements.get(prev)) else {
+        return false;
+    };
+    match previous {
+        Element::Text(text) => text
+            .chars()
+            .last()
+            .is_some_and(|ch| !ch.is_ascii_whitespace()),
+        Element::LineBreak | Element::LineBreaks(_) => false,
+        _ => true,
+    }
 }
 
 fn normalize_sequence_passes<'t>(
@@ -1384,6 +1491,7 @@ fn normalize_segments<'t>(segments: &mut [&mut Vec<Element<'t>>]) {
         }
     }
     for segment in segments.iter_mut() {
+        hoist_kept_leading_space_pass(segment);
         normalize_sequence_children(segment);
         lower_dash_runs(segment);
         substitute_number_unit_spaces(segment);

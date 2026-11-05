@@ -1,0 +1,11 @@
+[
+    {
+        "token": "right-monospace",
+        "rule": "fallback",
+        "span": [
+            7,
+            9
+        ],
+        "kind": "no-rules-match"
+    }
+]

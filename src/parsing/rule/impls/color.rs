@@ -142,6 +142,10 @@ fn try_consume_fn<'r, 't>(
         collect_consume_keep(parser, RULE_COLOR, close, &invalid, None)?
     };
     let ((mut elements, terminator), errors, paragraph_safe) = body.into();
+    let unformed_dash = legacy
+        && !table_owned
+        && terminator.token == Token::Color
+        && unform_strike_ate_close(&mut elements);
     if let Some(prefix) = body_pipe_prefix {
         elements.insert(0, prefix);
     }
@@ -152,7 +156,11 @@ fn try_consume_fn<'r, 't>(
     }
 
     let body_was_empty = elements.is_empty();
-    let leading_space = take_edge_space(&mut elements, true);
+    let leading_space = if unformed_dash {
+        None
+    } else {
+        take_edge_space(&mut elements, true)
+    };
     let trailing_space = take_edge_space(&mut elements, false);
     if legacy
         && elements.iter().all(
@@ -189,6 +197,10 @@ fn try_consume_fn<'r, 't>(
     output.push(element);
     if !spaces_vanish && let Some(space) = trailing_space {
         output.push(space);
+    }
+    if unformed_dash {
+        output.push(text!("--"));
+        output.push(text!("##"));
     }
 
     ok!(paragraph_safe; Elements::Multiple(output), errors)
@@ -240,6 +252,62 @@ fn is_table_column_token(token: Token) -> bool {
             | Token::TableColumnCenter
             | Token::TableColumnRight
     )
+}
+
+fn unform_strike_ate_close<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let mut path: Vec<usize> = Vec::new();
+    let mut here: &[Element<'t>] = elements;
+    loop {
+        let Some(last) = here.last() else {
+            return false;
+        };
+        match last {
+            Element::Container(container)
+                if container.ctype() == ContainerType::Strikethrough
+                    && container.attributes().get().is_empty() =>
+            {
+                let ate = matches!(
+                    container.elements().last(),
+                    Some(Element::Text(text)) if text.as_ref() == "##",
+                );
+                if !ate {
+                    return false;
+                }
+                break;
+            }
+            Element::Container(container)
+                if container.attributes().get().is_empty()
+                    && matches!(
+                        container.ctype(),
+                        ContainerType::Bold
+                            | ContainerType::Italics
+                            | ContainerType::Underline
+                            | ContainerType::Subscript
+                            | ContainerType::Superscript
+                            | ContainerType::Monospace,
+                    ) =>
+            {
+                path.push(here.len() - 1);
+                here = container.elements();
+            }
+            _ => return false,
+        }
+    }
+    let mut slot: &mut Vec<Element<'t>> = elements;
+    for index in path {
+        let Element::Container(container) = &mut slot[index] else {
+            return false;
+        };
+        slot = container.elements_mut();
+    }
+    let Some(Element::Container(strike)) = slot.pop() else {
+        return false;
+    };
+    let mut children: Vec<Element<'t>> = strike.into();
+    children.pop();
+    slot.push(text!("--"));
+    slot.extend(children);
+    true
 }
 
 fn take_edge_space<'t>(
