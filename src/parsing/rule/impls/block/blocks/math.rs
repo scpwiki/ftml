@@ -228,9 +228,7 @@ fn parse_wikidot_math_head(text: &str) -> Option<(Option<&str>, Option<&str>)> {
             return None;
         }
         rest = &rest[1..];
-        let Some(end) = rest.find('"') else {
-            return None;
-        };
+        let end = rest.find('"')?;
         let value = &rest[..end];
         rest = &rest[end + 1..];
         if !rest.is_empty() && !(rest.starts_with(' ') || rest.starts_with('\t')) {

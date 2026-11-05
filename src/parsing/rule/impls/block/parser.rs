@@ -1514,12 +1514,6 @@ where
             .is_some_and(|before| before.ends_with(b"\n"))
     }
 
-    /// Whether the parser sits just past a math closer followed by trailing
-    /// text on its line (as opposed to blanks running to the line end).
-    fn at_wikidot_math_tail_close(&self) -> bool {
-        self.current().token == Token::Whitespace && !self.at_blank_line_remainder()
-    }
-
     fn at_blank_line_remainder(&self) -> bool {
         if self.current().token != Token::Whitespace {
             return false;
@@ -2246,20 +2240,31 @@ where
 
             if let Some(end) = at_end_block {
                 if nested_wikidot_math > 0 {
+                    if Self::wikidot_math_closer_closes_nested_body(
+                        self.full_text().inner(),
+                        end.span.start,
+                    ) {
+                        return Ok((start, end));
+                    }
                     nested_wikidot_math -= 1;
                     last_nested_close = Some((end, self.clone()));
                     self.update(&before_end);
                 } else if wikidot_math
-                    && self.at_wikidot_math_tail_close()
                     && Self::math_body_has_unclosed_opener(
                         self.full_text().inner(),
                         start.span.start,
                         end.span.start,
                     )
+                    && !Self::wikidot_math_closer_closes_nested_body(
+                        self.full_text().inner(),
+                        end.span.start,
+                    )
                 {
-                    // A trailing-text closer with an unclosed opener still in
-                    // the body does not end the block; it nests like any other
-                    // closer, so a later closer can still merge the whole span.
+                    // With an unclosed opener still in the body (including one
+                    // live does not count as a nested opener), a closer that
+                    // is not the clean closer ending the last run of clean
+                    // closer lines stays body text, so a later closer can
+                    // still merge the whole span.
                     last_nested_close = Some((end, self.clone()));
                     self.update(&before_end);
                 } else {
@@ -2385,17 +2390,73 @@ where
         parts.next().is_none() && name.is_none_or(super::blocks::wikidot_math_name)
     }
 
+    /// Whether the text at `rest` begins with a clean math closer line.
+    ///
+    /// Clean means the closer is the whole line: no trailing blanks or
+    /// text before the line break. Live Wikidot only ends a body that has
+    /// an unclosed nested opener pending at the first closer of the last
+    /// contiguous run of clean closer lines; a closer with trailing blanks
+    /// stays body text.
+    fn wikidot_math_clean_closer_line(rest: &str) -> bool {
+        let line = rest.split('\n').next().unwrap_or(rest);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        line.eq_ignore_ascii_case("[[/math]]")
+    }
+
+    /// Whether a closer with an unclosed opener still in the body is the
+    /// one live Wikidot ends the block at: a clean closer line directly
+    /// followed by another clean closer line, with no clean closer after
+    /// that run.
+    fn wikidot_math_closer_closes_nested_body(text: &str, closer_start: usize) -> bool {
+        if !Self::wikidot_math_clean_closer_line(&text[closer_start..]) {
+            return false;
+        }
+        let Some(newline) = text[closer_start..].find('\n') else {
+            return false;
+        };
+        let next = closer_start + newline + 1;
+        if next >= text.len() || !Self::wikidot_math_clean_closer_line(&text[next..]) {
+            return false;
+        }
+        !Self::wikidot_math_later_clean_closer(text, closer_start)
+    }
+
     /// Whether the parser sits on the math body's head break: the line break
     /// that ends the head's own line.
     ///
     /// An opener right after it directly continues the head, so live Wikidot
-    /// does not count it as a nested opener (a clean closer then still ends
-    /// the block). An opener on any later line counts, so a clean closer
-    /// merges forward instead. The span check covers both body-start shapes
-    /// (at the head's newline, or on the token right after the head).
+    /// does not count it as a nested opener. An opener on any later line
+    /// counts, so a clean closer merges forward instead. The span check
+    /// covers both body-start shapes (at the head's newline, or on the token
+    /// right after the head).
     fn at_wikidot_math_body_head_break(&self, start: &ExtractedToken<'_>) -> bool {
         self.current().span.start == start.span.start
             || self.current().span.start == start.span.end
+    }
+
+    /// Whether a clean math closer line follows the run of clean closer
+    /// lines that starts at `closer_start`.
+    fn wikidot_math_later_clean_closer(text: &str, closer_start: usize) -> bool {
+        let mut position = closer_start;
+        loop {
+            let Some(newline) = text[position..].find('\n') else {
+                return false;
+            };
+            position += newline + 1;
+            if !Self::wikidot_math_clean_closer_line(&text[position..]) {
+                break;
+            }
+        }
+        while position < text.len() {
+            if Self::wikidot_math_clean_closer_line(&text[position..]) {
+                return true;
+            }
+            let Some(newline) = text[position..].find('\n') else {
+                return false;
+            };
+            position += newline + 1;
+        }
+        false
     }
 
     fn at_wikidot_crossed_math_close(&self, first_iteration: bool) -> bool {

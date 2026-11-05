@@ -1,0 +1,46 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": "type=align",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "a b",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "\"a\" type=\"align\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type = \"align\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type='align'",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "a-b",
+                "latex-source": "x"
+            }
+        }
+    ]
+}

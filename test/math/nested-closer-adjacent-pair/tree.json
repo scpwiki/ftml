@@ -1,0 +1,32 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": null,
+                "latex-source": "A\n[[math]]\nB"
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "math"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        }
+    ]
+}
