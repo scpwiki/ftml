@@ -149,10 +149,24 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                     }
                 });
 
+            let tab_count = items
+                .iter()
+                .filter(|item| matches!(item, TabViewItem::Tab(_)))
+                .count();
             ctx.html()
                 .div()
                 .attr(attr!("class" => "yui-content"))
                 .inner(|ctx| {
+                    if tab_count == 0 {
+                        ctx.html().tag("p").inner(|ctx| {
+                            for item in items {
+                                if let TabViewItem::Content(elements) = item {
+                                    render_elements(ctx, elements);
+                                }
+                            }
+                        });
+                        return;
+                    }
                     let mut tab_index = 0usize;
                     for item in items {
                         match item {

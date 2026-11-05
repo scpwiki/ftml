@@ -1,0 +1,15 @@
+[[tabview]]
+[[tab  ]] x [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab	]] x [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab 	]] x [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab[!-- x --]]] x [[/tab]]
+[[/tabview]]

@@ -1,0 +1,22 @@
+[[tabview]]
+[[tab ]] x [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab
+]] y [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab ]] x [[/tab]]
+[[tab
+]] y [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab ]] **bold** [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab ]] [[span]]hi[[/span]] [[/tab]]
+[[/tabview]]
