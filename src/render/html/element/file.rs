@@ -15,21 +15,18 @@ use crate::tree::FileSource;
 use std::borrow::Cow;
 
 pub fn render_file_link(ctx: &mut HtmlContext, file: &str, label: &str) {
-    let source = if ctx.layout().legacy() {
-        parse_wikidot_file_link_source(file)
+    let url = if ctx.layout().legacy() {
+        get_wikidot_file_link_url(ctx, file)
     } else {
-        Some(FileSource::File1 {
-            file: std::borrow::Cow::Borrowed(file),
-        })
+        ctx.handle().get_file_link(
+            &FileSource::File1 {
+                file: Cow::Borrowed(file),
+            },
+            ctx.info(),
+            ctx.settings(),
+        )
     };
-    let Some(source) = source else {
-        ctx.push_escaped(label);
-        return;
-    };
-    let Some(url) = ctx
-        .handle()
-        .get_file_link(&source, ctx.info(), ctx.settings())
-    else {
+    let Some(url) = url else {
         ctx.push_escaped(label);
         return;
     };
@@ -52,21 +49,27 @@ pub fn render_file_link(ctx: &mut HtmlContext, file: &str, label: &str) {
     anchor.contents(label);
 }
 
-fn parse_wikidot_file_link_source(file: &str) -> Option<FileSource<'_>> {
-    if (file.starts_with('"') && file.ends_with('"'))
-        || (file.starts_with('\'') && file.ends_with('\''))
-    {
-        if let Some((page, name)) = file.rsplit_once('/') {
-            return Some(FileSource::File2 {
-                page: Cow::Borrowed(page),
-                file: Cow::Borrowed(name),
-            });
-        }
-        return Some(FileSource::File1 {
-            file: Cow::Borrowed(file),
-        });
+fn get_wikidot_file_link_url<'a>(
+    ctx: &HtmlContext,
+    file: &'a str,
+) -> Option<Cow<'a, str>> {
+    let (path, is_path) = match file.strip_prefix('/') {
+        Some(path) => (path, true),
+        None => (file, file.contains('/')),
+    };
+
+    if is_path {
+        ctx.handle()
+            .get_local_file_path_link(path, ctx.info(), ctx.settings())
+    } else {
+        ctx.handle().get_file_link(
+            &FileSource::File1 {
+                file: Cow::Borrowed(path),
+            },
+            ctx.info(),
+            ctx.settings(),
+        )
     }
-    FileSource::parse_wikidot(file)
 }
 
 fn encode_wikidot_file_href(href: &str) -> Cow<'_, str> {
@@ -91,31 +94,6 @@ fn encode_wikidot_file_href(href: &str) -> Cow<'_, str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn wikidot_file_link_source_preserves_opaque_path_data() {
-        assert_eq!(
-            parse_wikidot_file_link_source("../elements.tsv"),
-            Some(FileSource::File2 {
-                page: std::borrow::Cow::Borrowed(".."),
-                file: std::borrow::Cow::Borrowed("elements.tsv"),
-            }),
-        );
-        assert_eq!(
-            parse_wikidot_file_link_source("page/../elements.tsv"),
-            Some(FileSource::File2 {
-                page: std::borrow::Cow::Borrowed("page/.."),
-                file: std::borrow::Cow::Borrowed("elements.tsv"),
-            }),
-        );
-        assert_eq!(
-            parse_wikidot_file_link_source("other-page/elements.tsv"),
-            Some(FileSource::File2 {
-                page: std::borrow::Cow::Borrowed("other-page"),
-                file: std::borrow::Cow::Borrowed("elements.tsv"),
-            }),
-        );
-    }
 
     #[test]
     fn wikidot_file_href_encodes_spaces_and_non_ascii_without_normalizing_path() {
