@@ -891,6 +891,9 @@ fn resolve_elements(
                 PartialElement::TableCell(cell) => {
                     resolve_elements(&mut cell.elements, bindings, resolved_occurrences)?;
                 }
+                PartialElement::WikidotFoster(elements) => {
+                    resolve_elements(elements, bindings, resolved_occurrences)?;
+                }
                 PartialElement::Tab(tab) => {
                     resolve_elements(&mut tab.elements, bindings, resolved_occurrences)?;
                 }
@@ -974,6 +977,7 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
                 .iter()
                 .any(|cell| elements_contain_delayed(&cell.elements)),
             PartialElement::TableCell(cell) => elements_contain_delayed(&cell.elements),
+            PartialElement::WikidotFoster(elements) => elements_contain_delayed(elements),
             PartialElement::Tab(tab) => elements_contain_delayed(&tab.elements),
             PartialElement::RubyText(text) => elements_contain_delayed(&text.elements),
             PartialElement::WikidotEmptyInlineOwner

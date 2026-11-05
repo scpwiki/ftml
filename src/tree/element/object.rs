@@ -487,6 +487,7 @@ impl Element<'_> {
                     }
                 }
                 PartialElement::TableCell(cell) => offset_elements(&mut cell.elements),
+                PartialElement::WikidotFoster(elements) => offset_elements(elements),
                 PartialElement::Tab(tab) => offset_elements(&mut tab.elements),
                 PartialElement::RubyText(ruby_text) => {
                     offset_elements(&mut ruby_text.elements);

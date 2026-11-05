@@ -18,9 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::clone::elements_to_owned;
 use super::{
-    Alignment, AnchorTarget, AttributeMap, ContainerType, ListItem, RubyText, Tab,
-    TableCell, TableRow,
+    Alignment, AnchorTarget, AttributeMap, ContainerType, Element, ListItem, RubyText,
+    Tab, TableCell, TableRow,
 };
 use crate::parsing::ParseErrorKind;
 use std::borrow::Cow;
@@ -140,6 +141,17 @@ pub enum WikidotBlockCloseKind {
     Align { head: usize },
 }
 
+impl WikidotBlockCloseKind {
+    pub fn head_byte(self) -> usize {
+        match self {
+            WikidotBlockCloseKind::Div { head, .. }
+            | WikidotBlockCloseKind::Collapsible { head }
+            | WikidotBlockCloseKind::Note { head }
+            | WikidotBlockCloseKind::Align { head } => head,
+        }
+    }
+}
+
 /// Part of an element, as returned by a rule.
 ///
 /// These are used by specific rules attempting to
@@ -152,6 +164,8 @@ pub enum PartialElement<'t> {
     WikidotBlockOpen(WikidotBlockShell<'t>),
 
     WikidotBlockClose(WikidotBlockCloseKind),
+
+    WikidotFoster(Vec<Element<'t>>),
 
     InlineSizeOpen(Cow<'t, str>, Cow<'t, str>),
 
@@ -190,6 +204,7 @@ impl PartialElement<'_> {
             PartialElement::WikidotEmptyInlineOwner => "WikidotEmptyInlineOwner",
             PartialElement::WikidotBlockOpen(_) => "WikidotBlockOpen",
             PartialElement::WikidotBlockClose(_) => "WikidotBlockClose",
+            PartialElement::WikidotFoster(_) => "WikidotFoster",
             PartialElement::InlineSizeOpen(..) => "InlineSizeOpen",
             PartialElement::InlineSizeClose(_) => "InlineSizeClose",
             PartialElement::InlineSpanOpen(..) => "InlineSpanOpen",
@@ -214,6 +229,7 @@ impl PartialElement<'_> {
             PartialElement::WikidotEmptyInlineOwner
             | PartialElement::WikidotBlockOpen(_)
             | PartialElement::WikidotBlockClose(_)
+            | PartialElement::WikidotFoster(_)
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)
@@ -242,6 +258,9 @@ impl PartialElement<'_> {
             }
             PartialElement::WikidotBlockClose(kind) => {
                 PartialElement::WikidotBlockClose(*kind)
+            }
+            PartialElement::WikidotFoster(elements) => {
+                PartialElement::WikidotFoster(elements_to_owned(elements))
             }
             PartialElement::InlineSizeOpen(value, head) => {
                 PartialElement::InlineSizeOpen(
@@ -346,6 +365,8 @@ impl AcceptsPartial {
                 | (AcceptsPartial::TableCell, PartialElement::TableCell(_))
                 | (AcceptsPartial::Tab, PartialElement::Tab(_))
                 | (AcceptsPartial::Ruby, PartialElement::RubyText(_))
+                | (AcceptsPartial::TableRow, PartialElement::WikidotFoster(_))
+                | (AcceptsPartial::TableCell, PartialElement::WikidotFoster(_))
         )
     }
 }

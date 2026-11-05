@@ -305,6 +305,7 @@ fn render_partial(ctx: &mut TextContext, partial: &PartialElement) {
             ctx.add_newline();
         }
         PartialElement::TableCell(cell) => render_elements(ctx, &cell.elements),
+        PartialElement::WikidotFoster(elements) => render_elements(ctx, elements),
         PartialElement::Tab(tab) => {
             if !ctx.ends_with_newline() {
                 ctx.add_newline();

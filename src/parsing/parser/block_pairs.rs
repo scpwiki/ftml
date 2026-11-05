@@ -77,6 +77,7 @@ pub(crate) struct WikidotBlockPairs {
     by_closer_byte: BTreeMap<usize, usize>,
     head_event_bytes: BTreeSet<usize>,
     closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
+    foster_heads: BTreeSet<usize>,
 }
 
 impl WikidotBlockPairs {
@@ -110,10 +111,8 @@ impl WikidotBlockPairs {
         self.pairs.is_empty()
     }
 
-    pub(crate) fn byte_inside_any_span(&self, byte: usize) -> bool {
-        self.by_closer_byte.iter().any(|(closer_start, index)| {
-            *closer_start > byte && self.pairs[*index].head_byte < byte
-        })
+    pub(crate) fn is_foster_head(&self, head_byte: usize) -> bool {
+        self.foster_heads.contains(&head_byte)
     }
 
     pub(crate) fn shows_stolen_head(
@@ -1126,6 +1125,46 @@ impl<'t> Scanner<'t> {
             }
             self.pairs[a].flat = flat;
         }
+        let tables: Vec<(usize, usize)> = self
+            .pairs
+            .iter()
+            .enumerate()
+            .filter(|(_, pair)| pair.kind == WikidotBlockKind::Table)
+            .map(|(index, _)| ranges[index])
+            .collect();
+        let mut sources: Vec<(usize, usize)> = Vec::new();
+        let mut foster_heads = BTreeSet::new();
+        for (index, pair) in self.pairs.iter().enumerate() {
+            if !pair.flat || !pair.kind.emits_flat() {
+                continue;
+            }
+            let closer_byte = self.tokens[pair.closer].span.start;
+            let innermost = tables
+                .iter()
+                .filter(|(start, end)| *start <= closer_byte && closer_byte < *end)
+                .max_by_key(|(start, _)| *start);
+            if innermost.is_some_and(|(start, _)| pair.head_byte < *start) {
+                sources.push(ranges[index]);
+                foster_heads.insert(pair.head_byte);
+            }
+        }
+        let mut by_size: Vec<usize> = (0..self.pairs.len()).collect();
+        by_size.sort_by_key(|&index| ranges[index].1 - ranges[index].0);
+        for index in by_size {
+            if self.pairs[index].flat || !self.pairs[index].kind.emits_flat() {
+                continue;
+            }
+            let (start, end) = ranges[index];
+            let contains_source = sources.iter().any(|(inner_start, inner_end)| {
+                start <= *inner_start
+                    && *inner_end <= end
+                    && (start, end) != (*inner_start, *inner_end)
+            });
+            if contains_source {
+                self.pairs[index].flat = true;
+                sources.push((start, end));
+            }
+        }
         let by_head = self
             .pairs
             .iter()
@@ -1151,6 +1190,7 @@ impl<'t> Scanner<'t> {
             by_closer_byte,
             head_event_bytes: self.head_event_bytes,
             closer_event_bytes: self.closer_event_bytes,
+            foster_heads,
         }
     }
 
@@ -1265,7 +1305,7 @@ impl<'t> Scanner<'t> {
             Some(WikidotBlockKind::Table) => {
                 if let Some(measure) = self.measure_table(i, &head, end, depth) {
                     let next = measure.end;
-                    self.apply_measure(measure, depth);
+                    self.apply_measure(measure, depth, events, true);
                     next
                 } else {
                     head.head_end
@@ -1277,7 +1317,7 @@ impl<'t> Scanner<'t> {
                 }
                 if let Some(measure) = self.measure_tabview(i, &head, end, depth) {
                     let next = measure.end;
-                    self.apply_measure(measure, depth);
+                    self.apply_measure(measure, depth, events, false);
                     next
                 } else {
                     head.head_end
@@ -1475,10 +1515,20 @@ impl<'t> Scanner<'t> {
         text.eq_ignore_ascii_case(expected)
     }
 
-    fn apply_measure(&mut self, measure: Measure, depth: usize) {
+    fn apply_measure(
+        &mut self,
+        measure: Measure,
+        depth: usize,
+        events: &mut Vec<Event>,
+        transparent: bool,
+    ) {
         self.pairs.extend(measure.pairs);
         for (child_start, child_end) in measure.children {
-            self.scan_segment(child_start, child_end, depth + 1);
+            if transparent {
+                self.walk_range(child_start, child_end, depth + 1, events);
+            } else {
+                self.scan_segment(child_start, child_end, depth + 1);
+            }
         }
     }
 
@@ -2190,6 +2240,7 @@ impl<'t> Scanner<'t> {
             rows += 1;
             let mut cells = 0_usize;
             let mut rpos = row_head.head_end;
+            let mut surplus = false;
             let (row_closer, row_closer_end) = loop {
                 rpos = self.skip_structure_space(rpos, limit)?;
                 if let Some(close) = self.read_kind_closer(rpos, WikidotBlockKind::Row) {
@@ -2197,6 +2248,17 @@ impl<'t> Scanner<'t> {
                         return None;
                     }
                     break (rpos, close.head_end);
+                }
+                if let Some(close) = self.read_kind_closer(rpos, WikidotBlockKind::Cell) {
+                    if cells == 0 {
+                        return None;
+                    }
+                    surplus = true;
+                    rpos = close.head_end;
+                    continue;
+                }
+                if surplus {
+                    return None;
                 }
                 cells += 1;
                 let cell_head = self.read_kind_head(rpos, WikidotBlockKind::Cell)?;

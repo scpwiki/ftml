@@ -854,6 +854,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     );
     drop_empty_inline_scopes(elements);
     drop_vanished_paragraphs(elements);
+    splice_wikidot_foster(elements);
     lowered
 }
 
@@ -884,6 +885,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     eject_segment_trailing_space(elements);
     drop_empty_inline_scopes(elements);
     drop_vanished_paragraphs(elements);
+    splice_wikidot_foster(elements);
 }
 
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
@@ -928,8 +930,28 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
         );
         eject_segment_trailing_space(elements);
         drop_empty_inline_scopes(elements);
+        splice_wikidot_foster(elements);
     }
     bibliography.set_reopened_wrappers(reopened);
+}
+
+fn splice_wikidot_foster<'t>(elements: &mut Vec<Element<'t>>) {
+    for element in elements.iter_mut() {
+        visit_children_mut(element, &mut splice_wikidot_foster);
+    }
+    if !elements.iter().any(|element| {
+        matches!(element, Element::Partial(PartialElement::WikidotFoster(_)))
+    }) {
+        return;
+    }
+    let mut spliced = Vec::with_capacity(elements.len());
+    for element in elements.drain(..) {
+        match element {
+            Element::Partial(PartialElement::WikidotFoster(tail)) => spliced.extend(tail),
+            element => spliced.push(element),
+        }
+    }
+    *elements = spliced;
 }
 
 fn collect_valid_scope_pairs(
@@ -2646,6 +2668,7 @@ fn lower_bibliography_block<'t>(
         );
         eject_segment_trailing_space(elements);
         drop_empty_inline_scopes(elements);
+        splice_wikidot_foster(elements);
     }
     bibliography.set_reopened_wrappers(reopened);
 }
@@ -3641,6 +3664,44 @@ fn partial_scope_class(partial: &PartialElement<'_>) -> Option<(usize, bool)> {
     }
 }
 
+fn lower_cell_like<'t>(
+    elements: &mut Vec<Element<'t>>,
+    valid: &BTreeSet<usize>,
+    ordinal: &mut usize,
+    active: &mut ActiveScopes<'t>,
+    bib: &mut Option<BibliographyLowering<'_, 't>>,
+) {
+    let start = *ordinal;
+    let mut cell_active = ActiveScopes {
+        close_pairs: active.close_pairs.clone(),
+        lifo_close_pairs: active.lifo_close_pairs.clone(),
+        cell_local: true,
+        ..Default::default()
+    };
+    let mut cell_trim = false;
+    lower_sequence(
+        elements,
+        valid,
+        ordinal,
+        &mut cell_active,
+        &mut cell_trim,
+        false,
+        false,
+        bib,
+    );
+    strip_trailing_space_from_vec(elements);
+    let end = *ordinal;
+    let retire: Vec<usize> = active
+        .close_pairs
+        .iter()
+        .filter(|(close, open)| **open < start && start <= **close && **close < end)
+        .filter_map(|(_, open)| active.open_instances.get(open).copied())
+        .collect();
+    for lineage in retire {
+        active.retire_scope_by_lineage(lineage);
+    }
+}
+
 fn lower_children<'t>(
     element: &mut Element<'t>,
     valid: &BTreeSet<usize>,
@@ -3653,39 +3714,14 @@ fn lower_children<'t>(
     if let Element::Table(table) = element {
         for row in &mut table.rows {
             for cell in &mut row.cells {
-                let start = *ordinal;
-                let mut cell_active = ActiveScopes {
-                    close_pairs: active.close_pairs.clone(),
-                    lifo_close_pairs: active.lifo_close_pairs.clone(),
-                    cell_local: true,
-                    ..Default::default()
-                };
-                let mut cell_trim = false;
-                lower_sequence(
-                    &mut cell.elements,
-                    valid,
-                    ordinal,
-                    &mut cell_active,
-                    &mut cell_trim,
-                    false,
-                    false,
-                    bib,
-                );
-                strip_trailing_space_from_vec(&mut cell.elements);
-                let end = *ordinal;
-                let retire: Vec<usize> = active
-                    .close_pairs
-                    .iter()
-                    .filter(|(close, open)| {
-                        **open < start && start <= **close && **close < end
-                    })
-                    .filter_map(|(_, open)| active.open_instances.get(open).copied())
-                    .collect();
-                for lineage in retire {
-                    active.retire_scope_by_lineage(lineage);
-                }
+                lower_cell_like(&mut cell.elements, valid, ordinal, active, bib);
             }
         }
+        return true;
+    }
+
+    if let Element::Partial(PartialElement::WikidotFoster(tail)) = element {
+        lower_cell_like(tail, valid, ordinal, active, bib);
         return true;
     }
 
@@ -3852,6 +3888,7 @@ fn visit_children<'t>(element: &Element<'t>, visit: &mut dyn FnMut(&[Element<'t>
                 }
             }
             PartialElement::TableCell(cell) => visit(&cell.elements),
+            PartialElement::WikidotFoster(elements) => visit(elements),
             PartialElement::Tab(tab) => visit(&tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner
@@ -3922,6 +3959,7 @@ fn visit_children_mut<'t>(
                 }
             }
             PartialElement::TableCell(cell) => visit(&mut cell.elements),
+            PartialElement::WikidotFoster(elements) => visit(elements),
             PartialElement::Tab(tab) => visit(&mut tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&mut ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner

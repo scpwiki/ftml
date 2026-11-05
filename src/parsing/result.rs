@@ -20,7 +20,7 @@
 
 use crate::parsing::Parser;
 use crate::parsing::error::ParseError;
-use crate::tree::{Element, Elements, ListType};
+use crate::tree::{Element, Elements, ListType, PartialElement};
 use std::marker::PhantomData;
 
 pub type ParseResult<'r, 't, T> = Result<ParseSuccess<'r, 't, T>, ParseError>;
@@ -158,6 +158,7 @@ impl<'t> ParseSuccess<'_, 't, Elements<'t>> {
             if let Element::Partial(partial) = element {
                 if partial.is_inline_format_control()
                     || partial.is_wikidot_block_control()
+                    || matches!(partial, PartialElement::WikidotFoster(_))
                 {
                     continue;
                 }

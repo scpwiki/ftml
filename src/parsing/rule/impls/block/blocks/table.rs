@@ -167,17 +167,30 @@ where
     Ok(parsed)
 }
 
+#[allow(clippy::type_complexity)]
 fn extract_table_rows<'r, 't>(
     parser: &Parser<'r, 't>,
     elements: Vec<Element<'t>>,
-) -> Result<(Vec<TableRow<'t>>, Vec<Cow<'t, str>>), ParseError> {
+) -> Result<(Vec<TableRow<'t>>, Vec<Cow<'t, str>>, Vec<Element<'t>>), ParseError> {
     let mut rows = Vec::new();
     let mut residuals = Vec::new();
+    let mut foster = Vec::new();
 
     for element in elements {
         match element {
             Element::Partial(PartialElement::TableRow(row)) => {
                 rows.push(row);
+            }
+
+            Element::Partial(PartialElement::WikidotFoster(_)) => {
+                foster.push(element);
+            }
+
+            Element::Partial(
+                PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_),
+            ) => {
+                foster.push(element);
             }
 
             Element::Text(text) if is_cell_closer(&text) => {
@@ -192,20 +205,33 @@ fn extract_table_rows<'r, 't>(
         }
     }
 
-    Ok((rows, residuals))
+    Ok((rows, residuals, foster))
 }
 
+#[allow(clippy::type_complexity)]
 fn extract_table_cells<'r, 't>(
     parser: &Parser<'r, 't>,
     elements: Vec<Element<'t>>,
-) -> Result<(Vec<TableCell<'t>>, Vec<Cow<'t, str>>), ParseError> {
+) -> Result<(Vec<TableCell<'t>>, Vec<Cow<'t, str>>, Vec<Element<'t>>), ParseError> {
     let mut cells = Vec::new();
     let mut residuals = Vec::new();
+    let mut foster = Vec::new();
 
     for element in elements {
         match element {
             Element::Partial(PartialElement::TableCell(cell)) if residuals.is_empty() => {
                 cells.push(cell);
+            }
+
+            Element::Partial(PartialElement::WikidotFoster(_)) => {
+                foster.push(element);
+            }
+
+            Element::Partial(
+                PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_),
+            ) => {
+                foster.push(element);
             }
 
             Element::Text(text) if !cells.is_empty() && is_cell_closer(&text) => {
@@ -220,7 +246,58 @@ fn extract_table_cells<'r, 't>(
         }
     }
 
-    Ok((cells, residuals))
+    Ok((cells, residuals, foster))
+}
+
+fn split_wikidot_foster<'t>(
+    parser: &Parser<'_, '_>,
+    elements: Vec<Element<'t>>,
+) -> (Vec<Element<'t>>, Vec<Element<'t>>, bool) {
+    if !parser.settings().layout.legacy() {
+        return (elements, Vec::new(), false);
+    }
+    let split = elements.iter().position(|element| {
+        matches!(
+            element,
+            Element::Partial(PartialElement::WikidotBlockClose(kind))
+                if parser.wikidot_close_is_foster(kind.head_byte())
+        )
+    });
+    match split {
+        Some(index) => {
+            let mut cell = elements;
+            let mut foster = cell.split_off(index);
+            foster.remove(0);
+            let pre = partition_wikidot_foster(foster);
+            (cell, pre, true)
+        }
+        None => (elements, Vec::new(), false),
+    }
+}
+
+fn partition_wikidot_foster<'t>(tail: Vec<Element<'t>>) -> Vec<Element<'t>> {
+    let mut pre = Vec::new();
+    let mut run = Vec::new();
+    for element in tail {
+        let hoisted = matches!(
+            element,
+            Element::Partial(ref partial) if partial.is_wikidot_block_control()
+        );
+        if hoisted {
+            if !run.is_empty() {
+                pre.push(Element::Partial(PartialElement::WikidotFoster(
+                    std::mem::take(&mut run),
+                )));
+            }
+            pre.push(element);
+        } else {
+            run.push(element);
+        }
+    }
+    if !run.is_empty() {
+        pre.push(Element::Partial(PartialElement::WikidotFoster(run)));
+    }
+    pre
 }
 
 fn is_cell_closer(source: &str) -> bool {
@@ -464,7 +541,8 @@ fn parse_table<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let (mut rows, residuals) = match extract_table_rows(parser, parsed.elements) {
+    let (mut rows, residuals, foster) = match extract_table_rows(parser, parsed.elements)
+    {
         Ok(value) => value,
         Err(error) => {
             if let Some(owner_start) = owner_start {
@@ -502,21 +580,25 @@ fn parse_table<'r, 't>(
     };
     let element = Element::Table(table);
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_TABLE);
-    if residuals.is_empty() {
+    if residuals.is_empty() && foster.is_empty() {
         if fused_close {
             ok!(false; vec![element, text!("]")], errors)
         } else {
             ok!(false; element, errors)
         }
     } else {
-        let mut elements = Vec::with_capacity(residuals.len() * 2 + 1);
+        let mut elements = Vec::with_capacity(foster.len() + residuals.len() * 2 + 1);
+        elements.extend(foster);
+        let has_residuals = !residuals.is_empty();
         for (index, residual) in residuals.into_iter().enumerate() {
             if index > 0 {
                 elements.push(Element::LineBreak);
             }
             elements.push(Element::Text(residual));
         }
-        elements.push(text!("\n"));
+        if has_residuals {
+            elements.push(text!("\n"));
+        }
         elements.push(element);
         if fused_close {
             elements.push(text!("]"));
@@ -578,7 +660,7 @@ fn parse_row<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let (cells, residuals) = extract_table_cells(parser, parsed.elements)?;
+    let (cells, residuals, foster) = extract_table_cells(parser, parsed.elements)?;
     if cells.is_empty() && parser.settings().layout.legacy() {
         return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
     }
@@ -587,11 +669,12 @@ fn parse_row<'r, 't>(
 
     let row = TableRow { cells, attributes };
     let element = Element::Partial(PartialElement::TableRow(row));
-    if residuals.is_empty() {
+    if residuals.is_empty() && foster.is_empty() {
         ok!(false; element, errors)
     } else {
         let mut elements = residuals.into_iter().map(Element::Text).collect::<Vec<_>>();
         elements.push(element);
+        elements.extend(foster);
         ok!(false; Elements::Multiple(elements), errors)
     }
 }
@@ -720,17 +803,20 @@ fn parse_cell_regular<'r, 't>(
         }
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    let preserve_single_paragraph = legacy && source.contains("\n\n");
+    let (cell_elements, foster, had_foster) =
+        split_wikidot_foster(parser, parsed.elements);
+    let preserve_single_paragraph = legacy && (source.contains("\n\n") || had_foster);
     let header = legacy && cell_closer_is_header(&probe, source_end);
 
     parse_cell(
-        parsed.elements,
+        cell_elements,
         parsed.attributes,
         parsed.errors,
         header,
         legacy,
         preserve_single_paragraph,
         legacy,
+        foster,
     )
 }
 
@@ -783,17 +869,20 @@ fn parse_cell_header<'r, 't>(
         }
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    let preserve_single_paragraph = legacy && source.contains("\n\n");
+    let (cell_elements, foster, had_foster) =
+        split_wikidot_foster(parser, parsed.elements);
+    let preserve_single_paragraph = legacy && (source.contains("\n\n") || had_foster);
     let header = cell_closer_is_header(&probe, source_end);
 
     parse_cell(
-        parsed.elements,
+        cell_elements,
         parsed.attributes,
         parsed.errors,
         header,
         legacy,
         preserve_single_paragraph,
         legacy,
+        foster,
     )
 }
 
@@ -801,6 +890,7 @@ fn cell_closer_is_header<'r: 't, 't>(probe: &Parser<'r, 't>, end: usize) -> bool
     explicit_closer_name(probe, end).as_deref() == Some("hcell")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_cell<'r, 't>(
     mut elements: Vec<Element<'t>>,
     mut attributes: AttributeMap<'t>,
@@ -809,6 +899,7 @@ fn parse_cell<'r, 't>(
     wikidot_paragraphs: bool,
     preserve_single_paragraph: bool,
     legacy: bool,
+    foster: Vec<Element<'t>>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     trim_cell_whitespace(&mut elements);
     if wikidot_paragraphs {
@@ -861,7 +952,14 @@ fn parse_cell<'r, 't>(
     };
     let element = Element::Partial(PartialElement::TableCell(cell));
 
-    ok!(false; element, errors)
+    if foster.is_empty() {
+        ok!(false; element, errors)
+    } else {
+        let mut elements = Vec::with_capacity(foster.len() + 1);
+        elements.push(element);
+        elements.extend(foster);
+        ok!(false; Elements::Multiple(elements), errors)
+    }
 }
 
 fn column_span_one() -> NonZeroU32 {
@@ -1268,9 +1366,17 @@ mod tests {
             Element::Text(cow!("Cell")),
             Element::Text(cow!(" ")),
         ];
-        let success =
-            parse_cell(elements, attributes, Vec::new(), false, false, false, true)
-                .unwrap();
+        let success = parse_cell(
+            elements,
+            attributes,
+            Vec::new(),
+            false,
+            false,
+            false,
+            true,
+            Vec::new(),
+        )
+        .unwrap();
         let Elements::Single(Element::Partial(PartialElement::TableCell(cell))) =
             success.item
         else {

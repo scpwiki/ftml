@@ -358,6 +358,7 @@ fn exercise_partial_element_helpers(partial: &PartialElement<'_>) -> usize {
             .map(|cell| exercise_elements_helpers(&cell.elements))
             .sum(),
         PartialElement::TableCell(cell) => exercise_elements_helpers(&cell.elements),
+        PartialElement::WikidotFoster(elements) => exercise_elements_helpers(elements),
         PartialElement::Tab(tab) => exercise_elements_helpers(&tab.elements),
         PartialElement::RubyText(text) => exercise_elements_helpers(&text.elements),
     }

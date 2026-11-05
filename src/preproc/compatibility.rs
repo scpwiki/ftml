@@ -1493,6 +1493,14 @@ fn canonicalize_crossed_center_collapsible_closers(
                         index += 1;
                         continue;
                     }
+                    let early = candidate
+                        .early_center_close
+                        .expect("crossed close candidate has an early closer");
+                    if preserve_early_close && early + 1 != index {
+                        pending = None;
+                        index += 1;
+                        continue;
+                    }
                     let Some(insertion_line) = crossed_center_close_insertion_line(
                         lines,
                         literal_lines,
@@ -1504,9 +1512,6 @@ fn canonicalize_crossed_center_collapsible_closers(
                         index += 1;
                         continue;
                     };
-                    let early = candidate
-                        .early_center_close
-                        .expect("crossed close candidate has an early closer");
                     if !preserve_early_close || early + 1 == index {
                         let (_, early_ending) = split_line(&lines[early]);
                         lines[early] = format!("{}{early_ending}", candidate.prefix);
@@ -2063,18 +2068,7 @@ mod tests {
 
         let mut wikidot = original.to_owned();
         substitute_for_layout(&mut wikidot, true);
-        assert_eq!(
-            wikidot,
-            concat!(
-                "> [[=]]\n",
-                "> [[collapsible show=\"poetry\" hide=\"poetry\"]]\n",
-                "> [[/=]]\n",
-                "> originally written here\n",
-                "> [[/collapsible]]\n",
-                "> [[/=]]\n",
-                "outside\n",
-            ),
-        );
+        assert_eq!(wikidot, original);
     }
 
     #[test]
