@@ -919,6 +919,25 @@ fn remove_tight_quote_lines(lines: &mut [String], literal_lines: &[bool]) {
         let indentation = body
             .strip_suffix(trimmed)
             .expect("trimmed quote body must remain a suffix of the source line");
+        // Live extracts a footnote body before a tight quote line is dropped,
+        // so the body survives even though the line renders nothing. Keep a
+        // tight line that opens with a footnote reference in the spaced-quote
+        // shape the footnote-first ownership rule understands: the parser then
+        // drops the reference with the row and leaves the body registered.
+        let marker_depth = trimmed.bytes().take_while(|byte| *byte == b'>').count();
+        if trimmed[marker_depth..].starts_with(FOOTNOTE_HEAD) {
+            let depth = marker_depth
+                .max(active_quote_depth)
+                .max(1)
+                .min(MAX_SYNTHESIZED_QUOTE_DEPTH);
+            *line = format!(
+                "{indentation}{} {}{ending}",
+                ">".repeat(depth),
+                &trimmed[marker_depth..],
+            );
+            active_quote_depth = depth;
+            continue;
+        }
         if active_quote_depth == 0 {
             *line = ending.to_owned();
         } else {
@@ -927,6 +946,11 @@ fn remove_tight_quote_lines(lines: &mut [String], literal_lines: &[bool]) {
         }
     }
 }
+
+/// A footnote reference head that opens a tight quote line. The whitespace
+/// before a reference is removed before this pass runs, so a quote marker
+/// directly followed by the reference no longer forms a valid quote depth.
+const FOOTNOTE_HEAD: &str = "[[footnote]]";
 
 fn valid_quote_depth(body: &str) -> usize {
     let body = body.trim_start_matches([' ', '\t']);

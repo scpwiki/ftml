@@ -547,6 +547,15 @@ fn parse_table<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    // Live loses the table head's line when the whitespace before a
+    // `[[footnote]]` reference is stripped and the reference joins the head
+    // line: the head no longer owns a line, so both table markers stay
+    // literal text and the reference renders on its own. A body that opens
+    // with a footnote reference therefore never forms a legacy table.
+    if legacy && table_body_opens_with_footnote(&parsed.elements) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let (mut rows, residuals, foster) = match extract_table_rows(parser, parsed.elements)
     {
         Ok(value) => value,
@@ -611,6 +620,18 @@ fn parse_table<'r, 't>(
         }
         ok!(false; Elements::Multiple(elements), errors)
     }
+}
+
+fn table_body_opens_with_footnote(elements: &[Element<'_>]) -> bool {
+    for element in elements {
+        match element {
+            Element::LineBreak => continue,
+            Element::Text(text) if text.chars().all(char::is_whitespace) => continue,
+            Element::Footnote(_) => return true,
+            _ => return false,
+        }
+    }
+    false
 }
 
 fn parse_row<'r, 't>(
