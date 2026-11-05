@@ -28,7 +28,7 @@ pub fn render_wikitext_raw(ctx: &mut HtmlContext, text: &str) {
             ctx.html()
                 .span()
                 .attr(attr!("style" => "white-space: pre-wrap;"))
-                .contents(text);
+                .inner(|ctx| ctx.push_escaped_wikidot_raw(text));
         }
         Layout::Wikijump => {
             ctx.html()

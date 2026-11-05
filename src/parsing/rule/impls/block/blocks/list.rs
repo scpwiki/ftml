@@ -921,7 +921,7 @@ Alpha
             concat!(
                 "<ul>\n",
                 "<li>Alpha<br>\n",
-                r#"<span style="white-space: pre-wrap;"> </span><br>"#,
+                r#"<span style="white-space: pre-wrap;">&#32;</span><br>"#,
                 "\n</li>\n",
                 "</ul>",
             ),

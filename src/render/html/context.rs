@@ -19,7 +19,7 @@
  */
 
 use super::builder::HtmlBuilder;
-use super::escape::escape;
+use super::escape::{escape, escape_wikidot_raw};
 use super::meta::{HtmlMeta, HtmlMetaType};
 use super::output::{HtmlOutput, HtmlResourceRequirement};
 use super::random::Random;
@@ -404,6 +404,11 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
     #[inline]
     pub fn push_escaped(&mut self, s: &str) {
         escape(self.buffer(), s);
+    }
+
+    #[inline]
+    pub fn push_escaped_wikidot_raw(&mut self, s: &str) {
+        escape_wikidot_raw(self.buffer(), s);
     }
 
     pub fn push_cached_table_of_contents<F>(&mut self, render: F)

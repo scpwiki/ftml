@@ -18,6 +18,34 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+pub fn escape_wikidot_raw(buffer: &mut String, s: &str) {
+    let mut start = 0;
+
+    for (index, byte) in s.bytes().enumerate() {
+        let escaped = match byte {
+            b' ' => "&#32;",
+            b'>' => "&gt;",
+            b'<' => "&lt;",
+            b'&' => "&amp;",
+            b'\'' => "&#39;",
+            b'"' => "&quot;",
+            b'\0' => " ",
+            _ => continue,
+        };
+
+        if start < index {
+            buffer.push_str(&s[start..index]);
+        }
+
+        buffer.push_str(escaped);
+        start = index + 1;
+    }
+
+    if start < s.len() {
+        buffer.push_str(&s[start..]);
+    }
+}
+
 pub fn escape(buffer: &mut String, s: &str) {
     let mut start = 0;
 
@@ -69,4 +97,16 @@ fn test() {
     );
     test!("null\0byte", "null byte");
     test!("日本語 < α & β", "日本語 &lt; α &amp; β");
+    macro_rules! test_raw {
+        ($input:expr, $expected:expr $(,)?) => {{
+            let mut buffer = String::new();
+            escape_wikidot_raw(&mut buffer, $input);
+
+            assert_eq!(&buffer, $expected, "Escaped HTML doesn't match expected");
+        }};
+    }
+
+    test_raw!("a 0 2px", "a&#32;0&#32;2px");
+    test_raw!(" a ", "&#32;a&#32;");
+    test_raw!("a&b <c>", "a&amp;b&#32;&lt;c&gt;");
 }
