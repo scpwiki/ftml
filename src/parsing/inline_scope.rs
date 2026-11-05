@@ -1242,6 +1242,21 @@ struct SequenceEffects {
     scored_span_opened_at_start: bool,
     scored_span_opened_unwrapped_at_start: bool,
     scored_span_closed: bool,
+    /// A scored span has closed in this sequence.
+    scored_span_closed_anywhere: bool,
+    /// Content (anything but a break or an enclosing scope's closer) was
+    /// lowered after the most recent scored span close.
+    scored_span_content_after: bool,
+    /// The sequence ends with a scored span: one closed here and nothing
+    /// followed it.
+    scored_span_at_end: bool,
+}
+
+struct ParagraphGroup<'t> {
+    wrapped: bool,
+    attributes: AttributeMap<'t>,
+    elements: Vec<Element<'t>>,
+    ends_with_scored_span: bool,
 }
 
 fn lower_root_sequence<'t>(
@@ -1253,7 +1268,7 @@ fn lower_root_sequence<'t>(
     bib: &mut Option<BibliographyLowering<'_, 't>>,
 ) {
     let mut output = Vec::with_capacity(elements.len());
-    let mut paragraph_group: Option<(bool, AttributeMap<'t>, Vec<Element<'t>>)> = None;
+    let mut paragraph_group: Option<ParagraphGroup<'t>> = None;
     let mut previous_scored_close = false;
     let mut pending: Vec<Element<'t>> = Vec::new();
 
@@ -1360,18 +1375,18 @@ fn lower_root_sequence<'t>(
             if !joins_previous {
                 flush_paragraph_group(&mut output, &mut paragraph_group);
             }
-            let (_, _, group) = paragraph_group.get_or_insert_with(|| {
-                (
-                    follows_table
-                        || reopens_paragraph_after_separator
-                        || !effects.scored_span_opened_unwrapped_at_start
-                            && !starts_in_scored_span
-                            && (!starts_in_inline_scope || continued_from_paragraph),
-                    paragraph_attributes,
-                    Vec::new(),
-                )
+            let group = paragraph_group.get_or_insert_with(|| ParagraphGroup {
+                wrapped: follows_table
+                    || reopens_paragraph_after_separator
+                    || !effects.scored_span_opened_unwrapped_at_start
+                        && !starts_in_scored_span
+                        && (!starts_in_inline_scope || continued_from_paragraph),
+                attributes: paragraph_attributes,
+                elements: Vec::new(),
+                ends_with_scored_span: false,
             });
-            group.append(container.elements_mut());
+            group.elements.append(container.elements_mut());
+            group.ends_with_scored_span = effects.scored_span_at_end;
             previous_scored_close = effects.scored_span_closed;
             continue;
         }
@@ -1544,7 +1559,7 @@ fn fold_scope_break_unit<'t>(
 
 fn flush_root_pending<'t>(
     output: &mut Vec<Element<'t>>,
-    paragraph_group: &mut Option<(bool, AttributeMap<'t>, Vec<Element<'t>>)>,
+    paragraph_group: &mut Option<ParagraphGroup<'t>>,
     pending: &mut Vec<Element<'t>>,
     valid: &BTreeSet<usize>,
     ordinal: &mut usize,
@@ -1640,11 +1655,22 @@ fn append_root_sequence<'t>(
 
 fn flush_paragraph_group<'t>(
     output: &mut Vec<Element<'t>>,
-    paragraph_group: &mut Option<(bool, AttributeMap<'t>, Vec<Element<'t>>)>,
+    paragraph_group: &mut Option<ParagraphGroup<'t>>,
 ) {
-    let Some((wrapped, attributes, mut elements)) = paragraph_group.take() else {
+    let Some(ParagraphGroup {
+        wrapped,
+        attributes,
+        mut elements,
+        ends_with_scored_span,
+    }) = paragraph_group.take()
+    else {
         return;
     };
+    // Live Wikidot does not wrap a run whose last content is a scored span:
+    // `[[span_]]x[[/span]]` renders as a bare `<span>x</span>`, while a run
+    // that continues after the span (even a trailing space) is wrapped.
+    // Captured 2026-11-05 against PagePreview.
+    let wrapped = wrapped && !ends_with_scored_span;
     if elements.is_empty() {
         return;
     }
@@ -1764,6 +1790,17 @@ fn lower_sequence<'t>(
 
     let mut source = mem::take(elements).into_iter().peekable();
     while let Some(mut element) = source.next() {
+        if effects.scored_span_closed_anywhere
+            && !matches!(
+                element,
+                Element::LineBreak
+                    | Element::LineBreaks(_)
+                    | Element::Partial(PartialElement::WikidotEmptyInlineOwner)
+                    | Element::Partial(PartialElement::InlineSpanClose(_))
+            )
+        {
+            effects.scored_span_content_after = true;
+        }
         if let Some(floor) = active.take_space_eject_floor() {
             let starts_with_space = matches!(
                 &element,
@@ -2122,6 +2159,8 @@ fn lower_sequence<'t>(
             }
             if scored {
                 effects.scored_span_closed = true;
+                effects.scored_span_closed_anywhere = true;
+                effects.scored_span_content_after = false;
                 *trim_next_break = true;
             }
             preserve_space_before_footnote |= preserve_empty_owner_space;
@@ -2648,6 +2687,8 @@ fn lower_sequence<'t>(
             last_run_outer_scope.reset();
         }
     }
+    effects.scored_span_at_end =
+        effects.scored_span_closed_anywhere && !effects.scored_span_content_after;
     flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
     if segment && active.any_live_unmaterialized() {
         emit_segment_copies(&mut output, &mut run, active, &mut last_run_outer_scope);

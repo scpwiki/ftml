@@ -131,9 +131,12 @@ fn empty_key_div_and_span_names_roll_back_separately_from_valid_attributes() {
             "[[span class=\"value\"]]body[[/span]]",
             "<p><span class=\"value\">body</span></p>",
         ),
+        // Live PagePreview leaves a run whose last content is a scored span
+        // unwrapped (captured 2026-11-05; same shape as
+        // span/fused-opener-scored-map-residual).
         (
             "[[span_ class=\"value\"]]body[[/span]]",
-            "<p><span class=\"value\">body</span></p>",
+            "<span class=\"value\">body</span>",
         ),
     ] {
         let (html, _, errors) = render_wikidot(source);
