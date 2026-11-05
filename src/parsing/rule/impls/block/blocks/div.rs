@@ -836,7 +836,8 @@ fn parse_fn<'r, 't>(
         } else {
             consume_wikidot_flat_head_break(parser, false)?;
         }
-        let attributes = wikidot_div_head_attributes(parser, &mut arguments);
+        let mut attributes = wikidot_div_head_attributes(parser, &mut arguments);
+        arguments.insert_explicit_empty_marker(&mut attributes);
         let shell = WikidotBlockShell::Div {
             head: opener_start,
             attributes,
@@ -1055,7 +1056,8 @@ fn parse_fn<'r, 't>(
         normalize_wikidot_div_elements(&mut elements, flag_score);
     }
 
-    let attributes = wikidot_div_head_attributes(parser, &mut arguments);
+    let mut attributes = wikidot_div_head_attributes(parser, &mut arguments);
+    arguments.insert_explicit_empty_marker(&mut attributes);
     let element =
         Element::Container(Container::new(ContainerType::Div, elements, attributes));
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_DIV);

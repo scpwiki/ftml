@@ -167,6 +167,7 @@ fn parse_fn<'r, 't>(
         }
         let mut attributes = arguments.to_attribute_map(parser.settings());
         super::super::arguments::retain_wikidot_html_attributes(&mut attributes);
+        arguments.insert_explicit_empty_marker(&mut attributes);
         for key in generated_attributes {
             match key {
                 "title" => {

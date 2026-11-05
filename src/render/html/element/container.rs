@@ -21,7 +21,7 @@
 use super::prelude::*;
 use crate::tree::{
     Container, ContainerType, HtmlTag, WIKIDOT_EMPTY_QUOTE_MARKER,
-    WIKIDOT_GENERATED_EMPTY_CLASS_MARKER,
+    WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER, WIKIDOT_GENERATED_EMPTY_CLASS_MARKER,
 };
 
 pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
@@ -84,6 +84,7 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
 
     let mut generated_class_attributes = None;
     let mut empty_quote_attributes = None;
+    let mut explicit_empty_value_attributes = None;
     let preserve_generated_empty_class = layout.legacy()
         && container.ctype() == ContainerType::Span
         && container
@@ -96,6 +97,29 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         .attributes()
         .get()
         .contains_key(WIKIDOT_EMPTY_QUOTE_MARKER);
+    // Attributes whose Wikidot head value evaluated to empty are emitted as
+    // `key=""` by live, unlike attributes live omits entirely.
+    let explicit_empty_value_names = layout.legacy().then(|| {
+        container
+            .attributes()
+            .get()
+            .get(WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER)
+            .map(|names| {
+                names
+                    .split(' ')
+                    .filter(|name| {
+                        !name.is_empty()
+                            && name.chars().all(|character| {
+                                character.is_ascii_alphanumeric() || character == '-'
+                            })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    });
+    let preserve_explicit_empty_values = explicit_empty_value_names
+        .as_ref()
+        .is_some_and(|names| !names.is_empty());
     let attributes = if preserve_generated_empty_class {
         let mut attributes = container.attributes().clone();
         attributes.remove(WIKIDOT_GENERATED_EMPTY_CLASS_MARKER);
@@ -104,6 +128,13 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         let mut attributes = container.attributes().clone();
         attributes.remove(WIKIDOT_EMPTY_QUOTE_MARKER);
         empty_quote_attributes.insert(attributes)
+    } else if preserve_explicit_empty_values {
+        let mut attributes = container.attributes().clone();
+        attributes.remove(WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER);
+        for name in explicit_empty_value_names.iter().flatten() {
+            attributes.remove(name);
+        }
+        explicit_empty_value_attributes.insert(attributes)
     } else {
         container.attributes()
     };
@@ -126,6 +157,12 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
             tag.attr(attr!("id" => id;; attributes))
         }
     };
+
+    if preserve_explicit_empty_values {
+        for name in explicit_empty_value_names.iter().flatten() {
+            tag.attr_single_quoted(name, &[]);
+        }
+    }
 
     if layout.legacy() && matches!(container.ctype(), ContainerType::Header(_)) {
         if container.elements().is_empty()

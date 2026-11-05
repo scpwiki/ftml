@@ -1,0 +1,13 @@
+{
+    "elements": [
+        {
+            "element": "table-of-contents",
+            "data": {
+                "attributes": {
+                    "title": "a]]b"
+                },
+                "align": null
+            }
+        }
+    ]
+}

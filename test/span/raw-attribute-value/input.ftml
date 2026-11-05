@@ -1,0 +1,7 @@
+[[span class="@@a@@"]]x[[/span]]
+
+[[span class="a@@b@@c"]]x[[/span]]
+
+[[span class="@@a"]]x[[/span]]
+
+[[span data-x="@<b>@"]]x[[/span]]

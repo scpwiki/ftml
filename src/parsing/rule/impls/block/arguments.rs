@@ -122,6 +122,9 @@ pub struct Arguments<'t> {
     inner: HashMap<ArgumentKey<'t>, Cow<'t, str>>,
     raw: Vec<RawModuleArgument<'t>>,
     bare: HashSet<ArgumentKey<'t>>,
+    /// Wikidot head attributes whose quoted value evaluated to empty because it
+    /// contained raw inline markup; live emits these as `key=""`.
+    explicit_empty: HashSet<ArgumentKey<'t>>,
     case_sensitive: bool,
     empty_key_present: bool,
     source_present: bool,
@@ -272,6 +275,35 @@ impl<'t> Arguments<'t> {
         self.empty_key_present
     }
 
+    #[inline]
+    pub(crate) fn mark_explicit_empty(&mut self, key: Cow<'t, str>) {
+        let key = self.key_cow(key);
+        self.explicit_empty.insert(key);
+    }
+
+    /// Records the attributes whose Wikidot-layout value evaluated to empty in
+    /// the block's attribute map, so the renderer can emit `key=""` for them.
+    pub(crate) fn insert_explicit_empty_marker(&self, attributes: &mut AttributeMap<'t>) {
+        if self.explicit_empty.is_empty() {
+            return;
+        }
+
+        let names: Vec<&str> = self
+            .explicit_empty
+            .iter()
+            .map(|key| key.as_str())
+            .filter(|name| attributes.get().keys().any(|key| key.as_ref() == *name))
+            .collect();
+        if names.is_empty() {
+            return;
+        }
+
+        attributes.insert(
+            crate::tree::WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER,
+            Cow::Owned(names.join(" ")),
+        );
+    }
+
     pub(crate) fn count_key(&self, key: &str) -> usize {
         self.raw
             .iter()
@@ -317,7 +349,6 @@ impl<'t> Arguments<'t> {
         let mut map = self.attribute_map_from_entries(settings, |_, _| true);
         if settings.layout.legacy()
             && let Some(value) = self.inner.get(&self.key("scrolling"))
-            && !contains_unresolved_wikidot_variable(value)
         {
             let value = normalize_wikidot_html_attribute_value(value);
             map.insert_wikidot_iframe_attribute("scrolling", value);
