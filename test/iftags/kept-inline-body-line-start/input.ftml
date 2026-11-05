@@ -1,0 +1,7 @@
+plain
+[[iftags +fruit]]B[[/iftags]]
+
+[[div]]
+D
+[[/div]]
+[[iftags +fruit]]C[[/iftags]]

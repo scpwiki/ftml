@@ -33,7 +33,7 @@ mod prelude {
 
 mod anchor;
 mod bibcite;
-mod block;
+pub(crate) mod block;
 mod blockquote;
 mod bold;
 mod center;

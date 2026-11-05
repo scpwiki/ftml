@@ -207,7 +207,8 @@ fn wikidot_document_leading_indented_list_requires_a_later_root_marker() {
 
 #[test]
 fn wikidot_closed_quote_prefixed_iftags_evaluate_before_native_quotes() {
-    // Live sandbox provenance: run-quoted-conditionals, 2026-07-13.
+    // Live sandbox provenance: run-quoted-conditionals, 2026-07-13;
+    // empty-spec rows re-adjudicated on saved pages, 2026-11-05.
     for (input, body, included) in [
         (
             "> [[iftags -codex-never]]\n> OMEGA_D1_TRUE\n> [[/iftags]]\nOMEGA_AFTER",
@@ -237,12 +238,12 @@ fn wikidot_closed_quote_prefixed_iftags_evaluate_before_native_quotes() {
         (
             ">[[iftags]]\nOMEGA_TIGHT_NOARG\n>[[/iftags]]\nOMEGA_AFTER",
             "OMEGA_TIGHT_NOARG",
-            true,
+            false,
         ),
         (
             "[[iftags]]\nOMEGA_ROOT_NOARG\n[[/iftags]]\nOMEGA_AFTER",
             "OMEGA_ROOT_NOARG",
-            true,
+            false,
         ),
         (
             ">> [[iftags +codex-never]]\n>> OMEGA_SHALLOW_FALSE\n> [[/iftags]]\nOMEGA_AFTER",

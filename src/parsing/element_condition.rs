@@ -76,13 +76,33 @@ impl<'t> ElementCondition<'t> {
     }
 
     pub fn check(conditions: &[ElementCondition], values: &[Cow<str>]) -> bool {
+        Self::check_with(conditions, values, |value, condition| value == condition)
+    }
+
+    pub(crate) fn check_ignore_ascii_case(
+        conditions: &[ElementCondition],
+        values: &[Cow<str>],
+    ) -> bool {
+        Self::check_with(conditions, values, |value, condition| {
+            value.eq_ignore_ascii_case(condition)
+        })
+    }
+
+    fn check_with<F>(
+        conditions: &[ElementCondition],
+        values: &[Cow<str>],
+        matches: F,
+    ) -> bool
+    where
+        F: Fn(&str, &str) -> bool,
+    {
         let mut required = true;
         let mut prohibited = true;
         let mut present = false;
         let mut had_present = false;
 
         for condition in conditions {
-            let has_value = values.contains(&condition.value);
+            let has_value = values.iter().any(|value| matches(value, &condition.value));
 
             match condition.ctype {
                 ElementConditionType::Required => required &= has_value,

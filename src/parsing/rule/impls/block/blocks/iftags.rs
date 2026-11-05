@@ -39,7 +39,6 @@ fn parse_conditions<'r, 't>(
     spec: Option<&'t str>,
 ) -> Result<Vec<ElementCondition<'t>>, ParseError> {
     match spec {
-        Some("-") if parser.settings().layout.legacy() => Ok(Vec::new()),
         Some(spec) if !parser.settings().layout.legacy() && spec.trim().is_empty() => {
             Err(parser.make_err(ParseErrorKind::BlockMissingArguments))
         }
@@ -291,6 +290,67 @@ fn spec_contains_complete_comment(spec: &str) -> bool {
     false
 }
 
+pub(crate) fn iftags_head_keeps_inline_body<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() {
+        return false;
+    }
+
+    let source = parser.full_text().inner();
+    let spec_start = parser.current().span.start;
+    let mut probe = parser.clone();
+    let (spec_end, head_end) = loop {
+        let token = probe.current();
+        match token.token {
+            Token::RightBlock => break (token.span.start, token.span.end),
+            Token::RightLink
+            | Token::LineBreak
+            | Token::ParagraphBreak
+            | Token::InputEnd
+            | Token::LeftBlock
+            | Token::LeftBlockEnd => return false,
+            _ => {
+                if probe.step().is_err() {
+                    return false;
+                }
+            }
+        }
+    };
+
+    let Some(spec) = source.get(spec_start..spec_end) else {
+        return false;
+    };
+    if spec_contains_complete_comment(spec) {
+        return false;
+    }
+    let conditions = ElementCondition::parse_cow(Cow::Owned(spec.to_owned()));
+    if !check_iftags(parser.page_info(), &conditions) {
+        return false;
+    }
+
+    let bytes = source.as_bytes();
+    let mut index = head_end;
+    while matches!(bytes.get(index), Some(b' ' | b'\t')) {
+        index += 1;
+    }
+    if matches!(bytes.get(index), None | Some(b'\n' | b'\r')) {
+        return false;
+    }
+
+    let mut body_probe = probe.clone();
+    if body_probe.step().is_err() {
+        return true;
+    }
+    match body_probe.wikidot_iftags_pairing_end().0 {
+        Some(body_end) => source
+            .get(head_end..body_end)
+            .is_some_and(|body| !body.trim().is_empty()),
+        None => true,
+    }
+}
+
 fn prepend_head_leftover<'r, 't>(
     result: ParseResult<'r, 't, Elements<'t>>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -373,11 +433,7 @@ where
             Ok(conditions) => conditions,
             Err(_) => return false,
         };
-        let include_body = if conditions.is_empty() && self.settings().layout.legacy() {
-            !self.page_info().tags.is_empty()
-        } else {
-            check_iftags(self.page_info(), &conditions)
-        };
+        let include_body = check_iftags(self.page_info(), &conditions);
         if include_body {
             return false;
         }
@@ -501,11 +557,7 @@ fn parse_fn<'r, 't>(
         parser.step()?;
     }
 
-    let include_body = if conditions.is_empty() && parser.settings().layout.legacy() {
-        !parser.page_info().tags.is_empty()
-    } else {
-        check_iftags(parser.page_info(), &conditions)
-    };
+    let include_body = check_iftags(parser.page_info(), &conditions);
 
     let legacy = parser.settings().layout.legacy();
     let mut designated_end = None;
@@ -1115,9 +1167,16 @@ fn gather_iftags_body_in_quote<'r, 't>(
     Ok(success)
 }
 
+pub(crate) fn iftags_conditions_match(
+    conditions: &[ElementCondition],
+    tags: &[Cow<str>],
+) -> bool {
+    !conditions.is_empty() && ElementCondition::check_ignore_ascii_case(conditions, tags)
+}
+
 pub fn check_iftags(info: &PageInfo, conditions: &[ElementCondition]) -> bool {
     trace!("Checking iftags");
-    ElementCondition::check(conditions, &info.tags)
+    iftags_conditions_match(conditions, &info.tags)
 }
 
 #[cfg(test)]
@@ -1128,7 +1187,7 @@ mod tests {
     use std::borrow::Cow;
 
     #[test]
-    fn iftags_no_arguments_follows_page_tags_and_conditions_check_page_tags() {
+    fn iftags_empty_conditions_drop_and_conditions_compare_tags() {
         let legacy = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tagless = PageInfo {
             tags: Vec::new(),
@@ -1150,7 +1209,7 @@ mod tests {
 
         for source in ["[[iftags]]body[[/iftags]]", "[[iftags   ]]body[[/iftags]]"] {
             assert!(!body_rendered(source, &tagless, &legacy), "{source}");
-            assert!(body_rendered(source, &tagged, &legacy), "{source}");
+            assert!(!body_rendered(source, &tagged, &legacy), "{source}");
         }
 
         assert!(!body_rendered(
@@ -1163,7 +1222,7 @@ mod tests {
             &tagged,
             &legacy
         ));
-        assert!(!body_rendered(
+        assert!(body_rendered(
             "[[iftags -]]body[[/iftags]]",
             &tagless,
             &legacy
@@ -1195,5 +1254,12 @@ mod tests {
 
         assert!(check_iftags(&info, &included));
         assert!(!check_iftags(&info, &excluded));
+        assert!(check_iftags(&info, &ElementCondition::parse("+ALPHA")));
+        assert!(!check_iftags(&info, &ElementCondition::parse("-ALPHA")));
+        assert!(check_iftags(&info, &ElementCondition::parse("GAMMA")));
+        assert!(!check_iftags(
+            &info,
+            &ElementCondition::parse("+alpha +gamma +beta")
+        ));
     }
 }
