@@ -88,6 +88,106 @@
                             },
                             "target": null
                         }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "/a:b",
+                            "label": {
+                                "slug": "b"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "_default-a:b",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "a:b"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": ":::a",
+                            "label": {
+                                "slug": ":a"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "fragment:_template",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "_template"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "fragment:_template",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "_template_"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a:_",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "__"
+                            },
+                            "target": null
+                        }
                     }
                 ]
             }

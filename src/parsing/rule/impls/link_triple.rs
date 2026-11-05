@@ -728,8 +728,36 @@ const COLON_PLACEHOLDER: &str = "\u{2b9}";
 /// `wikidot_normalize::normalize` pipeline except multi-category merging, so
 /// `a:b:c` keeps its colons and `_default:` still strips.
 fn normalize_triple_slug(text: &str) -> String {
-    let mut text = collapse_colon_runs(text);
+    // Live keeps a trailing `:_` (an underscore directly after a category
+    // colon, as in `fragment:_template`) and drops every other trailing run
+    // of `:`/`_` in a colon-bearing target.
+    let mut text = if text.contains(':') {
+        let keep = match text
+            .char_indices()
+            .rfind(|&(_, character)| character != ':' && character != '_')
+        {
+            Some((index, character)) => index + character.len_utf8(),
+            None => 0,
+        };
+        let tail = &text[keep..];
+        if tail.is_empty() || tail == ":_" {
+            text.to_owned()
+        } else {
+            text[..keep].to_owned()
+        }
+    } else {
+        text.to_owned()
+    };
+    text = collapse_colon_runs(&text);
     strip_default_category(&mut text);
+
+    if text.matches(':').count() <= 1 {
+        // With at most one category separator the stock pipeline already
+        // matches live, including an underscore directly after the colon.
+        normalize(&mut text);
+        return text;
+    }
+
     let mut protected = text.replace(':', COLON_PLACEHOLDER);
     normalize(&mut protected);
     let mut restored = protected.replace(COLON_PLACEHOLDER, ":");
@@ -752,6 +780,16 @@ fn triple_page_ref(target: &str) -> PageRef {
         site: None,
         page: normalize_triple_slug(page),
         extra,
+    }
+}
+
+/// Turns `/` in the page portion into `-`, leaving the `#` fragment raw:
+/// live triple-link fragments keep every character and are percent-encoded
+/// later, so `a#b/c` is `/a#b/c` while `a/b#c` is `/a-b#c`.
+fn replace_page_slashes(target: &str) -> String {
+    match target.split_once('#') {
+        Some((page, anchor)) => format!("{}#{anchor}", page.replace('/', "-")),
+        None => target.replace('/', "-"),
     }
 }
 
@@ -902,7 +940,7 @@ fn parse_link_location<'r, 't>(
         && (!is_url(&url) || !authored_url_prefix_is_url)
     {
         return Some((
-            LinkLocation::Page(triple_page_ref(&url.replace('/', "-"))),
+            LinkLocation::Page(triple_page_ref(&replace_page_slashes(&url))),
             LinkType::Page,
         ));
     }

@@ -48,6 +48,38 @@
                             },
                             "target": "new-tab"
                         }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a",
+                                "extra": "#b"
+                            },
+                            "label": {
+                                "slug": "a#b"
+                            },
+                            "target": "new-tab"
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": ":",
+                            "label": {
+                                "slug": ":"
+                            },
+                            "target": "new-tab"
+                        }
                     }
                 ]
             }

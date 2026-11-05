@@ -110,6 +110,92 @@
                             },
                             "target": null
                         }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a",
+                                "extra": "#b/c"
+                            },
+                            "label": {
+                                "slug": "a#b/c"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a:b",
+                                "extra": "/c#d"
+                            },
+                            "label": {
+                                "slug": "b/c#d"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a",
+                                "extra": "/b#c d"
+                            },
+                            "label": {
+                                "slug": "a/b#c d"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a",
+                                "extra": "##b"
+                            },
+                            "label": {
+                                "slug": "a##b"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "::a#b",
+                            "label": {
+                                "slug": "a#b"
+                            },
+                            "target": null
+                        }
                     }
                 ]
             }
