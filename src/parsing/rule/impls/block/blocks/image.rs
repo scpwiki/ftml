@@ -79,7 +79,9 @@ fn parse_fn<'r, 't>(
                 parser.get_head_field_map_wikidot(&BLOCK_IMAGE, in_head)?;
             let source_prefix_is_url = is_url(source.prefix_before_first_comment());
             (
-                discard_wikidot_controls(source.into_cow()),
+                split_wikidot_image_head_field(discard_wikidot_controls(
+                    source.into_cow(),
+                )),
                 source_prefix_is_url,
                 arguments,
             )
@@ -168,6 +170,17 @@ fn parse_fn<'r, 't>(
     };
 
     success_elements(element)
+}
+
+/// Live takes only the first whitespace-delimited token of an image head as
+/// the filename; later tokens are attribute-like. A head assembled across a
+/// gate seam keeps that whitespace inside the collected field, so split it
+/// here as well.
+fn split_wikidot_image_head_field<'t>(source: Cow<'t, str>) -> Cow<'t, str> {
+    match source.find(char::is_whitespace) {
+        Some(index) if index > 0 => Cow::Owned(source[..index].to_owned()),
+        _ => source,
+    }
 }
 
 fn parse_wikidot_image_source<'t>(

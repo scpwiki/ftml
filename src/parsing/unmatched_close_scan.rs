@@ -211,6 +211,10 @@ fn find_forward_line_break(
     (found, scanned)
 }
 
+/// The region an unmatched `[[/name]]` closer may claim as its single-link
+/// target runs to the end of the authored line: a complete block later on
+/// the same line owns the closer instead of the link, as live shows for
+/// `x[[/math]] [[eref eq1]]` (literal closer, then the equation reference).
 fn end_block_link_region_end(source: &str, start: usize) -> usize {
     let text = source;
     let bytes = text.as_bytes();
@@ -224,7 +228,7 @@ fn end_block_link_region_end(source: &str, start: usize) -> usize {
                     i = bytes.len();
                 }
             }
-        } else if bytes[i].is_ascii_whitespace() {
+        } else if matches!(bytes[i], b'\n' | b'\r') {
             region_end = i;
             break;
         } else {

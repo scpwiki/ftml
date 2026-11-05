@@ -242,6 +242,7 @@ where
             if split_batch.is_none() {
                 defer_suppression_seams(&mut stack, &mut elements);
             }
+            let fused_block_residual = take_fused_block_residual(&mut elements);
             let active_div = elements_contain_div(&elements);
             let list_has_same_line_residual = explicit_list_opener
                 && !paragraph_safe
@@ -368,6 +369,12 @@ where
             }
             if div_has_same_line_residual {
                 stack.mark_wikidot_same_line_div_residual();
+            }
+            if let Some(div_like) = fused_block_residual {
+                if div_like {
+                    stack.mark_wikidot_same_line_div_residual();
+                }
+                push_element(&mut stack, text!("]"), true);
             }
             if code_has_same_line_residual {
                 stack.mark_wikidot_same_line_code_residual();
@@ -568,6 +575,37 @@ fn elements_end_with_code(elements: &Elements<'_>) -> bool {
         }
         Elements::None => false,
     }
+}
+
+/// A fused closer leaves one `]` of the closer run appended to the block's
+/// own elements. Pull it back out so it enters the paragraph stack as inline
+/// text after the block: live keeps it in the same inline flow as the next
+/// authored line (`</div>\n]<br>\nafter`).
+fn take_fused_block_residual<'t>(elements: &mut Elements<'t>) -> Option<bool> {
+    let Elements::Multiple(parts) = elements else {
+        return None;
+    };
+    let residual = matches!(
+        parts.last(),
+        Some(Element::Text(text)) if text.as_ref() == "]"
+    );
+    if !residual || parts.len() < 2 {
+        return None;
+    }
+    let div_like = match parts.get(parts.len() - 2) {
+        Some(Element::Container(container)) => matches!(
+            container.ctype(),
+            ContainerType::Div
+                | ContainerType::Note
+                | ContainerType::Blockquote
+                | ContainerType::Align(_)
+        ),
+        Some(Element::Collapsible { .. }) => true,
+        Some(Element::Table(_)) => false,
+        _ => return None,
+    };
+    parts.pop();
+    Some(div_like)
 }
 
 fn elements_end_with_list(elements: &Elements<'_>) -> bool {

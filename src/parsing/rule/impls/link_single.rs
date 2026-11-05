@@ -245,6 +245,10 @@ where
     let tokens = parser.remaining();
     let region_end =
         parser.cached_end_block_link_region(parser.full_text().inner(), start);
+    // The head probe speculates later blocks on a clone that shares the
+    // footnote list; a footnote registered by a probe block that does not own
+    // this closer must not survive into the real parse.
+    let footnote_count = parser.footnote_count();
     let head_claimed =
         if let Some(outcome) = parser.end_block_link_head_outcome(tokens, region_end) {
             outcome
@@ -292,6 +296,9 @@ where
             parser.cache_end_block_link_head_outcome(tokens, region_end, saw_left_block);
             head_claimed
         };
+    if parser.footnote_count() != footnote_count {
+        parser.truncate_footnotes(footnote_count);
+    }
     if head_claimed {
         return Ok(None);
     }
