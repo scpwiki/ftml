@@ -2017,11 +2017,6 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     #[inline]
-    pub(crate) fn l85_depth(&self) -> usize {
-        self.depth
-    }
-
-    #[inline]
     pub fn set_accepts_partial(&mut self, value: AcceptsPartial) {
         self.accepts_partial = value;
     }

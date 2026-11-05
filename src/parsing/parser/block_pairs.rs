@@ -2786,6 +2786,7 @@ impl<'t> Scanner<'t> {
                                 head_byte,
                                 closer: inner_closer,
                                 closer_end: inner_end,
+                                closer_byte: 0,
                                 flat: false,
                             });
                             j = inner_end;
@@ -3309,6 +3310,16 @@ mod tests {
     #[test]
     #[test]
     fn block_pairs_differential() {
+        std::thread::Builder::new()
+            .name("block-pairs-differential".to_owned())
+            .stack_size(crate::parsing::DEEP_PARSE_STACK_BYTES)
+            .spawn(block_pairs_differential_body)
+            .expect("unable to start differential worker")
+            .join()
+            .expect("differential worker panicked");
+    }
+
+    fn block_pairs_differential_body() {
         let findings_set: std::collections::HashSet<(String, String)> = FINDINGS_TEXT
             .lines()
             .filter(|line| !line.is_empty())
@@ -3323,7 +3334,6 @@ mod tests {
         let mut inexact: Vec<String> = Vec::new();
         let mut total_pairs = 0_usize;
         for case in &cases {
-            eprintln!("L85DBG CASE {}", case.id);
             let tokenization = crate::tokenize(&case.source);
             let repaired = crate::parsing::repaired_tokenization_for_test(
                 &tokenization,

@@ -325,9 +325,6 @@ where
             // L85: a recovered literal div alongside a formed block is
             // nested (e.g. in a list item), never a genuine literal-div
             // line; don't start a literal run for it (e25-shape `<p><ul>`).
-            if div_literal_recovered && elements_contain_formed_block(&elements) {
-                eprintln!("L85DBG LITDIV pos={}", parser.current().span.start);
-            }
             if div_literal_recovered && !elements_contain_formed_block(&elements) {
                 stack.note_wikidot_div_literal_push();
             }

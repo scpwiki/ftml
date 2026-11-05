@@ -57,15 +57,6 @@ impl Rule {
         self,
         parser: &mut Parser<'r, 't>,
     ) -> ParseResult<'r, 't, Elements<'t>> {
-        if parser.l85_depth() > 50 {
-            eprintln!(
-                "L85DBG RULE {} pos={} depth={} tok={:?}",
-                self.name,
-                parser.current().span.start,
-                parser.l85_depth(),
-                parser.current().token,
-            );
-        }
         if let LineRequirement::StartOfLine = self.position
             && !parser.start_of_line()
         {

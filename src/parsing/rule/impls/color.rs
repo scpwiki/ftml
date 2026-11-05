@@ -40,7 +40,6 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Trying to create color container");
-    eprintln!("L85DBG COLOR pos={}", parser.current().span.start);
     let starts_line = parser.start_of_line();
     let head_start = parser.current().span.start;
     assert_step(parser, Token::Color)?;
