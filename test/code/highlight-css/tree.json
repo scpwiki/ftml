@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": ".a:hover { color: #fff; margin: 0 1px; }",
+                "language": "css",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": ".a:hover { color: #fff; margin: 0 1px; }",
+            "language": "css",
+            "name": null
+        }
+    ]
+}

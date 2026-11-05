@@ -2070,6 +2070,28 @@ where
         Ok(Cow::Borrowed(slice))
     }
 
+    /// Extracts a block body that must keep a trailing escaped line break.
+    ///
+    /// The tokenizer fuses a continuation backslash into the following line
+    /// break token (its slice is `"\\\n"`), so that token's span starts
+    /// *before* the backslash. Verbatim block bodies keep the backslash, so
+    /// the body has to extend through the token slice; the caller's trim
+    /// removes the resulting trailing newline.
+    pub fn get_body_text_keeping_continued_break(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<Cow<'t, str>, ParseError> {
+        let (start, end) = self.get_body_generic(block_rule, |_| Ok(()))?;
+        let end = if end.slice.starts_with('\\') {
+            end.span.end
+        } else {
+            end.span.start
+        };
+        Ok(Cow::Borrowed(
+            self.full_text().slice_range(start.span.start, end),
+        ))
+    }
+
     fn get_math_body_text(
         &mut self,
         block_rule: &BlockRule,
@@ -2194,7 +2216,12 @@ where
         loop {
             if let Some(end) = self.verify_end_block(first, block_rule, false, false) {
                 if end_blocks_to_skip == 0 {
-                    let slice = self.full_text().slice_partial(start, end);
+                    let end = if end.slice.starts_with('\\') {
+                        end.span.end
+                    } else {
+                        end.span.start
+                    };
+                    let slice = self.full_text().slice_range(start.span.start, end);
                     return Ok(Cow::Borrowed(slice));
                 }
                 end_blocks_to_skip -= 1;

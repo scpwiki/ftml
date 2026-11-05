@@ -1,0 +1,312 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "LEAD"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "BLANKS"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "\n\nx\n\n",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "TRAIL"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "SPACES"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "  x  ",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "MID"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "SPACE"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "KEPT"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "x \ny ",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "TABS"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "    y    ",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "NBSP"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": " x ",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "IDEOGRAPHIC"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "　x　",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "WS"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "LINE"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "BLANKED"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "x\n\ny",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "LEAD"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "WS"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "LINES"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "\n\nx\n\n",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "ALL"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "BLANK"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "code",
+            "data": {
+                "contents": "\n\n",
+                "language": null,
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "\n\nx\n\n",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "  x  ",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "x \ny ",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "    y    ",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": " x ",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "　x　",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "x\n\ny",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "\n\nx\n\n",
+            "language": null,
+            "name": null
+        },
+        {
+            "contents": "\n\n",
+            "language": null,
+            "name": null
+        }
+    ]
+}

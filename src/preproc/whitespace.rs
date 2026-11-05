@@ -326,7 +326,12 @@ fn normalize_wikidot_code_body_bytes(text: &mut String) {
 
         match character {
             '\t' if in_code || in_raw => output.push_str("    "),
-            '\u{00a0}' if in_code => output.push(' '),
+            // NOTE: Non-breaking spaces in code bodies are intentionally NOT
+            // converted here. Live serves them as regular spaces, but only
+            // after trailing-whitespace trimming (which preserves NBSP while
+            // stripping the spaces it would become); converting here would
+            // let the later trim eat them (codews:19). Conversion happens in
+            // `wikidot_trim_code_body`, after the trim.
             character
                 if (in_code || in_raw) && is_wikidot_discarded_control(character) => {}
             _ => output.push(character),
