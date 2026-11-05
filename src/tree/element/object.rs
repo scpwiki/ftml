@@ -281,6 +281,11 @@ pub enum Element<'t> {
         latex_source: Cow<'t, str>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         wikidot_block_open_elements: Vec<Element<'t>>,
+        /// Inline span/size scopes that cross this Wikidot math block also
+        /// wrap its rendered equation number. These are renderer-owned
+        /// compatibility wrappers, not authored math attributes.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        wikidot_label_spans: Vec<AttributeMap<'t>>,
     },
 
     #[serde(rename_all = "kebab-case")]
@@ -801,12 +806,17 @@ impl Element<'_> {
                 name,
                 latex_source,
                 wikidot_block_open_elements,
+                wikidot_label_spans,
             } => Element::Math {
                 name: option_string_to_owned(name),
                 latex_source: string_to_owned(latex_source),
                 wikidot_block_open_elements: elements_to_owned(
                     wikidot_block_open_elements,
                 ),
+                wikidot_label_spans: wikidot_label_spans
+                    .iter()
+                    .map(AttributeMap::to_owned)
+                    .collect(),
             },
             Element::MathInline { latex_source } => Element::MathInline {
                 latex_source: string_to_owned(latex_source),

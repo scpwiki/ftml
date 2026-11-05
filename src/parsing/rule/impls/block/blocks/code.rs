@@ -135,6 +135,7 @@ fn parse_fn<'r, 't>(
         language,
         name,
         wikidot_block_open_elements: Vec::new(),
+        wikidot_label_spans: Vec::new(),
     };
 
     let element = parser.push_code_block_element(code_block);

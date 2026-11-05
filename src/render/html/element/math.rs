@@ -41,6 +41,7 @@ pub fn render_math_block(
     name: Option<&str>,
     latex_source: &str,
     open_elements: &[Element],
+    label_spans: &[AttributeMap],
 ) {
     debug!(
         "Rendering math block (name '{}', source '{}')",
@@ -53,7 +54,7 @@ pub fn render_math_block(
         if let Some(name) = name {
             ctx.register_named_equation(name, index);
         }
-        render_wikidot_math_block(ctx, index, latex_source, open_elements);
+        render_wikidot_math_block(ctx, index, latex_source, open_elements, label_spans);
         return;
     }
 
@@ -65,6 +66,7 @@ fn render_wikidot_math_block(
     index: NonZeroUsize,
     latex_source: &str,
     open_elements: &[Element],
+    label_spans: &[AttributeMap],
 ) {
     let environment = if latex_source.contains('{') || latex_source.contains('\\') {
         "align"
@@ -84,12 +86,27 @@ fn render_wikidot_math_block(
     };
     let id = format!("equation-{index}");
 
-    render_wikidot_equation_number(ctx, index, open_elements);
+    render_wikidot_equation_number_with_spans(ctx, index, open_elements, label_spans);
     ctx.push_raw('\n');
     ctx.html()
         .div()
         .attr(attr!("class" => "math-equation", "id" => &id))
         .contents(&wrapped);
+}
+
+fn render_wikidot_equation_number_with_spans(
+    ctx: &mut HtmlContext,
+    index: NonZeroUsize,
+    open_elements: &[Element],
+    label_spans: &[AttributeMap],
+) {
+    let Some((attributes, remaining)) = label_spans.split_first() else {
+        render_wikidot_equation_number(ctx, index, open_elements);
+        return;
+    };
+    ctx.html().span().attr(attr!(;; attributes)).inner(|ctx| {
+        render_wikidot_equation_number_with_spans(ctx, index, open_elements, remaining);
+    });
 }
 
 fn render_wikidot_equation_number(

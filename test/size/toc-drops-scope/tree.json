@@ -1,0 +1,22 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "size",
+                "attributes": {
+                    "style": "font-size: 120%;"
+                },
+                "elements": [
+                    {
+                        "element": "table-of-contents",
+                        "data": {
+                            "attributes": {},
+                            "align": null
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

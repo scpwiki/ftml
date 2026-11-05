@@ -698,6 +698,20 @@ impl<'t> ActiveScopes<'t> {
         });
     }
 
+    fn retire_size_scopes(&mut self) {
+        let mut retired = Vec::new();
+        let mut current = self.active_tail;
+        while let Some(position) = current {
+            current = self.scopes[position].previous_active;
+            if self.scopes[position].kind == ScopeKind::Size {
+                retired.push(position);
+            }
+        }
+        for position in retired {
+            self.kill_scope(position);
+        }
+    }
+
     fn nested_empty_copies(&self) -> Vec<Element<'t>> {
         let mut copies: Vec<Element<'t>> = Vec::new();
         for position in self.active_positions() {
@@ -2491,7 +2505,10 @@ fn lower_sequence<'t>(
             run.push(element);
             run_has_content = true;
         } else if has_lowerable_children(&element)
-            || matches!(element, Element::Code(_) | Element::Math { .. })
+            || matches!(
+                element,
+                Element::Code(_) | Element::Math { .. } | Element::TableOfContents { .. }
+            )
         {
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
@@ -2580,6 +2597,11 @@ fn lower_sequence<'t>(
                 {
                     link.spans = active.wikidot_label_spans();
                 }
+                attach_wikidot_block_label_spans(
+                    &mut element,
+                    active,
+                    &mut *trim_next_break,
+                );
                 let watermark = if block_boundary {
                     Some(active.begin_watch())
                 } else {
@@ -3318,6 +3340,52 @@ fn close_live_anchor<'t>(
     }
     emit_segment_copies(output, run, active, last_run_outer_scope);
     active.kill_from(position);
+}
+
+fn wikidot_code_is_highlighted(language: Option<&str>) -> bool {
+    matches!(language, Some("css" | "python" | "java"))
+}
+
+fn attach_wikidot_block_label_spans<'t>(
+    element: &mut Element<'t>,
+    active: &mut ActiveScopes<'t>,
+    trim_next_break: &mut bool,
+) {
+    if !active.has_active_scope() {
+        return;
+    }
+    let label_spans = active.wikidot_label_spans();
+    let has_size = active
+        .iter_active_rev()
+        .any(|scope| scope.kind == ScopeKind::Size);
+    match element {
+        Element::Code(code_block) => {
+            if label_spans.is_empty() {
+                return;
+            }
+            code_block.wikidot_label_spans = label_spans;
+            if has_size && wikidot_code_is_highlighted(code_block.language.as_deref()) {
+                active.retire_size_scopes();
+            }
+        }
+        Element::Math {
+            wikidot_label_spans,
+            ..
+        } => {
+            if !label_spans.is_empty() {
+                *wikidot_label_spans = label_spans;
+            }
+            if has_size {
+                active.retire_size_scopes();
+                *trim_next_break = true;
+            }
+        }
+        Element::TableOfContents { .. } if has_size => {
+            active.retire_size_scopes();
+            *trim_next_break = true;
+        }
+        _ => {}
+    }
 }
 
 fn flush_close_run<'t>(

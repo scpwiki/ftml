@@ -1,0 +1,41 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "size",
+                "attributes": {
+                    "style": "font-size: 120%;"
+                },
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "code",
+                        "data": {
+                            "contents": "x",
+                            "language": null,
+                            "name": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "b"
+                    }
+                ]
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "x",
+            "language": null,
+            "name": null
+        }
+    ]
+}

@@ -20,6 +20,7 @@
 
 use super::clone::{elements_to_owned, option_string_to_owned, string_to_owned};
 use super::element::Element;
+use crate::tree::AttributeMap;
 use std::borrow::Cow;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
@@ -29,6 +30,11 @@ pub struct CodeBlock<'t> {
     pub name: Option<Cow<'t, str>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wikidot_block_open_elements: Vec<Element<'t>>,
+    /// Inline span/size scopes that cross this Wikidot code block also
+    /// wrap its rendered content inside `<pre>`. These are renderer-owned
+    /// compatibility wrappers, not authored code attributes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wikidot_label_spans: Vec<AttributeMap<'t>>,
 }
 
 impl CodeBlock<'_> {
@@ -40,6 +46,11 @@ impl CodeBlock<'_> {
             wikidot_block_open_elements: elements_to_owned(
                 &self.wikidot_block_open_elements,
             ),
+            wikidot_label_spans: self
+                .wikidot_label_spans
+                .iter()
+                .map(AttributeMap::to_owned)
+                .collect(),
         }
     }
 }
