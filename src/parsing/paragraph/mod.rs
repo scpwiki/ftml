@@ -187,7 +187,8 @@ where
                     && stack.current_empty()
                     && stack.wikidot_finished_ends_with_explicit_list()
                     && parser.wikidot_next_line_has_content()
-                    && !parser.in_wikidot_iftags_span()
+                    && !parser.body_end_boundary_accepts("iftags")
+                    && !parser.has_pending_iftags_end_ahead()
                 {
                     parser.step()?;
                     continue;

@@ -2590,7 +2590,8 @@ where
                     )
                 })
                 && self.wikidot_next_line_has_content()
-                && !self.in_wikidot_iftags_span()
+                && !self.body_end_boundary_accepts("iftags")
+                && !self.has_pending_iftags_end_ahead()
             {
                 self.step()?;
                 first = false;

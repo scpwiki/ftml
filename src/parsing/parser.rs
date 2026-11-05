@@ -451,6 +451,18 @@ impl<'r, 't> Parser<'r, 't> {
             .contains(&position)
     }
 
+    /// L85: whether a suspended iftags gate still has its designated end
+    /// ahead of the current position (the post-list text belongs to its
+    /// body even though the gate's boundary is not on the stack).
+    pub(crate) fn has_pending_iftags_end_ahead(&self) -> bool {
+        let here = self.current().span.start;
+        self.block_end_scan_cache
+            .borrow()
+            .pending_iftags_end_swallows
+            .iter()
+            .any(|pending| *pending > here)
+    }
+
     pub(crate) fn take_pending_iftags_end_swallow(&self, position: usize) -> bool {
         let mut cache = self.block_end_scan_cache.borrow_mut();
         match cache
@@ -689,9 +701,7 @@ impl<'r, 't> Parser<'r, 't> {
         }
         let cache = self.block_end_scan_cache.borrow();
         let runs = &cache.wikidot_line_runs;
-        if runs.on_list_item_line(pair.head_byte)
-            || runs.on_list_item_line(pair.closer_byte)
-        {
+        if runs.on_list_item_line(pair.head_byte) {
             return true;
         }
         if runs.quote_run_id(pair.head_byte).is_some()

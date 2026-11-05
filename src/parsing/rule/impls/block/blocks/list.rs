@@ -341,10 +341,12 @@ fn parse_list_block_impl<'r, 't>(
     // L85: live drops the post-list break element before same-para content
     // (ul-post-e, closeout, cross `G`); the break token itself is dropped
     // top-level by gather. Blank lines and input end keep the break, as
-    // does content inside a kept iftags gate body (kept-gate pin).
+    // does content inside a kept iftags gate body (kept-gate pin: boundary
+    // or still-pending designated end).
     record_wikidot_explicit_list_end(parser);
-    let content_after_list =
-        parser.wikidot_next_line_has_content() && !parser.in_wikidot_iftags_span();
+    let content_after_list = parser.wikidot_next_line_has_content()
+        && !parser.body_end_boundary_accepts("iftags")
+        && !parser.has_pending_iftags_end_ahead();
     if parser.settings().layout.legacy()
         && !nested
         && !flag_score
