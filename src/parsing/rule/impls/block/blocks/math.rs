@@ -71,6 +71,7 @@ fn parse_fn<'r, 't>(
         name,
         latex_source,
         wikidot_block_open_elements: Vec::new(),
+        wikidot_label_spans: Vec::new(),
     };
 
     success_elements(element)

@@ -2375,6 +2375,7 @@ fn parser_mutable_state_helpers_reset_and_remove_collections() {
         language: Some(cow!("rust")),
         name: Some(cow!("sample")),
         wikidot_block_open_elements: Vec::new(),
+        wikidot_label_spans: Vec::new(),
     });
     parser.push_table_of_contents_entry(HeadingLevel::One, &[text!("Heading")]);
     parser.set_footnote_block();
@@ -2402,6 +2403,7 @@ fn parser_mutable_state_helpers_reset_and_remove_collections() {
         language: None,
         name: None,
         wikidot_block_open_elements: Vec::new(),
+        wikidot_label_spans: Vec::new(),
     });
     parser.push_table_of_contents_entry(HeadingLevel::Two, &[text!("Heading")]);
 
@@ -2413,6 +2415,7 @@ fn parser_mutable_state_helpers_reset_and_remove_collections() {
             language: None,
             name: None,
             wikidot_block_open_elements: Vec::new(),
+            wikidot_label_spans: Vec::new(),
         }],
     );
     assert_eq!(
@@ -2505,6 +2508,7 @@ fn parser_append_shared_items_and_optional_spaces_cover_helpers() {
         language: None,
         name: None,
         wikidot_block_open_elements: Vec::new(),
+        wikidot_label_spans: Vec::new(),
     }];
     let mut table_of_contents = vec![(2, String::from("Heading"))];
     let mut footnotes = vec![vec![text!("note")]];
@@ -2535,6 +2539,7 @@ fn parser_append_shared_items_and_optional_spaces_cover_helpers() {
             language: None,
             name: None,
             wikidot_block_open_elements: Vec::new(),
+            wikidot_label_spans: Vec::new(),
         }],
     );
     assert_eq!(

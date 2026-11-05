@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use crate::tree::AttributeMap;
 
 pub fn render_wikitext_raw(ctx: &mut HtmlContext, text: &str) {
     debug!("Escaping raw string '{text}'");
@@ -73,6 +74,7 @@ pub fn render_code(
     language: Option<&str>,
     contents: &str,
     open_elements: &[Element],
+    label_spans: &[AttributeMap],
 ) {
     debug!(
         "Rendering code block (language {})",
@@ -82,7 +84,7 @@ pub fn render_code(
     ctx.handle().post_code(index, contents);
 
     if ctx.layout().legacy() {
-        render_wikidot_code(ctx, language, contents, open_elements);
+        render_wikidot_code(ctx, language, contents, open_elements, label_spans);
         return;
     }
 
@@ -137,6 +139,7 @@ fn render_wikidot_code(
     language: Option<&str>,
     contents: &str,
     open_elements: &[Element],
+    label_spans: &[AttributeMap],
 ) {
     ctx.html()
         .div()
@@ -154,28 +157,61 @@ fn render_wikidot_code(
                         .attr(attr!("class" => "hl-main"))
                         .inner(|ctx| {
                             ctx.html().pre().inner(|ctx| {
-                                render_wikidot_highlight(
+                                render_wikidot_code_contents(
                                     ctx,
-                                    language.unwrap(),
-                                    contents,
+                                    label_spans,
+                                    &mut |ctx| {
+                                        render_wikidot_highlight(
+                                            ctx,
+                                            language.unwrap(),
+                                            contents,
+                                        );
+                                    },
                                 );
                             });
                         });
                 }
                 _ => {
                     ctx.html().pre().inner(|ctx| {
-                        ctx.html().code().contents(contents);
+                        render_wikidot_code_contents(ctx, label_spans, &mut |ctx| {
+                            ctx.html().code().contents(contents);
+                        });
                     });
                 }
             }
         });
 }
 
+fn render_wikidot_code_contents(
+    ctx: &mut HtmlContext,
+    label_spans: &[AttributeMap],
+    contents: &mut dyn FnMut(&mut HtmlContext),
+) {
+    let Some((attributes, remaining)) = label_spans.split_first() else {
+        contents(ctx);
+        return;
+    };
+    ctx.html()
+        .span()
+        .attr(attr!(;; attributes))
+        .inner(|ctx| render_wikidot_code_contents(ctx, remaining, contents));
+}
+
 fn render_wikidot_highlight(ctx: &mut HtmlContext, language: &str, contents: &str) {
     let mut rest = contents;
+    let mut prev_is_property = false;
     while !rest.is_empty() {
-        let (class, length) = wikidot_highlight_token(language, rest);
+        let (mut class, length) = wikidot_highlight_token(language, rest);
         let (token, next) = rest.split_at(length);
+        if language == "css" && prev_is_property && class == "hl-identifier" {
+            let is_bare_value = !token.contains(['(', ')', '\'', '"', '/']);
+            if is_bare_value {
+                class = "hl-var";
+            }
+        }
+        prev_is_property =
+            (language == "css" && class == "hl-reserved" && token.ends_with(':'))
+                || (class == "hl-code" && prev_is_property);
         ctx.html()
             .span()
             .attr(attr!("class" => class))

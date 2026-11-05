@@ -56,6 +56,7 @@ impl CompatCodeBlock {
             language: self.language.map(Cow::Owned),
             name: self.name.map(Cow::Owned),
             wikidot_block_open_elements: Vec::new(),
+            wikidot_label_spans: Vec::new(),
         }
     }
 }

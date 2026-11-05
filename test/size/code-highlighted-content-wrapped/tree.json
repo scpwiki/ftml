@@ -1,0 +1,33 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "size",
+                "attributes": {
+                    "style": "font-size: 120%;"
+                },
+                "elements": [
+                    {
+                        "element": "code",
+                        "data": {
+                            "contents": "a { color: red; }",
+                            "language": "css",
+                            "name": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    }
+                ]
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "a { color: red; }",
+            "language": "css",
+            "name": null
+        }
+    ]
+}

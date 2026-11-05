@@ -252,12 +252,14 @@ mod tests {
                 language: None,
                 name: None,
                 wikidot_block_open_elements: Vec::new(),
+                wikidot_label_spans: Vec::new(),
             }),
             Element::Code(CodeBlock {
                 contents: Cow::Borrowed("body"),
                 language: None,
                 name: None,
                 wikidot_block_open_elements: Vec::new(),
+                wikidot_label_spans: Vec::new(),
             }),
         ];
 

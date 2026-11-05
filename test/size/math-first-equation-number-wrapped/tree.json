@@ -1,0 +1,32 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "size",
+                "attributes": {
+                    "style": "font-size: 120%;"
+                },
+                "elements": [
+                    {
+                        "element": "math",
+                        "data": {
+                            "name": null,
+                            "latex-source": "x"
+                        }
+                    },
+                    {
+                        "element": "math",
+                        "data": {
+                            "name": null,
+                            "latex-source": "y"
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    }
+                ]
+            }
+        }
+    ]
+}
