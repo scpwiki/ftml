@@ -156,8 +156,11 @@ Accepts score (`_`): Strips leading and trailing newlines.
 
 In `Layout::Wikidot`, only `a` opens and closes this block; the `anchor` name and cross-name closers remain literal. `Layout::Wikijump` retains both names.
 
+In `Layout::Wikidot`, an anchor inside an anchor's body, or any other anchor-producing element such as a link, a footnote reference, an equation reference, a file link or a standalone button, closes the enclosing anchor at that element. Inline markup open inside the anchor is dropped at the same point, and content after the inner element renders outside the closed anchor.
+
 Arguments:
-* All accepted attributes
+* `Layout::Wikijump`: all accepted attributes.
+* `Layout::Wikidot`: `href` after live's normalization, plus `class`, `id`, `style`, `role`, `type`, `target` and `data-*` (lower-cased names), emitted as `id`, `class`, `style`, `role`, `type`, `data-*`, `href`, `target`. Other attributes, including `name` and `title`, are dropped as live drops them.
 
 Example:
 

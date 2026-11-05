@@ -420,6 +420,10 @@ impl<'t> ActiveScopes<'t> {
         self.scopes[position].has_content
     }
 
+    fn scope_wrapper(&self, position: usize) -> &ScopeWrapper<'t> {
+        &self.scopes[position].wrapper
+    }
+
     fn scope_is_scored(&self, position: usize) -> bool {
         self.scopes[position].scored
     }
@@ -813,6 +817,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     mut bibliographies: Option<&mut BibliographyList<'t>>,
 ) -> Vec<bool> {
     flatten_crossing_inline_containers(elements);
+    flatten_anchor_crossing_inline_containers(elements);
     build_wikidot_block_frames(elements, true);
     let mut lowered = Vec::new();
     let (valid, close_pairs) = match bibliographies.as_deref_mut() {
@@ -821,6 +826,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
             for bibliography in list.slice_mut() {
                 for (_, items) in bibliography.slice_mut() {
                     flatten_crossing_inline_containers(items);
+                    flatten_anchor_crossing_inline_containers(items);
                     build_wikidot_bibliography_frames(items);
                 }
             }
@@ -857,6 +863,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     elements: &mut Vec<Element<'t>>,
 ) {
     flatten_crossing_inline_containers(elements);
+    flatten_anchor_crossing_inline_containers(elements);
     build_wikidot_block_frames(elements, false);
     let (valid, close_pairs) = collect_valid_scope_pairs(elements);
 
@@ -885,6 +892,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
     for (_, elements) in bibliography.slice_mut() {
         flatten_crossing_inline_containers(elements);
+        flatten_anchor_crossing_inline_containers(elements);
         build_wikidot_bibliography_frames(elements);
     }
     let mut ordinal = 0;
@@ -1040,7 +1048,10 @@ impl PendingScopes {
         *ordinal += 1;
         let stack = self.stack_mut(class);
         let popped = if !synthetic
-            && matches!(class, ScopeClass::Span | ScopeClass::Size)
+            && matches!(
+                class,
+                ScopeClass::Span | ScopeClass::Size | ScopeClass::Anchor
+            )
             && !stack.is_empty()
         {
             stack.pop_front()
@@ -1163,6 +1174,67 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
             }
             _ => unreachable!("flatten candidate checked above"),
         }
+    }
+    *elements = output;
+}
+
+fn flatten_anchor_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
+    flatten_anchor_container_items(elements, false);
+}
+
+fn flatten_anchor_container_items<'t>(elements: &mut Vec<Element<'t>>, in_anchor: bool) {
+    let mut output = Vec::with_capacity(elements.len());
+    let mut anchors = in_anchor;
+    for mut element in mem::take(elements) {
+        match &element {
+            Element::Partial(PartialElement::InlineAnchorOpen(..)) => {
+                anchors = true;
+                output.push(element);
+                continue;
+            }
+            Element::Partial(PartialElement::InlineAnchorClose(_)) => {
+                anchors = false;
+                output.push(element);
+                continue;
+            }
+            _ => {}
+        }
+        let flattens = anchors
+            && (subtree_contains_anchor_producer(&element)
+                || subtree_contains_anchor_open(&element));
+        if flattens
+            && let Element::Container(container) = &mut element
+            && let Some(kind) = format_kind_of(container.ctype())
+        {
+            let mut children = mem::take(container.elements_mut());
+            flatten_anchor_container_items(&mut children, true);
+            output.push(Element::Partial(PartialElement::InlineFormatOpen(kind)));
+            output.extend(children);
+            output.push(Element::Partial(PartialElement::InlineFormatClose(kind)));
+            continue;
+        }
+        if flattens
+            && let Element::Color {
+                color,
+                background,
+                elements: children,
+            } = &mut element
+        {
+            let mut children = mem::take(children);
+            flatten_anchor_container_items(&mut children, true);
+            output.push(Element::Partial(PartialElement::InlineColorOpen(
+                color.clone(),
+                *background,
+            )));
+            output.extend(children);
+            output.push(Element::Partial(PartialElement::InlineColorClose));
+            continue;
+        }
+        let mut visit = |children: &mut Vec<Element<'t>>| {
+            flatten_anchor_container_items(children, anchors);
+        };
+        visit_children_mut(&mut element, &mut visit);
+        output.push(element);
     }
     *elements = output;
 }
@@ -2172,29 +2244,12 @@ fn lower_sequence<'t>(
             let current = *ordinal;
             *ordinal += 1;
             if valid.contains(&current) {
-                if let Some(position) = active.anchor_position() {
-                    if !active.scope_has_content(position)
-                        && run.iter().all(|element| {
-                            matches!(element, Element::Text(text) if text.trim().is_empty())
-                        })
-                    {
-                        run.clear();
-                        run.push(Element::Partial(
-                            PartialElement::WikidotEmptyInlineOwner,
-                        ));
-                    }
-                    flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
-                    let anchor_trailing_space = matches!(
-                        output.last(),
-                        Some(Element::Anchor { elements: inner, .. })
-                            if matches!(inner.last(), Some(Element::Text(text)) if text == " ")
-                    );
-                    if anchor_trailing_space {
-                        trim_trailing_space(&mut output);
-                        output.push(text!(" "));
-                    }
-                    active.commit_close_no_reopen(position);
-                }
+                wikidot_close_anchor_scope(
+                    &mut output,
+                    &mut run,
+                    active,
+                    &mut last_run_outer_scope,
+                );
                 let leading_space =
                     matches!(source.peek(), Some(Element::Text(text)) if text == " ");
                 if leading_space {
@@ -2523,6 +2578,14 @@ fn lower_sequence<'t>(
             }
             if inline_scope_parts(&element).is_some() {
                 active.apply_subtree_istack(&element);
+            }
+            if active.has_anchor_scope() && wikidot_inline_closes_anchor(&element) {
+                wikidot_close_anchor_scope(
+                    &mut output,
+                    &mut run,
+                    active,
+                    &mut last_run_outer_scope,
+                );
             }
             run.push(element);
             run_has_content = true;
@@ -3391,6 +3454,106 @@ fn emit_segment_copies<'t>(
     if active.any_unmaterialized() {
         run.push(Element::Partial(PartialElement::WikidotEmptyInlineOwner));
         flush_run(output, run, active, last_run_outer_scope);
+    }
+}
+
+fn wikidot_inline_closes_anchor(element: &Element<'_>) -> bool {
+    match element {
+        Element::Link { .. }
+        | Element::AnchorName(_)
+        | Element::Footnote(_)
+        | Element::EquationReference(_)
+        | Element::StandaloneButton(_)
+        | Element::FileLink { .. } => true,
+        Element::Image { link, .. } => link.is_some(),
+        _ => false,
+    }
+}
+
+fn subtree_contains_anchor_producer(element: &Element<'_>) -> bool {
+    if wikidot_inline_closes_anchor(element) {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        found |= children.iter().any(subtree_contains_anchor_producer);
+    });
+    found
+}
+
+fn subtree_contains_anchor_open(element: &Element<'_>) -> bool {
+    if matches!(
+        element,
+        Element::Partial(PartialElement::InlineAnchorOpen(..))
+    ) {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        found |= children.iter().any(subtree_contains_anchor_open);
+    });
+    found
+}
+
+fn element_is_whitespace_only(element: &Element<'_>) -> bool {
+    match element {
+        Element::Text(text) => text.trim().is_empty(),
+        Element::Container(container) => {
+            container.elements().iter().all(element_is_whitespace_only)
+        }
+        Element::Color { elements, .. } => {
+            elements.iter().all(element_is_whitespace_only)
+        }
+        _ => false,
+    }
+}
+
+fn trim_run_trailing_space(run: &mut Vec<Element<'_>>) -> bool {
+    let mut trimmed = false;
+    while let Some(Element::Text(text)) = run.last_mut() {
+        let length = text.trim_end_matches(' ').len();
+        if length == text.len() {
+            break;
+        }
+        trimmed = true;
+        text.to_mut().truncate(length);
+        if text.is_empty() {
+            run.pop();
+        } else {
+            break;
+        }
+    }
+    trimmed
+}
+
+fn wikidot_close_anchor_scope<'t>(
+    output: &mut Vec<Element<'t>>,
+    run: &mut Vec<Element<'t>>,
+    active: &mut ActiveScopes<'t>,
+    last_run_outer_scope: &mut RunMergeState,
+) {
+    let Some(position) = active.anchor_position() else {
+        return;
+    };
+    let trailing_break = matches!(run.last(), Some(Element::LineBreak));
+    let trailing_space = trim_run_trailing_space(run) || trailing_break;
+    let empty =
+        !active.scope_has_content(position) && run.iter().all(element_is_whitespace_only);
+    if empty {
+        let wrapper = active.scope_wrapper(position).clone();
+        active.kill_from(position);
+        active.pop_istack_through_anchor();
+        output.push(wrapper.wrap(vec![Element::Partial(
+            PartialElement::WikidotEmptyInlineOwner,
+        )]));
+        last_run_outer_scope.reset();
+        return;
+    }
+    flush_run(output, run, active, last_run_outer_scope);
+    active.kill_from(position);
+    active.pop_istack_through_anchor();
+    if trailing_space {
+        output.push(text!(" "));
     }
 }
 

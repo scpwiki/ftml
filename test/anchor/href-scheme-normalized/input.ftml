@@ -1,0 +1,41 @@
+[[a href="javascript:alert(1)"]]a[[/a]]
+
+[[a href="JAVASCRIPT:alert(1)"]]a[[/a]]
+
+[[a href="javascript:void(0)"]]a[[/a]]
+
+[[a href="javascript:;"]]a[[/a]]
+
+[[a href="data:x"]]a[[/a]]
+
+[[a href="data:text/html,<b>x</b>"]]a[[/a]]
+
+[[a href="data:image/png;base64,AA"]]a[[/a]]
+
+[[a href="tel:+1"]]a[[/a]]
+
+[[a href="file:///etc/passwd"]]a[[/a]]
+
+[[a href="HTTP://X/Y"]]a[[/a]]
+
+[[a href="irc://x"]]a[[/a]]
+
+[[a href="x/y"]]a[[/a]]
+
+[[a href="?q=1"]]a[[/a]]
+
+[[a href="./x"]]a[[/a]]
+
+[[a href="a::b"]]a[[/a]]
+
+[[a href="a - b"]]a[[/a]]
+
+[[a href=":x"]]a[[/a]]
+
+[[a href=":"]]a[[/a]]
+
+[[a href="abc="]]a[[/a]]
+
+[[a href=" http://x"]]a[[/a]]
+
+[[a href="http://x "]]a[[/a]]

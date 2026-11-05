@@ -1,0 +1,39 @@
+[[a href="/x" name="n"]]y[[/a]]
+
+[[a name="n"]]y[[/a]]
+
+[[a href="/x" title="t" rel="r" onclick="o" foo="f"]]y[[/a]]
+
+[[a href="/x" lang="en" dir="ltr" align="left" tabindex="2"]]y[[/a]]
+
+[[a href="/x" aria-label="a"]]y[[/a]]
+
+[[a href="/x" CLASS="c"]]y[[/a]]
+
+[[a href="/x" HREF="/u"]]y[[/a]]
+
+[[a href="/x" id="i" class="c" style="s" role="r" type="t" data-x="d" target="_blank"]]y[[/a]]
+
+[[a href="/x" style="s" class="c" id="i"]]y[[/a]]
+
+[[a href="/x" data-z="1" data-a="2" data-m="3"]]y[[/a]]
+
+[[a href="/x" data-X="1"]]y[[/a]]
+
+[[a href="/x" DATA-X="1"]]y[[/a]]
+
+[[a href="/x" data-="1"]]y[[/a]]
+
+[[a data-x="" id="i"]]y[[/a]]
+
+[[a href="/x" class="a  b"]]y[[/a]]
+
+[[a href="/x" class="c" class=""]]y[[/a]]
+
+[[a href="/x" href="/u"]]y[[/a]]
+
+[[a class="c"]]y[[/a]]
+
+[[a]]y[[/a]]
+
+[[a href="/x" target="_blank" class="c"]]y[[/a]]

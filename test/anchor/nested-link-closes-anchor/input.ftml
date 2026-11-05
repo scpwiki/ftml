@@ -1,0 +1,17 @@
+[[a href="/x"]]a[[[p|q]]]b[[/a]]
+
+[[a href="/x"]][[[p|q]]][[/a]]
+
+[[a href="/x"]]a[http://e.com L]b[[/a]]
+
+[[a href="/x"]]http://e.com[[/a]]
+
+[[a href="/x"]]a[# n]b[[/a]]
+
+[[a href="/x"]]a[[# n]]b[[/a]]
+
+[[a href="/x"]]a[[a href="/y"]]b[[/a]]c[[/a]]
+
+[[a href="/x"]][[[p|q]]]**y**[[/a]]
+
+[[a href="/x"]]a[[[p|q]]]b[[[r|s]]]c[[/a]]

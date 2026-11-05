@@ -185,6 +185,20 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         self.ctx.push_raw('"');
     }
 
+    pub fn attr_quoted(&mut self, key: &str, value: &str) -> &mut Self {
+        debug_assert!(is_alphanumeric(key));
+        debug_assert!(self.in_tag);
+
+        self.ctx.push_raw(' ');
+        self.ctx.push_escaped(key);
+        self.ctx.push_raw('=');
+        self.ctx.push_raw('"');
+        self.ctx.push_escaped(value);
+        self.ctx.push_raw('"');
+
+        self.chain()
+    }
+
     pub fn attr_single(&mut self, key: &str, value_parts: &[&str]) -> &mut Self {
         let has_value = !value_parts.iter().all(|s| s.is_empty());
 

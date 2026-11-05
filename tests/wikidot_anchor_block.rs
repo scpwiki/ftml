@@ -132,33 +132,33 @@ fn wikidot_a_block_family_matches_live_grammar_with_safe_urls() {
         (
             "a-canonical-valid",
             "[[a]]v7 body[[/a]]",
-            "<p><a href>v7 body</a></p>",
+            "<p><a href=\"\">v7 body</a></p>",
         ),
         ("a-incomplete-opening", "[[a", "<p>[[a</p>"),
         (
             "a-case-variation-name",
             "[[A]]v7 body[[/A]]",
-            "<p><a href>v7 body</a></p>",
+            "<p><a href=\"\">v7 body</a></p>",
         ),
         (
             "a-whitespace-control",
             "[[a]]alpha\tbeta\u{a0}gamma[[/a]]",
-            "<p><a href>alpha beta\u{a0}gamma</a></p>",
+            "<p><a href=\"\">alpha beta\u{a0}gamma</a></p>",
         ),
         (
             "a-boundary",
             "start-[[a]]v7 body[[/a]]-middle\n\n[[a]]end[[/a]]",
-            "<p>start-<a href>v7 body</a>-middle</p><p><a href>end</a></p>",
+            "<p>start-<a href=\"\">v7 body</a>-middle</p><p><a href=\"\">end</a></p>",
         ),
         (
             "a-serialization-source-preservation",
             "[[a]]serialized body[[/a]]",
-            "<p><a href>serialized body</a></p>",
+            "<p><a href=\"\">serialized body</a></p>",
         ),
         (
             "a-text-renderer-relevance",
             "[[a]]visible text[[/a]]",
-            "<p><a href>visible text</a></p>",
+            "<p><a href=\"\">visible text</a></p>",
         ),
         (
             "a-missing-close",
@@ -168,37 +168,37 @@ fn wikidot_a_block_family_matches_live_grammar_with_safe_urls() {
         (
             "a-nesting-same-feature",
             "[[a]][[a]]nested[[/a]][[/a]]",
-            "<p><a href></a><a href>nested</a></p>",
+            "<p><a href=\"\"></a><a href=\"\">nested</a></p>",
         ),
         (
             "a-nesting-different-feature",
             "[[a]][[bold]]nested[[/bold]][[/a]]",
-            "<p><a href>[[bold]]nested[[/bold]]</a></p>",
+            "<p><a href=\"\">[[bold]]nested[[/bold]]</a></p>",
         ),
         (
             "a-invalid-overlap",
             "[[a]]outer [[bold]]inner[[/a]][[/bold]]",
-            "<p><a href>outer [[bold]]inner</a>[[/bold]]</p>",
+            "<p><a href=\"\">outer [[bold]]inner</a>[[/bold]]</p>",
         ),
         (
             "a-duplicate-arguments",
             r#"[[a class="one" class="two"]]v7 body[[/a]]"#,
-            "<p><a href class=\"two\">v7 body</a></p>",
+            "<p><a class=\"two\" href=\"\">v7 body</a></p>",
         ),
         (
             "a-empty-arguments",
             r#"[[a class=""]]v7 body[[/a]]"#,
-            "<p><a href>v7 body</a></p>",
+            "<p><a href=\"\">v7 body</a></p>",
         ),
         (
             "a-unknown-argument",
             r#"[[a v7UnknownArgument="x"]]v7 body[[/a]]"#,
-            "<p><a href>v7 body</a></p>",
+            "<p><a href=\"\">v7 body</a></p>",
         ),
         (
             "a-quote-variation",
             "[[a class='single quoted' data-v7=unquoted]]v7 body[[/a]]",
-            "<p><a href>v7 body</a></p>",
+            "<p><a href=\"\">v7 body</a></p>",
         ),
         (
             "a-unsafe-url",
@@ -236,7 +236,7 @@ fn wikidot_rejected_anchor_candidates_create_no_attributes() {
     );
     let (_, html) = render(source);
     assert!(html.contains("[[anchor href=&quot;javascript:alert(1)&quot; onclick="));
-    assert!(html.contains("<a href>active</a>"));
+    assert!(html.contains("<a href=\"\">active</a>"));
     assert!(!html.contains(r#" onclick=""#));
     assert!(!html.contains("href=\"javascript:"));
 }

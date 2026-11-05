@@ -34,23 +34,70 @@ pub fn render_anchor(
     debug!("Rendering anchor");
 
     let layout = ctx.layout();
+    if layout == Layout::Wikidot {
+        render_wikidot_anchor(ctx, elements, attributes, target);
+        return;
+    }
+
     let target_value = match target {
         Some(target) => target.html_attr(),
         None => "",
     };
-    let opens_new_tab =
-        target == Some(AnchorTarget::NewTab) && layout == Layout::Wikijump;
+    let opens_new_tab = target == Some(AnchorTarget::NewTab);
 
     ctx.html()
         .a()
         .attr(attr!(
-            "class" => "wj-anchor"; if layout == Layout::Wikijump,
-            "href" => ""; if layout == Layout::Wikidot && !attributes.get().contains_key("href"),
+            "class" => "wj-anchor",
             "target" => target_value; if target.is_some(),
             "rel" => "noopener noreferrer"; if opens_new_tab;;
             attributes,
         ))
         .contents(elements);
+}
+
+fn render_wikidot_anchor(
+    ctx: &mut HtmlContext,
+    elements: &[Element],
+    attributes: &AttributeMap,
+    target: Option<AnchorTarget>,
+) {
+    let map = attributes.get();
+    let mut tag = ctx.html().a();
+
+    for key in ["id", "class", "style", "role", "type"] {
+        if let Some(value) = map.get(key) {
+            tag.attr_quoted(key, value);
+        }
+    }
+
+    let mut ordered = Vec::new();
+    for key in attributes.ordered_keys() {
+        if key.starts_with("data-")
+            && let Some(value) = map.get(key.as_ref())
+        {
+            tag.attr_quoted(key, value);
+            ordered.push(key.as_ref());
+        }
+    }
+    for (key, value) in map {
+        if key.starts_with("data-") && !ordered.contains(&key.as_ref()) {
+            tag.attr_quoted(key, value);
+        }
+    }
+
+    let href = map.get("href").map(Cow::as_ref).unwrap_or("");
+    tag.attr_quoted("href", href);
+
+    let target = map
+        .get("target")
+        .map(Cow::as_ref)
+        .or_else(|| target.map(|target| target.html_attr()));
+    if let Some(value) = target {
+        tag.attr_quoted("target", value);
+    }
+
+    tag.contents(elements);
 }
 
 pub fn render_anchor_target(ctx: &mut HtmlContext, target: &str) {
