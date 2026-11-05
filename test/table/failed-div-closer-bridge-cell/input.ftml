@@ -1,0 +1,12 @@
+[[table]]
+[[row]]
+[[cell]]
+x [[/div]] [[/cell]]
+[[/row]]
+[[/table]]
+
+[[table]]
+[[row]]
+[[cell]] x [[/span]] [[/cell]]
+[[/row]]
+[[/table]]

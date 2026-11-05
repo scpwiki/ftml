@@ -1,0 +1,3 @@
+[[collapsible show="a" hide="b"]]
+x [[/div]] [[/collapsible]]
+z

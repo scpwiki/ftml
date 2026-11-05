@@ -1,0 +1,88 @@
+{
+    "elements": [
+        {
+            "element": "table",
+            "data": {
+                "type": "advanced",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": " "
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "div"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "element": "table",
+            "data": {
+                "type": "advanced",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": " "
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "span"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
