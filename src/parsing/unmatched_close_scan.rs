@@ -29,11 +29,22 @@
 //! rendered output is unchanged. Every entry is self-validating: a query
 //! that does not match the cached key recomputes with the original logic.
 
+use super::parser::RuleAttemptKey;
 use super::{ExtractedToken, Parser};
 use std::collections::BTreeMap;
 
 #[cfg(test)]
 use std::cell::Cell;
+
+#[derive(Debug, Clone, Copy)]
+struct LinkHeadScan {
+    tokens_end: usize,
+    scanned_from: usize,
+    region_end: usize,
+    /// `None` when the scan saw no head at all, which holds in every context.
+    context: Option<RuleAttemptKey>,
+    claimed_head: Option<usize>,
+}
 
 #[derive(Debug, Default)]
 pub(super) struct UnmatchedCloseScanCache {
@@ -42,7 +53,7 @@ pub(super) struct UnmatchedCloseScanCache {
     single_bracket: Option<(usize, Option<usize>)>,
     owner_scans: [Option<OwnerLineScan>; 3],
     link_region: Option<(usize, usize)>,
-    link_no_head: Option<(usize, usize, usize)>,
+    link_head_scan: Option<LinkHeadScan>,
     div_line_close: Option<(usize, Option<usize>)>,
     next_line_break: Option<(usize, Option<usize>)>,
     target_failures: BTreeMap<(usize, bool, bool), ()>,
@@ -368,22 +379,35 @@ impl<'r, 't> Parser<'r, 't> {
         region_end
     }
 
+    /// What a probe of a later head depends on besides the head itself. `None`
+    /// in a context where probe outcomes must not be shared.
+    pub(crate) fn end_block_link_head_context(&self) -> Option<RuleAttemptKey> {
+        self.rule_attempt_context()
+    }
+
+    /// A closer asks whether any later head on its line is claimed, so one scan
+    /// answers every later closer in the region: no claim holds for all of them,
+    /// and a claimed head answers each closer before it.
     pub(crate) fn end_block_link_head_outcome(
         &self,
         remaining: &[ExtractedToken<'t>],
         region_end: usize,
+        context: Option<RuleAttemptKey>,
     ) -> Option<bool> {
         let cache = self.block_end_scan_cache.borrow();
-        let scan = &cache.unmatched_close_scan;
-        let (end, start, cached_region) = scan.link_no_head?;
+        let scan = cache.unmatched_close_scan.link_head_scan.as_ref()?;
         let range = remaining.as_ptr_range();
-        if range.end as usize == end
-            && range.start as usize >= start
-            && cached_region == region_end
+        if range.end as usize != scan.tokens_end
+            || (range.start as usize) < scan.scanned_from
+            || scan.region_end != region_end
+            || scan.context.is_some_and(|scanned| context != Some(scanned))
         {
-            Some(false)
-        } else {
-            None
+            return None;
+        }
+        match scan.claimed_head {
+            None => Some(false),
+            Some(head) if range.start as usize <= head => Some(true),
+            Some(_) => None,
         }
     }
 
@@ -392,14 +416,22 @@ impl<'r, 't> Parser<'r, 't> {
         remaining: &[ExtractedToken<'t>],
         region_end: usize,
         saw_left_block: bool,
+        context: Option<RuleAttemptKey>,
+        claimed_index: Option<usize>,
     ) {
-        if saw_left_block {
+        if saw_left_block && context.is_none() {
             return;
         }
         let mut cache = self.block_end_scan_cache.borrow_mut();
-        let scan = &mut cache.unmatched_close_scan;
         let range = remaining.as_ptr_range();
-        scan.link_no_head = Some((range.end as usize, range.start as usize, region_end));
+        cache.unmatched_close_scan.link_head_scan = Some(LinkHeadScan {
+            tokens_end: range.end as usize,
+            scanned_from: range.start as usize,
+            region_end,
+            context: if saw_left_block { context } else { None },
+            claimed_head: claimed_index
+                .map(|index| std::ptr::from_ref(&remaining[index]) as usize),
+        });
     }
 
     pub(crate) fn link_target_scan_failed(
@@ -621,6 +653,17 @@ mod tests {
                 source.len(),
             );
         }
+    }
+
+    #[test]
+    fn end_block_link_head_scans_scale_linearly() {
+        let source = r#"[[anchor class="x"]]body[[/anchor]]"#.repeat(256);
+        let visits = scan_visits(&source);
+        assert!(
+            visits <= source.len() * 16,
+            "{visits} visits for {} bytes",
+            source.len(),
+        );
     }
 
     #[test]

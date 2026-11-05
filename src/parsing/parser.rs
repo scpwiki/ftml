@@ -1649,6 +1649,16 @@ impl<'r, 't> Parser<'r, 't> {
             );
     }
 
+    /// The context part of a rule attempt key, with depth pinned, for an outcome
+    /// shared across positions in one flat sequence.
+    pub(crate) fn rule_attempt_context(&self) -> Option<RuleAttemptKey> {
+        let mut key = self.rule_attempt_key("")?;
+        key.remaining = 0;
+        key.start_of_line = false;
+        key.depth = Some(self.depth);
+        Some(key)
+    }
+
     fn rule_attempt_key(&self, rule: &'static str) -> Option<RuleAttemptKey> {
         #[cfg(test)]
         if RULE_ATTEMPT_MEMO_DISABLED.with(Cell::get) {
@@ -2367,6 +2377,25 @@ impl<'r, 't> Parser<'r, 't> {
     #[inline]
     pub fn same_pointer(&self, old_remaining: &'r [ExtractedToken<'t>]) -> bool {
         ptr::eq(self.remaining, old_remaining)
+    }
+
+    /// Moves to `remaining[index]`, with the same result as `index + 1` steps.
+    pub(crate) fn step_to_remaining(&mut self, index: usize) {
+        let previous = index
+            .checked_sub(1)
+            .map_or(self.current, |before| &self.remaining[before]);
+        self.start_of_line = token_starts_line(previous.token);
+        if let Some(cursor) = self.quote_body_cursor.as_mut()
+            && std::iter::once(self.current)
+                .chain(&self.remaining[..index])
+                .any(|token| {
+                    matches!(token.token, Token::LineBreak | Token::ParagraphBreak)
+                })
+        {
+            cursor.line_state = QuoteBodyLineState::NeedPrefix;
+        }
+        self.current = &self.remaining[index];
+        self.remaining = &self.remaining[index + 1..];
     }
 
     #[inline]
