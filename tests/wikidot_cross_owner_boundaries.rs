@@ -97,7 +97,7 @@ fn inline_scope_list_line_break_ownership_matches_live_proper_and_crossed_closes
         (
             "[[span class=\"probe\"]]\n[[ul]]\nX\n[[/ul]]\n[[/span]]\n",
             concat!(
-                "<p><span class=\"probe\"><br>\n</span></p>",
+                "<p><span class=\"probe\"><br></span></p>",
                 "<ul>\n<li style=\"list-style: none\"><span class=\"probe\">X</span></li>\n</ul>",
             ),
         ),
@@ -111,8 +111,8 @@ fn inline_scope_list_line_break_ownership_matches_live_proper_and_crossed_closes
         (
             "[[span class=\"probe\"]]\n[[ul]]\nX\n[[/span]]\n[[/ul]]\n",
             concat!(
-                "<span class=\"probe\"><br>\n</span>",
-                "<ul>\n<li style=\"list-style: none\"><span class=\"probe\">X<br>\n</span></li>\n</ul><br>\n",
+                "<span class=\"probe\"><br></span>",
+                "<ul>\n<li style=\"list-style: none\"><span class=\"probe\">X<br></span></li>\n</ul><br>\n",
             ),
         ),
         (
@@ -153,7 +153,7 @@ fn crossed_inline_scope_wraps_wikidot_collapsible_handles() {
         "{html}",
     );
     assert!(
-        html.contains("<div class=\"collapsible-block-content\"><p><span class=\"probe\">X<br>\n</span></p></div>"),
+        html.contains("<div class=\"collapsible-block-content\"><p><span class=\"probe\">X<br></span></p></div>"),
         "{html}",
     );
 }

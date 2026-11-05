@@ -18,10 +18,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::inline_delimiter::{ReachableCloseMode, validate_reachable_close};
+use super::inline_delimiter::{
+    ReachableCloseMode, container_closes_at_line_start, validate_reachable_close,
+};
 use super::prelude::*;
 use crate::parsing::inline_format::{element_contains_link, monospace_close_split};
-use crate::tree::Container;
+use crate::tree::{Container, WIKIDOT_WS_MONO_VANISH_MARKER};
 use std::borrow::Cow;
 
 pub const RULE_MONOSPACE: Rule = Rule {
@@ -54,6 +56,17 @@ fn try_consume_fn<'r, 't>(
 
             if is_padding_only {
                 assert_step(parser, Token::RightMonospace)?;
+                if parser.settings().layout.legacy()
+                    && wikidot_padding_only_space_drops(parser)
+                {
+                    let mut attributes = AttributeMap::new();
+                    attributes.insert(WIKIDOT_WS_MONO_VANISH_MARKER, cow!(""));
+                    return success_elements(Element::Container(Container::new(
+                        ContainerType::Monospace,
+                        Vec::new(),
+                        attributes,
+                    )));
+                }
                 return success_elements(text!(" "));
             }
             leading_padding = true;
@@ -195,6 +208,11 @@ fn try_consume_fn<'r, 't>(
         output.push(text!(" "));
     }
     output.push(element);
+    if parser.settings().layout.legacy()
+        && output.last().is_some_and(container_closes_at_line_start)
+    {
+        output.push(text!(" "));
+    }
     let trailing_separator = trailing_padding
         && !matches!(
             parser.current().token,
@@ -213,6 +231,10 @@ fn try_consume_fn<'r, 't>(
         output.push(text!("}}"));
     }
     ok!(paragraph_safe; output, errors)
+}
+
+fn wikidot_padding_only_space_drops(parser: &Parser<'_, '_>) -> bool {
+    parser.full_text().inner()[parser.current().span.start..].starts_with("[[/")
 }
 
 fn unform_strike_ate_close<'t>(elements: &mut Vec<Element<'t>>) -> bool {

@@ -81,6 +81,6 @@ fn controls_without_arguments_and_other_blocks_are_unchanged() {
     assert!(!html.contains("[["), "{html:?}");
     assert_renders(
         "x [[span class=\"q\"]] \nin span\n[[/span]]",
-        "<p>x <span class=\"q\"><br>\nin span<br>\n</span></p>",
+        "<p>x <span class=\"q\"><br>\nin span<br></span></p>",
     );
 }

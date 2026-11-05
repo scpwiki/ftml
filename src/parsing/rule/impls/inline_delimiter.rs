@@ -36,6 +36,14 @@ pub(super) fn assert_unpadded_open<'r, 't>(
     }
 }
 
+pub(super) fn container_closes_at_line_start(element: &Element) -> bool {
+    matches!(
+        element,
+        Element::Container(container)
+            if matches!(container.elements().last(), Some(Element::LineBreak))
+    )
+}
+
 pub(super) fn append_wikidot_line_close_space(
     elements: Elements<'_>,
     wikidot: bool,
@@ -43,8 +51,7 @@ pub(super) fn append_wikidot_line_close_space(
     let closes_at_line_start = wikidot
         && matches!(
             &elements,
-            Elements::Single(Element::Container(container))
-                if matches!(container.elements().last(), Some(Element::LineBreak))
+            Elements::Single(element) if container_closes_at_line_start(element)
         );
     if !closes_at_line_start {
         return elements;

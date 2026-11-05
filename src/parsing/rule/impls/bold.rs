@@ -19,8 +19,8 @@
  */
 
 use super::inline_delimiter::{
-    ReachableCloseMode, append_split_close_leftover, assert_unpadded_open,
-    inline_body_padded_through_seams, prepend_split_close_leftover,
+    ReachableCloseMode, append_split_close_leftover, append_wikidot_line_close_space,
+    assert_unpadded_open, inline_body_padded_through_seams, prepend_split_close_leftover,
     validate_reachable_close,
 };
 use super::prelude::*;
@@ -164,6 +164,8 @@ fn finish_collected<'r, 't>(
         };
         return ok!(paragraph_safe; elements, errors);
     }
+    let elements =
+        append_wikidot_line_close_space(elements, parser.settings().layout.legacy());
     let elements = match leftover {
         Some(leftover) => append_split_close_leftover(elements, leftover),
         None => elements,
@@ -257,7 +259,7 @@ mod tests {
                 "<p><tt>a<br>\nb</tt></p>",
                 "<p><span style=\"color: #c00\">a<br>\nb</span></p>",
                 "<p><span style=\"text-decoration: underline;\">a<br>\nb</span></p>",
-                "<p><span style=\"text-decoration: line-through;\">a<br>\n</span></p>",
+                "<p><span style=\"text-decoration: line-through;\">a<br></span></p>",
                 "<p><span style=\"text-decoration: line-through;\">a<br>\nb</span></p>",
                 "<p>\u{2014}a<br>\nb \u{2014}</p>",
                 "<p><strong>a<br>\nb</strong></p>",

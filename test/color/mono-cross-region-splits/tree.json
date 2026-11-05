@@ -1,0 +1,155 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "#63ff54",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "monospace",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "raw",
+                                                "data": " >  "
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "-"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "["
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "cmd"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "]"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": ":"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "delete"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": " "
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "file"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": " "
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "SCP"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "-"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "6279"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "##"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "line-break"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "63ff54"
+                    },
+                    {
+                        "element": "text",
+                        "data": "|"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "monospace",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "raw",
+                                    "data": " >  "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "-"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "["
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "cmd"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": ":"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "revert"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "-"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "to"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "original"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "##"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

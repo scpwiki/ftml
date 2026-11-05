@@ -264,7 +264,7 @@ fn same_line_div_span_marker_controls_stay_clean() {
         (
             "multiline",
             "[[div]]\n[[span]]x\n[[/span]]\n[[/div]]",
-            "<div><p><span>x<br>\n</span></p></div>",
+            "<div><p><span>x<br></span></p></div>",
             "x",
         ),
     ] {

@@ -125,9 +125,36 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
                 ctx.html().span().contents(container.elements());
             });
         }
+    } else if layout.legacy() && container_trailing_break_drops_newline(container.ctype())
+    {
+        match container.elements().split_last() {
+            Some((Element::LineBreak, rest)) => {
+                tag.inner(|ctx| {
+                    render_elements(ctx, rest);
+                    ctx.html().br();
+                });
+            }
+            _ => {
+                tag.contents(container.elements());
+            }
+        }
     } else {
         tag.contents(container.elements());
     }
+}
+
+fn container_trailing_break_drops_newline(ctype: ContainerType) -> bool {
+    matches!(
+        ctype,
+        ContainerType::Bold
+            | ContainerType::Italics
+            | ContainerType::Monospace
+            | ContainerType::Span
+            | ContainerType::Strikethrough
+            | ContainerType::Superscript
+            | ContainerType::Subscript
+            | ContainerType::Underline
+    )
 }
 
 fn has_wikidot_heading_label_span(elements: &[Element]) -> bool {
