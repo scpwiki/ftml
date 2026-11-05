@@ -137,12 +137,15 @@ impl<'t> ParagraphStack<'t> {
                         PartialElement::WikidotBlockClose(
                             WikidotBlockCloseKind::Div { .. }
                                 | WikidotBlockCloseKind::Collapsible { .. }
+                                | WikidotBlockCloseKind::CollapsibleCrossedBottom { .. }
                                 | WikidotBlockCloseKind::Note { .. }
                                 | WikidotBlockCloseKind::Align { .. }
                         ) | PartialElement::WikidotBlockOpen(WikidotBlockShell::Div {
                             scored: true,
                             ..
                         })
+                    )
+                )
                     )
                 )
                     )

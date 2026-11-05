@@ -1,0 +1,133 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "collapsible"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "hideLocation"
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "bottom"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "hide"
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "ZZZ"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "after"
+                    }
+                ]
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "a",
+                [
+                    {
+                        "element": "text",
+                        "data": "A"
+                    }
+                ]
+            ],
+            [
+                "\u0000",
+                [
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "collapsible"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            ],
+            [
+                "b",
+                [
+                    {
+                        "element": "text",
+                        "data": "B"
+                    }
+                ]
+            ]
+        ]
+    ]
+}

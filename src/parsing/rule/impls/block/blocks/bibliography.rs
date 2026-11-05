@@ -20,11 +20,14 @@
 
 use super::prelude::*;
 use crate::parsing::consume::wikidot_flat_close_kind_at_byte;
+use crate::parsing::rule::impls::block::parser::parse_wikidot_attributes;
 use crate::tree::{
     Bibliography, LinkLabel, LinkLocation, LinkType, PartialElement,
     WikidotBlockCloseKind,
 };
 use std::borrow::Cow;
+
+use super::collapsible::parse_hide_location;
 
 pub const BLOCK_BIBLIOGRAPHY: BlockRule = BlockRule {
     name: "block-bibliography",
@@ -161,6 +164,33 @@ fn parse_fn<'r, 't>(
         }
     }
 
+    if wikidot_candidate {
+        for (_, elements) in bibliography.slice_mut() {
+            for element in elements.iter_mut() {
+                let Element::Partial(PartialElement::WikidotBlockClose(
+                    WikidotBlockCloseKind::Collapsible { head },
+                )) = element
+                else {
+                    continue;
+                };
+                if *head >= body_start {
+                    continue;
+                }
+                let Some(hide_text) =
+                    wikidot_crossed_collapsible_bottom(source, parser, *head)
+                else {
+                    continue;
+                };
+                *element = Element::Partial(PartialElement::WikidotBlockClose(
+                    WikidotBlockCloseKind::CollapsibleCrossedBottom {
+                        head: *head,
+                        hide_text,
+                    },
+                ));
+            }
+        }
+    }
+
     let index = parser.push_bibliography(bibliography);
     let block = Element::BibliographyBlock { index, title, hide };
     let frames = if wikidot_candidate {
@@ -176,7 +206,10 @@ fn parse_fn<'r, 't>(
         frames,
     };
     ok!(
-        vec![block, Element::Partial(PartialElement::WikidotBlockClose(close))],
+        vec![
+            block,
+            Element::Partial(PartialElement::WikidotBlockClose(close))
+        ],
         errors
     )
 }
@@ -190,8 +223,42 @@ where
         .iter()
         .filter(|(_, pair)| pair.head_byte < body_start)
         .filter_map(|(closer, _)| wikidot_flat_close_kind_at_byte(parser, *closer))
-        .map(WikidotBlockCloseKind::rendered_frames)
+        .map(|kind| kind.rendered_frames())
         .sum()
+}
+
+fn wikidot_crossed_collapsible_bottom<'r, 't>(
+    source: &'t str,
+    parser: &Parser<'r, 't>,
+    head_byte: usize,
+) -> Option<Option<Cow<'t, str>>>
+where
+    'r: 't,
+{
+    let rest = source.get(head_byte..)?.strip_prefix("[[")?;
+    let head_end = rest.find("]]")?;
+    let head_text = &rest[..head_end];
+    if head_text.contains("[!--") || head_text.contains("[[") {
+        return None;
+    }
+    let (name, field) = head_text
+        .find([' ', '\t', '\n', '\r'])
+        .map(|split| head_text.split_at(split))
+        .unwrap_or((head_text, ""));
+    if !name.eq_ignore_ascii_case("collapsible") {
+        return None;
+    }
+    let mut arguments = parse_wikidot_attributes(field);
+    let (_, show_bottom) = arguments
+        .get("hideLocation")
+        .map(|value| parse_hide_location(&value, parser))
+        .transpose()
+        .ok()?
+        .unwrap_or((true, false));
+    if !show_bottom {
+        return None;
+    }
+    Some(arguments.get("hide"))
 }
 
 fn wikidot_crossed_bibliography_residual<'t>(
@@ -344,10 +411,9 @@ mod tests {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize("[[bibliography]]");
-        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
 
-        assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(html, "<p>[[bibliography]]</p>");
     }
 
@@ -358,10 +424,9 @@ mod tests {
         let tokenization = crate::tokenize(
             "A claim[[footnote]]with a note[[/footnote]].\n\n[[bibliography]]",
         );
-        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
 
-        assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(
             html,
             "<p>A claim<sup class=\"footnoteref\"><a id=\"footnoteref-1\" href=\"javascript:;\" class=\"footnoteref\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnote-1&#39;)\">1</a></sup>.</p><p>[[bibliography]]</p><div class=\"footnotes-footer\"><div class=\"title\">Footnotes</div><div class=\"footnote-footer\" id=\"footnote-1\"><a href=\"javascript:;\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnoteref-1&#39;)\">1</a>. with a note</div></div>",

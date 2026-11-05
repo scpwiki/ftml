@@ -39,10 +39,6 @@ impl WikidotBlockKind {
         )
     }
 
-    fn is_first_fit(self) -> bool {
-        matches!(self, WikidotBlockKind::Collapsible | WikidotBlockKind::Note)
-    }
-
     fn needs_own_line(self) -> bool {
         matches!(
             self,
@@ -84,7 +80,6 @@ pub(crate) struct WikidotBlockPair {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct WikidotBlockPairs {
     pairs: Vec<WikidotBlockPair>,
-    by_head: BTreeMap<usize, usize>,
     by_head_byte: BTreeMap<usize, usize>,
     by_closer_byte: BTreeMap<usize, usize>,
     head_event_bytes: BTreeSet<usize>,
@@ -93,12 +88,9 @@ pub(crate) struct WikidotBlockPairs {
 }
 
 impl WikidotBlockPairs {
+    #[cfg(test)]
     pub(crate) fn pairs(&self) -> &[WikidotBlockPair] {
         &self.pairs
-    }
-
-    pub(crate) fn pair_at_head(&self, head: usize) -> Option<&WikidotBlockPair> {
-        self.by_head.get(&head).map(|index| &self.pairs[*index])
     }
 
     pub(crate) fn pair_at_head_byte(
@@ -119,6 +111,7 @@ impl WikidotBlockPairs {
             .map(|index| &self.pairs[*index])
     }
 
+    #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.pairs.is_empty()
     }
@@ -1198,12 +1191,6 @@ impl<'t> Scanner<'t> {
                 sources.push((start, end));
             }
         }
-        let by_head = self
-            .pairs
-            .iter()
-            .enumerate()
-            .map(|(index, pair)| (pair.head, index))
-            .collect();
         let by_head_byte = self
             .pairs
             .iter()
@@ -1218,7 +1205,6 @@ impl<'t> Scanner<'t> {
             .collect();
         WikidotBlockPairs {
             pairs: self.pairs,
-            by_head,
             by_head_byte,
             by_closer_byte,
             head_event_bytes: self.head_event_bytes,
@@ -1532,23 +1518,6 @@ impl<'t> Scanner<'t> {
         self.bib_ranges
             .first()
             .is_some_and(|(start, end)| *start < index && index < *end)
-    }
-
-    fn line_is_quote_led(&self, index: usize) -> bool {
-        let line = self.line_of[index];
-        let first = self.line_first[line];
-        let end = self
-            .line_first
-            .get(line + 1)
-            .copied()
-            .unwrap_or(self.tokens.len());
-        (first..end).any(|t| self.tokens[t].token == Token::Quote)
-            && (first..index).all(|t| {
-                matches!(
-                    self.tokens[t].token,
-                    Token::Quote | Token::Whitespace | Token::InputStart
-                )
-            })
     }
 
     fn tabview_banned(&self, head_index: usize) -> bool {

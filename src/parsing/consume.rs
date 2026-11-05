@@ -338,7 +338,7 @@ pub(crate) fn line_has_unmatched_wikidot_owner_opener(
 pub(crate) fn wikidot_flat_close_kind_at_byte<'r, 't>(
     parser: &Parser<'r, 't>,
     closer_byte: usize,
-) -> Option<WikidotBlockCloseKind>
+) -> Option<WikidotBlockCloseKind<'t>>
 where
     'r: 't,
 {

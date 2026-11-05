@@ -64,7 +64,7 @@ use self::bibliography::{render_bibcite, render_bibliography};
 use self::block_frame::{BlockFrame, render_block_frame};
 use self::button::render_standalone_button;
 use self::clear_float::render_clear_float;
-use self::collapsible::{Collapsible, render_collapsible};
+use self::collapsible::{Collapsible, render_collapsible, render_wikidot_frame_link};
 use self::container::{render_color, render_container};
 use self::date::render_date;
 use self::definition_list::render_definition_list;
@@ -94,7 +94,7 @@ use self::user::render_user;
 use self::video::render_video;
 use super::HtmlContext;
 use super::attributes::AddedAttributes;
-use crate::tree::{CodeBlock, Element, ListItem, PartialElement};
+use crate::tree::{CodeBlock, Element, ListItem, PartialElement, WikidotBlockCloseKind};
 use ref_map::*;
 
 pub fn render_elements(ctx: &mut HtmlContext, elements: &[Element]) {
@@ -425,6 +425,20 @@ fn render_partial(ctx: &mut HtmlContext, partial: &PartialElement) {
     );
 
     match partial {
+        PartialElement::WikidotBlockClose(
+            WikidotBlockCloseKind::CollapsibleCrossedBottom { hide_text, .. },
+        ) if ctx.rendering_wikidot_bibliography() => {
+            ctx.push_raw_str("</div>");
+            ctx.html()
+                .div()
+                .attr(attr!("class" => "collapsible-block-unfolded-link"))
+                .inner(|ctx| {
+                    render_wikidot_frame_link(ctx, hide_text.as_deref(), false, &[])
+                });
+            for _ in 0..2 {
+                ctx.push_raw_str("</div>");
+            }
+        }
         PartialElement::WikidotBlockClose(kind)
             if ctx.rendering_wikidot_bibliography() =>
         {

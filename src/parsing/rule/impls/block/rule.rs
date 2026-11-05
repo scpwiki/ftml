@@ -516,6 +516,7 @@ where
                 | "block-align-left"
                 | "block-align-justify"
                 | "block-toc"
+                | "block-html"
         )
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
