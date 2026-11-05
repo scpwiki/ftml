@@ -397,6 +397,10 @@ fn repair_bracket_run_tokenization<'t>(
     let mut tokens: Vec<ExtractedToken<'t>> = tokenization.tokens().to_vec();
     let mut repaired = false;
     let mut index = 0;
+    // Monotone forward scan backing the cheap pre-gate for the probes
+    // below: a candidate that has nothing left which could end a block
+    // head cannot form a block, so it never needs a parser built for it.
+    let mut head_gate = BracketRunHeadGate::default();
     while index + 1 < tokens.len() {
         let comment_head = tokens[index].token == Token::LeftLink
             && tokens[index].span.end - tokens[index].span.start == 3
@@ -413,7 +417,9 @@ fn repair_bracket_run_tokenization<'t>(
                     && token.span.start == tokens[index].span.start + 4
                     && token.span.end == tokens[index].span.start + 6
             });
-        if comment_head {
+        if comment_head
+            && head_gate.has_head_terminator_at_or_after(&tokens, source, index + 3)
+        {
             let start = tokens[index].span.start;
             let token_at = |token: Token, span: std::ops::Range<usize>| ExtractedToken {
                 token,
@@ -444,6 +450,7 @@ fn repair_bracket_run_tokenization<'t>(
                 tokens = candidate;
                 repaired = true;
                 index += 2;
+                head_gate.reset(index);
                 continue;
             }
         }
@@ -452,6 +459,10 @@ fn repair_bracket_run_tokenization<'t>(
             && tokens[index + 1].span.start == tokens[index].span.end
             && tokens[index].span.end - tokens[index].span.start == 1;
         if !pair {
+            index += 1;
+            continue;
+        }
+        if !head_gate.has_head_terminator_at_or_after(&tokens, source, index + 2) {
             index += 1;
             continue;
         }
@@ -474,6 +485,7 @@ fn repair_bracket_run_tokenization<'t>(
             tokens = candidate;
             repaired = true;
             index += 2;
+            head_gate.reset(index);
             continue;
         }
         let segment_candidate = candidate;
@@ -496,6 +508,7 @@ fn repair_bracket_run_tokenization<'t>(
             tokens = candidate;
             repaired = true;
             index += 3;
+            head_gate.reset(index);
             continue;
         }
         if bracket_run_segment_prefix(
@@ -509,11 +522,111 @@ fn repair_bracket_run_tokenization<'t>(
             tokens = segment_candidate;
             repaired = true;
             index += 2;
+            head_gate.reset(index);
             continue;
         }
         index += 1;
     }
     repaired.then(|| tokenization.with_tokens(tokens))
+}
+
+/// Monotone forward scan that answers the repair probes' cheap pre-gate:
+/// does the token stream at or after a position still contain anything
+/// that can end a block head?
+///
+/// `RULE_BLOCK` cannot accept a re-split candidate unless its block head
+/// collects successfully. Every success path of the head-word collection
+/// (`collect_text_resolved_impl`, and the raw `collect_text_keep` used by
+/// the residual-opener head) terminates on a token that ends the head:
+/// whitespace, a line break, a paragraph break, `]]`, `]]]`, or `]` (the
+/// fused-close path, conservatively included). A fused `[[iftags ...]]`
+/// segment inside the head can also close it, so a `[[` that may start one
+/// counts as a candidate too. Without either, the collection runs to end
+/// of input and fails, so the probe can only report failure.
+///
+/// Callers query non-decreasing positions, so a repair pass visits each
+/// token at most once; `reset` is only needed after committing a repair,
+/// which rewrites the token list.
+#[derive(Debug, Default)]
+struct BracketRunHeadGate {
+    next: Option<usize>,
+    scanned: usize,
+}
+
+impl BracketRunHeadGate {
+    fn has_head_terminator_at_or_after(
+        &mut self,
+        tokens: &[ExtractedToken<'_>],
+        source: &str,
+        from: usize,
+    ) -> bool {
+        match self.next {
+            Some(next) if next >= from => return true,
+            None if self.scanned > from => return false,
+            _ => {}
+        }
+        let mut index = self.scanned.max(from);
+        while index < tokens.len() {
+            if bracket_run_token_can_end_head(tokens, index, source) {
+                self.next = Some(index);
+                self.scanned = index + 1;
+                return true;
+            }
+            index += 1;
+        }
+        self.next = None;
+        self.scanned = tokens.len();
+        false
+    }
+
+    fn reset(&mut self, index: usize) {
+        self.next = None;
+        self.scanned = index;
+    }
+}
+
+fn bracket_run_token_can_end_head(
+    tokens: &[ExtractedToken<'_>],
+    index: usize,
+    source: &str,
+) -> bool {
+    match tokens[index].token {
+        Token::Whitespace
+        | Token::LineBreak
+        | Token::ParagraphBreak
+        | Token::RightBlock
+        | Token::RightLink
+        | Token::RightBracket => true,
+        Token::LeftBlock => bracket_run_iftags_head_may_start(tokens, index, source),
+        _ => false,
+    }
+}
+
+/// Superset of the fused `[[iftags` segment check that `iftags_segment_fused`
+/// performs before scanning a segment: the token must be `[[` and the head
+/// word must spell `iftags`. Being a superset is safe here; it can only
+/// make the repair run a probe it would have run anyway.
+fn bracket_run_iftags_head_may_start(
+    tokens: &[ExtractedToken<'_>],
+    index: usize,
+    source: &str,
+) -> bool {
+    let bytes = source.as_bytes();
+    let mut offset = tokens[index].span.end;
+    while matches!(bytes.get(offset), Some(b' ' | b'\t')) {
+        offset += 1;
+    }
+    const NAME: &[u8] = b"iftags";
+    if !bytes
+        .get(offset..offset + NAME.len())
+        .is_some_and(|candidate| candidate.eq_ignore_ascii_case(NAME))
+    {
+        return false;
+    }
+    matches!(
+        bytes.get(offset + NAME.len()),
+        None | Some(b' ' | b'\t' | b'\r' | b'\n' | b']')
+    )
 }
 
 fn bracket_run_block_parses<'t>(
