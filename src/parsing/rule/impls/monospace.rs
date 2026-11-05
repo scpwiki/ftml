@@ -46,13 +46,18 @@ fn try_consume_fn<'r, 't>(
     let mut leading_padding = false;
     if is_wikidot_edge_padding(parser.current()) {
         let is_padding_only = parser.next_two_tokens().1 == Some(Token::RightMonospace);
-        assert_step(parser, Token::Whitespace)?;
+        let keep_for_dash = parser.settings().layout.legacy()
+            && !is_padding_only
+            && parser.next_two_tokens().1 == Some(Token::DoubleDash);
+        if !keep_for_dash {
+            assert_step(parser, Token::Whitespace)?;
 
-        if is_padding_only {
-            assert_step(parser, Token::RightMonospace)?;
-            return success_elements(text!(" "));
+            if is_padding_only {
+                assert_step(parser, Token::RightMonospace)?;
+                return success_elements(text!(" "));
+            }
+            leading_padding = true;
         }
-        leading_padding = true;
     }
 
     let close = [ParseCondition::current(Token::RightMonospace)];
@@ -96,6 +101,10 @@ fn try_consume_fn<'r, 't>(
             return ok!(paragraph_safe; output, errors);
         }
     }
+
+    let unformed_dash = parser.settings().layout.legacy()
+        && terminator.token == Token::RightMonospace
+        && unform_strike_ate_close(&mut elements);
 
     let trailing_padding = if parser.current().token == Token::RightMonospace {
         elements.push(text!("}}"));
@@ -190,7 +199,35 @@ fn try_consume_fn<'r, 't>(
     if trailing_separator {
         output.push(text!(" "));
     }
+    if unformed_dash {
+        output.push(text!("--"));
+        output.push(text!("}}"));
+    }
     ok!(paragraph_safe; output, errors)
+}
+
+fn unform_strike_ate_close<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let ate_close = matches!(
+        elements.last(),
+        Some(Element::Container(container))
+            if container.ctype() == ContainerType::Strikethrough
+                && container.attributes().get().is_empty()
+                && matches!(
+                    container.elements().last(),
+                    Some(Element::Text(text)) if text.as_ref() == "}}",
+                )
+    );
+    if !ate_close {
+        return false;
+    }
+    let Some(Element::Container(strike)) = elements.pop() else {
+        return false;
+    };
+    let mut children: Vec<Element<'t>> = strike.into();
+    children.pop();
+    elements.push(text!("--"));
+    elements.extend(children);
+    true
 }
 
 fn wikidot_shed_close(elements: &[Element<'_>]) -> Option<(usize, String, String, bool)> {
