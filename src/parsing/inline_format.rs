@@ -4,6 +4,7 @@ use crate::parsing::rule::impls::{
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, Container, ContainerType, Element,
     InlineFormatKind, LinkLabel, LinkLocation, ListItem, PartialElement, TableType,
+    WikidotBlockShell,
 };
 use std::borrow::Cow;
 use std::mem;
@@ -2345,6 +2346,11 @@ fn pairing_barrier(element: &Element<'_>) -> bool {
                 | PartialElement::TableRow(_)
                 | PartialElement::TableCell(_)
                 | PartialElement::Tab(_)
+                | PartialElement::WikidotBlockOpen(
+                    WikidotBlockShell::Div { .. }
+                        | WikidotBlockShell::Note { .. }
+                        | WikidotBlockShell::Collapsible { .. }
+                )
         ),
         _ => false,
     }
@@ -3967,6 +3973,20 @@ fn discard_range(elements: &mut [Option<Element<'_>>], range: Range<usize>) {
     for index in range {
         elements[index].take();
     }
+}
+
+pub(crate) fn lower_wikidot_root_dash_runs(elements: &mut Vec<Element<'_>>) {
+    if !elements.iter().any(|element| dash_run_len(element).is_some()) {
+        return;
+    }
+    let mut output = Vec::with_capacity(elements.len());
+    for element in elements.drain(..) {
+        match dash_run_len(&element) {
+            Some(run_len) => output.extend(wikidot_dash_run_elements(run_len)),
+            None => output.push(element),
+        }
+    }
+    *elements = output;
 }
 
 fn lower_dash_runs(elements: &mut Vec<Element<'_>>) {

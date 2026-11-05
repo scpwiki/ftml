@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::line_owner::try_consume_definition_list_block;
 use super::prelude::*;
 use crate::parsing::collect::collect_consume_keep_split;
 use crate::parsing::{ParagraphSplitEntry, ParagraphSplitKind, ParseSuccess};
@@ -79,6 +80,10 @@ fn parse_definition_list<'r, 't>(
 
     if parser.wikidot_scored_div_first_line_suppresses_at(parser.current().span.start) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    if let Some(body) = try_consume_definition_list_block(parser)? {
+        return ok!(false; Elements::Multiple(body));
     }
 
     let mut items = Vec::new();

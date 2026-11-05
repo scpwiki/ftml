@@ -72,15 +72,20 @@ fn consume_header_once<'r, 't>(
     ];
     let ctype = ContainerType::Header(heading);
     let restore_line = if parser.settings().layout.legacy() {
-        let previous = parser.in_wikidot_single_line_content();
+        let previous = (
+            parser.in_wikidot_single_line_content(),
+            parser.in_wikidot_heading_line(),
+        );
         parser.set_in_wikidot_single_line_content(true);
+        parser.set_in_wikidot_heading_line(true);
         Some(previous)
     } else {
         None
     };
     let collected = collect_container(parser, RULE_HEADER, ctype, &close, &[], None);
-    if let Some(previous) = restore_line {
-        parser.set_in_wikidot_single_line_content(previous);
+    if let Some((single_line, heading_line)) = restore_line {
+        parser.set_in_wikidot_single_line_content(single_line);
+        parser.set_in_wikidot_heading_line(heading_line);
     }
     let collected = collected?;
     let (mut elements, mut all_errors, _) = collected.into();

@@ -15,6 +15,7 @@ const DEFINITION_LIST_LINE: u16 = 1 << 8;
 const SINGLE_LINE_CONTENT: u16 = 1 << 9;
 const DIV_LITERAL_RECOVERED: u16 = 1 << 10;
 const MODULE_EMPTY_BODY: u16 = 1 << 11;
+const HEADING_LINE: u16 = 1 << 12;
 
 /// Sentinel for "no scored div direct body" in the packed field.
 const SCORED_DIV_DIRECT_INACTIVE: u32 = u32::MAX;
@@ -349,6 +350,14 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_in_wikidot_single_line_content(&mut self, value: bool) {
         set_flag(&mut self.wikidot.flags, SINGLE_LINE_CONTENT, value);
+    }
+
+    pub(crate) fn in_wikidot_heading_line(&self) -> bool {
+        self.wikidot.flags & HEADING_LINE != 0
+    }
+
+    pub(crate) fn set_in_wikidot_heading_line(&mut self, value: bool) {
+        set_flag(&mut self.wikidot.flags, HEADING_LINE, value);
     }
 
     pub(crate) fn in_wikidot_simple_table_cell(&self) -> bool {

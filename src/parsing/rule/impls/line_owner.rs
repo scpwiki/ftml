@@ -1,7 +1,7 @@
 use super::RULE_PAGE;
 use super::block::blocks::{
     BLOCK_ALIGN_CENTER, BLOCK_ALIGN_JUSTIFY, BLOCK_ALIGN_LEFT, BLOCK_ALIGN_RIGHT,
-    BLOCK_COLLAPSIBLE, BLOCK_DIV, CollapsibleHead, parse_collapsible_head,
+    BLOCK_COLLAPSIBLE, BLOCK_DIV, BLOCK_NOTE, CollapsibleHead, parse_collapsible_head,
     wikidot_div_head_attributes,
 };
 use super::block::{BlockBodyStart, BlockRule};
@@ -15,6 +15,7 @@ use std::borrow::Cow;
 pub(crate) enum LineOwner {
     Quote { depth: usize },
     List { depth: usize, ltype: ListType },
+    DefinitionList,
 }
 
 #[derive(Debug)]
@@ -29,6 +30,7 @@ enum BlockHead<'t> {
     Div(AttributeMap<'t>),
     Align(Alignment),
     Collapsible(CollapsibleHead<'t>),
+    Note(AttributeMap<'t>),
 }
 
 pub(crate) fn try_consume_lost_owner_block<'r, 't>(
@@ -49,6 +51,47 @@ where
         Ok(Some(block)) => {
             parser.update(&candidate);
             Ok(Some(block))
+        }
+        Ok(None) | Err(_) => {
+            parser.reset_mutable_state(state);
+            Ok(None)
+        }
+    }
+}
+
+pub(crate) fn try_consume_definition_list_block<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<Vec<Element<'t>>>, ParseError>
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy()
+        || !parser.start_of_line()
+        || parser.current().token != Token::Colon
+    {
+        return Ok(None);
+    }
+
+    let state = parser.get_mutable_state();
+    let mut candidate = parser.clone();
+    let parsed: Result<Option<Vec<Element<'t>>>, ParseError> = (|| {
+        candidate.step()?;
+        if candidate.current().token != Token::Whitespace {
+            return Ok(None);
+        }
+        candidate.step()?;
+        let Some(lost) =
+            parse_lost_owner_block(&mut candidate, LineOwner::DefinitionList)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(lost.body))
+    })();
+
+    match parsed {
+        Ok(Some(body)) => {
+            parser.update(&candidate);
+            Ok(Some(body))
         }
         Ok(None) | Err(_) => {
             parser.reset_mutable_state(state);
@@ -174,6 +217,18 @@ where
         parser.set_block(&BLOCK_COLLAPSIBLE);
         let (head, body_start) = parse_collapsible_head(parser, &name, in_head)?;
         (BlockHead::Collapsible(head), "collapsible", body_start)
+    } else if name.eq_ignore_ascii_case("note") {
+        if !matches!(owner, LineOwner::DefinitionList) || parser.in_note() {
+            return Ok(None);
+        }
+        parser.set_block(&BLOCK_NOTE);
+        let (arguments, body_start) =
+            parser.get_head_map_with_body_start_wikidot(&BLOCK_NOTE, in_head)?;
+        if !arguments.is_empty() {
+            return Ok(None);
+        }
+        let attributes = arguments.to_attribute_map(parser.settings());
+        (BlockHead::Note(attributes), "note", body_start)
     } else if let Some((block_rule, alignment, close_name)) = alignment_rule(&name) {
         parser.set_block(block_rule);
         let body_start = parser.get_head_none_with_body_start(block_rule, in_head)?;
@@ -186,6 +241,9 @@ where
         return Ok(None);
     }
     if matches!(owner, LineOwner::List { .. }) && matches!(head, BlockHead::Align(_)) {
+        return Ok(None);
+    }
+    if matches!(owner, LineOwner::DefinitionList) && matches!(head, BlockHead::Align(_)) {
         return Ok(None);
     }
     if matches!(head, BlockHead::Align(_)) && parser.wikidot_in_scored_div_direct_body() {
@@ -219,6 +277,7 @@ where
     }
     let mut append_unquoted_close_break = false;
     let mut residual_list_close = None;
+    let mut close_tail = None;
     let body = gather_paragraphs(
         parser,
         RULE_PAGE,
@@ -229,6 +288,7 @@ where
                 owner,
                 &mut append_unquoted_close_break,
                 &mut residual_list_close,
+                &mut close_tail,
             )
         }),
     );
@@ -243,11 +303,15 @@ where
     parser.set_quote_body_cursor(previous_cursor);
     let (mut body, errors, _) = body?.into();
     trim_trailing_physical_break(&mut body);
+    if let Some(tail) = close_tail {
+        body.push(Element::Text(tail));
+    }
     if let Some(ltype) = residual_list_close {
         append_residual_list_close(&mut body, ltype);
     }
 
     let control = match head {
+        _ if matches!(owner, LineOwner::DefinitionList) => None,
         BlockHead::Div(attributes) => {
             // Live keeps an empty shell only when the authored head carries a
             // non-empty attribute; a bare authored div head loses the line.
@@ -269,6 +333,11 @@ where
             AttributeMap::new(),
         ))),
         BlockHead::Collapsible(head) => Some(head.into_element(Vec::new())),
+        BlockHead::Note(attributes) => Some(Element::Container(Container::new(
+            ContainerType::Note,
+            Vec::new(),
+            attributes,
+        ))),
     };
     Ok(Some(LostOwnerBlock {
         control,
@@ -300,6 +369,7 @@ where
             depth,
             ltype: ListType::Generic,
         } => (3, depth),
+        LineOwner::DefinitionList => (4, 0),
     };
     let mut scan = parser.clone();
     let mut visited = Vec::new();
@@ -344,12 +414,14 @@ where
 
         let mut ignored_break = false;
         let mut ignored_residual_close = None;
+        let mut ignored_tail = None;
         if consume_matching_close(
             &mut scan,
             close_name,
             owner,
             &mut ignored_break,
             &mut ignored_residual_close,
+            &mut ignored_tail,
         )? {
             parser.cache_lost_owner_scan_outcomes(
                 close_name,
@@ -431,6 +503,7 @@ fn consume_matching_close<'r, 't>(
     owner: LineOwner,
     append_unquoted_close_break: &mut bool,
     residual_list_close: &mut Option<ListType>,
+    close_tail: &mut Option<Cow<'t, str>>,
 ) -> Result<bool, ParseError>
 where
     'r: 't,
@@ -459,7 +532,23 @@ where
             close.current().token,
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
         ) {
-            continue;
+            if !matches!(owner, LineOwner::DefinitionList) {
+                continue;
+            }
+            let source = close.full_text().inner();
+            let start = close.current().span.start;
+            let end = source[start..]
+                .find('\n')
+                .map_or(source.len(), |offset| start + offset);
+            *close_tail =
+                Some(Cow::Borrowed(source[start..end].trim_end_matches('\r')));
+            while close.current().span.start < end
+                && close.current().token != Token::InputEnd
+            {
+                close.step()?;
+            }
+            parser.update(&close);
+            return Ok(true);
         }
         let trailing_line_break = close.current().token == Token::LineBreak;
         if trailing_line_break {
@@ -490,6 +579,14 @@ fn consume_owner_prefix(
             if parser.current().token != Token::Quote
                 || parser.current().slice.len() != depth
             {
+                return Ok(false);
+            }
+            parser.step()?;
+            parser.get_optional_space()?;
+            Ok(true)
+        }
+        LineOwner::DefinitionList => {
+            if parser.current().token != Token::Colon {
                 return Ok(false);
             }
             parser.step()?;
