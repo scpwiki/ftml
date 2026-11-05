@@ -1,0 +1,173 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "monospace",
+        "span": [
+            11,
+            13
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-monospace",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-monospace",
+        "rule": "fallback",
+        "span": [
+            6,
+            8
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            43,
+            45
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            16,
+            18
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "bold",
+        "span": [
+            43,
+            45
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            24,
+            26
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            43,
+            45
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            31,
+            33
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            37,
+            39
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            37,
+            39
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            43,
+            45
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            39,
+            41
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "monospace",
+        "span": [
+            56,
+            58
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-monospace",
+        "rule": "fallback",
+        "span": [
+            45,
+            47
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-monospace",
+        "rule": "fallback",
+        "span": [
+            51,
+            53
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "monospace",
+        "span": [
+            73,
+            73
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-monospace",
+        "rule": "fallback",
+        "span": [
+            58,
+            60
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-monospace",
+        "rule": "fallback",
+        "span": [
+            68,
+            70
+        ],
+        "kind": "no-rules-match"
+    }
+]

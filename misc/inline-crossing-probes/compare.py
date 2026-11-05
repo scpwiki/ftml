@@ -16,7 +16,9 @@ Both sides are normalized before comparison, in this order:
     3. style attributes: split declarations on ";", strip each, drop empties,
        rejoin with "; "  (style="color: red;" == style="color: red")
     4. <br /> / <br/> / <br> -> <br>
-    5. collapse ASCII whitespace runs to one space, then strip
+    5. remove whitespace between consecutive </p>/<p> (live separates
+       paragraphs with newlines; FTML renders the body without them)
+    6. collapse ASCII whitespace runs to one space, then strip
 
 Prints "agree N/M" then one block per disagreeing case (id, source, normalized
 live, normalized ftml, plus a whitespace-only marker when the normalized
@@ -46,6 +48,7 @@ DEFAULT_LIVE_RESULTS = REC / "live-results.json"
 
 _ASCII_WS = re.compile(r"[ \t\r\n\f\v]+")
 _BR = re.compile(r"<br\s*/?>", re.IGNORECASE)
+_P_GAP = re.compile(r"</p>\s+<p>")
 _STYLE_ATTR = re.compile(r'style="([^"]*)"')
 
 
@@ -76,6 +79,7 @@ def normalize(text):
 
     text = _STYLE_ATTR.sub(_normalize_style, text)
     text = _BR.sub("<br>", text)
+    text = _P_GAP.sub("</p><p>", text)
     text = _ASCII_WS.sub(" ", text).strip()
     return text
 

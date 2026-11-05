@@ -1,0 +1,92 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "bold",
+        "span": [
+            17,
+            19
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            9,
+            11
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            9,
+            11
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            51,
+            53
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            39,
+            41
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            85,
+            87
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            73,
+            75
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "color",
+        "span": [
+            119,
+            119
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            105,
+            107
+        ],
+        "kind": "no-rules-match"
+    }
+]

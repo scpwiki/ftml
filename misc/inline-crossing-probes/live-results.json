@@ -502,5 +502,181 @@
       "\n\n<p>ab</p>\n"
     ],
     "det": true
+  },
+  "m1": {
+    "source": "--a##red|xb**{{c}}--d##--**##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong></span><strong>d</strong>&#8212;</span>##</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong></span><strong>d</strong>&#8212;</span>##</p>\n"
+    ],
+    "det": true
+  },
+  "m2": {
+    "source": "{{a**b}}c**",
+    "runs": [
+      "\n\n<p><tt>a<strong>b</strong></tt><strong>c</strong></p>\n",
+      "\n\n<p><tt>a<strong>b</strong></tt><strong>c</strong></p>\n"
+    ],
+    "det": true
+  },
+  "m3": {
+    "source": "--a##red|xb**{{c--d}}##--**##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong><tt><strong>d</strong></tt>&#8212;</span>##</span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong><tt><strong>d</strong></tt>&#8212;</span>##</span></p>\n"
+    ],
+    "det": true
+  },
+  "m4": {
+    "source": "--a##red|xb**{{--c##--{{**##}}",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt><strong>c</strong>&#8212;{{</tt>##</span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt><strong>c</strong>&#8212;{{</tt>##</span></span></p>\n"
+    ],
+    "det": true
+  },
+  "m5": {
+    "source": "--a##red|xb**{{--c##--{{**##}}}}",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt><strong>c</strong>&#8212;{{</tt>##}}</span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt><strong>c</strong>&#8212;{{</tt>##}}</span></span></p>\n"
+    ],
+    "det": true
+  },
+  "m6": {
+    "source": "--a##red|xb**{{--c##--{{**##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong>{{</strong></span><strong>c</strong>&#8212;{{</span>##</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong>{{</strong></span><strong>c</strong>&#8212;{{</span>##</p>\n"
+    ],
+    "det": true
+  },
+  "m7": {
+    "source": "{{a--b}}c--",
+    "runs": [
+      "\n\n<p><tt>a<span style=\"text-decoration: line-through;\">b</span></tt><span style=\"text-decoration: line-through;\">c</span></p>\n",
+      "\n\n<p><tt>a<span style=\"text-decoration: line-through;\">b</span></tt><span style=\"text-decoration: line-through;\">c</span></p>\n"
+    ],
+    "det": true
+  },
+  "m8": {
+    "source": "{{a##red|b}}c##",
+    "runs": [
+      "\n\n<p><tt>a<span style=\"color: red\">b</span></tt><span style=\"color: red\">c</span></p>\n",
+      "\n\n<p><tt>a<span style=\"color: red\">b</span></tt><span style=\"color: red\">c</span></p>\n"
+    ],
+    "det": true
+  },
+  "ts-b-i-tt-p2": {
+    "source": "--a##red|xb**//{{--c##--{{//**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em>{{</em></strong><em><strong>c</strong>&#8212;{{</em></span>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em>{{</em></strong><em><strong>c</strong>&#8212;{{</em></span>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "ts-tt-i-b-p2": {
+    "source": "--a##red|xb{{//**--c##--**//{{##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb{{<strong><em>c</em>&#8212;</strong></span>{{##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb{{<strong><em>c</em>&#8212;</strong></span>{{##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "bi-missing-##-p2": {
+    "source": "--a##red|xb**//--c##--//**\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c</strong>&#8212;</em></span></span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c</strong>&#8212;</em></span></span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "bi-no-strike-p2": {
+    "source": "##red|a**//b##c//**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a<strong><em>b</em></strong><em><strong>c</strong></em>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"color: red\">a<strong><em>b</em></strong><em><strong>c</strong></em>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "ib-missing-##-p2": {
+    "source": "--a##red|xb//**--c##--**//\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em>c</em>&#8212;</strong></span></span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em>c</em>&#8212;</strong></span></span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "ib-no-strike-p2": {
+    "source": "##red|a//**b##c**//##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a<em><strong>b</strong></em><strong><em>c</em></strong>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"color: red\">a<em><strong>b</strong></em><strong><em>c</em></strong>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "plain-bi-strike-p2": {
+    "source": "**a//b--c**d--e//\n\nplain",
+    "runs": [
+      "\n\n<p><strong>a<em>b<span style=\"text-decoration: line-through;\">c</span></em><span style=\"text-decoration: line-through;\"><em>d</em></span><em>e</em></strong></p>\n<p>plain</p>\n",
+      "\n\n<p><strong>a<em>b<span style=\"text-decoration: line-through;\">c</span></em><span style=\"text-decoration: line-through;\"><em>d</em></span><em>e</em></strong></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "plain-color-bi-p2": {
+    "source": "##red|a**//b##c//**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a<strong><em>b</em></strong><em><strong>c</strong></em>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"color: red\">a<strong><em>b</em></strong><em><strong>c</strong></em>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "bi-gap-p2": {
+    "source": "--a##red|xb**//--c d## e--//**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c d</strong> e&#8212;</em></span>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c d</strong> e&#8212;</em></span>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "bi-trail-text-p2": {
+    "source": "--a##red|xb**//--c##tail--//**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c</strong>tail&#8212;</em></span>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c</strong>tail&#8212;</em></span>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "ib-gap-p2": {
+    "source": "--a##red|xb//**--c d## e--**//##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em>c d</em> e&#8212;</strong></span>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em>c d</em> e&#8212;</strong></span>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "bi-open-trail-p2": {
+    "source": "--a##red|xb**//--c##--//** f##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c</strong>&#8212;</em></span> f##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<em><strong>c</strong>&#8212;</em></span> f##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "nc-color-p2": {
+    "source": "##red|a**b**c##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a<strong>b</strong>c</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"color: red\">a<strong>b</strong>c</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "nc-color-cross-p2": {
+    "source": "##red|a**b##c**d##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a<strong>b</strong></span><strong>c</strong>d##</p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"color: red\">a<strong>b</strong></span><strong>c</strong>d##</p>\n<p>plain</p>\n"
+    ],
+    "det": true
   }
 }

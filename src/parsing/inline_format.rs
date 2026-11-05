@@ -194,6 +194,9 @@ fn normalize_sequence_scoped<'t>(
     normalize_sequence_children(elements);
     lower_dash_runs(elements);
     substitute_number_unit_spaces(elements);
+    if std::env::var_os("FTML_DBG_INLINE").is_some() {
+        eprintln!("DBG out: {elements:?}");
+    }
 }
 
 fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
@@ -2037,6 +2040,7 @@ enum PairRole<'t> {
     ColorClose,
     Drop,
     LiteralMarker(InlineFormatKind),
+    LiteralText(&'static str),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2053,6 +2057,8 @@ enum ProjItem<'a> {
     FormatEventClose(InlineFormatKind),
     ColorEventOpen,
     ColorEventClose,
+    ColorEdgeOpen,
+    ColorEdgeClose,
 }
 
 #[derive(Clone, Copy)]
@@ -2061,10 +2067,16 @@ enum Expansion {
     Color,
 }
 
-const LITERAL_MARKERS: [InlineFormatKind; 3] = [
+/// Format kinds whose parsed containers are re-paired as marker edges.
+/// Bold, italics and underline are the symmetric literal markers that always
+/// participate; strikethrough joins them because the parser can steal its
+/// open or close marker into a nested container, leaving the real partner as
+/// literal dash text.
+const EDGE_MARKERS: [InlineFormatKind; 4] = [
     InlineFormatKind::Bold,
     InlineFormatKind::Italics,
     InlineFormatKind::Underline,
+    InlineFormatKind::Strikethrough,
 ];
 
 const MARKER_TEXTS: [&str; 6] = ["**", "//", "__", "{{", "}}", "##"];
@@ -2450,8 +2462,13 @@ fn repair_literal_marker_pairs_segments<'t>(
     let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
     roles.resize_with(projection.len(), || None);
     let mut found = false;
-    for kind in LITERAL_MARKERS {
-        found |= pair_symmetric_markers(&projection, &mut roles, kind);
+    for kind in EDGE_MARKERS {
+        found |= pair_symmetric_markers(
+            &projection,
+            &mut roles,
+            kind,
+            kind == InlineFormatKind::Strikethrough,
+        );
     }
     if !inside_monospace {
         found |= pair_monospace_markers(&projection, &mut roles);
@@ -2487,8 +2504,13 @@ fn repair_literal_marker_pairs_pass<'t>(
     let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
     roles.resize_with(projection.len(), || None);
     let mut found = false;
-    for kind in LITERAL_MARKERS {
-        found |= pair_symmetric_markers(&projection, &mut roles, kind);
+    for kind in EDGE_MARKERS {
+        found |= pair_symmetric_markers(
+            &projection,
+            &mut roles,
+            kind,
+            kind == InlineFormatKind::Strikethrough,
+        );
     }
     if !inside_monospace {
         found |= pair_monospace_markers(&projection, &mut roles);
@@ -2521,10 +2543,15 @@ fn project_marker_sequence<'a, 't>(
             let children = formatter_children(element)
                 .expect("expansion requires formatter children");
             match expansion {
-                Expansion::Format(kind) if LITERAL_MARKERS.contains(&kind) => {
+                Expansion::Format(kind) if EDGE_MARKERS.contains(&kind) => {
                     projection.push(ProjItem::EdgeOpen(kind));
                     project_marker_sequence(children, projection);
                     projection.push(ProjItem::EdgeClose(kind));
+                }
+                Expansion::Color => {
+                    projection.push(ProjItem::ColorEdgeOpen);
+                    project_marker_sequence(children, projection);
+                    projection.push(ProjItem::ColorEdgeClose);
                 }
                 _ => {
                     projection.push(ProjItem::PartialLike);
@@ -2617,6 +2644,9 @@ fn apply_marker_roles<'t>(
             Some(PairRole::ColorClose) => {
                 output.push(Element::Partial(PartialElement::InlineColorClose));
             }
+            Some(PairRole::LiteralText(text)) => {
+                output.push(Element::Text(Cow::Borrowed(text)));
+            }
             Some(PairRole::Drop) => {}
         }
     }
@@ -2649,6 +2679,9 @@ fn push_edge_replacement<'t>(
         Some(PairRole::Drop) => {}
         Some(PairRole::LiteralMarker(kind)) => {
             output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
+        }
+        Some(PairRole::LiteralText(text)) => {
+            output.push(Element::Text(Cow::Borrowed(text)));
         }
         None => match expansion {
             Expansion::Format(kind) => {
@@ -2724,7 +2757,10 @@ fn expansion_of(element: &Element<'_>) -> Option<Expansion> {
                 FormatKind::Monospace => {
                     Some(Expansion::Format(InlineFormatKind::Monospace))
                 }
-                FormatKind::Strike | FormatKind::Color => None,
+                FormatKind::Strike => {
+                    Some(Expansion::Format(InlineFormatKind::Strikethrough))
+                }
+                FormatKind::Color => None,
             }
         }
         _ => None,
@@ -2794,7 +2830,9 @@ fn projection_has_content(items: &[ProjItem<'_>]) -> bool {
         | ProjItem::FormatEventOpen(_)
         | ProjItem::FormatEventClose(_)
         | ProjItem::ColorEventOpen
-        | ProjItem::ColorEventClose => false,
+        | ProjItem::ColorEventClose
+        | ProjItem::ColorEdgeOpen
+        | ProjItem::ColorEdgeClose => false,
     })
 }
 
@@ -2802,6 +2840,7 @@ fn pair_symmetric_markers<'t>(
     projection: &[ProjItem<'_>],
     roles: &mut [Option<PairRole<'t>>],
     kind: InlineFormatKind,
+    edges_required: bool,
 ) -> bool {
     let marker = kind.open_marker();
     let mut siblings: Vec<Option<usize>> = vec![None; projection.len()];
@@ -2875,6 +2914,17 @@ fn pair_symmetric_markers<'t>(
                 }
             }
             Some(open_index) => {
+                let pairs_edges = matches!(
+                    projection[open_index],
+                    ProjItem::EdgeOpen(_) | ProjItem::EdgeClose(_)
+                ) || matches!(
+                    projection[index],
+                    ProjItem::EdgeOpen(_) | ProjItem::EdgeClose(_)
+                );
+                if edges_required && !pairs_edges {
+                    open = Some(index);
+                    continue;
+                }
                 if !proj_ends_with_pad(&projection[index - 1])
                     && projection_has_content(&projection[open_index + 1..index])
                 {
@@ -2975,53 +3025,104 @@ fn pair_monospace_markers<'t>(
     found
 }
 
+enum ColorHead<'t> {
+    Literal(Cow<'t, str>, bool),
+    Container(usize),
+}
+
 fn pair_color_markers<'t>(
     projection: &[ProjItem<'_>],
     roles: &mut [Option<PairRole<'t>>],
 ) -> bool {
+    // Container edge siblings: a color container whose open edge is a head
+    // knows the position of its parsed close marker.
+    let mut color_edges: Vec<Option<usize>> = vec![None; projection.len()];
+    let mut stack: Vec<usize> = Vec::new();
+    for (index, item) in projection.iter().enumerate() {
+        match item {
+            ProjItem::ColorEdgeOpen => stack.push(index),
+            ProjItem::ColorEdgeClose => {
+                if let Some(open) = stack.pop() {
+                    color_edges[open] = Some(index);
+                    color_edges[index] = Some(open);
+                }
+            }
+            _ => {}
+        }
+    }
+
     let mut found = false;
-    let mut pending: Option<(usize, usize, Cow<'t, str>, bool)> = None;
-    let mut depth = 0usize;
+    let mut pending: Option<(usize, usize, ColorHead<'t>)> = None;
+    let mut event_depth = 0usize;
+    let mut edge_depth = 0usize;
     for index in 0..projection.len() {
         if matches!(projection[index], ProjItem::Barrier) {
             pending = None;
             continue;
         }
-        match projection[index] {
-            ProjItem::ColorEventOpen => {
-                depth += 1;
-                continue;
-            }
-            ProjItem::ColorEventClose => {
-                depth = depth.saturating_sub(1);
-                continue;
-            }
-            _ => {}
-        }
         if pending.is_none() {
-            if depth == 0
+            if event_depth == 0
+                && edge_depth == 0
                 && let Some((color, background, len)) = color_head_at(projection, index)
             {
-                pending = Some((index, index + len, color, background));
+                pending =
+                    Some((index, index + len, ColorHead::Literal(color, background)));
+            } else if event_depth == 0
+                && edge_depth == 0
+                && matches!(projection[index], ProjItem::ColorEdgeOpen)
+            {
+                pending = Some((index, index + 1, ColorHead::Container(index)));
             }
-            continue;
-        }
-        let head = pending.as_ref().unwrap().0;
-        let content_start = pending.as_ref().unwrap().1;
-        if depth == 0
-            && index >= content_start
-            && matches!(projection[index], ProjItem::Text(value) if value == "##")
-            && projection_has_content(&projection[content_start..index])
-        {
-            let (_, _, color, background) = pending.take().unwrap();
-            if roles[head].is_none() && roles[index].is_none() {
-                roles[head] = Some(PairRole::ColorOpen(color, background));
-                for slot in &mut roles[head + 1..content_start] {
-                    *slot = Some(PairRole::Drop);
+        } else if event_depth == 0 {
+            let (head, content_start, head_kind) =
+                pending.as_ref().expect("checked above");
+            let (head, content_start) = (*head, *content_start);
+            let inside_edge = matches!(head_kind, ColorHead::Container(_));
+            let at_candidate_depth = if inside_edge {
+                edge_depth == 1
+            } else {
+                edge_depth == 0
+            };
+            let has_content = index >= content_start
+                && projection_has_content(&projection[content_start..index]);
+            let text_marker =
+                matches!(projection[index], ProjItem::Text(value) if value == "##");
+            if at_candidate_depth && has_content && text_marker {
+                let head_kind = pending.take().expect("checked above").2;
+                if roles[head].is_none() && roles[index].is_none() {
+                    match head_kind {
+                        ColorHead::Literal(color, background) => {
+                            roles[head] = Some(PairRole::ColorOpen(color, background));
+                            for slot in &mut roles[head + 1..content_start] {
+                                *slot = Some(PairRole::Drop);
+                            }
+                            roles[index] = Some(PairRole::ColorClose);
+                            found = true;
+                        }
+                        ColorHead::Container(open) => {
+                            roles[index] = Some(PairRole::ColorClose);
+                            if let Some(close) = color_edges[open]
+                                && roles[close].is_none()
+                            {
+                                roles[close] = Some(PairRole::LiteralText("##"));
+                            }
+                            found = true;
+                        }
+                    }
                 }
-                roles[index] = Some(PairRole::ColorClose);
-                found = true;
+            } else if matches!(head_kind, ColorHead::Container(_))
+                && matches!(projection[index], ProjItem::ColorEdgeClose)
+                && color_edges[head] == Some(index)
+            {
+                pending = None;
             }
+        }
+        match projection[index] {
+            ProjItem::ColorEventOpen => event_depth += 1,
+            ProjItem::ColorEventClose => event_depth = event_depth.saturating_sub(1),
+            ProjItem::ColorEdgeOpen => edge_depth += 1,
+            ProjItem::ColorEdgeClose => edge_depth = edge_depth.saturating_sub(1),
+            _ => {}
         }
     }
     found

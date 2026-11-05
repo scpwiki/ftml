@@ -1,0 +1,92 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            21,
+            23
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            12,
+            14
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            44,
+            46
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            35,
+            37
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            64,
+            66
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            56,
+            58
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            84,
+            86
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            76,
+            78
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "color",
+        "span": [
+            116,
+            116
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            104,
+            106
+        ],
+        "kind": "no-rules-match"
+    }
+]
