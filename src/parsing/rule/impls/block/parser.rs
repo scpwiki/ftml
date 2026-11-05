@@ -24,7 +24,8 @@ use crate::layout::Layout;
 use crate::parsing::collect::{
     CommentElidedText, collect_comment_elided_keep, collect_text_keep,
     collect_text_resolved_fused, collect_text_resolved_fused_tracked,
-    consume_iftags_segment, consume_valid_comment,
+    collect_text_resolved_fused_tracked_quoted, consume_iftags_segment,
+    consume_valid_comment,
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -6335,13 +6336,25 @@ where
             ];
             let rule = self.rule();
             let fused_name_close = self.head_had_segment();
-            let (slice, last, segment_consumed) = collect_text_resolved_fused_tracked(
-                self,
-                rule,
-                &end_conditions,
-                &reject_conditions,
-                Some(ParseErrorKind::BlockMalformedArguments),
-            )?;
+            let quoted_head =
+                self.settings().layout.legacy() && block_rule.name() == "block-math";
+            let (slice, last, segment_consumed) = if quoted_head {
+                collect_text_resolved_fused_tracked_quoted(
+                    self,
+                    rule,
+                    &end_conditions,
+                    &reject_conditions,
+                    Some(ParseErrorKind::BlockMalformedArguments),
+                )?
+            } else {
+                collect_text_resolved_fused_tracked(
+                    self,
+                    rule,
+                    &end_conditions,
+                    &reject_conditions,
+                    Some(ParseErrorKind::BlockMalformedArguments),
+                )?
+            };
             if last.token == Token::RightLink {
                 if !(self.settings().layout.legacy()
                     && (fused_name_close || segment_consumed))

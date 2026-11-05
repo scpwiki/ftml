@@ -172,15 +172,16 @@ fn render_image_element_wikidot(
     let style = get("style");
 
     let build_image = |ctx: &mut HtmlContext| {
-        ctx.html().img().attr(attr!(
+        let mut image = ctx.html().img();
+        image.attr(attr!(
             "src" => image_url,
             "width" => width.unwrap_or(""); if width.is_some(),
             "height" => height.unwrap_or(""); if height.is_some(),
             "title" => title.unwrap_or(""); if title.is_some(),
             "style" => style.unwrap_or(""); if style.is_some(),
             "class" => class,
-            "alt" => alt,
         ));
+        image.attr_quoted("alt", alt);
     };
 
     let build_link = |ctx: &mut HtmlContext| match link {

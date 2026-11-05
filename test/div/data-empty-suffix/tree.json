@@ -1,0 +1,52 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {
+                    "data-": "v"
+                },
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "T"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "data-": "v"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "T"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

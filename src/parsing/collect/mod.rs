@@ -57,5 +57,6 @@ pub(crate) use self::iftags::{
 };
 pub use self::text::{
     collect_text, collect_text_keep, collect_text_resolved, collect_text_resolved_fused,
-    collect_text_resolved_fused_tracked, collect_text_resolved_head,
+    collect_text_resolved_fused_tracked, collect_text_resolved_fused_tracked_quoted,
+    collect_text_resolved_head,
 };

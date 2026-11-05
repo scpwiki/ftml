@@ -106,8 +106,11 @@ where
         closes,
         invalids,
         kind,
-        false,
-        FusedNameClose::Never,
+        ResolvedCollect {
+            allow_fused_closer: false,
+            fused_name_close: FusedNameClose::Never,
+            quote_terminator: false,
+        },
     )?;
     Ok((text, last))
 }
@@ -166,8 +169,11 @@ where
         closes,
         invalids,
         kind,
-        true,
-        fused_name_close,
+        ResolvedCollect {
+            allow_fused_closer: true,
+            fused_name_close,
+            quote_terminator: false,
+        },
     )?;
     Ok((text, last))
 }
@@ -188,8 +194,35 @@ where
         closes,
         invalids,
         kind,
-        true,
-        FusedNameClose::OnSegment,
+        ResolvedCollect {
+            allow_fused_closer: true,
+            fused_name_close: FusedNameClose::OnSegment,
+            quote_terminator: false,
+        },
+    )
+}
+
+pub fn collect_text_resolved_fused_tracked_quoted<'p, 'r, 't>(
+    parser: &'p mut Parser<'r, 't>,
+    rule: Rule,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>, bool), ParseError>
+where
+    'r: 't,
+{
+    collect_text_resolved_impl(
+        parser,
+        rule,
+        closes,
+        invalids,
+        kind,
+        ResolvedCollect {
+            allow_fused_closer: true,
+            fused_name_close: FusedNameClose::OnSegment,
+            quote_terminator: true,
+        },
     )
 }
 
@@ -210,14 +243,20 @@ enum FusedNameClose {
     Asserted,
 }
 
+#[derive(Clone, Copy)]
+struct ResolvedCollect {
+    allow_fused_closer: bool,
+    fused_name_close: FusedNameClose,
+    quote_terminator: bool,
+}
+
 fn collect_text_resolved_impl<'p, 'r, 't>(
     parser: &'p mut Parser<'r, 't>,
     _rule: Rule,
     closes: &[ParseCondition],
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
-    allow_fused_closer: bool,
-    fused_name_close: FusedNameClose,
+    collect: ResolvedCollect,
 ) -> Result<(Cow<'t, str>, &'r ExtractedToken<'t>, bool), ParseError>
 where
     'r: 't,
@@ -228,8 +267,10 @@ where
     let mut output = None::<String>;
     let mut segment_consumed = false;
     let mut fused_close = None::<(usize, usize)>;
+    let mut in_quote = false;
 
     loop {
+        let quoted = collect.quote_terminator && in_quote;
         if let Some((bracket_start, segment_end)) = fused_close.take() {
             let current = parser.current();
             if current.token == Token::RightBracket && current.span.start == bracket_start
@@ -254,7 +295,7 @@ where
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
 
-        if parser.evaluate_any(closes) {
+        if !quoted && parser.evaluate_any(closes) {
             let last = parser.current();
             let end = last.span.start;
             let text = match output {
@@ -278,10 +319,11 @@ where
             return Err(parser.make_err(kind.unwrap_or(ParseErrorKind::RuleFailed)));
         }
 
-        if fused_name_close != FusedNameClose::Never
+        if !quoted
+            && collect.fused_name_close != FusedNameClose::Never
             && parser.settings().layout.legacy()
             && parser.current().token == Token::RightLink
-            && (fused_name_close == FusedNameClose::Asserted
+            && (collect.fused_name_close == FusedNameClose::Asserted
                 || segment_consumed
                 || output.is_some())
             && closes.iter().any(|close| {
@@ -321,7 +363,7 @@ where
         }
 
         if parser.current().token == Token::LeftBlock
-            && let Some(segment) = (if allow_fused_closer {
+            && let Some(segment) = (if collect.allow_fused_closer {
                 iftags_segment_fused(parser)
             } else {
                 iftags_segment(parser)
@@ -340,7 +382,7 @@ where
             } else {
                 None
             };
-            let segment = (if allow_fused_closer {
+            let segment = (if collect.allow_fused_closer {
                 consume_iftags_segment_fused(parser)?
             } else {
                 consume_iftags_segment(parser)?
@@ -431,6 +473,9 @@ where
             continue;
         }
 
+        if parser.current().token == Token::DoubleQuote {
+            in_quote = !in_quote;
+        }
         parser.step()?;
     }
 }

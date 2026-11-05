@@ -90,7 +90,7 @@ impl<'t> FileSource<'t> {
         if quoted_inner.is_some() {
             return None;
         }
-        if is_url(source) || source.starts_with("/local--files/") {
+        if is_url(source) {
             return Some(FileSource::Url(cow!(source)));
         }
 
@@ -100,12 +100,10 @@ impl<'t> FileSource<'t> {
 
         let source = source.strip_prefix('/').unwrap_or(source);
         match source.rsplit_once('/') {
-            Some((page, file)) if !page.is_empty() && !file.is_empty() => {
-                Some(FileSource::File2 {
-                    page: cow!(page),
-                    file: cow!(file),
-                })
-            }
+            Some((page, file)) if !page.is_empty() => Some(FileSource::File2 {
+                page: cow!(page),
+                file: cow!(file),
+            }),
             None if !source.is_empty() => Some(FileSource::File1 { file: cow!(source) }),
             _ => None,
         }
@@ -207,7 +205,10 @@ mod tests {
         );
         assert_eq!(
             FileSource::parse_wikidot("/local--files/page/image.png"),
-            Some(FileSource::Url(cow!("/local--files/page/image.png"))),
+            Some(FileSource::File2 {
+                page: cow!("local--files/page"),
+                file: cow!("image.png"),
+            }),
         );
         assert_eq!(
             FileSource::parse_wikidot("/image.png"),

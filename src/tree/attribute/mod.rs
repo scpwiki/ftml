@@ -292,7 +292,7 @@ mod tests {
         assert!(!inserted.insert("disabled", cow!("false")));
         assert!(!inserted.insert("data-x onclick", cow!("bad")));
         assert!(!inserted.insert("aria-label\"", cow!("bad")));
-        assert!(!inserted.insert("data-", cow!("bad")));
+        assert!(inserted.insert("data-", cow!("value")));
         assert!(!inserted.insert("srcset", cow!("javascript:alert(1) 1x")));
         assert!(!inserted.insert("onclick", cow!("alert(1)")));
         assert_eq!(
@@ -303,6 +303,7 @@ mod tests {
             inserted.get().get("data-upper").map(Cow::as_ref),
             Some("caps")
         );
+        assert_eq!(inserted.get().get("data-").map(Cow::as_ref), Some("value"));
         assert_eq!(
             inserted.get().get("aria-label").map(Cow::as_ref),
             Some("label")
