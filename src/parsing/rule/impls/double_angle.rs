@@ -39,6 +39,10 @@ fn try_consume_fn<'r, 't>(
 
         Token::LeftDoubleAngle => success_elements(text!("\u{0ab}")),
 
+        Token::Quote if current.slice == ">>" && parser.settings().layout.legacy() => {
+            Err(parser.make_err(ParseErrorKind::RuleFailed))
+        }
+
         Token::Quote if current.slice == ">>" => success_elements(text!("\u{0bb}")),
 
         Token::Quote => Err(parser.make_err(ParseErrorKind::RuleFailed)),

@@ -76,12 +76,6 @@ static LEFT_ANGLE_QUOTES: LazyLock<Replacer> = LazyLock::new(|| Replacer::RegexR
     replacement: "\u{ab}",
 });
 
-static RIGHT_ANGLE_QUOTES: LazyLock<Replacer> =
-    LazyLock::new(|| Replacer::RegexReplace {
-        regex: Regex::new(r"[^\n>](?<repl>>>)").unwrap(),
-        replacement: "\u{bb}",
-    });
-
 static NUMBER_UNITS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
@@ -731,6 +725,9 @@ fn conditional_deferral_spans(text: &str) -> Vec<Range<usize>> {
         if rest.starts_with('<') {
             let len = rest.bytes().take_while(|byte| *byte == b'<').count();
             spans.push(edge..edge + len);
+        } else if rest.starts_with('>') {
+            let len = rest.bytes().take_while(|byte| *byte == b'>').count();
+            spans.push(edge..edge + len);
         } else if rest.starts_with(['.', ' ']) {
             let len = rest
                 .bytes()
@@ -750,11 +747,18 @@ fn replace_wikidot_angle_quotes_deferring(text: &mut String, buffer: &mut String
     if !text.contains("<<") && !text.contains(">>") {
         return;
     }
-    let deferred: Vec<Range<usize>> = conditional_deferral_spans(text)
-        .into_iter()
+    let spans = conditional_deferral_spans(text);
+    let left_deferred: Vec<Range<usize>> = spans
+        .iter()
         .filter(|range| text[range.start..].starts_with('<'))
+        .cloned()
         .collect();
-    if deferred.is_empty() {
+    let right_deferred: Vec<Range<usize>> = spans
+        .iter()
+        .filter(|range| text[range.start..].starts_with('>'))
+        .cloned()
+        .collect();
+    if left_deferred.is_empty() && right_deferred.is_empty() {
         replace_wikidot_angle_quotes_outside_owners(text, buffer);
         return;
     }
@@ -767,7 +771,8 @@ fn replace_wikidot_angle_quotes_deferring(text: &mut String, buffer: &mut String
         replace_angle_quotes_in_segment_deferring(
             &source[cursor..range.start],
             cursor,
-            &deferred,
+            &left_deferred,
+            &right_deferred,
             &mut output,
             buffer,
         );
@@ -777,7 +782,8 @@ fn replace_wikidot_angle_quotes_deferring(text: &mut String, buffer: &mut String
     replace_angle_quotes_in_segment_deferring(
         &source[cursor..],
         cursor,
-        &deferred,
+        &left_deferred,
+        &right_deferred,
         &mut output,
         buffer,
     );
@@ -787,14 +793,15 @@ fn replace_wikidot_angle_quotes_deferring(text: &mut String, buffer: &mut String
 fn replace_angle_quotes_in_segment_deferring(
     segment: &str,
     segment_start: usize,
-    deferred: &[Range<usize>],
+    left_deferred: &[Range<usize>],
+    right_deferred: &[Range<usize>],
     output: &mut String,
     buffer: &mut String,
 ) {
     let mut converted = String::with_capacity(segment.len());
     let segment_end = segment_start + segment.len();
     let mut cursor = 0usize;
-    for range in deferred {
+    for range in left_deferred {
         if range.end <= segment_start || range.start >= segment_end {
             continue;
         }
@@ -812,8 +819,33 @@ fn replace_angle_quotes_in_segment_deferring(
     let mut part = segment[cursor..].to_owned();
     LEFT_ANGLE_QUOTES.replace(&mut part, buffer);
     converted.push_str(&part);
-    replace_right_angle_quotes(&mut converted, buffer);
-    output.push_str(&converted);
+    if right_deferred
+        .iter()
+        .all(|range| range.end <= segment_start || range.start >= segment_end)
+    {
+        replace_right_angle_quotes(&mut converted, buffer);
+        output.push_str(&converted);
+        return;
+    }
+    let mut cursor = 0usize;
+    for range in right_deferred {
+        if range.end <= segment_start || range.start >= segment_end {
+            continue;
+        }
+        let local_start = range.start.max(segment_start) - segment_start;
+        let local_end = range.end.min(segment_end) - segment_start;
+        if local_start < cursor {
+            continue;
+        }
+        let mut part = converted[cursor..local_start].to_owned();
+        replace_right_angle_quotes(&mut part, buffer);
+        output.push_str(&part);
+        output.push_str(&converted[local_start..local_end]);
+        cursor = local_end;
+    }
+    let mut part = converted[cursor..].to_owned();
+    replace_right_angle_quotes(&mut part, buffer);
+    output.push_str(&part);
 }
 
 fn replace_wikidot_ellipsis_deferring(text: &mut String, buffer: &mut String) {
@@ -821,7 +853,7 @@ fn replace_wikidot_ellipsis_deferring(text: &mut String, buffer: &mut String) {
     protected_ranges.extend(
         conditional_deferral_spans(text)
             .into_iter()
-            .filter(|range| !text[range.start..].starts_with('<')),
+            .filter(|range| text[range.start..].starts_with(['.', ' '])),
     );
     let protected_ranges = merge_ranges(protected_ranges);
     replace_ellipsis_outside_ranges(text, buffer, &protected_ranges);
@@ -880,16 +912,32 @@ pub(crate) fn wikidot_seam_edits(text: &str, seams: &[usize]) -> Vec<WikidotSeam
             });
         }
     }
-    for captures in RIGHT_ANGLE_QUOTES.regex().captures_iter(text) {
-        let candidate = captures.name("repl").unwrap();
-        let full = captures.get(0).unwrap().range();
-        if range_crosses_seam(&full, seams) {
-            let start = candidate.start();
-            let run_len = text.as_bytes()[start..]
-                .iter()
-                .take_while(|byte| **byte == b'>')
-                .count();
-            for pair in 0..run_len / 2 {
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'>' {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < bytes.len() && bytes[index] == b'>' {
+            index += 1;
+        }
+        let end = index;
+        if end - start < 2 {
+            continue;
+        }
+        let touches = if start == 0 {
+            seams.iter().any(|seam| *seam < end)
+        } else {
+            text[..start]
+                .chars()
+                .next_back()
+                .is_some_and(|before| before != '\n')
+                && seams.iter().any(|seam| *seam >= start && *seam <= end)
+        };
+        if touches {
+            for pair in 0..(end - start) / 2 {
                 edits.push(WikidotSeamEdit {
                     range: start + pair * 2..start + pair * 2 + 2,
                     replacement: "\u{bb}",
@@ -1393,7 +1441,6 @@ fn regexes() {
     let _ = &*NATIVE_DOUBLE_QUOTES;
     let _ = &*NATIVE_LOW_DOUBLE_QUOTES;
     let _ = &*LEFT_ANGLE_QUOTES;
-    let _ = &*RIGHT_ANGLE_QUOTES;
     let _ = &*NUMBER_UNITS;
     let _ = &*HORIZONTAL_ELLIPSIS;
 }
