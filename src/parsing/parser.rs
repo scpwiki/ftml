@@ -112,6 +112,14 @@ pub(crate) struct RuleAttemptKey {
     wikidot: WikidotState,
 }
 
+/// A body walk at one position: the rule whose closer it looks for, the parser
+/// context, and what can end it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct BodyWalkKey {
+    attempt: RuleAttemptKey,
+    boundaries: u64,
+}
+
 #[cfg(test)]
 thread_local! {
     static RULE_ATTEMPT_MEMO_DISABLED: Cell<bool> = const { Cell::new(false) };
@@ -122,6 +130,8 @@ pub(super) struct BlockScanCache<'t> {
     peak_depth: Cell<usize>,
     rule_attempt_failures: HashMap<RuleAttemptKey, (ParseError, usize)>,
     rule_attempt_failure_positions: Vec<bool>,
+    body_walk_failures: HashMap<BodyWalkKey, usize>,
+    body_walk_failure_positions: Vec<bool>,
     body_end_outcomes: BTreeMap<ContextualBlockEndScanKey, bool>,
     wikidot_composite_span_close: BTreeMap<(usize, BlockEndScanContext), bool>,
     #[cfg(test)]
@@ -1703,6 +1713,61 @@ impl<'r, 't> Parser<'r, 't> {
         let peak = cache.peak_depth.get();
         cache.peak_depth.set(peak.max(enclosing_peak));
         peak - self.depth
+    }
+
+    pub(crate) fn body_walk_key(&self, rule: &'static str) -> Option<BodyWalkKey> {
+        Some(BodyWalkKey {
+            attempt: self.rule_attempt_key(rule)?,
+            boundaries: self.body_end_boundary_fingerprint(),
+        })
+    }
+
+    /// Whether a body walk that reached this position before, in the same
+    /// context, ran to `InputEnd` without meeting its closer. The walk from here
+    /// on is the same computation, so it ends the same way.
+    pub(crate) fn body_walk_reaches_input_end(&self, key: BodyWalkKey) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        if !cache
+            .body_walk_failure_positions
+            .get(self.remaining.len())
+            .is_some_and(|&recorded| recorded)
+        {
+            return false;
+        }
+        let height = cache
+            .body_walk_failures
+            .get(&key)
+            .filter(|height| self.depth + **height <= self.max_recursion_depth)
+            .or_else(|| {
+                let mut at_depth = key;
+                at_depth.attempt.depth = Some(self.depth);
+                cache.body_walk_failures.get(&at_depth)
+            });
+        let Some(height) = height else {
+            return false;
+        };
+        cache
+            .peak_depth
+            .set(cache.peak_depth.get().max(self.depth + height));
+        true
+    }
+
+    /// Records the positions a body walk passed before it ran to `InputEnd`.
+    pub(crate) fn cache_body_walk_failure(&self, visited: &[(usize, BodyWalkKey)]) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let height = cache.peak_depth.get().saturating_sub(self.depth);
+        let exceeds_limit = self.depth + height > self.max_recursion_depth;
+        for &(position, mut key) in visited {
+            if exceeds_limit {
+                key.attempt.depth = Some(self.depth);
+            }
+            let positions = &mut cache.body_walk_failure_positions;
+            if positions.len() <= position {
+                positions.resize(position + 1, false);
+            }
+            positions[position] = true;
+            cache.body_walk_failures.insert(key, height);
+        }
     }
 
     pub(crate) fn rule_attempt_failure(&self, rule: &'static str) -> Option<ParseError> {

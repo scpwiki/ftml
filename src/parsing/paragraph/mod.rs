@@ -27,8 +27,8 @@ pub(crate) use self::stack::collapsible_has_direct_literal_nested_opener;
 
 use super::collect::{TokenWindow, comment_bridge_end};
 use super::consume::consume;
-use super::parser::Parser;
 use super::parser::QuoteBodyLineStatus;
+use super::parser::{BodyWalkKey, Parser};
 use super::prelude::*;
 use super::rule::Rule;
 use super::token::Token;
@@ -65,6 +65,8 @@ where
     }
 
     let mut finished = false;
+    let mut walk_visited: Vec<(usize, BodyWalkKey)> = Vec::new();
+    let mut walk_started = false;
     let mut literal_gallery_pending = false;
     let mut line_prefix_whitespace_only = true;
     while !finished {
@@ -133,6 +135,19 @@ where
                     Token::LineBreak | Token::ParagraphBreak
                 ),
         );
+        if close_condition_fn.is_some()
+            && walk_started
+            && parser.current().token == Token::LeftBlock
+            && let Some(key) = parser.body_walk_key(rule.name())
+        {
+            if parser.body_walk_reaches_input_end(key) {
+                parser.cache_body_walk_failure(&walk_visited);
+                parser.jump_to_input_end();
+                return Err(parser.make_err(ParseErrorKind::EndOfInput));
+            }
+            walk_visited.push((parser.remaining().len(), key));
+        }
+        walk_started = true;
         let iteration_token = parser.current().token;
         let consumed = match parser.current().token {
             Token::InputEnd => {
@@ -143,6 +158,7 @@ where
                     }
 
                     warn!("Hit the end of input, producing an error");
+                    parser.cache_body_walk_failure(&walk_visited);
                     return Err(parser.make_err(ParseErrorKind::EndOfInput));
                 } else {
                     warn!("Hit the end of input, terminating token iteration");
