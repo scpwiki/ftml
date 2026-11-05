@@ -1068,7 +1068,7 @@ fn parse_fn<'r, 't>(
     }
 }
 
-fn wikidot_div_head_attributes<'r, 't>(
+pub(crate) fn wikidot_div_head_attributes<'r, 't>(
     parser: &Parser<'r, 't>,
     arguments: &mut Arguments<'t>,
 ) -> AttributeMap<'t> {

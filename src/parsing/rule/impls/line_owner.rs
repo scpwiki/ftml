@@ -2,6 +2,7 @@ use super::RULE_PAGE;
 use super::block::blocks::{
     BLOCK_ALIGN_CENTER, BLOCK_ALIGN_JUSTIFY, BLOCK_ALIGN_LEFT, BLOCK_ALIGN_RIGHT,
     BLOCK_COLLAPSIBLE, BLOCK_DIV, CollapsibleHead, parse_collapsible_head,
+    wikidot_div_head_attributes,
 };
 use super::block::{BlockBodyStart, BlockRule};
 use super::prelude::*;
@@ -25,7 +26,7 @@ pub(crate) struct LostOwnerBlock<'t> {
 }
 
 enum BlockHead<'t> {
-    Div,
+    Div(AttributeMap<'t>),
     Align(Alignment),
     Collapsible(CollapsibleHead<'t>),
 }
@@ -165,9 +166,10 @@ where
     }
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {
         parser.set_block(&BLOCK_DIV);
-        let (_, body_start) =
+        let (mut arguments, body_start) =
             parser.get_head_map_with_body_start_wikidot(&BLOCK_DIV, in_head)?;
-        (BlockHead::Div, "div", body_start)
+        let attributes = wikidot_div_head_attributes(parser, &mut arguments);
+        (BlockHead::Div(attributes), "div", body_start)
     } else if name.eq_ignore_ascii_case("collapsible") {
         parser.set_block(&BLOCK_COLLAPSIBLE);
         let (head, body_start) = parse_collapsible_head(parser, &name, in_head)?;
@@ -202,7 +204,7 @@ where
     let previous_cursor = parser.quote_body_cursor();
     let previous_quote_boundary = parser.quote_boundary_closes_body();
     let previous_collapsible = parser.in_wikidot_collapsible();
-    let lost_div = matches!(head, BlockHead::Div);
+    let lost_div = matches!(head, BlockHead::Div(_));
     let lost_collapsible = matches!(head, BlockHead::Collapsible(_));
     parser.set_native_blockquote_depth(None);
     parser.set_quote_body_cursor(None);
@@ -246,7 +248,21 @@ where
     }
 
     let control = match head {
-        BlockHead::Div => None,
+        BlockHead::Div(attributes) => {
+            // Live keeps an empty shell only when the authored head carries a
+            // non-empty attribute; a bare authored div head loses the line.
+            attributes
+                .get()
+                .values()
+                .any(|value| !value.is_empty())
+                .then(|| {
+                    Element::Container(Container::new(
+                        ContainerType::Div,
+                        Vec::new(),
+                        attributes,
+                    ))
+                })
+        }
         BlockHead::Align(alignment) => Some(Element::Container(Container::new(
             ContainerType::Align(alignment),
             Vec::new(),
