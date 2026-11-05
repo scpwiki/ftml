@@ -82,6 +82,14 @@ impl<'t> AttributeMap<'t> {
         self.inner.insert(cow!("href"), value);
     }
 
+    pub(crate) fn insert_wikidot_iframe_attribute(
+        &mut self,
+        attribute: &str,
+        value: Cow<'t, str>,
+    ) {
+        self.inner.insert(Cow::Owned(attribute.to_owned()), value);
+    }
+
     #[inline]
     pub fn remove(&mut self, attribute: &str) -> Option<Cow<'t, str>> {
         self.inner.remove(attribute)

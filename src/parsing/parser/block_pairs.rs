@@ -86,6 +86,7 @@ pub(crate) struct WikidotBlockPairs {
     head_event_bytes: BTreeSet<usize>,
     closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
     foster_heads: BTreeSet<usize>,
+    greedy_ranges: Vec<(usize, usize)>,
 }
 
 impl WikidotBlockPairs {
@@ -129,6 +130,12 @@ impl WikidotBlockPairs {
 
     pub(crate) fn is_foster_head(&self, head_byte: usize) -> bool {
         self.foster_heads.contains(&head_byte)
+    }
+
+    pub(crate) fn has_greedy_tail_within(&self, from: usize, to: usize) -> bool {
+        self.greedy_ranges
+            .iter()
+            .any(|&(start, _)| from <= start && start < to)
     }
 
     pub(crate) fn shows_stolen_head(
@@ -444,6 +451,7 @@ struct Scanner<'t> {
     pairs: Vec<WikidotBlockPair>,
     head_event_bytes: BTreeSet<usize>,
     closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
+    greedy_ranges: Vec<(usize, usize)>,
 }
 
 impl<'t> Scanner<'t> {
@@ -625,6 +633,7 @@ impl<'t> Scanner<'t> {
             pairs: Vec::new(),
             head_event_bytes: BTreeSet::new(),
             closer_event_bytes: BTreeSet::new(),
+            greedy_ranges: Vec::new(),
         }
     }
 
@@ -1108,6 +1117,35 @@ impl<'t> Scanner<'t> {
             )
     }
 
+    fn iframe_greedy_tail_range(
+        &self,
+        index: usize,
+        head: &HeadRead,
+    ) -> Option<(usize, usize)> {
+        let head_end_token = self.tokens.get(head.head_end.checked_sub(1)?)?;
+        if !matches!(head_end_token.token, Token::RightBlock | Token::RightLink) {
+            return None;
+        }
+        let close_start = head_end_token.span.start;
+        let head_start = self.tokens[index].span.start;
+        let head_text = self.source.get(head_start..close_start)?;
+        let inner = head_text.strip_prefix("[[")?;
+        let (name, rest) = inner.split_once([' ', '\t'])?;
+        if !name.eq_ignore_ascii_case("iframe") {
+            return None;
+        }
+        let url = rest.trim_start_matches([' ', '\t']);
+        if url.is_empty() || url.contains([' ', '\t', '[', ']', '\n', '\r']) {
+            return None;
+        }
+        let (_, tail_end) = crate::parsing::rule::impls::wikidot_greedy_tail(
+            self.source,
+            url,
+            close_start,
+        )?;
+        Some((close_start, tail_end))
+    }
+
     fn line_quote_depth(&self, index: usize) -> usize {
         let line = self.line_of[index];
         let first = self.line_first[line];
@@ -1420,6 +1458,9 @@ impl<'t> Scanner<'t> {
             .enumerate()
             .map(|(index, pair)| (self.tokens[pair.closer].span.start, index))
             .collect();
+        let mut greedy_ranges = self.greedy_ranges;
+        greedy_ranges.sort_unstable();
+        greedy_ranges.dedup();
         WikidotBlockPairs {
             pairs: self.pairs,
             by_head_byte,
@@ -1427,6 +1468,7 @@ impl<'t> Scanner<'t> {
             head_event_bytes: self.head_event_bytes,
             closer_event_bytes: self.closer_event_bytes,
             foster_heads,
+            greedy_ranges,
         }
     }
 
@@ -1536,6 +1578,12 @@ impl<'t> Scanner<'t> {
         if rule_name == "block-note" && head.has_args {
             self.reprocess_head_segments(&head, end, depth, events);
             return head.head_end;
+        }
+        if rule_name == "block-iframe"
+            && let Some(range) = self.iframe_greedy_tail_range(i, &head)
+        {
+            self.greedy_ranges.push(range);
+            return self.token_at_or_after(range.1);
         }
         match Self::kind_of(rule_name) {
             Some(WikidotBlockKind::Table) => {

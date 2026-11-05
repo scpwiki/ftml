@@ -307,6 +307,22 @@ impl<'t> Arguments<'t> {
         map
     }
 
+    pub(crate) fn to_wikidot_iframe_attribute_map(
+        &self,
+        settings: &WikitextSettings,
+    ) -> AttributeMap<'t> {
+        let mut map = self.attribute_map_from_entries(settings, |_, _| true);
+        if settings.layout.legacy()
+            && let Some(value) = self.inner.get(&self.key("scrolling"))
+            && !contains_unresolved_wikidot_variable(value)
+        {
+            let value = normalize_wikidot_html_attribute_value(value);
+            map.insert_wikidot_iframe_attribute("scrolling", value);
+        }
+        map.isolate_id(settings);
+        map
+    }
+
     pub fn to_wikidot_anchor_attribute_map(
         &self,
         settings: &WikitextSettings,

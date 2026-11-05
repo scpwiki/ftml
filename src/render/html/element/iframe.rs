@@ -38,16 +38,15 @@ pub fn render_iframe(ctx: &mut HtmlContext, url: &str, attributes: &AttributeMap
                 .get(name)
                 .map_or("", std::convert::AsRef::as_ref)
         };
-        ctx.html().iframe().attr(attr!(
-            "src" => &src,
-            "align" => get("align"),
-            "frameborder" => get("frameborder"),
-            "height" => get("height"),
-            "scrolling" => get("scrolling"),
-            "width" => get("width"),
-            "class" => get("class"),
-            "style" => get("style"),
-        ));
+        let mut iframe = ctx.html().iframe();
+        iframe.attr_single_quoted("src", &[src.as_ref()]);
+        iframe.attr_single_quoted("align", &[get("align")]);
+        iframe.attr_single_quoted("frameborder", &[get("frameborder")]);
+        iframe.attr_single_quoted("height", &[get("height")]);
+        iframe.attr_single_quoted("scrolling", &[get("scrolling")]);
+        iframe.attr_single_quoted("width", &[get("width")]);
+        iframe.attr_single_quoted("class", &[get("class")]);
+        iframe.attr_single_quoted("style", &[get("style")]);
     } else {
         ctx.html().iframe().attr(attr!(
             "src" => &src,

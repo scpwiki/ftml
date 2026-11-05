@@ -66,9 +66,12 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    let attributes = if parser.settings().layout.legacy() && arguments.has_spaced_equals()
-    {
-        AttributeMap::default()
+    let attributes = if parser.settings().layout.legacy() {
+        if arguments.has_spaced_equals() {
+            AttributeMap::default()
+        } else {
+            arguments.to_wikidot_iframe_attribute_map(parser.settings())
+        }
     } else {
         arguments.to_attribute_map(parser.settings())
     };
@@ -117,18 +120,31 @@ fn consume_greedy_tail(
 }
 
 fn greedy_url_extension(parser: &Parser<'_, '_>, url: &str) -> Option<(String, usize)> {
-    if !wikidot_iframe_url(&discard_wikidot_controls(Cow::Borrowed(url))) {
-        return None;
-    }
     let source = parser.full_text().inner();
     let after_head = parser.current().span.start;
     let head_end = after_head.checked_sub("]]".len())?;
-    if source.get(head_end..after_head) != Some("]]") {
+    wikidot_greedy_tail(source, url, head_end)
+}
+
+/// The URL tail absorbed by a bare iframe head that closes at head_close_start
+/// (the byte of the head's closing brackets), or None when it does not extend.
+///
+/// Returns the absorbed tail (newlines dropped) and the absolute byte after
+/// the absorbed span.
+pub(crate) fn wikidot_greedy_tail(
+    source: &str,
+    url: &str,
+    head_close_start: usize,
+) -> Option<(String, usize)> {
+    if !wikidot_iframe_url(&discard_wikidot_controls(Cow::Borrowed(url))) {
         return None;
     }
-    let rest = source.get(head_end..)?;
+    if source.get(head_close_start..head_close_start + "]]".len()) != Some("]]") {
+        return None;
+    }
+    let rest = source.get(head_close_start..)?;
     let (tail, match_end) = greedy_tail(rest)?;
-    Some((tail, head_end + match_end))
+    Some((tail, head_close_start + match_end))
 }
 
 /// Extend a bare iframe URL the way live Wikidot does.
@@ -264,8 +280,8 @@ mod tests {
         assert_eq!(
             html,
             concat!(
-                "<p><iframe src=\"https://example.com/\" align frameborder ",
-                "height scrolling width class style></iframe></p>",
+                "<p><iframe src=\"https://example.com/\" align=\"\" frameborder=\"\" ",
+                "height=\"\" scrolling=\"\" width=\"\" class=\"\" style=\"\"></iframe></p>",
             ),
         );
     }

@@ -151,8 +151,8 @@ fn wikidot_malformed_attribute_fragments_keep_blocks_and_resynchronize() {
             "[[iframe https://example.com bogus=bare width=\"41\" height=\"42\"]]",
         ),
         concat!(
-            "<p><iframe src=\"https://example.com\" align frameborder ",
-            "height=\"42\" scrolling width class style></iframe></p>",
+            "<p><iframe src=\"https://example.com\" align=\"\" frameborder=\"\" ",
+            "height=\"42\" scrolling=\"\" width=\"\" class=\"\" style=\"\"></iframe></p>",
         ),
     );
 }

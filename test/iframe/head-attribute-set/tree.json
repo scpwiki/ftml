@@ -1,0 +1,14 @@
+{
+    "elements": [
+        {
+            "element": "iframe",
+            "data": {
+                "url": "http://example.com",
+                "attributes": {
+                    "align": "left",
+                    "frameborder": "0"
+                }
+            }
+        }
+    ]
+}

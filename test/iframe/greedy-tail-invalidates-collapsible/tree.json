@@ -1,0 +1,24 @@
+{
+    "elements": [
+        {
+            "element": "collapsible",
+            "data": {
+                "elements": [
+                    {
+                        "element": "iframe",
+                        "data": {
+                            "url": "http://example.com",
+                            "attributes": {}
+                        }
+                    }
+                ],
+                "attributes": {},
+                "start-open": false,
+                "show-text": "+ a",
+                "hide-text": "- b",
+                "show-top": true,
+                "show-bottom": false
+            }
+        }
+    ]
+}
