@@ -1186,6 +1186,9 @@ fn try_consume_pending_iftags_end_swallow<'r, 't>(
         return None;
     }
     let position = parser.current().span.start;
+    if !parser.has_pending_iftags_end_swallow(position) {
+        return None;
+    }
     let mut probe = parser.clone();
     let fused = step_over_wikidot_designated_end(&mut probe)?;
     if !parser.take_pending_iftags_end_swallow(position) {

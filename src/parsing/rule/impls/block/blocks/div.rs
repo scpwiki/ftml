@@ -330,46 +330,51 @@ where
             outcome
         } else {
             let mutable_state = parser.get_mutable_state();
-            let mut outer = parser.clone();
-            let outer_end = outer
-                .get_body_elements(&BLOCK_DIV, false)
-                .ok()
-                .map(|_| outer.current().span.start);
-            parser.reset_mutable_state(mutable_state);
-
-            let mutable_state = parser.get_mutable_state();
             let mut span = parser.clone();
             let outcome = if span.get_optional_space().is_ok()
                 && span.current().token == Token::LeftBlock
             {
-                span.get_block_name(false)
-                    .ok()
-                    .map(|(name, in_head, segment)| {
-                        (
-                            name.eq_ignore_ascii_case("span")
-                                && span.head_word_is_actionable(
-                                    &name,
-                                    matches!(name, Cow::Borrowed(_)),
-                                    segment,
-                                ),
-                            in_head,
-                        )
-                    })
-                    .is_some_and(|(is_span, in_head)| {
-                        is_span
-                            && {
-                                span.set_block(&BLOCK_SPAN);
-                                span.get_head_map_with_body_start_wikidot(
-                                    &BLOCK_SPAN,
-                                    in_head,
-                                )
-                                .and_then(|_| span.get_body_elements(&BLOCK_SPAN, false))
-                                .is_ok()
-                            }
-                            && outer_end.is_some_and(|outer_end| {
+                let span_head =
+                    span.get_block_name(false)
+                        .ok()
+                        .map(|(name, in_head, segment)| {
+                            (
+                                name.eq_ignore_ascii_case("span")
+                                    && span.head_word_is_actionable(
+                                        &name,
+                                        matches!(name, Cow::Borrowed(_)),
+                                        segment,
+                                    ),
+                                in_head,
+                            )
+                        });
+                span_head.is_some_and(|(is_span, in_head)| {
+                    is_span
+                        && {
+                            span.set_block(&BLOCK_SPAN);
+                            span.get_head_map_with_body_start_wikidot(
+                                &BLOCK_SPAN,
+                                in_head,
+                            )
+                            .and_then(|_| span.get_body_text(&BLOCK_SPAN))
+                            .is_ok()
+                        }
+                        && {
+                            // Only the ordered comparison needs the enclosing
+                            // body end, and reading it parses the whole rest of
+                            // the body on a clone. Div openers on one line each
+                            // pay that parse once, so compute it only after the
+                            // content really starts with a bounded span.
+                            let mut outer = parser.clone();
+                            let outer_end = outer
+                                .get_body_text(&BLOCK_DIV)
+                                .ok()
+                                .map(|_| outer.current().span.start);
+                            outer_end.is_some_and(|outer_end| {
                                 span.current().span.start < outer_end
                             })
-                    })
+                        }
+                })
             } else {
                 false
             };

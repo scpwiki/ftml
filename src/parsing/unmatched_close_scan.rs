@@ -589,8 +589,24 @@ mod tests {
 
     #[test]
     fn div_line_close_scans_scale_linearly() {
-        // Kept below the default recursion limit: this helper parses on the
-        // test thread, which has no deep-parse stack.
+        // This helper parses straight through gather_paragraphs on the calling
+        // thread. Repeated unclosed [[div]] openers nest one body parse per
+        // opener, and the unoptimized test profile spends about 20 KiB of
+        // stack per level, so the default 2 MiB test-harness stack overflows
+        // before the visit counts are measured. The recursion guard that keeps
+        // those counts bounded is what the assertion checks, so run the same
+        // shapes on an explicit large stack instead of shrinking them below
+        // the depth this regression needs to exercise.
+        std::thread::Builder::new()
+            .name("div-line-close-scan".to_owned())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(div_line_close_scans_scale_linearly_body)
+            .expect("spawn scan thread")
+            .join()
+            .expect("scan thread");
+    }
+
+    fn div_line_close_scans_scale_linearly_body() {
         for source in [
             "[[div]]".repeat(96),
             "[[/div]]".repeat(96),

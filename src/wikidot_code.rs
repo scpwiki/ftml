@@ -55,10 +55,12 @@ fn candidate_at_inner(
     require_line_owner: bool,
 ) -> Option<WikidotCodeCandidate> {
     let mut ownership = LineOwnership::new();
+    let mut close_brackets = CloseBracketCursor::new(source);
     let body_start = code_opener_end_checked(
         source,
         opener_start,
         require_line_owner.then(|| ownership.at(source, opener_start)),
+        &mut close_brackets,
     )?;
     let mut cursor = body_start;
     let mut nested_depth = 0usize;
@@ -66,7 +68,9 @@ fn candidate_at_inner(
 
     while let Some(relative_marker) = source[cursor..].find("[[") {
         let marker_start = cursor + relative_marker;
-        if let Some(marker_end) = code_closer_end(source, marker_start) {
+        if let Some(marker_end) =
+            code_closer_end(source, marker_start, &mut close_brackets)
+        {
             if nested_depth > 0 {
                 nested_depth -= 1;
                 end_blocks_to_skip += 1;
@@ -89,6 +93,7 @@ fn candidate_at_inner(
             source,
             marker_start,
             Some(ownership.at(source, marker_start)),
+            &mut close_brackets,
         ) {
             nested_depth += 1;
             cursor = nested_body_start;
@@ -112,10 +117,13 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
     let mut output = BTreeMap::new();
     let mut stack = Vec::<OpenCode>::new();
     let mut ownership = LineOwnership::new();
+    let mut close_brackets = CloseBracketCursor::new(source);
     let mut cursor = 0usize;
     while let Some(relative_marker) = source[cursor..].find("[[") {
         let marker_start = cursor + relative_marker;
-        if let Some(marker_end) = code_closer_marker_end(source, marker_start) {
+        if let Some(marker_end) =
+            code_closer_marker_end(source, marker_start, &mut close_brackets)
+        {
             if code_closer_terminates(source, marker_end) {
                 if let Some(open) = stack.pop() {
                     let candidate = WikidotCodeCandidate {
@@ -146,6 +154,7 @@ pub(crate) fn candidates(source: &str) -> BTreeMap<usize, WikidotCodeCandidate> 
             source,
             marker_start,
             Some(ownership.at(source, marker_start)),
+            &mut close_brackets,
         ) {
             stack.push(OpenCode {
                 opener_start: marker_start,
@@ -219,10 +228,72 @@ pub(crate) fn active_body_ranges(source: &str) -> Vec<Range<usize>> {
     ranges
 }
 
+/// Monotone memo for "the next `]]` at or after this byte".
+///
+/// Every candidate head and closer head in a source asks for the first close
+/// marker ahead of it. Answering each ask with `str::find` rescans the whole
+/// tail, so a page full of `[[` fragments without any `]]` (for example
+/// `[[/ a ` or `[[/math` repeated) cost O(n²) in preprocessing and again in
+/// the parse. The asks in each pass only move forward, so one shared cursor
+/// answers them in linear total work while recomputing the identical answer.
+#[derive(Debug)]
+struct CloseBracketCursor<'a> {
+    source: &'a str,
+    scanned_from: usize,
+    found: Option<usize>,
+}
+
+impl<'a> CloseBracketCursor<'a> {
+    fn new(source: &'a str) -> Self {
+        CloseBracketCursor {
+            source,
+            scanned_from: 0,
+            found: None,
+        }
+    }
+
+    /// The first `]]` at or after `position`, or `None`.
+    ///
+    /// `found` is the first close marker at or after `scanned_from`,
+    /// and a scanned tail with no close marker stays empty for every later
+    /// position, so both a found answer and an empty one are reusable forward.
+    /// Rescanning the empty answer is what made a page of `[[/name`
+    /// fragments quadratic in preprocessing and again in the parse.
+    fn next_at(&mut self, position: usize) -> Option<usize> {
+        if position < self.scanned_from {
+            // A backwards ask cannot reuse the forward cursor; answer it
+            // directly and leave the cursor untouched.
+            return self
+                .source
+                .get(position..)?
+                .find("]]")
+                .map(|offset| position + offset);
+        }
+        if let Some(found) = self.found {
+            if found >= position {
+                return Some(found);
+            }
+        } else if self.scanned_from != 0 {
+            // The scanned tail had no close marker at all, so neither does
+            // a later position in it.
+            return None;
+        }
+        let found = self
+            .source
+            .get(position..)?
+            .find("]]")
+            .map(|offset| position + offset);
+        self.scanned_from = position;
+        self.found = found;
+        found
+    }
+}
+
 fn code_opener_end_checked(
     source: &str,
     opener_start: usize,
     line_ownership: Option<bool>,
+    close_brackets: &mut CloseBracketCursor<'_>,
 ) -> Option<usize> {
     let suffix = source.get(opener_start..)?;
     let head_start = opener_start + "[[".len();
@@ -230,7 +301,7 @@ fn code_opener_end_checked(
         return None;
     }
 
-    let relative_end = source[head_start..].find("]]")?;
+    let relative_end = close_brackets.next_at(head_start)? - head_start;
     let head_end = head_start + relative_end;
     let head = &source[head_start..head_end];
     if head_has_malformed_nested_marker(head) {
@@ -266,18 +337,26 @@ fn head_has_malformed_nested_marker(head: &str) -> bool {
     false
 }
 
-fn code_closer_end(source: &str, closer_start: usize) -> Option<usize> {
-    let closer_end = code_closer_marker_end(source, closer_start)?;
+fn code_closer_end(
+    source: &str,
+    closer_start: usize,
+    close_brackets: &mut CloseBracketCursor<'_>,
+) -> Option<usize> {
+    let closer_end = code_closer_marker_end(source, closer_start, close_brackets)?;
     code_closer_terminates(source, closer_end).then_some(closer_end)
 }
 
-fn code_closer_marker_end(source: &str, closer_start: usize) -> Option<usize> {
+fn code_closer_marker_end(
+    source: &str,
+    closer_start: usize,
+    close_brackets: &mut CloseBracketCursor<'_>,
+) -> Option<usize> {
     let suffix = source.get(closer_start..)?;
     if !suffix.starts_with("[[/") {
         return None;
     }
     let head_start = closer_start + "[[/".len();
-    let relative_end = source[head_start..].find("]]")?;
+    let relative_end = close_brackets.next_at(head_start)? - head_start;
     let head_end = head_start + relative_end;
     let name = &source[head_start..head_end];
 
