@@ -145,6 +145,8 @@ fn scan_include_argument_segment<'t>(
     let value_starts_with_comment = after_equals.as_bytes().starts_with(b"[!--")
         && complete_comment_end(after_equals.as_bytes(), 0).is_some();
     let (value, _) = trim_include_space_start(after_equals);
+    // Live trims trailing whitespace from each argument value.
+    let value = value.trim_end_matches([' ', '\t', '\r', '\n']);
     let authored_empty_value = value.is_empty() && !value_starts_with_comment;
 
     trace!("Adding argument for include (key '{key}', value '{value}')");
@@ -484,9 +486,9 @@ mod tests {
         );
         assert_eq!(
             include.variables().get("facility").map(Cow::as_ref),
-            Some("-- ")
+            Some("--")
         );
-        assert_eq!(include.variables().get("x").map(Cow::as_ref), Some("66 "));
+        assert_eq!(include.variables().get("x").map(Cow::as_ref), Some("66"));
         assert!(!include.variables().contains_key("textclass"));
         assert!(!include.variables().contains_key("text"));
     }
@@ -668,8 +670,8 @@ mod tests {
             parse_include_block("[[include page | a=x | b={$a}{$a} | c=prefix-{$b}]]", 0)
                 .expect("include should parse");
 
-        assert_eq!(include.variables().get("a").map(Cow::as_ref), Some("x "));
-        assert_eq!(include.variables().get("b").map(Cow::as_ref), Some("xx "));
+        assert_eq!(include.variables().get("a").map(Cow::as_ref), Some("x"));
+        assert_eq!(include.variables().get("b").map(Cow::as_ref), Some("xx"));
         assert_eq!(
             include.variables().get("c").map(Cow::as_ref),
             Some("prefix-xx"),
