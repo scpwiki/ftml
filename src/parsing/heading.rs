@@ -9,6 +9,12 @@ pub(crate) fn normalize_wikidot_headings<'t>(elements: &mut Vec<Element<'t>>) {
             element,
             Element::Container(container)
                 if matches!(container.ctype(), ContainerType::Header(heading) if !heading.has_toc)
+                    && !container.attributes().get().contains_key(
+                        crate::tree::WIKIDOT_HEADING_REOPEN_MARKER,
+                    )
+                    && !container.attributes().get().contains_key(
+                        crate::tree::WIKIDOT_HEADING_BARRIER_MARKER,
+                    )
                     && heading_elements_are_empty(container.elements())
         )
     });
@@ -72,6 +78,8 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             }
             PartialElement::TableCell(cell) => visit(&mut cell.elements),
             PartialElement::WikidotFoster(elements) => visit(elements),
+            PartialElement::WikidotCollapsibleTail(elements) => visit(elements),
+            PartialElement::WikidotCollapsibleHeadingEnd => {}
             PartialElement::Tab(tab) => visit(&mut tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&mut ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner

@@ -62,6 +62,10 @@ pub enum ParseCondition {
 
     TokenPair(Token, Token),
 
+    /// The current token starts at or after this source byte. Used to split a
+    /// line construct at a block closer that must not be consumed as content.
+    AtSourceByte(usize),
+
     SplitClose(SplitDelimiter),
 
     PaddedSplitClose(SplitDelimiter),

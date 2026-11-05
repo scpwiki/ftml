@@ -150,6 +150,10 @@ fn tree_stack_depth_reaches_threshold<'a>(
                 PartialElement::WikidotFoster(elements) => {
                     push_tree_elements(stack, elements, child_depth)
                 }
+                PartialElement::WikidotCollapsibleTail(elements) => {
+                    push_tree_elements(stack, elements, child_depth)
+                }
+                PartialElement::WikidotCollapsibleHeadingEnd => {}
                 PartialElement::Tab(tab) => {
                     push_tree_elements(stack, &tab.elements, child_depth)
                 }

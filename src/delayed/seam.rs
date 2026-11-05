@@ -166,6 +166,10 @@ where
             PartialElement::WikidotFoster(elements) => {
                 rewrite_elements(elements, apply_typography, classify)?;
             }
+            PartialElement::WikidotCollapsibleTail(elements) => {
+                rewrite_elements(elements, apply_typography, classify)?;
+            }
+            PartialElement::WikidotCollapsibleHeadingEnd => {}
             PartialElement::Tab(tab) => {
                 rewrite_elements(&mut tab.elements, apply_typography, classify)?;
             }

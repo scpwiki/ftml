@@ -97,6 +97,14 @@ pub(crate) const WIKIDOT_EMPTY_QUOTE_MARKER: &str = "data-ftml-empty-quote";
 /// renderer emits `key=""` for them the way live does; stripped when rendered.
 pub(crate) const WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER: &str = "data-ftml-empty-value";
 pub(crate) const WIKIDOT_WS_MONO_VANISH_MARKER: &str = "data-ftml-ws-mono-vanish";
+/// Marks a Wikidot heading whose line carries a dropped block closer (or an
+/// ended collapsible head). The implicit label span is then produced by the
+/// inline-scope lowering instead of the heading renderer. Stripped when rendered.
+pub(crate) const WIKIDOT_HEADING_BARRIER_MARKER: &str = "data-ftml-heading-barrier";
+/// Marks a heading reopened inside a collapsible shell on its line. The
+/// renderer then emits the bare heading element instead of an implicit label
+/// span. Stripped when rendered.
+pub(crate) const WIKIDOT_HEADING_REOPEN_MARKER: &str = "data-ftml-heading-reopen";
 use std::borrow::Cow;
 use std::collections::HashSet;
 
@@ -404,6 +412,10 @@ fn collect_page_references(
                 PartialElement::WikidotFoster(elements) => {
                     collect_page_references(elements, references, seen);
                 }
+                PartialElement::WikidotCollapsibleTail(elements) => {
+                    collect_page_references(elements, references, seen);
+                }
+                PartialElement::WikidotCollapsibleHeadingEnd => {}
                 PartialElement::Tab(tab) => {
                     collect_page_references(&tab.elements, references, seen);
                 }
@@ -511,6 +523,10 @@ fn collect_user_references(
                 PartialElement::WikidotFoster(elements) => {
                     collect_user_references(elements, references, seen);
                 }
+                PartialElement::WikidotCollapsibleTail(elements) => {
+                    collect_user_references(elements, references, seen);
+                }
+                PartialElement::WikidotCollapsibleHeadingEnd => {}
                 PartialElement::Tab(tab) => {
                     collect_user_references(&tab.elements, references, seen);
                 }

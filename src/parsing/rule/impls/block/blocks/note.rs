@@ -44,6 +44,12 @@ fn parse_note_block<'r, 't>(
     assert!(!flag_star, "Note doesn't allow star flag");
     assert!(!flag_score, "Note doesn't allow score flag");
     assert_block_name(&BLOCK_NOTE, name);
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser.wikidot_byte_on_heading_line(opener_start)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
 
     if parser.in_note() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));

@@ -472,6 +472,10 @@ fn render_partial(ctx: &mut HtmlContext, partial: &PartialElement) {
         }
         PartialElement::TableCell(cell) => render_elements(ctx, &cell.elements),
         PartialElement::WikidotFoster(elements) => render_elements(ctx, elements),
+        PartialElement::WikidotCollapsibleTail(elements) => {
+            render_elements(ctx, elements)
+        }
+        PartialElement::WikidotCollapsibleHeadingEnd => {}
         PartialElement::Tab(tab) => {
             if !tab.label.is_empty() {
                 ctx.html().span().contents(&tab.label);

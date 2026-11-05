@@ -427,6 +427,7 @@ where
                         }
                         ParseCondition::TokenPair(..) => None,
                         ParseCondition::CurrentTokenAtSourceLineStart(_)
+                        | ParseCondition::AtSourceByte(_)
                         | ParseCondition::SplitClose(_)
                         | ParseCondition::PaddedSplitClose(_) => None,
                     });

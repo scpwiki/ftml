@@ -20,11 +20,16 @@
 
 use super::prelude::*;
 use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
+use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
+use crate::parsing::rule::impls::RULE_BLOCK;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::parsing::{ParseError, ParseErrorKind};
-use crate::tree::{AttributeMap, ListItem, ListType, PartialElement, WikidotBlockShell};
+use crate::tree::{
+    AttributeMap, Container, ContainerType, ListItem, ListType, PartialElement,
+    WikidotBlockShell,
+};
 use std::borrow::Cow;
 
 pub const BLOCK_COLLAPSIBLE: BlockRule = BlockRule {
@@ -107,6 +112,87 @@ where
     ))
 }
 
+fn wikidot_reopen_body_paragraphs<'t>(body: Vec<Element<'t>>) -> Vec<Element<'t>> {
+    if body.is_empty() {
+        return body;
+    }
+    let inline_only = body.iter().all(|element| {
+        element.paragraph_safe()
+            || matches!(element, Element::LineBreak | Element::LineBreaks(_))
+    });
+    if !inline_only {
+        return body;
+    }
+    vec![Element::Container(Container::new(
+        ContainerType::Paragraph,
+        body,
+        AttributeMap::new(),
+    ))]
+}
+
+/// Elements left on the heading line after a collapsible head that ends the
+/// line: the reopened heading's tail text, or a paragraph of body content when
+/// a same-line closer ends it first.
+fn collect_wikidot_heading_line_tail<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    opener_start: usize,
+) -> ParseResult<'r, 't, Vec<Element<'t>>> {
+    let mut elements = Vec::new();
+    while parser.current().token == Token::Whitespace {
+        parser.step()?;
+    }
+    if matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    ) {
+        if parser.current().token == Token::LineBreak {
+            parser.step()?;
+        }
+        return Ok(crate::parsing::ParseSuccess::new(
+            elements,
+            Vec::new(),
+            false,
+        ));
+    }
+    let current = parser.current().span.start;
+    let line_end = parser
+        .wikidot_heading_line_range(opener_start)
+        .map(|(_, end)| end)
+        .unwrap_or_else(|| parser.full_text().inner().len());
+    let closer = parser
+        .wikidot_heading_flat_closers(current)
+        .first()
+        .map(|(byte, _, _)| *byte);
+    let stop = closer.unwrap_or(line_end);
+    let conditions = [
+        ParseCondition::current(Token::LineBreak),
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::current(Token::InputEnd),
+        ParseCondition::AtSourceByte(stop),
+    ];
+    let collected = crate::parsing::collect::collect_consume_before(
+        parser,
+        RULE_BLOCK,
+        &conditions,
+        &[],
+        None,
+    )?;
+    let ((mut tail, _last), errors, _) = collected.into();
+    if closer.is_some() {
+        if !tail.is_empty() {
+            tail = vec![Element::Container(Container::new(
+                ContainerType::Paragraph,
+                tail,
+                AttributeMap::new(),
+            ))];
+        }
+    } else if parser.current().token == Token::LineBreak {
+        parser.step()?;
+    }
+    elements.extend(tail);
+    Ok(crate::parsing::ParseSuccess::new(elements, errors, false))
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -140,6 +226,85 @@ fn parse_fn<'r, 't>(
             i < break_at && i >= 2 && source[i - 2] == b']' && source[i - 1] == b']'
         });
 
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && let Some((reopen_head, reopen_heading)) = parser.take_wikidot_heading_reopen()
+        && reopen_head == opener_start
+    {
+        let shell = WikidotBlockShell::Collapsible {
+            head: opener_start,
+            start_open: head.start_open,
+            show_text: head.show_text,
+            hide_text: head.hide_text,
+            show_top: head.show_top,
+            show_bottom: head.show_bottom,
+            reopen_heading: Some(reopen_heading),
+        };
+        let mut elements =
+            vec![Element::Partial(PartialElement::WikidotBlockOpen(shell))];
+        let current = parser.current().span.start;
+        let same_line_closer = parser
+            .wikidot_heading_flat_closers(current)
+            .first()
+            .map(|(byte, _, _)| *byte);
+        let mut errors = Vec::new();
+        let close = Element::Partial(PartialElement::WikidotBlockClose(
+            crate::tree::WikidotBlockCloseKind::Collapsible { head: opener_start },
+        ));
+        if let Some(stop) = same_line_closer {
+            let conditions = [
+                ParseCondition::current(Token::LineBreak),
+                ParseCondition::current(Token::ParagraphBreak),
+                ParseCondition::current(Token::InputEnd),
+                ParseCondition::AtSourceByte(stop),
+            ];
+            let collected = crate::parsing::collect::collect_consume_before(
+                parser,
+                RULE_BLOCK,
+                &conditions,
+                &[],
+                None,
+            )?;
+            let ((body, _last), mut collected_errors, _) = collected.into();
+            errors.append(&mut collected_errors);
+            let mut closer = parser.clone();
+            if closer.get_end_block().is_ok() {
+                parser.update(&closer);
+            }
+            elements.push(Element::Partial(
+                PartialElement::WikidotCollapsibleHeadingEnd,
+            ));
+            elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
+                wikidot_reopen_body_paragraphs(body),
+            )));
+            elements.push(close);
+            return ok!(false; Elements::Multiple(elements), errors);
+        }
+
+        let tail = collect_wikidot_heading_line_tail(parser, opener_start)?;
+        elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
+            tail.item,
+        )));
+        elements.push(Element::Partial(
+            PartialElement::WikidotCollapsibleHeadingEnd,
+        ));
+        let previous_context = parser.in_wikidot_collapsible();
+        parser.set_in_wikidot_collapsible(true);
+        let body = parser.get_body_elements_with_literal_quote_context(
+            &BLOCK_COLLAPSIBLE,
+            true,
+            BlockBodyStart::NextPhysicalLine,
+        );
+        parser.set_in_wikidot_collapsible(previous_context);
+        let (body_elements, mut body_errors, _) = body?.into();
+        errors.append(&mut body_errors);
+        elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
+            wikidot_reopen_body_paragraphs(body_elements),
+        )));
+        elements.push(close);
+        return ok!(false; Elements::Multiple(elements), errors);
+    }
+
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
         && pair.kind == WikidotBlockKind::Collapsible
     {
@@ -151,6 +316,7 @@ fn parse_fn<'r, 't>(
             hide_text: head.hide_text,
             show_top: head.show_top,
             show_bottom: head.show_bottom,
+            reopen_heading: None,
         };
         return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
     }

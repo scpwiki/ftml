@@ -98,6 +98,15 @@ where
             return Err(parser.make_err(ParseErrorKind::EndOfInput));
         }
 
+        if let Some(barrier) = parser.wikidot_heading_barrier()
+            && parser.current().span.start >= barrier
+        {
+            if _rule.name() == "header" {
+                return ok!(paragraph_safe; parser.current(), errors);
+            }
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+
         if parser.evaluate_any(close_conditions) {
             if consume_terminator
                 && let Some(split_match) = split_close_match(parser, close_conditions)

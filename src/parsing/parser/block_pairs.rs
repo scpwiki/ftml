@@ -102,9 +102,38 @@ pub(crate) struct WikidotBlockPairs {
     closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
     foster_heads: BTreeSet<usize>,
     greedy_ranges: Vec<(usize, usize)>,
+    heading_ranges: Vec<(usize, usize)>,
+    closer_end_bytes: BTreeMap<usize, usize>,
 }
 
 impl WikidotBlockPairs {
+    /// The byte range of the heading line containing the byte, if that byte is
+    /// on one. The range excludes the terminating break.
+    pub(crate) fn heading_line_range(&self, byte: usize) -> Option<(usize, usize)> {
+        let index = self
+            .heading_ranges
+            .partition_point(|(start, _)| *start <= byte);
+        if index == 0 {
+            return None;
+        }
+        let (start, end) = self.heading_ranges[index - 1];
+        (byte < end).then_some((start, end))
+    }
+
+    pub(crate) fn closer_end_byte(&self, closer_byte: usize) -> Option<usize> {
+        self.closer_end_bytes.get(&closer_byte).copied()
+    }
+
+    /// Pairs whose head sits in the given byte range.
+    pub(crate) fn heads_between(
+        &self,
+        from: usize,
+        to: usize,
+    ) -> impl Iterator<Item = &WikidotBlockPair> {
+        self.by_head_byte
+            .range(from..to)
+            .map(|(_, index)| &self.pairs[*index])
+    }
     #[cfg(test)]
     pub(crate) fn pairs(&self) -> &[WikidotBlockPair] {
         &self.pairs
@@ -451,6 +480,7 @@ struct Scanner<'t> {
     line_first: Vec<usize>,
     heading_line: Vec<bool>,
     heading_line_end_bytes: Vec<usize>,
+    heading_ranges: Vec<(usize, usize)>,
     head_dropped: Vec<bool>,
     module_closers: Vec<usize>,
     iftags_closers: Vec<usize>,
@@ -499,6 +529,7 @@ impl<'t> Scanner<'t> {
         let mut line_first: Vec<usize> = Vec::new();
         let mut heading_line: Vec<bool> = Vec::new();
         let mut heading_line_end_bytes: Vec<usize> = Vec::new();
+        let mut heading_ranges: Vec<(usize, usize)> = Vec::new();
         let mut line = 0_usize;
         let mut index = 0_usize;
         while index < tokens.len() {
@@ -531,6 +562,7 @@ impl<'t> Scanner<'t> {
             heading_line.push(is_heading);
             if is_heading {
                 heading_line_end_bytes.push(end_byte);
+                heading_ranges.push((tokens[index].span.start, end_byte));
             }
             index = cursor;
             line += 1;
@@ -634,6 +666,7 @@ impl<'t> Scanner<'t> {
             line_first,
             heading_line,
             heading_line_end_bytes,
+            heading_ranges,
             head_dropped,
             module_closers,
             iftags_closers,
@@ -1494,6 +1527,11 @@ impl<'t> Scanner<'t> {
         for pair in &mut self.pairs {
             pair.closer_byte = self.tokens[pair.closer].span.start;
         }
+        let mut closer_end_bytes: BTreeMap<usize, usize> = BTreeMap::new();
+        for pair in &self.pairs {
+            let end = self.tokens[pair.closer_end - 1].span.end;
+            closer_end_bytes.insert(pair.closer_byte, end);
+        }
         let ranges: Vec<(usize, usize)> = self
             .pairs
             .iter()
@@ -1581,13 +1619,19 @@ impl<'t> Scanner<'t> {
                 flat = true;
             }
             if !flat {
-                let pos = self
-                    .heading_line_end_bytes
-                    .partition_point(|end| *end <= a_start);
-                flat = self
-                    .heading_line_end_bytes
-                    .get(pos)
-                    .is_some_and(|end| *end < a_end);
+                let body_after_heading_line = self.pairs[a].kind
+                    == WikidotBlockKind::Collapsible
+                    && self.on_heading_line(self.pairs[a].head)
+                    && !self.on_heading_line(self.pairs[a].closer);
+                if !body_after_heading_line {
+                    let pos = self
+                        .heading_line_end_bytes
+                        .partition_point(|end| *end <= a_start);
+                    flat = self
+                        .heading_line_end_bytes
+                        .get(pos)
+                        .is_some_and(|end| *end < a_end);
+                }
             }
             if !flat {
                 flat = self.bib_ranges.first().is_some_and(|(start, end)| {
@@ -1660,6 +1704,8 @@ impl<'t> Scanner<'t> {
             closer_event_bytes: self.closer_event_bytes,
             foster_heads,
             greedy_ranges,
+            heading_ranges: self.heading_ranges,
+            closer_end_bytes,
         }
     }
 

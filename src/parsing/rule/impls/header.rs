@@ -19,7 +19,10 @@
  */
 
 use super::prelude::*;
-use crate::tree::Heading;
+use crate::parsing::ParseSuccess;
+use crate::parsing::parser::block_pairs::WikidotBlockKind;
+use crate::tree::{Container, Heading, HeadingReopen, WIKIDOT_HEADING_BARRIER_MARKER};
+use std::borrow::Cow;
 use std::convert::TryInto;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -82,13 +85,14 @@ fn consume_header_once<'r, 't>(
     } else {
         None
     };
-    let collected = collect_container(parser, RULE_HEADER, ctype, &close, &[], None);
+    let mut collected =
+        collect_wikidot_heading_with_barriers(parser, ctype, heading, &close);
     if let Some((single_line, heading_line)) = restore_line {
         parser.set_in_wikidot_single_line_content(single_line);
         parser.set_in_wikidot_heading_line(heading_line);
     }
-    let collected = collected?;
-    let (mut elements, mut all_errors, _) = collected.into();
+    let ((elements, toc_elements), mut all_errors, _) = collected?.into();
+    let mut elements = elements;
 
     let content = match &elements {
         Elements::Single(Element::Container(container)) => {
@@ -125,10 +129,18 @@ fn consume_header_once<'r, 't>(
         }
     }
 
-    if heading.has_toc
-        && let Elements::Single(Element::Container(ref container)) = elements
-    {
-        parser.push_table_of_contents_entry(heading.level, container.elements());
+    if heading.has_toc {
+        match &toc_elements {
+            Some(toc) => parser.push_table_of_contents_entry(heading.level, toc),
+            None => {
+                if let Elements::Single(Element::Container(container)) = &elements {
+                    parser.push_table_of_contents_entry(
+                        heading.level,
+                        container.elements(),
+                    );
+                }
+            }
+        }
     }
 
     if parser.settings().layout.legacy()
@@ -150,6 +162,164 @@ fn consume_header_once<'r, 't>(
     }
 
     ok!(false; elements, all_errors)
+}
+
+type CollectedHeading<'t> = (Elements<'t>, Option<Vec<Element<'t>>>);
+
+fn collect_wikidot_heading_with_barriers<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    ctype: ContainerType,
+    heading: Heading,
+    close: &[ParseCondition],
+) -> ParseResult<'r, 't, CollectedHeading<'t>> {
+    if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
+        let from = parser.current().span.start;
+        let collapsible_head = parser.wikidot_heading_collapsible_head(from);
+        let closers = if collapsible_head.is_some() {
+            Vec::new()
+        } else {
+            parser.wikidot_heading_flat_closers(from)
+        };
+        if collapsible_head.is_some() || !closers.is_empty() {
+            return collect_split_wikidot_heading(
+                parser,
+                ctype,
+                heading,
+                close,
+                collapsible_head,
+                &closers,
+            );
+        }
+    }
+
+    let collected = collect_container(parser, RULE_HEADER, ctype, close, &[], None)?;
+    let (elements, errors, paragraph_safe) = collected.into();
+    Ok(ParseSuccess::new((elements, None), errors, paragraph_safe))
+}
+
+fn collect_split_wikidot_heading<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    ctype: ContainerType,
+    heading: Heading,
+    close: &[ParseCondition],
+    collapsible_head: Option<usize>,
+    closers: &[(usize, usize, WikidotBlockKind)],
+) -> ParseResult<'r, 't, CollectedHeading<'t>> {
+    let source = parser.full_text().inner();
+    let mut stops: Vec<usize> = closers.iter().map(|(byte, _, _)| *byte).collect();
+    if let Some(head) = collapsible_head {
+        stops.push(head);
+    }
+
+    let mut label: Vec<Element<'t>> = Vec::new();
+    let mut tail: Vec<Element<'t>> = Vec::new();
+    let mut toc: Vec<Element<'t>> = Vec::new();
+    let mut errors = Vec::new();
+    let mut label_done = false;
+
+    for (index, &byte) in stops.iter().enumerate() {
+        let mut conditions: Vec<ParseCondition> = close.to_vec();
+        conditions.push(ParseCondition::AtSourceByte(byte));
+        parser.set_wikidot_heading_barrier(Some(byte));
+        let collected =
+            collect_consume_before(parser, RULE_HEADER, &conditions, &[], None);
+        parser.set_wikidot_heading_barrier(None);
+        let success = collected?;
+        let ((mut elements, _last), mut step_errors, _) = success.into();
+        errors.append(&mut step_errors);
+
+        if label_done {
+            toc.extend(elements.iter().cloned());
+            tail.append(&mut elements);
+        } else {
+            toc.extend(elements.iter().cloned());
+            label = elements;
+            label_done = true;
+        }
+
+        if Some(byte) == collapsible_head {
+            break;
+        }
+        if parser.current().span.start < byte {
+            break;
+        }
+
+        let kind = closers[index].2;
+        let start = parser.current().span.start;
+        let mut probe = parser.clone();
+        if probe.get_end_block().is_err() {
+            break;
+        }
+        parser.update(&probe);
+        let end = parser.current().span.start;
+        let raw: Cow<'t, str> = Cow::Borrowed(&source[start..end]);
+        toc.push(Element::Text(raw));
+        if kind == WikidotBlockKind::Collapsible
+            && parser.current().token == Token::Whitespace
+            && parser.current().slice == " "
+        {
+            parser.step()?;
+        }
+    }
+
+    if collapsible_head.is_none() {
+        let success = collect_consume_before(parser, RULE_HEADER, close, &[], None)?;
+        let ((mut elements, _last), mut step_errors, _) = success.into();
+        errors.append(&mut step_errors);
+        toc.extend(elements.iter().cloned());
+        tail.append(&mut elements);
+        if !matches!(
+            parser.current().token,
+            Token::InputEnd | Token::BulletItem | Token::NumberedItem
+        ) {
+            parser.step()?;
+        }
+    }
+
+    if let Some(head) = collapsible_head {
+        trim_trailing_heading_space(&mut label);
+        let id = heading
+            .has_toc
+            .then(|| Cow::Owned(format!("toc{}", parser.table_of_contents_len())));
+        parser.set_wikidot_heading_reopen(Some((
+            head,
+            HeadingReopen {
+                level: heading.level,
+                id,
+            },
+        )));
+    }
+
+    let mut content: Vec<Element<'t>> = Vec::with_capacity(tail.len() + 1);
+    content.push(Element::Container(Container::new(
+        ContainerType::HeadingLabel,
+        label,
+        AttributeMap::new(),
+    )));
+    content.extend(tail);
+
+    let mut attributes = AttributeMap::new();
+    attributes.insert(WIKIDOT_HEADING_BARRIER_MARKER, cow!(""));
+    let element = Element::Container(Container::new(ctype, content, attributes));
+    let mut success =
+        ParseSuccess::new((Elements::Single(element), Some(toc)), errors, false);
+    success.split_close_leftover = None;
+    Ok(success)
+}
+
+fn trim_trailing_heading_space(elements: &mut Vec<Element<'_>>) {
+    let Some(Element::Text(text)) = elements.last_mut() else {
+        return;
+    };
+    let trimmed = text.trim_end_matches([' ', '\t']);
+    if trimmed.len() == text.len() {
+        return;
+    }
+    if trimmed.is_empty() {
+        elements.pop();
+    } else {
+        *text = Cow::Owned(trimmed.to_owned());
+    }
 }
 
 fn wikidot_literal_heading<'t>(

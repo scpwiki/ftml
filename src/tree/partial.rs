@@ -20,8 +20,8 @@
 
 use super::clone::elements_to_owned;
 use super::{
-    Alignment, AnchorTarget, AttributeMap, ContainerType, Element, ListItem, RubyText,
-    Tab, TableCell, TableRow,
+    Alignment, AnchorTarget, AttributeMap, ContainerType, Element, HeadingLevel,
+    ListItem, RubyText, Tab, TableCell, TableRow,
 };
 use crate::parsing::ParseErrorKind;
 use std::borrow::Cow;
@@ -73,6 +73,23 @@ impl InlineFormatKind {
     }
 }
 
+/// A Wikidot heading that a collapsible head on its line reopens inside the
+/// collapsible shell frames.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct HeadingReopen<'t> {
+    pub level: HeadingLevel,
+    pub id: Option<Cow<'t, str>>,
+}
+
+impl<'t> HeadingReopen<'t> {
+    pub fn to_owned(&self) -> HeadingReopen<'static> {
+        HeadingReopen {
+            level: self.level,
+            id: self.id.as_ref().map(|id| Cow::Owned(id.to_string())),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum WikidotBlockShell<'t> {
     Div {
@@ -87,6 +104,7 @@ pub enum WikidotBlockShell<'t> {
         hide_text: Option<Cow<'t, str>>,
         show_top: bool,
         show_bottom: bool,
+        reopen_heading: Option<HeadingReopen<'t>>,
     },
     Note {
         head: usize,
@@ -125,6 +143,7 @@ impl<'t> WikidotBlockShell<'t> {
                 hide_text,
                 show_top,
                 show_bottom,
+                reopen_heading,
             } => WikidotBlockShell::Collapsible {
                 head: *head,
                 start_open: *start_open,
@@ -132,6 +151,7 @@ impl<'t> WikidotBlockShell<'t> {
                 hide_text: hide_text.as_ref().map(|text| Cow::Owned(text.to_string())),
                 show_top: *show_top,
                 show_bottom: *show_bottom,
+                reopen_heading: reopen_heading.as_ref().map(HeadingReopen::to_owned),
             },
             WikidotBlockShell::Note { head } => WikidotBlockShell::Note { head: *head },
             WikidotBlockShell::Align { head, alignment } => WikidotBlockShell::Align {
@@ -236,6 +256,14 @@ pub enum PartialElement<'t> {
 
     WikidotFoster(Vec<Element<'t>>),
 
+    /// The rest of a heading line after a collapsible head, placed inside the
+    /// reopened heading frame.
+    WikidotCollapsibleTail(Vec<Element<'t>>),
+
+    /// Ends the reopened heading and closes the collapsible shell frames that
+    /// the heading line opened.
+    WikidotCollapsibleHeadingEnd,
+
     InlineSizeOpen(Cow<'t, str>, Cow<'t, str>),
 
     InlineSizeClose(Cow<'t, str>),
@@ -274,6 +302,10 @@ impl PartialElement<'_> {
             PartialElement::WikidotBlockOpen(_) => "WikidotBlockOpen",
             PartialElement::WikidotBlockClose(_) => "WikidotBlockClose",
             PartialElement::WikidotFoster(_) => "WikidotFoster",
+            PartialElement::WikidotCollapsibleTail(_) => "WikidotCollapsibleTail",
+            PartialElement::WikidotCollapsibleHeadingEnd => {
+                "WikidotCollapsibleHeadingEnd"
+            }
             PartialElement::InlineSizeOpen(..) => "InlineSizeOpen",
             PartialElement::InlineSizeClose(_) => "InlineSizeClose",
             PartialElement::InlineSpanOpen(..) => "InlineSpanOpen",
@@ -299,6 +331,8 @@ impl PartialElement<'_> {
             | PartialElement::WikidotBlockOpen(_)
             | PartialElement::WikidotBlockClose(_)
             | PartialElement::WikidotFoster(_)
+            | PartialElement::WikidotCollapsibleTail(_)
+            | PartialElement::WikidotCollapsibleHeadingEnd
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)
@@ -330,6 +364,12 @@ impl PartialElement<'_> {
             }
             PartialElement::WikidotFoster(elements) => {
                 PartialElement::WikidotFoster(elements_to_owned(elements))
+            }
+            PartialElement::WikidotCollapsibleTail(elements) => {
+                PartialElement::WikidotCollapsibleTail(elements_to_owned(elements))
+            }
+            PartialElement::WikidotCollapsibleHeadingEnd => {
+                PartialElement::WikidotCollapsibleHeadingEnd
             }
             PartialElement::InlineSizeOpen(value, head) => {
                 PartialElement::InlineSizeOpen(

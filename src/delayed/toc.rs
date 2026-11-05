@@ -107,6 +107,10 @@ fn visit_headings<'a, 't>(
                 PartialElement::WikidotFoster(elements) => {
                     visit_headings(elements, footnotes, visitor);
                 }
+                PartialElement::WikidotCollapsibleTail(elements) => {
+                    visit_headings(elements, footnotes, visitor);
+                }
+                PartialElement::WikidotCollapsibleHeadingEnd => {}
                 PartialElement::Tab(tab) => {
                     visit_headings(&tab.elements, footnotes, visitor);
                 }
