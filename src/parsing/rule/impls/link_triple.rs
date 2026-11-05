@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::link_triple_transliteration::transliterate_character;
 use super::prelude::*;
 use crate::data::PageRef;
 use crate::parsing::collect::{
@@ -29,7 +30,6 @@ use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use crate::url::is_url;
 use std::borrow::Cow;
-use unicode_normalization::UnicodeNormalization;
 use wikidot_normalize::normalize;
 
 pub const RULE_LINK_TRIPLE: Rule = Rule {
@@ -219,12 +219,12 @@ fn build_same<'r, 't>(
     } else {
         label
     };
-    let label = if parser.settings().layout.legacy()
-        && target.is_some()
-        && !is_url(&url)
-        && strip_category(&url).is_none()
+    let label = if parser.settings().layout.legacy() && target.is_some() && !is_url(&url)
     {
-        Cow::Owned(format!("*{label}"))
+        match strip_category(&url) {
+            Some(stripped) => Cow::Owned(stripped.to_owned()),
+            None => Cow::Owned(format!("*{label}")),
+        }
     } else {
         label
     };
@@ -246,16 +246,28 @@ fn build_same<'r, 't>(
 }
 
 fn same_link_label<'t>(parser: &Parser<'_, '_>, url: &'t str) -> &'t str {
-    match strip_category(url) {
-        Some(_)
-            if parser.settings().layout.legacy()
-                && url.starts_with(':')
-                && (url.contains(" :") || url.contains(": ")) =>
-        {
-            url
+    if !parser.settings().layout.legacy() {
+        return match strip_category_native(url) {
+            Some(stripped) => stripped,
+            None => url,
+        };
+    }
+
+    let base = if url.starts_with(':') || url.starts_with('/') {
+        url
+    } else {
+        match strip_category(url) {
+            Some(stripped) => stripped,
+            None => url,
         }
-        Some(stripped) => stripped,
-        None => url,
+    };
+    strip_fragment(base)
+}
+
+fn strip_fragment(target: &str) -> &str {
+    match target.split_once('#') {
+        Some((page, _)) => page,
+        None => target,
     }
 }
 
@@ -329,11 +341,9 @@ fn build_separate<'r, 't>(
     };
 
     let label = if label.is_empty() && legacy {
-        let mut normalized = str!(url.as_ref());
-        if normalized.starts_with(':') {
-            normalized.remove(0);
-        }
-        normalize(&mut normalized);
+        let page = strip_fragment(url.as_ref());
+        let transliterated = transliterate_triple_target(page);
+        let normalized = normalize_triple_slug(&transliterated);
         match link {
             LinkLocation::Page(_) => LinkLabel::Title(Cow::Owned(normalized)),
             LinkLocation::Url(_) => LinkLabel::Text(Cow::Owned(normalized)),
@@ -689,46 +699,130 @@ fn wikidot_target(
     }
 }
 
-fn transliterate_triple_target(url: &str) -> Option<String> {
+fn transliterate_triple_target(url: &str) -> String {
     let mut transliterated = String::with_capacity(url.len());
 
-    for character in url.nfkd() {
-        if is_format_character(character) {
-            transliterated.push(' ');
-        } else if character.is_ascii() {
+    for character in url.chars() {
+        if character.is_ascii() {
             transliterated.push(character);
+        } else if let Some(latin) = transliterate_character(character) {
+            transliterated.push_str(latin);
+        } else if is_format_character(character) {
+            transliterated.push(' ');
         } else if is_transliteration_combining_mark(character) {
             continue;
         } else {
-            let latin = transliterate_cyrillic(character)?;
-            transliterated.push_str(latin);
-        }
-    }
-
-    Some(transliterated)
-}
-
-fn transliterate_triple_anchor(anchor: &str) -> String {
-    let mut transliterated = String::with_capacity(anchor.len());
-
-    for character in anchor.chars() {
-        if is_format_character(character) {
-            transliterated.push(character);
-            continue;
-        }
-
-        if character.is_ascii() {
-            transliterated.push(character);
-            continue;
-        }
-
-        match transliterate_triple_target(character.encode_utf8(&mut [0; 4])) {
-            Some(transliteration) => transliterated.push_str(&transliteration),
-            None => transliterated.push(character),
+            transliterated.push(' ');
         }
     }
 
     transliterated
+}
+
+/// Stands in for `:` while `wikidot_normalize::normalize` runs, so every
+/// colon survives instead of merging into dashes. Modifier Letter Prime is
+/// NFKC- and casefold-stable and matches the slug character class.
+const COLON_PLACEHOLDER: &str = "\u{2b9}";
+
+/// Normalizes a transliterated triple-link slug the way live does: the full
+/// `wikidot_normalize::normalize` pipeline except multi-category merging, so
+/// `a:b:c` keeps its colons and `_default:` still strips.
+fn normalize_triple_slug(text: &str) -> String {
+    // Live keeps a trailing `:_` (an underscore directly after a category
+    // colon, as in `fragment:_template`) and drops every other trailing run
+    // of `:`/`_` in a colon-bearing target.
+    let mut text = if text.contains(':') {
+        let keep = match text
+            .char_indices()
+            .rfind(|&(_, character)| character != ':' && character != '_')
+        {
+            Some((index, character)) => index + character.len_utf8(),
+            None => 0,
+        };
+        let tail = &text[keep..];
+        if tail.is_empty() || tail == ":_" {
+            text.to_owned()
+        } else {
+            text[..keep].to_owned()
+        }
+    } else {
+        text.to_owned()
+    };
+    text = collapse_colon_runs(&text);
+    strip_default_category(&mut text);
+
+    if text.matches(':').count() <= 1 {
+        // With at most one category separator the stock pipeline already
+        // matches live, including an underscore directly after the colon.
+        normalize(&mut text);
+        return text;
+    }
+
+    let mut protected = text.replace(':', COLON_PLACEHOLDER);
+    normalize(&mut protected);
+    let mut restored = protected.replace(COLON_PLACEHOLDER, ":");
+    // Mirror the colon-adjacent normalize steps the placeholder blocked.
+    restored = restored.replace("-:", ":").replace(":-", ":");
+    restored.trim_matches(':').to_owned()
+}
+
+/// Builds the local page reference for a transliterated triple-link target.
+/// Leading colons are dropped (`::a` becomes `a`) and the `#` fragment stays
+/// raw for later percent-encoding; it is never transliterated. Spaces in the
+/// fragment are percent-encoded up front, matching live triple-link hrefs.
+fn triple_page_ref(target: &str) -> PageRef {
+    let target = target.trim_start_matches(':');
+    let (page, extra) = match target.split_once('#') {
+        Some((page, anchor)) => (page, Some(format!("#{}", anchor.replace(' ', "%20")))),
+        None => (target, None),
+    };
+    PageRef {
+        site: None,
+        page: normalize_triple_slug(page),
+        extra,
+    }
+}
+
+/// Turns `/` in the page portion into `-`, leaving the `#` fragment raw:
+/// live triple-link fragments keep every character and are percent-encoded
+/// later, so `a#b/c` is `/a#b/c` while `a/b#c` is `/a-b#c`.
+fn replace_page_slashes(target: &str) -> String {
+    match target.split_once('#') {
+        Some((page, anchor)) => format!("{}#{anchor}", page.replace('/', "-")),
+        None => target.replace('/', "-"),
+    }
+}
+
+fn collapse_colon_runs(text: &str) -> String {
+    if !text.contains("::") {
+        return str!(text);
+    }
+
+    let mut collapsed = String::with_capacity(text.len());
+    let mut prev_colon = false;
+    for character in text.chars() {
+        if character == ':' {
+            if prev_colon {
+                continue;
+            }
+            prev_colon = true;
+            collapsed.push(':');
+        } else {
+            prev_colon = false;
+            collapsed.push(character);
+        }
+    }
+    collapsed
+}
+
+fn strip_default_category(text: &mut String) {
+    const PREFIX: &str = "_default:";
+    if text
+        .get(..PREFIX.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(PREFIX))
+    {
+        text.replace_range(..PREFIX.len(), "");
+    }
 }
 
 fn is_format_character(character: char) -> bool {
@@ -769,42 +863,6 @@ fn is_transliteration_combining_mark(character: char) -> bool {
     )
 }
 
-fn transliterate_cyrillic(character: char) -> Option<&'static str> {
-    match character {
-        'а' | 'А' => Some("a"),
-        'б' | 'Б' => Some("b"),
-        'в' | 'В' => Some("v"),
-        'г' | 'Г' => Some("g"),
-        'д' | 'Д' => Some("d"),
-        'е' | 'Е' => Some("e"),
-        'ж' | 'Ж' => Some("zh"),
-        'з' | 'З' => Some("z"),
-        'и' | 'И' => Some("i"),
-        'к' | 'К' => Some("k"),
-        'л' | 'Л' => Some("l"),
-        'м' | 'М' => Some("m"),
-        'н' | 'Н' => Some("n"),
-        'о' | 'О' => Some("o"),
-        'п' | 'П' => Some("p"),
-        'р' | 'Р' => Some("r"),
-        'с' | 'С' => Some("s"),
-        'т' | 'Т' => Some("t"),
-        'у' | 'У' => Some("u"),
-        'ф' | 'Ф' => Some("f"),
-        'х' | 'Х' => Some("kh"),
-        'ц' | 'Ц' => Some("ts"),
-        'ч' | 'Ч' => Some("ch"),
-        'ш' | 'Ш' => Some("sh"),
-        'щ' | 'Щ' => Some("shch"),
-        'ъ' | 'Ъ' | 'ь' | 'Ь' => Some(""),
-        'ы' | 'Ы' => Some("y"),
-        'э' | 'Э' => Some("e"),
-        'ю' | 'Ю' => Some("yu"),
-        'я' | 'Я' => Some("ya"),
-        _ => None,
-    }
-}
-
 fn parse_link_location<'r, 't>(
     parser: &Parser<'r, 't>,
     mut url: Cow<'t, str>,
@@ -816,6 +874,10 @@ fn parse_link_location<'r, 't>(
     }
 
     if url.contains("###") || url.contains("/##/") {
+        return None;
+    }
+
+    if url.matches('#').count() >= 2 {
         return None;
     }
 
@@ -838,38 +900,37 @@ fn parse_link_location<'r, 't>(
         ));
     }
 
-    if let Some(cross_site) = url.strip_prefix(':') {
-        let mut page = cross_site
-            .split(':')
-            .map(|part| {
-                let mut part = part.trim().to_owned();
-                normalize(&mut part);
-                part
-            })
-            .collect::<Vec<_>>()
-            .join(":");
-        if page.is_empty() {
-            return Some((LinkLocation::Page(PageRef::page_only("")), LinkType::Page));
-        }
-        page.make_ascii_lowercase();
-        return Some((
-            LinkLocation::Page(PageRef {
-                site: None,
-                page,
-                extra: None,
-            }),
-            LinkType::Page,
-        ));
-    }
-
     if leading_space && is_url(&url) && authored_url_prefix_is_url {
         let page = url.replace("://", ":");
         let page = page.trim_end_matches('/');
         return Some((LinkLocation::Page(PageRef::page_only(page)), LinkType::Page));
     }
 
+    if !url.is_ascii() {
+        let trimmed = url.trim_start();
+        if !is_url(trimmed) && !trimmed.starts_with('/') {
+            let (page_part, anchor_part) = match url.split_once('#') {
+                Some((page, anchor)) => (page.to_owned(), Some(anchor.to_owned())),
+                None => (url.as_ref().to_owned(), None),
+            };
+            let mut transliterated = transliterate_triple_target(&page_part);
+            if let Some(anchor) = anchor_part {
+                transliterated.push('#');
+                transliterated.push_str(&anchor);
+            }
+            url = Cow::Owned(transliterated);
+        }
+    }
+
+    if url.starts_with(':') {
+        return Some((
+            LinkLocation::Page(triple_page_ref(url.as_ref())),
+            LinkType::Page,
+        ));
+    }
+
     if let Some((page, extra)) = url.split_once("/#/") {
-        let mut page_ref = PageRef::page_only(page);
+        let mut page_ref = triple_page_ref(page);
         page_ref.extra = Some(format!("#/{extra}"));
         return Some((LinkLocation::Page(page_ref), LinkType::Page));
     }
@@ -879,35 +940,9 @@ fn parse_link_location<'r, 't>(
         && (!is_url(&url) || !authored_url_prefix_is_url)
     {
         return Some((
-            LinkLocation::Page(PageRef::page_only(url.replace('/', "-"))),
+            LinkLocation::Page(triple_page_ref(&replace_page_slashes(&url))),
             LinkType::Page,
         ));
-    }
-
-    if !url.is_ascii() && !is_url(&url) {
-        let (page_part, anchor_part) = match url.split_once('#') {
-            Some((page, anchor)) => (page, Some(anchor)),
-            None => (url.as_ref(), None),
-        };
-        match transliterate_triple_target(page_part) {
-            Some(transliterated)
-                if !transliterated.is_empty() || page_part.is_empty() =>
-            {
-                url = Cow::Owned(match anchor_part {
-                    Some(anchor) => format!(
-                        "{transliterated}#{}",
-                        transliterate_triple_anchor(anchor),
-                    ),
-                    None => transliterated,
-                });
-            }
-            _ => {
-                return Some((
-                    LinkLocation::Page(PageRef::page_only("")),
-                    LinkType::Page,
-                ));
-            }
-        }
     }
 
     if is_url(&url) && !authored_url_prefix_is_url {
@@ -915,13 +950,34 @@ fn parse_link_location<'r, 't>(
     }
 
     if url.starts_with('#') {
-        return Some((LinkLocation::Page(PageRef::page_only(&url)), LinkType::Page));
+        return Some((
+            LinkLocation::Page(triple_page_ref(url.as_ref())),
+            LinkType::Page,
+        ));
     }
 
-    LinkLocation::parse_with_interwiki(url, parser.settings())
+    if url.starts_with('/') || is_url(&url) {
+        if url.contains(' ') {
+            url = Cow::Owned(url.replace(' ', "%20"));
+        }
+        return LinkLocation::parse_with_interwiki(url, parser.settings());
+    }
+
+    Some((
+        LinkLocation::Page(triple_page_ref(url.as_ref())),
+        LinkType::Page,
+    ))
 }
 
 fn strip_category(url: &str) -> Option<&str> {
+    if is_url(url) {
+        return None;
+    }
+    let page = strip_fragment(url);
+    page.find(':').map(|idx| page[idx + 1..].trim_start())
+}
+
+fn strip_category_native(url: &str) -> Option<&str> {
     if is_url(url) {
         return None;
     }
@@ -932,7 +988,7 @@ fn strip_category(url: &str) -> Option<&str> {
             url.find(':').map(|idx| {
                 let url = url[idx + 1..].trim_start();
 
-                strip_category(url).unwrap_or(url)
+                strip_category_native(url).unwrap_or(url)
             })
         }
 
@@ -972,15 +1028,20 @@ fn test_strip_category() {
         "multiple: categories: here: test",
         Some("categories: here: test"),
     );
-    test!(":scp-wiki:scp-001", Some("scp-001"));
-    test!(":scp-wiki : SCP-001", Some("SCP-001"));
-    test!(":scp-wiki:system:recent-changes", Some("recent-changes"));
+    test!(":scp-wiki:scp-001", Some("scp-wiki:scp-001"));
+    test!(":scp-wiki : SCP-001", Some("scp-wiki : SCP-001"));
+    test!(
+        ":scp-wiki:system:recent-changes",
+        Some("scp-wiki:system:recent-changes"),
+    );
     test!(
         ":scp-wiki : system : Recent Changes",
-        Some("Recent Changes"),
+        Some("scp-wiki : system : Recent Changes"),
     );
-    test!(": snippets : redirect", Some("redirect"));
-    test!(":", None);
+    test!(": snippets : redirect", Some("snippets : redirect"));
+    test!(":", Some(""));
+    test!("a:b#c", Some("b"));
+    test!("a#b:c", None);
 }
 
 #[test]
@@ -988,57 +1049,39 @@ fn test_transliterate_triple_target() {
     macro_rules! test {
         ($input:expr, $expected:expr $(,)?) => {{
             let actual = transliterate_triple_target($input);
-            let expected: Option<String> = $expected.map(str::to_owned);
 
             assert_eq!(
-                actual, expected,
+                actual, $expected,
                 "Transliterated triple-link target doesn't match expected",
             );
         }};
     }
 
-    test!("документ", Some("dokument"));
-    test!("café", Some("cafe"));
-
-    test!("ДОКУМЕНТ", Some("dokument"));
-    test!("CAFÉ", Some("CAFE"));
-
-    test!("й", Some("i"));
-    test!("ё", Some("e"));
-
-    test!("日本語", None);
-    test!("документ日本語", None);
-    test!("ß", None);
-
-    test!("pa\u{200b}ge", Some("pa ge"));
-    test!("\u{200b}page", Some(" page"));
-    test!("page\u{200b}", Some("page "));
-    test!("pa\u{200c}ge", Some("pa ge"));
-    test!("pa\u{feff}ge", Some("pa ge"));
-    test!("pa\u{ad}ge", Some("pa ge"));
-    test!("pa\u{2060}ge", Some("pa ge"));
-}
-
-#[test]
-fn test_transliterate_triple_anchor() {
-    macro_rules! test {
-        ($input:expr, $expected:expr $(,)?) => {
-            assert_eq!(
-                transliterate_triple_anchor($input),
-                $expected,
-                "Transliterated triple-link anchor doesn't match expected",
-            )
-        };
-    }
-
-    test!("café", "cafe");
     test!("документ", "dokument");
-    test!("Section Title", "Section Title");
+    test!("café", "cafe");
 
-    test!("日本語セクション", "日本語セクション");
-    test!("Section日本", "Section日本");
-    test!("ß", "ß");
-    test!("frag\u{200b}ment", "frag\u{200b}ment");
+    test!("ДОКУМЕНТ", "dokument");
+    test!("CAFÉ", "CAFe");
+
+    test!("й", "j");
+    test!("ё", "e");
+    test!("Ä", "ae");
+    test!("ß", "ss");
+    test!("Σ", "s");
+    test!("я", "a");
+
+    test!("日本語", "   ");
+    test!("документ日本語", "dokument   ");
+    test!("ａ", " ");
+    test!("ﬁ", " ");
+
+    test!("pa\u{200b}ge", "pa ge");
+    test!("\u{200b}page", " page");
+    test!("page\u{200b}", "page ");
+    test!("pa\u{200c}ge", "pa ge");
+    test!("pa\u{feff}ge", "pa ge");
+    test!("pa\u{ad}ge", "pa ge");
+    test!("pa\u{2060}ge", "pa ge");
 }
 
 #[cfg(test)]
