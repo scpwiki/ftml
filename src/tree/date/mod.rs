@@ -172,6 +172,7 @@ impl DateItem {
     ) -> io::Result<String> {
         match format {
             Some(format) => {
+                let format = format.strip_suffix("|agohover").unwrap_or(format);
                 self.format_strftime(format, language, DateFormatFlavor::Wikidot)
             }
             None => self.format_default(language),
