@@ -27,6 +27,7 @@ use crate::parsing::collect::{
 use crate::parsing::consume::consume;
 use crate::parsing::paragraph::{ParagraphStack, gather_paragraphs};
 use crate::parsing::parser::{QuoteBodyLineStatus, QuoteEscapedUnit};
+use crate::parsing::rule::impls::block::parser::WikidotHeadSpaceRegion;
 use crate::tree::{
     AcceptsPartial, AttributeMap, Container, PartialElement, Tab, TabViewItem,
 };
@@ -66,15 +67,120 @@ fn close_content_run<'t>(
     run: &mut Vec<Element<'t>>,
     items: &mut Vec<TabViewItem<'t>>,
     runs: &mut usize,
+    pop_trailing: bool,
 ) {
-    while matches!(run.last(), Some(element) if element.is_whitespace()) {
-        run.pop();
+    if pop_trailing {
+        while matches!(run.last(), Some(element) if element.is_whitespace()) {
+            run.pop();
+        }
+    } else if !run.is_empty()
+        && !matches!(run.last(), Some(element) if element.is_whitespace())
+    {
+        run.push(Element::LineBreak);
     }
     if !run.is_empty() {
         *runs += 1;
         items.push(TabViewItem::Content(std::mem::take(run)));
     }
     run.clear();
+}
+
+fn wikidot_failed_tab_gap_valid(lower: &[u8], start: usize, end: usize) -> bool {
+    lower[start..end]
+        .iter()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
+}
+
+fn wikidot_find_failed_opener(lower: &[u8], from: usize) -> Option<usize> {
+    let mut best = None;
+    for pattern in [b"[[tab ]]" as &[u8], b"[[tab\n]]"] {
+        let mut offset = from;
+        while offset + pattern.len() <= lower.len() {
+            if &lower[offset..offset + pattern.len()] == pattern {
+                if best.is_none_or(|found| offset < found) {
+                    best = Some(offset);
+                }
+                break;
+            }
+            offset += 1;
+        }
+    }
+    best
+}
+
+fn wikidot_find_tab_closer(lower: &[u8], from: usize) -> Option<usize> {
+    let pattern = b"[[/tab]]" as &[u8];
+    let mut offset = from;
+    while offset + pattern.len() <= lower.len() {
+        if &lower[offset..offset + pattern.len()] == pattern {
+            return Some(offset);
+        }
+        offset += 1;
+    }
+    None
+}
+
+fn wikidot_failed_tab_content_valid(elements: &[Element]) -> Option<usize> {
+    let mut joined = String::new();
+    for element in elements {
+        match element {
+            Element::Text(text) => joined.push_str(text),
+            Element::LineBreak => joined.push('\n'),
+            _ => joined.push('\0'),
+        }
+    }
+    let lower = joined.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut pos = 0usize;
+    let mut inside = false;
+    let mut openers = 0usize;
+    loop {
+        if inside {
+            let close = wikidot_find_tab_closer(bytes, pos)?;
+            pos = close + 8;
+            inside = false;
+        } else {
+            let next_opener = wikidot_find_failed_opener(bytes, pos);
+            let next_closer = wikidot_find_tab_closer(bytes, pos);
+            match (next_opener, next_closer) {
+                (None, None) => {
+                    if wikidot_failed_tab_gap_valid(bytes, pos, bytes.len()) {
+                        return Some(openers);
+                    }
+                    return None;
+                }
+                (None, Some(close)) => {
+                    if !wikidot_failed_tab_gap_valid(bytes, pos, close) {
+                        return None;
+                    }
+                    pos = close + 8;
+                }
+                (Some(open), None) => {
+                    if !wikidot_failed_tab_gap_valid(bytes, pos, open) {
+                        return None;
+                    }
+                    pos = open + 8;
+                    inside = true;
+                    openers += 1;
+                }
+                (Some(open), Some(close)) => {
+                    if close < open {
+                        if !wikidot_failed_tab_gap_valid(bytes, pos, close) {
+                            return None;
+                        }
+                        pos = close + 8;
+                    } else {
+                        if !wikidot_failed_tab_gap_valid(bytes, pos, open) {
+                            return None;
+                        }
+                        pos = open + 8;
+                        inside = true;
+                        openers += 1;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn parse_tabview<'r, 't>(
@@ -154,10 +260,11 @@ fn parse_tabview<'r, 't>(
     let mut run = Vec::new();
     let mut runs = 0usize;
 
+    let legacy = parser.settings().layout.legacy();
     for element in elements {
         match element {
             Element::Partial(PartialElement::Tab(tab)) => {
-                close_content_run(&mut run, &mut items, &mut runs);
+                close_content_run(&mut run, &mut items, &mut runs, !legacy);
                 items.push(TabViewItem::Tab(tab));
             }
 
@@ -166,14 +273,37 @@ fn parse_tabview<'r, 't>(
             element => run.push(element),
         }
     }
-    close_content_run(&mut run, &mut items, &mut runs);
+    close_content_run(&mut run, &mut items, &mut runs, true);
 
     let records_added = parser.degraded_title_record_count() - records_at_entry;
     let native = !parser.settings().layout.legacy();
     parser.truncate_degraded_title_records(records_at_entry);
 
-    if runs > 0 && (!native || runs != records_added) {
+    if runs > 0 && native && runs != records_added {
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
+    }
+
+    if runs > 0 && !native {
+        let mut failed_openers = 0usize;
+        let mut tab_count = 0usize;
+        let mut allows = true;
+        for item in &items {
+            match item {
+                TabViewItem::Tab(_) => tab_count += 1,
+                TabViewItem::Content(content) => {
+                    match wikidot_failed_tab_content_valid(content) {
+                        Some(count) => failed_openers += count,
+                        None => {
+                            allows = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if !allows || (tab_count == 0 && failed_openers == 0) {
+            return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
+        }
     }
 
     if items.is_empty() {
@@ -978,7 +1108,7 @@ fn tab_title_footnote_closes(
 
 fn collect_tab_label<'r, 't>(
     parser: &mut Parser<'r, 't>,
-) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>), ParseError>
+) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>, bool), ParseError>
 where
     'r: 't,
 {
@@ -1019,7 +1149,7 @@ where
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
                 parser.step()?;
-                return Ok((text, None));
+                return Ok((text, None, saw_unit));
             }
             Token::RightLink => {
                 let text = tab_label_finish(
@@ -1038,7 +1168,7 @@ where
                 }
                 let leftover = &source[current.span.start + 2..current.span.end];
                 parser.step()?;
-                return Ok((text, Some(leftover)));
+                return Ok((text, Some(leftover), saw_unit));
             }
             Token::LeftComment => {
                 let range = consume_valid_comment(parser)?;
@@ -1068,7 +1198,7 @@ where
                         copied_until = parser.current().span.start;
                         if fused_end {
                             parser.step()?;
-                            return Ok((std::borrow::Cow::Borrowed(""), None));
+                            return Ok((std::borrow::Cow::Borrowed(""), None, saw_unit));
                         }
                         continue;
                     }
@@ -1109,7 +1239,7 @@ where
                                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
                             }
                             parser.step()?;
-                            return Ok((text, None));
+                            return Ok((text, None, saw_unit));
                         }
                         continue;
                     }
@@ -1140,7 +1270,7 @@ where
                                 saw_unit,
                             );
                             parser.step()?;
-                            return Ok((text, None));
+                            return Ok((text, None, saw_unit));
                         }
                     }
                     continue;
@@ -1152,7 +1282,7 @@ where
                     copied_until = parser.current().span.start;
                     if fused_end {
                         parser.step()?;
-                        return Ok((std::borrow::Cow::Borrowed(""), None));
+                        return Ok((std::borrow::Cow::Borrowed(""), None, saw_unit));
                     }
                     continue;
                 }
@@ -1173,7 +1303,7 @@ where
                 {
                     parser.step()?;
                     parser.step()?;
-                    return Ok((std::borrow::Cow::Borrowed(""), None));
+                    return Ok((std::borrow::Cow::Borrowed(""), None, saw_unit));
                 }
                 parser.step()?;
             }
@@ -1209,7 +1339,7 @@ fn finish_tab_label_at_construct<'r, 't>(
     output: Option<String>,
     copied_until: usize,
     saw_unit: bool,
-) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>), ParseError> {
+) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>, bool), ParseError> {
     let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
         std::iter::once(parser.current())
             .chain(parser.remaining())
@@ -1228,7 +1358,7 @@ fn finish_tab_label_at_construct<'r, 't>(
                 while parser.current().span.start < token.span.end {
                     parser.step()?;
                 }
-                return Ok((text, None));
+                return Ok((text, None, saw_unit));
             }
             Token::RightLink => {
                 let text = tab_label_finish(
@@ -1243,7 +1373,7 @@ fn finish_tab_label_at_construct<'r, 't>(
                 while parser.current().span.start < token.span.end {
                     parser.step()?;
                 }
-                return Ok((text, Some(leftover)));
+                return Ok((text, Some(leftover), saw_unit));
             }
             Token::LineBreak | Token::ParagraphBreak => {
                 return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
@@ -1260,7 +1390,7 @@ fn finish_tab_label_at_construct<'r, 't>(
 fn parse_tab<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -1270,18 +1400,47 @@ fn parse_tab<'r, 't>(
     assert!(!flag_score, "Tab doesn't allow score flag");
     assert_block_name(&BLOCK_TAB, name);
 
-    let (label, leftover) = if in_head {
-        let (label, leftover) = collect_tab_label(parser)?;
+    let legacy = parser.settings().layout.legacy();
+    let leading_space = legacy
+        && in_head
+        && parser
+            .full_text()
+            .inner()
+            .as_bytes()
+            .get(opener_start + 2)
+            .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'));
+    if legacy
+        && in_head
+        && !leading_space
+        && matches!(
+            parser.wikidot_head_space_region(opener_start, false),
+            WikidotHeadSpaceRegion::SingleSeparator
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    let (label, leftover, saw_title_unit) = if in_head {
+        let (label, leftover, saw_unit) = collect_tab_label(parser)?;
         if leftover.is_none() && parser.current().token == Token::LineBreak {
             parser.step()?;
         }
-        (Some(label), leftover)
+        (Some(label), leftover, saw_unit)
     } else {
-        (None, None)
+        (None, None, false)
     };
 
-    let label = if parser.settings().layout.legacy() {
-        label.unwrap_or(std::borrow::Cow::Borrowed("untitled"))
+    let label = if legacy {
+        match label {
+            None => std::borrow::Cow::Borrowed("untitled"),
+            Some(value) => {
+                if !leading_space && !saw_title_unit && value.trim().is_empty() {
+                    std::borrow::Cow::Borrowed("untitled")
+                } else {
+                    value
+                }
+            }
+        }
     } else {
         match label {
             Some(value) => value,

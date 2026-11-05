@@ -151,3 +151,7 @@ replay-en--fragment:components-gen1	AlignCenter@28378..28471 descent-only
 replay-jp--chuukunn-s-proposal	Div@16409..16520 scan-only
 replay-jp--chuukunn-s-proposal	Div@16409..16438 descent-only
 replay-en--scp-7453	AlignRight@7616..7712 scan-only
+corpus-test/tabview/tab-failed-head-content/input.ftml	structural Tab scan=6 tree=5 contained=true
+corpus-test/tabview/tab-mixed-content/input.ftml	TabView@140..197 descent-only
+corpus-test/tabview/tab-mixed-content/input.ftml	TabView@199..252 descent-only
+corpus-test/tabview/tab-mixed-content/input.ftml	structural Tab scan=4 tree=7 contained=true
