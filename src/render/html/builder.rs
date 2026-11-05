@@ -197,6 +197,12 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         self.chain()
     }
 
+    pub fn attr_single_quoted(&mut self, key: &str, value_parts: &[&str]) -> &mut Self {
+        self.attr_key(key, true);
+        self.attr_value(value_parts);
+        self.chain()
+    }
+
     pub fn attr(&mut self, attributes: AddedAttributes) -> &mut Self {
         let Some(attribute_map) = attributes.map else {
             for (key, value_parts) in filter_attribute_entries(&attributes) {

@@ -1,0 +1,18 @@
+{
+    "elements": [
+        {
+            "element": "iframe",
+            "data": {
+                "url": "http://example.com",
+                "attributes": {
+                    "align": "right",
+                    "class": "z",
+                    "frameborder": "1",
+                    "height": "7",
+                    "style": "color:red",
+                    "width": "5"
+                }
+            }
+        }
+    ]
+}

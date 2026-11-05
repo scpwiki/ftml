@@ -172,8 +172,8 @@ fn other_live_backed_inline_blocks_take_ownership() {
     assert_eq!(
         render("[[[start|A[[iframe https://example.com/]]B]]]"),
         concat!(
-            r#"<p>[[[start|A<iframe src="https://example.com/" align frameborder "#,
-            r#"height scrolling width class style></iframe>B]]]</p>"#,
+            r#"<p>[[[start|A<iframe src="https://example.com/" align="" frameborder="" "#,
+            r#"height="" scrolling="" width="" class="" style=""></iframe>B]]]</p>"#,
         ),
     );
     assert_eq!(

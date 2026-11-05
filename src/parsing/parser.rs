@@ -453,6 +453,13 @@ impl<'r, 't> Parser<'r, 't> {
             .collect()
     }
 
+    pub(crate) fn wikidot_greedy_tail_within(&self, from: usize, to: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .has_greedy_tail_within(from, to)
+    }
+
     pub(crate) fn wikidot_scan_shows_stolen_head(
         &self,
         kind: block_pairs::WikidotBlockKind,

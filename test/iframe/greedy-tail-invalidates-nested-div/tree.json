@@ -1,0 +1,29 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "div",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "iframe",
+                                    "data": {
+                                        "url": "http://example.com",
+                                        "attributes": {}
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

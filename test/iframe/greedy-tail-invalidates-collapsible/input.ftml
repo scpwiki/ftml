@@ -1,0 +1,3 @@
+[[collapsible show="+ a" hide="- b"]]
+[[iframe http://example.com]]
+[[/collapsible]]

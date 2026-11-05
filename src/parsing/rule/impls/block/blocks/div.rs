@@ -1008,6 +1008,7 @@ fn parse_fn<'r, 't>(
     } else {
         None
     };
+    let body_start_byte = parser.current().span.start;
     let parse_as_paragraphs =
         wrap_paragraphs || parser.settings().layout.legacy() && flag_score;
     let body = parser.get_body_elements_with_context(
@@ -1024,7 +1025,20 @@ fn parse_fn<'r, 't>(
         }
         parser.leave_wikidot_div_body();
     }
+    let body_end_byte = parser.current().span.start;
+    let greedy = parser.settings().layout.legacy()
+        && parser.wikidot_greedy_tail_within(
+            body_start_byte,
+            body_end_byte.max(body_start_byte + 1),
+        );
+    let owns_pair = parser
+        .wikidot_block_pair_at_head_byte(opener_start)
+        .is_some_and(|pair| pair.kind == WikidotBlockKind::Div);
+    let greedy_ate_the_close = greedy && !owns_pair;
     let (mut elements, errors, _) = match body {
+        Ok(_) if greedy_ate_the_close => {
+            return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
+        }
         Ok(body) => body.into(),
         Err(error) => {
             if cacheable_wikijump_failure && error.kind() == ParseErrorKind::EndOfInput {
