@@ -505,6 +505,23 @@ where
 
     parser.get_optional_space()?;
 
+    if parser.settings().layout.legacy()
+        && parser.in_wikidot_bibliography_body()
+        && matches!(
+            block.name,
+            "block-div"
+                | "block-note"
+                | "block-align-center"
+                | "block-align-right"
+                | "block-align-left"
+                | "block-align-justify"
+                | "block-toc"
+                | "block-html"
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let memoization = BlockFailureMemoization::for_block(parser, block);
     if let Some(error) = memoization.cached_failure(parser, block, opener_start) {
         return Err(error);

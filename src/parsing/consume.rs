@@ -335,10 +335,10 @@ pub(crate) fn line_has_unmatched_wikidot_owner_opener(
     last_open.is_some_and(|open| last_close.is_none_or(|close| open > close))
 }
 
-fn wikidot_flat_close_kind_at<'r, 't>(
+pub(crate) fn wikidot_flat_close_kind_at_byte<'r, 't>(
     parser: &Parser<'r, 't>,
     closer_byte: usize,
-) -> Option<WikidotBlockCloseKind>
+) -> Option<WikidotBlockCloseKind<'t>>
 where
     'r: 't,
 {
@@ -516,7 +516,7 @@ where
             || normalized.eq_ignore_ascii_case("hcell"))
     {
         Element::Text(close_source_cow.clone())
-    } else if let Some(kind) = wikidot_flat_close_kind_at(parser, start) {
+    } else if let Some(kind) = wikidot_flat_close_kind_at_byte(parser, start) {
         Element::Partial(PartialElement::WikidotBlockClose(kind))
     } else {
         return Ok(None);
@@ -796,7 +796,10 @@ fn wikidot_leading_space_close_label(source: &str) -> Option<&str> {
     let label = label.trim_start_matches([' ', '\t']);
     if label.is_empty()
         || label.chars().any(char::is_whitespace)
-        || !matches!(label.to_ascii_lowercase().as_str(), "div" | "span")
+        || !matches!(
+            label.to_ascii_lowercase().as_str(),
+            "div" | "span" | "bibliography"
+        )
     {
         return None;
     }
@@ -1307,6 +1310,20 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     for &rule in get_rules_for_token(current) {
         if rule.name() == "delayed-conditional"
             && parser.generated_until_right_block().is_empty()
+        {
+            continue;
+        }
+        if parser.in_wikidot_bibliography_body()
+            && matches!(
+                rule.name(),
+                "center"
+                    | "header"
+                    | "blockquote"
+                    | "table"
+                    | "horizontal-rule"
+                    | "clear-float"
+                    | "list"
+            )
         {
             continue;
         }

@@ -39,8 +39,16 @@ impl WikidotBlockKind {
         )
     }
 
-    fn is_first_fit(self) -> bool {
-        matches!(self, WikidotBlockKind::Collapsible | WikidotBlockKind::Note)
+    fn needs_own_line(self) -> bool {
+        matches!(
+            self,
+            WikidotBlockKind::Div
+                | WikidotBlockKind::Note
+                | WikidotBlockKind::AlignCenter
+                | WikidotBlockKind::AlignRight
+                | WikidotBlockKind::AlignLeft
+                | WikidotBlockKind::AlignJustify
+        )
     }
 
     pub(crate) fn emits_flat(self) -> bool {
@@ -72,7 +80,6 @@ pub(crate) struct WikidotBlockPair {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct WikidotBlockPairs {
     pairs: Vec<WikidotBlockPair>,
-    by_head: BTreeMap<usize, usize>,
     by_head_byte: BTreeMap<usize, usize>,
     by_closer_byte: BTreeMap<usize, usize>,
     head_event_bytes: BTreeSet<usize>,
@@ -81,12 +88,9 @@ pub(crate) struct WikidotBlockPairs {
 }
 
 impl WikidotBlockPairs {
+    #[cfg(test)]
     pub(crate) fn pairs(&self) -> &[WikidotBlockPair] {
         &self.pairs
-    }
-
-    pub(crate) fn pair_at_head(&self, head: usize) -> Option<&WikidotBlockPair> {
-        self.by_head.get(&head).map(|index| &self.pairs[*index])
     }
 
     pub(crate) fn pair_at_head_byte(
@@ -107,8 +111,19 @@ impl WikidotBlockPairs {
             .map(|index| &self.pairs[*index])
     }
 
+    #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.pairs.is_empty()
+    }
+
+    pub(crate) fn closers_between(
+        &self,
+        from_byte: usize,
+        to_byte: usize,
+    ) -> impl Iterator<Item = (usize, &WikidotBlockPair)> {
+        self.by_closer_byte
+            .range(from_byte..to_byte)
+            .map(|(byte, index)| (*byte, &self.pairs[*index]))
     }
 
     pub(crate) fn is_foster_head(&self, head_byte: usize) -> bool {
@@ -942,6 +957,9 @@ impl<'t> Scanner<'t> {
         head: &HeadRead,
         head_index: usize,
     ) -> bool {
+        if kind.needs_own_line() && self.in_bibliography_body(head_index) {
+            return false;
+        }
         match kind {
             WikidotBlockKind::Div | WikidotBlockKind::Note => {
                 !self.on_heading_line(head_index) && self.followed_by_break(head.head_end)
@@ -1005,7 +1023,9 @@ impl<'t> Scanner<'t> {
             | WikidotBlockKind::AlignRight
             | WikidotBlockKind::AlignLeft
             | WikidotBlockKind::AlignJustify => {
-                self.starts_line(closer_index) && self.followed_by_break(closer_end)
+                !self.in_bibliography_body(closer_index)
+                    && self.starts_line(closer_index)
+                    && self.followed_by_break(closer_end)
             }
             _ => true,
         }
@@ -1123,6 +1143,12 @@ impl<'t> Scanner<'t> {
                     .get(pos)
                     .is_some_and(|end| *end < a_end);
             }
+            if !flat {
+                flat = self.bib_ranges.first().is_some_and(|(start, end)| {
+                    let pair = &self.pairs[a];
+                    pair.head < *start && *start < pair.closer && pair.closer < *end
+                });
+            }
             self.pairs[a].flat = flat;
         }
         let tables: Vec<(usize, usize)> = self
@@ -1165,12 +1191,6 @@ impl<'t> Scanner<'t> {
                 sources.push((start, end));
             }
         }
-        let by_head = self
-            .pairs
-            .iter()
-            .enumerate()
-            .map(|(index, pair)| (pair.head, index))
-            .collect();
         let by_head_byte = self
             .pairs
             .iter()
@@ -1185,7 +1205,6 @@ impl<'t> Scanner<'t> {
             .collect();
         WikidotBlockPairs {
             pairs: self.pairs,
-            by_head,
             by_head_byte,
             by_closer_byte,
             head_event_bytes: self.head_event_bytes,
@@ -1423,39 +1442,22 @@ impl<'t> Scanner<'t> {
         let mut ranges = Vec::new();
         let mut i = 0_usize;
         while i < self.tokens.len() {
+            if let Some(next) = self.skip_bibliography_opaque(i) {
+                i = next;
+                continue;
+            }
             if self.tokens[i].token == Token::LeftBlock
+                && self.starts_line(i)
                 && self.raw_name_is(i, "bibliography")
+                && let Some(head) = self.read_head(i, false)
             {
-                if let Some(head) = self.read_head(i, false) {
-                    let mut j = head.head_end;
-                    let mut end = None;
-                    while j < self.tokens.len() {
-                        match self.tokens[j].token {
-                            Token::LeftBlockEnd => {
-                                if let Some(close) = self.read_head(j, true)
-                                    && close.name.eq_ignore_ascii_case("bibliography")
-                                {
-                                    end = Some(close.head_end);
-                                    break;
-                                }
-                                j += 1;
-                            }
-                            Token::LeftBlock | Token::LeftBlockStar => {
-                                match self.skip_construct_in_body(j, self.tokens.len(), 0)
-                                {
-                                    Some(next) => j = next,
-                                    None => break,
-                                }
-                            }
-                            Token::InputEnd => break,
-                            _ => j += 1,
-                        }
-                    }
-                    if let Some(end) = end {
+                match self.bibliography_close_after(head.head_end) {
+                    Some(end) => {
                         ranges.push((i, end));
                         i = end;
                         continue;
                     }
+                    None => break,
                 }
             }
             i += 1;
@@ -1463,21 +1465,63 @@ impl<'t> Scanner<'t> {
         ranges
     }
 
-    fn line_is_quote_led(&self, index: usize) -> bool {
-        let line = self.line_of[index];
-        let first = self.line_first[line];
-        let end = self
-            .line_first
-            .get(line + 1)
-            .copied()
-            .unwrap_or(self.tokens.len());
-        (first..end).any(|t| self.tokens[t].token == Token::Quote)
-            && (first..index).all(|t| {
-                matches!(
-                    self.tokens[t].token,
-                    Token::Quote | Token::Whitespace | Token::InputStart
-                )
-            })
+    fn bibliography_close_after(&self, mut j: usize) -> Option<usize> {
+        while j < self.tokens.len() {
+            if let Some(next) = self.skip_bibliography_opaque(j) {
+                j = next;
+                continue;
+            }
+            match self.tokens[j].token {
+                Token::LeftBlockEnd => {
+                    if self.source[self.tokens[j].span.start..]
+                        .starts_with("[[/bibliography]]")
+                        && let Some(close) = self.read_head(j, true)
+                        && self.followed_by_break(close.head_end)
+                    {
+                        return Some(close.head_end);
+                    }
+                    j += 1;
+                }
+                Token::InputEnd => return None,
+                _ => j += 1,
+            }
+        }
+        None
+    }
+
+    fn skip_bibliography_opaque(&self, i: usize) -> Option<usize> {
+        let token = &self.tokens[i];
+        match token.token {
+            Token::LeftComment => self.skip_comment(i),
+            Token::LeftBlock => {
+                if let Some(candidate) = self.code_candidates.get(&token.span.start)
+                    && self.raw_name_is(i, "code")
+                {
+                    return Some(self.token_at_or_after(candidate.owner_end));
+                }
+                if let Some(segment) = self.segment_at(i) {
+                    return (!segment.include_body).then_some(segment.end);
+                }
+                if !self.raw_name_is(i, "math") {
+                    return None;
+                }
+                let head = self.read_head(i, false)?;
+                (head.head_end..self.tokens.len()).find_map(|j| {
+                    (self.tokens[j].token == Token::LeftBlockEnd)
+                        .then(|| self.read_head(j, true))
+                        .flatten()
+                        .filter(|close| close.name.eq_ignore_ascii_case("math"))
+                        .map(|close| close.head_end)
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn in_bibliography_body(&self, index: usize) -> bool {
+        self.bib_ranges
+            .first()
+            .is_some_and(|(start, end)| *start < index && index < *end)
     }
 
     fn tabview_banned(&self, head_index: usize) -> bool {

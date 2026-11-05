@@ -19,8 +19,15 @@
  */
 
 use super::prelude::*;
-use crate::tree::{Bibliography, LinkLabel, LinkLocation, LinkType};
+use crate::parsing::consume::wikidot_flat_close_kind_at_byte;
+use crate::parsing::rule::impls::block::parser::parse_wikidot_attributes;
+use crate::tree::{
+    Bibliography, LinkLabel, LinkLocation, LinkType, PartialElement,
+    WikidotBlockCloseKind,
+};
 use std::borrow::Cow;
+
+use super::collapsible::parse_hide_location;
 
 pub const BLOCK_BIBLIOGRAPHY: BlockRule = BlockRule {
     name: "block-bibliography",
@@ -72,7 +79,11 @@ fn parse_fn<'r, 't>(
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
 
-        let mut elements = vec![Element::Text(cow!(opener))];
+        let mut elements = Vec::new();
+        if source[..opener_start].ends_with('\n') {
+            elements.push(text!(" "));
+        }
+        elements.push(Element::Text(cow!(opener)));
         if &source[opener_end..parser.current().span.start] == "\n" {
             elements.push(text!(" "));
         }
@@ -83,37 +94,7 @@ fn parse_fn<'r, 't>(
     let hide = arguments.get_bool(parser, "hide")?.unwrap_or(false);
 
     if wikidot_candidate && !parser.has_body_end_block(&BLOCK_BIBLIOGRAPHY) {
-        let opener_text = &source[opener_start..opener_end];
-        if opener_text[2..].contains("[[") || opener_text.contains("[!--") {
-            return Err(parser.make_err(ParseErrorKind::RuleFailed));
-        }
-        if parser.in_wikidot_bibliography_speculation() {
-            let body_start = parser.current().span.start;
-            let mut literal = vec![Element::Text(cow!(opener_text))];
-            if &source[opener_end..body_start] == "\n" {
-                literal.push(Element::LineBreak);
-            }
-            return success_elements_with_paragraph_safety(false, literal, Vec::new());
-        }
-        let body_start = parser.current().span.start;
-        let mutable_state = parser.get_mutable_state();
-        let snapshot = parser.clone();
-        parser.set_wikidot_bibliography_speculation(true);
-        let body = parser.get_body_elements(&BLOCK_BIBLIOGRAPHY, false);
-        parser.set_wikidot_bibliography_speculation(false);
-        let body = body?;
-        let (mut body_elements, errors, _) = body.into();
-        let mut literal = vec![Element::Text(cow!(&source[opener_start..opener_end]))];
-        if &source[opener_end..body_start] == "\n" {
-            literal.push(Element::LineBreak);
-        }
-        if body_elements.iter().all(|element| element.paragraph_safe()) {
-            literal.append(&mut body_elements);
-            return ok!(literal, errors);
-        }
-        parser.update(&snapshot);
-        parser.reset_mutable_state(mutable_state);
-        return success_elements_with_paragraph_safety(false, literal, Vec::new());
+        return Err(parser.make_end_of_input_err());
     }
 
     let body_start = parser.current().span.start;
@@ -183,9 +164,101 @@ fn parse_fn<'r, 't>(
         }
     }
 
-    let index = parser.push_bibliography(bibliography);
+    if wikidot_candidate {
+        for (_, elements) in bibliography.slice_mut() {
+            for element in elements.iter_mut() {
+                let Element::Partial(PartialElement::WikidotBlockClose(
+                    WikidotBlockCloseKind::Collapsible { head },
+                )) = element
+                else {
+                    continue;
+                };
+                if *head >= body_start {
+                    continue;
+                }
+                let Some(hide_text) =
+                    wikidot_crossed_collapsible_bottom(source, parser, *head)
+                else {
+                    continue;
+                };
+                *element = Element::Partial(PartialElement::WikidotBlockClose(
+                    WikidotBlockCloseKind::CollapsibleCrossedBottom {
+                        head: *head,
+                        hide_text,
+                    },
+                ));
+            }
+        }
+    }
 
-    ok!(Element::BibliographyBlock { index, title, hide }, errors)
+    let index = parser.push_bibliography(bibliography);
+    let block = Element::BibliographyBlock { index, title, hide };
+    let frames = if wikidot_candidate {
+        wikidot_crossed_frames(parser, body_start)
+    } else {
+        0
+    };
+    if frames == 0 {
+        return ok!(block, errors);
+    }
+    let close = WikidotBlockCloseKind::BibliographyCrossed {
+        head: opener_start,
+        frames,
+    };
+    ok!(
+        vec![
+            block,
+            Element::Partial(PartialElement::WikidotBlockClose(close))
+        ],
+        errors
+    )
+}
+
+fn wikidot_crossed_frames<'r, 't>(parser: &Parser<'r, 't>, body_start: usize) -> usize
+where
+    'r: 't,
+{
+    parser
+        .wikidot_block_pairs_closed_between(body_start, parser.current().span.start)
+        .iter()
+        .filter(|(_, pair)| pair.head_byte < body_start)
+        .filter_map(|(closer, _)| wikidot_flat_close_kind_at_byte(parser, *closer))
+        .map(|kind| kind.rendered_frames())
+        .sum()
+}
+
+fn wikidot_crossed_collapsible_bottom<'r, 't>(
+    source: &'t str,
+    parser: &Parser<'r, 't>,
+    head_byte: usize,
+) -> Option<Option<Cow<'t, str>>>
+where
+    'r: 't,
+{
+    let rest = source.get(head_byte..)?.strip_prefix("[[")?;
+    let head_end = rest.find("]]")?;
+    let head_text = &rest[..head_end];
+    if head_text.contains("[!--") || head_text.contains("[[") {
+        return None;
+    }
+    let (name, field) = head_text
+        .find([' ', '\t', '\n', '\r'])
+        .map(|split| head_text.split_at(split))
+        .unwrap_or((head_text, ""));
+    if !name.eq_ignore_ascii_case("collapsible") {
+        return None;
+    }
+    let mut arguments = parse_wikidot_attributes(field);
+    let (_, show_bottom) = arguments
+        .get("hideLocation")
+        .map(|value| parse_hide_location(&value, parser))
+        .transpose()
+        .ok()?
+        .unwrap_or((true, false));
+    if !show_bottom {
+        return None;
+    }
+    Some(arguments.get("hide"))
 }
 
 fn wikidot_crossed_bibliography_residual<'t>(
@@ -341,7 +414,13 @@ mod tests {
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
 
-        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            errors.iter().any(|error| {
+                error.rule() == "block-bibliography"
+                    && error.kind() == ParseErrorKind::EndOfInput
+            }),
+            "{errors:#?}",
+        );
         assert_eq!(html, "<p>[[bibliography]]</p>");
     }
 
@@ -355,7 +434,13 @@ mod tests {
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
 
-        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            errors.iter().any(|error| {
+                error.rule() == "block-bibliography"
+                    && error.kind() == ParseErrorKind::EndOfInput
+            }),
+            "{errors:#?}",
+        );
         assert_eq!(
             html,
             "<p>A claim<sup class=\"footnoteref\"><a id=\"footnoteref-1\" href=\"javascript:;\" class=\"footnoteref\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnote-1&#39;)\">1</a></sup>.</p><p>[[bibliography]]</p><div class=\"footnotes-footer\"><div class=\"title\">Footnotes</div><div class=\"footnote-footer\" id=\"footnote-1\"><a href=\"javascript:;\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnoteref-1&#39;)\">1</a>. with a note</div></div>",

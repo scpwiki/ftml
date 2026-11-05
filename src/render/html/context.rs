@@ -71,6 +71,7 @@ where
     code_snippet_index: NonZeroUsize,
     table_of_contents_index: Incrementer,
     equation_index: NonZeroUsize,
+    rendering_wikidot_bibliography: bool,
     named_equations: HashMap<String, NonZeroUsize>,
     bibliography_render_stack: Vec<String>,
     footnote_render_stack: Vec<usize>,
@@ -166,6 +167,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             code_snippet_index: NonZeroUsize::new(1).unwrap(),
             table_of_contents_index: settings.id_indexer(),
             equation_index: NonZeroUsize::new(1).unwrap(),
+            rendering_wikidot_bibliography: false,
             named_equations: HashMap::new(),
             bibliography_render_stack: Vec::new(),
             footnote_render_stack: Vec::new(),
@@ -230,6 +232,16 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
     #[inline]
     pub fn random(&mut self) -> &mut Random {
         &mut self.random
+    }
+
+    #[inline]
+    pub(crate) fn rendering_wikidot_bibliography(&self) -> bool {
+        self.rendering_wikidot_bibliography
+    }
+
+    #[inline]
+    pub(crate) fn set_rendering_wikidot_bibliography(&mut self, value: bool) {
+        self.rendering_wikidot_bibliography = value;
     }
 
     #[inline]

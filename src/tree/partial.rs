@@ -133,21 +133,81 @@ impl<'t> WikidotBlockShell<'t> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum WikidotBlockCloseKind {
-    Div { head: usize, scored: bool },
-    Collapsible { head: usize },
-    Note { head: usize },
-    Align { head: usize },
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum WikidotBlockCloseKind<'t> {
+    Div {
+        head: usize,
+        scored: bool,
+    },
+    Collapsible {
+        head: usize,
+    },
+    CollapsibleCrossedBottom {
+        head: usize,
+        hide_text: Option<Cow<'t, str>>,
+    },
+    Note {
+        head: usize,
+    },
+    Align {
+        head: usize,
+    },
+    BibliographyCrossed {
+        head: usize,
+        frames: usize,
+    },
 }
 
-impl WikidotBlockCloseKind {
-    pub fn head_byte(self) -> usize {
+impl WikidotBlockCloseKind<'_> {
+    pub fn rendered_frames(&self) -> usize {
+        match self {
+            WikidotBlockCloseKind::Collapsible { .. } => 3,
+            WikidotBlockCloseKind::CollapsibleCrossedBottom { .. } => 3,
+            WikidotBlockCloseKind::BibliographyCrossed { .. } => 0,
+            _ => 1,
+        }
+    }
+
+    pub fn to_owned(&self) -> WikidotBlockCloseKind<'static> {
+        match self {
+            WikidotBlockCloseKind::Div { head, scored } => WikidotBlockCloseKind::Div {
+                head: *head,
+                scored: *scored,
+            },
+            WikidotBlockCloseKind::Collapsible { head } => {
+                WikidotBlockCloseKind::Collapsible { head: *head }
+            }
+            WikidotBlockCloseKind::CollapsibleCrossedBottom { head, hide_text } => {
+                WikidotBlockCloseKind::CollapsibleCrossedBottom {
+                    head: *head,
+                    hide_text: hide_text
+                        .as_ref()
+                        .map(|text| Cow::Owned(text.to_string())),
+                }
+            }
+            WikidotBlockCloseKind::Note { head } => {
+                WikidotBlockCloseKind::Note { head: *head }
+            }
+            WikidotBlockCloseKind::Align { head } => {
+                WikidotBlockCloseKind::Align { head: *head }
+            }
+            WikidotBlockCloseKind::BibliographyCrossed { head, frames } => {
+                WikidotBlockCloseKind::BibliographyCrossed {
+                    head: *head,
+                    frames: *frames,
+                }
+            }
+        }
+    }
+
+    pub fn head_byte(&self) -> usize {
         match self {
             WikidotBlockCloseKind::Div { head, .. }
             | WikidotBlockCloseKind::Collapsible { head }
+            | WikidotBlockCloseKind::CollapsibleCrossedBottom { head, .. }
             | WikidotBlockCloseKind::Note { head }
-            | WikidotBlockCloseKind::Align { head } => head,
+            | WikidotBlockCloseKind::Align { head }
+            | WikidotBlockCloseKind::BibliographyCrossed { head, .. } => *head,
         }
     }
 }
@@ -163,7 +223,7 @@ pub enum PartialElement<'t> {
 
     WikidotBlockOpen(WikidotBlockShell<'t>),
 
-    WikidotBlockClose(WikidotBlockCloseKind),
+    WikidotBlockClose(WikidotBlockCloseKind<'t>),
 
     WikidotFoster(Vec<Element<'t>>),
 
@@ -257,7 +317,7 @@ impl PartialElement<'_> {
                 PartialElement::WikidotBlockOpen(shell.to_owned())
             }
             PartialElement::WikidotBlockClose(kind) => {
-                PartialElement::WikidotBlockClose(*kind)
+                PartialElement::WikidotBlockClose(kind.to_owned())
             }
             PartialElement::WikidotFoster(elements) => {
                 PartialElement::WikidotFoster(elements_to_owned(elements))

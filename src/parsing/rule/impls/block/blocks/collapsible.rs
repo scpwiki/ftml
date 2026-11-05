@@ -261,7 +261,10 @@ fn prepare_wikidot_unfolded_tail(mut elements: Vec<Element<'_>>) -> Vec<Element<
     elements
 }
 
-fn parse_hide_location(s: &str, parser: &Parser) -> Result<(bool, bool), ParseError> {
+pub(crate) fn parse_hide_location(
+    s: &str,
+    parser: &Parser,
+) -> Result<(bool, bool), ParseError> {
     if parser.settings().layout.legacy() {
         return Ok(match s {
             "bottom" => (false, true),

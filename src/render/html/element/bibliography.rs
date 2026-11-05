@@ -107,8 +107,8 @@ fn render_wikidot_bibcite(ctx: &mut HtmlContext, index: usize, brackets: bool) {
     ctx.html()
         .a()
         .attr(attr!(
-            "class" => "bibcite",
             "href" => "javascript:;",
+            "class" => "bibcite",
             "id" => &id,
             "onclick" => &onclick,
         ))
@@ -347,6 +347,17 @@ fn bibliography_merge_into<'t>(
 }
 
 fn render_wikidot_bibliography(
+    ctx: &mut HtmlContext,
+    title: &str,
+    bibliography: &Bibliography,
+) {
+    let previous = ctx.rendering_wikidot_bibliography();
+    ctx.set_rendering_wikidot_bibliography(true);
+    render_wikidot_bibliography_shell(ctx, title, bibliography);
+    ctx.set_rendering_wikidot_bibliography(previous);
+}
+
+fn render_wikidot_bibliography_shell(
     ctx: &mut HtmlContext,
     title: &str,
     bibliography: &Bibliography,

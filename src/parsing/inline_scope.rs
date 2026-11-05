@@ -870,7 +870,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
             for bibliography in list.slice_mut() {
                 for (_, items) in bibliography.slice_mut() {
                     flatten_crossing_inline_containers(items);
-                    build_wikidot_block_frames(items, false);
+                    build_wikidot_bibliography_frames(items);
                 }
             }
             collect_valid_scope_pairs_with_bibliographies(elements, list)
@@ -936,20 +936,13 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
     for (_, elements) in bibliography.slice_mut() {
         flatten_crossing_inline_containers(elements);
-        build_wikidot_block_frames(elements, false);
+        build_wikidot_bibliography_frames(elements);
     }
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
     for (_, elements) in bibliography.slice() {
-        collect_valid_pairs(
-            elements,
-            &mut ordinal,
-            &mut pending,
-            &mut valid,
-            None,
-            false,
-        );
+        collect_valid_pairs(elements, &mut ordinal, &mut pending, &mut valid, None, true);
     }
     pending.finish_weak(&mut valid);
 
@@ -1163,6 +1156,16 @@ impl PendingScopes {
             valid.insert(weak.close);
             self.pairs.insert(weak.close, weak.open);
         }
+    }
+
+    fn abandon_delimiter_scopes(&mut self) {
+        let mut abandoned = 0;
+        for stack in self.formats.iter_mut() {
+            abandoned += stack.drain(..).filter(|open| open.accepted).count();
+        }
+        abandoned += self.colors.drain(..).filter(|open| open.accepted).count();
+        abandoned += self.anchors.drain(..).filter(|open| open.accepted).count();
+        self.active_count -= abandoned;
     }
 }
 
@@ -1799,6 +1802,11 @@ fn collect_valid_pairs(
                     }
                 }
             }
+            Element::Partial(PartialElement::WikidotBlockClose(_))
+                if inside_bibliography =>
+            {
+                pending.abandon_delimiter_scopes();
+            }
             _ => {
                 let mut visit = |children: &[Element<'_>]| {
                     collect_valid_pairs(
@@ -2393,6 +2401,8 @@ fn lower_sequence<'t>(
                     false,
                 );
                 active.record_open_instance(current);
+            } else {
+                run.push(Element::Text(Cow::Borrowed(kind.open_marker())));
             }
             continue;
         }
@@ -4390,7 +4400,7 @@ impl<'t> WikidotFrameAssembly<'t> {
         });
     }
 
-    fn close_kind(&mut self, kind: WikidotBlockCloseKind) {
+    fn close_kind(&mut self, kind: WikidotBlockCloseKind<'_>) {
         match kind {
             WikidotBlockCloseKind::Div { scored, .. } => {
                 if scored {
@@ -4398,6 +4408,24 @@ impl<'t> WikidotFrameAssembly<'t> {
                 } else {
                     self.strip_paragraph_before_close();
                 }
+                self.pop_frame();
+            }
+            WikidotBlockCloseKind::CollapsibleCrossedBottom { head, .. } => {
+                self.strip_paragraph_before_close();
+                self.pop_frame();
+                let close = self.collapsible_closes.remove(&head);
+                let (show_bottom, hide_text) = close
+                    .map(|close| (close.show_bottom, close.hide_text))
+                    .unwrap_or((false, None));
+                if show_bottom {
+                    self.push_shell_link(
+                        "collapsible-block-unfolded-link",
+                        false,
+                        hide_text,
+                        false,
+                    );
+                }
+                self.pop_frame();
                 self.pop_frame();
             }
             WikidotBlockCloseKind::Collapsible { head } => {
@@ -4421,6 +4449,16 @@ impl<'t> WikidotFrameAssembly<'t> {
             WikidotBlockCloseKind::Note { .. } | WikidotBlockCloseKind::Align { .. } => {
                 self.strip_paragraph_before_close();
                 self.pop_frame();
+            }
+            WikidotBlockCloseKind::BibliographyCrossed { frames, .. } => {
+                for _ in 0..frames {
+                    self.pop_frame();
+                    if let Some(Element::WikidotBlockFrame { omit_close, .. }) =
+                        self.top().last_mut()
+                    {
+                        *omit_close = true;
+                    }
+                }
             }
         }
     }
@@ -4498,6 +4536,29 @@ impl<'t> WikidotFrameAssembly<'t> {
         }
         self.output
     }
+}
+
+fn build_wikidot_bibliography_frames<'t>(elements: &mut Vec<Element<'t>>) {
+    for element in elements.iter_mut() {
+        visit_children_mut(element, &mut |children| {
+            build_wikidot_block_frames(children, false);
+        });
+    }
+    if !elements.iter().any(is_wikidot_block_partial) {
+        return;
+    }
+    let mut assembly = WikidotFrameAssembly::new(false);
+    for element in mem::take(elements) {
+        match element {
+            Element::Partial(PartialElement::WikidotBlockClose(_))
+                if assembly.stack.is_empty() =>
+            {
+                assembly.output.push(element);
+            }
+            element => assembly.push(element),
+        }
+    }
+    *elements = assembly.finish();
 }
 
 fn build_wikidot_block_frames<'t>(elements: &mut Vec<Element<'t>>, at_root: bool) {
