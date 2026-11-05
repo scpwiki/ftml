@@ -95,43 +95,6 @@
                     }
                 ]
             }
-        },
-        {
-            "element": "container",
-            "data": {
-                "type": "paragraph",
-                "attributes": {},
-                "elements": [
-                    {
-                        "element": "text",
-                        "data": "[["
-                    },
-                    {
-                        "element": "text",
-                        "data": "embedaudio"
-                    },
-                    {
-                        "element": "text",
-                        "data": "]]"
-                    },
-                    {
-                        "element": "text",
-                        "data": "x"
-                    },
-                    {
-                        "element": "text",
-                        "data": "[[/"
-                    },
-                    {
-                        "element": "text",
-                        "data": "embedaudio"
-                    },
-                    {
-                        "element": "text",
-                        "data": "]]"
-                    }
-                ]
-            }
         }
     ]
 }

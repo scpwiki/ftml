@@ -43,50 +43,5 @@
             67
         ],
         "kind": "no-rules-match"
-    },
-    {
-        "token": "identifier",
-        "rule": "block",
-        "span": [
-            83,
-            84
-        ],
-        "kind": "rule-failed"
-    },
-    {
-        "token": "left-block",
-        "rule": "fallback",
-        "span": [
-            69,
-            71
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "right-block",
-        "rule": "fallback",
-        "span": [
-            81,
-            83
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "left-block-end",
-        "rule": "fallback",
-        "span": [
-            84,
-            87
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "right-block",
-        "rule": "fallback",
-        "span": [
-            97,
-            99
-        ],
-        "kind": "no-rules-match"
     }
 ]
