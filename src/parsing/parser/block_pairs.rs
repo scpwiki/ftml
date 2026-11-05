@@ -2409,7 +2409,7 @@ impl<'t> Scanner<'t> {
         text.eq_ignore_ascii_case("tab")
     }
 
-    fn tab_head_footnote_first(&self, pos: usize, head: &HeadRead) -> bool {
+    fn tab_head_first_inner_block(&self, pos: usize, head: &HeadRead) -> Option<String> {
         let mut name_end = pos + 1;
         while name_end < head.head_end
             && !matches!(
@@ -2425,13 +2425,15 @@ impl<'t> Scanner<'t> {
         }
         let first_content = (name_end..head.head_end)
             .find(|&t| self.tokens[t].token != Token::Whitespace);
-        if let Some(t) = first_content
-            && matches!(
-                self.tokens[t].token,
-                Token::LeftBlock | Token::LeftBlockStar
-            )
-        {
-            let inner_name: String = (t + 1..head.head_end)
+        let t = first_content?;
+        if !matches!(
+            self.tokens[t].token,
+            Token::LeftBlock | Token::LeftBlockStar
+        ) {
+            return None;
+        }
+        Some(
+            (t + 1..head.head_end)
                 .take_while(|&k| {
                     !matches!(
                         self.tokens[k].token,
@@ -2444,14 +2446,24 @@ impl<'t> Scanner<'t> {
                     )
                 })
                 .map(|k| self.tokens[k].slice)
-                .collect();
-            if inner_name.eq_ignore_ascii_case("footnote")
-                || inner_name.eq_ignore_ascii_case("footnoteblock")
-            {
-                return true;
-            }
-        }
-        false
+                .collect(),
+        )
+    }
+
+    fn tab_head_footnote_first(&self, pos: usize, head: &HeadRead) -> bool {
+        self.tab_head_first_inner_block(pos, head)
+            .is_some_and(|name| {
+                name.eq_ignore_ascii_case("footnote")
+                    || name.eq_ignore_ascii_case("footnoteblock")
+            })
+    }
+
+    /// A tab head whose title starts with a footnoteblock block fails, but
+    /// live keeps it as literal content of the enclosing view; the scanner
+    /// mirrors that by skipping the head and accepting content lines after it.
+    fn tab_head_footnoteblock_first(&self, pos: usize, head: &HeadRead) -> bool {
+        self.tab_head_first_inner_block(pos, head)
+            .is_some_and(|name| name.eq_ignore_ascii_case("footnoteblock"))
     }
 
     /// T1: scan a failed tab head's body for nested real tabs. A failed
@@ -2556,6 +2568,7 @@ impl<'t> Scanner<'t> {
         };
         let head_depth = self.line_quote_depth(head_index);
         let mut tabs = 0_usize;
+        let mut degraded_content = false;
         let mut pos = head.head_end;
         loop {
             pos = if head_depth > 0 {
@@ -2564,7 +2577,7 @@ impl<'t> Scanner<'t> {
                 self.skip_structure_space(pos, limit)?
             };
             if let Some(close) = self.read_kind_closer(pos, WikidotBlockKind::TabView) {
-                if tabs == 0 {
+                if tabs == 0 && !degraded_content {
                     return None;
                 }
                 if self.quote_depth_outside(pos, head_depth) {
@@ -2608,9 +2621,18 @@ impl<'t> Scanner<'t> {
                         pos = tab_closer_end;
                         continue;
                     }
+                    if degraded_content {
+                        pos += 1;
+                        continue;
+                    }
                     return None;
                 }
             };
+            if self.tab_head_footnoteblock_first(pos, &tab_head) {
+                degraded_content = true;
+                pos = tab_head.head_end;
+                continue;
+            }
             tabs += 1;
             let failed = self.tab_head_failed_title(&tab_head);
             if self.tab_head_footnote_first(pos, &tab_head) {

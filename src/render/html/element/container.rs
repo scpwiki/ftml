@@ -20,7 +20,8 @@
 
 use super::prelude::*;
 use crate::tree::{
-    Container, ContainerType, HtmlTag, WIKIDOT_GENERATED_EMPTY_CLASS_MARKER,
+    Container, ContainerType, HtmlTag, WIKIDOT_EMPTY_QUOTE_MARKER,
+    WIKIDOT_GENERATED_EMPTY_CLASS_MARKER,
 };
 
 pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
@@ -82,16 +83,27 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
     let mut tag = ctx.html().tag(tag_spec.tag());
 
     let mut generated_class_attributes = None;
+    let mut empty_quote_attributes = None;
     let preserve_generated_empty_class = layout.legacy()
         && container.ctype() == ContainerType::Span
         && container
             .attributes()
             .get()
             .contains_key(WIKIDOT_GENERATED_EMPTY_CLASS_MARKER);
+    // An ejected tabview leaves an empty blockquote run in live; the marker
+    // keeps it through tree cleanup and never reaches the output.
+    let strip_empty_quote_marker = container
+        .attributes()
+        .get()
+        .contains_key(WIKIDOT_EMPTY_QUOTE_MARKER);
     let attributes = if preserve_generated_empty_class {
         let mut attributes = container.attributes().clone();
         attributes.remove(WIKIDOT_GENERATED_EMPTY_CLASS_MARKER);
         generated_class_attributes.insert(attributes)
+    } else if strip_empty_quote_marker {
+        let mut attributes = container.attributes().clone();
+        attributes.remove(WIKIDOT_EMPTY_QUOTE_MARKER);
+        empty_quote_attributes.insert(attributes)
     } else {
         container.attributes()
     };

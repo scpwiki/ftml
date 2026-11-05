@@ -567,11 +567,20 @@ fn try_consume_fn<'r, 't>(
                     Element::Partial(PartialElement::WikidotBlockClose(_))
                 )
             });
+        // A tabview ending the row keeps the row break: live renders the
+        // line after the tabview in the same inline flow ("</div><br>\noutro").
+        let wikidot_tabview_line = parser.settings().layout.legacy()
+            && elements
+                .iter()
+                .rev()
+                .find(|element| **element != Element::LineBreak)
+                .is_some_and(|element| matches!(element, Element::TabView(_)));
         let keep_line_break = if parser.settings().layout.legacy() {
             paragraph_safe
                 || alignment_block
                 || collapsible_row
                 || wikidot_block_close_line
+                || wikidot_tabview_line
         } else {
             !consumed_past_line || paragraph_safe
         };
@@ -670,6 +679,7 @@ fn try_consume_fn<'r, 't>(
         split_counts.push((segment.len(), segment_safe, ParagraphSplitKind::Paragraph));
         elements.extend(segment);
     }
+
     if append_unquoted_close_break {
         elements.push(Element::LineBreak);
         if let Some(last) = split_counts.last_mut() {
@@ -1181,13 +1191,23 @@ fn push_native_quote_row<'t>(
     if wikidot_block_close_row {
         stack.record_next_element_line_start(false);
     }
+    // A tabview ending a row leaves the following line in its inline flow
+    // (live: "</div><br>\noutro"), like a flat block closer row.
+    let wikidot_tabview_row_end = wikidot
+        && row
+            .elements
+            .iter()
+            .rev()
+            .find(|element| **element != Element::LineBreak)
+            .is_some_and(|element| matches!(element, Element::TabView(_)));
     if let Some(counts) = split_counts {
         let leaves_following_content_unwrapped = row
             .elements
             .iter()
             .any(collapsible_has_direct_literal_nested_opener)
             || (wikidot && alignment_block)
-            || wikidot_block_close_row;
+            || wikidot_block_close_row
+            || wikidot_tabview_row_end;
         let has_simple_table = row.elements.iter().any(|element| {
             matches!(
                 element,
@@ -1255,7 +1275,8 @@ fn push_native_quote_row<'t>(
         .iter()
         .any(collapsible_has_direct_literal_nested_opener)
         || (wikidot && alignment_block)
-        || wikidot_block_close_row;
+        || wikidot_block_close_row
+        || wikidot_tabview_row_end;
     let has_simple_table = row.elements.iter().any(|element| {
         matches!(
             element,

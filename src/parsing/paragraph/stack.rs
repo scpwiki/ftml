@@ -128,16 +128,19 @@ impl<'t> ParagraphStack<'t> {
                                 | ContainerType::Blockquote
                                 | ContainerType::Align(_)
                         )
-                ) || matches!(element, Element::Code(_) | Element::Collapsible { .. })
-                    || matches!(
-                        element,
-                        Element::Partial(
-                            PartialElement::WikidotBlockClose(_)
-                                | PartialElement::WikidotBlockOpen(
-                                    WikidotBlockShell::Div { scored: true, .. }
-                                )
-                        )
+                ) || matches!(
+                    element,
+                    Element::Code(_) | Element::Collapsible { .. } | Element::TabView(_)
+                ) || matches!(
+                    element,
+                    Element::Partial(
+                        PartialElement::WikidotBlockClose(_)
+                            | PartialElement::WikidotBlockOpen(WikidotBlockShell::Div {
+                                scored: true,
+                                ..
+                            })
                     )
+                )
             })
     }
 
