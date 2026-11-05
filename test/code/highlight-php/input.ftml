@@ -1,0 +1,3 @@
+[[code type="php"]]
+<?php echo 1;
+[[/code]]

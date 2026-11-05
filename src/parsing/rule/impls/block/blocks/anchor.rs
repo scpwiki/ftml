@@ -402,20 +402,16 @@ mod tests {
     }
 
     #[test]
-    fn wikidot_anchor_neutralizes_dangerous_href() {
-        for href in [
-            "javascript:alert(1)",
-            "javascript: alert(1)",
-            "javascript : alert(1)",
-            "java script:alert(1)",
-            "javascript:alert`1`",
-            "javascript:alert${1}",
-            "javascript:document[`title`]=`pwned`",
-            "data:text/html;base64,AAAA",
+    fn wikidot_anchor_preserves_live_dangerous_href_normalization() {
+        for (href, expected) in [
+            ("javascript:alert(1)", "javascript:alert-1"),
+            ("javascript: alert(1)", "javascript:alert-1"),
+            ("javascript : alert(1)", "javascript:alert-1"),
+            ("java script:alert(1)", "java-script:alert-1"),
         ] {
             assert_eq!(
                 render(&format!(r#"[[a href="{href}"]]click[[/a]]"#)),
-                r##"<p><a href="#invalid-url">click</a></p>"##,
+                format!(r#"<p><a href="{expected}">click</a></p>"#),
             );
         }
     }

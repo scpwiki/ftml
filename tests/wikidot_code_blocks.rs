@@ -202,9 +202,12 @@ fn active_code_normalizes_only_live_body_bytes() {
     let [code] = tree.code_blocks.as_slice() else {
         panic!("expected one code block, got {tree:#?}");
     };
+    // Live Wikidot (PagePreview, captured twice): tabs expand to four
+    // spaces, NBSP is served as a space, interior trailing spaces are kept,
+    // and the body's trailing ASCII whitespace is trimmed (disc4 F2).
     assert_eq!(
         code.contents,
-        "alpha    beta gamma  \n  leading and    internal      ",
+        "alpha    beta gamma  \n  leading and    internal",
     );
     assert_eq!(code.language.as_deref(), Some("rust"));
     assert_eq!(code.name.as_deref(), Some("sample-heading"));

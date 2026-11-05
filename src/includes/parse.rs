@@ -37,6 +37,10 @@ use std::collections::HashMap;
 
 const INCLUDE_ARGUMENT_EXPANSION_ALLOWANCE: usize = 64 * 1024;
 
+/// The character set PHP's default `trim()` strips, which is what live applies
+/// to each include argument value (at both ends).
+const INCLUDE_ARGUMENT_TRIM: [char; 6] = [' ', '\t', '\n', '\r', '\0', '\u{000b}'];
+
 #[derive(Debug)]
 struct RawIncludeArgument<'t> {
     key: &'t str,
@@ -131,21 +135,23 @@ fn scan_include_argument_segment<'t>(
     segment: &'t str,
     arguments: &mut Vec<RawIncludeArgument<'t>>,
 ) {
-    let (source, _) = trim_include_space_start(segment);
+    let source = trim_include_space_start(segment);
     let key_end = include_argument_key_end(source);
     if key_end == 0 {
         return;
     }
 
     let key = &source[..key_end];
-    let (after_key, _) = trim_include_space_start(&source[key_end..]);
+    let after_key = trim_include_space_start(&source[key_end..]);
     let Some(after_equals) = after_key.strip_prefix('=') else {
         return;
     };
-    let value_starts_with_comment = after_equals.as_bytes().starts_with(b"[!--")
-        && complete_comment_end(after_equals.as_bytes(), 0).is_some();
-    let (value, _) = trim_include_space_start(after_equals);
-    let authored_empty_value = value.is_empty() && !value_starts_with_comment;
+    let value = trim_include_space_start(after_equals);
+    // Live trims each argument value with PHP's default trim set at both ends.
+    // Comments are not stripped here: live keeps them inside the value and only
+    // drops them when the substituted page text is rendered.
+    let value = value.trim_end_matches(INCLUDE_ARGUMENT_TRIM);
+    let authored_empty_value = value.is_empty();
 
     trace!("Adding argument for include (key '{key}', value '{value}')");
     arguments.push(RawIncludeArgument {
@@ -186,23 +192,22 @@ fn include_argument_key_end(source: &str) -> usize {
     index
 }
 
-fn trim_include_space_start(source: &str) -> (&str, bool) {
+/// Leading PHP `trim()` of one include argument segment or field.
+///
+/// This deliberately does not skip comments: live keeps a comment as part of
+/// the argument text, so whitespace after a comment is interior whitespace.
+fn trim_include_space_start(source: &str) -> &str {
     let bytes = source.as_bytes();
     let mut index = 0;
-    let mut skipped_comment = false;
 
-    loop {
-        while matches!(bytes.get(index), Some(b' ' | b'\n' | b'\t')) {
-            index += 1;
-        }
-        let Some(end) = complete_comment_end(bytes, index) else {
-            break;
-        };
-        skipped_comment = true;
-        index = end;
+    while matches!(
+        bytes.get(index),
+        Some(b' ' | b'\n' | b'\t' | b'\r' | b'\0' | b'\x0b')
+    ) {
+        index += 1;
     }
 
-    (&source[index..], skipped_comment)
+    &source[index..]
 }
 
 fn complete_comment_end(bytes: &[u8], start: usize) -> Option<usize> {
@@ -484,9 +489,9 @@ mod tests {
         );
         assert_eq!(
             include.variables().get("facility").map(Cow::as_ref),
-            Some("-- ")
+            Some("--")
         );
-        assert_eq!(include.variables().get("x").map(Cow::as_ref), Some("66 "));
+        assert_eq!(include.variables().get("x").map(Cow::as_ref), Some("66"));
         assert!(!include.variables().contains_key("textclass"));
         assert!(!include.variables().contains_key("text"));
     }
@@ -663,13 +668,67 @@ mod tests {
     }
 
     #[test]
+    fn include_argument_values_use_the_live_php_trim_set() {
+        for whitespace in [' ', '\t', '\n', '\r', '\0', '\u{000b}'] {
+            for source in [
+                format!("[[include page | a={whitespace}x{whitespace}]]"),
+                format!("[[include page | a={whitespace}x{whitespace}| b=2]]"),
+            ] {
+                let (include, _) = parse_include_block(&source, 0)
+                    .unwrap_or_else(|_| panic!("include should parse: {source:?}"));
+                assert_eq!(
+                    include.variables().get("a").map(Cow::as_ref),
+                    Some("x"),
+                    "{source:?}",
+                );
+            }
+        }
+
+        for source in [
+            "[[include page | a=\u{00a0}x\u{00a0}]]",
+            "[[include page | a=\u{000c}x\u{000c}]]",
+            "[[include page | a=\u{2003}x\u{2003}]]",
+        ] {
+            let (include, _) = parse_include_block(source, 0)
+                .unwrap_or_else(|_| panic!("include should parse: {source:?}"));
+            let value = include.variables().get("a").map(Cow::as_ref);
+            let expected = &source["[[include page | a=".len()..source.len() - 2];
+            assert_eq!(value, Some(expected), "{source:?}");
+        }
+    }
+
+    #[test]
+    fn include_argument_trim_does_not_cross_comments() {
+        let (include, _) = parse_include_block("[[include page | a= [!--c--] x ]]", 0)
+            .expect("include should parse");
+        assert_eq!(
+            include.variables().get("a").map(Cow::as_ref),
+            Some("[!--c--] x"),
+        );
+
+        for source in [
+            "[[include page | [!--c--]a=1]]",
+            "[[include page | [!--c--] a=1]]",
+            "[[include page | a [!--c--]=1]]",
+        ] {
+            let (include, _) = parse_include_block(source, 0)
+                .unwrap_or_else(|_| panic!("include should parse: {source:?}"));
+            assert!(
+                !include.variables().contains_key("a"),
+                "{source:?}: {:?}",
+                include.variables(),
+            );
+        }
+    }
+
+    #[test]
     fn ordinary_acyclic_include_argument_expansion_is_unchanged() {
         let (include, _) =
             parse_include_block("[[include page | a=x | b={$a}{$a} | c=prefix-{$b}]]", 0)
                 .expect("include should parse");
 
-        assert_eq!(include.variables().get("a").map(Cow::as_ref), Some("x "));
-        assert_eq!(include.variables().get("b").map(Cow::as_ref), Some("xx "));
+        assert_eq!(include.variables().get("a").map(Cow::as_ref), Some("x"));
+        assert_eq!(include.variables().get("b").map(Cow::as_ref), Some("xx"));
         assert_eq!(
             include.variables().get("c").map(Cow::as_ref),
             Some("prefix-xx"),

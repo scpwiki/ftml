@@ -1,0 +1,54 @@
+LEAD-BLANKS
+[[code]]
+
+
+x
+
+
+[[/code]]
+
+TRAIL-SPACES
+[[code]]
+  x  
+[[/code]]
+
+MID-SPACE-KEPT
+[[code]]
+x 
+y 
+[[/code]]
+
+TABS
+[[code]]
+	y	
+[[/code]]
+
+NBSP
+[[code]]
+ x 
+[[/code]]
+
+IDEOGRAPHIC
+[[code]]
+　x　
+[[/code]]
+
+WS-LINE-BLANKED
+[[code]]
+x
+ 
+y
+[[/code]]
+
+LEAD-WS-LINES
+[[code]]
+ 
+x
+ 
+[[/code]]
+
+ALL-BLANK
+[[code]]
+
+
+[[/code]]

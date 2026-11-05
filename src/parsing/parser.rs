@@ -160,6 +160,9 @@ pub(super) struct BlockScanCache<'t> {
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
     pub(super) unmatched_close_scan: super::unmatched_close_scan::UnmatchedCloseScanCache,
+    /// Monotone scan slot for the Wikidot anchor-label walk's termination
+    /// bytes; see `Parser::anchor_label_reaches_input_end`.
+    anchor_label_stop: Option<(usize, Option<usize>)>,
     last_virtual_gate_end: Cell<Option<usize>>,
 }
 
@@ -2136,6 +2139,96 @@ impl<'r, 't> Parser<'r, 't> {
         let input_end = self.remaining.last().unwrap_or(self.current);
         debug_assert_eq!(input_end.token, Token::InputEnd);
         ParseError::new(ParseErrorKind::EndOfInput, self.rule, input_end)
+    }
+
+    /// Whether the Wikidot anchor-label walk that starts at byte `start` is
+    /// certain to run to `InputEnd` and fail there with `EndOfInput`.
+    ///
+    /// `collect_wikidot_anchor_label` only succeeds at a `]`-bearing token
+    /// (`RightBracket`/`RightBlock`/`RightLink`, or the `RightLink` of a
+    /// fused iftags closer) and only fails elsewhere at a line break, a
+    /// generated token, a comment sub-parse failure, or `InputEnd`. None of
+    /// those tokens can occur at or after `start` when the source tail has
+    /// no `]`, `\n`, `\r`, or `\` byte and no generated marker:
+    ///
+    /// - `RightBracket`/`RightBlock`/`RightLink` slices contain `]`, so a
+    ///   fused closer is impossible too.
+    /// - `LineBreak`/`ParagraphBreak` slices contain a newline byte, except
+    ///   for the tokenizer's terminal-backslash `LineBreak`, which needs a
+    ///   `\` byte.
+    /// - The tokenizer only emits `LeftComment` when a later `--]` closer
+    ///   exists, which contains `]` (also across runtime-literal segments).
+    /// - `GeneratedPageLink`/`GeneratedTagLinks` tokens require a generated
+    ///   delayed marker at their position.
+    ///
+    /// Every remaining token therefore falls into the step-over arms (a
+    /// plain step, or an iftags segment that cannot fuse and cannot error),
+    /// so the walk reaches `InputEnd` and returns the same `EndOfInput`
+    /// error. Successive `[#` openers share that unclosed tail; the
+    /// monotone slot keeps the total scan work linear instead of walking the
+    /// rest of the document once per opener.
+    pub(crate) fn anchor_label_reaches_input_end(&self, start: usize) -> bool {
+        let source = self.full_text().inner();
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let stop = match cache.anchor_label_stop {
+            Some((scanned_from, stop))
+                if scanned_from <= start && stop.is_none_or(|stop| stop >= start) =>
+            {
+                stop
+            }
+            _ => {
+                let tail = &source[start..];
+                let byte_stop = [
+                    tail.find(']'),
+                    tail.find('\n'),
+                    tail.find('\r'),
+                    tail.find('\\'),
+                ]
+                .into_iter()
+                .flatten()
+                .min()
+                .map(|offset| start + offset);
+                let generated_stop = self.delayed_markers.range(start..).find_map(
+                    |(&position, marker)| {
+                        marker.generated().is_some().then_some(position)
+                    },
+                );
+                let stop = match (byte_stop, generated_stop) {
+                    (Some(byte_stop), Some(generated_stop)) => {
+                        Some(byte_stop.min(generated_stop))
+                    }
+                    (byte_stop, generated_stop) => byte_stop.or(generated_stop),
+                };
+                cache.anchor_label_stop = Some((start, stop));
+                stop
+            }
+        };
+        stop.is_none()
+    }
+
+    /// Position this parser at the trailing `InputEnd` token without
+    /// stepping through the tokens in between.
+    ///
+    /// Callers must have proven that a step-by-step walk would end here (see
+    /// `Parser::anchor_label_reaches_input_end`), which also means no line
+    /// break is skipped, so the quote-body cursor needs no update. Only the
+    /// current token is observed after the walk fails: the error is built
+    /// from it and the discarded sub-parser position is not committed.
+    pub(crate) fn jump_to_input_end(&mut self) {
+        let Some(input_end) = self.remaining.last() else {
+            debug_assert_eq!(self.current.token, Token::InputEnd);
+            return;
+        };
+        debug_assert_eq!(input_end.token, Token::InputEnd);
+        let previous = self
+            .remaining
+            .len()
+            .checked_sub(2)
+            .map(|index| &self.remaining[index])
+            .unwrap_or(self.current);
+        self.start_of_line = token_starts_line(previous.token);
+        self.current = input_end;
+        self.remaining = &self.remaining[self.remaining.len()..];
     }
 }
 

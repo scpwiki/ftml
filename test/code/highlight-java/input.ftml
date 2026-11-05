@@ -1,0 +1,5 @@
+[[code type="java"]]
+import java.util.*;
+int a;
+List<String> l = new ArrayList<>();
+[[/code]]

@@ -1,0 +1,3 @@
+[[code type="cpp"]]
+/* c */ int main(void) { printf("%d\n", 1.5e3); }
+[[/code]]

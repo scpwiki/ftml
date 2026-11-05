@@ -1,0 +1,1 @@
+.a:hover { color: #fff; margin: 0 1px; }

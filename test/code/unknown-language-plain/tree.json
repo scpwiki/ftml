@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "SELECT a FROM b WHERE c = 'd';",
+                "language": "apache",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "SELECT a FROM b WHERE c = 'd';",
+            "language": "apache",
+            "name": null
+        }
+    ]
+}

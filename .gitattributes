@@ -19,6 +19,9 @@ tests/fixtures/parity-gaps/math-crlf/input.ftml -text
 # This comment/preprocessor witness intentionally contains a CR byte before a comment and LF.
 tests/fixtures/parity-gaps/comment-crlf-join/input.ftml -text
 
+# This include witness intentionally contains syntax-significant trailing ASCII whitespace.
+test/include/wikidot-argument-whitespace/input.ftml whitespace=-trailing-space
+
 # These content-separator witnesses intentionally contain syntax-significant trailing ASCII whitespace.
 tests/fixtures/parity-gaps/content-separator-ascii-padding/input.ftml whitespace=-trailing-space
 tests/fixtures/parity-gaps/content-separator-crlf-overlong/input.ftml whitespace=-trailing-space

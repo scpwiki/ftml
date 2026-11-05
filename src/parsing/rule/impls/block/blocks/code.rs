@@ -101,13 +101,36 @@ fn parse_fn<'r, 't>(
                 || parser.has_runtime_literal_in_range(owner_range)
         },
     );
+    let skip_end_blocks = wikidot_candidate
+        .as_ref()
+        .map(|candidate| candidate.end_blocks_to_skip)
+        .unwrap_or(0);
+    let code = if skip_end_blocks > 0 {
+        parser.get_body_text_after_skipping_end_blocks(&BLOCK_CODE, skip_end_blocks)?
+    } else {
+        parser.get_body_text_keeping_continued_break(&BLOCK_CODE)?
+    };
+
+    // Wikidot trims code bodies: leading blank lines are dropped and
+    // trailing whitespace is stripped, while leading spaces on the first
+    // content line are kept. The token slice above can additionally eat
+    // same-line spaces after the opener head (the head parser consumes
+    // them), so recover exactly those before trimming; the trim itself
+    // handles every trailing case. Non-legacy layouts keep the token
+    // slice untouched.
     let code = match wikidot_candidate {
-        Some(candidate) if candidate.end_blocks_to_skip > 0 => parser
-            .get_body_text_after_skipping_end_blocks(
-                &BLOCK_CODE,
-                candidate.end_blocks_to_skip,
-            )?,
-        _ => parser.get_body_text(&BLOCK_CODE)?,
+        Some(candidate) => {
+            let eaten = &source[candidate.body.start..body_start];
+            let eaten = if !eaten.is_empty()
+                && eaten.bytes().all(|byte| byte == b' ' || byte == b'\t')
+            {
+                eaten
+            } else {
+                ""
+            };
+            Cow::Owned(wikidot_trim_code_body(&format!("{eaten}{code}")))
+        }
+        None => code,
     };
 
     if has_delayed_input {
@@ -140,6 +163,29 @@ fn parse_fn<'r, 't>(
 
     let element = parser.push_code_block_element(code_block);
     ok!(element)
+}
+
+/// Trims a legacy code body the way Wikidot does: leading blank lines are
+/// dropped, trailing whitespace is stripped, and everything else (including
+/// leading spaces on the first content line and blank lines in the middle)
+/// is kept verbatim.
+fn wikidot_trim_code_body(body: &str) -> String {
+    let mut trimmed = body;
+    loop {
+        let without_indent = trimmed.trim_start_matches([' ', '\t']);
+        match without_indent.strip_prefix('\n') {
+            Some(rest) => trimmed = rest,
+            // Not a blank line: keep the indent, it is content.
+            None => break,
+        }
+    }
+    // NOTE: Only ASCII whitespace is stripped. Wider whitespace (such as
+    // ideographic spaces) is preserved, as on live. Non-breaking spaces
+    // survive the trim and are then served as regular spaces, matching the
+    // live bytes for bodies like `\n\xa0x\xa0\n` (codews:19).
+    trimmed
+        .trim_end_matches([' ', '\t', '\n'])
+        .replace('\u{a0}', " ")
 }
 
 #[cfg(test)]
@@ -277,11 +323,14 @@ mod tests {
                 "[[code type=\"python\"[[iftags -zzz]][[/iftags]]]]x = 1[[/code]]",
                 concat!(
                     "<div class=\"code\"><div class=\"hl-main\"><pre>",
-                    "<span class=\"hl-identifier\">[[/iftags]]]]x</span>",
-                    "<span class=\"hl-code\"> </span>",
-                    "<span class=\"hl-identifier\">=</span>",
-                    "<span class=\"hl-code\"> </span>",
-                    "<span class=\"hl-identifier\">1</span>",
+                    "<span class=\"hl-brackets\">[[</span>",
+                    "<span class=\"hl-code\">/</span>",
+                    "<span class=\"hl-identifier\">iftags</span>",
+                    "<span class=\"hl-brackets\">]]</span>",
+                    "<span class=\"hl-code\">]]</span>",
+                    "<span class=\"hl-identifier\">x</span>",
+                    "<span class=\"hl-code\"> = </span>",
+                    "<span class=\"hl-number\">1</span>",
                     "</pre></div></div>",
                 ),
             ),
