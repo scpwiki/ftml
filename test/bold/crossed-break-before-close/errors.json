@@ -1,0 +1,146 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "bold",
+        "span": [
+            13,
+            15
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            7,
+            9
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            7,
+            9
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "italics",
+        "span": [
+            28,
+            30
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            15,
+            17
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "italics",
+        "rule": "italics",
+        "span": [
+            22,
+            24
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            22,
+            24
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "subscript",
+        "span": [
+            43,
+            45
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            30,
+            32
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "subscript",
+        "rule": "subscript",
+        "span": [
+            37,
+            39
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "subscript",
+        "rule": "fallback",
+        "span": [
+            37,
+            39
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "underline",
+        "span": [
+            58,
+            58
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [
+            45,
+            47
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "underline",
+        "rule": "underline",
+        "span": [
+            52,
+            54
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [
+            52,
+            54
+        ],
+        "kind": "no-rules-match"
+    }
+]

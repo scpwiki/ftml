@@ -100,6 +100,10 @@ struct ActiveScope<'t> {
     kind: ScopeKind,
     scored: bool,
     has_content: bool,
+    /// An element closed empty as this scope's first child. Tidy prunes empty
+    /// elements only after parsing, so until then it blocks a leading space from
+    /// moving out of this scope.
+    empty_first_child: bool,
     pending: bool,
     materialized: bool,
     origin: usize,
@@ -137,13 +141,10 @@ struct ActiveScopes<'t> {
     scopes: Vec<ActiveScope<'t>>,
     active_tail: Option<usize>,
     watches: Vec<(usize, Vec<InlineTag>)>,
-    space_eject_floor: Option<Option<usize>>,
+    leading_space_moves_out: bool,
     close_pairs: BTreeMap<usize, usize>,
-    lifo_close_pairs: BTreeMap<usize, usize>,
     open_instances: BTreeMap<usize, usize>,
-    consumed: BTreeSet<usize>,
     istack: Vec<IstEntry<'t>>,
-    deferred_closes: Vec<usize>,
     cell_local: bool,
 }
 
@@ -182,6 +183,7 @@ impl<'t> ActiveScopes<'t> {
             kind,
             scored,
             has_content: false,
+            empty_first_child: false,
             pending: false,
             materialized: false,
             origin,
@@ -275,78 +277,22 @@ impl<'t> ActiveScopes<'t> {
         });
     }
 
-    fn drop_consumed_scopes(&mut self) {
-        if self.consumed.is_empty() {
-            return;
-        }
-        let mut drops = Vec::new();
-        let mut position = self.active_tail;
-        while let Some(current) = position {
-            if self.consumed.contains(&self.scopes[current].origin) {
-                drops.push(current);
-            }
-            position = self.scopes[current].previous_active;
-        }
-        if drops.is_empty() {
-            return;
-        }
-        for entry in &drops {
-            self.unlink(*entry);
-        }
-        self.istack.retain(|entry| match entry {
-            IstEntry::Scope { position, .. } => !drops.contains(position),
-            IstEntry::Inline { .. } => true,
-        });
-    }
-
-    fn note_close_fired(&mut self, close_ordinal: usize) {
-        let lineage = self
-            .lifo_close_pairs
-            .get(&close_ordinal)
-            .and_then(|open| self.open_instances.get(open))
-            .copied();
-        if let Some(lineage) = lineage {
-            self.consumed.insert(lineage);
-        }
-    }
-
-    fn truncate_to_outermost(&mut self) {
-        self.drop_consumed_scopes();
-        let Some(outermost) = self.outer_active_position() else {
-            return;
-        };
-        let mut drops = Vec::new();
-        let mut position = self.active_tail;
-        while let Some(current) = position {
-            if current != outermost {
-                drops.push(current);
-            }
-            position = self.scopes[current].previous_active;
-        }
-        if drops.is_empty() {
-            return;
-        }
-        for entry in &drops {
-            self.unlink(*entry);
-        }
-        self.istack.retain(|entry| match entry {
-            IstEntry::Scope { position, .. } => !drops.contains(position),
-            IstEntry::Inline { .. } => true,
-        });
-    }
-
-    /// End scopes left open by a deferred crossed close. Called once the
-    /// enclosing paragraph has been flushed, so the scope's own close has
-    /// already been rendered and it must not reopen in the next paragraph.
-    fn drop_deferred_closes(&mut self) {
-        if self.deferred_closes.is_empty() {
-            return;
-        }
-        for position in mem::take(&mut self.deferred_closes) {
-            let linked = self.active_tail == Some(position)
-                || self.scopes[position].next_active.is_some();
-            if linked {
-                self.kill_scope(position);
+    /// A paragraph or block boundary closes every open inline element but
+    /// leaves the inline stack alone, and the content after it reopens exactly
+    /// what the stack holds. A close that popped another element's entry can
+    /// therefore leave an element open here that does not reopen there.
+    fn sync_chain_to_istack(&mut self) {
+        let mut seen: Vec<InlineTag> = Vec::with_capacity(self.istack.len());
+        for position in self.active_positions() {
+            let scope = &self.scopes[position];
+            let tag = scope.wrapper.tag();
+            let keep = scope.kind == ScopeKind::Anchor
+                || (!seen.contains(&tag)
+                    && self.istack.iter().any(|entry| entry.tag() == tag));
+            if keep {
+                seen.push(tag);
+            } else {
+                self.unlink(position);
             }
         }
     }
@@ -462,6 +408,14 @@ impl<'t> ActiveScopes<'t> {
         }
     }
 
+    fn pop_istack_through_anchor(&mut self) {
+        while let Some(entry) = self.istack.pop() {
+            if entry.tag() == InlineTag::Anchor {
+                break;
+            }
+        }
+    }
+
     fn scope_has_content(&self, position: usize) -> bool {
         self.scopes[position].has_content
     }
@@ -483,6 +437,11 @@ impl<'t> ActiveScopes<'t> {
 
     fn end_scope(&mut self, position: usize) {
         self.unlink(position);
+        if !self.scopes[position].has_content
+            && let Some(parent) = self.active_tail
+        {
+            self.scopes[parent].empty_first_child = true;
+        }
     }
 
     fn tidy_close(&mut self, tag: InlineTag) {
@@ -507,19 +466,6 @@ impl<'t> ActiveScopes<'t> {
                     ended.push(top);
                 }
                 _ => {
-                    // The close target sits above the current element in the
-                    // istack, so its own close is deferred: the scope stays
-                    // open to wrap the reopened elements, and is ended at the
-                    // enclosing paragraph boundary instead of leaking into the
-                    // next paragraph.
-                    if let Some(close) = close_index
-                        && let IstEntry::Scope { position, .. } = &self.istack[close]
-                    {
-                        let position = *position;
-                        if !self.deferred_closes.contains(&position) {
-                            self.deferred_closes.push(position);
-                        }
-                    }
                     self.istack.pop();
                     self.end_scope(top);
                     ended.push(top);
@@ -530,7 +476,6 @@ impl<'t> ActiveScopes<'t> {
         if ended.is_empty() {
             return;
         }
-        let base = self.active_tail;
         let mut reopened: Vec<usize> = Vec::new();
         if let Some(at) = insert_at {
             let entries: Vec<(ScopeKind, ScopeWrapper<'t>, bool, usize, Option<usize>)> =
@@ -567,9 +512,7 @@ impl<'t> ActiveScopes<'t> {
                 self.note_scope_closed(*position);
             }
         }
-        if ended.len() >= 2 {
-            self.space_eject_floor = Some(base);
-        }
+        self.leading_space_moves_out = ended.len() >= 2;
     }
 
     fn istack_push_inline(&mut self, tag: InlineTag, wrapper: ScopeWrapper<'t>) {
@@ -594,8 +537,16 @@ impl<'t> ActiveScopes<'t> {
         }
     }
 
-    fn take_space_eject_floor(&mut self) -> Option<Option<usize>> {
-        self.space_eject_floor.take()
+    fn innermost_scope_keeping_leading_space(&self) -> Option<usize> {
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            let scope = &self.scopes[current];
+            if scope.has_content || scope.empty_first_child {
+                return Some(current);
+            }
+            position = scope.previous_active;
+        }
+        None
     }
 
     fn iter_active_rev(&self) -> ActiveScopeRevIter<'_, 't> {
@@ -864,7 +815,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     flatten_crossing_inline_containers(elements);
     build_wikidot_block_frames(elements, true);
     let mut lowered = Vec::new();
-    let (valid, close_pairs, lifo_close_pairs) = match bibliographies.as_deref_mut() {
+    let (valid, close_pairs) = match bibliographies.as_deref_mut() {
         Some(list) => {
             lowered = vec![false; list.slice().len()];
             for bibliography in list.slice_mut() {
@@ -881,7 +832,6 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     let mut ordinal = 0;
     let mut active = ActiveScopes {
         close_pairs,
-        lifo_close_pairs,
         ..Default::default()
     };
     let mut trim_next_break = false;
@@ -908,12 +858,11 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 ) {
     flatten_crossing_inline_containers(elements);
     build_wikidot_block_frames(elements, false);
-    let (valid, close_pairs, lifo_close_pairs) = collect_valid_scope_pairs(elements);
+    let (valid, close_pairs) = collect_valid_scope_pairs(elements);
 
     let mut ordinal = 0;
     let mut active = ActiveScopes {
         close_pairs,
-        lifo_close_pairs,
         ..Default::default()
     };
     let mut trim_next_break = false;
@@ -948,7 +897,6 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
 
     let mut active = ActiveScopes {
         close_pairs: pending.pairs,
-        lifo_close_pairs: pending.lifo_pairs,
         ..Default::default()
     };
     let mut ordinal = 0;
@@ -994,11 +942,7 @@ fn splice_wikidot_foster<'t>(elements: &mut Vec<Element<'t>>) {
 
 fn collect_valid_scope_pairs(
     elements: &[Element<'_>],
-) -> (
-    BTreeSet<usize>,
-    BTreeMap<usize, usize>,
-    BTreeMap<usize, usize>,
-) {
+) -> (BTreeSet<usize>, BTreeMap<usize, usize>) {
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
@@ -1012,17 +956,13 @@ fn collect_valid_scope_pairs(
     );
     pending.finish_weak(&mut valid);
 
-    (valid, pending.pairs, pending.lifo_pairs)
+    (valid, pending.pairs)
 }
 
 fn collect_valid_scope_pairs_with_bibliographies(
     elements: &[Element<'_>],
     bibliographies: &BibliographyList<'_>,
-) -> (
-    BTreeSet<usize>,
-    BTreeMap<usize, usize>,
-    BTreeMap<usize, usize>,
-) {
+) -> (BTreeSet<usize>, BTreeMap<usize, usize>) {
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
@@ -1036,7 +976,7 @@ fn collect_valid_scope_pairs_with_bibliographies(
     );
     pending.finish_weak(&mut valid);
 
-    (valid, pending.pairs, pending.lifo_pairs)
+    (valid, pending.pairs)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1057,9 +997,6 @@ struct PendingScopes {
     anchors: VecDeque<PendingScope>,
     active_count: usize,
     pairs: BTreeMap<usize, usize>,
-    lifo_pairs: BTreeMap<usize, usize>,
-    lifo_sizes: Vec<usize>,
-    lifo_spans: Vec<usize>,
     weak: Vec<WeakPair>,
 }
 
@@ -1089,11 +1026,6 @@ impl PendingScopes {
             ordinal: *ordinal,
             accepted,
         });
-        match class {
-            ScopeClass::Size => self.lifo_sizes.push(*ordinal),
-            ScopeClass::Span => self.lifo_spans.push(*ordinal),
-            _ => {}
-        }
         *ordinal += 1;
     }
 
@@ -1106,14 +1038,6 @@ impl PendingScopes {
     ) {
         let close = *ordinal;
         *ordinal += 1;
-        let lifo_open = match class {
-            ScopeClass::Size => self.lifo_sizes.pop(),
-            ScopeClass::Span => self.lifo_spans.pop(),
-            _ => None,
-        };
-        if let Some(open) = lifo_open {
-            self.lifo_pairs.insert(close, open);
-        }
         let stack = self.stack_mut(class);
         let popped = if !synthetic
             && matches!(class, ScopeClass::Span | ScopeClass::Size)
@@ -1345,7 +1269,7 @@ fn lower_root_sequence<'t>(
             && container.ctype() == ContainerType::Paragraph
         {
             if paragraph_group.is_none() || !previous_scored_close {
-                active.truncate_to_outermost();
+                active.sync_chain_to_istack();
             }
             if paragraph_group.is_none()
                 && let Some(position) = active.anchor_position()
@@ -1402,7 +1326,7 @@ fn lower_root_sequence<'t>(
             }
             let continued_from_paragraph =
                 paragraph_group.is_some() || previous_is_own_chunk_block;
-            active.take_space_eject_floor();
+            active.leading_space_moves_out = false;
             let effects = lower_sequence(
                 container.elements_mut(),
                 valid,
@@ -1421,7 +1345,6 @@ fn lower_root_sequence<'t>(
 
             if !joins_previous {
                 flush_paragraph_group(&mut output, &mut paragraph_group);
-                active.drop_deferred_closes();
             }
             let group = paragraph_group.get_or_insert_with(|| ParagraphGroup {
                 wrapped: follows_table
@@ -1619,7 +1542,7 @@ fn flush_root_pending<'t>(
         return false;
     }
     flush_paragraph_group(output, paragraph_group);
-    active.drop_consumed_scopes();
+    active.sync_chain_to_istack();
     let scope_before = active.outer_active_position();
     let scope_open_at_start = active.has_active_scope();
     let mut sequence = mem::take(pending);
@@ -1854,7 +1777,8 @@ fn lower_sequence<'t>(
         {
             effects.scored_span_content_after = true;
         }
-        if let Some(floor) = active.take_space_eject_floor() {
+        if mem::take(&mut active.leading_space_moves_out) {
+            let floor = active.innermost_scope_keeping_leading_space();
             let starts_with_space = matches!(
                 &element,
                 Element::Text(text) if text.starts_with([' ', '\t'])
@@ -1962,13 +1886,13 @@ fn lower_sequence<'t>(
             if valid.contains(ordinal)
                 && resolved.is_some_and(|position| active.has_anchor_above(position))
             {
+                active.pop_istack_through_anchor();
                 *ordinal += 1;
                 continue;
             }
             let current = *ordinal;
             *ordinal += 1;
             if valid.contains(&current) {
-                active.note_close_fired(current);
                 if trailing_space {
                     run.pop();
                 }
@@ -2136,10 +2060,10 @@ fn lower_sequence<'t>(
             if valid.contains(ordinal)
                 && resolved.is_some_and(|position| active.has_anchor_above(position))
             {
+                active.pop_istack_through_anchor();
                 *ordinal += 1;
                 continue;
             }
-            active.note_close_fired(current);
             if scored {
                 while matches!(
                     run.last(),
@@ -2364,6 +2288,7 @@ fn lower_sequence<'t>(
                         );
                     }
                     active.commit_close_no_reopen(position);
+                    active.pop_istack_through_anchor();
                 }
                 if trailing_space
                     && !next_starts_with_space
@@ -2771,7 +2696,7 @@ fn lower_bibliography_block<'t>(
     trim_next_break: &mut bool,
 ) {
     bib.lowered[index] = true;
-    active.truncate_to_outermost();
+    active.sync_chain_to_istack();
     let bibliography = &mut bib.bibliographies.slice_mut()[index];
     bibliography.set_title_wrappers(active.bibliography_wrappers());
     let mut reopened = Vec::with_capacity(bibliography.slice().len());
@@ -3426,11 +3351,14 @@ fn close_flattened_scope<'t>(
     let has_next = next.is_some();
     let resolved = active.resolve_close(close_ordinal, tag);
     if resolved.is_some_and(|position| active.has_anchor_above(position)) {
+        active.pop_istack_through_anchor();
         return;
     }
     let empty = !resolved.is_some_and(|position| active.scope_has_content(position))
         && run.is_empty();
     let trailing_space = matches!(run.last(), Some(Element::Text(text)) if text == " ");
+    let trailing_break = matches!(run.last(), Some(Element::LineBreak));
+    let next_is_break = matches!(next, Some(Element::LineBreak | Element::LineBreaks(_)));
     if trailing_space {
         run.pop();
     }
@@ -3447,7 +3375,8 @@ fn close_flattened_scope<'t>(
     if resolved.is_some() {
         active.tidy_close(tag);
     }
-    if trailing_space && !next_starts_with_space && !empty && has_next {
+    let space_moves_out = trailing_space || trailing_break && !next_is_break;
+    if space_moves_out && !next_starts_with_space && !empty && has_next {
         run.push(text!(" "));
         *run_has_content = true;
     }
@@ -3596,11 +3525,14 @@ fn flush_run<'t>(
     }
     let outer_scope = active.outer_active_position();
     let chain = active.active_positions();
-    active.mark_active_content();
     let mut wrapped = mem::take(run);
     for scope in active.iter_active_rev() {
+        if scope.empty_first_child && !scope.has_content {
+            wrapped.insert(0, Element::Partial(PartialElement::WikidotEmptyInlineOwner));
+        }
         wrapped = vec![scope.wrapper.wrap(wrapped)];
     }
+    active.mark_active_content();
     if outer_scope.is_some() && wrapped.len() == 1 {
         if outer_scope == last_run_outer_scope.outer
             && run_merges_across_separator(output, &wrapped[0])
@@ -3890,7 +3822,6 @@ fn lower_cell_like<'t>(
     let start = *ordinal;
     let mut cell_active = ActiveScopes {
         close_pairs: active.close_pairs.clone(),
-        lifo_close_pairs: active.lifo_close_pairs.clone(),
         cell_local: true,
         ..Default::default()
     };
@@ -3997,7 +3928,7 @@ fn lower_children<'t>(
     let mut visit = |children: &mut Vec<Element<'t>>| {
         lowered = true;
         if truncate_at_entry {
-            active.truncate_to_outermost();
+            active.sync_chain_to_istack();
         }
         lower_sequence(
             children,

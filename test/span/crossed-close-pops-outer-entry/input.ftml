@@ -1,0 +1,7 @@
+[[span]]--a##red|b--c##d
+
+e[[/span]]f
+
+[[span]]A[[size 120%]]B[[/size]]C
+
+D[[/span]]E

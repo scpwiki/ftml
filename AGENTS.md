@@ -5,6 +5,7 @@
 - `README.md`, `docs/WikijumpBoundary.md`, the workspace manifests, and nearby parser/render fixtures.
 - FTML provides deterministic parsing and rendering primitives. Behavior requiring a site, page database, actor, URL arguments, query, import state, file service, permissions, or browser runtime belongs in Wikijump or another caller.
 - For Wikidot compatibility, live Wikidot evidence and provenance-backed corpus examples outrank assumptions and local Wikijump output.
+- Wikidot's inline nesting is Text_Wiki pairing followed by libtidy's inline stack. `docs/WikidotInlineNesting.md` states the rule. Reason from it before inferring a quirk from captures, and pin only live bytes.
 - Corpus expectations are staged: `tree.json` records the parse tree only; rendering is judged from `wikidot.html` and `output.html`. Some constructs exist in only one layout (Wikijump-native blocks render literally in the Wikidot layout); judge each construct in the layout where it exists.
 - Evidence from Wikidot's PagePreview route can differ from saved pages, notably for `[[iftags]]` gate evaluation; treat PagePreview-only verdicts as provisional until a saved page confirms them.
 

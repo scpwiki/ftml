@@ -1,0 +1,148 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "—"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "color",
+                                    "data": {
+                                        "color": "red",
+                                        "background": false,
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "b"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "—"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "c"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "d"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "e"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "f"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "A"
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "size",
+                                        "attributes": {
+                                            "style": "font-size: 120%;"
+                                        },
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "B"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "C"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "D"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "E"
+                    }
+                ]
+            }
+        }
+    ]
+}

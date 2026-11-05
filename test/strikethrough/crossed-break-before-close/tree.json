@@ -1,0 +1,102 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "—"
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "red",
+                            "background": false,
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "b"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "—"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "c"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "d"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "##"
+                    },
+                    {
+                        "element": "text",
+                        "data": "red"
+                    },
+                    {
+                        "element": "text",
+                        "data": "|"
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "strikethrough",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "b"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "##"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "c"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "d"
+                    }
+                ]
+            }
+        }
+    ]
+}
