@@ -4373,12 +4373,24 @@ where
             Token::LeftBlock => {
                 let source = self.full_text().inner();
                 let rest = &source[start..];
-                if rest.starts_with("[[code") {
+                let name = rest
+                    .strip_prefix("[[")
+                    .unwrap_or(rest)
+                    .split(|c: char| c.is_whitespace() || c == ']')
+                    .next()
+                    .unwrap_or("");
+                if name.eq_ignore_ascii_case("code") {
                     self.wikidot_code_candidate(start)
                         .map(|candidate| candidate.owner_end)
-                } else if rest.starts_with("[[math") {
-                    rest.find("[[/math]]")
-                        .map(|close| start + close + "[[/math]]".len())
+                } else if name.eq_ignore_ascii_case("math") {
+                    rest.match_indices("[[/")
+                        .map(|(index, _)| index)
+                        .find(|&index| {
+                            rest[index..].get(..9).is_some_and(|slice| {
+                                slice.eq_ignore_ascii_case("[[/math]]")
+                            })
+                        })
+                        .map(|close| start + close + 9)
                 } else {
                     None
                 }

@@ -1450,11 +1450,15 @@ impl<'t> Scanner<'t> {
                 && self.starts_line(i)
                 && self.raw_name_is(i, "bibliography")
                 && let Some(head) = self.read_head(i, false)
-                && let Some(end) = self.bibliography_close_after(head.head_end)
             {
-                ranges.push((i, end));
-                i = end;
-                continue;
+                match self.bibliography_close_after(head.head_end) {
+                    Some(end) => {
+                        ranges.push((i, end));
+                        i = end;
+                        continue;
+                    }
+                    None => break,
+                }
             }
             i += 1;
         }

@@ -351,9 +351,10 @@ fn render_wikidot_bibliography(
     title: &str,
     bibliography: &Bibliography,
 ) {
+    let previous = ctx.rendering_wikidot_bibliography();
     ctx.set_rendering_wikidot_bibliography(true);
     render_wikidot_bibliography_shell(ctx, title, bibliography);
-    ctx.set_rendering_wikidot_bibliography(false);
+    ctx.set_rendering_wikidot_bibliography(previous);
 }
 
 fn render_wikidot_bibliography_shell(

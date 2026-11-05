@@ -94,7 +94,7 @@ fn parse_fn<'r, 't>(
     let hide = arguments.get_bool(parser, "hide")?.unwrap_or(false);
 
     if wikidot_candidate && !parser.has_body_end_block(&BLOCK_BIBLIOGRAPHY) {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        return Err(parser.make_end_of_input_err());
     }
 
     let body_start = parser.current().span.start;
@@ -411,9 +411,16 @@ mod tests {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize("[[bibliography]]");
-        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
 
+        assert!(
+            errors.iter().any(|error| {
+                error.rule() == "block-bibliography"
+                    && error.kind() == ParseErrorKind::EndOfInput
+            }),
+            "{errors:#?}",
+        );
         assert_eq!(html, "<p>[[bibliography]]</p>");
     }
 
@@ -424,9 +431,16 @@ mod tests {
         let tokenization = crate::tokenize(
             "A claim[[footnote]]with a note[[/footnote]].\n\n[[bibliography]]",
         );
-        let (tree, _) = crate::parse(&tokenization, &page_info, &settings).into();
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
 
+        assert!(
+            errors.iter().any(|error| {
+                error.rule() == "block-bibliography"
+                    && error.kind() == ParseErrorKind::EndOfInput
+            }),
+            "{errors:#?}",
+        );
         assert_eq!(
             html,
             "<p>A claim<sup class=\"footnoteref\"><a id=\"footnoteref-1\" href=\"javascript:;\" class=\"footnoteref\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnote-1&#39;)\">1</a></sup>.</p><p>[[bibliography]]</p><div class=\"footnotes-footer\"><div class=\"title\">Footnotes</div><div class=\"footnote-footer\" id=\"footnote-1\"><a href=\"javascript:;\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnoteref-1&#39;)\">1</a>. with a note</div></div>",
