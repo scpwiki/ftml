@@ -394,6 +394,9 @@ fn collect_page_references(
                 PartialElement::TableCell(cell) => {
                     collect_page_references(&cell.elements, references, seen);
                 }
+                PartialElement::WikidotFoster(elements) => {
+                    collect_page_references(elements, references, seen);
+                }
                 PartialElement::Tab(tab) => {
                     collect_page_references(&tab.elements, references, seen);
                 }
@@ -497,6 +500,9 @@ fn collect_user_references(
                 }
                 PartialElement::TableCell(cell) => {
                     collect_user_references(&cell.elements, references, seen);
+                }
+                PartialElement::WikidotFoster(elements) => {
+                    collect_user_references(elements, references, seen);
                 }
                 PartialElement::Tab(tab) => {
                     collect_user_references(&tab.elements, references, seen);

@@ -1,0 +1,112 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "A"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "table",
+                        "data": {
+                            "type": "advanced",
+                            "attributes": {},
+                            "rows": [
+                                {
+                                    "attributes": {},
+                                    "cells": [
+                                        {
+                                            "header": false,
+                                            "column-span": 1,
+                                            "align": null,
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "B"
+                                                },
+                                                {
+                                                    "element": "line-break"
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": "[[/"
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": "div"
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": "]]"
+                                                },
+                                                {
+                                                    "element": "line-break"
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": "E"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "header": false,
+                                            "column-span": 1,
+                                            "align": null,
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "G"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "F"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "H"
+                    }
+                ]
+            }
+        }
+    ]
+}

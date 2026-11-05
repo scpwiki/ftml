@@ -1,0 +1,11 @@
+[[table]]
+[[row]]
+[[cell]]
+[[collapsible show="+ show"]]
+A1
+[[/cell]]
+[[cell]]
+B2[[/collapsible]]C3
+[[/cell]]
+[[/row]]
+[[/table]]

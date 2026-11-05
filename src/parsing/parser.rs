@@ -356,13 +356,6 @@ impl<'r, 't> Parser<'r, 't> {
             .copied()
     }
 
-    pub(crate) fn wikidot_closer_inside_any_span(&self, closer_byte: usize) -> bool {
-        self.block_end_scan_cache
-            .borrow()
-            .wikidot_block_pairs
-            .byte_inside_any_span(closer_byte)
-    }
-
     pub(crate) fn wikidot_scan_shows_stolen_head(
         &self,
         kind: block_pairs::WikidotBlockKind,
@@ -374,23 +367,11 @@ impl<'r, 't> Parser<'r, 't> {
             .shows_stolen_head(kind, head_byte)
     }
 
-    pub(crate) fn wikidot_flat_pair_before(
-        &self,
-        kind: block_pairs::WikidotBlockKind,
-        closer_byte: usize,
-    ) -> Option<(usize, bool)> {
+    pub(crate) fn wikidot_close_is_foster(&self, head_byte: usize) -> bool {
         self.block_end_scan_cache
             .borrow()
             .wikidot_block_pairs
-            .pairs()
-            .iter()
-            .find(|pair| {
-                pair.flat
-                    && pair.kind == kind
-                    && pair.kind.emits_flat()
-                    && pair.head_byte < closer_byte
-            })
-            .map(|pair| (pair.head_byte, pair.scored))
+            .is_foster_head(head_byte)
     }
 
     #[inline]

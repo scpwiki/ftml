@@ -147,6 +147,9 @@ fn tree_stack_depth_reaches_threshold<'a>(
                 PartialElement::TableCell(cell) => {
                     push_tree_elements(stack, &cell.elements, child_depth)
                 }
+                PartialElement::WikidotFoster(elements) => {
+                    push_tree_elements(stack, elements, child_depth)
+                }
                 PartialElement::Tab(tab) => {
                     push_tree_elements(stack, &tab.elements, child_depth)
                 }

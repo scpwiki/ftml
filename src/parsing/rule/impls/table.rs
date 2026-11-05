@@ -458,7 +458,51 @@ fn cell_boundary<'r, 't>(
     }
 }
 
+/// Wikidot keeps a single line break before a simple (unbracketed) table when
+/// that break directly follows a div or code closer. In every other setting
+/// (start of input, blank line, quote or paragraph content) the break is
+/// dropped or absorbed by the surrounding paragraph. Reports whether the
+/// table at the current position is in the break-preserving setting.
+fn wikidot_simple_table_preserves_break(parser: &Parser<'_, '_>) -> bool {
+    if !parser.settings().layout.legacy() {
+        return false;
+    }
+    let pos = parser.current().span.start;
+    if pos == 0 {
+        return false;
+    }
+    let before = &parser.full_text().inner()[..pos];
+    let line = match before.strip_suffix('\n') {
+        Some(line) => line,
+        None => return false,
+    };
+    let line = match line.rsplit('\n').next() {
+        Some(line) => line,
+        None => return false,
+    };
+    let line = line.strip_suffix('\r').unwrap_or(line);
+    line.eq_ignore_ascii_case("[[/div]]") || line.eq_ignore_ascii_case("[[/code]]")
+}
+
 fn try_consume_fn<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    let preserve_break = wikidot_simple_table_preserves_break(parser);
+    let success = try_consume_inner(parser);
+    if !preserve_break {
+        return success;
+    }
+    success.map(|success| {
+        success.map(|elements| match elements {
+            Elements::Single(table @ Element::Table(_)) => {
+                Elements::Multiple(vec![Element::LineBreak, table])
+            }
+            elements => elements,
+        })
+    })
+}
+
+fn try_consume_inner<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     if parser.settings().layout.legacy() && parser.in_wikidot_literal_alias_body() {

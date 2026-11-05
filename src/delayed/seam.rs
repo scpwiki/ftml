@@ -163,6 +163,9 @@ where
             PartialElement::TableCell(cell) => {
                 rewrite_elements(&mut cell.elements, apply_typography, classify)?;
             }
+            PartialElement::WikidotFoster(elements) => {
+                rewrite_elements(elements, apply_typography, classify)?;
+            }
             PartialElement::Tab(tab) => {
                 rewrite_elements(&mut tab.elements, apply_typography, classify)?;
             }
