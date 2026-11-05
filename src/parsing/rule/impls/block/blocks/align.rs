@@ -108,11 +108,10 @@ pub fn parse_alignment_block<'r, 't>(
             .find("]]")
             .map(|offset| opener_start + offset + 2)
             .unwrap_or(source.len());
-        if !source[head_end..]
-            .as_bytes()
-            .first()
-            .is_some_and(|byte| matches!(*byte, b'\n' | b'\r'))
-        {
+        if !matches!(
+            source.as_bytes().get(head_end).copied(),
+            Some(b'\n' | b'\r')
+        ) {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
     }
