@@ -155,24 +155,27 @@ pub fn render_footnote_block(
     };
 
     if ctx.layout() == Layout::Wikidot {
+        let title = (!title.is_empty()).then_some(title);
         ctx.html()
             .div()
             .attr(attr!("class" => "footnotes-footer"))
             .inner(|ctx| {
-                if wrappers.is_empty() {
-                    ctx.html()
-                        .div()
-                        .attr(attr!("class" => "title"))
-                        .contents(title);
-                } else {
-                    ctx.html()
-                        .div()
-                        .attr(attr!("class" => "title"))
-                        .inner(|ctx| {
-                            render_wikidot_wrapped(ctx, wrappers, &mut |ctx| {
-                                ctx.push_escaped(title);
+                if let Some(title) = title {
+                    if wrappers.is_empty() {
+                        ctx.html()
+                            .div()
+                            .attr(attr!("class" => "title"))
+                            .contents(title);
+                    } else {
+                        ctx.html()
+                            .div()
+                            .attr(attr!("class" => "title"))
+                            .inner(|ctx| {
+                                render_wikidot_wrapped(ctx, wrappers, &mut |ctx| {
+                                    ctx.push_escaped(title);
+                                });
                             });
-                        });
+                    }
                 }
                 for (index, contents) in ctx.footnotes().iter().enumerate() {
                     let index = index + 1;

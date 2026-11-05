@@ -119,6 +119,17 @@ fn wikidot_date_html_keeps_default_text_and_format_class() {
 }
 
 #[test]
+fn wikidot_date_text_omits_the_ago_hover_directive() {
+    assert_eq!(
+        render_text(
+            r#"[[date 1234567890 format="%Y|agohover"]]"#,
+            Layout::Wikidot
+        ),
+        "2009",
+    );
+}
+
+#[test]
 fn wikijump_date_format_still_expands_strftime_directives() {
     let cases = [
         ("%u", "4"),
