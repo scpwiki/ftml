@@ -503,12 +503,17 @@ fn collect_list_item_elements<'r, 't>(
         Option<crate::parsing::collect::CollectSplitEscape<'t>>,
     ),
 > {
+    // A list marker that does not begin its source line is literal text in
+    // live Wikidot: `* item# item` is one item whose body reads `item# item`.
+    // The preprocessor glues a comment-led continuation onto the previous
+    // line, so those markers reach the collect without a break token while
+    // sitting mid-line in the source.
     let close_conditions = [
         ParseCondition::current(Token::LineBreak),
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::InputEnd),
-        ParseCondition::current(Token::BulletItem),
-        ParseCondition::current(Token::NumberedItem),
+        ParseCondition::source_line_start(Token::BulletItem),
+        ParseCondition::source_line_start(Token::NumberedItem),
     ];
 
     let restore_line = if parser.settings().layout.legacy() {

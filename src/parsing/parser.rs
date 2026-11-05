@@ -906,6 +906,27 @@ impl<'r, 't> Parser<'r, 't> {
         self.start_of_line
     }
 
+    /// Whether the current token is the first non-blank content on its
+    /// physical source line.
+    ///
+    /// `start_of_line` tracks only break tokens in the parser's stream, so a
+    /// consumed construct (an elided comment, a kept `[[iftags]]` body) can
+    /// hide a physical line start that live Wikidot still honors. Rules that
+    /// re-detect line-leading syntax from inside a collect use this instead.
+    pub(crate) fn current_at_source_line_start(&self) -> bool {
+        let source = self.full_text.inner();
+        let bytes = source.as_bytes();
+        let mut pos = self.current.span.start;
+        loop {
+            match pos.checked_sub(1).map(|index| bytes[index]) {
+                None => return true,
+                Some(b' ' | b'\t') => pos -= 1,
+                Some(b'\r' | b'\n') => return true,
+                Some(_) => return false,
+            }
+        }
+    }
+
     #[inline]
     pub fn in_native_blockquote_line(&self) -> bool {
         self.native_blockquote_depth.is_some()
@@ -1912,6 +1933,9 @@ impl<'r, 't> Parser<'r, 't> {
     pub fn evaluate(&self, condition: ParseCondition) -> bool {
         match condition {
             ParseCondition::CurrentToken(token) => self.current.token == token,
+            ParseCondition::CurrentTokenAtSourceLineStart(token) => {
+                self.current.token == token && self.current_at_source_line_start()
+            }
             ParseCondition::TokenPair(current, next) => {
                 if self.current.token != current {
                     return false;

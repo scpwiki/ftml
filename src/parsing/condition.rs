@@ -53,6 +53,13 @@ impl SplitDelimiter {
 pub enum ParseCondition {
     CurrentToken(Token),
 
+    /// The current token is `token` and is the first non-blank content on its
+    /// physical source line. The stream-level `start_of_line` flag only follows
+    /// break tokens, so a consumed construct (an elided comment, a kept
+    /// `[[iftags]]` body) can hide a physical line start that live Wikidot
+    /// still honors.
+    CurrentTokenAtSourceLineStart(Token),
+
     TokenPair(Token, Token),
 
     SplitClose(SplitDelimiter),
@@ -64,6 +71,11 @@ impl ParseCondition {
     #[inline]
     pub fn current(token: Token) -> Self {
         ParseCondition::CurrentToken(token)
+    }
+
+    #[inline]
+    pub fn source_line_start(token: Token) -> Self {
+        ParseCondition::CurrentTokenAtSourceLineStart(token)
     }
 
     #[inline]

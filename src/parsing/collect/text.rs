@@ -384,7 +384,8 @@ where
                             })
                         }
                         ParseCondition::TokenPair(..) => None,
-                        ParseCondition::SplitClose(_)
+                        ParseCondition::CurrentTokenAtSourceLineStart(_)
+                        | ParseCondition::SplitClose(_)
                         | ParseCondition::PaddedSplitClose(_) => None,
                     });
                     if let Some(last) = fused {
