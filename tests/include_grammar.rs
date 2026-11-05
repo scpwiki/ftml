@@ -60,12 +60,7 @@ impl<'t> Includer<'t> for CapturedIncludes {
                 include
                     .variables()
                     .iter()
-                    .map(|(key, value)| {
-                        (
-                            key.to_string(),
-                            value.trim_end_matches([' ', '\t', '\r', '\n']).to_owned(),
-                        )
-                    })
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
                     .collect(),
             ));
         }
@@ -274,7 +269,7 @@ fn live_include_grammar_matrix() {
             "value-comment",
             "BEGIN\n[[include run-owned:include-grammar-20260730123701-464 |x=[!--A--]|n=2|z=3]]\nEND",
             Some(Target::Local),
-            &[("n", "2"), ("x", ""), ("z", "3")],
+            &[("n", "2"), ("x", "[!--A--]"), ("z", "3")],
         ),
         (
             "uppercase-keys",

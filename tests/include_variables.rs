@@ -172,7 +172,7 @@ fn snippets_redirect_dynamic_fallback_arguments_select_the_default_backend() {
         included_pages,
         vec![PageRef::page_and_site("snippets", "redirect-backend")],
     );
-    assert_eq!(expanded, "MODE=default\n|URL=http://example.test/target\n",);
+    assert_eq!(expanded, "MODE=default|URL=http://example.test/target",);
 }
 
 #[test]

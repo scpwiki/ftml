@@ -39,7 +39,7 @@ use regex::{Regex, RegexBuilder};
 use std::sync::LazyLock;
 
 static INCLUDE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    RegexBuilder::new(r"^(?:[ \t]*>)*\[\[\s*include\s+")
+    RegexBuilder::new(r"^(?:[ \t]*>)*\[\[include\s+")
         .case_insensitive(true)
         .multi_line(true)
         .dot_matches_new_line(true)

@@ -27,9 +27,10 @@
 // handled by the include parser so one inert segment cannot reject the block.
 
 // Top-level rule
+// Live rejects any whitespace between "[[" and "include", so the opener is tight.
 include = {
     SOI ~ // Because we slice from the start of an include block using regex
-    "[[" ~ space? ~ ^"include" ~ whitespace ~
+    "[[" ~ ^"include" ~ whitespace ~
     page_ref ~
     (whitespace ~ stray_open_brackets? ~ argument_tail)? ~
     include_end

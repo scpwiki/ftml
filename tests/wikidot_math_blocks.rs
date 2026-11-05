@@ -220,6 +220,7 @@ fn formula_body_preserves_literal_bytes_in_the_math_element() {
     assert!(wikidot_block_open_elements.is_empty());
     assert!(wikidot_label_spans.is_empty());
     assert!(name.is_none());
+    assert!(wikidot_label_spans.is_empty());
     assert_eq!(latex_source, "A  [[bold]]B[[/bold]]\tC");
 }
 
