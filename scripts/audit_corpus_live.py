@@ -52,7 +52,7 @@ VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
 MASKS = [
     (re.compile(r"wiki-tabview-[0-9a-f]{8,}"), "wiki-tabview-#"),
     (re.compile(r"wiki-tab-\d+-\d+"), "wiki-tab-#"),
-    (re.compile(r"(bibitem|bibcite)-[0-9a-zA-Z]{6,}"), r"\1-#"),
+    (re.compile(r"(bibitem|bibcite)-(\d+)-\d+a\b"), r"\1-\2-#"),
     (re.compile(r"\btime_\d+\b"), "time_#"),
     (re.compile(r"collapsible-[0-9a-f]{8,}"), "collapsible-#"),
     (re.compile(r"gallery-[0-9a-f]{6,}"), "gallery-#"),
