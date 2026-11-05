@@ -87,6 +87,7 @@ pub struct ParagraphStack<'t> {
     wikidot_reopen_for_footnote: bool,
     wikidot_bare_after_explicit_list: bool,
     wikidot_explicit_pre_candidate: bool,
+    wikidot_suppress_explicit_pre_dissolve: bool,
     wikidot_post_empty_list_break: bool,
 
     finished: Vec<Element<'t>>,
@@ -268,6 +269,9 @@ impl<'t> ParagraphStack<'t> {
 
     fn wikidot_dissolve_explicit_pre_candidate(&mut self) {
         self.wikidot_explicit_pre_candidate = false;
+        if self.wikidot_suppress_explicit_pre_dissolve {
+            return;
+        }
         let len = self.finished.len();
         if len < 2 {
             return;
@@ -305,7 +309,11 @@ impl<'t> ParagraphStack<'t> {
     }
 
     fn wikidot_note_explicit_pre_candidate(&mut self, pre_attached: bool) {
-        if !self.wikidot || !pre_attached || self.finished.len() < 2 {
+        if !self.wikidot
+            || self.wikidot_suppress_explicit_pre_dissolve
+            || !pre_attached
+            || self.finished.len() < 2
+        {
             return;
         }
         let len = self.finished.len();
@@ -604,6 +612,15 @@ impl<'t> ParagraphStack<'t> {
         self.wikidot_div_literal_run_wrap = true;
     }
 
+    /// Body parsers own their own paragraph splitting: live keeps the
+    /// paragraph around text that precedes an explicit list inside a block
+    /// body (`<div><p>A<br></p><ul>`), so the top-level pre-list dissolve
+    /// must not run there.
+    #[inline]
+    pub(crate) fn suppress_wikidot_explicit_pre_dissolve(&mut self) {
+        self.wikidot_suppress_explicit_pre_dissolve = true;
+    }
+
     #[inline]
     pub(crate) fn note_wikidot_div_literal_push(&mut self) {
         if self.wikidot_div_literal_run_wrap {
@@ -777,6 +794,26 @@ impl<'t> ParagraphStack<'t> {
 
     #[inline]
     pub fn push_element(&mut self, element: Element<'t>, paragraph_safe: bool) {
+        // L85: a lone leading break before an explicit list vanishes (live
+        // keeps real breaks only with content: R1 keeps, para-start drops).
+        if self.wikidot
+            && matches!(
+                &element,
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            )
+            && matches!(self.current.last(), Some(Element::LineBreak))
+            && self.current.iter().rev().skip(1).all(|element| {
+                matches!(
+                    element,
+                    Element::Delayed(delayed) if delayed.is_suppression_seam()
+                )
+            })
+        {
+            self.current.pop();
+        }
         let paragraph_break_separated = self.paragraph_break_since_element;
         if element != Element::LineBreak {
             self.paragraph_break_since_element = false;
@@ -1298,6 +1335,16 @@ impl<'t> ParagraphStack<'t> {
     #[inline]
     pub fn push_errors(&mut self, errors: &mut Vec<ParseError>) {
         self.errors.append(errors);
+    }
+
+    pub(crate) fn wikidot_finished_ends_with_explicit_list(&self) -> bool {
+        matches!(
+            self.finished.last(),
+            Some(Element::List {
+                wikidot_explicit_block: true,
+                ..
+            })
+        )
     }
 
     #[inline]

@@ -133,6 +133,10 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_div_bounded_span: BTreeMap<usize, bool>,
     wikidot_div_stream_marks: BTreeMap<usize, (u32, u32)>,
     wikidot_block_pairs: block_pairs::WikidotBlockPairs,
+    wikidot_line_runs: block_pairs::WikidotLineRuns,
+    pub(super) wikidot_li_cross_scan: Option<block_pairs::WikidotLiCrossScan>,
+    wikidot_li_body_boundaries: Vec<usize>,
+    wikidot_table_cut_boundary: Cell<bool>,
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
@@ -261,6 +265,30 @@ pub struct Parser<'r, 't> {
     wikidot: WikidotState,
 }
 
+pub(crate) fn wikidot_own_line_prefix(source: &str, byte: usize) -> bool {
+    let end = byte.min(source.len());
+    let start = source[..end].rfind('\n').map_or(0, |offset| offset + 1);
+    source[start..end].trim_matches([' ', '\t']).is_empty()
+}
+
+/// Own line inside a quote run: only quote markers and spacing precede the
+/// byte (`> [[/div]]` counts, `> text [[/div]]` does not).
+fn wikidot_quoted_own_line_prefix(source: &str, byte: usize) -> bool {
+    let end = byte.min(source.len());
+    let start = source[..end].rfind('\n').map_or(0, |offset| offset + 1);
+    source[start..end]
+        .chars()
+        .all(|character| matches!(character, '>' | ' ' | '\t'))
+}
+
+fn wikidot_closer_ends_line(source: &str, byte: usize) -> bool {
+    let start = byte.min(source.len());
+    let end = source[start..]
+        .find('\n')
+        .map_or(source.len(), |offset| start + offset);
+    source[start..end].trim_end().ends_with("]]")
+}
+
 impl<'r, 't> Parser<'r, 't> {
     pub(crate) fn new(
         tokenization: &'r Tokenization<'t>,
@@ -321,6 +349,13 @@ impl<'r, 't> Parser<'r, 't> {
                     block_pairs::WikidotBlockPairs::default()
                 },
                 closer_scan: CloserScanCache::new(tokenization.tokens().len()),
+                wikidot_line_runs: if settings.layout.legacy() {
+                    block_pairs::compute_wikidot_line_runs(
+                        tokenization.full_text().inner(),
+                    )
+                } else {
+                    block_pairs::WikidotLineRuns::default()
+                },
                 ..Default::default()
             })),
             two_block_end_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -440,6 +475,18 @@ impl<'r, 't> Parser<'r, 't> {
             .contains(&position)
     }
 
+    /// L85: whether a suspended iftags gate still has its designated end
+    /// ahead of the current position (the post-list text belongs to its
+    /// body even though the gate's boundary is not on the stack).
+    pub(crate) fn has_pending_iftags_end_ahead(&self) -> bool {
+        let here = self.current().span.start;
+        self.block_end_scan_cache
+            .borrow()
+            .pending_iftags_end_swallows
+            .iter()
+            .any(|pending| *pending > here)
+    }
+
     pub(crate) fn take_pending_iftags_end_swallow(&self, position: usize) -> bool {
         let mut cache = self.block_end_scan_cache.borrow_mut();
         match cache
@@ -506,8 +553,222 @@ impl<'r, 't> Parser<'r, 't> {
         closes: Vec<WikidotLiClose>,
     ) {
         let mut cache = self.block_end_scan_cache.borrow_mut();
+        let mut boundaries: Vec<usize> =
+            cache.wikidot_li_paired_heads.iter().copied().collect();
+        for close in &closes {
+            let Some(pair) = close.paired else {
+                continue;
+            };
+            let pair_depth = heads
+                .iter()
+                .find(|head| head.pos == pair)
+                .map(|head| head.depth);
+            if pair_depth.is_some_and(|depth| depth >= close.depth) {
+                boundaries.push(close.pos);
+            }
+        }
+        boundaries.sort_unstable();
+        boundaries.dedup();
+        cache.wikidot_li_body_boundaries = boundaries;
         cache.wikidot_li_heads = heads;
         cache.wikidot_li_closes = closes;
+    }
+
+    pub(crate) fn wikidot_head_on_table_row_line(&self, head_byte: usize) -> bool {
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_line_runs
+            .on_table_row_line(head_byte)
+    }
+
+    pub(crate) fn wikidot_byte_on_list_item_line(&self, byte: usize) -> bool {
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_line_runs
+            .on_list_item_line(byte)
+    }
+
+    pub(crate) fn wikidot_byte_in_quote_run(&self, byte: usize) -> bool {
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_line_runs
+            .quote_run_id(byte)
+            .is_some()
+    }
+
+    pub(crate) fn clear_wikidot_table_cut_boundary(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_table_cut_boundary
+            .set(false);
+    }
+
+    pub(crate) fn set_wikidot_table_cut_boundary(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_table_cut_boundary
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_table_cut_boundary(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_table_cut_boundary
+            .take()
+    }
+
+    pub(crate) fn wikidot_flat_close_splits_quote_run(&self, head_byte: usize) -> bool {
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+        let cache = self.block_end_scan_cache.borrow();
+        let runs = &cache.wikidot_line_runs;
+        runs.quote_run_id(head_byte).is_none()
+            && !runs.on_list_item_line(head_byte)
+            && !runs.on_table_row_line(head_byte)
+    }
+
+    pub(crate) fn wikidot_li_items_at_depth(
+        &self,
+        depth: usize,
+    ) -> (Vec<usize>, Vec<usize>) {
+        let cache = self.block_end_scan_cache.borrow();
+        let heads: Vec<usize> = cache
+            .wikidot_li_heads
+            .iter()
+            .filter(|head| {
+                head.depth == depth && cache.wikidot_li_paired_heads.contains(&head.pos)
+            })
+            .map(|head| head.pos)
+            .collect();
+        let closes: Vec<usize> = cache
+            .wikidot_li_closes
+            .iter()
+            .filter(|close| close.depth == depth && close.paired.is_some())
+            .map(|close| close.pos)
+            .collect();
+        (heads, closes)
+    }
+
+    pub(crate) fn wikidot_li_straddles_bodies(
+        &self,
+        first: usize,
+        second: usize,
+    ) -> bool {
+        let (lo, hi) = if first < second {
+            (first, second)
+        } else if first > second {
+            (second, first)
+        } else {
+            return false;
+        };
+        let cache = self.block_end_scan_cache.borrow();
+        let boundaries = &cache.wikidot_li_body_boundaries;
+        let index = boundaries.partition_point(|pos| *pos <= lo);
+        boundaries.get(index).is_some_and(|pos| *pos < hi)
+    }
+
+    pub(crate) fn wikidot_li_cross_head_in_region(&self, byte: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_cross_scan
+            .as_ref()
+            .is_some_and(|scan| byte > scan.region_start && byte < scan.region_end)
+    }
+
+    pub(crate) fn wikidot_li_cross_pair_crossed(&self, closer_byte: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_cross_scan
+            .as_ref()
+            .is_some_and(|scan| {
+                scan.divcoll_pairs
+                    .get(&closer_byte)
+                    .is_some_and(|(_, crossed)| *crossed)
+            })
+    }
+
+    pub(crate) fn wikidot_pair_goes_flat(
+        &self,
+        pair: &block_pairs::WikidotBlockPair,
+    ) -> bool {
+        if !pair.kind.emits_flat() {
+            return false;
+        }
+        // L85: pairs crossed through explicit-list structure nest under the
+        // cross scan; they are never flat (l-ul-li-*).
+        if self.wikidot_li_cross_pair_crossed(pair.closer_byte) {
+            return false;
+        }
+        // L85: a head inside the scanned list region whose closer falls past
+        // the region end terminates at `[[/ul]]` instead (closeout).
+        if self.wikidot_li_cross_head_in_region(pair.head_byte)
+            && !self.wikidot_li_cross_head_in_region(pair.closer_byte)
+            && pair.closer_byte > pair.head_byte
+        {
+            return false;
+        }
+        if pair.flat {
+            return true;
+        }
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+        let cache = self.block_end_scan_cache.borrow();
+        let runs = &cache.wikidot_line_runs;
+        if runs.on_list_item_line(pair.head_byte) {
+            return true;
+        }
+        // L85: a quote crossing is flat when only one end sits in a quote run
+        // and the closer side keeps live's shapes:
+        // - head quoted, closer outside (q-open-in-quote, q-cross-pair);
+        // - closer quoted on its own line (q-close-in-quote) or with
+        //   same-line content after it (q-close-in-quote-mid).
+        // A closer that merely ends a quoted content line keeps the recursive
+        // path, because live keeps that line's break
+        // (wikidot_div_closes_at_closer_on_quote_line). Pairs entirely inside
+        // one quote run are flat only through the scan's crossing set
+        // (q-both-in-quote-cross).
+        let head_run = runs.quote_run_id(pair.head_byte);
+        let closer_run = runs.quote_run_id(pair.closer_byte);
+        if head_run.is_some() && closer_run.is_none() {
+            return true;
+        }
+        if head_run.is_none() && closer_run.is_some() {
+            let source = self.full_text().inner();
+            if wikidot_quoted_own_line_prefix(source, pair.closer_byte)
+                || !wikidot_closer_ends_line(source, pair.closer_byte)
+            {
+                return true;
+            }
+        }
+        if runs.on_table_row_line(pair.head_byte) {
+            let line = runs.line_of(pair.head_byte);
+            let line_start = runs.line_start(line);
+            if !cache
+                .wikidot_block_pairs
+                .has_closer_byte_in_range(line_start, pair.head_byte)
+            {
+                return true;
+            }
+        }
+        let boundaries = &cache.wikidot_li_body_boundaries;
+        let (lo, hi) = if pair.head_byte < pair.closer_byte {
+            (pair.head_byte, pair.closer_byte)
+        } else {
+            (pair.closer_byte, pair.head_byte)
+        };
+        let index = boundaries.partition_point(|pos| *pos <= lo);
+        boundaries.get(index).is_some_and(|pos| *pos < hi)
     }
 
     pub(crate) fn wikidot_li_close_record(

@@ -60,6 +60,9 @@ where
     if parser.settings().layout.legacy() && close_condition_fn.is_none() {
         stack.enable_wikidot_div_literal_run_wrap();
     }
+    if parser.settings().layout.legacy() && close_condition_fn.is_some() {
+        stack.suppress_wikidot_explicit_pre_dissolve();
+    }
 
     let mut finished = false;
     let mut literal_gallery_pending = false;
@@ -172,6 +175,27 @@ where
             }
 
             _ => {
+                // L85: drop a scan-redundant `[[/li]]` inside div/collapsible
+                // bodies and re-check the end condition after it (cross
+                // shapes continue across the dropped closer).
+                if parser.wikidot_li_cross_skip_redundant_here(rule.name()) {
+                    continue;
+                }
+                // L85: drop the post-list break token before same-para
+                // content at top level (live leaves the text bare with no
+                // break: cross `G`, closeout `E`, ul-post-e).
+                if parser.settings().layout.legacy()
+                    && close_condition_fn.is_none()
+                    && parser.current().token == Token::LineBreak
+                    && stack.current_empty()
+                    && stack.wikidot_finished_ends_with_explicit_list()
+                    && parser.wikidot_next_line_has_content()
+                    && !parser.body_end_boundary_accepts("iftags")
+                    && !parser.has_pending_iftags_end_ahead()
+                {
+                    parser.step()?;
+                    continue;
+                }
                 let close_condition_met = match close_condition_fn.as_mut() {
                     Some(close_condition_fn) => close_condition_fn(parser)?,
                     None => false,
@@ -251,6 +275,7 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
+            let ends_with_explicit_list = elements_end_with_explicit_list(&elements);
             let embed_error_has_same_line_residual = embed_opener
                 && !paragraph_safe
                 && active_div
@@ -283,6 +308,7 @@ where
             let literal_div_line = parser.settings().layout.legacy()
                 && div_score != Some(true)
                 && !same_line_div_candidate
+                && !elements_contain_formed_block(&elements)
                 && errors.iter().any(|error| {
                     error.kind() == ParseErrorKind::RuleFailed
                         && error.rule() == "block-div"
@@ -299,7 +325,10 @@ where
             if inline_div_opener && active_div {
                 stack.mark_wikidot_continued_block_boundary();
             }
-            if div_literal_recovered {
+            // L85: a recovered literal div alongside a formed block is
+            // nested (e.g. in a list item), never a genuine literal-div
+            // line; don't start a literal run for it (e25-shape `<p><ul>`).
+            if div_literal_recovered && !elements_contain_formed_block(&elements) {
                 stack.note_wikidot_div_literal_push();
             }
             if empty_quote_control && !paragraph_safe && elements.is_empty() {
@@ -371,6 +400,17 @@ where
                 stack.end_paragraph();
             }
             if list_has_same_line_residual {
+                stack.mark_next_unwrapped_after_block();
+            }
+            // L85: live leaves same-para text after an explicit list bare
+            // (cross `G`, closeout `E`); the skipped post-list break leaves
+            // no marker, so mark directly. Blank/end cases keep the break
+            // element and its existing mark path.
+            if parser.settings().layout.legacy()
+                && close_condition_fn.is_none()
+                && ends_with_explicit_list
+                && parser.wikidot_next_line_has_content()
+            {
                 stack.mark_next_unwrapped_after_block();
             }
             if div_has_same_line_residual {
@@ -637,6 +677,44 @@ fn elements_end_with_list(elements: &Elements<'_>) -> bool {
         Elements::Multiple(elements) => {
             matches!(elements.last(), Some(Element::List { .. }))
         }
+        Elements::None => false,
+    }
+}
+
+// L85: whether pushed elements hold a formed block (list, table, non-para
+// container...). A div failure alongside one is nested, never a genuine
+// literal-div line.
+fn elements_contain_formed_block(elements: &Elements<'_>) -> bool {
+    let is_block = |element: &Element<'_>| match element {
+        Element::List { .. }
+        | Element::Table(_)
+        | Element::TabView(_)
+        | Element::Gallery(_)
+        | Element::DefinitionList(_) => true,
+        Element::Container(container) => container.ctype() != ContainerType::Paragraph,
+        _ => false,
+    };
+    match elements {
+        Elements::Single(element) => is_block(element),
+        Elements::Multiple(elements) => elements.iter().any(is_block),
+        Elements::None => false,
+    }
+}
+
+// L85: whether pushed elements end with an explicit (`[[ul]]`/`[[ol]]`) list.
+fn elements_end_with_explicit_list(elements: &Elements<'_>) -> bool {
+    let is_explicit = |element: &Element<'_>| {
+        matches!(
+            element,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        )
+    };
+    match elements {
+        Elements::Single(element) => is_explicit(element),
+        Elements::Multiple(elements) => elements.last().is_some_and(is_explicit),
         Elements::None => false,
     }
 }

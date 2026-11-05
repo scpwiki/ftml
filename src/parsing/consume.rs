@@ -21,6 +21,7 @@
 use super::Parser;
 use super::parser::QuoteBodyLineStatus;
 use super::parser::block_pairs::WikidotBlockKind;
+use super::parser::wikidot_own_line_prefix;
 use super::prelude::*;
 use super::rule::{
     get_rules_for_token,
@@ -346,7 +347,7 @@ where
         return None;
     }
     let pair = parser.wikidot_block_pair_at_closer_byte(closer_byte)?;
-    if !pair.flat || !pair.kind.emits_flat() {
+    if !parser.wikidot_pair_goes_flat(&pair) {
         return None;
     }
     // A scored head rejected by the alias check stays literal, so its closer
@@ -381,6 +382,273 @@ where
     })
 }
 
+fn render_interior_line_prefix(source: &str, byte: usize) -> &str {
+    let line_start = source[..byte.min(source.len())]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    &source[line_start..byte.min(source.len())]
+}
+
+fn wikidot_render_interior_close_kind_at<'r, 't>(
+    parser: &Parser<'r, 't>,
+    closer_byte: usize,
+) -> Option<WikidotBlockCloseKind<'t>>
+where
+    'r: 't,
+{
+    let pair = parser.wikidot_block_pair_at_closer_byte(closer_byte)?;
+    if !pair.kind.emits_flat() {
+        return None;
+    }
+    let kind = wikidot_flat_close_kind_at_byte(parser, closer_byte)?;
+    if !parser.wikidot_head_on_table_row_line(pair.head_byte)
+        && !parser.wikidot_byte_on_list_item_line(pair.head_byte)
+    {
+        return None;
+    }
+    if parser.wikidot_byte_on_list_item_line(closer_byte) {
+        return None;
+    }
+    let source = parser.full_text().inner();
+    if pair.head_byte >= pair.closer_byte
+        || !source[pair.head_byte..pair.closer_byte].contains('\n')
+    {
+        return None;
+    }
+    Some(kind)
+}
+
+fn render_interior_close_line_is_quoted(source: &str, closer_byte: usize) -> bool {
+    render_interior_line_prefix(source, closer_byte)
+        .trim_start_matches([' ', '\t'])
+        .starts_with('>')
+}
+
+fn render_interior_close_has_midrow_suffix(parser: &Parser<'_, '_>) -> bool {
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start.min(source.len());
+    let end = source[start..]
+        .find('\n')
+        .map_or(source.len(), |offset| start + offset);
+    !source[start..end].trim_matches([' ', '\t']).is_empty()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RenderInteriorNext {
+    Blank,
+    Block,
+    Breakable,
+    Plain,
+}
+
+fn render_interior_next_token<'a>(
+    parser: &'a Parser<'_, '_>,
+    index: usize,
+) -> Option<&'a crate::parsing::ExtractedToken<'a>> {
+    // look_ahead(0) is the token after current, so index 0 is current.
+    if index == 0 {
+        Some(parser.current())
+    } else {
+        parser.look_ahead(index - 1)
+    }
+}
+
+fn render_interior_next_line_shape(parser: &Parser<'_, '_>) -> RenderInteriorNext {
+    let mut index = 0usize;
+    loop {
+        let Some(token) = render_interior_next_token(parser, index) else {
+            return RenderInteriorNext::Blank;
+        };
+        index += 1;
+        match token.token {
+            Token::Whitespace => {}
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                return RenderInteriorNext::Blank;
+            }
+            Token::LeftBlock | Token::LeftBlockStar | Token::LeftBlockEnd => {
+                return RenderInteriorNext::Block;
+            }
+            // L8.5: live drops the closer break before a fresh list
+            // (P27, l-coll-item-cross) but keeps it before tables.
+            Token::BulletItem | Token::NumberedItem => {
+                return RenderInteriorNext::Block;
+            }
+            Token::TableColumn
+            | Token::TableColumnRight
+            | Token::TableColumnCenter
+            | Token::TableColumnTitle
+            | Token::Quote
+            | Token::Heading
+            | Token::TripleDash => return RenderInteriorNext::Breakable,
+            _ => return RenderInteriorNext::Plain,
+        }
+    }
+}
+
+fn render_interior_plain_line_ahead(parser: &Parser<'_, '_>) -> bool {
+    let mut index = 0usize;
+    let mut first_meaningful = true;
+    loop {
+        let Some(token) = render_interior_next_token(parser, index) else {
+            return false;
+        };
+        index += 1;
+        match token.token {
+            Token::Whitespace => {}
+            Token::LineBreak | Token::InputEnd => return !first_meaningful,
+            Token::ParagraphBreak => return false,
+            Token::LeftBlock
+            | Token::LeftBlockEnd
+            | Token::LeftBlockStar
+            | Token::TableColumn
+            | Token::TableColumnRight
+            | Token::TableColumnCenter
+            | Token::TableColumnTitle
+            | Token::Quote
+            | Token::BulletItem
+            | Token::NumberedItem
+            | Token::Heading
+            | Token::TripleDash => return false,
+            Token::Colon if first_meaningful => return false,
+            _ => {
+                first_meaningful = false;
+            }
+        }
+    }
+}
+
+fn consume_render_interior_chain<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    errors: &mut Vec<ParseError>,
+) -> Result<Vec<Element<'t>>, ParseError>
+where
+    'r: 't,
+{
+    let mut elements = Vec::new();
+    loop {
+        if !render_interior_plain_line_ahead(parser) {
+            break;
+        }
+        if !elements.is_empty() {
+            elements.push(Element::LineBreak);
+        }
+        loop {
+            match parser.current().token {
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => break,
+                _ => {}
+            }
+            let before = parser.current().span.start;
+            let checkpoint = parser.clone();
+            match consume(parser) {
+                Ok(success) => {
+                    if parser.current().span.start == before {
+                        parser.update(&checkpoint);
+                        break;
+                    }
+                    let (item, mut item_errors, _) = success.into();
+                    errors.append(&mut item_errors);
+                    match item {
+                        Elements::None => {}
+                        Elements::Single(element) => elements.push(element),
+                        Elements::Multiple(items) => elements.extend(items),
+                    }
+                }
+                Err(error) => {
+                    parser.update(&checkpoint);
+                    errors.push(error);
+                    break;
+                }
+            }
+        }
+        if parser.current().token != Token::LineBreak {
+            break;
+        }
+        let mut probe = parser.clone();
+        if probe.step().is_err() {
+            break;
+        }
+        match render_interior_next_line_shape(&probe) {
+            RenderInteriorNext::Plain => {
+                parser.step()?;
+            }
+            RenderInteriorNext::Blank => break,
+            _ => {
+                parser.step()?;
+                break;
+            }
+        }
+    }
+    Ok(elements)
+}
+
+fn try_consume_wikidot_render_interior_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<ParseResult<'r, 't, Elements<'t>>>, ParseError>
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy()
+        || parser.discarding_hidden_body()
+        || parser.current().token != Token::LeftBlockEnd
+    {
+        return Ok(None);
+    }
+    let closer_byte = parser.current().span.start;
+    let Some(kind) = wikidot_render_interior_close_kind_at(parser, closer_byte) else {
+        return Ok(None);
+    };
+    let source = parser.full_text().inner();
+    if render_interior_close_line_is_quoted(source, closer_byte) {
+        return Ok(None);
+    }
+    let mut close = parser.clone();
+    if close.get_end_block().is_err() {
+        return Ok(None);
+    }
+    parser.update(&close);
+    let close_element = Element::Partial(PartialElement::WikidotBlockClose(kind));
+    if render_interior_close_has_midrow_suffix(parser) {
+        return Ok(Some(ok!(false; close_element, Vec::new())));
+    }
+    while parser.current().token == Token::Whitespace {
+        if parser.step().is_err() {
+            break;
+        }
+    }
+    let mut probe = parser.clone();
+    let ate_break = if probe.current().token == Token::LineBreak {
+        probe.step().is_ok()
+    } else {
+        false
+    };
+    if !ate_break {
+        return Ok(Some(ok!(false; close_element, Vec::new())));
+    }
+    match render_interior_next_line_shape(&probe) {
+        RenderInteriorNext::Blank | RenderInteriorNext::Block => {
+            parser.step()?;
+            Ok(Some(ok!(false; close_element, Vec::new())))
+        }
+        RenderInteriorNext::Breakable => {
+            parser.step()?;
+            Ok(Some(ok!(false;
+                Elements::Multiple(vec![close_element, Element::LineBreak]),
+                Vec::new()
+            )))
+        }
+        RenderInteriorNext::Plain => {
+            parser.step()?;
+            let mut errors = Vec::new();
+            let mut output = vec![close_element, Element::LineBreak];
+            match consume_render_interior_chain(parser, &mut errors) {
+                Ok(chain) => output.extend(chain),
+                Err(error) => errors.push(error),
+            }
+            Ok(Some(ok!(false; Elements::Multiple(output), errors)))
+        }
+    }
+}
+
 fn try_consume_structural_close<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<Elements<'t>>, ParseError>
@@ -413,10 +681,21 @@ where
         && parser.current().token == Token::LeftBlockEnd
     {
         let mut close = parser.clone();
+        let close_pos = parser.current().span.start;
         if let Ok(name) = close.get_end_block() {
             let name = name.strip_suffix('_').unwrap_or(&name);
+            let closer_own_line =
+                wikidot_own_line_prefix(parser.full_text().inner(), close_pos);
             if parser.take_wikidot_crossed_close(name) {
                 parser.update(&close);
+                // L85: a silently taken crossed close that starts its own line
+                // absorbs that line's break (closeout keeps a single break
+                // around `[[/div]]`, q-close-in-quote drops it). A closer that
+                // ends a content line keeps the break
+                // (wikidot_div_closes_at_closer_on_quote_line).
+                if closer_own_line && parser.current().token == Token::LineBreak {
+                    let _ = parser.step();
+                }
                 return Ok(Some(Elements::None));
             }
         }
@@ -1010,6 +1289,30 @@ where
             return Ok(None);
         }
     }
+    // L8.5: a break before an own-line render-interior closer vanishes so
+    // the interior tail keeps its paragraph shape (live shows no break).
+    if parser.settings().layout.legacy() {
+        let closer_ahead = match next.1 {
+            Some(Token::LeftBlockEnd) => {
+                parser.look_ahead(0).map(|token| token.span.start)
+            }
+            Some(Token::Whitespace) => parser
+                .look_ahead(1)
+                .filter(|token| token.token == Token::LeftBlockEnd)
+                .map(|token| token.span.start),
+            _ => None,
+        };
+        if let Some(closer_byte) = closer_ahead
+            && wikidot_render_interior_close_kind_at(parser, closer_byte).is_some()
+            && !render_interior_close_line_is_quoted(
+                parser.full_text().inner(),
+                closer_byte,
+            )
+        {
+            parser.step()?;
+            return Ok(Some(Elements::None));
+        }
+    }
 
     let next_offset = if matches!(
         parser.look_ahead(0).map(|token| token.token),
@@ -1048,6 +1351,17 @@ where
                 && matches!(
                     token.token,
                     Token::Quote | Token::BulletItem | Token::NumberedItem
+                ))
+            // L85 scope-5: live keeps the break before a table in item
+            // bodies (li-table-contained).
+            && !(parser.settings().layout.legacy()
+                && parser.wikidot_li_inside_item_body()
+                && matches!(
+                    token.token,
+                    Token::TableColumn
+                        | Token::TableColumnRight
+                        | Token::TableColumnCenter
+                        | Token::TableColumnTitle
                 ))
     });
     // A marker line owns its break only when the list really forms: a list
@@ -1263,6 +1577,67 @@ fn try_consume_wikidot_li_listbody_silent_close<'r, 't>(
     )))
 }
 
+/// L85: parse an implicit nested list at a scan-marked `[[li]]` inside a
+/// div/collapsible body (l-ul-li-cross). Falls through on any failure.
+fn try_consume_wikidot_li_cross_implicit_list<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if !parser.settings().layout.legacy() {
+        return None;
+    }
+    if parser.discarding_hidden_body() {
+        return None;
+    }
+    if parser.current().token != Token::LeftBlock {
+        return None;
+    }
+    if !parser.wikidot_top_boundary_is_div_or_collapsible() {
+        return None;
+    }
+    if !parser.wikidot_li_cross_implicit_li_at(parser.current().span.start) {
+        return None;
+    }
+    let mut probe = parser.clone();
+    let output = super::rule::impls::parse_wikidot_implicit_list_block(&mut probe);
+    let output = output.ok()?;
+    parser.update(&probe);
+    Some(Ok(output))
+}
+
+/// L85: silently drop a scan-redundant list closer (`l-ul-li-closein` keeps
+/// `EG` joined: the redundant `[[/li]]`/`[[/ul]]` vanish with one following
+/// line break each).
+fn try_consume_wikidot_li_cross_redundant_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if !parser.settings().layout.legacy() {
+        return None;
+    }
+    if parser.discarding_hidden_body() {
+        return None;
+    }
+    if parser.current().token != Token::LeftBlockEnd {
+        return None;
+    }
+    let position = parser.current().span.start;
+    if !parser.wikidot_li_cross_redundant_at(position) {
+        return None;
+    }
+    let mut close = parser.clone();
+    if close.get_end_block().is_err() {
+        return None;
+    }
+    parser.update(&close);
+    if parser.current().token == Token::LineBreak {
+        let _ = parser.step();
+    }
+    Some(Ok(crate::parsing::ParseSuccess::new(
+        Elements::None,
+        Vec::new(),
+        true,
+    )))
+}
+
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     if parser.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
         return Err(parser.make_err(ParseErrorKind::EndOfInput));
@@ -1280,6 +1655,10 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         return result;
     }
 
+    if let Some(result) = try_consume_wikidot_li_cross_redundant_close(parser) {
+        return result;
+    }
+
     if let Some(position) = parser.fused_name_residual()
         && parser.current().span.start >= position
     {
@@ -1294,6 +1673,11 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     parser.depth_increment()?;
+
+    if let Some(result) = try_consume_wikidot_render_interior_close(parser)? {
+        parser.depth_decrement();
+        return result;
+    }
 
     let pending_unquoted_collapsible_close = parser.settings().layout.legacy()
         && parser.pending_wikidot_collapsible_closer()
@@ -1339,6 +1723,11 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     if let Some(elements) = try_consume_leaf_token(parser)? {
         parser.depth_decrement();
         return ok!(elements);
+    }
+
+    if let Some(result) = try_consume_wikidot_li_cross_implicit_list(parser) {
+        parser.depth_decrement();
+        return result;
     }
 
     let mut all_errors = Vec::new();

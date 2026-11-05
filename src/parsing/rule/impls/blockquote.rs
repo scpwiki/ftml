@@ -45,6 +45,132 @@ struct NativeQuoteRow<'t> {
     empty_spaced: bool,
     indent: usize,
     source_line: Option<&'t str>,
+    cut_boundary: bool,
+}
+
+struct QuoteFlatSplit<'t> {
+    close: Element<'t>,
+    rest: Vec<Element<'t>>,
+    rows: Vec<(usize, NativeQuoteRow<'t>)>,
+    base_depth: usize,
+    /// The closed row's own trailing break. Live keeps it when the flat close
+    /// ends the quoted run (no quoted content follows the closer), giving
+    /// `</div><br>` before the following unquoted line.
+    trailing_break: bool,
+}
+
+fn trim_wikidot_flat_close_rest(rest: &mut Vec<Element>) {
+    while let Some(Element::Text(text)) = rest.first_mut() {
+        if text.chars().all(|c| c == ' ' || c == '\t') {
+            rest.remove(0);
+            continue;
+        }
+        let trimmed = text.trim_start_matches([' ', '\t']);
+        if trimmed.len() == text.len() {
+            break;
+        }
+        if trimmed.is_empty() {
+            rest.remove(0);
+        } else {
+            *text = trimmed.to_owned().into();
+        }
+        break;
+    }
+}
+
+fn find_external_flat_close(
+    parser: &Parser<'_, '_>,
+    elements: &[Element],
+) -> Option<usize> {
+    elements.iter().position(|element| {
+        let Element::Partial(PartialElement::WikidotBlockClose(kind)) = element else {
+            return false;
+        };
+        parser.wikidot_flat_close_splits_quote_run(kind.head_byte())
+    })
+}
+
+fn build_flat_split_segments<'t>(
+    split: QuoteFlatSplit<'t>,
+    wikidot: bool,
+) -> Vec<(Vec<Element<'t>>, bool)> {
+    let mut segments: Vec<(Vec<Element<'t>>, bool)> = Vec::new();
+    let mut bare: Vec<Element<'t>> = vec![split.close];
+    bare.extend(split.rest);
+    let mut bare_extended_by_rows = false;
+    // L8.5: a bare batch still carrying the closer (same-row rest)
+    // stays bare, but a fresh batch after a flush boundary (spaced
+    // blank, quote run) is a closed paragraph so following text
+    // cannot join its chunk.
+    let flush_bare = |bare: &mut Vec<Element<'t>>,
+                      segments: &mut Vec<(Vec<Element<'t>>, bool)>| {
+        if bare.is_empty() {
+            return;
+        }
+        let fresh = !matches!(
+            bare.first(),
+            Some(Element::Partial(PartialElement::WikidotBlockClose(_)))
+        );
+        let batch = std::mem::take(bare);
+        if fresh && batch.iter().all(Element::paragraph_safe) {
+            segments.push((
+                vec![Element::Container(Container::new(
+                    ContainerType::Paragraph,
+                    batch,
+                    AttributeMap::new(),
+                ))],
+                false,
+            ));
+        } else {
+            segments.push((batch, false));
+        }
+    };
+    let mut quote_run: Vec<(usize, (), NativeQuoteRow<'t>)> = Vec::new();
+    let flush_quote_run =
+        |quote_run: &mut Vec<(usize, (), NativeQuoteRow<'t>)>,
+         segments: &mut Vec<(Vec<Element<'t>>, bool)>| {
+            if quote_run.is_empty() {
+                return;
+            }
+            let run = std::mem::take(quote_run);
+            let depth_lists = process_depths((), run);
+            let mut elements: Vec<Element> = depth_lists
+                .into_iter()
+                .filter_map(|(_, depth_list)| {
+                    build_blockquote_element(depth_list, wikidot)
+                })
+                .collect();
+            if !elements.is_empty() {
+                segments.push((elements, false));
+            }
+        };
+    for (depth, row) in split.rows {
+        let rerouted = depth.saturating_sub(split.base_depth);
+        if rerouted > 0 {
+            flush_bare(&mut bare, &mut segments);
+            quote_run.push((rerouted - 1, (), row));
+            continue;
+        }
+        flush_quote_run(&mut quote_run, &mut segments);
+        if row.empty_spaced {
+            flush_bare(&mut bare, &mut segments);
+            continue;
+        }
+        if row.elements.is_empty() {
+            continue;
+        }
+        if !bare.is_empty() {
+            bare.push(Element::LineBreak);
+        }
+        bare.extend(row.elements);
+        bare_extended_by_rows = true;
+    }
+    flush_quote_run(&mut quote_run, &mut segments);
+    if split.trailing_break && !bare_extended_by_rows {
+        bare.push(Element::LineBreak);
+    }
+    flush_bare(&mut bare, &mut segments);
+    segments
 }
 
 fn consume_deeper_collapsible_close<'r, 't>(
@@ -300,6 +426,8 @@ fn try_consume_fn<'r, 't>(
     let mut quote_run_active = true;
     let mut flatten_following_rows = false;
     let mut append_unquoted_close_break = false;
+    let mut flat_split: Option<QuoteFlatSplit<'t>> = None;
+    let mut first_row_depth: Option<usize> = None;
 
     if parser.settings().layout.legacy()
         && let Some(gate_quote) = virtual_gate_quote_leader(parser)
@@ -383,6 +511,7 @@ fn try_consume_fn<'r, 't>(
                         empty_spaced: false,
                         indent: row_indent,
                         source_line: None,
+                        cut_boundary: false,
                     },
                 ));
             } else {
@@ -600,6 +729,96 @@ fn try_consume_fn<'r, 't>(
             }
         }
 
+        if flat_split.is_none()
+            && !flatten_following_rows
+            && parser.settings().layout.legacy()
+            && let Some(close_index) = find_external_flat_close(parser, &elements)
+        {
+            let trailing_break = matches!(elements.last(), Some(Element::LineBreak));
+            if trailing_break {
+                elements.pop();
+            }
+            let mut rest = elements.split_off(close_index);
+            let close = rest.remove(0);
+            trim_wikidot_flat_close_rest(&mut rest);
+            // Only a closer that ends its row (nothing follows it on that
+            // line) carries the row's break over to the unquoted line.
+            let trailing_break = trailing_break && rest.is_empty();
+            if first_row_depth.is_none() {
+                first_row_depth = Some(depth);
+            }
+            let base_depth = first_row_depth.unwrap_or(depth);
+            if !elements.is_empty() {
+                let source_line = if row_indent > 0 {
+                    Some(&parser.full_text().inner()[content_start..line_text_end])
+                } else {
+                    None
+                };
+                let cut_boundary = parser.take_wikidot_table_cut_boundary();
+                let before_safe = elements.iter().all(Element::paragraph_safe);
+                elements.push(Element::LineBreak);
+                depths.push((
+                    depth - 1,
+                    (),
+                    NativeQuoteRow {
+                        elements,
+                        paragraph_safe: before_safe,
+                        paragraph_split: None,
+                        empty_spaced: false,
+                        indent: row_indent,
+                        source_line,
+                        cut_boundary,
+                    },
+                ));
+            }
+            flat_split = Some(QuoteFlatSplit {
+                close,
+                rest,
+                rows: Vec::new(),
+                base_depth,
+                trailing_break,
+            });
+            push_quote_row_units(
+                &mut depths,
+                &mut escaped_rows,
+                flatten_following_rows,
+                std::mem::take(&mut pending_rows),
+            );
+            flatten_following_rows |= escaped_after_deeper_close;
+            continue;
+        }
+        if let Some(split) = flat_split.as_mut() {
+            if matches!(elements.last(), Some(Element::LineBreak)) {
+                elements.pop();
+            }
+            let source_line = if row_indent > 0 {
+                Some(&parser.full_text().inner()[content_start..line_text_end])
+            } else {
+                None
+            };
+            let _ = parser.take_wikidot_table_cut_boundary();
+            split.rows.push((
+                depth,
+                NativeQuoteRow {
+                    elements,
+                    paragraph_safe,
+                    paragraph_split: None,
+                    empty_spaced: empty_spaced_row,
+                    indent: row_indent,
+                    source_line,
+                    cut_boundary: false,
+                },
+            ));
+            push_quote_row_units(
+                &mut depths,
+                &mut escaped_rows,
+                flatten_following_rows,
+                std::mem::take(&mut pending_rows),
+            );
+            flatten_following_rows |= escaped_after_deeper_close;
+            continue;
+        }
+
         let source_line = if row_indent > 0 {
             Some(&parser.full_text().inner()[content_start..line_text_end])
         } else {
@@ -609,6 +828,7 @@ fn try_consume_fn<'r, 't>(
             counts.len() >= 2
                 && counts.iter().map(|entry| entry.0).sum::<usize>() == elements.len()
         });
+        let cut_boundary = parser.take_wikidot_table_cut_boundary();
         let row = NativeQuoteRow {
             elements,
             paragraph_safe,
@@ -616,10 +836,14 @@ fn try_consume_fn<'r, 't>(
             empty_spaced: empty_spaced_row,
             indent: row_indent,
             source_line,
+            cut_boundary,
         };
         if flatten_following_rows {
             escaped_rows.push(row);
         } else {
+            if first_row_depth.is_none() {
+                first_row_depth = Some(depth);
+            }
             depths.push((depth - 1, (), row));
         }
         push_quote_row_units(
@@ -636,6 +860,7 @@ fn try_consume_fn<'r, 't>(
         && gate_escaped_segments.is_empty()
         && pending_rows.is_empty()
         && !parser.quote_escaped_units_pending()
+        && flat_split.is_none()
     {
         if consumed_pruned_row {
             return ok!(false; Elements::None, errors);
@@ -653,7 +878,11 @@ fn try_consume_fn<'r, 't>(
         elements.extend(build_flattened_quote_rows(escaped_rows, wikidot));
     }
     elements.extend(escaped_elements);
-    let mut escaped_segments = gate_escaped_segments;
+    let mut escaped_segments = Vec::new();
+    if let Some(split) = flat_split {
+        escaped_segments = build_flat_split_segments(split, wikidot);
+    }
+    escaped_segments.extend(gate_escaped_segments);
     escaped_segments.extend(pending_rows.into_iter().map(|(depth, row_elements, _)| {
         (form_quote_row_unit(row_elements, depth), false)
     }));
@@ -811,6 +1040,7 @@ fn push_quote_row_units<'t>(
             empty_spaced: false,
             indent: 0,
             source_line: None,
+            cut_boundary: false,
         };
         if flatten {
             escaped_rows.push(row);
@@ -1226,6 +1456,14 @@ fn push_native_quote_row<'t>(
             .rev()
             .find(|element| **element != Element::LineBreak)
             .is_some_and(|element| matches!(element, Element::TabView(_)));
+    let wikidot_block_open_row = wikidot
+        && matches!(
+            row.elements.first(),
+            Some(Element::Partial(PartialElement::WikidotBlockOpen(_)))
+        );
+    if wikidot_block_open_row {
+        stack.record_next_element_line_start(true);
+    }
     if let Some(counts) = split_counts {
         let leaves_following_content_unwrapped = row
             .elements
@@ -1271,6 +1509,9 @@ fn push_native_quote_row<'t>(
                 };
                 stack.push_element(element, element_safe);
             }
+        }
+        if row.cut_boundary {
+            stack.mark_wikidot_simple_table_boundary();
         }
         if has_simple_table {
             stack.merge_wikidot_adjacent_simple_tables();
@@ -1320,6 +1561,9 @@ fn push_native_quote_row<'t>(
             row.paragraph_safe
         };
         stack.push_element(element, paragraph_safe);
+    }
+    if row.cut_boundary {
+        stack.mark_wikidot_simple_table_boundary();
     }
     if has_simple_table {
         stack.merge_wikidot_adjacent_simple_tables();

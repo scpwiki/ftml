@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::parsing::{ParserWrap, strip_newlines};
+use crate::parsing::{ParagraphSplitKind, ParserWrap, strip_newlines};
 use crate::tree::{
     AcceptsPartial, AttributeMap, Container, ContainerType, ListItem, ListType,
     PartialElement,
@@ -121,6 +121,9 @@ fn parse_list_block<'r, 't>(
     if track_collect {
         parser.pop_wikidot_li_collect();
     }
+    if result.is_err() && depth == 0 {
+        parser.wikidot_li_cross_clear();
+    }
     parser.set_wikidot_li_pairing_depth(depth);
     result
 }
@@ -151,6 +154,7 @@ fn parse_list_block_impl<'r, 't>(
     let attributes = arguments.to_attribute_map(parser.settings());
     if wikidot && parser.wikidot_li_pairing_depth() == 1 {
         parser.compute_wikidot_li_pairing();
+        parser.compute_wikidot_li_cross_scan();
     }
     if parser.settings().layout.legacy() && !parser.has_body_end_block(block_rule) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -177,6 +181,9 @@ fn parse_list_block_impl<'r, 't>(
 
     let mut items = Vec::new();
     let mut literal_elements = Vec::new();
+    let mut partial_item_indices: Vec<usize> = Vec::new();
+    let mut partial_count = 0usize;
+    let mut skipped_empty_partial = false;
 
     if flag_score {
         strip_newlines(&mut elements);
@@ -206,9 +213,13 @@ fn parse_list_block_impl<'r, 't>(
                     flag_score,
                     content_follows,
                 );
+                partial_count += 1;
                 if !matches!(&list_item, ListItem::Elements { elements, .. } if elements.is_empty())
                 {
+                    partial_item_indices.push(items.len());
                     items.push(list_item);
+                } else {
+                    skipped_empty_partial = true;
                 }
             }
 
@@ -243,6 +254,34 @@ fn parse_list_block_impl<'r, 't>(
         content_follows,
     );
 
+    let mut b5_escaped: Option<Vec<Element<'t>>> = None;
+    if wikidot
+        && !flag_score
+        && !skipped_empty_partial
+        && items
+            .iter()
+            .all(|item| matches!(item, ListItem::Elements { .. }))
+    {
+        let pairing_depth = parser.wikidot_li_pairing_depth();
+        let (heads, closes) = parser.wikidot_li_items_at_depth(pairing_depth);
+        if heads.len() == partial_count
+            && closes.len() == partial_count
+            && partial_item_indices.len() == partial_count
+            && partial_item_indices
+                .windows(2)
+                .all(|pair| pair[1] == pair[0] + 1)
+        {
+            b5_escaped = wikidot_li_apply_b5(
+                parser,
+                list_type,
+                &mut items,
+                &partial_item_indices,
+                &heads,
+                &closes,
+            );
+        }
+    }
+
     if wikidot && flag_score {
         for item in &mut items {
             if let ListItem::Elements { elements, .. } = item {
@@ -259,6 +298,14 @@ fn parse_list_block_impl<'r, 't>(
     }
 
     if items.is_empty() {
+        if let Some(escaped) = b5_escaped {
+            let count = escaped.len();
+            let mut success =
+                crate::parsing::ParseSuccess::new(escaped.into(), errors, false);
+            success.paragraph_split =
+                Some(vec![(count, false, ParagraphSplitKind::Paragraph)]);
+            return Ok(success);
+        }
         if parser.settings().layout.legacy() {
             return if nested {
                 ok!(false; Elements::None, errors)
@@ -276,11 +323,35 @@ fn parse_list_block_impl<'r, 't>(
         attributes,
         wikidot_explicit_block: parser.settings().layout.legacy(),
     };
+    if let Some(escaped) = b5_escaped {
+        let mut output = vec![element];
+        if fused_close {
+            output.push(text!("]"));
+        }
+        let list_count = output.len();
+        let escaped_count = escaped.len();
+        output.extend(escaped);
+        let mut success = crate::parsing::ParseSuccess::new(output.into(), errors, false);
+        success.paragraph_split = Some(vec![
+            (list_count, false, ParagraphSplitKind::Paragraph),
+            (escaped_count, false, ParagraphSplitKind::Paragraph),
+        ]);
+        return Ok(success);
+    }
+    // L85: live drops the post-list break element before same-para content
+    // (ul-post-e, closeout, cross `G`); the break token itself is dropped
+    // top-level by gather. Blank lines and input end keep the break, as
+    // does content inside a kept iftags gate body (kept-gate pin: boundary
+    // or still-pending designated end).
     record_wikidot_explicit_list_end(parser);
+    let content_after_list = parser.wikidot_next_line_has_content()
+        && !parser.body_end_boundary_accepts("iftags")
+        && !parser.has_pending_iftags_end_ahead();
     if parser.settings().layout.legacy()
         && !nested
         && !flag_score
         && !closer_has_same_line_residual
+        && !content_after_list
     {
         let mut output = vec![element];
         if fused_close {
@@ -341,6 +412,217 @@ fn push_literal_list_item<'t>(
             attributes,
         });
     }
+}
+
+fn wikidot_li_flat_spans(
+    parser: &Parser<'_, '_>,
+    items: &[ListItem],
+) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    for item in items {
+        let ListItem::Elements { elements, .. } = item else {
+            continue;
+        };
+        for element in elements {
+            let Element::Partial(partial) = element else {
+                continue;
+            };
+            let head = match partial {
+                PartialElement::WikidotBlockOpen(shell) => shell.head_byte(),
+                PartialElement::WikidotBlockClose(kind) => kind.head_byte(),
+                _ => continue,
+            };
+            if let Some(pair) = parser.wikidot_block_pair_at_head_byte(head) {
+                let span = (pair.head_byte, pair.closer_byte);
+                if !spans.contains(&span) {
+                    spans.push(span);
+                }
+            }
+        }
+    }
+    spans
+}
+
+fn wikidot_li_span_covers(spans: &[(usize, usize)], pos: usize) -> bool {
+    spans
+        .iter()
+        .any(|(head, closer)| *head < pos && pos < *closer)
+}
+
+fn wikidot_li_open_heads(elements: &[Element]) -> Vec<usize> {
+    elements
+        .iter()
+        .filter_map(|element| match element {
+            Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+                Some(shell.head_byte())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn wikidot_li_apply_b5<'t>(
+    parser: &Parser<'_, '_>,
+    list_type: ListType,
+    items: &mut Vec<ListItem<'t>>,
+    partial_item_indices: &[usize],
+    heads: &[usize],
+    closes: &[usize],
+) -> Option<Vec<Element<'t>>> {
+    let spans = wikidot_li_flat_spans(parser, items);
+    if spans.is_empty() {
+        return None;
+    }
+    let base = partial_item_indices.first().copied().unwrap_or(0);
+    let mut merged: Vec<ListItem<'t>> = Vec::with_capacity(items.len());
+    merged.extend(items.drain(..base));
+    let mut partials: std::collections::VecDeque<ListItem<'t>> =
+        items.drain(..).collect();
+    let mut hi = 0usize;
+    while let Some(outer) = partials.pop_front() {
+        let dropped = wikidot_li_span_covers(&spans, closes[hi]);
+        let mut inner_count = 0usize;
+        while hi + inner_count + 1 < heads.len()
+            && wikidot_li_span_covers(&spans, heads[hi + inner_count + 1])
+        {
+            inner_count += 1;
+        }
+        if !dropped || inner_count == 0 {
+            merged.push(outer);
+            hi += 1;
+            continue;
+        }
+        let (mut outer_elements, outer_attributes) = match outer {
+            ListItem::Elements {
+                elements,
+                attributes,
+            } => (elements, attributes),
+            other => {
+                merged.push(other);
+                hi += 1;
+                continue;
+            }
+        };
+        let outer_heads = wikidot_li_open_heads(&outer_elements);
+        let mut inner_items: Vec<(Vec<Element<'t>>, crate::tree::AttributeMap<'t>)> =
+            Vec::new();
+        for _ in 0..inner_count {
+            let Some(inner) = partials.pop_front() else {
+                break;
+            };
+            let ListItem::Elements {
+                elements,
+                attributes,
+            } = inner
+            else {
+                continue;
+            };
+            inner_items.push((elements, attributes));
+        }
+        let mut post = Vec::new();
+        let mut close_element = None;
+        if let Some((elements, attributes)) = inner_items.pop() {
+            let split_at = elements.iter().position(|element| {
+                let Element::Partial(PartialElement::WikidotBlockClose(kind)) = element
+                else {
+                    return false;
+                };
+                outer_heads.contains(&kind.head_byte())
+            });
+            match split_at {
+                Some(at) => {
+                    let mut elements = elements;
+                    post = elements.split_off(at + 1);
+                    close_element = elements.pop();
+                    let pre = elements;
+                    if !pre.is_empty() {
+                        inner_items.push((pre, attributes));
+                    }
+                }
+                None => inner_items.push((elements, attributes)),
+            }
+        }
+        if !inner_items.is_empty() {
+            let inner_list_items: Vec<ListItem> = inner_items
+                .into_iter()
+                .map(|(elements, attributes)| ListItem::Elements {
+                    elements,
+                    attributes,
+                })
+                .collect();
+            outer_elements.push(Element::List {
+                ltype: list_type,
+                items: inner_list_items,
+                attributes: crate::tree::AttributeMap::new(),
+                wikidot_explicit_block: true,
+            });
+        }
+        if let Some(close) = close_element {
+            outer_elements.push(close);
+        }
+        outer_elements.extend(post);
+        merged.push(ListItem::Elements {
+            elements: outer_elements,
+            attributes: outer_attributes,
+        });
+        hi += 1 + inner_count;
+    }
+    *items = merged;
+    wikidot_li_split_external_close(items, heads, closes)
+}
+
+fn wikidot_li_split_external_close<'t>(
+    items: &mut Vec<ListItem<'t>>,
+    heads: &[usize],
+    closes: &[usize],
+) -> Option<Vec<Element<'t>>> {
+    let ranges: Vec<(usize, usize)> = heads
+        .iter()
+        .zip(closes.iter())
+        .map(|(head, close)| (*head, *close))
+        .collect();
+    let head_inside = |head: usize| {
+        ranges
+            .iter()
+            .any(|(start, end)| *start < head && head < *end)
+    };
+    let found = items.iter().enumerate().find_map(|(item_index, item)| {
+        let ListItem::Elements { elements, .. } = item else {
+            return None;
+        };
+        elements
+            .iter()
+            .position(|element| {
+                let Element::Partial(PartialElement::WikidotBlockClose(kind)) = element
+                else {
+                    return false;
+                };
+                !head_inside(kind.head_byte())
+            })
+            .map(|at| (item_index, at))
+    });
+    let Some((item_index, at)) = found else {
+        return None;
+    };
+    let mut escaped = match &mut items[item_index] {
+        ListItem::Elements { elements, .. } => elements.split_off(at),
+        _ => return None,
+    };
+    let mut drained: Vec<Element<'t>> = Vec::new();
+    for later in items.drain(item_index + 1..) {
+        let ListItem::Elements { elements, .. } = later else {
+            continue;
+        };
+        drained.extend(elements);
+    }
+    escaped.extend(drained);
+    if matches!(
+        &items[item_index],
+        ListItem::Elements { elements, .. } if elements.is_empty()
+    ) {
+        items.remove(item_index);
+    }
+    Some(escaped)
 }
 
 fn wikidot_content_follows(tokens: &[ExtractedToken<'_>]) -> bool {
@@ -538,6 +820,20 @@ fn wikidot_li_segment_is_blank(segment: &[Element]) -> bool {
     segment.iter().all(Element::is_whitespace)
 }
 
+/// L85 scope-5: live keeps a single break after these formed blocks in
+/// item bodies (li-div/align/code/coll/note-contained); every other
+/// paragraph-unsafe element (tables, rules, lists) still drops it.
+fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
+    match element {
+        Element::Container(container) => matches!(
+            container.ctype(),
+            ContainerType::Div | ContainerType::Align(_) | ContainerType::Note
+        ),
+        Element::Collapsible { .. } | Element::Code { .. } => true,
+        _ => false,
+    }
+}
+
 fn assemble_wikidot_li_segments<'t>(
     mut segments: Vec<Vec<Element<'t>>>,
     source: &str,
@@ -563,6 +859,7 @@ fn assemble_wikidot_li_segments<'t>(
         while index < segment.len() {
             if segment[index] == Element::LineBreak
                 && !segment[index - 1].paragraph_safe()
+                && !wikidot_li_break_kept_after_block(&segment[index - 1])
             {
                 segment.remove(index);
             } else {
@@ -610,10 +907,16 @@ fn assemble_wikidot_li_segments<'t>(
     if had_leading_empty || had_trailing_empty {
         strip_newlines(&mut elements);
     }
+    // L85 scope-6: a trailing newline after a nested list stays raw on live
+    // (no break element). Other trailing content keeps the break.
+    // L85 scope-5: same for a trailing simple table (T5-item-table-end).
+    let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }));
+    let trailing_table = matches!(elements.last(), Some(Element::Table(_)));
     if had_trailing_empty
         && elements
             .last()
             .is_some_and(|element| !element.paragraph_safe())
+        && !trailing_nested_list
     {
         elements.push(Element::LineBreak);
     } else if !had_trailing_empty {
@@ -622,7 +925,11 @@ fn assemble_wikidot_li_segments<'t>(
             .rfind("[[/li")
             .map(|index| &source[..index])
             .unwrap_or(source);
-        if body.ends_with('\n') && !matches!(elements.last(), Some(Element::LineBreak)) {
+        if body.ends_with('\n')
+            && !matches!(elements.last(), Some(Element::LineBreak))
+            && !trailing_nested_list
+            && !trailing_table
+        {
             elements.push(Element::LineBreak);
         }
     }
@@ -644,6 +951,75 @@ fn trim_wikidot_block_gaps(elements: &mut Vec<Element<'_>>) {
             index += 1;
         }
     }
+}
+
+/// L85: parse an implicit nested list at a scan-marked `[[li]]` inside a
+/// div/collapsible body (l-ul-li-cross). Items reuse the li segment
+/// machinery; the list ends at a foreign scan-paired close (propagated),
+/// an explicit list close (propagated), or non-`[[li]]` content.
+pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    let mut items: Vec<ListItem<'t>> = Vec::new();
+    let mut errors: Vec<ParseError> = Vec::new();
+    loop {
+        if parser.current().token == Token::InputEnd {
+            break;
+        }
+        if parser.wikidot_li_cross_foreign_stop_here(&BLOCK_LI) {
+            break;
+        }
+        if parser.current().token == Token::LeftBlockEnd {
+            break;
+        }
+        if parser.current().token != Token::LeftBlock {
+            break;
+        }
+        {
+            let mut probe = parser.clone();
+            let Ok((name, _, _)) = probe.get_block_name(false) else {
+                break;
+            };
+            let name = name.strip_suffix('_').unwrap_or(&name);
+            if !name.eq_ignore_ascii_case("li") {
+                break;
+            }
+        }
+        let head_pos = parser.current().span.start;
+        let (_, in_head, _) = parser
+            .get_block_name(false)
+            .map_err(|_| parser.make_err(ParseErrorKind::RuleFailed))?;
+        let arguments = parser.get_head_map_wikidot(&BLOCK_LI, in_head)?;
+        let attributes = arguments.to_attribute_map(parser.settings());
+        let body_start = parser.current().span.start;
+        parser.push_wikidot_li_collect(Some(head_pos));
+        let body = parser.get_wikidot_li_body_segments(&BLOCK_LI);
+        parser.pop_wikidot_li_collect();
+        let body = body?;
+        let source_end = parser.current().span.start;
+        let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_LI);
+        let (segments, segment_errors, _) = body.into();
+        errors.extend(segment_errors);
+        let source = &parser.full_text().inner()[body_start..source_end];
+        let mut elements = assemble_wikidot_li_segments(segments, source);
+        if fused_close {
+            elements.push(text!("]"));
+        }
+        items.push(ListItem::Elements {
+            elements,
+            attributes,
+        });
+    }
+    if items.is_empty() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    let element = Element::List {
+        ltype: ListType::Bullet,
+        items,
+        attributes: AttributeMap::new(),
+        wikidot_explicit_block: true,
+    };
+    success_elements_with_paragraph_safety(false, element, errors)
 }
 
 #[cfg(test)]

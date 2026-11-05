@@ -1,0 +1,84 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "A"
+                            },
+                            {
+                                "element": "line-break"
+                            },
+                            {
+                                "element": "text",
+                                "data": "[["
+                            },
+                            {
+                                "element": "text",
+                                "data": "div"
+                            },
+                            {
+                                "element": "text",
+                                "data": "]]"
+                            },
+                            {
+                                "element": "line-break"
+                            },
+                            {
+                                "element": "text",
+                                "data": "B"
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "E"
+                            },
+                            {
+                                "element": "text",
+                                "data": "[[/"
+                            },
+                            {
+                                "element": "text",
+                                "data": "div"
+                            },
+                            {
+                                "element": "text",
+                                "data": "]]"
+                            },
+                            {
+                                "element": "text",
+                                "data": "F"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "G"
+                    }
+                ]
+            }
+        }
+    ]
+}

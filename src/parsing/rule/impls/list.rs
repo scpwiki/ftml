@@ -29,7 +29,7 @@ use crate::parsing::{
     DepthItem, DepthList, ParagraphSplitEntry, ParagraphSplitKind, ParseSuccess,
     process_depths,
 };
-use crate::tree::{AttributeMap, Element, ListItem, ListType};
+use crate::tree::{AttributeMap, Element, ListItem, ListType, PartialElement};
 
 const MAX_LIST_DEPTH: usize = 128;
 
@@ -278,6 +278,113 @@ fn retain_active_nested_list_types<T>(
     normalized
 }
 
+fn wikidot_escape_batch_breaks_block(element: &Element) -> bool {
+    if matches!(
+        element,
+        Element::Partial(
+            PartialElement::WikidotBlockOpen(_) | PartialElement::WikidotBlockClose(_)
+        )
+    ) {
+        return false;
+    }
+    !element.paragraph_safe()
+}
+
+fn wikidot_escape_batches(escaped: &[Element]) -> Vec<ParagraphSplitEntry> {
+    let mut entries: Vec<ParagraphSplitEntry> = Vec::new();
+    let mut bare = false;
+    let mut index = 0usize;
+    let mut run_start = 0usize;
+    let mut run_safe = true;
+    while index < escaped.len() {
+        let element = &escaped[index];
+        if matches!(
+            element,
+            Element::Partial(PartialElement::WikidotBlockClose(_))
+        ) {
+            if index > run_start {
+                entries.push((
+                    index - run_start,
+                    run_safe,
+                    ParagraphSplitKind::Paragraph,
+                ));
+            }
+            run_start = index;
+            run_safe = false;
+            bare = true;
+            index += 1;
+        } else if wikidot_escape_batch_breaks_block(element) {
+            if index > run_start {
+                entries.push((
+                    index - run_start,
+                    run_safe,
+                    ParagraphSplitKind::Paragraph,
+                ));
+            }
+            entries.push((1, false, ParagraphSplitKind::Paragraph));
+            index += 1;
+            run_start = index;
+            run_safe = true;
+            bare = false;
+        } else {
+            let safe = !bare;
+            if safe != run_safe && index > run_start {
+                entries.push((
+                    index - run_start,
+                    run_safe,
+                    ParagraphSplitKind::Paragraph,
+                ));
+                run_start = index;
+                run_safe = safe;
+            }
+            index += 1;
+        }
+    }
+    if escaped.len() > run_start {
+        entries.push((
+            escaped.len() - run_start,
+            run_safe,
+            ParagraphSplitKind::Paragraph,
+        ));
+    }
+    if entries.is_empty() && !escaped.is_empty() {
+        entries.push((escaped.len(), true, ParagraphSplitKind::Paragraph));
+    }
+    entries
+}
+
+fn find_wikidot_flat_boundary(elements: &[Element]) -> Option<(usize, bool)> {
+    elements.iter().enumerate().find_map(|(index, element)| {
+        let Element::Partial(partial) = element else {
+            return None;
+        };
+        match partial {
+            PartialElement::WikidotBlockOpen(_) => Some((index, false)),
+            PartialElement::WikidotBlockClose(_) => Some((index, true)),
+            _ => None,
+        }
+    })
+}
+
+fn trim_wikidot_flat_close_space(elements: &mut Vec<Element>) {
+    while let Some(Element::Text(text)) = elements.last_mut() {
+        if text.chars().all(|c| c == ' ' || c == '\t') {
+            elements.pop();
+            continue;
+        }
+        let trimmed = text.trim_end_matches([' ', '\t']);
+        if trimmed.len() == text.len() {
+            break;
+        }
+        if trimmed.is_empty() {
+            elements.pop();
+        } else {
+            *text = trimmed.to_owned().into();
+        }
+        break;
+    }
+}
+
 fn parse_next_list_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
     errors: &mut Vec<ParseError>,
@@ -345,10 +452,57 @@ where
     let item_result = collect_list_item_elements(&mut sub_parser)?;
     let content_end = sub_parser.current().span.start;
     let (
-        (elements, ends_run, ends_at_break, escape),
+        (mut elements, ends_run, ends_at_break, escape),
         mut item_errors,
         item_paragraph_safe,
     ) = item_result.into();
+    if escape.is_none()
+        && parser.settings().layout.legacy()
+        && let Some((boundary, is_close)) = find_wikidot_flat_boundary(&elements)
+    {
+        errors.append(&mut item_errors);
+        *paragraph_safe &= item_paragraph_safe;
+        parser.update(&sub_parser);
+        if is_close {
+            let escaped = elements.split_off(boundary);
+            trim_wikidot_flat_close_space(&mut elements);
+            let control = if elements.is_empty() {
+                None
+            } else {
+                Some((depth, list_type, std::mem::take(&mut elements)))
+            };
+            return Ok(ListItemStep::Split {
+                control,
+                escaped_split: Some(vec![(
+                    escaped.len(),
+                    false,
+                    ParagraphSplitKind::Paragraph,
+                )]),
+                escaped,
+                escaped_safe: false,
+            });
+        }
+        let escaped = elements.split_off(boundary + 1);
+        let open = elements.pop();
+        trim_wikidot_flat_close_space(&mut elements);
+        if let Some(open) = open {
+            elements.push(open);
+        }
+        if escaped.is_empty() {
+            return Ok(ListItemStep::Item((depth, list_type, elements), true));
+        }
+        let control = Some((depth, list_type, elements));
+        // L8.5: partition the escape into paragraph batches. Leading
+        // text renders as paragraph(s); a closer flips the rest bare
+        // until a swallowed block re-freshens what follows it.
+        let entries = wikidot_escape_batches(&escaped);
+        return Ok(ListItemStep::Split {
+            control,
+            escaped_split: Some(entries),
+            escaped,
+            escaped_safe: false,
+        });
+    }
     if let Some(escape) = escape {
         errors.append(&mut item_errors);
         *paragraph_safe &= item_paragraph_safe;

@@ -1973,6 +1973,424 @@ where
         self.set_wikidot_li_stream(heads, closes);
     }
 
+    /// L85: region scan for one outer explicit list. Runs a force-close stack
+    /// over div/collapsible/ul/ol/li events from after the `[[ul]]`/`[[ol]]`
+    /// head to its closer. Live evidence: l-ul-li-cross, l-ul-li-closeout,
+    /// l-ul-li-closein, l-ul-li-closein-c.
+    pub(crate) fn compute_wikidot_li_cross_scan(&self) {
+        use crate::parsing::parser::block_pairs::{
+            WikidotLiCrossKind, WikidotLiCrossScan,
+        };
+        use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum CrossFrame {
+            List,
+            Li,
+            Div,
+            Coll,
+        }
+
+        let mut scan = self.clone();
+        let scan_start = scan.current().span.start;
+        // Seed the region's own list frame: breaches must force-pop it so
+        // its later redundant closer is marked.
+        let mut stack: Vec<(CrossFrame, usize, bool)> =
+            vec![(CrossFrame::List, scan_start, false)];
+        let mut li_events: BTreeSet<usize> = BTreeSet::new();
+        let mut depth = 0usize;
+        let mut sat: VecDeque<CrossFrame> = VecDeque::new();
+        let mut pairs: BTreeMap<usize, (WikidotLiCrossKind, bool)> = BTreeMap::new();
+        let mut redundant: BTreeSet<usize> = BTreeSet::new();
+        let mut implicit: BTreeSet<usize> = BTreeSet::new();
+
+        // Pop through `index` (inclusive); inner frames with unseen closers
+        // leave pending satisfactions for their later redundant closers.
+        macro_rules! pop_through {
+            ($index:expr) => {{
+                while stack.len() > $index + 1 {
+                    let (kind, _, seen) = stack.pop().expect("len checked");
+                    if !seen {
+                        sat.push_back(kind);
+                    }
+                }
+                stack.pop();
+            }};
+        }
+
+        loop {
+            if scan.current().token == Token::InputEnd || scan.at_hard_body_end_boundary()
+            {
+                break;
+            }
+            if scan.skip_discarded_iftags_segment(false) {
+                continue;
+            }
+            if scan.current().token == Token::LeftComment {
+                use super::super::comment::comment_closer_token_count;
+                loop {
+                    if comment_closer_token_count(&scan).is_some() {
+                        break;
+                    }
+                    if scan.step().is_err() {
+                        break;
+                    }
+                    if scan.current().token == Token::InputEnd {
+                        break;
+                    }
+                }
+                continue;
+            }
+            match scan.current().token {
+                Token::LeftBlock => {
+                    let start = scan.current().span.start;
+                    let mut probe = scan.clone();
+                    if let Ok((name, _, _)) = probe.get_block_name(false) {
+                        let name = name.strip_suffix('_').unwrap_or(&name);
+                        let opaque = self.wikidot_li_cross_byte_opaque(start);
+                        if name.eq_ignore_ascii_case("ul")
+                            || name.eq_ignore_ascii_case("ol")
+                        {
+                            depth += 1;
+                            if !opaque {
+                                li_events.insert(start);
+                                stack.push((CrossFrame::List, start, false));
+                            }
+                        } else if name.eq_ignore_ascii_case("li") {
+                            if !opaque {
+                                li_events.insert(start);
+                                match stack.last().map(|(kind, _, _)| *kind) {
+                                    Some(CrossFrame::Li) => {
+                                        stack.pop();
+                                        stack.push((CrossFrame::Li, start, false));
+                                    }
+                                    Some(CrossFrame::Div) | Some(CrossFrame::Coll) => {
+                                        stack.push((CrossFrame::List, start, false));
+                                        stack.push((CrossFrame::Li, start, false));
+                                        implicit.insert(start);
+                                    }
+                                    _ => stack.push((CrossFrame::Li, start, false)),
+                                }
+                            }
+                        } else if name.eq_ignore_ascii_case("div") {
+                            if !opaque {
+                                stack.push((CrossFrame::Div, start, false));
+                            }
+                        } else if name.eq_ignore_ascii_case("collapsible") {
+                            if !opaque {
+                                stack.push((CrossFrame::Coll, start, false));
+                            }
+                        }
+                    }
+                    if scan.step().is_err() {
+                        break;
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    let close_pos = scan.current().span.start;
+                    let mut probe = scan.clone();
+                    let recovered: Option<(std::borrow::Cow<'_, str>, bool)> =
+                        match probe.get_end_block() {
+                            Ok(name) => Some((name, true)),
+                            Err(_) => {
+                                let mut name_probe = scan.clone();
+                                if name_probe.step().is_err() {
+                                    None
+                                } else {
+                                    let token = name_probe.current();
+                                    Some((
+                                        std::borrow::Cow::Owned(
+                                            scan.full_text().inner()
+                                                [token.span.start..token.span.end]
+                                                .to_owned(),
+                                        ),
+                                        false,
+                                    ))
+                                }
+                            }
+                        };
+                    let Some((raw_name, clean)) = recovered else {
+                        if scan.step().is_err() {
+                            break;
+                        }
+                        continue;
+                    };
+                    let name = raw_name.strip_suffix('_').unwrap_or(&raw_name);
+                    let opaque = self.wikidot_li_cross_byte_opaque(close_pos);
+                    if name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+                    {
+                        if depth == 0 {
+                            if !opaque && sat.front() == Some(&CrossFrame::List) {
+                                sat.pop_front();
+                                redundant.insert(close_pos);
+                            }
+                            break;
+                        }
+                        depth -= 1;
+                        if !opaque {
+                            li_events.insert(close_pos);
+                            if let Some(index) = stack
+                                .iter()
+                                .rposition(|(kind, _, _)| *kind == CrossFrame::List)
+                            {
+                                pop_through!(index);
+                            } else if sat.front() == Some(&CrossFrame::List) {
+                                sat.pop_front();
+                                redundant.insert(close_pos);
+                            }
+                        }
+                        // L85: the region ends at its own list's closer;
+                        // later blocks belong to later scans (a following
+                        // `[[div]]` is not this region's breach).
+                        if depth == 0 {
+                            break;
+                        }
+                        if clean {
+                            scan.update(&probe);
+                        } else if scan.step().is_err() {
+                            break;
+                        }
+                    } else if name.eq_ignore_ascii_case("li") {
+                        if !opaque {
+                            li_events.insert(close_pos);
+                            if stack.last().map(|(kind, _, _)| *kind)
+                                == Some(CrossFrame::Li)
+                            {
+                                stack.pop();
+                            } else if sat.front() == Some(&CrossFrame::Li) {
+                                sat.pop_front();
+                                redundant.insert(close_pos);
+                            } else if let Some(index) = stack
+                                .iter()
+                                .rposition(|(kind, _, _)| *kind == CrossFrame::Li)
+                            {
+                                stack[index].2 = true;
+                                redundant.insert(close_pos);
+                            }
+                        }
+                        if clean {
+                            scan.update(&probe);
+                        } else if scan.step().is_err() {
+                            break;
+                        }
+                    } else if name.eq_ignore_ascii_case("div")
+                        || name.eq_ignore_ascii_case("collapsible")
+                    {
+                        if !opaque {
+                            let (frame, kind) = if name.eq_ignore_ascii_case("div") {
+                                (CrossFrame::Div, WikidotLiCrossKind::Div)
+                            } else {
+                                (CrossFrame::Coll, WikidotLiCrossKind::Collapsible)
+                            };
+                            if let Some(index) = stack
+                                .iter()
+                                .rposition(|(stack_kind, _, _)| *stack_kind == frame)
+                            {
+                                let open_byte = stack[index].1;
+                                let crossed = li_events
+                                    .range(open_byte + 1..close_pos)
+                                    .next()
+                                    .is_some();
+                                pop_through!(index);
+                                pairs.insert(close_pos, (kind, crossed));
+                            } else if sat.front() == Some(&frame) {
+                                sat.pop_front();
+                            } else {
+                                while let Some((stack_kind, _, seen)) = stack.pop() {
+                                    if !seen {
+                                        sat.push_back(stack_kind);
+                                    }
+                                }
+                                pairs.insert(close_pos, (kind, true));
+                            }
+                        }
+                        if clean {
+                            scan.update(&probe);
+                        } else if scan.step().is_err() {
+                            break;
+                        }
+                    } else if scan.step().is_err() {
+                        break;
+                    }
+                }
+                _ => {
+                    if scan.step().is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+        let region_end = scan.current().span.start;
+        self.block_end_scan_cache.borrow_mut().wikidot_li_cross_scan =
+            Some(WikidotLiCrossScan {
+                divcoll_pairs: pairs,
+                redundant,
+                implicit_li: implicit,
+                region_start: scan_start,
+                region_end,
+            });
+    }
+
+    fn wikidot_li_cross_byte_opaque(&self, byte: usize) -> bool {
+        if self.lost_owner_literal_range_end(byte).is_some() {
+            return true;
+        }
+        if self.wikidot_byte_on_list_item_line(byte) {
+            return true;
+        }
+        if self.wikidot_head_on_table_row_line(byte) {
+            return true;
+        }
+        if self.wikidot_byte_in_quote_run(byte) {
+            return true;
+        }
+        false
+    }
+
+    pub(crate) fn wikidot_li_cross_scan_ran(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_cross_scan
+            .is_some()
+    }
+
+    pub(crate) fn wikidot_li_cross_pair_at(
+        &self,
+        closer_byte: usize,
+    ) -> Option<(
+        crate::parsing::parser::block_pairs::WikidotLiCrossKind,
+        bool,
+    )> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_cross_scan
+            .as_ref()?
+            .divcoll_pairs
+            .get(&closer_byte)
+            .copied()
+    }
+
+    pub(crate) fn wikidot_li_cross_redundant_at(&self, byte: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_cross_scan
+            .as_ref()
+            .is_some_and(|scan| scan.redundant.contains(&byte))
+    }
+
+    pub(crate) fn wikidot_li_cross_implicit_li_at(&self, byte: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_cross_scan
+            .as_ref()
+            .is_some_and(|scan| scan.implicit_li.contains(&byte))
+    }
+
+    pub(crate) fn wikidot_li_cross_clear(&self) {
+        self.block_end_scan_cache.borrow_mut().wikidot_li_cross_scan = None;
+    }
+
+    /// L85: whether the line starting at the current line break carries
+    /// content. Used for post-list break/bareness decisions. A line led by
+    /// a block closer is a structural boundary, not same-para content
+    /// (live keeps the break before an orphan closer: div/list-item-end).
+    pub(crate) fn wikidot_next_line_has_content(&self) -> bool {
+        if self.current().token != Token::LineBreak {
+            return false;
+        }
+        for extracted in self.remaining() {
+            match extracted.token {
+                Token::Whitespace => {}
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                    return false;
+                }
+                // A line led by a block head is a structural boundary, not
+                // same-paragraph content (live keeps the post-list break
+                // before a following div: explicit-pre-dissolves-before-div).
+                Token::LeftBlock | Token::LeftBlockStar | Token::LeftBlockEnd => {
+                    return false;
+                }
+                _ => return true,
+            }
+        }
+        false
+    }
+
+    /// L85: stop a list body at a scan-paired div/collapsible closer whose
+    /// opener is genuinely outside (closein shapes). Scoped to list rules.
+    pub(crate) fn wikidot_li_cross_foreign_stop_here(
+        &self,
+        block_rule: &BlockRule,
+    ) -> bool {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return false;
+        }
+        if !matches!(
+            block_rule.name,
+            "block-list-unordered" | "block-list-ordered" | "block-list-item"
+        ) {
+            return false;
+        }
+        if self.current().token != Token::LeftBlockEnd {
+            return false;
+        }
+        let pos = self.current().span.start;
+        let Some((kind, _)) = self.wikidot_li_cross_pair_at(pos) else {
+            return false;
+        };
+        if !self.wikidot_ancestor_boundary_accepts(kind.boundary_name()) {
+            return false;
+        }
+        true
+    }
+
+    /// L85: whether an implicit-list `[[li]]` stands here inside a
+    /// div/collapsible body (cross shapes).
+    pub(crate) fn wikidot_li_cross_implicit_li_here(&self, rule_name: &str) -> bool {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return false;
+        }
+        if !matches!(rule_name, "block-div" | "block-collapsible") {
+            return false;
+        }
+        if self.current().token != Token::LeftBlock {
+            return false;
+        }
+        self.wikidot_li_cross_implicit_li_at(self.current().span.start)
+    }
+
+    /// L85: skip (drop) a scan-redundant `[[/li]]` inside div/collapsible
+    /// bodies (cross shapes). Consumes the closer on success.
+    pub(crate) fn wikidot_li_cross_skip_redundant_here(
+        &mut self,
+        rule_name: &str,
+    ) -> bool {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return false;
+        }
+        if !matches!(rule_name, "block-div" | "block-collapsible") {
+            return false;
+        }
+        if self.exact_wikidot_li_close_end().is_none() {
+            return false;
+        }
+        let pos = self.current().span.start;
+        if !self.wikidot_li_cross_redundant_at(pos) {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.get_end_block().is_err() {
+            return false;
+        }
+        self.update(&probe);
+        // L85: the redundant closer absorbs its line break (cross drops
+        // `B`'s break before the implicit list).
+        if self.current().token == Token::LineBreak {
+            let _ = self.step();
+        }
+        true
+    }
+
     pub(crate) fn wikidot_li_close_disposition_for_item(
         &self,
         head_pos: usize,
@@ -2162,6 +2580,29 @@ where
                 continue;
             }
 
+            // L85 scope-6: drop a break right after a nested explicit list
+            // before same-para content (live keeps a raw newline there).
+            if self.settings().layout.legacy()
+                && !self.discarding_hidden_body()
+                && self.current().token == Token::LineBreak
+                && segments.last().is_some_and(|segment| {
+                    matches!(
+                        segment.last(),
+                        Some(Element::List {
+                            wikidot_explicit_block: true,
+                            ..
+                        })
+                    )
+                })
+                && self.wikidot_next_line_has_content()
+                && !self.body_end_boundary_accepts("iftags")
+                && !self.has_pending_iftags_end_ahead()
+            {
+                self.step()?;
+                first = false;
+                continue;
+            }
+
             if let Some(disposition) = self.wikidot_li_non_ending_close_here() {
                 match disposition {
                     WikidotLiCloseDisposition::Silent => {
@@ -2206,6 +2647,14 @@ where
             }
 
             if self.terminate_at_wikidot_list_close(block_rule, first) {
+                return Ok(crate::parsing::ParseSuccess::new(
+                    segments,
+                    all_errors,
+                    paragraph_safe,
+                ));
+            }
+
+            if self.wikidot_li_cross_foreign_stop_here(block_rule) {
                 return Ok(crate::parsing::ParseSuccess::new(
                     segments,
                     all_errors,
@@ -4155,7 +4604,16 @@ where
                 return Ok(());
             }
 
+            if self.wikidot_li_cross_skip_redundant_here(block_rule.name) {
+                first = false;
+                continue;
+            }
+
             if self.terminate_at_wikidot_list_close(block_rule, first) {
+                return Ok(());
+            }
+
+            if self.wikidot_li_cross_foreign_stop_here(block_rule) {
                 return Ok(());
             }
 

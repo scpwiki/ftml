@@ -735,32 +735,61 @@ fn canonicalize_early_closed_align_wrapped_collapsible(lines: &mut Vec<String>) 
 
 fn canonicalize_collapsible_closers_sharing_lines(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
-    let mut open_depths: Vec<usize> = Vec::new();
+    let mut open_depths: Vec<(usize, bool)> = Vec::new();
     let mut output = Vec::with_capacity(lines.len());
-    for (line, literal) in lines.iter().zip(literal_lines.iter()) {
+    for (line_number, (line, literal)) in
+        lines.iter().zip(literal_lines.iter()).enumerate()
+    {
         let (body, ending) = split_line(line);
         if *literal {
             output.push(line.clone());
             continue;
         }
         let (quote_depth, _) = quote_depth_and_body(body);
+        // L8.5: pipe-headed openers pair with their quoted closers
+        // directly (render-interior flat); stripping the quote would
+        // forge a drop-shape pair, so they never unquote here.
+        let pipe_headed = body.trim_start_matches([' ', '\t']).starts_with("||");
         match marker_line(line) {
             Some((_, Marker::CollapsibleOpen)) => {
-                open_depths.push(quote_depth);
+                open_depths.push((quote_depth, pipe_headed));
                 output.push(line.clone());
             }
             Some((_, Marker::CollapsibleClose)) => {
-                if quote_depth > 0 && open_depths.last() == Some(&0) {
-                    open_depths.pop();
+                // L8.5: a quoted closer with live content after it in
+                // its quote run keeps its quote so the run splits and
+                // ejects (live q-coll-close shape); only run-final
+                // closers unquote to their root opener.
+                let mut run_has_content = false;
+                if quote_depth > 0 {
+                    for following in
+                        lines.iter().skip(line_number + 1).take_while(|next| {
+                            let (next_body, _) = split_line(next);
+                            let (next_depth, _) = quote_depth_and_body(next_body);
+                            next_depth > 0
+                        })
+                    {
+                        let (following_body, _) = split_line(following);
+                        let (_, quoted_body) = quote_depth_and_body(following_body);
+                        if !quoted_body.trim_matches([' ', '\t']).is_empty() {
+                            run_has_content = true;
+                            break;
+                        }
+                    }
+                }
+                let unquote = quote_depth > 0
+                    && open_depths.last() == Some(&(0, false))
+                    && !run_has_content;
+                open_depths.pop();
+                if unquote {
                     output.push(format!("[[/collapsible]]{ending}"));
                 } else {
-                    open_depths.pop();
                     output.push(line.clone());
                 }
             }
             _ => {
                 if quote_depth == 0
-                    && open_depths.last() == Some(&0)
+                    && open_depths.last().is_some_and(|&(depth, _)| depth == 0)
                     && split_list_item_collapsible_close(&mut output, body, ending)
                 {
                     open_depths.pop();
@@ -768,7 +797,7 @@ fn canonicalize_collapsible_closers_sharing_lines(lines: &mut Vec<String>) {
                 }
                 let lower = body.to_ascii_lowercase();
                 if line_opens_collapsible(line) && !lower.contains("[[/collapsible]]") {
-                    open_depths.push(quote_depth);
+                    open_depths.push((quote_depth, pipe_headed));
                 } else if lower.contains("[[/collapsible]]") {
                     open_depths.pop();
                 }

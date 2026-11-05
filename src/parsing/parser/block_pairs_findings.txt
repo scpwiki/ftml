@@ -51,7 +51,7 @@ l8-preview-l-coll-item-cross	Collapsible@4..40 scan-only
 l8-preview-l-ul-li-cross	Div@15..47 scan-only
 l8-preview-l-ul-li-cross	Div@15..24 descent-only
 l8-preview-l-ul-li-closeout	Div@15..50 scan-only
-l8-preview-l-ul-li-closeout	Div@15..24 descent-only
+l8-preview-l-ul-li-closeout	Div@15..32 descent-only
 l8-preview-l-ul-li-closein	Div@0..32 scan-only
 l8-preview-l-ul-li-closein	Div@0..50 descent-only
 l8-preview-l-ul-li-closein-c	Collapsible@0..48 scan-only
@@ -156,3 +156,5 @@ corpus-test/div/scored-body-first-line-left/input.ftml	AlignLeft@9..23 scan-only
 corpus-test/div/scored-body-align-stays-suppressed/input.ftml	AlignCenter@11..25 scan-only
 corpus-test/div/scored-body-first-line-tabview/input.ftml	TabView@9..54 scan-only
 corpus-test/div/scored-body-first-line-tabview/input.ftml	Tab@21..41 scan-only
+corpus-test/list/wikidot-li-cross-closeout/input.ftml	Div@15..50 scan-only
+corpus-test/list/wikidot-li-cross-closeout/input.ftml	Div@15..32 descent-only

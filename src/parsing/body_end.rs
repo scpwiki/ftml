@@ -99,6 +99,34 @@ impl<'r, 't> Parser<'r, 't> {
         })
     }
 
+    /// L85: whether the innermost body boundary accepts div/collapsible.
+    /// Confines implicit-list parsing to genuine div/collapsible bodies.
+    pub(crate) fn wikidot_top_boundary_is_div_or_collapsible(&self) -> bool {
+        self.body_end_boundaries().last().is_some_and(|boundary| {
+            !boundary.confined
+                && boundary.accepts_names.iter().any(|accepted| {
+                    accepted.eq_ignore_ascii_case("div")
+                        || accepted.eq_ignore_ascii_case("collapsible")
+                })
+        })
+    }
+
+    /// L85: whether a non-top (ancestor) body boundary accepts `name`.
+    /// Used to confine explicit-list cross stops to genuinely outer opens.
+    pub(crate) fn wikidot_ancestor_boundary_accepts(&self, name: &str) -> bool {
+        let boundaries = self.body_end_boundaries();
+        let Some((_, ancestors)) = boundaries.split_last() else {
+            return false;
+        };
+        ancestors.iter().any(|boundary| {
+            !boundary.confined
+                && boundary
+                    .accepts_names
+                    .iter()
+                    .any(|accepted| accepted.eq_ignore_ascii_case(name))
+        })
+    }
+
     pub(crate) fn at_body_end_boundary(&self) -> bool
     where
         'r: 't,

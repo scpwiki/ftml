@@ -120,7 +120,25 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Collapsible doesn't allow score flag");
     assert_block_name(&BLOCK_COLLAPSIBLE, name);
 
+    // L85: the dispatcher consumes the head and any trailing spaces before
+    // entry, so capture the head-end line break position now; live keeps a
+    // break for trailing spaces after a collapsible head (z-head-trail-space-c).
+    let wikidot_head_break_at =
+        (parser.current().token == Token::LineBreak).then(|| parser.current().span.start);
     let (head, body_start) = parse_collapsible_head(parser, name, in_head)?;
+    // L85: detect trailing spaces after the head from source: the head-end
+    // line break directly preceded by spaces means live emits a break inside
+    // the opening paragraph (z-head-trail-space-c).
+    let wikidot_trailing_space_break = parser.settings().layout.legacy()
+        && body_start == BlockBodyStart::NextPhysicalLine
+        && wikidot_head_break_at.is_some_and(|break_at| {
+            let source = parser.full_text().inner().as_bytes();
+            let mut i = break_at;
+            while i > 0 && matches!(source[i - 1], b' ' | b'\t') {
+                i -= 1;
+            }
+            i < break_at && i >= 2 && source[i - 2] == b']' && source[i - 1] == b']'
+        });
 
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
         && pair.kind == WikidotBlockKind::Collapsible
@@ -169,6 +187,17 @@ fn parse_fn<'r, 't>(
         }
     };
     let (mut elements, mut errors, _) = body.into();
+    if wikidot_trailing_space_break && !elements.is_empty() {
+        // L85: live keeps the trailing-space break inside the opening
+        // paragraph (z-head-trail-space-c), not before the content.
+        if let Some(Element::Container(container)) = elements.first_mut()
+            && container.ctype() == ContainerType::Paragraph
+        {
+            container.elements_mut().insert(0, Element::LineBreak);
+        } else {
+            elements.insert(0, Element::LineBreak);
+        }
+    }
     let unfolded_tail_start = if parser.take_wikidot_collapsible_content_closed() {
         let tail_start = elements.len();
         let tail = parser.get_body_elements_with_literal_quote_context(
