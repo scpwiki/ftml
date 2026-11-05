@@ -118,6 +118,7 @@ where
         let explicit_list_opener = wikidot_explicit_list_opener(parser);
         let div_score = wikidot_div_score(parser);
         let div_opener = div_score.is_some();
+        let div_residual_opener = div_opener || wikidot_div_after_line_break(parser);
         let same_line_div_candidate =
             div_opener && wikidot_div_closes_on_current_line(parser);
         let embed_opener = wikidot_embed_opener(parser);
@@ -257,7 +258,7 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
-            let div_has_same_line_residual = div_opener
+            let div_has_same_line_residual = div_residual_opener
                 && active_div
                 && !matches!(
                     parser.current().token,
@@ -475,8 +476,31 @@ where
         return None;
     }
 
+    wikidot_div_score_at(parser, parser.current().span.start)
+}
+
+fn wikidot_div_after_line_break<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() || parser.current().token != Token::LineBreak {
+        return false;
+    }
+    let Some(next) = parser.look_ahead(0) else {
+        return false;
+    };
+    if next.token != Token::LeftBlock {
+        return false;
+    }
+    wikidot_div_score_at(parser, next.span.start).is_some()
+}
+
+fn wikidot_div_score_at<'r, 't>(parser: &Parser<'r, 't>, start: usize) -> Option<bool>
+where
+    'r: 't,
+{
     let source = parser.full_text().inner();
-    let candidate = &source[parser.current().span.start..];
+    let candidate = &source[start..];
     let after_open = candidate.strip_prefix("[[")?;
     let after_open = after_open.trim_start_matches([' ', '\t']);
     let name_end = after_open

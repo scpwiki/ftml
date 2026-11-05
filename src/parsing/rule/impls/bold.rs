@@ -25,7 +25,7 @@ use super::inline_delimiter::{
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
-use crate::tree::PartialElement;
+use crate::tree::{PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
 
 pub const RULE_BOLD: Rule = Rule {
     name: "bold",
@@ -114,12 +114,29 @@ fn try_consume_split_delimiter<'r, 't>(
     finish_collected(parser, collected)
 }
 
+fn bold_body_crosses_formed_div(elements: &Elements<'_>) -> bool {
+    let Elements::Single(Element::Container(container)) = elements else {
+        return false;
+    };
+    container.elements().iter().any(|element| match element {
+        Element::Container(inner) => inner.ctype() == ContainerType::Div,
+        Element::Partial(
+            PartialElement::WikidotBlockOpen(WikidotBlockShell::Div { .. })
+            | PartialElement::WikidotBlockClose(WikidotBlockCloseKind::Div { .. }),
+        ) => true,
+        _ => false,
+    })
+}
+
 fn finish_collected<'r, 't>(
     parser: &mut Parser<'r, 't>,
     collected: ParseSuccess<Elements<'t>>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let leftover = collected.split_close_leftover.clone();
     let (elements, errors, paragraph_safe) = collected.into();
+    if parser.settings().layout.legacy() && bold_body_crosses_formed_div(&elements) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if parser.settings().layout.legacy()
         && matches!(
             &elements,

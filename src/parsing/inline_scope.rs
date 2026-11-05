@@ -1,6 +1,7 @@
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, InlineFormatKind, ListItem, PartialElement,
+    WikidotBlockCloseKind, WikidotBlockShell, WikidotFrameLink,
 };
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -778,6 +779,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     mut bibliographies: Option<&mut BibliographyList<'t>>,
 ) -> Vec<bool> {
     flatten_crossing_inline_containers(elements);
+    build_wikidot_block_frames(elements, true);
     let mut lowered = Vec::new();
     let (valid, close_pairs) = match bibliographies.as_deref_mut() {
         Some(list) => {
@@ -785,6 +787,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
             for bibliography in list.slice_mut() {
                 for (_, items) in bibliography.slice_mut() {
                     flatten_crossing_inline_containers(items);
+                    build_wikidot_block_frames(items, false);
                 }
             }
             collect_valid_scope_pairs_with_bibliographies(elements, list)
@@ -817,6 +820,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     elements: &mut Vec<Element<'t>>,
 ) {
     flatten_crossing_inline_containers(elements);
+    build_wikidot_block_frames(elements, false);
     let (valid, close_pairs) = collect_valid_scope_pairs(elements);
 
     let mut ordinal = 0;
@@ -841,6 +845,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
     for (_, elements) in bibliography.slice_mut() {
         flatten_crossing_inline_containers(elements);
+        build_wikidot_block_frames(elements, false);
     }
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
@@ -1057,6 +1062,15 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
     }
     let mut output = Vec::with_capacity(elements.len());
     for mut element in mem::take(elements) {
+        if let Some(kind) = format_kind_literalised_around_flow_block(&element)
+            && let Element::Container(container) = &mut element
+        {
+            let children = mem::take(container.elements_mut());
+            output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
+            output.extend(children);
+            output.push(Element::Text(Cow::Borrowed(kind.close_marker())));
+            continue;
+        }
         if !container_flattens(&element) {
             output.push(element);
             continue;
@@ -1086,6 +1100,36 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
         }
     }
     *elements = output;
+}
+
+fn is_wikidot_flow_block(element: &Element<'_>) -> bool {
+    match element {
+        Element::Container(container) => matches!(
+            container.ctype(),
+            ContainerType::Div | ContainerType::Note | ContainerType::Align(_)
+        ),
+        Element::Collapsible { .. }
+        | Element::TabView(_)
+        | Element::WikidotBlockFrame { .. } => true,
+        Element::Partial(
+            PartialElement::WikidotBlockOpen(_) | PartialElement::WikidotBlockClose(_),
+        ) => true,
+        _ => false,
+    }
+}
+
+fn format_kind_literalised_around_flow_block(
+    element: &Element<'_>,
+) -> Option<InlineFormatKind> {
+    let Element::Container(container) = element else {
+        return None;
+    };
+    let kind = format_kind_of(container.ctype())?;
+    container
+        .elements()
+        .iter()
+        .any(is_wikidot_flow_block)
+        .then_some(kind)
 }
 
 fn container_flattens(element: &Element<'_>) -> bool {
@@ -2316,7 +2360,9 @@ fn lower_sequence<'t>(
             }
             run.push(element);
             run_has_content = true;
-        } else if has_lowerable_children(&element) {
+        } else if has_lowerable_children(&element)
+            || matches!(element, Element::Code(_) | Element::Math { .. })
+        {
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
@@ -2367,6 +2413,26 @@ fn lower_sequence<'t>(
                                 active.kill_from(position);
                             }
                         }
+                        if let Element::Code(code_block) = &mut element
+                            && active.has_anchor_scope()
+                        {
+                            code_block.wikidot_block_open_elements =
+                                active.nested_empty_copies();
+                            if let Some(position) = active.anchor_position() {
+                                active.kill_from(position);
+                            }
+                        }
+                        if let Element::Math {
+                            wikidot_block_open_elements,
+                            ..
+                        } = &mut element
+                            && active.has_anchor_scope()
+                        {
+                            *wikidot_block_open_elements = active.nested_empty_copies();
+                            if let Some(position) = active.anchor_position() {
+                                active.kill_from(position);
+                            }
+                        }
                     }
                 } else if is_paragraph && segment {
                     close_live_anchor(
@@ -2376,6 +2442,13 @@ fn lower_sequence<'t>(
                         &mut last_run_outer_scope,
                     );
                     active.pend_all();
+                }
+                if let Element::WikidotBlockFrame {
+                    collapsible_link: Some(link),
+                    ..
+                } = &mut element
+                {
+                    link.spans = active.wikidot_label_spans();
                 }
                 let watermark = if block_boundary {
                     Some(active.begin_watch())
@@ -2884,6 +2957,14 @@ fn emptied_block_vanishes(element: &Element<'_>) -> bool {
                 ContainerType::Paragraph | ContainerType::Div
             ) && container.attributes().get().is_empty()
                 && container.elements().is_empty()
+    ) || matches!(
+        element,
+        Element::WikidotBlockFrame {
+            attributes,
+            children,
+            collapsible_link: None,
+            ..
+        } if attributes.get().is_empty() && children.is_empty()
     )
 }
 
@@ -3023,6 +3104,9 @@ fn parent_is_block_segment(element: &Element<'_>) -> bool {
         | Element::List { .. }
         | Element::Table(_)
         | Element::TabView(_)
+        | Element::WikidotBlockFrame { .. }
+        | Element::Code(_)
+        | Element::Math { .. }
         | Element::DefinitionList(_) => true,
         Element::Partial(partial) => matches!(
             partial,
@@ -3359,6 +3443,14 @@ fn is_vanished_empty_div(element: &Element<'_>) -> bool {
             if container.ctype() == ContainerType::Div
                 && container.attributes().get().is_empty()
                 && container.elements().is_empty()
+    ) || matches!(
+        element,
+        Element::WikidotBlockFrame {
+            attributes,
+            children,
+            collapsible_link: None,
+            ..
+        } if attributes.get().is_empty() && children.is_empty()
     )
 }
 
@@ -3528,6 +3620,7 @@ fn lower_children<'t>(
     }
 
     let eject = matches!(element, Element::Collapsible { .. })
+        || matches!(element, Element::WikidotBlockFrame { .. })
         || matches!(
             element,
             Element::Container(container) if matches!(
@@ -3617,6 +3710,7 @@ fn visit_children<'t>(element: &Element<'t>, visit: &mut dyn FnMut(&[Element<'t>
         | Element::Collapsible { elements, .. }
         | Element::Color { elements, .. }
         | Element::Include { elements, .. } => visit(elements),
+        Element::WikidotBlockFrame { children, .. } => visit(children),
         Element::List { items, .. } => {
             for item in items {
                 match item {
@@ -3647,6 +3741,8 @@ fn visit_children<'t>(element: &Element<'t>, visit: &mut dyn FnMut(&[Element<'t>
             PartialElement::Tab(tab) => visit(&tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner
+            | PartialElement::WikidotBlockOpen(_)
+            | PartialElement::WikidotBlockClose(_)
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)
@@ -3684,6 +3780,7 @@ fn visit_children_mut<'t>(
         | Element::Collapsible { elements, .. }
         | Element::Color { elements, .. }
         | Element::Include { elements, .. } => visit(elements),
+        Element::WikidotBlockFrame { children, .. } => visit(children),
         Element::List { items, .. } => {
             for item in items {
                 match item {
@@ -3714,6 +3811,8 @@ fn visit_children_mut<'t>(
             PartialElement::Tab(tab) => visit(&mut tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&mut ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner
+            | PartialElement::WikidotBlockOpen(_)
+            | PartialElement::WikidotBlockClose(_)
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)
@@ -3727,6 +3826,338 @@ fn visit_children_mut<'t>(
         },
         _ => {}
     }
+}
+
+fn is_wikidot_block_partial(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Partial(
+            PartialElement::WikidotBlockOpen(_) | PartialElement::WikidotBlockClose(_)
+        )
+    )
+}
+
+fn wikidot_frame_attributes<'a>(pairs: &[(&'a str, &'a str)]) -> AttributeMap<'a> {
+    let mut attributes = AttributeMap::new();
+    for (key, value) in pairs {
+        attributes.insert(key, Cow::Borrowed(value));
+    }
+    attributes
+}
+
+struct WikidotFrameBuild<'t> {
+    attributes: AttributeMap<'t>,
+    children: Vec<Element<'t>>,
+    scored_div: bool,
+}
+
+fn unwrap_scored_frame_edges<'t>(children: &mut Vec<Element<'t>>) {
+    if children.is_empty() {
+        return;
+    }
+    // Mirror legacy scored-div normalization (edge paragraphs unwrap, middle
+    // ones stay); the flat path already carries real breaks, so no newline
+    // separators are added.
+    let unwrap_at = |children: &mut Vec<Element<'t>>, index: usize| {
+        let is_paragraph = matches!(
+            children.get(index),
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Paragraph
+        );
+        if is_paragraph {
+            let inner = match &mut children[index] {
+                Element::Container(container) => mem::take(container.elements_mut()),
+                _ => unreachable!("checked above"),
+            };
+            children.splice(index..=index, inner);
+        }
+    };
+    let last = children.len() - 1;
+    unwrap_at(children, last);
+    if last > 0 {
+        unwrap_at(children, 0);
+    }
+}
+
+struct WikidotCollapsibleClose<'t> {
+    show_bottom: bool,
+    hide_text: Option<Cow<'t, str>>,
+}
+
+struct WikidotFrameAssembly<'t> {
+    output: Vec<Element<'t>>,
+    stack: Vec<WikidotFrameBuild<'t>>,
+    collapsible_closes: BTreeMap<usize, WikidotCollapsibleClose<'t>>,
+    at_root: bool,
+}
+
+impl<'t> WikidotFrameAssembly<'t> {
+    fn new(at_root: bool) -> Self {
+        WikidotFrameAssembly {
+            output: Vec::new(),
+            stack: Vec::new(),
+            collapsible_closes: BTreeMap::new(),
+            at_root,
+        }
+    }
+
+    fn top(&mut self) -> &mut Vec<Element<'t>> {
+        match self.stack.last_mut() {
+            Some(frame) => &mut frame.children,
+            None => &mut self.output,
+        }
+    }
+
+    fn push(&mut self, element: Element<'t>) {
+        match element {
+            Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+                self.open_shell(shell);
+            }
+            Element::Partial(PartialElement::WikidotBlockClose(kind)) => {
+                self.close_kind(kind);
+            }
+            element => {
+                self.top().push(element);
+            }
+        }
+    }
+
+    fn open_shell(&mut self, shell: WikidotBlockShell<'t>) {
+        match shell {
+            WikidotBlockShell::Div {
+                attributes, scored, ..
+            } => {
+                self.stack.push(WikidotFrameBuild {
+                    attributes,
+                    children: Vec::new(),
+                    scored_div: scored,
+                });
+            }
+            WikidotBlockShell::Note { .. } => {
+                self.stack.push(WikidotFrameBuild {
+                    attributes: wikidot_frame_attributes(&[("class", "wiki-note")]),
+                    children: Vec::new(),
+                    scored_div: false,
+                });
+            }
+            WikidotBlockShell::Align { alignment, .. } => {
+                self.stack.push(WikidotFrameBuild {
+                    attributes: wikidot_frame_attributes(&[(
+                        "style",
+                        alignment.wd_html_style(),
+                    )]),
+                    children: Vec::new(),
+                    scored_div: false,
+                });
+            }
+            WikidotBlockShell::Collapsible {
+                head,
+                start_open,
+                show_text,
+                hide_text,
+                show_top,
+                show_bottom,
+            } => {
+                self.collapsible_closes.insert(
+                    head,
+                    WikidotCollapsibleClose {
+                        show_bottom,
+                        hide_text: hide_text.clone(),
+                    },
+                );
+                self.stack.push(WikidotFrameBuild {
+                    attributes: wikidot_frame_attributes(&[(
+                        "class",
+                        "collapsible-block",
+                    )]),
+                    children: Vec::new(),
+                    scored_div: false,
+                });
+                let folded_hidden = start_open;
+                self.push_shell_link(
+                    "collapsible-block-folded",
+                    folded_hidden,
+                    show_text,
+                    true,
+                );
+                let mut unfolded_attributes =
+                    wikidot_frame_attributes(&[("class", "collapsible-block-unfolded")]);
+                if !start_open {
+                    unfolded_attributes.insert("style", Cow::Borrowed("display:none"));
+                }
+                self.stack.push(WikidotFrameBuild {
+                    attributes: unfolded_attributes,
+                    children: Vec::new(),
+                    scored_div: false,
+                });
+                if show_top {
+                    self.push_shell_link(
+                        "collapsible-block-unfolded-link",
+                        false,
+                        hide_text,
+                        false,
+                    );
+                }
+                self.stack.push(WikidotFrameBuild {
+                    attributes: wikidot_frame_attributes(&[(
+                        "class",
+                        "collapsible-block-content",
+                    )]),
+                    children: Vec::new(),
+                    scored_div: false,
+                });
+            }
+        }
+    }
+
+    fn push_shell_link(
+        &mut self,
+        class: &'t str,
+        hidden: bool,
+        text: Option<Cow<'t, str>>,
+        show: bool,
+    ) {
+        let mut attributes = wikidot_frame_attributes(&[("class", class)]);
+        if hidden {
+            attributes.insert("style", Cow::Borrowed("display:none"));
+        }
+        let link = WikidotFrameLink {
+            text,
+            show,
+            spans: Vec::new(),
+        };
+        self.top().push(Element::WikidotBlockFrame {
+            attributes,
+            children: Vec::new(),
+            collapsible_link: Some(link),
+            omit_close: false,
+        });
+    }
+
+    fn close_kind(&mut self, kind: WikidotBlockCloseKind) {
+        match kind {
+            WikidotBlockCloseKind::Div { scored, .. } => {
+                if scored {
+                    self.unwrap_paragraph_before_close();
+                } else {
+                    self.strip_paragraph_before_close();
+                }
+                self.pop_frame();
+            }
+            WikidotBlockCloseKind::Collapsible { head } => {
+                self.strip_paragraph_before_close();
+                self.pop_frame();
+                let close = self.collapsible_closes.remove(&head);
+                let (show_bottom, hide_text) = close
+                    .map(|close| (close.show_bottom, close.hide_text))
+                    .unwrap_or((false, None));
+                if show_bottom {
+                    self.push_shell_link(
+                        "collapsible-block-unfolded-link",
+                        false,
+                        hide_text,
+                        false,
+                    );
+                }
+                self.pop_frame();
+                self.pop_frame();
+            }
+            WikidotBlockCloseKind::Note { .. } | WikidotBlockCloseKind::Align { .. } => {
+                self.strip_paragraph_before_close();
+                self.pop_frame();
+            }
+        }
+    }
+
+    fn strip_paragraph_before_close(&mut self) {
+        let emptied = match self.top().last_mut() {
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Paragraph =>
+            {
+                let elements = container.elements_mut();
+                if matches!(elements.last(), Some(Element::LineBreak)) {
+                    elements.pop();
+                }
+                elements.is_empty()
+            }
+            _ => return,
+        };
+        if emptied {
+            self.top().pop();
+        }
+    }
+
+    fn unwrap_paragraph_before_close(&mut self) {
+        let is_paragraph = matches!(
+            self.top().last(),
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Paragraph
+        );
+        if !is_paragraph {
+            return;
+        }
+        let paragraph = self.top().pop();
+        if let Some(Element::Container(container)) = paragraph {
+            let children = container.elements().to_vec();
+            self.top().extend(children);
+        }
+    }
+
+    fn pop_frame(&mut self) {
+        let Some(mut frame) = self.stack.pop() else {
+            return;
+        };
+        if frame.scored_div {
+            unwrap_scored_frame_edges(&mut frame.children);
+        }
+        if matches!(frame.children.last(), Some(Element::LineBreak)) {
+            frame.children.pop();
+        }
+        self.top().push(Element::WikidotBlockFrame {
+            attributes: frame.attributes,
+            children: frame.children,
+            collapsible_link: None,
+            omit_close: false,
+        });
+    }
+
+    fn finish(mut self) -> Vec<Element<'t>> {
+        while let Some(frame) = self.stack.pop() {
+            let mut frame = frame;
+            if frame.scored_div {
+                unwrap_scored_frame_edges(&mut frame.children);
+            }
+            if !self.at_root {
+                while matches!(frame.children.last(), Some(Element::LineBreak)) {
+                    frame.children.pop();
+                }
+            }
+            let omit_close = self.at_root;
+            self.top().push(Element::WikidotBlockFrame {
+                attributes: frame.attributes,
+                children: frame.children,
+                collapsible_link: None,
+                omit_close,
+            });
+        }
+        self.output
+    }
+}
+
+fn build_wikidot_block_frames<'t>(elements: &mut Vec<Element<'t>>, at_root: bool) {
+    for element in elements.iter_mut() {
+        visit_children_mut(element, &mut |children| {
+            build_wikidot_block_frames(children, false);
+        });
+    }
+    if !elements.iter().any(is_wikidot_block_partial) {
+        return;
+    }
+    let mut assembly = WikidotFrameAssembly::new(at_root);
+    for element in mem::take(elements) {
+        assembly.push(element);
+    }
+    *elements = assembly.finish();
 }
 
 #[cfg(test)]

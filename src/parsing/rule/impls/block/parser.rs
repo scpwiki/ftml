@@ -1239,6 +1239,14 @@ where
 
             let score_close = name.ends_with('_');
             let name = name.strip_suffix('_').unwrap_or(&name);
+            if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
+                let flat_closer = parser
+                    .wikidot_block_pair_at_closer_byte(end_start)
+                    .is_some_and(|pair| pair.flat && pair.kind.emits_flat());
+                if flat_closer {
+                    return Ok(false);
+                }
+            }
             if parser.settings().layout.legacy()
                 && score_close
                 && block_rule.name == "block-iftags"

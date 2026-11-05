@@ -200,6 +200,11 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         Element::Collapsible { elements, .. } => {
             render_elements(ctx, elements);
         }
+        Element::WikidotBlockFrame { children, .. } => {
+            ctx.add_newline();
+            render_elements(ctx, children);
+            ctx.add_newline();
+        }
         Element::TableOfContents { .. } => {}
         Element::Footnote(index) => {
             if ctx.title_mode() {
@@ -264,6 +269,8 @@ fn render_partial(ctx: &mut TextContext, partial: &PartialElement) {
 
     match partial {
         PartialElement::WikidotEmptyInlineOwner
+        | PartialElement::WikidotBlockOpen(_)
+        | PartialElement::WikidotBlockClose(_)
         | PartialElement::InlineSizeOpen(..)
         | PartialElement::InlineSizeClose(_)
         | PartialElement::InlineSpanOpen(..)

@@ -31,7 +31,9 @@ use crate::parsing::parser::{QuoteBodyLineStatus, QuoteEscapedUnit};
 use crate::parsing::{
     DepthItem, DepthList, ParagraphSplitEntry, ParagraphSplitKind, process_depths,
 };
-use crate::tree::{AttributeMap, Container, ContainerType, ListItem, ListType};
+use crate::tree::{
+    AttributeMap, Container, ContainerType, ListItem, ListType, PartialElement,
+};
 
 const MAX_BLOCKQUOTE_DEPTH: usize = 128;
 
@@ -378,8 +380,20 @@ fn try_consume_fn<'r, 't>(
         let collapsible_row =
             matches!(elements.first(), Some(Element::Collapsible { .. }));
 
+        // A line carrying a flat block closer keeps its break (the closer
+        // consumed no break itself); flat heads already ate theirs.
+        let wikidot_block_close_line = parser.settings().layout.legacy()
+            && elements.iter().any(|element| {
+                matches!(
+                    element,
+                    Element::Partial(PartialElement::WikidotBlockClose(_))
+                )
+            });
         let keep_line_break = if parser.settings().layout.legacy() {
-            paragraph_safe || alignment_block || collapsible_row
+            paragraph_safe
+                || alignment_block
+                || collapsible_row
+                || wikidot_block_close_line
         } else {
             !consumed_past_line || paragraph_safe
         };
@@ -953,6 +967,7 @@ fn push_native_quote_row<'t>(
         stack.pop_line_break();
         stack.end_paragraph();
         stack.mark_wikidot_simple_table_boundary();
+        stack.record_next_element_line_start(true);
         return;
     }
     let alignment_block = row.elements.iter().any(|element| {
@@ -976,12 +991,25 @@ fn push_native_quote_row<'t>(
                 && counts.iter().map(|entry| entry.0).sum::<usize>() == row.elements.len()
         })
         .cloned();
+    // A row carrying a flat block closer leaves following content unwrapped
+    // and keeps its own trailing break (mirrors top-level closer lines).
+    let wikidot_block_close_row = wikidot
+        && row.elements.iter().any(|element| {
+            matches!(
+                element,
+                Element::Partial(PartialElement::WikidotBlockClose(_))
+            )
+        });
+    if wikidot_block_close_row {
+        stack.record_next_element_line_start(false);
+    }
     if let Some(counts) = split_counts {
         let leaves_following_content_unwrapped = row
             .elements
             .iter()
             .any(collapsible_has_direct_literal_nested_opener)
-            || (wikidot && alignment_block);
+            || (wikidot && alignment_block)
+            || wikidot_block_close_row;
         let has_simple_table = row.elements.iter().any(|element| {
             matches!(
                 element,
@@ -1001,7 +1029,7 @@ fn push_native_quote_row<'t>(
             if index < last_index && matches!(slice.last(), Some(Element::LineBreak)) {
                 slice.pop();
             }
-            let per_element = seam_bounded
+            let per_element = (seam_bounded
                 && !*safe
                 && slice.iter().any(|element| {
                     !element.paragraph_safe()
@@ -1009,7 +1037,8 @@ fn push_native_quote_row<'t>(
                             element,
                             Element::List { .. } | Element::DefinitionList(_)
                         )
-                });
+                }))
+                || wikidot_block_close_row;
             for element in slice {
                 let element_safe = if per_element {
                     element.paragraph_safe()
@@ -1047,16 +1076,18 @@ fn push_native_quote_row<'t>(
         .elements
         .iter()
         .any(collapsible_has_direct_literal_nested_opener)
-        || (wikidot && alignment_block);
+        || (wikidot && alignment_block)
+        || wikidot_block_close_row;
     let has_simple_table = row.elements.iter().any(|element| {
         matches!(
             element,
             Element::Table(table) if table.table_type == crate::tree::TableType::Simple
         )
     });
-    let per_element = !row.paragraph_safe
+    let per_element = (!row.paragraph_safe
         && crate::parsing::paragraph::batch_is_seam_bounded(&row.elements)
-        && row.elements.iter().any(|element| !element.paragraph_safe());
+        && row.elements.iter().any(|element| !element.paragraph_safe()))
+        || wikidot_block_close_row;
     for element in row.elements {
         let paragraph_safe = if per_element {
             element.paragraph_safe()

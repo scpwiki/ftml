@@ -231,6 +231,7 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
             Element::Math {
                 name: Some(Cow::Borrowed("eq-main")),
                 latex_source: Cow::Borrowed("x^2"),
+                wikidot_block_open_elements: Vec::new(),
             },
             Element::Footnote(1),
             Element::Footnote(2),

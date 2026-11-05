@@ -313,6 +313,9 @@ fn exercise_element_helpers(element: &Element<'_>) -> usize {
             })
             .sum(),
         Element::Collapsible { elements, .. } => exercise_elements_helpers(elements),
+        Element::WikidotBlockFrame { children, .. } => {
+            exercise_elements_helpers(children)
+        }
         Element::Color { elements, .. } => exercise_elements_helpers(elements),
         Element::Include { elements, .. } => exercise_elements_helpers(elements),
         Element::Partial(partial) => exercise_partial_element_helpers(partial),
@@ -336,6 +339,8 @@ fn exercise_partial_element_helpers(partial: &PartialElement<'_>) -> usize {
 
     match partial {
         PartialElement::WikidotEmptyInlineOwner
+        | PartialElement::WikidotBlockOpen(_)
+        | PartialElement::WikidotBlockClose(_)
         | PartialElement::InlineSizeOpen(..)
         | PartialElement::InlineSizeClose(_)
         | PartialElement::InlineSpanOpen(..)

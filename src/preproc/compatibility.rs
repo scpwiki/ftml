@@ -814,7 +814,7 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
     let mut div_depth = 0usize;
     let mut baselines: Vec<usize> = Vec::new();
     let mut output = Vec::with_capacity(lines.len());
-    for (line, literal) in lines.iter().zip(literal_lines.iter()) {
+    for (index, (line, literal)) in lines.iter().zip(literal_lines.iter()).enumerate() {
         if !*literal {
             let (body, _) = split_line(line);
             let trimmed = body.trim_end();
@@ -824,9 +824,24 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
                 }
                 Some((_, Marker::CollapsibleClose)) => {
                     if let Some(baseline) = baselines.pop() {
-                        while div_depth > baseline {
-                            output.push("[[/div]]\n".to_owned());
-                            div_depth -= 1;
+                        // Rescue only tight nesting tails (a div re-close on
+                        // the very next line). Crossings (content between, or
+                        // no re-close at all) go to the flat path, which
+                        // pairs the div across the collapsible; synthesizing
+                        // a closer would defeat that pairing (live evidence:
+                        // q2-cd-own, q2-d-unclosed-in-c keep/cross the div).
+                        let tight_tail = !literal_lines
+                            .get(index + 1)
+                            .is_some_and(|literal| *literal)
+                            && lines.get(index + 1).is_some_and(|next| {
+                                let (body, _) = split_line(next);
+                                standalone_div_marker(body.trim_end(), "") == Some(false)
+                            });
+                        if tight_tail {
+                            while div_depth > baseline {
+                                output.push("[[/div]]\n".to_owned());
+                                div_depth -= 1;
+                            }
                         }
                     }
                 }
@@ -2953,6 +2968,10 @@ mod tests {
 
     #[test]
     fn unclosed_div_closed_before_collapsible_close() {
+        // Crossings (content between, or no re-close at all) are not rescued:
+        // live pairs the div across the collapsible (or leaves it literal),
+        // and synthesizing a closer would defeat that pairing. Live evidence:
+        // q2-cd-own, q2-d-unclosed-in-c.
         let mut source = concat!(
             "[[collapsible show=\"Breach\"]]\n",
             "[[div class=\"blockquote\"]]\n",
@@ -2969,9 +2988,55 @@ mod tests {
                 "[[collapsible show=\"Breach\"]]\n",
                 "[[div class=\"blockquote\"]]\n",
                 "body text\n",
-                "[[/div]]\n",
                 "[[/collapsible]]\n",
             ),
+        );
+
+        // Tight nesting tails (a div re-close on the very next line) still
+        // rescue the div before the collapsible close.
+        let mut tight = vec![
+            "[[collapsible show=\"Breach\"]]\n".to_owned(),
+            "[[div class=\"blockquote\"]]\n".to_owned(),
+            "body text\n".to_owned(),
+            "[[/collapsible]]\n".to_owned(),
+            "[[/div]]\n".to_owned(),
+        ];
+        close_unclosed_divs_before_collapsible_close(&mut tight);
+        assert_eq!(
+            tight,
+            vec![
+                "[[collapsible show=\"Breach\"]]\n".to_owned(),
+                "[[div class=\"blockquote\"]]\n".to_owned(),
+                "body text\n".to_owned(),
+                "[[/div]]\n".to_owned(),
+                "[[/collapsible]]\n".to_owned(),
+                "[[/div]]\n".to_owned(),
+            ],
+        );
+
+        // Content between the collapsible close and the div re-close is a
+        // crossing: no rescue, the flat path pairs across.
+        let mut crossed = vec![
+            "[[collapsible]]\n".to_owned(),
+            "A\n".to_owned(),
+            "[[div]]\n".to_owned(),
+            "B\n".to_owned(),
+            "[[/collapsible]]\n".to_owned(),
+            "C\n".to_owned(),
+            "[[/div]]\n".to_owned(),
+        ];
+        close_unclosed_divs_before_collapsible_close(&mut crossed);
+        assert_eq!(
+            crossed,
+            vec![
+                "[[collapsible]]\n".to_owned(),
+                "A\n".to_owned(),
+                "[[div]]\n".to_owned(),
+                "B\n".to_owned(),
+                "[[/collapsible]]\n".to_owned(),
+                "C\n".to_owned(),
+                "[[/div]]\n".to_owned(),
+            ],
         );
     }
 

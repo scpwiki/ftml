@@ -208,3 +208,67 @@ pub use self::target::BLOCK_TARGET;
 pub use self::toc::BLOCK_TABLE_OF_CONTENTS;
 pub use self::underline::BLOCK_UNDERLINE;
 pub use self::user::BLOCK_USER;
+
+use crate::parsing::parser::Parser;
+use crate::parsing::parser::block_pairs::WikidotBlockPair;
+use crate::parsing::{ParseError, Token};
+
+pub(crate) fn wikidot_flat_pair_for_head(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> Option<WikidotBlockPair> {
+    if !parser.settings().layout.legacy() {
+        return None;
+    }
+    if std::env::var("L83NOFLAT").is_ok() {
+        return None;
+    }
+    parser
+        .wikidot_block_pair_at_head_byte(opener_start)
+        .filter(|pair| pair.flat && pair.kind.emits_flat())
+}
+
+pub(crate) fn wikidot_scored_div_close_compatible<'r, 't>(
+    parser: &Parser<'r, 't>,
+    head_byte: usize,
+) -> bool
+where
+    'r: 't,
+{
+    parser.wikidot_alias_has_compatible_close(&BLOCK_DIV, head_byte)
+}
+
+pub(crate) fn wikidot_scan_pairs_head(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> bool {
+    parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser
+            .wikidot_block_pair_at_head_byte(opener_start)
+            .is_some()
+}
+
+pub(crate) fn consume_wikidot_flat_head_break<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    keep_break_after_spaces: bool,
+) -> Result<(), ParseError>
+where
+    'r: 't,
+{
+    if parser.current().token == Token::Whitespace {
+        let mut lookahead = parser.clone();
+        lookahead.step()?;
+        if lookahead.current().token != Token::LineBreak {
+            return Ok(());
+        }
+        parser.step()?;
+        if keep_break_after_spaces {
+            return Ok(());
+        }
+    }
+    if parser.current().token == Token::LineBreak {
+        parser.step()?;
+    }
+    Ok(())
+}

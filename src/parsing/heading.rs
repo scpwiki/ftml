@@ -43,6 +43,7 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
         | Element::Collapsible { elements, .. }
         | Element::Color { elements, .. }
         | Element::Include { elements, .. } => visit(elements),
+        Element::WikidotBlockFrame { children, .. } => visit(children),
         Element::List { items, .. } => {
             for item in items {
                 match item {
@@ -73,6 +74,8 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             PartialElement::Tab(tab) => visit(&mut tab.elements),
             PartialElement::RubyText(ruby_text) => visit(&mut ruby_text.elements),
             PartialElement::WikidotEmptyInlineOwner
+            | PartialElement::WikidotBlockOpen(_)
+            | PartialElement::WikidotBlockClose(_)
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)

@@ -329,6 +329,65 @@ impl<'r, 't> Parser<'r, 't> {
             .clone()
     }
 
+    pub(crate) fn wikidot_block_pair_at_head_byte(
+        &self,
+        head_byte: usize,
+    ) -> Option<block_pairs::WikidotBlockPair> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .pair_at_head_byte(head_byte)
+            .copied()
+    }
+
+    pub(crate) fn wikidot_block_pair_at_closer_byte(
+        &self,
+        closer_byte: usize,
+    ) -> Option<block_pairs::WikidotBlockPair> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .pair_at_closer_byte(closer_byte)
+            .copied()
+    }
+
+    pub(crate) fn wikidot_closer_inside_any_span(&self, closer_byte: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .byte_inside_any_span(closer_byte)
+    }
+
+    pub(crate) fn wikidot_scan_shows_stolen_head(
+        &self,
+        kind: block_pairs::WikidotBlockKind,
+        head_byte: usize,
+    ) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .shows_stolen_head(kind, head_byte)
+    }
+
+    pub(crate) fn wikidot_flat_pair_before(
+        &self,
+        kind: block_pairs::WikidotBlockKind,
+        closer_byte: usize,
+    ) -> Option<(usize, bool)> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .pairs()
+            .iter()
+            .find(|pair| {
+                pair.flat
+                    && pair.kind == kind
+                    && pair.kind.emits_flat()
+                    && pair.head_byte < closer_byte
+            })
+            .map(|pair| (pair.head_byte, pair.scored))
+    }
+
     #[inline]
     pub(crate) fn wikidot_iftags_body_end(&self) -> Option<usize> {
         self.block_end_scan_cache
@@ -2289,6 +2348,7 @@ fn parser_mutable_state_helpers_reset_and_remove_collections() {
         contents: cow!("code"),
         language: Some(cow!("rust")),
         name: Some(cow!("sample")),
+        wikidot_block_open_elements: Vec::new(),
     });
     parser.push_table_of_contents_entry(HeadingLevel::One, &[text!("Heading")]);
     parser.set_footnote_block();
@@ -2315,6 +2375,7 @@ fn parser_mutable_state_helpers_reset_and_remove_collections() {
         contents: cow!("code"),
         language: None,
         name: None,
+        wikidot_block_open_elements: Vec::new(),
     });
     parser.push_table_of_contents_entry(HeadingLevel::Two, &[text!("Heading")]);
 
@@ -2325,6 +2386,7 @@ fn parser_mutable_state_helpers_reset_and_remove_collections() {
             contents: cow!("code"),
             language: None,
             name: None,
+            wikidot_block_open_elements: Vec::new(),
         }],
     );
     assert_eq!(
@@ -2416,6 +2478,7 @@ fn parser_append_shared_items_and_optional_spaces_cover_helpers() {
         contents: cow!("code"),
         language: None,
         name: None,
+        wikidot_block_open_elements: Vec::new(),
     }];
     let mut table_of_contents = vec![(2, String::from("Heading"))];
     let mut footnotes = vec![vec![text!("note")]];
@@ -2445,6 +2508,7 @@ fn parser_append_shared_items_and_optional_spaces_cover_helpers() {
             contents: cow!("code"),
             language: None,
             name: None,
+            wikidot_block_open_elements: Vec::new(),
         }],
     );
     assert_eq!(

@@ -26,4 +26,4 @@ mod object;
 pub use self::collection::Elements;
 pub use self::iter_owned::*;
 pub use self::iter_ref::*;
-pub use self::object::Element;
+pub use self::object::{Element, WikidotFrameLink};

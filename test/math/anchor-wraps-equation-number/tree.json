@@ -1,0 +1,25 @@
+{
+    "elements": [
+        {
+            "element": "anchor",
+            "data": {
+                "target": null,
+                "attributes": {
+                    "href": "https://e.com/"
+                },
+                "elements": [
+                    {
+                        "element": "math",
+                        "data": {
+                            "name": null,
+                            "latex-source": "x"
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    }
+                ]
+            }
+        }
+    ]
+}

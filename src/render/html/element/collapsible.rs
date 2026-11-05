@@ -73,12 +73,8 @@ pub fn render_collapsible(ctx: &mut HtmlContext, collapsible: Collapsible) {
             let (elements, unfolded_tail) = unfolded_tail_start
                 .map(|start| elements.split_at(start.min(elements.len())))
                 .unwrap_or((elements, &[]));
-            let show_text = show_text
-                .filter(|text| !text.is_empty() && *text != "0")
-                .unwrap_or("+ show block");
-            let hide_text = hide_text
-                .filter(|text| !text.is_empty() && *text != "0")
-                .unwrap_or("– hide block");
+            let show_text = wikidot_link_label(show_text, true);
+            let hide_text = wikidot_link_label(hide_text, false);
             render_collapsible_wikidot(
                 ctx,
                 elements,
@@ -189,6 +185,29 @@ fn render_wikidot_hide_link(
         .inner(|ctx| {
             render_wikidot_collapsible_link_with_spans(ctx, hide_text, label_spans)
         });
+}
+
+fn wikidot_link_label(text: Option<&str>, show: bool) -> &str {
+    let default = if show {
+        "+ show block"
+    } else {
+        "– hide block"
+    };
+    text.filter(|text| !text.is_empty() && *text != "0")
+        .unwrap_or(default)
+}
+
+pub(super) fn render_wikidot_frame_link(
+    ctx: &mut HtmlContext,
+    text: Option<&str>,
+    show: bool,
+    label_spans: &[AttributeMap],
+) {
+    render_wikidot_collapsible_link_with_spans(
+        ctx,
+        wikidot_link_label(text, show),
+        label_spans,
+    );
 }
 
 fn render_wikidot_collapsible_link_with_spans(

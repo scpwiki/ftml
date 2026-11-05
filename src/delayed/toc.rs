@@ -82,6 +82,9 @@ fn visit_headings<'a, 't>(
             | Element::Include { elements, .. } => {
                 visit_headings(elements, footnotes, visitor);
             }
+            Element::WikidotBlockFrame { children, .. } => {
+                visit_headings(children, footnotes, visitor);
+            }
             Element::Partial(partial) => match partial {
                 PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
                     visit_headings(elements, footnotes, visitor);
@@ -108,6 +111,8 @@ fn visit_headings<'a, 't>(
                     visit_headings(&text.elements, footnotes, visitor);
                 }
                 PartialElement::WikidotEmptyInlineOwner
+                | PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_)
                 | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(..)

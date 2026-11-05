@@ -862,6 +862,9 @@ fn resolve_elements(
             | Element::Include { elements, .. } => {
                 resolve_elements(elements, bindings, resolved_occurrences)?;
             }
+            Element::WikidotBlockFrame { children, .. } => {
+                resolve_elements(children, bindings, resolved_occurrences)?;
+            }
             Element::Partial(partial) => match partial {
                 PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
                     resolve_elements(elements, bindings, resolved_occurrences)?;
@@ -895,6 +898,8 @@ fn resolve_elements(
                     resolve_elements(&mut text.elements, bindings, resolved_occurrences)?;
                 }
                 PartialElement::WikidotEmptyInlineOwner
+                | PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_)
                 | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(..)
@@ -956,6 +961,7 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
         | Element::Collapsible { elements, .. }
         | Element::Color { elements, .. }
         | Element::Include { elements, .. } => elements_contain_delayed(elements),
+        Element::WikidotBlockFrame { children, .. } => elements_contain_delayed(children),
         Element::Partial(partial) => match partial {
             PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
                 elements_contain_delayed(elements)
@@ -971,6 +977,8 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
             PartialElement::Tab(tab) => elements_contain_delayed(&tab.elements),
             PartialElement::RubyText(text) => elements_contain_delayed(&text.elements),
             PartialElement::WikidotEmptyInlineOwner
+            | PartialElement::WikidotBlockOpen(_)
+            | PartialElement::WikidotBlockClose(_)
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)

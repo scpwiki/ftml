@@ -111,6 +111,9 @@ fn tree_stack_depth_reaches_threshold<'a>(
             | Element::Include { elements, .. } => {
                 push_tree_elements(stack, elements, child_depth)
             }
+            Element::WikidotBlockFrame { children, .. } => {
+                push_tree_elements(stack, children, child_depth)
+            }
             Element::List { items, .. } => {
                 for item in items {
                     match item {
@@ -151,6 +154,8 @@ fn tree_stack_depth_reaches_threshold<'a>(
                     push_tree_elements(stack, &ruby.elements, child_depth)
                 }
                 PartialElement::WikidotEmptyInlineOwner
+                | PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_)
                 | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(..)

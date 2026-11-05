@@ -197,6 +197,15 @@ pub enum Element<'t> {
         show_bottom: bool,
     },
 
+    #[serde(rename_all = "kebab-case")]
+    WikidotBlockFrame {
+        attributes: AttributeMap<'t>,
+        children: Vec<Element<'t>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        collapsible_link: Option<WikidotFrameLink<'t>>,
+        omit_close: bool,
+    },
+
     TableOfContents {
         attributes: AttributeMap<'t>,
         align: Option<Alignment>,
@@ -270,6 +279,8 @@ pub enum Element<'t> {
     Math {
         name: Option<Cow<'t, str>>,
         latex_source: Cow<'t, str>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        wikidot_block_open_elements: Vec<Element<'t>>,
     },
 
     #[serde(rename_all = "kebab-case")]
@@ -316,6 +327,24 @@ pub enum Element<'t> {
     ///
     /// See [`WJ-816`](https://scuttle.atlassian.net/browse/WJ-816).
     Partial(PartialElement<'t>),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct WikidotFrameLink<'t> {
+    pub text: Option<Cow<'t, str>>,
+    pub show: bool,
+    pub spans: Vec<AttributeMap<'t>>,
+}
+
+impl WikidotFrameLink<'_> {
+    pub fn to_owned(&self) -> WikidotFrameLink<'static> {
+        WikidotFrameLink {
+            text: option_string_to_owned(&self.text),
+            show: self.show,
+            spans: self.spans.iter().map(AttributeMap::to_owned).collect(),
+        }
+    }
 }
 
 impl Element<'_> {
@@ -368,6 +397,7 @@ impl Element<'_> {
             Element::RadioButton { .. } => "RadioButton",
             Element::CheckBox { .. } => "CheckBox",
             Element::Collapsible { .. } => "Collapsible",
+            Element::WikidotBlockFrame { .. } => "WikidotBlockFrame",
             Element::TableOfContents { .. } => "TableOfContents",
             Element::Footnote(_) => "Footnote",
             Element::FootnoteBlock { .. } => "FootnoteBlock",
@@ -426,6 +456,7 @@ impl Element<'_> {
             | Element::Collapsible { elements, .. }
             | Element::Color { elements, .. }
             | Element::Include { elements, .. } => offset_elements(elements),
+            Element::WikidotBlockFrame { children, .. } => offset_elements(children),
             Element::List { items, .. } => {
                 for item in items {
                     match item {
@@ -461,6 +492,8 @@ impl Element<'_> {
                     offset_elements(&mut ruby_text.elements);
                 }
                 PartialElement::WikidotEmptyInlineOwner
+                | PartialElement::WikidotBlockOpen(_)
+                | PartialElement::WikidotBlockClose(_)
                 | PartialElement::InlineSizeOpen(..)
                 | PartialElement::InlineSizeClose(_)
                 | PartialElement::InlineSpanOpen(..)
@@ -512,6 +545,7 @@ impl Element<'_> {
             Element::DefinitionList(_) => false,
             Element::RadioButton { .. } | Element::CheckBox { .. } => true,
             Element::Collapsible { .. } => false,
+            Element::WikidotBlockFrame { .. } => false,
             Element::TableOfContents { .. } => false,
             Element::Footnote(_) => true,
             Element::FootnoteBlock { .. } => false,
@@ -689,6 +723,19 @@ impl Element<'_> {
                 show_top: *show_top,
                 show_bottom: *show_bottom,
             },
+            Element::WikidotBlockFrame {
+                attributes,
+                children,
+                collapsible_link,
+                omit_close,
+            } => Element::WikidotBlockFrame {
+                attributes: attributes.to_owned(),
+                children: elements_to_owned(children),
+                collapsible_link: collapsible_link
+                    .as_ref()
+                    .map(WikidotFrameLink::to_owned),
+                omit_close: *omit_close,
+            },
             Element::TableOfContents { align, attributes } => Element::TableOfContents {
                 align: *align,
                 attributes: attributes.to_owned(),
@@ -749,9 +796,16 @@ impl Element<'_> {
                 elements: elements_to_owned(elements),
             },
             Element::Code(code_block) => Element::Code(code_block.to_owned()),
-            Element::Math { name, latex_source } => Element::Math {
+            Element::Math {
+                name,
+                latex_source,
+                wikidot_block_open_elements,
+            } => Element::Math {
                 name: option_string_to_owned(name),
                 latex_source: string_to_owned(latex_source),
+                wikidot_block_open_elements: elements_to_owned(
+                    wikidot_block_open_elements,
+                ),
             },
             Element::MathInline { latex_source } => Element::MathInline {
                 latex_source: string_to_owned(latex_source),

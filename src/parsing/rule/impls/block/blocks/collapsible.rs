@@ -19,10 +19,12 @@
  */
 
 use super::prelude::*;
+use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
 use crate::parsing::consume::consume;
+use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::parsing::{ParseError, ParseErrorKind};
-use crate::tree::{AttributeMap, ListItem, ListType};
+use crate::tree::{AttributeMap, ListItem, ListType, PartialElement, WikidotBlockShell};
 use std::borrow::Cow;
 
 pub const BLOCK_COLLAPSIBLE: BlockRule = BlockRule {
@@ -108,7 +110,7 @@ where
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -120,6 +122,36 @@ fn parse_fn<'r, 't>(
 
     let (head, body_start) = parse_collapsible_head(parser, name, in_head)?;
 
+    if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
+        && pair.kind == WikidotBlockKind::Collapsible
+    {
+        consume_wikidot_flat_head_break(parser, true)?;
+        let shell = WikidotBlockShell::Collapsible {
+            head: opener_start,
+            start_open: head.start_open,
+            show_text: head.show_text,
+            hide_text: head.hide_text,
+            show_top: head.show_top,
+            show_bottom: head.show_bottom,
+        };
+        return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
+    }
+    // First-fit binding: a scan-seen head with a visible same-kind closer
+    // after it lost that closer to an outer opener and must stay literal.
+    // Scan-blind heads (zoned closers, dropped arguments) and truly unclosed
+    // heads fall through to the legacy path, which already fails unclosed.
+    if parser.settings().layout.legacy()
+        && parser
+            .wikidot_block_pair_at_head_byte(opener_start)
+            .is_none()
+        && (parser.discarding_hidden_body()
+            || parser.wikidot_scan_shows_stolen_head(
+                WikidotBlockKind::Collapsible,
+                opener_start,
+            ))
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let previous_collapsible_context = parser.in_wikidot_collapsible();
     if parser.settings().layout.legacy() {
         parser.set_in_wikidot_collapsible(true);

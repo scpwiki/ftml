@@ -19,8 +19,10 @@
  */
 
 use super::prelude::*;
+use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
 use crate::delayed::DelayedElement;
-use crate::tree::{Alignment, AttributeMap};
+use crate::parsing::parser::block_pairs::WikidotBlockKind;
+use crate::tree::{Alignment, AttributeMap, PartialElement, WikidotBlockShell};
 
 macro_rules! make_align_block {
     ($block_const:ident, $block_name:expr, $symbol:expr, $align:ident) => {
@@ -87,6 +89,24 @@ pub fn parse_alignment_block<'r, 't>(
             == 1;
 
     let body_start = parser.get_head_none_with_body_start(block_rule, in_head)?;
+
+    if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
+        && matches!(
+            pair.kind,
+            WikidotBlockKind::AlignCenter
+                | WikidotBlockKind::AlignRight
+                | WikidotBlockKind::AlignLeft
+                | WikidotBlockKind::AlignJustify
+        )
+    {
+        consume_wikidot_flat_head_break(parser, false)?;
+        let shell = WikidotBlockShell::Align {
+            head: opener_start,
+            alignment,
+        };
+        return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
+    }
+
     if !parser.has_body_end_block(block_rule) {
         return Err(parser.make_end_of_input_err());
     }

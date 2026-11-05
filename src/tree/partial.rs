@@ -19,8 +19,8 @@
  */
 
 use super::{
-    AnchorTarget, AttributeMap, ContainerType, ListItem, RubyText, Tab, TableCell,
-    TableRow,
+    Alignment, AnchorTarget, AttributeMap, ContainerType, ListItem, RubyText, Tab,
+    TableCell, TableRow,
 };
 use crate::parsing::ParseErrorKind;
 use std::borrow::Cow;
@@ -72,6 +72,74 @@ impl InlineFormatKind {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum WikidotBlockShell<'t> {
+    Div {
+        head: usize,
+        attributes: AttributeMap<'t>,
+        scored: bool,
+    },
+    Collapsible {
+        head: usize,
+        start_open: bool,
+        show_text: Option<Cow<'t, str>>,
+        hide_text: Option<Cow<'t, str>>,
+        show_top: bool,
+        show_bottom: bool,
+    },
+    Note {
+        head: usize,
+    },
+    Align {
+        head: usize,
+        alignment: Alignment,
+    },
+}
+
+impl<'t> WikidotBlockShell<'t> {
+    pub fn to_owned(&self) -> WikidotBlockShell<'static> {
+        match self {
+            WikidotBlockShell::Div {
+                head,
+                attributes,
+                scored,
+            } => WikidotBlockShell::Div {
+                head: *head,
+                attributes: attributes.to_owned(),
+                scored: *scored,
+            },
+            WikidotBlockShell::Collapsible {
+                head,
+                start_open,
+                show_text,
+                hide_text,
+                show_top,
+                show_bottom,
+            } => WikidotBlockShell::Collapsible {
+                head: *head,
+                start_open: *start_open,
+                show_text: show_text.as_ref().map(|text| Cow::Owned(text.to_string())),
+                hide_text: hide_text.as_ref().map(|text| Cow::Owned(text.to_string())),
+                show_top: *show_top,
+                show_bottom: *show_bottom,
+            },
+            WikidotBlockShell::Note { head } => WikidotBlockShell::Note { head: *head },
+            WikidotBlockShell::Align { head, alignment } => WikidotBlockShell::Align {
+                head: *head,
+                alignment: *alignment,
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum WikidotBlockCloseKind {
+    Div { head: usize, scored: bool },
+    Collapsible { head: usize },
+    Note { head: usize },
+    Align { head: usize },
+}
+
 /// Part of an element, as returned by a rule.
 ///
 /// These are used by specific rules attempting to
@@ -80,6 +148,10 @@ impl InlineFormatKind {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum PartialElement<'t> {
     WikidotEmptyInlineOwner,
+
+    WikidotBlockOpen(WikidotBlockShell<'t>),
+
+    WikidotBlockClose(WikidotBlockCloseKind),
 
     InlineSizeOpen(Cow<'t, str>, Cow<'t, str>),
 
@@ -116,6 +188,8 @@ impl PartialElement<'_> {
     pub fn name(&self) -> &'static str {
         match self {
             PartialElement::WikidotEmptyInlineOwner => "WikidotEmptyInlineOwner",
+            PartialElement::WikidotBlockOpen(_) => "WikidotBlockOpen",
+            PartialElement::WikidotBlockClose(_) => "WikidotBlockClose",
             PartialElement::InlineSizeOpen(..) => "InlineSizeOpen",
             PartialElement::InlineSizeClose(_) => "InlineSizeClose",
             PartialElement::InlineSpanOpen(..) => "InlineSpanOpen",
@@ -138,6 +212,8 @@ impl PartialElement<'_> {
     pub fn parse_error_kind(&self) -> ParseErrorKind {
         match self {
             PartialElement::WikidotEmptyInlineOwner
+            | PartialElement::WikidotBlockOpen(_)
+            | PartialElement::WikidotBlockClose(_)
             | PartialElement::InlineSizeOpen(..)
             | PartialElement::InlineSizeClose(_)
             | PartialElement::InlineSpanOpen(..)
@@ -160,6 +236,12 @@ impl PartialElement<'_> {
         match self {
             PartialElement::WikidotEmptyInlineOwner => {
                 PartialElement::WikidotEmptyInlineOwner
+            }
+            PartialElement::WikidotBlockOpen(shell) => {
+                PartialElement::WikidotBlockOpen(shell.to_owned())
+            }
+            PartialElement::WikidotBlockClose(kind) => {
+                PartialElement::WikidotBlockClose(*kind)
             }
             PartialElement::InlineSizeOpen(value, head) => {
                 PartialElement::InlineSizeOpen(
@@ -219,6 +301,13 @@ impl PartialElement<'_> {
     }
 
     #[inline]
+    pub(crate) fn is_wikidot_block_control(&self) -> bool {
+        matches!(
+            self,
+            PartialElement::WikidotBlockOpen(_) | PartialElement::WikidotBlockClose(_)
+        )
+    }
+
     pub(crate) fn is_inline_format_control(&self) -> bool {
         matches!(
             self,
