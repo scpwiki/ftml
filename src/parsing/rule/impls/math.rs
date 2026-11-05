@@ -21,6 +21,7 @@
 use super::prelude::*;
 use super::raw::RULE_RAW;
 use crate::parsing::collect::consume_valid_comment;
+use crate::parsing::parser::closer_scan::count_scan_token_visit;
 use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
 use std::borrow::Cow;
 
@@ -74,13 +75,32 @@ fn collect_wikidot_math_source<'r, 't>(
 where
     'r: 't,
 {
+    let scan_start = parser.current_token_index();
+    // A scan from an earlier `[[$` opener that stepped to `InputEnd` proved
+    // that no `RightMath` exists at or after it, and that the walk was a plain
+    // single-token walk (it never consumed a comment or a raw region, which are
+    // the only ways this loop jumps over tokens). Every later opener therefore
+    // walks the same way to the same `InputEnd` and returns the identical
+    // `EndOfInput` error; see `parsing/parser/closer_scan.rs`.
+    //
+    // A discarding hidden body commits the failed attempt when it lands on the
+    // body's end-block boundary, and the full walk lands there on `InputEnd`
+    // while this shortcut would stay on the opener, so those scans keep
+    // running for real.
+    if !parser.discarding_hidden_body() && parser.math_close_absent(scan_start) {
+        return Err(parser.make_end_of_input_err());
+    }
+
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
     let mut segment_start = start;
     let mut comment_elided = None::<String>;
     let mut suppress_formula = false;
+    // Only needed to decide whether this walk may be memoized.
+    let mut saw_jump = false;
 
     loop {
+        count_scan_token_visit();
         match parser.current().token {
             Token::RightMath => {
                 let end = parser.current().span.start;
@@ -109,7 +129,12 @@ where
             Token::ParagraphBreak => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
-            Token::InputEnd => return Err(parser.make_err(ParseErrorKind::EndOfInput)),
+            Token::InputEnd => {
+                if !saw_jump {
+                    parser.record_math_close_absent(scan_start);
+                }
+                return Err(parser.make_err(ParseErrorKind::EndOfInput));
+            }
 
             Token::RuntimeText | Token::GeneratedPageLink | Token::GeneratedTagLinks => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -125,6 +150,7 @@ where
             }
 
             Token::LeftComment => {
+                saw_jump = true;
                 let comment_start = parser.current().span.start;
                 let mut comment = parser.clone();
                 if consume_valid_comment(&mut comment).is_err() {
@@ -169,6 +195,7 @@ where
             }
 
             Token::Raw => {
+                saw_jump = true;
                 let mut raw = parser.clone();
                 if RULE_RAW.try_consume(&mut raw).is_err() {
                     parser.step()?;

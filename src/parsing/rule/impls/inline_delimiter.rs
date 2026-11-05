@@ -21,6 +21,7 @@
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
+use crate::parsing::parser::closer_scan::count_scan_token_visit;
 use crate::tree::Container;
 use std::borrow::Cow;
 
@@ -106,10 +107,31 @@ pub(super) fn validate_reachable_close(
     mode: ReachableCloseMode,
 ) -> Result<(), ParseError> {
     let tokens = parser.remaining();
+    let scan_start = parser.ahead_token_index();
+    // A split-free scan that reached `InputEnd` from an earlier opener proved
+    // that no `token` exists at or after it, and that it never touched block
+    // bookkeeping (which is the only parser-context-dependent outcome here).
+    // Every later start sees a suffix of those tokens, so it reaches
+    // `InputEnd` too and returns the identical error; see
+    // `parsing/parser/closer_scan.rs`.
+    if split.is_none()
+        && let Some(paragraph_break) = parser.delimiter_close_absent(token, scan_start)
+    {
+        return Err(if paragraph_break {
+            parser.make_err(ParseErrorKind::RuleFailed)
+        } else {
+            parser.make_err(ParseErrorKind::EndOfInput)
+        });
+    }
+
     let mut paragraph_error = None;
     let mut open_blocks: Vec<String> = Vec::new();
+    // Both are only needed to decide whether this walk may be memoized.
+    let mut saw_block_pairing = false;
+    let mut last_paragraph_break = None;
     let mut index = 0;
     while index < tokens.len() {
+        count_scan_token_visit();
         if let Some(delimiter) = split
             && delimiter.is_half(&tokens[index])
             && tokens.get(index + 1).is_some_and(|next| {
@@ -133,25 +155,36 @@ pub(super) fn validate_reachable_close(
         }
         match tokens[index].token {
             Token::InputEnd => {
+                if split.is_none() && !saw_block_pairing {
+                    parser.record_delimiter_close_absent(
+                        token,
+                        scan_start,
+                        last_paragraph_break,
+                    );
+                }
                 return Err(paragraph_error
                     .unwrap_or_else(|| parser.make_err(ParseErrorKind::EndOfInput)));
             }
             Token::ParagraphBreak => {
+                last_paragraph_break = Some(scan_start + index);
                 paragraph_error
                     .get_or_insert_with(|| parser.make_err(ParseErrorKind::RuleFailed));
             }
             Token::LeftBlock | Token::LeftBlockStar => {
+                saw_block_pairing = true;
                 let name = block_name_at(tokens, index);
                 if is_block_name(&name) {
                     open_blocks.push(name);
                 }
             }
             Token::LeftLink => {
+                saw_block_pairing = true;
                 if let Some(name) = link_name_at(tokens, index) {
                     open_blocks.push(name);
                 }
             }
             Token::LeftBlockEnd => {
+                saw_block_pairing = true;
                 let name = block_name_at(tokens, index);
                 if !is_block_name(&name) {
                 } else if let Some(pos) = open_blocks.iter().rposition(|n| *n == name) {
