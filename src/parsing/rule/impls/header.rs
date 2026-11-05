@@ -161,6 +161,10 @@ fn consume_header_once<'r, 't>(
         }
     }
 
+    if parser.settings().layout.legacy() {
+        elements = hoist_heading_explicit_lists(elements);
+    }
+
     ok!(false; elements, all_errors)
 }
 
@@ -318,6 +322,47 @@ fn trim_trailing_heading_space(elements: &mut Vec<Element<'_>>) {
     if trimmed.is_empty() {
         elements.pop();
     } else {
+        *text = Cow::Owned(trimmed.to_owned());
+    }
+}
+
+/// Live hoists an explicit list out of a heading line: the heading keeps only
+/// the content before the list, and the list (with whatever followed it on the
+/// line) renders after the heading shell.
+fn hoist_heading_explicit_lists<'t>(elements: Elements<'t>) -> Elements<'t> {
+    match elements {
+        Elements::Single(Element::Container(mut container)) => {
+            let list_at = container.elements().iter().position(|element| {
+                matches!(
+                    element,
+                    Element::List {
+                        wikidot_explicit_block: true,
+                        ..
+                    }
+                )
+            });
+            let Some(list_at) = list_at else {
+                return Element::Container(container).into();
+            };
+            let hoisted = container.elements_mut().split_off(list_at);
+            trim_heading_prefix_space(&mut container);
+            let mut output = Vec::with_capacity(hoisted.len() + 1);
+            output.push(Element::Container(container));
+            output.extend(hoisted);
+            Elements::Multiple(output)
+        }
+        other => other,
+    }
+}
+
+fn trim_heading_prefix_space(container: &mut crate::tree::Container<'_>) {
+    let Some(Element::Text(text)) = container.elements_mut().last_mut() else {
+        return;
+    };
+    let trimmed = text.trim_end_matches([' ', '\t']);
+    if trimmed.is_empty() {
+        container.elements_mut().pop();
+    } else if trimmed.len() != text.len() {
         *text = Cow::Owned(trimmed.to_owned());
     }
 }

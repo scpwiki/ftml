@@ -19,7 +19,10 @@
  */
 
 use super::prelude::*;
-use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
+use super::{
+    consume_wikidot_flat_head_break, trim_wikidot_trailing_explicit_list_break,
+    wikidot_flat_pair_for_head,
+};
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{PartialElement, WikidotBlockShell};
 
@@ -92,7 +95,10 @@ fn parse_note_block<'r, 't>(
     parser.set_note_flag(legacy);
     let body = parser.get_body_elements(&BLOCK_NOTE, legacy);
     parser.set_note_flag(false);
-    let (elements, errors, paragraph_safe) = body?.into();
+    let (mut elements, errors, paragraph_safe) = body?.into();
+    if legacy {
+        trim_wikidot_trailing_explicit_list_break(&mut elements);
+    }
 
     let element = Element::Container(Container::new(
         ContainerType::Note,

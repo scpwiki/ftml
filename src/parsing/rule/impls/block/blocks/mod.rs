@@ -218,6 +218,41 @@ pub use self::user::BLOCK_USER;
 use crate::parsing::parser::Parser;
 use crate::parsing::parser::block_pairs::WikidotBlockPair;
 use crate::parsing::{ParseError, Token};
+use crate::tree::Element;
+
+/// Live Wikidot keeps no trailing `<br>` after an explicit `[[ul]]`/`[[ol]]`
+/// block that ends a note, alignment, collapsible or tab body: the block's
+/// line break is dropped there, while it survives at the page root, in a plain
+/// div and in a table cell.
+pub(crate) fn trim_wikidot_trailing_explicit_list_break(elements: &mut Vec<Element<'_>>) {
+    if matches!(elements.last(), Some(Element::LineBreak))
+        && matches!(
+            elements.get(elements.len().saturating_sub(2)),
+            Some(Element::List {
+                wikidot_explicit_block: true,
+                ..
+            })
+        )
+    {
+        elements.pop();
+    }
+}
+
+/// Live Wikidot keeps the line break an explicit list leaves at the end of a
+/// footnote body, unlike the other paragraph bodies.
+pub(crate) fn append_wikidot_footnote_trailing_list_break(
+    elements: &mut Vec<Element<'_>>,
+) {
+    if matches!(
+        elements.last(),
+        Some(Element::List {
+            wikidot_explicit_block: true,
+            ..
+        })
+    ) {
+        elements.push(Element::LineBreak);
+    }
+}
 
 pub(crate) fn wikidot_flat_pair_for_head(
     parser: &Parser<'_, '_>,

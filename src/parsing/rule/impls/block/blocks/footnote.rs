@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::append_wikidot_footnote_trailing_list_break;
 use super::prelude::*;
 use crate::parsing::parse_boolean;
 use crate::parsing::rule::impls::comment_closer_token_count;
@@ -121,6 +122,9 @@ fn parse_footnote_ref<'r, 't>(
         && matches!(elements.last(), Some(Element::LineBreak))
     {
         elements.pop();
+    }
+    if parser.settings().layout.legacy() {
+        append_wikidot_footnote_trailing_list_break(&mut elements);
     }
 
     let index = parser.push_footnote(elements);
