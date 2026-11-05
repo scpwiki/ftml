@@ -196,6 +196,12 @@ where
     if wikidot_label_region_has_owner_opener(&source[label_start..close]) {
         return Ok(None);
     }
+    // Live: an enclosing body's closer inside the label region (tab, cell,
+    // collapsible, ...) still ends that body; the stray closer stays literal
+    // and no link forms across it.
+    if wikidot_label_region_has_body_closer(parser, source, label_start, close) {
+        return Ok(None);
+    }
     let label = raw_label.trim_matches([' ', '\t']);
     if label.is_empty() {
         return Ok(None);
@@ -243,6 +249,28 @@ where
         elements.push(text!(residual_closer));
     }
     Ok(Some(Elements::Multiple(elements)))
+}
+
+fn wikidot_label_region_has_body_closer<'r, 't>(
+    parser: &Parser<'r, 't>,
+    source: &str,
+    region_start: usize,
+    region_end: usize,
+) -> bool
+where
+    'r: 't,
+{
+    let mut offset = region_start;
+    while let Some(found) = source[offset..region_end].find("[[/") {
+        let at = offset + found;
+        let mut probe = parser.clone();
+        while probe.current().span.start < at && probe.step().is_ok() {}
+        if probe.current().span.start == at && probe.at_body_end_boundary() {
+            return true;
+        }
+        offset = at + "[[/".len();
+    }
+    false
 }
 
 fn wikidot_label_region_has_owner_opener(region: &str) -> bool {
