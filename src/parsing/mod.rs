@@ -26,7 +26,7 @@ mod boolean;
 mod check_step;
 mod collect;
 mod condition;
-mod consume;
+pub(crate) mod consume;
 mod depth;
 mod element_condition;
 mod error;

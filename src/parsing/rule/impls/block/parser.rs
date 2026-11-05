@@ -1656,6 +1656,17 @@ where
                 }
             }
 
+            if parser.settings().layout.legacy()
+                && !fused_close
+                && !parser.discarding_hidden_body()
+                && block_rule.name == "block-bibliography"
+                && matches!(name, Cow::Borrowed(_))
+                && &parser.full_text().inner()[end_start..parser.current().span.start]
+                    != "[[/bibliography]]"
+            {
+                return Ok(false);
+            }
+
             let score_close = name.ends_with('_');
             let name = name.strip_suffix('_').unwrap_or(&name);
             if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
@@ -4337,6 +4348,53 @@ where
         }
     }
 
+    fn skip_wikidot_bibliography_opaque_segment(&mut self) -> bool {
+        let start = self.current().span.start;
+        let end = match self.current().token {
+            Token::Raw => {
+                let mut raw = self.clone();
+                if raw.skip_raw_segment()
+                    && !self.full_text().inner()[start..raw.current().span.start]
+                        .contains('\n')
+                {
+                    self.update(&raw);
+                    return true;
+                }
+                return false;
+            }
+            Token::LeftComment => {
+                let mut comment = self.clone();
+                if crate::parsing::collect::consume_valid_comment(&mut comment).is_ok() {
+                    self.update(&comment);
+                    return true;
+                }
+                return false;
+            }
+            Token::LeftBlock => {
+                let source = self.full_text().inner();
+                let rest = &source[start..];
+                if rest.starts_with("[[code") {
+                    self.wikidot_code_candidate(start)
+                        .map(|candidate| candidate.owner_end)
+                } else if rest.starts_with("[[math") {
+                    rest.find("[[/math]]")
+                        .map(|close| start + close + "[[/math]]".len())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        let Some(end) = end else {
+            return false;
+        };
+        while self.current().span.start < end
+            && self.current().token != Token::InputEnd
+            && self.step().is_ok()
+        {}
+        true
+    }
+
     pub fn has_body_end_block(&self, block_rule: &BlockRule) -> bool {
         // An end head needs a `[[/` token, so a source with none left cannot
         // close this body. Checking the cached marker first keeps repeated
@@ -4388,7 +4446,14 @@ where
                 continue;
             }
 
-            if parser.skip_raw_segment() {
+            if block_rule.name == "block-bibliography"
+                && parser.settings().layout.legacy()
+            {
+                if parser.skip_wikidot_bibliography_opaque_segment() {
+                    first = false;
+                    continue;
+                }
+            } else if parser.skip_raw_segment() {
                 first = false;
                 continue;
             }

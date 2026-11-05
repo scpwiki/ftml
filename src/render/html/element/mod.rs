@@ -425,6 +425,13 @@ fn render_partial(ctx: &mut HtmlContext, partial: &PartialElement) {
     );
 
     match partial {
+        PartialElement::WikidotBlockClose(kind)
+            if ctx.rendering_wikidot_bibliography() =>
+        {
+            for _ in 0..kind.rendered_frames() {
+                ctx.push_raw_str("</div>");
+            }
+        }
         PartialElement::WikidotEmptyInlineOwner
         | PartialElement::WikidotBlockOpen(_)
         | PartialElement::WikidotBlockClose(_)

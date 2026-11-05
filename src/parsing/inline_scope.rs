@@ -870,7 +870,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
             for bibliography in list.slice_mut() {
                 for (_, items) in bibliography.slice_mut() {
                     flatten_crossing_inline_containers(items);
-                    build_wikidot_block_frames(items, false);
+                    build_wikidot_bibliography_frames(items);
                 }
             }
             collect_valid_scope_pairs_with_bibliographies(elements, list)
@@ -936,7 +936,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
     for (_, elements) in bibliography.slice_mut() {
         flatten_crossing_inline_containers(elements);
-        build_wikidot_block_frames(elements, false);
+        build_wikidot_bibliography_frames(elements);
     }
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
@@ -4422,6 +4422,16 @@ impl<'t> WikidotFrameAssembly<'t> {
                 self.strip_paragraph_before_close();
                 self.pop_frame();
             }
+            WikidotBlockCloseKind::BibliographyCrossed { frames, .. } => {
+                for _ in 0..frames {
+                    self.pop_frame();
+                    if let Some(Element::WikidotBlockFrame { omit_close, .. }) =
+                        self.top().last_mut()
+                    {
+                        *omit_close = true;
+                    }
+                }
+            }
         }
     }
 
@@ -4498,6 +4508,29 @@ impl<'t> WikidotFrameAssembly<'t> {
         }
         self.output
     }
+}
+
+fn build_wikidot_bibliography_frames<'t>(elements: &mut Vec<Element<'t>>) {
+    for element in elements.iter_mut() {
+        visit_children_mut(element, &mut |children| {
+            build_wikidot_block_frames(children, false);
+        });
+    }
+    if !elements.iter().any(is_wikidot_block_partial) {
+        return;
+    }
+    let mut assembly = WikidotFrameAssembly::new(false);
+    for element in mem::take(elements) {
+        match element {
+            Element::Partial(PartialElement::WikidotBlockClose(_))
+                if assembly.stack.is_empty() =>
+            {
+                assembly.output.push(element);
+            }
+            element => assembly.push(element),
+        }
+    }
+    *elements = assembly.finish();
 }
 
 fn build_wikidot_block_frames<'t>(elements: &mut Vec<Element<'t>>, at_root: bool) {

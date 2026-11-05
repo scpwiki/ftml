@@ -157,7 +157,6 @@ pub(super) struct BlockScanCache<'t> {
     colon_line_vanished: Cell<bool>,
     line_follows_block: Cell<bool>,
     bare_div_literal: Cell<bool>,
-    wikidot_bibliography_speculation: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
@@ -371,6 +370,19 @@ impl<'r, 't> Parser<'r, 't> {
             .wikidot_block_pairs
             .pair_at_closer_byte(closer_byte)
             .copied()
+    }
+
+    pub(crate) fn wikidot_block_pairs_closed_between(
+        &self,
+        from_byte: usize,
+        to_byte: usize,
+    ) -> Vec<(usize, block_pairs::WikidotBlockPair)> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .closers_between(from_byte, to_byte)
+            .map(|(byte, pair)| (byte, *pair))
+            .collect()
     }
 
     pub(crate) fn wikidot_scan_shows_stolen_head(
@@ -598,22 +610,6 @@ impl<'r, 't> Parser<'r, 't> {
     #[inline]
     pub(crate) fn gate_items_allowed(&self) -> bool {
         self.block_end_scan_cache.borrow().gate_items_allowed.get()
-    }
-
-    #[inline]
-    pub(crate) fn in_wikidot_bibliography_speculation(&self) -> bool {
-        self.block_end_scan_cache
-            .borrow()
-            .wikidot_bibliography_speculation
-            .get()
-    }
-
-    #[inline]
-    pub(crate) fn set_wikidot_bibliography_speculation(&self, value: bool) {
-        self.block_end_scan_cache
-            .borrow()
-            .wikidot_bibliography_speculation
-            .set(value);
     }
 
     #[inline]

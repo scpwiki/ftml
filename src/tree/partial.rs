@@ -139,15 +139,25 @@ pub enum WikidotBlockCloseKind {
     Collapsible { head: usize },
     Note { head: usize },
     Align { head: usize },
+    BibliographyCrossed { head: usize, frames: usize },
 }
 
 impl WikidotBlockCloseKind {
+    pub fn rendered_frames(self) -> usize {
+        match self {
+            WikidotBlockCloseKind::Collapsible { .. } => 3,
+            WikidotBlockCloseKind::BibliographyCrossed { .. } => 0,
+            _ => 1,
+        }
+    }
+
     pub fn head_byte(self) -> usize {
         match self {
             WikidotBlockCloseKind::Div { head, .. }
             | WikidotBlockCloseKind::Collapsible { head }
             | WikidotBlockCloseKind::Note { head }
-            | WikidotBlockCloseKind::Align { head } => head,
+            | WikidotBlockCloseKind::Align { head }
+            | WikidotBlockCloseKind::BibliographyCrossed { head, .. } => head,
         }
     }
 }

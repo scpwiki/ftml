@@ -134,11 +134,17 @@ impl<'t> ParagraphStack<'t> {
                 ) || matches!(
                     element,
                     Element::Partial(
-                        PartialElement::WikidotBlockClose(_)
-                            | PartialElement::WikidotBlockOpen(WikidotBlockShell::Div {
-                                scored: true,
-                                ..
-                            })
+                        PartialElement::WikidotBlockClose(
+                            WikidotBlockCloseKind::Div { .. }
+                                | WikidotBlockCloseKind::Collapsible { .. }
+                                | WikidotBlockCloseKind::Note { .. }
+                                | WikidotBlockCloseKind::Align { .. }
+                        ) | PartialElement::WikidotBlockOpen(WikidotBlockShell::Div {
+                            scored: true,
+                            ..
+                        })
+                    )
+                )
                     )
                 )
             })
@@ -877,7 +883,8 @@ impl<'t> ParagraphStack<'t> {
                 && !self.next_element_started_line
                 && matches!(
                     self.finished.last(),
-                    Some(Element::Partial(PartialElement::WikidotBlockClose(_)))
+                    Some(Element::Partial(PartialElement::WikidotBlockClose(kind)))
+                        if !matches!(kind, WikidotBlockCloseKind::BibliographyCrossed { .. })
                 )
             {
                 self.mark_next_unwrapped_after_block();
