@@ -1,0 +1,65 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "bold",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "image",
+                                                "data": {
+                                                    "source": {
+                                                        "type": "direct",
+                                                        "data": {
+                                                            "type": "file1",
+                                                            "data": {
+                                                                "file": "a.png"
+                                                            }
+                                                        }
+                                                    },
+                                                    "link": null,
+                                                    "alignment": null,
+                                                    "attributes": {},
+                                                    "target": null
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "y"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

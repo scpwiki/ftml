@@ -77,9 +77,7 @@ fn parse_definition_list<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    if parser
-        .wikidot_scored_div_first_line_suppresses_at(parser.current().span.start)
-    {
+    if parser.wikidot_scored_div_first_line_suppresses_at(parser.current().span.start) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 

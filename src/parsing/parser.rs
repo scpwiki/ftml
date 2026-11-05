@@ -1701,6 +1701,14 @@ impl<'r, 't> Parser<'r, 't> {
         self.start_of_line = true;
     }
 
+    /// Mark the current token as logically mid-line. Used where live Wikidot
+    /// has consumed the preceding break as part of a scored inline block, so
+    /// the line-leading rules must not fire on what follows.
+    #[inline]
+    pub(crate) fn clear_start_of_line(&mut self) {
+        self.start_of_line = false;
+    }
+
     #[inline]
     pub(crate) fn record_virtual_gate_end(&self, gate_end: usize) {
         self.block_end_scan_cache

@@ -1,0 +1,33 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "definition-list",
+                        "data": [
+                            {
+                                "key_string": "d",
+                                "key": [
+                                    {
+                                        "element": "text",
+                                        "data": "d"
+                                    }
+                                ],
+                                "value": [
+                                    {
+                                        "element": "text",
+                                        "data": "e"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

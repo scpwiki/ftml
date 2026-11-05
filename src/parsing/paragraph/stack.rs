@@ -88,7 +88,6 @@ pub struct ParagraphStack<'t> {
     wikidot_bare_after_explicit_list: bool,
     wikidot_explicit_pre_candidate: bool,
     wikidot_post_empty_list_break: bool,
-    wikidot_scored_close_end_len: Option<usize>,
 
     finished: Vec<Element<'t>>,
 
@@ -327,7 +326,9 @@ impl<'t> ParagraphStack<'t> {
 
     fn wikidot_element_contains_unaligned_image(element: &Element<'_>) -> bool {
         match element {
-            Element::Image { alignment: None, .. } => true,
+            Element::Image {
+                alignment: None, ..
+            } => true,
             Element::Delayed(delayed) => delayed.image_alignment() == Some(None),
             Element::Container(container) => container
                 .elements()
@@ -344,7 +345,7 @@ impl<'t> ParagraphStack<'t> {
 
     pub(crate) fn wikidot_run_ends_with_scored_alias(elements: &[Element<'_>]) -> bool {
         let mut rest = elements;
-        while let Some(last) = rest.last() {
+        while let Some((last, head)) = rest.split_last() {
             let skip = match last {
                 Element::LineBreak | Element::LineBreaks(_) => true,
                 Element::Delayed(delayed) => delayed.is_suppression_seam(),
@@ -353,7 +354,7 @@ impl<'t> ParagraphStack<'t> {
             if !skip {
                 break;
             }
-            rest = &rest[..rest.len() - 1];
+            rest = head;
         }
         let scored_kind = match rest.last() {
             Some(Element::Partial(PartialElement::InlineSpanClose(_))) => 0,
@@ -363,7 +364,9 @@ impl<'t> ParagraphStack<'t> {
         let mut depth = 0usize;
         for element in rest.iter().rev() {
             match element {
-                Element::Partial(PartialElement::InlineSpanClose(_)) if scored_kind == 0 => {
+                Element::Partial(PartialElement::InlineSpanClose(_))
+                    if scored_kind == 0 =>
+                {
                     depth += 1
                 }
                 Element::Partial(PartialElement::InlineAnchorClose(_))
@@ -396,6 +399,41 @@ impl<'t> ParagraphStack<'t> {
                     }
                 }
                 _ => {}
+            }
+        }
+        false
+    }
+
+    pub(crate) fn wikidot_element_is_scored_alias_open(element: &Element<'_>) -> bool {
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(attributes, ..)) => {
+                attributes.get().contains_key("data-ftml-score-span")
+            }
+            Element::Partial(PartialElement::InlineAnchorOpen(attributes, ..)) => {
+                attributes.get().contains_key(
+                    crate::parsing::inline_scope::WIKIDOT_SCORE_ANCHOR_ATTRIBUTE,
+                )
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the current run would end with a paired scored span or anchor
+    /// close once trailing ASCII spaces are trimmed.
+    fn wikidot_trailing_space_after_scored_alias(&self) -> bool {
+        let mut index = self.current.len();
+        let mut saw_space = false;
+        while index > 0 {
+            index -= 1;
+            match &self.current[index] {
+                Element::Text(text) if text == " " => saw_space = true,
+                Element::Delayed(delayed) if delayed.is_suppression_seam() => {}
+                _ => {
+                    return saw_space
+                        && Self::wikidot_run_ends_with_scored_alias(
+                            &self.current[..=index],
+                        );
+                }
             }
         }
         false
@@ -1329,7 +1367,16 @@ impl<'t> ParagraphStack<'t> {
     }
 
     fn trim_trailing_ascii_space(&mut self) {
-        let mut removed = false;
+        // Live Wikidot trims the trailing space from the output but still lets
+        // it count as content after a scored close: `[[span_]]x[[/span]] `
+        // keeps its paragraph wrapper. Leave the space for the root lowering,
+        // which decides the wrapper and then ejects it.
+        if self.wikidot
+            && !self.current_unwrapped
+            && self.wikidot_trailing_space_after_scored_alias()
+        {
+            return;
+        }
         while let Some(index) = self.current.iter().rposition(|element| {
             !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
         }) {
@@ -1337,39 +1384,10 @@ impl<'t> ParagraphStack<'t> {
                 break;
             }
             self.current.remove(index);
-            removed = true;
             if !self.wikidot {
                 break;
             }
         }
-        if removed
-            && self.wikidot
-            && Self::wikidot_run_ends_with_scored_alias(&self.current)
-        {
-            self.wikidot_scored_close_end_len = Some(self.current.len());
-        }
-    }
-
-    /// Record that the current run ends softly (a break or enclosing-block
-    /// boundary follows the scored close rather than a hard end of input).
-    /// Live keeps the paragraph wrapped in that case.
-    pub(crate) fn note_wikidot_scored_close_soft_end(&mut self) {
-        if self.wikidot {
-            self.wikidot_scored_close_end_len = Some(self.current.len());
-        }
-    }
-
-    /// Whether a run ending with a paired scored span/anchor close stays
-    /// unwrapped: only when nothing (not even whitespace or a break) has
-    /// followed the close since. Always consumes any recorded soft end.
-    fn wikidot_scored_close_end_unwrapped(&mut self) -> bool {
-        let suppressed = self
-            .wikidot_scored_close_end_len
-            .is_some_and(|len| len == self.current.len());
-        self.wikidot_scored_close_end_len = None;
-        self.wikidot
-            && !suppressed
-            && Self::wikidot_run_ends_with_scored_alias(&self.current)
     }
 
     fn remove_pending_aligned_image_separator(&mut self) {
@@ -1382,9 +1400,6 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn end_paragraph(&mut self) {
-        if self.wikidot_scored_close_end_unwrapped() {
-            self.current_unwrapped = true;
-        }
         if self.wikidot_bare_after_explicit_list && !self.current.is_empty() {
             self.current_unwrapped = true;
             self.unwrapped_after_block_line = true;

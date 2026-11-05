@@ -69,7 +69,6 @@ where
         if quote_line_status == QuoteBodyLineStatus::Boundary {
             if parser.quote_boundary_closes_body() {
                 stack.pop_line_break();
-                stack.note_wikidot_scored_close_soft_end();
                 finished = true;
                 continue;
             }
@@ -144,16 +143,6 @@ where
                     return Err(parser.make_err(ParseErrorKind::EndOfInput));
                 } else {
                     warn!("Hit the end of input, terminating token iteration");
-                    // A trailing space after a scored close keeps the
-                    // paragraph wrapped; live unwraps only a bare close.
-                    if parser.settings().layout.legacy() {
-                        let source = parser.full_text().inner();
-                        let pos = parser.current().span.start.min(source.len());
-                        if source[..pos].ends_with(' ') || source[..pos].ends_with('\t')
-                        {
-                            stack.note_wikidot_scored_close_soft_end();
-                        }
-                    }
                     finished = true;
                     None
                 }
@@ -175,7 +164,6 @@ where
                     push_element(&mut stack, Element::LineBreak, true);
                     stack.mark_wikidot_demoted_comment_break();
                 } else {
-                    stack.note_wikidot_scored_close_soft_end();
                     stack.end_paragraph_at_break();
                 }
 
@@ -190,7 +178,6 @@ where
                 };
 
                 if close_condition_met {
-                    stack.note_wikidot_scored_close_soft_end();
                     finished = true;
                     None
                 } else {

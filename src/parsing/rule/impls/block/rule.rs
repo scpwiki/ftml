@@ -303,10 +303,7 @@ fn wikidot_scored_div_body_suppresses_block(
     ) {
         return parser.wikidot_in_scored_div_direct_body();
     }
-    if matches!(
-        block_name,
-        "block-tabview" | "block-tab" | "block-gallery"
-    ) {
+    if matches!(block_name, "block-tabview" | "block-tab" | "block-gallery") {
         return parser.wikidot_scored_div_first_line_suppresses_at(opener_start);
     }
     false

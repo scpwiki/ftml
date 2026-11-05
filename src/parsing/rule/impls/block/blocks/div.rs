@@ -723,7 +723,8 @@ where
     let source = parser.full_text().inner();
     let alias_start = gap_end.current().span.start;
     let gap = &source[head_end..alias_start];
-    let mut literal = elide_comments_from_literal(&source[opener_start..head_end]).into_owned();
+    let mut literal =
+        elide_comments_from_literal(&source[opener_start..head_end]).into_owned();
     // Live keeps same-line spaces after the head but drops a gap that
     // spans a line break.
     if !gap.contains(['\r', '\n']) {
@@ -751,10 +752,7 @@ fn parse_fn<'r, 't>(
     let source_bytes = parser.full_text().inner().as_bytes();
     let mut head_end = parser.current().span.start;
     while head_end > opener_start
-        && matches!(
-            source_bytes[head_end - 1],
-            b' ' | b'\t' | b'\r' | b'\n'
-        )
+        && matches!(source_bytes[head_end - 1], b' ' | b'\t' | b'\r' | b'\n')
     {
         head_end -= 1;
     }

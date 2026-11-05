@@ -151,3 +151,8 @@ replay-en--fragment:components-gen1	AlignCenter@28378..28471 descent-only
 replay-jp--chuukunn-s-proposal	Div@16409..16520 scan-only
 replay-jp--chuukunn-s-proposal	Div@16409..16438 descent-only
 replay-en--scp-7453	AlignRight@7616..7712 scan-only
+corpus-test/div/scored-body-first-line-center/input.ftml	AlignCenter@9..23 scan-only
+corpus-test/div/scored-body-first-line-left/input.ftml	AlignLeft@9..23 scan-only
+corpus-test/div/scored-body-align-stays-suppressed/input.ftml	AlignCenter@11..25 scan-only
+corpus-test/div/scored-body-first-line-tabview/input.ftml	TabView@9..54 scan-only
+corpus-test/div/scored-body-first-line-tabview/input.ftml	Tab@21..41 scan-only

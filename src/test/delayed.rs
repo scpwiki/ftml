@@ -224,9 +224,11 @@ fn inline_list_delayed_anchor_is_not_wrapped_in_a_paragraph() {
         render_inline_list(source),
         "<a href=\"/component:image-block\">inline row</a>",
     );
+    // Live PagePreview leaves a run whose last content is a scored anchor
+    // unwrapped in page mode too (captured 2026-11-05).
     assert_eq!(
         render_authored(source),
-        "<p><a href=\"/component:image-block\">inline row</a></p>",
+        "<a href=\"/component:image-block\">inline row</a>",
     );
 }
 
