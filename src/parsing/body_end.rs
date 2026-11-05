@@ -19,6 +19,7 @@
  */
 
 use super::{Parser, Token};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[derive(Debug, Copy, Clone)]
 pub(super) struct BodyEndBoundary {
@@ -49,6 +50,31 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow_mut()
             .body_end_boundaries
             .pop();
+    }
+
+    /// Identifies what can end a body walk here: the innermost boundary, plus
+    /// the set of its ancestors. The ancestors' order and repeats do not change
+    /// any boundary check, so walks at different nesting depths share it.
+    pub(crate) fn body_end_boundary_fingerprint(&self) -> u64 {
+        let cache = self.block_end_scan_cache.borrow();
+        let identity = |boundary: &BodyEndBoundary| {
+            (
+                boundary.accepts_names.as_ptr() as usize,
+                boundary.accepts_names.len(),
+                boundary.hard,
+                boundary.confined,
+            )
+        };
+        let Some((innermost, ancestors)) = cache.body_end_boundaries.split_last() else {
+            return 0;
+        };
+        let mut ancestors: Vec<_> = ancestors.iter().map(identity).collect();
+        ancestors.sort_unstable();
+        ancestors.dedup();
+        let mut hasher = DefaultHasher::new();
+        identity(innermost).hash(&mut hasher);
+        ancestors.hash(&mut hasher);
+        hasher.finish()
     }
 
     fn body_end_boundaries(&self) -> Vec<BodyEndBoundary> {
