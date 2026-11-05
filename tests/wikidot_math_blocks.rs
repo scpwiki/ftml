@@ -211,6 +211,7 @@ fn formula_body_preserves_literal_bytes_in_the_math_element() {
             name,
             latex_source,
             wikidot_block_open_elements,
+            wikidot_label_spans,
         },
     ] = tree.elements.as_slice()
     else {
@@ -218,6 +219,7 @@ fn formula_body_preserves_literal_bytes_in_the_math_element() {
     };
     assert!(wikidot_block_open_elements.is_empty());
     assert!(name.is_none());
+    assert!(wikidot_label_spans.is_empty());
     assert_eq!(latex_source, "A  [[bold]]B[[/bold]]\tC");
 }
 
