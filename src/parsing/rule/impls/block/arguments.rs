@@ -349,7 +349,6 @@ impl<'t> Arguments<'t> {
         let mut map = self.attribute_map_from_entries(settings, |_, _| true);
         if settings.layout.legacy()
             && let Some(value) = self.inner.get(&self.key("scrolling"))
-            && !contains_unresolved_wikidot_variable(value)
         {
             let value = normalize_wikidot_html_attribute_value(value);
             map.insert_wikidot_iframe_attribute("scrolling", value);
