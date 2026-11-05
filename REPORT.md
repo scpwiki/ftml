@@ -17,17 +17,32 @@ Date: 2026-11-05. Base: `c1dc640` (main). Branch: `claude/audit-corpus-fixtures-
 - `heading/comment-line-start` was a second B1 victim; live gives `<h1>Head++ Sub</h1>`. Its `wikidot.html` is corrected.
 - New live-confirmed fixture `misc/comment-line-start-exposed-constructs` pins the rule (live: `<p>a* item</p><p>b+ Head</p><p>c&#8212;&#8212;<br />d</p>`).
 
+**Fixed by the follow-up lane (2026-11-05, "dsh-fixturefix")**
+
+- B1 remainder: a list item now closes only at a marker that begins its
+  physical source line (`ParseCondition::CurrentTokenAtSourceLineStart`), so
+  `list/comment-line-start` pins the live one-item output. The general rule is
+  pinned by the new `list/midline-marker-literal` fixture; every probe in the
+  B1 table above now matches live.
+- B4: duplicate bibliography labels are numbered by the distinct-label prefix,
+  reproducing live's `1.`, `2.`, `2.` and duplicate `bibitem-2` id.
+  `misc/bibliography-duplicate-definition` is corrected.
+- B5: a run whose last content is a scored `[[span_ ...]]` is no longer wrapped
+  in a paragraph, matching live. `span/fused-opener-scored-map-residual` is
+  corrected.
+- B6: the manufactured line break is no longer emitted after a fused list
+  closer at EOF, matching live's `</ul>]`. `list/fused-close` is corrected.
+- B2/B3 are untouched: the CSS highlighter port is another lane's
+  (`d4l1-code`) follow-up, which had not merged when this lane finished.
+
 **Partial**
 
-- B1 remaining: when the *previous* line is a list item and the comment-led line starts with a list marker (`* item\n[!--a--]# item`, `# one\n[!--a--]* two`), the preprocessor now drops the break correctly (`"* item[!--a--]* item2"`), but the list parser still splits the items; live gives one item (`item* item2`). `list/comment-line-start` therefore still encodes the bug. Next step: find where the list rule re-detects the marker after the comment (not `start_of_line`, which is false there).
-
 - `strikethrough` was cut off after 23 of its 69 fixtures when the sweep was stopped.
-- The 6 bug-encoded fixtures are identified and evidenced, but **none is fixed yet**. No implementation or fixture file has been changed. The only commits are the harness and this report.
 
 **Remaining**
 
 1. Audit `tabview` (57) and `table` (50), both priority families, the rest of `strikethrough` (46), and the other ~520 fixtures. Rerunning the harness skips everything already cached by source hash.
-2. Fix the bug-encoded items, one small commit each, in this order: B1 (comment newline elision; clearest rule, widest reach), B2/B3 (CSS highlighter), B4 (duplicate bibliography numbering), then adjudicate B5/B6 with focused probes before fixing.
+2. B2/B3 (`code/css-pseudo-class-split`, `code/css-url-token-intact`) are handed to the `d4l1-code` highlighter lane's follow-up; this audit lane did not race it.
 3. For the 7 iftags-true-gate fixtures, take a saved-page capture with tags `fruit, component`. Anonymous PagePreview cannot judge them.
 4. Decide whether the 17 whitespace-only divergences should be fixed or recorded as reviewed `comparison-normalization`. Project policy needs a browser review before that label applies.
 
@@ -91,11 +106,24 @@ Live numbers the duplicate-label definition with the **same** number and id as t
 
 ### B5. `span/fused-opener-scored-map-residual`: paragraph wrapper
 
-Live `<span class="c">]x</span>` (no paragraph); fixture `<p><span class="c">]x</span></p>`. Not adjudicated further.
+Live `<span class="c">]x</span>` (no paragraph); fixture `<p><span class="c">]x</span></p>`.
+
+Adjudicated with live probes (captured twice): live leaves a run unwrapped when its
+last content is a scored span, whatever precedes it on the line
+(`a [[span_]]x[[/span]]` → `a <span>x</span>`), and wraps it again as soon as
+anything follows the span (`a [[span_]]x[[/span]] b` → `<p>…</p>`,
+`…[[/span]]**b**` → `<p>…</p>`). A plain `[[span]]` is always wrapped. Fixed by
+tracking a sequence's trailing scored-span close through paragraph assembly and
+skipping the wrapper.
 
 ### B6. `list/fused-close`: extra trailing `<br>` at EOF
 
-Source ends with `[[/ul]]]` and no final newline. Live ends with `</ul>\n]`. The fixture ends with `</ul>]<br>`, an extra `<br>` element. Low visual impact, but it is an element-level divergence. Not adjudicated further.
+Source ends with `[[/ul]]]` and no final newline. Live ends with `</ul>\n]`. The fixture ends with `</ul>]<br>`, an extra `<br>` element. Low visual impact, but it is an element-level divergence.
+
+Adjudicated with live probes (captured twice): the residual `]` occupies the
+line-end slot, so at EOF and before a blank line live emits no break, while a
+single source line break after the closer still renders as `<br />`. The
+manufactured break is now emitted only for the single-line-break case.
 
 ## Stale but harmless (formatting whitespace only)
 
