@@ -21,6 +21,7 @@
 use super::prelude::*;
 use crate::tree::AttributeMap;
 use crate::url::normalize_href;
+use std::borrow::Cow;
 
 pub fn render_iframe(ctx: &mut HtmlContext, url: &str, attributes: &AttributeMap) {
     debug!("Rendering iframe block (url '{url}')");
@@ -63,11 +64,20 @@ pub fn render_html(ctx: &mut HtmlContext, contents: &str, attributes: &Attribute
     let src = normalize_href(&iframe_url, None);
 
     if ctx.layout().legacy() {
+        let wikidot_attributes = attributes.get();
+        let user_class: &str = wikidot_attributes.get("class").map_or("", AsRef::as_ref);
+        let user_style: &str = wikidot_attributes.get("style").map_or("", AsRef::as_ref);
+        let class = if user_class.is_empty() {
+            Cow::Borrowed("html-block-iframe")
+        } else {
+            Cow::Owned(format!("{user_class} html-block-iframe"))
+        };
         ctx.html().iframe().attr(attr!(
             "src" => &src,
             "allowtransparency" => "true",
             "frameborder" => "0",
-            "class" => "html-block-iframe",
+            "style" => &user_style; if !user_style.is_empty(),
+            "class" => &class,
         ));
     } else {
         ctx.html().iframe().attr(attr!(
