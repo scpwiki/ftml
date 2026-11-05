@@ -88,11 +88,20 @@ pub fn parse_alignment_block<'r, 't>(
             % 2
             == 1;
 
-    // Live Wikidot gives these blocks line-owned openers: the opener must
-    // start its line and be followed immediately by a line break. A mid-line
-    // opener or trailing text after it renders literally.
+    // Live Wikidot gives these blocks line-owned openers: the opener must be
+    // the first thing on its line and be followed immediately by a line
+    // break. A mid-line or indented opener, or trailing text after it,
+    // renders literally.
     if parser.settings().layout.legacy() && !in_head {
-        if !parser.start_of_line() {
+        let at_line_start = match opener_start
+            .checked_sub(1)
+            .map(|index| source.as_bytes()[index])
+        {
+            None => true,
+            Some(b'\n' | b'\r') => true,
+            Some(_) => parser.in_native_blockquote_line(),
+        };
+        if !at_line_start {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
         let head_end = source[opener_start..]

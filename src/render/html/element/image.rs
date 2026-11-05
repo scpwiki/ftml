@@ -145,19 +145,21 @@ fn render_image_element_wikidot(
                 .and_then(|value| value.strip_suffix('\''))
         })
         .unwrap_or(image_url);
-    let image_url = if dangerous_scheme(safety_url) && !encoded_wikidot_prefix {
-        "#invalid-url"
-    } else {
-        image_url
-    };
+    let invalid_url = dangerous_scheme(safety_url) && !encoded_wikidot_prefix;
+    let image_url = if invalid_url { "#invalid-url" } else { image_url };
     let get = |name| attributes.get().get(name).map(|value| value.as_ref());
     // Live Wikidot derives the default alt text from everything after the
-    // last slash, keeping any query string or fragment.
-    let default_alt = image_url
-        .trim_end_matches('/')
-        .rsplit('/')
-        .next()
-        .unwrap_or("");
+    // last slash, keeping any query string or fragment. A rejected source
+    // has no usable name, so its alt stays empty.
+    let default_alt = if invalid_url {
+        ""
+    } else {
+        image_url
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or("")
+    };
     let alt = get("alt").or(attachment_alt).unwrap_or(default_alt);
     let class = get("class").unwrap_or("image");
     let width = get("width");

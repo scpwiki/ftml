@@ -45,12 +45,6 @@ fn try_consume_fn<'r, 't>(
     assert_step(parser, Token::Color)?;
 
     let legacy = parser.settings().layout.legacy();
-    eprintln!(
-        "DEBUG color attempt span={:?} legacy={} in_color={}",
-        parser.current().span,
-        legacy,
-        parser.in_color(),
-    );
 
     // Live Wikidot does not nest colors: a `##name|` opener inside color
     // content stays literal text, so a nested color attempt fails here.
@@ -157,11 +151,6 @@ fn try_consume_fn<'r, 't>(
         collect_consume_before(parser, RULE_COLOR, close, &invalid, None)
     } else if legacy {
         collect_color_body_skipping_empty_close(parser, RULE_COLOR, close, &invalid)
-    } else {
-        collect_consume_keep(parser, RULE_COLOR, close, &invalid, None)
-    };
-    parser.set_color_flag(false);
-    let body = body_result?;
     } else {
         collect_consume_keep(parser, RULE_COLOR, close, &invalid, None)
     };
@@ -292,18 +281,8 @@ fn collect_color_body_skipping_empty_close<'r, 't>(
     let mut errors = Vec::new();
     let mut paragraph_safe = true;
     let terminator = loop {
-        eprintln!(
-            "DEBUG color body loop at {:?} in_color={}",
-            parser.current(),
-            parser.in_color(),
-        );
         let body = collect_consume_keep(parser, rule, close, invalid, None)?;
         let ((new_elements, term), new_errors, new_safe) = body.into();
-        eprintln!(
-            "DEBUG color body iter elements={} term={:?}",
-            new_elements.len(),
-            term.token,
-        );
         errors.extend(new_errors);
         paragraph_safe &= new_safe;
         if term.token == Token::Color && new_elements.is_empty() && elements.is_empty() {

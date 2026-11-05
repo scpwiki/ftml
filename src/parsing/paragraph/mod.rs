@@ -258,6 +258,12 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
+            let note_has_same_line_residual = parser.settings().layout.legacy()
+                && elements_contain_note(&elements)
+                && !matches!(
+                    parser.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                );
             let code_has_same_line_residual = elements_end_with_code(&elements)
                 && !matches!(
                     parser.current().token,
@@ -375,6 +381,9 @@ where
                     stack.mark_wikidot_same_line_div_residual();
                 }
                 push_element(&mut stack, text!("]"), true);
+            }
+            if note_has_same_line_residual {
+                stack.mark_wikidot_same_line_note_residual();
             }
             if code_has_same_line_residual {
                 stack.mark_wikidot_same_line_code_residual();
@@ -551,6 +560,20 @@ where
 
 fn wikidot_div_closes_on_current_line(parser: &Parser<'_, '_>) -> bool {
     parser.wikidot_div_closes_on_physical_line(parser.current().span.start)
+}
+
+fn elements_contain_note(elements: &Elements<'_>) -> bool {
+    let is_note = |element: &Element<'_>| {
+        matches!(
+            element,
+            Element::Container(container) if container.ctype() == ContainerType::Note
+        )
+    };
+    match elements {
+        Elements::None => false,
+        Elements::Single(element) => is_note(element),
+        Elements::Multiple(elements) => elements.iter().any(is_note),
+    }
 }
 
 fn elements_contain_div(elements: &Elements<'_>) -> bool {

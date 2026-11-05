@@ -441,6 +441,13 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
+    /// Live Wikidot leaves text on the note closer's line as a bare
+    /// continuation, exactly like a div closer's same-line residual.
+    #[inline]
+    pub(crate) fn mark_wikidot_same_line_note_residual(&mut self) {
+        self.mark_wikidot_same_line_div_residual();
+    }
+
     #[inline]
     pub(crate) fn mark_wikidot_same_line_code_residual(&mut self) {
         if self.wikidot {

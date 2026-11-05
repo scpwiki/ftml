@@ -83,7 +83,8 @@ impl DateItem {
     }
 
     pub fn time_since(self) -> i64 {
-        self.timestamp() - now().timestamp()
+        // Out-of-range timestamps can sit past the i64 difference bounds.
+        self.timestamp().saturating_sub(now().timestamp())
     }
 
     pub fn to_datetime_tz(self) -> OffsetDateTime {
