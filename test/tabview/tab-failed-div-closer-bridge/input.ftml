@@ -1,0 +1,28 @@
+[[tabview]]
+[[tab A]]
+x [[/div]] [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab A]]
+x [[/div]]	[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab A]]
+x [[/div]] [[/div]] [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab A]]
+x [[/div]] y [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab A]]
+x
+[[/div]] [[/tab]]
+[[tab B]]
+y
+[[/tab]]
+[[/tabview]]

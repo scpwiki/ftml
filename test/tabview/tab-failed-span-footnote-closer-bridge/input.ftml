@@ -1,0 +1,9 @@
+[[tabview]]
+[[tab A]]
+x [[/span]] [[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab A]]
+x [[/footnote]] [[/tab]]
+[[/tabview]]
