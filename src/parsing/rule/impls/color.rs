@@ -264,13 +264,15 @@ fn try_consume_fn<'r, 't>(
     ok!(paragraph_safe; Elements::Multiple(output), errors)
 }
 
-/// Collect a Wikidot color body, treating a `##` that would close over an
-/// empty body as literal text and continuing the scan.
+/// Collect a Wikidot color body, treating a `##` that sits at the very start
+/// of the body as literal text and continuing the scan.
 ///
-/// Live Wikidot closes a color span at the first `##` that leaves non-empty
-/// content, so a nested `##name|` opener reads as literal text. Stopping at
-/// the first `##` unconditionally would end the body immediately for
-/// `##blue|##red|a##`, and the resulting empty body would fail the whole span.
+/// Live Wikidot does not close a color over an empty body: `##blue|##` stays
+/// literal, and a nested `##name|` opener reads as text (as in
+/// `##blue|##red|a##`). The decision is about the authored source: a body
+/// whose inline elements merely vanish (`##red|{{}}##`) still closes at its
+/// `##`, which is why the check compares the terminator span against the body
+/// start instead of testing the collected elements.
 fn collect_color_body_skipping_empty_close<'r, 't>(
     parser: &mut Parser<'r, 't>,
     rule: Rule,
@@ -280,12 +282,16 @@ fn collect_color_body_skipping_empty_close<'r, 't>(
     let mut elements = Vec::new();
     let mut errors = Vec::new();
     let mut paragraph_safe = true;
+    let body_start = parser.current().span.start;
     let terminator = loop {
         let body = collect_consume_keep(parser, rule, close, invalid, None)?;
         let ((new_elements, term), new_errors, new_safe) = body.into();
         errors.extend(new_errors);
         paragraph_safe &= new_safe;
-        if term.token == Token::Color && new_elements.is_empty() && elements.is_empty() {
+        if term.token == Token::Color
+            && elements.is_empty()
+            && term.span.start == body_start
+        {
             elements.push(text!("##"));
             continue;
         }

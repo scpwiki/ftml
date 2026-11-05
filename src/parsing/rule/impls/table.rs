@@ -902,8 +902,12 @@ fn parse_cell_start<'r, 't>(
                 if parser.settings().layout.legacy()
                     && let Some(plain) = wikidot_cell_marker_without_space(parser, "~")
                 {
-                    if let Some(marker) = plain {
-                        literal_prefix = Some(marker);
+                    if plain.is_some() {
+                        // A marker glued to more markers is one literal run.
+                        literal_prefix = Some(
+                            take_repeated_cell_marker(parser, marker_start, b'~')?
+                                .unwrap_or("~"),
+                        );
                     }
                     break (None, false);
                 }
@@ -928,8 +932,12 @@ fn parse_cell_start<'r, 't>(
                 if parser.settings().layout.legacy()
                     && let Some(plain) = wikidot_cell_marker_without_space(parser, "=")
                 {
-                    if let Some(marker) = plain {
-                        literal_prefix = Some(marker);
+                    if plain.is_some() {
+                        // A marker glued to more markers is one literal run.
+                        literal_prefix = Some(
+                            take_repeated_cell_marker(parser, marker_start, b'=')?
+                                .unwrap_or("="),
+                        );
                     }
                     break (None, false);
                 }
@@ -947,12 +955,17 @@ fn parse_cell_start<'r, 't>(
                 break (Some(Alignment::Center), false);
             }
             Token::TableColumnRight => {
+                let marker_start = parser.current().span.end - 1;
                 increase_span!();
                 if parser.settings().layout.legacy()
                     && let Some(plain) = wikidot_cell_marker_without_space(parser, ">")
                 {
-                    if let Some(marker) = plain {
-                        literal_prefix = Some(marker);
+                    if plain.is_some() {
+                        // A marker glued to more markers is one literal run.
+                        literal_prefix = Some(
+                            take_repeated_cell_marker(parser, marker_start, b'>')?
+                                .unwrap_or(">"),
+                        );
                     }
                     break (None, false);
                 }
