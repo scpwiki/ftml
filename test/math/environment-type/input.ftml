@@ -1,0 +1,23 @@
+[[math type="align"]]
+x
+[[/math]]
+
+[[math a type="gather"]]
+x
+[[/math]]
+
+[[math type="equation"]]
+A&B
+[[/math]]
+
+[[math type="foo"]]
+x
+[[/math]]
+
+[[math type="ALIGN"]]
+x
+[[/math]]
+
+[[math type="align*"]]
+x
+[[/math]]

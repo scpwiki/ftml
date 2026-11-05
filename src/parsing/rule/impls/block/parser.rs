@@ -1495,6 +1495,31 @@ where
         }
     }
 
+    /// Whether the parser sits at a math closer that starts its own line.
+    ///
+    /// Wikidot closes a math block at the first `[[/math]]` that starts its
+    /// line, even when blank lines or trailing text follow. A closer on the
+    /// same line as the opener or body text never closes (those shapes merge
+    /// forward instead). The byte check covers every line-break token
+    /// (including a lone-backslash break), which a token check cannot see
+    /// once the break has been stepped over.
+    fn math_closer_starts_line(&self) -> bool {
+        if self.current().token != Token::LeftBlockEnd {
+            return false;
+        }
+        self.full_text()
+            .inner()
+            .as_bytes()
+            .get(..self.current().span.start)
+            .is_some_and(|before| before.ends_with(b"\n"))
+    }
+
+    /// Whether the parser sits just past a math closer followed by trailing
+    /// text on its line (as opposed to blanks running to the line end).
+    fn at_wikidot_math_tail_close(&self) -> bool {
+        self.current().token == Token::Whitespace && !self.at_blank_line_remainder()
+    }
+
     fn at_blank_line_remainder(&self) -> bool {
         if self.current().token != Token::Whitespace {
             return false;
@@ -1534,14 +1559,12 @@ where
             }
 
             if block_rule.accepts_newlines_outside_body {
-                if !first_iteration
-                    && parser.settings().layout.legacy()
+                if parser.settings().layout.legacy()
                     && !parser.discarding_hidden_body()
                     && block_rule.name == "block-math"
-                    && !parser.in_footnote()
+                    && !parser.math_closer_starts_line()
                 {
-                    parser
-                        .get_token(Token::LineBreak, ParseErrorKind::BlockExpectedEnd)?;
+                    return Ok(false);
                 } else if !first_iteration {
                     parser.get_optional_line_break()?;
                 }
@@ -1684,13 +1707,14 @@ where
                             block_rule.name,
                             "block-code" | "block-math" | "block-bibliography"
                         )
-                        && !(block_rule.name == "block-math" && parser.in_footnote())
                         && !(matches!(
                             parser.current().token,
                             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                         ) || parser.at_blank_line_remainder()
                             || (block_rule.name == "block-code"
-                                && parser.at_wikidot_code_close_terminator()))
+                                && parser.at_wikidot_code_close_terminator())
+                            || (block_rule.name == "block-math"
+                                && parser.current().token == Token::Whitespace))
                     {
                         return Ok(false);
                     }
@@ -2225,6 +2249,19 @@ where
                     nested_wikidot_math -= 1;
                     last_nested_close = Some((end, self.clone()));
                     self.update(&before_end);
+                } else if wikidot_math
+                    && self.at_wikidot_math_tail_close()
+                    && Self::math_body_has_unclosed_opener(
+                        self.full_text().inner(),
+                        start.span.start,
+                        end.span.start,
+                    )
+                {
+                    // A trailing-text closer with an unclosed opener still in
+                    // the body does not end the block; it nests like any other
+                    // closer, so a later closer can still merge the whole span.
+                    last_nested_close = Some((end, self.clone()));
+                    self.update(&before_end);
                 } else {
                     return Ok((start, end));
                 }
@@ -2233,6 +2270,7 @@ where
             } else if wikidot_math
                 && !suppress_nested_wikidot_math
                 && self.at_wikidot_nested_math_opener()
+                && !self.at_wikidot_math_body_head_break(start)
             {
                 nested_wikidot_math += 1;
             }
@@ -2268,6 +2306,62 @@ where
         }
     }
 
+    /// Whether a math body span holds a line-start `[[math]]` opener without
+    /// a matching line-start `[[/math]]` closer.
+    ///
+    /// This mirrors `at_wikidot_nested_math_opener` for body text the token
+    /// scan never visits as an opener (notably an opener consumed as the
+    /// body's first line), so that a trailing-text closer with a pending
+    /// opener nests instead of ending the block. Indented markers and
+    /// same-line closers do not count, exactly as in the token scan.
+    fn math_body_has_unclosed_opener(text: &str, start: usize, end: usize) -> bool {
+        let Some(body) = text.get(start..end) else {
+            return false;
+        };
+        let mut depth = 0i32;
+        let mut first = true;
+        for line in body.split('\n') {
+            let line_start = !first
+                || start == 0
+                || text
+                    .get(..start)
+                    .is_some_and(|before| before.ends_with('\n'));
+            first = false;
+            if !line_start {
+                continue;
+            }
+            if let Some(head) = line.strip_prefix("[[")
+                && !head.starts_with('/')
+                && let Some(marker) = head.split("]]").next()
+            {
+                let mut parts = marker.split_whitespace();
+                if parts
+                    .next()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("math"))
+                {
+                    let name = parts.next();
+                    if parts.next().is_none()
+                        && name.is_none_or(super::blocks::wikidot_math_name)
+                    {
+                        depth += 1;
+                        continue;
+                    }
+                }
+            }
+            if let Some(close) = line.strip_prefix("[[/")
+                && close
+                    .get(..4)
+                    .is_some_and(|name| name.eq_ignore_ascii_case("math"))
+                && let Some(after) = close.get(4..)
+                && let Some(trailer) = after.strip_prefix("]]")
+                && (trailer.is_empty() || trailer.starts_with([' ', '\t']))
+            {
+                depth -= 1;
+            }
+        }
+        depth > 0
+    }
+
     fn at_wikidot_nested_math_opener(&self) -> bool {
         if !matches!(
             self.current().token,
@@ -2289,6 +2383,19 @@ where
         }
         let name = parts.next();
         parts.next().is_none() && name.is_none_or(super::blocks::wikidot_math_name)
+    }
+
+    /// Whether the parser sits on the math body's head break: the line break
+    /// that ends the head's own line.
+    ///
+    /// An opener right after it directly continues the head, so live Wikidot
+    /// does not count it as a nested opener (a clean closer then still ends
+    /// the block). An opener on any later line counts, so a clean closer
+    /// merges forward instead. The span check covers both body-start shapes
+    /// (at the head's newline, or on the token right after the head).
+    fn at_wikidot_math_body_head_break(&self, start: &ExtractedToken<'_>) -> bool {
+        self.current().span.start == start.span.start
+            || self.current().span.start == start.span.end
     }
 
     fn at_wikidot_crossed_math_close(&self, first_iteration: bool) -> bool {

@@ -1,0 +1,46 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"align\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "a type=\"gather\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"equation\"",
+                "latex-source": "A&B"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"foo\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"ALIGN\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"align*\"",
+                "latex-source": "x"
+            }
+        }
+    ]
+}

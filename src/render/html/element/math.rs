@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::{AnchorTarget, AttributeMap, PartialElement};
+use crate::tree::{AnchorTarget, AttributeMap, ListItem, PartialElement, SyntaxTree};
 use cfg_if::cfg_if;
 use std::num::NonZeroUsize;
 
@@ -40,6 +40,7 @@ pub fn render_math_block(
     ctx: &mut HtmlContext,
     name: Option<&str>,
     latex_source: &str,
+    environment: Option<&str>,
     open_elements: &[Element],
     label_spans: &[AttributeMap],
 ) {
@@ -54,44 +55,158 @@ pub fn render_math_block(
         if let Some(name) = name {
             ctx.register_named_equation(name, index);
         }
-        render_wikidot_math_block(ctx, index, latex_source, open_elements, label_spans);
+        render_wikidot_math_block(
+            ctx,
+            index,
+            environment,
+            latex_source,
+            open_elements,
+            label_spans,
+        );
         return;
     }
 
     render_latex(ctx, name, Some(index), latex_source, DisplayStyle::Block);
 }
 
+/// Math environments Wikidot accepts in `[[math type="..."]]` and in a
+/// whole-body `\begin{...}...\end{...}`. `equation` is valid in the body
+/// but an explicit `type="equation"` falls back to auto-detection.
+const WIKIDOT_MATH_ENVIRONMENTS: &[&str] = &[
+    "eqnarray",
+    "align",
+    "equation",
+    "gather",
+    "multline",
+    "matrix",
+    "pmatrix",
+    "bmatrix",
+    "Bmatrix",
+    "vmatrix",
+    "Vmatrix",
+    "smallmatrix",
+    "cases",
+    "split",
+    "gathered",
+    "aligned",
+    "alignat",
+    "array",
+];
+
+/// The environment for one Wikidot math block: either the valid `Ok` name
+/// with its unwrapped body, or the rejected `Err` name shown in the error
+/// block.
+fn resolve_wikidot_math_environment(
+    explicit: Option<&str>,
+    source: &str,
+) -> Result<(String, String), String> {
+    if let Some((name, inner)) = whole_body_math_environment(source) {
+        let canonical = name.replace('*', "");
+        if WIKIDOT_MATH_ENVIRONMENTS.contains(&canonical.as_str()) {
+            return Ok((canonical, inner.trim().to_owned()));
+        }
+        return Err(canonical);
+    }
+    if let Some(explicit) = explicit {
+        let canonical = explicit.replace('*', "");
+        if canonical == "equation" {
+            // fall through to auto-detection below
+        } else if WIKIDOT_MATH_ENVIRONMENTS.contains(&canonical.as_str()) {
+            return Ok((canonical, source.to_owned()));
+        } else {
+            return Err(canonical);
+        }
+    }
+    if source.contains('&') || source.contains('\\') {
+        Ok((str!("align"), source.to_owned()))
+    } else {
+        Ok((str!("equation"), source.to_owned()))
+    }
+}
+
+/// The environment and inner body of a source that is exactly one
+/// `\begin{X}...\end{X}` span, or `None` when the body does not have that
+/// shape. `X` must be a bare alphanumeric-or-star name; anything else
+/// falls back to the explicit type or auto-detection. The match is greedy:
+/// with two same-name spans the inner body keeps the middle markers.
+fn whole_body_math_environment(source: &str) -> Option<(&str, &str)> {
+    let rest = source.strip_prefix(r"\begin{")?;
+    let brace = rest.find('}')?;
+    let name = &rest[..brace];
+    if name.is_empty()
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'*')
+    {
+        return None;
+    }
+    rest[brace + 1..]
+        .strip_suffix(&format!("\\end{{{name}}}"))
+        .map(|inner| (name, inner))
+}
+
+/// Join math body lines the way Wikidot does: every run of spaces, tabs
+/// and newlines becomes one space. Other characters (including the
+/// non-breaking space) are kept verbatim.
+fn join_wikidot_math_source(source: &str) -> String {
+    source
+        .split([' ', '\t', '\n', '\r'])
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn render_wikidot_math_block(
     ctx: &mut HtmlContext,
     index: NonZeroUsize,
+    environment: Option<&str>,
     latex_source: &str,
     open_elements: &[Element],
     label_spans: &[AttributeMap],
 ) {
-    let environment = if latex_source.contains('{') || latex_source.contains('\\') {
-        "align"
-    } else {
-        "equation"
-    };
-    let source = latex_source
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    let wrapped = if source.is_empty() {
-        format!("\\begin{{{environment}}} \\end{{{environment}}}")
-    } else {
-        format!("\\begin{{{environment}}} {source} \\end{{{environment}}}")
-    };
-    let id = format!("equation-{index}");
+    let source = join_wikidot_math_source(latex_source);
+    match resolve_wikidot_math_environment(environment, &source) {
+        Err(bad) => {
+            // Live Wikidot escapes `&`, `<` and `>` in the rejected name
+            // but leaves both quote characters verbatim, so the message is
+            // assembled with raw pushes instead of escaped contents.
+            ctx.html()
+                .div()
+                .attr(attr!("class" => "error-block"))
+                .inner(|ctx| {
+                    ctx.push_raw_str("Unsupported math environment \"");
+                    for character in bad.chars() {
+                        match character {
+                            '&' => ctx.push_raw_str("&amp;"),
+                            '<' => ctx.push_raw_str("&lt;"),
+                            '>' => ctx.push_raw_str("&gt;"),
+                            _ => ctx.push_raw(character),
+                        }
+                    }
+                    ctx.push_raw('"');
+                });
+        }
+        Ok((environment, source)) => {
+            let wrapped = if source.is_empty() {
+                format!("\\begin{{{environment}}} \\end{{{environment}}}")
+            } else {
+                format!("\\begin{{{environment}}} {source} \\end{{{environment}}}")
+            };
+            let id = format!("equation-{index}");
 
-    render_wikidot_equation_number_with_spans(ctx, index, open_elements, label_spans);
-    ctx.push_raw('\n');
-    ctx.html()
-        .div()
-        .attr(attr!("class" => "math-equation", "id" => &id))
-        .contents(&wrapped);
+            render_wikidot_equation_number_with_spans(
+                ctx,
+                index,
+                open_elements,
+                label_spans,
+            );
+            ctx.push_raw('\n');
+            ctx.html()
+                .div()
+                .attr(attr!("class" => "math-equation", "id" => &id))
+                .contents(&wrapped);
+        }
+    }
 }
 
 fn render_wikidot_equation_number_with_spans(
@@ -517,6 +632,145 @@ pub fn render_equation_reference(ctx: &mut HtmlContext, name: &str) {
                 "aria-hidden" => "true",
             ));
         });
+}
+
+/// Pre-register every named Wikidot equation in render order.
+///
+/// Rendering numbers equations as they are visited, so an `[[eref]]`
+/// placed before its `[[math]]` cannot resolve in a single pass. This
+/// walk visits the tree in exactly the order the renderer does (including
+/// footnote and bibliography bodies at their blocks) and records each
+/// name, so forward references resolve to the same numbers the renderer
+/// then assigns. Later rendering re-registers the same values.
+pub fn preregister_wikidot_equations(ctx: &mut HtmlContext, tree: &SyntaxTree) {
+    let mut index = NonZeroUsize::new(1).unwrap();
+    preregister_wikidot_equation_slices(ctx, tree, &[&tree.elements], &mut index);
+    if tree.needs_footnote_block {
+        let bodies: Vec<&[Element]> = ctx.footnotes().iter().map(Vec::as_slice).collect();
+        preregister_wikidot_equation_slices(ctx, tree, &bodies, &mut index);
+    }
+}
+
+fn preregister_wikidot_equation_slices(
+    ctx: &mut HtmlContext,
+    tree: &SyntaxTree,
+    initial: &[&[Element<'_>]],
+    index: &mut NonZeroUsize,
+) {
+    let mut stack: Vec<(&[Element], usize)> =
+        initial.iter().rev().map(|slice| (*slice, 0)).collect();
+    while let Some((elements, position)) = stack.pop() {
+        let Some(element) = elements.get(position) else {
+            continue;
+        };
+        stack.push((elements, position + 1));
+        match element {
+            Element::Container(container) => stack.push((container.elements(), 0)),
+            Element::Table(table) => {
+                let mut cells = Vec::new();
+                for row in &table.rows {
+                    for cell in &row.cells {
+                        cells.push(cell.elements.as_slice());
+                    }
+                }
+                for slice in cells.into_iter().rev() {
+                    stack.push((slice, 0));
+                }
+            }
+            Element::TabView(tabs) => {
+                for tab in tabs.iter().rev() {
+                    stack.push((tab.elements(), 0));
+                }
+            }
+            Element::Anchor { elements, .. } => stack.push((elements.as_slice(), 0)),
+            Element::List { items, .. } => {
+                for item in items.iter().rev() {
+                    match item {
+                        ListItem::Elements { elements, .. } => {
+                            stack.push((elements.as_slice(), 0));
+                        }
+                        ListItem::SubList { element } => {
+                            stack.push((std::slice::from_ref(&**element), 0));
+                        }
+                    }
+                }
+            }
+            Element::DefinitionList(items) => {
+                for item in items.iter().rev() {
+                    stack.push((item.value_elements.as_slice(), 0));
+                    stack.push((item.key_elements.as_slice(), 0));
+                }
+            }
+            Element::Collapsible {
+                elements,
+                unfolded_tail_start,
+                wikidot_block_open_elements,
+                ..
+            } => {
+                let (elements, unfolded_tail) = unfolded_tail_start
+                    .map(|start| elements.split_at(start.min(elements.len())))
+                    .unwrap_or((elements.as_slice(), &[]));
+                stack.push((unfolded_tail, 0));
+                stack.push((elements, 0));
+                stack.push((wikidot_block_open_elements.as_slice(), 0));
+            }
+            Element::WikidotBlockFrame { children, .. } => {
+                stack.push((children.as_slice(), 0))
+            }
+            Element::Color { elements, .. } => stack.push((elements.as_slice(), 0)),
+            Element::Include { elements, .. } => stack.push((elements.as_slice(), 0)),
+            Element::FootnoteBlock { .. } => {
+                for body in ctx.footnotes().iter().rev() {
+                    stack.push((body.as_slice(), 0));
+                }
+            }
+            Element::BibliographyBlock {
+                index: block_index, ..
+            } => {
+                if let Some(bibliography) = tree.bibliographies.slice().get(*block_index)
+                {
+                    for (_, elements) in bibliography.slice().iter().rev() {
+                        stack.push((elements.as_slice(), 0));
+                    }
+                }
+            }
+            Element::Math { name, .. } => {
+                if let Some(name) = name {
+                    ctx.register_named_equation(name, *index);
+                }
+                *index = NonZeroUsize::new(index.get() + 1).unwrap();
+            }
+            Element::Partial(partial) => match partial {
+                PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
+                    stack.push((elements.as_slice(), 0));
+                }
+                PartialElement::ListItem(ListItem::SubList { element }) => {
+                    stack.push((std::slice::from_ref(&**element), 0));
+                }
+                PartialElement::TableRow(row) => {
+                    let mut cells = Vec::new();
+                    for cell in &row.cells {
+                        cells.push(cell.elements.as_slice());
+                    }
+                    for slice in cells.into_iter().rev() {
+                        stack.push((slice, 0));
+                    }
+                }
+                PartialElement::TableCell(cell) => {
+                    stack.push((cell.elements.as_slice(), 0))
+                }
+                PartialElement::WikidotFoster(elements) => {
+                    stack.push((elements.as_slice(), 0))
+                }
+                PartialElement::Tab(tab) => stack.push((tab.elements.as_slice(), 0)),
+                PartialElement::RubyText(ruby_text) => {
+                    stack.push((ruby_text.elements.as_slice(), 0));
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
 }
 
 #[cfg(all(test, feature = "mathml"))]

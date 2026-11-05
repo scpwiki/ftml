@@ -38,7 +38,7 @@ pub use self::output::{
 };
 
 use self::context::HtmlContext;
-use self::element::{render_element, render_elements};
+use self::element::{preregister_wikidot_equations, render_element, render_elements};
 use crate::data::PageInfo;
 use crate::render::{Handle, PageExistenceResolver, Render, UserInfoResolver};
 use crate::settings::WikitextSettings;
@@ -127,6 +127,9 @@ impl HtmlRender {
             tree.wikitext_len,
         );
 
+        if settings.layout.legacy() {
+            preregister_wikidot_equations(&mut ctx, tree);
+        }
         render_contents(&mut ctx, tree);
         ctx.into()
     }

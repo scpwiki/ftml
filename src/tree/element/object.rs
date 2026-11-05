@@ -279,6 +279,8 @@ pub enum Element<'t> {
     Math {
         name: Option<Cow<'t, str>>,
         latex_source: Cow<'t, str>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        environment: Option<Cow<'t, str>>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         wikidot_block_open_elements: Vec<Element<'t>>,
         /// Inline span/size scopes that cross this Wikidot math block also
@@ -805,11 +807,13 @@ impl Element<'_> {
             Element::Math {
                 name,
                 latex_source,
+                environment,
                 wikidot_block_open_elements,
                 wikidot_label_spans,
             } => Element::Math {
                 name: option_string_to_owned(name),
                 latex_source: string_to_owned(latex_source),
+                environment: option_string_to_owned(environment),
                 wikidot_block_open_elements: elements_to_owned(
                     wikidot_block_open_elements,
                 ),

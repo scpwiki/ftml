@@ -544,34 +544,25 @@ mod tests {
     }
 
     #[test]
-    fn wikidot_footnote_renders_math_block_in_body() {
-        let (html, errors) = render_wikidot(
+    fn wikidot_footnote_leaves_mid_line_math_opener_literal() {
+        let (html, _) = render_wikidot(
             "Text[[footnote]]note [[math]]\nx^2\n[[/math]] end[[/footnote]] done.\n\n[[footnoteblock]]",
         );
 
-        assert!(errors.is_empty(), "{errors:#?}");
-        assert!(html.contains("class=\"math-equation\""), "{html}");
-        assert!(
-            html.contains("\\begin{equation} x^2 \\end{equation}"),
-            "{html}"
-        );
-        assert!(html.contains("<p>end</p>"), "{html}");
-        assert!(!html.contains("[[math]]"), "{html}");
+        assert!(!html.contains("class=\"math-equation\""), "{html}");
+        assert!(html.contains("note [[math]]"), "{html}");
+        assert!(html.contains("x^2"), "{html}");
+        assert!(html.contains("[[/math]] end"), "{html}");
     }
 
     #[test]
-    fn wikidot_footnote_renders_single_line_math_block() {
-        let (html, errors) = render_wikidot(
+    fn wikidot_footnote_leaves_single_line_math_block_literal() {
+        let (html, _) = render_wikidot(
             "Text[[footnote]]See [[math]] x^2 [[/math]] here[[/footnote]]\n\n[[footnoteblock]]",
         );
 
-        assert!(errors.is_empty(), "{errors:#?}");
-        assert!(html.contains("class=\"math-equation\""), "{html}");
-        assert!(
-            html.contains("\\begin{equation} x^2 \\end{equation}"),
-            "{html}"
-        );
-        assert!(!html.contains("[[math]]"), "{html}");
+        assert!(!html.contains("class=\"math-equation\""), "{html}");
+        assert!(html.contains("See [[math]] x^2 [[/math]] here"), "{html}");
     }
 
     #[test]
