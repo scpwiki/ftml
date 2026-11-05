@@ -1,0 +1,11 @@
+[[html class="c" style="color:red"]]y[[/html]]
+
+[[html style="color:red" class="c"]]y[[/html]]
+
+[[html class="a" style="color:red" class="b" style="color:blue"]]y[[/html]]
+
+[[html class="" style="color:red"]]y[[/html]]
+
+[[html class="c" style=""]]y[[/html]]
+
+[[html class="a b" style="color:red;background:blue"]]y[[/html]]

@@ -1,0 +1,72 @@
+{
+    "elements": [
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "c",
+                    "style": "color:red"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "c",
+                    "style": "color:red"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "b",
+                    "style": "color:blue"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "",
+                    "style": "color:red"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "c",
+                    "style": ""
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "a b",
+                    "style": "color:red;background:blue"
+                }
+            }
+        }
+    ],
+    "html-blocks": [
+        "y",
+        "y",
+        "y",
+        "y",
+        "y",
+        "y"
+    ]
+}
