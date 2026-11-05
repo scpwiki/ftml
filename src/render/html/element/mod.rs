@@ -322,14 +322,12 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             name,
             latex_source,
             wikidot_block_open_elements,
-        } => {
-            render_math_block(
-                ctx,
-                ref_cow!(name),
-                latex_source,
-                wikidot_block_open_elements,
-            )
-        }
+        } => render_math_block(
+            ctx,
+            ref_cow!(name),
+            latex_source,
+            wikidot_block_open_elements,
+        ),
         Element::MathInline { latex_source } => render_math_inline(ctx, latex_source),
         Element::EquationReference(name) => render_equation_reference(ctx, name),
         Element::Embed(embed) => render_embed(ctx, embed),

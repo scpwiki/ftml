@@ -29,7 +29,9 @@ use super::rule::{
         starts_wikidot_only_scheme_url, try_consume_wikidot_end_block_link, url_elements,
     },
 };
-use crate::tree::{LinkLabel, LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind};
+use crate::tree::{
+    LinkLabel, LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind,
+};
 use std::{borrow::Cow, mem};
 
 fn try_consume_wikidot_parser_function_anchor_fallback<'r, 't>(
@@ -386,7 +388,10 @@ where
     // must stay literal too (memoized by the head-side check).
     if pair.kind == WikidotBlockKind::Div
         && pair.scored
-        && !super::rule::impls::wikidot_scored_div_close_compatible(parser, pair.head_byte)
+        && !super::rule::impls::wikidot_scored_div_close_compatible(
+            parser,
+            pair.head_byte,
+        )
     {
         return None;
     }
@@ -398,13 +403,15 @@ where
         WikidotBlockKind::Collapsible => WikidotBlockCloseKind::Collapsible {
             head: pair.head_byte,
         },
-        WikidotBlockKind::Note => WikidotBlockCloseKind::Note { head: pair.head_byte },
+        WikidotBlockKind::Note => WikidotBlockCloseKind::Note {
+            head: pair.head_byte,
+        },
         WikidotBlockKind::AlignCenter
         | WikidotBlockKind::AlignRight
         | WikidotBlockKind::AlignLeft
-        | WikidotBlockKind::AlignJustify => {
-            WikidotBlockCloseKind::Align { head: pair.head_byte }
-        }
+        | WikidotBlockKind::AlignJustify => WikidotBlockCloseKind::Align {
+            head: pair.head_byte,
+        },
         _ => return None,
     })
 }

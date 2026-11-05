@@ -88,7 +88,10 @@ impl WikidotBlockPairs {
         self.by_head.get(&head).map(|index| &self.pairs[*index])
     }
 
-    pub(crate) fn pair_at_head_byte(&self, head_byte: usize) -> Option<&WikidotBlockPair> {
+    pub(crate) fn pair_at_head_byte(
+        &self,
+        head_byte: usize,
+    ) -> Option<&WikidotBlockPair> {
         self.by_head_byte
             .get(&head_byte)
             .map(|index| &self.pairs[*index])
@@ -1139,9 +1142,7 @@ impl<'t> Scanner<'t> {
             .pairs
             .iter()
             .enumerate()
-            .map(|(index, pair)| {
-                (self.tokens[pair.closer].span.start, index)
-            })
+            .map(|(index, pair)| (self.tokens[pair.closer].span.start, index))
             .collect();
         WikidotBlockPairs {
             pairs: self.pairs,

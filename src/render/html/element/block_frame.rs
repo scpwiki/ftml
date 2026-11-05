@@ -51,12 +51,7 @@ pub fn render_block_frame(ctx: &mut HtmlContext, frame: BlockFrame) {
     }
     tag.inner(|ctx| {
         if let Some(link) = collapsible_link {
-            render_wikidot_frame_link(
-                ctx,
-                link.text.as_deref(),
-                link.show,
-                &link.spans,
-            );
+            render_wikidot_frame_link(ctx, link.text.as_deref(), link.show, &link.spans);
         }
         render_elements(ctx, children);
     });

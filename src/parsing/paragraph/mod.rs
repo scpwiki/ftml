@@ -118,8 +118,7 @@ where
         let explicit_list_opener = wikidot_explicit_list_opener(parser);
         let div_score = wikidot_div_score(parser);
         let div_opener = div_score.is_some();
-        let div_residual_opener =
-            div_opener || wikidot_div_after_line_break(parser);
+        let div_residual_opener = div_opener || wikidot_div_after_line_break(parser);
         let same_line_div_candidate =
             div_opener && wikidot_div_closes_on_current_line(parser);
         let embed_opener = wikidot_embed_opener(parser);
@@ -484,9 +483,7 @@ fn wikidot_div_after_line_break<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,
 {
-    if !parser.settings().layout.legacy()
-        || parser.current().token != Token::LineBreak
-    {
+    if !parser.settings().layout.legacy() || parser.current().token != Token::LineBreak {
         return false;
     }
     let Some(next) = parser.look_ahead(0) else {

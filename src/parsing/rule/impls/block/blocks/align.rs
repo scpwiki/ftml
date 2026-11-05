@@ -19,9 +19,7 @@
  */
 
 use super::prelude::*;
-use super::{
-    consume_wikidot_flat_head_break, wikidot_flat_pair_for_head,
-};
+use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
 use crate::delayed::DelayedElement;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{Alignment, AttributeMap, PartialElement, WikidotBlockShell};

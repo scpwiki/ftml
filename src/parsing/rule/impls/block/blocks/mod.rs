@@ -223,10 +223,9 @@ pub(crate) fn wikidot_flat_pair_for_head(
     if std::env::var("L83NOFLAT").is_ok() {
         return None;
     }
-    let pair = parser
+    parser
         .wikidot_block_pair_at_head_byte(opener_start)
-        .filter(|pair| pair.flat && pair.kind.emits_flat());
-    pair
+        .filter(|pair| pair.flat && pair.kind.emits_flat())
 }
 
 pub(crate) fn wikidot_scored_div_close_compatible<'r, 't>(

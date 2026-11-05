@@ -566,9 +566,10 @@ impl<'t> ParagraphStack<'t> {
                 element,
                 Element::Partial(
                     PartialElement::WikidotBlockOpen(_)
-                        | PartialElement::WikidotBlockClose(
-                            WikidotBlockCloseKind::Div { scored: true, .. }
-                        )
+                        | PartialElement::WikidotBlockClose(WikidotBlockCloseKind::Div {
+                            scored: true,
+                            ..
+                        })
                 )
             )
         {

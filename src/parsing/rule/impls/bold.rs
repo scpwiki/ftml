@@ -25,9 +25,7 @@ use super::inline_delimiter::{
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
-use crate::tree::{
-    PartialElement, WikidotBlockCloseKind, WikidotBlockShell,
-};
+use crate::tree::{PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
 
 pub const RULE_BOLD: Rule = Rule {
     name: "bold",
@@ -124,9 +122,7 @@ fn bold_body_crosses_formed_div(elements: &Elements<'_>) -> bool {
         Element::Container(inner) => inner.ctype() == ContainerType::Div,
         Element::Partial(
             PartialElement::WikidotBlockOpen(WikidotBlockShell::Div { .. })
-            | PartialElement::WikidotBlockClose(
-                WikidotBlockCloseKind::Div { .. },
-            ),
+            | PartialElement::WikidotBlockClose(WikidotBlockCloseKind::Div { .. }),
         ) => true,
         _ => false,
     })

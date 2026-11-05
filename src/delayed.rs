@@ -961,9 +961,7 @@ fn element_contains_delayed(element: &Element<'_>) -> bool {
         | Element::Collapsible { elements, .. }
         | Element::Color { elements, .. }
         | Element::Include { elements, .. } => elements_contain_delayed(elements),
-        Element::WikidotBlockFrame { children, .. } => {
-            elements_contain_delayed(children)
-        }
+        Element::WikidotBlockFrame { children, .. } => elements_contain_delayed(children),
         Element::Partial(partial) => match partial {
             PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
                 elements_contain_delayed(elements)

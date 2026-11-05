@@ -1061,14 +1061,14 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
     }
     let mut output = Vec::with_capacity(elements.len());
     for mut element in mem::take(elements) {
-        if let Some(kind) = format_kind_literalised_around_flow_block(&element) {
-            if let Element::Container(container) = &mut element {
-                let children = mem::take(container.elements_mut());
-                output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
-                output.extend(children);
-                output.push(Element::Text(Cow::Borrowed(kind.close_marker())));
-                continue;
-            }
+        if let Some(kind) = format_kind_literalised_around_flow_block(&element)
+            && let Element::Container(container) = &mut element
+        {
+            let children = mem::take(container.elements_mut());
+            output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
+            output.extend(children);
+            output.push(Element::Text(Cow::Borrowed(kind.close_marker())));
+            continue;
         }
         if !container_flattens(&element) {
             output.push(element);
@@ -3778,9 +3778,7 @@ impl<'t> WikidotFrameAssembly<'t> {
     fn open_shell(&mut self, shell: WikidotBlockShell<'t>) {
         match shell {
             WikidotBlockShell::Div {
-                attributes,
-                scored,
-                ..
+                attributes, scored, ..
             } => {
                 self.stack.push(WikidotFrameBuild {
                     attributes,
@@ -3835,10 +3833,8 @@ impl<'t> WikidotFrameAssembly<'t> {
                     show_text,
                     true,
                 );
-                let mut unfolded_attributes = wikidot_frame_attributes(&[(
-                    "class",
-                    "collapsible-block-unfolded",
-                )]);
+                let mut unfolded_attributes =
+                    wikidot_frame_attributes(&[("class", "collapsible-block-unfolded")]);
                 if !start_open {
                     unfolded_attributes.insert("style", Cow::Borrowed("display:none"));
                 }

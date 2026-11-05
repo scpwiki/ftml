@@ -342,11 +342,7 @@ impl WikidotFrameLink<'_> {
         WikidotFrameLink {
             text: option_string_to_owned(&self.text),
             show: self.show,
-            spans: self
-                .spans
-                .iter()
-                .map(AttributeMap::to_owned)
-                .collect(),
+            spans: self.spans.iter().map(AttributeMap::to_owned).collect(),
         }
     }
 }

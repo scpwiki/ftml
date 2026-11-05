@@ -118,12 +118,8 @@ impl<'t> WikidotBlockShell<'t> {
             } => WikidotBlockShell::Collapsible {
                 head: *head,
                 start_open: *start_open,
-                show_text: show_text
-                    .as_ref()
-                    .map(|text| Cow::Owned(text.to_string())),
-                hide_text: hide_text
-                    .as_ref()
-                    .map(|text| Cow::Owned(text.to_string())),
+                show_text: show_text.as_ref().map(|text| Cow::Owned(text.to_string())),
+                hide_text: hide_text.as_ref().map(|text| Cow::Owned(text.to_string())),
                 show_top: *show_top,
                 show_bottom: *show_bottom,
             },

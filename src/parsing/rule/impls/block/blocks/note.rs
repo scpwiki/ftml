@@ -19,9 +19,7 @@
  */
 
 use super::prelude::*;
-use super::{
-    consume_wikidot_flat_head_break, wikidot_flat_pair_for_head,
-};
+use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{PartialElement, WikidotBlockShell};
 
@@ -74,12 +72,12 @@ fn parse_note_block<'r, 't>(
     // Scan-blind heads (zoned closers, dropped arguments) and truly unclosed
     // heads fall through to the legacy path, which already fails unclosed.
     if parser.settings().layout.legacy()
-        && parser.wikidot_block_pair_at_head_byte(opener_start).is_none()
+        && parser
+            .wikidot_block_pair_at_head_byte(opener_start)
+            .is_none()
         && (parser.discarding_hidden_body()
-            || parser.wikidot_scan_shows_stolen_head(
-                WikidotBlockKind::Note,
-                opener_start,
-            ))
+            || parser
+                .wikidot_scan_shows_stolen_head(WikidotBlockKind::Note, opener_start))
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }

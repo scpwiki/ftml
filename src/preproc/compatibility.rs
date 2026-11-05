@@ -835,8 +835,7 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
                             .is_some_and(|literal| *literal)
                             && lines.get(index + 1).is_some_and(|next| {
                                 let (body, _) = split_line(next);
-                                standalone_div_marker(body.trim_end(), "")
-                                    == Some(false)
+                                standalone_div_marker(body.trim_end(), "") == Some(false)
                             });
                         if tight_tail {
                             while div_depth > baseline {

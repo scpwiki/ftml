@@ -18,9 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::clone::{
-    elements_to_owned, option_string_to_owned, string_to_owned,
-};
+use super::clone::{elements_to_owned, option_string_to_owned, string_to_owned};
 use super::element::Element;
 use std::borrow::Cow;
 
