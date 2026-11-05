@@ -1,0 +1,35 @@
+[[tabview]]
+[[tab title=" "]]
+x
+[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab title=""]]
+x
+[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab title="A" title="B"]]
+x
+[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab A title="B" title="C"]]
+x
+[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab title="A" class="c" A]]
+x
+[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab title="A" A title="B"]]
+x
+[[/tab]]
+[[/tabview]]
