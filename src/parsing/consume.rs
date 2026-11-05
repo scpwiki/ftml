@@ -143,10 +143,11 @@ where
 
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
-    let Some(relative_marker_end) = source[start..].find("]]") else {
+    let Some(marker_found) = parser.cached_close_marker(source, start) else {
         return Ok(None);
     };
-    let marker_end = start + relative_marker_end + 2;
+    let relative_marker_end = marker_found - start;
+    let marker_end = marker_found + 2;
     let name = source[start + "[[/".len()..start + relative_marker_end]
         .trim_matches([' ', '\t']);
     if !matches!(
@@ -155,7 +156,10 @@ where
     ) {
         return Ok(None);
     }
-    if line_has_unmatched_wikidot_owner_opener(source, start, name) {
+    if parser
+        .cached_owner_opener_before(source, start, name)
+        .unwrap_or_else(|| line_has_unmatched_wikidot_owner_opener(source, start, name))
+    {
         return Ok(None);
     }
     if (name.eq_ignore_ascii_case("span") && parser.rule().name() == "block-span")
@@ -181,13 +185,13 @@ where
     {
         label_start += 1;
     }
-    let line_end = source[label_start..]
-        .find(['\r', '\n'])
-        .map_or(source.len(), |offset| label_start + offset);
-    let Some(relative_close) = source[label_start..line_end].find(']') else {
+    let (_, line_end) = parser.unmatched_line_bounds(source, label_start);
+    let Some(close) = parser
+        .cached_close_bracket(source, label_start)
+        .filter(|found| *found < line_end)
+    else {
         return Ok(None);
     };
-    let close = label_start + relative_close;
     let raw_label = &source[label_start..close];
     if wikidot_label_region_has_owner_opener(&source[label_start..close]) {
         return Ok(None);
@@ -263,7 +267,7 @@ fn wikidot_label_region_has_owner_opener(region: &str) -> bool {
     false
 }
 
-fn line_has_unmatched_wikidot_owner_opener(
+pub(crate) fn line_has_unmatched_wikidot_owner_opener(
     source: &str,
     close_start: usize,
     name: &str,

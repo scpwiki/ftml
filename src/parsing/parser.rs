@@ -156,6 +156,7 @@ pub(super) struct BlockScanCache<'t> {
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
+    pub(super) unmatched_close_scan: super::unmatched_close_scan::UnmatchedCloseScanCache,
 }
 
 #[derive(Debug)]

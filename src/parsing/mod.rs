@@ -44,6 +44,7 @@ mod rule;
 mod string;
 mod strip;
 mod token;
+mod unmatched_close_scan;
 mod wikidot_text;
 
 mod prelude {

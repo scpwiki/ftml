@@ -15,6 +15,7 @@ use super::iftags::{
     consume_iftags_segment_fused, iftags_segment_fused,
 };
 use super::prelude::*;
+use crate::parsing::unmatched_close_scan::LinkTargetScanMemo;
 use std::borrow::Cow;
 use std::ops::Range;
 
@@ -156,12 +157,13 @@ pub(crate) fn collect_comment_elided_keep<'r, 't>(
     closes: &[ParseCondition],
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
+    link_memo: Option<LinkTargetScanMemo>,
 ) -> Result<(CommentElidedText<'t>, &'r ExtractedToken<'t>), ParseError>
 where
     'r: 't,
 {
     let start = parser.current().span.start;
-    collect_comment_elided_keep_from(parser, start, closes, invalids, kind)
+    collect_comment_elided_keep_from(parser, start, closes, invalids, kind, link_memo)
 }
 
 pub(crate) fn collect_comment_elided_keep_from<'r, 't>(
@@ -170,6 +172,40 @@ pub(crate) fn collect_comment_elided_keep_from<'r, 't>(
     closes: &[ParseCondition],
     invalids: &[ParseCondition],
     kind: Option<ParseErrorKind>,
+    link_memo: Option<LinkTargetScanMemo>,
+) -> Result<(CommentElidedText<'t>, &'r ExtractedToken<'t>), ParseError>
+where
+    'r: 't,
+{
+    let mut traversed = Vec::new();
+    let result = collect_comment_elided_keep_from_inner(
+        parser,
+        start,
+        closes,
+        invalids,
+        kind,
+        link_memo,
+        &mut traversed,
+    );
+    if let (Some(memo), Err(_)) = (link_memo, &result) {
+        parser.cache_link_target_scan_failed(
+            &traversed,
+            memo.line_break_separator,
+            memo.in_iftags_span,
+        );
+    }
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_comment_elided_keep_from_inner<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    start: usize,
+    closes: &[ParseCondition],
+    invalids: &[ParseCondition],
+    kind: Option<ParseErrorKind>,
+    link_memo: Option<LinkTargetScanMemo>,
+    traversed: &mut Vec<usize>,
 ) -> Result<(CommentElidedText<'t>, &'r ExtractedToken<'t>), ParseError>
 where
     'r: 't,
@@ -177,6 +213,20 @@ where
     let mut comments = Vec::new();
 
     loop {
+        if let Some(memo) = link_memo {
+            let addr = parser.current() as *const ExtractedToken as usize;
+            traversed.push(addr);
+            #[cfg(test)]
+            parser.add_unmatched_close_scan_visits(1);
+            if parser.link_target_scan_failed(
+                addr,
+                memo.line_break_separator,
+                memo.in_iftags_span,
+            ) {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+        }
+
         if parser.current_generated().is_some()
             || matches!(
                 parser.current().token,
