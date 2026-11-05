@@ -503,7 +503,13 @@ where
         return Err(parser.make_err(ParseErrorKind::BlockDisallowsScore));
     }
 
-    parser.get_optional_space()?;
+    // The Wikidot [[html]] body is raw source captured from the byte after the
+    // opener, so the space that follows a head-less opener belongs to the body
+    // and must not be consumed by the generic block-head spacing rule.
+    let raw_opener_body = parser.settings().layout.legacy() && block.name == "block-html";
+    if !raw_opener_body {
+        parser.get_optional_space()?;
+    }
 
     let memoization = BlockFailureMemoization::for_block(parser, block);
     if let Some(error) = memoization.cached_failure(parser, block, opener_start) {

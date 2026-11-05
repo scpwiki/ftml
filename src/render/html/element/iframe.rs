@@ -72,13 +72,26 @@ pub fn render_html(ctx: &mut HtmlContext, contents: &str, attributes: &Attribute
         } else {
             Cow::Owned(format!("{user_class} html-block-iframe"))
         };
-        ctx.html().iframe().attr(attr!(
-            "src" => &src,
-            "allowtransparency" => "true",
-            "frameborder" => "0",
-            "style" => &user_style; if !user_style.is_empty(),
-            "class" => &class,
-        ));
+        // Wikidot emits the class attribute before the style attribute when a
+        // user class is supplied, but after it when only the fixed class is
+        // present. Both orders are pinned by the saved-page captures.
+        if user_class.is_empty() {
+            ctx.html().iframe().attr(attr!(
+                "src" => &src,
+                "allowtransparency" => "true",
+                "frameborder" => "0",
+                "style" => &user_style; if !user_style.is_empty(),
+                "class" => &class,
+            ));
+        } else {
+            ctx.html().iframe().attr(attr!(
+                "src" => &src,
+                "allowtransparency" => "true",
+                "frameborder" => "0",
+                "class" => &class,
+                "style" => &user_style; if !user_style.is_empty(),
+            ));
+        }
     } else {
         ctx.html().iframe().attr(attr!(
             "src" => &src,

@@ -218,6 +218,53 @@ mod tests {
     }
 
     #[test]
+    fn wikidot_html_block_captures_raw_body_boundaries() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+
+        for (source, expected_blocks) in [
+            (r#"[[html]]   [[/html]]"#, vec!["   "]),
+            (r#"[[html]] y [[/html]]"#, vec![" y "]),
+            (r#"[[html]]y [[/html]]"#, vec!["y "]),
+            ("[[html]] \n [[/html]]", vec![" \n "]),
+            ("[[html]]\n\n[[/html]]", vec!["\n\n"]),
+            (r#"[[html]]a [[/html]] b[[/html]]"#, vec!["a "]),
+            (r#"[[html]]x[[/html]][[/html]]"#, vec!["x[[/html]]"]),
+            (r#"[[html]]x[[/html]]y[[/html]]"#, vec!["x[[/html]]y"]),
+            (r#"[[html]]x[[/html]] y[[/html]]"#, vec!["x"]),
+            ("[[html]]x[[/html]]\n[[/html]]", vec!["x"]),
+            (r#"[[html]]a[[html]]b[[/html]]"#, vec!["a[[html]]b"]),
+            (
+                r#"[[html]]x[[/html]][[/html]][[/html]]"#,
+                vec!["x[[/html]][[/html]]"],
+            ),
+        ] {
+            let tokenization = crate::tokenize(source);
+            let (tree, errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            assert_eq!(tree.html_blocks, expected_blocks, "{source:?}: {errors:?}");
+        }
+
+        for (source, expected_html) in [
+            (r#"[[html]]x[[/html]]y"#, "<p>[[html]]x[[/html]]y</p>"),
+            (
+                r#"[[html]]x[[/html]][[/html]]y"#,
+                "<p>[[html]]x[[/html]][[/html]]y</p>",
+            ),
+            (r#"[[html]]x[[/html]]]"#, "<p>[[html]]x[[/html]]]</p>"),
+        ] {
+            let tokenization = crate::tokenize(source);
+            let (tree, _errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            assert!(tree.html_blocks.is_empty(), "{source:?}: {tree:#?}");
+            let html = crate::render::html::HtmlRender
+                .render(&tree, &page_info, &settings)
+                .body;
+            assert_eq!(html, expected_html, "{source:?}");
+        }
+    }
+
+    #[test]
     fn wikidot_html_block_with_head_arguments_renders_styled_iframe() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
@@ -242,7 +289,22 @@ mod tests {
             (
                 r#"[[html class="c" style="color:red"]]y[[/html]]"#,
                 "y",
-                r#"style="color:red" class="c html-block-iframe""#,
+                r#"class="c html-block-iframe" style="color:red""#,
+            ),
+            (
+                r#"[[html style="color:red" class="c"]]y[[/html]]"#,
+                "y",
+                r#"class="c html-block-iframe" style="color:red""#,
+            ),
+            (
+                r#"[[html class="" style="color:red"]]y[[/html]]"#,
+                "y",
+                r#"style="color:red" class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html class="c" style=""]]y[[/html]]"#,
+                "y",
+                r#"class="c html-block-iframe""#,
             ),
             (
                 r#"[[html id="i"]]y[[/html]]"#,
