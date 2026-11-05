@@ -166,9 +166,13 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                         match item {
                             TabViewItem::Tab(tab) => {
                                 let tab_id = format!("wiki-tab-0-{tab_index}");
+                                // Live Wikidot hides every panel after the first inline.
                                 ctx.html()
                                     .div()
-                                    .attr(attr!("id" => &tab_id))
+                                    .attr(attr!(
+                                        "id" => &tab_id,
+                                        "style" => "display:none"; if tab_index > 0,
+                                    ))
                                     .contents(&tab.elements);
                                 tab_index += 1;
                             }
@@ -291,7 +295,11 @@ mod tests {
             "{html}",
         );
         assert!(html.contains("id=\"wiki-tab-0-1\""), "{html}");
-        assert!(!html.contains("display:"), "{html}");
+        assert!(
+            html.contains("<div id=\"wiki-tab-0-1\" style=\"display:none\">two</div>"),
+            "{html}",
+        );
+        assert_eq!(html.matches("display:none").count(), 1, "{html}");
         assert!(!html.contains("<wj-tabs"), "{html}");
         assert!(!html.contains("new YAHOO.widget.TabView"), "{html}");
         assert!(!html.contains("<script"), "{html}");
