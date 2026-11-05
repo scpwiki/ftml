@@ -253,6 +253,7 @@ pub(crate) fn head_seam_forms_block(block: &BlockRule, layout: Layout) -> bool {
         || matches!(
             block.name,
             "block-footnote"
+                | "block-footnote-block"
                 | "block-div"
                 | "block-table"
                 | "block-table-row"
@@ -1028,14 +1029,27 @@ where
                 name.trim()
             }
         }
-        let name = match name {
+        let mut name = match name {
             Cow::Borrowed(name) => Cow::Borrowed(trim_head_word(name, legacy)),
             Cow::Owned(name) => Cow::Owned(trim_head_word(&name, legacy).to_owned()),
         };
         if matches!(name, Cow::Owned(_))
             && (name.contains(char::is_whitespace) || name.contains("]]"))
         {
-            return Err(self.make_err(ParseErrorKind::RuleFailed));
+            // A head word assembled across a gate seam can carry the
+            // whitespace that separated it from the rest of the head. Live
+            // reads such a head as its first token plus trailing tokens, so
+            // keep the first token instead of failing the whole block.
+            match name.find(char::is_whitespace) {
+                Some(index)
+                    if self.settings().layout.legacy()
+                        && !name.contains("]]")
+                        && self.rule().name() == "block-date" =>
+                {
+                    name = Cow::Owned(name[..index].to_owned());
+                }
+                _ => return Err(self.make_err(ParseErrorKind::RuleFailed)),
+            }
         }
         let in_head = !matches!(
             last.token,

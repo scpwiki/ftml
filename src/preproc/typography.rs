@@ -305,6 +305,56 @@ fn ranges_contain(ranges: &[Range<usize>], offset: usize) -> bool {
     insertion > 0 && offset < ranges[insertion - 1].end
 }
 
+/// The `[[date]]` head is not typographed by live: `[[date 123 45]]` still
+/// reads its first token as the timestamp. Nested gate seams can sit inside
+/// the head, so the closing `]]` is found with bracket nesting.
+fn wikidot_date_head_ranges(text: &str) -> Vec<Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(relative_open) = text[cursor..].find("[[") {
+        let open = cursor + relative_open;
+        let Some(head_end) = wikidot_nested_head_end(text, open) else {
+            break;
+        };
+        let head = &text[open + 2..head_end];
+        let lead = head.len() - head.trim_start().len();
+        let trimmed = &head[lead..];
+        let name_len = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+        let name = trimmed[..name_len]
+            .strip_prefix('*')
+            .unwrap_or(&trimmed[..name_len]);
+        if name.eq_ignore_ascii_case("date") {
+            ranges.push(open + 2 + lead + name_len..head_end);
+        }
+        cursor = head_end + 2;
+        if cursor >= text.len() {
+            break;
+        }
+    }
+    ranges
+}
+
+fn wikidot_nested_head_end(text: &str, open: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut depth = 1usize;
+    let mut index = open + 2;
+    while index + 1 < bytes.len() {
+        if bytes[index] == b'[' && bytes[index + 1] == b'[' {
+            depth += 1;
+            index += 2;
+        } else if bytes[index] == b']' && bytes[index + 1] == b']' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(index);
+            }
+            index += 2;
+        } else {
+            index += 1;
+        }
+    }
+    None
+}
+
 fn wikidot_head_value_ranges(text: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     let mut cursor = 0usize;
@@ -354,7 +404,11 @@ fn wikidot_head_value_ranges(text: &str) -> Vec<Range<usize>> {
         let name_end = text[name_start..]
             .find(|character: char| character.is_whitespace() || character == ']')
             .map_or(text.len(), |relative| name_start + relative);
-        if name_end > name_start {
+        if name_end > name_start
+            && text[name_start..name_end].bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'%')
+            })
+        {
             let span_end = text[name_start..]
                 .find(']')
                 .map_or(text.len(), |relative| name_start + relative);
@@ -412,6 +466,9 @@ fn typography_protected_ranges(text: &str, wikidot: bool) -> Vec<Range<usize>> {
     ranges.extend(wikidot_inline_math_ranges(text));
     ranges.extend(wikidot_block_attribute_ranges(text));
     ranges.extend(wikidot_local_link_separator_ranges(text));
+    if wikidot {
+        ranges.extend(wikidot_date_head_ranges(text));
+    }
     if !wikidot {
         ranges.extend(native_head_value_ranges(text));
     }

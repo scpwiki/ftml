@@ -116,6 +116,11 @@ fn parse_footnote_ref<'r, 't>(
     {
         elements.pop();
     }
+    if parser.settings().layout.legacy()
+        && matches!(elements.last(), Some(Element::LineBreak))
+    {
+        elements.pop();
+    }
 
     let index = parser.push_footnote(elements);
 

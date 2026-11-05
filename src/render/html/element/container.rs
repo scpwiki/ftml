@@ -125,6 +125,11 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
                 ctx.html().span().contents(container.elements());
             });
         }
+    } else if layout.legacy()
+        && container.ctype() == ContainerType::Blockquote
+        && let Some(elements) = wikidot_break_only_paragraph(container.elements())
+    {
+        tag.contents(elements);
     } else if layout.legacy() && container_trailing_break_drops_newline(container.ctype())
     {
         match container.elements().split_last() {
@@ -141,6 +146,26 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
     } else {
         tag.contents(container.elements());
     }
+}
+
+/// A Wikidot blockquote whose whole body is one paragraph of line breaks is
+/// emitted without the paragraph wrapper: live renders the breaks directly
+/// inside the quote, not a paragraph shell.
+fn wikidot_break_only_paragraph<'a, 't>(
+    elements: &'a [Element<'t>],
+) -> Option<&'a [Element<'t>]> {
+    let [Element::Container(paragraph)] = elements else {
+        return None;
+    };
+    if paragraph.ctype() != ContainerType::Paragraph {
+        return None;
+    }
+    let elements = paragraph.elements();
+    (!elements.is_empty()
+        && elements.iter().all(|element| {
+            matches!(element, Element::LineBreak | Element::LineBreaks(_))
+        }))
+    .then_some(elements)
 }
 
 fn container_trailing_break_drops_newline(ctype: ContainerType) -> bool {
