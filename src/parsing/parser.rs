@@ -44,7 +44,9 @@ use std::rc::Rc;
 use std::{mem, ptr};
 
 pub(crate) mod block_pairs;
+pub(crate) mod closer_scan;
 mod wikidot_state;
+use self::closer_scan::CloserScanCache;
 use self::wikidot_state::WikidotState;
 
 pub(crate) const DEFAULT_MAX_RECURSION_DEPTH: usize = 100;
@@ -161,6 +163,9 @@ pub(super) struct BlockScanCache<'t> {
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
     pub(super) unmatched_close_scan: super::unmatched_close_scan::UnmatchedCloseScanCache,
     last_virtual_gate_end: Cell<Option<usize>>,
+    /// Monotone "no closer ahead" memos for forward closer scans in parser
+    /// rules; see `parser/closer_scan.rs`.
+    closer_scan: CloserScanCache,
 }
 
 #[derive(Debug)]
@@ -306,6 +311,7 @@ impl<'r, 't> Parser<'r, 't> {
                 } else {
                     block_pairs::WikidotBlockPairs::default()
                 },
+                closer_scan: CloserScanCache::new(tokenization.tokens().len()),
                 ..Default::default()
             })),
             two_block_end_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -2136,6 +2142,73 @@ impl<'r, 't> Parser<'r, 't> {
         let input_end = self.remaining.last().unwrap_or(self.current);
         debug_assert_eq!(input_end.token, Token::InputEnd);
         ParseError::new(ParseErrorKind::EndOfInput, self.rule, input_end)
+    }
+
+    /// Absolute index of this parser's current token in the tokenization.
+    ///
+    /// Closer-scan memos key on these indices because the token stream is
+    /// immutable for the whole parse.
+    pub(crate) fn current_token_index(&self) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .closer_scan
+            .index_of_current(self.remaining().len())
+    }
+
+    /// Absolute index of the first token after the current one, which is where
+    /// a forward closer scan starting "ahead" of the current token begins.
+    pub(crate) fn ahead_token_index(&self) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .closer_scan
+            .index_ahead(self.remaining().len())
+    }
+
+    /// For a split-free `validate_reachable_close` scan for `closer` that
+    /// starts at absolute token index `start`: `Some(has_paragraph_break)`
+    /// when the walk provably only reaches `InputEnd` (and therefore returns
+    /// exactly the recorded error kind), `None` when the scan must run.
+    pub(crate) fn delimiter_close_absent(
+        &self,
+        closer: Token,
+        start: usize,
+    ) -> Option<bool> {
+        self.block_end_scan_cache
+            .borrow()
+            .closer_scan
+            .delimiter_absence(closer, start)
+    }
+
+    /// Record that a split-free scan for `closer` from `start` reached
+    /// `InputEnd` without touching block bookkeeping.
+    pub(crate) fn record_delimiter_close_absent(
+        &self,
+        closer: Token,
+        start: usize,
+        last_paragraph_break: Option<usize>,
+    ) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .closer_scan
+            .record_delimiter_absence(closer, start, last_paragraph_break);
+    }
+
+    /// Whether a Wikidot math scan starting at absolute token index `start`
+    /// provably reaches `InputEnd` without a `RightMath` closer.
+    pub(crate) fn math_close_absent(&self, start: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .closer_scan
+            .math_absence(start)
+    }
+
+    /// Record that the Wikidot math scan from `start` stepped to `InputEnd`
+    /// without consuming a comment or raw region.
+    pub(crate) fn record_math_close_absent(&self, start: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .closer_scan
+            .record_math_absence(start);
     }
 }
 

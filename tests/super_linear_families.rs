@@ -141,3 +141,60 @@ fn div_line_scans_stay_linear_in_opener_count() {
         );
     }
 }
+
+#[test]
+fn unmatched_inline_openers_do_not_rescan_the_document() {
+    // Every `{{` opener asks the delimiter preflight whether a `}}` is
+    // reachable, and every `[[$` opener asks the Wikidot math collector for
+    // its `$]]` closer. With no closer in the document each scan used to walk
+    // to the end of the input once per opener: quadratic in the opener count.
+    // `parsing/parser/closer_scan.rs` memoizes the proven absence, so the
+    // document is only scanned once. The unit test next to that memo asserts
+    // the token-visit count directly; this one guards the whole pipeline.
+    for (unit, opener) in [("{", "{"), ("[[$ a ", "[[$")] {
+        for count in [4096usize, 8192] {
+            let input = unit.repeat(count);
+            let (html, elapsed) = render_timed(&input);
+            assert!(
+                elapsed < Duration::from_secs(5),
+                "{unit:?} x {count} took {elapsed:?}",
+            );
+            assert_eq!(
+                html.matches(opener).count(),
+                count,
+                "{unit:?} x {count} no longer renders literally",
+            );
+        }
+    }
+}
+
+#[test]
+fn closed_inline_delimiters_and_math_render_unchanged() {
+    // Positive controls for the memo: a reachable closer must still take the
+    // real walk and still render (shapes pinned by test/monospace* and
+    // test/math/inline).
+    let cases = [
+        ("{{x}}", "<p><tt>x</tt></p>"),
+        (
+            "before {{   a  **b**  c   }} after",
+            "<p>before <tt>a <strong>b</strong> c</tt> after</p>",
+        ),
+        ("{{x}}}}tail", "<p><tt>x}}</tt>tail</p>"),
+        (
+            "Apple [[$ a^2 $]] Banana",
+            "<p>Apple <span class=\"math-inline\">$a^2$</span> Banana</p>",
+        ),
+        (
+            "[[$ x $]]{{y}}",
+            "<p><span class=\"math-inline\">$x$</span><tt>y</tt></p>",
+        ),
+    ];
+    for (input, expected) in cases {
+        let (html, elapsed) = render_timed(input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{input:?} took {elapsed:?}"
+        );
+        assert_eq!(html, expected, "{input:?}");
+    }
+}
