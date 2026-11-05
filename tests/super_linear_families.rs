@@ -141,3 +141,69 @@ fn div_line_scans_stay_linear_in_opener_count() {
         );
     }
 }
+
+#[test]
+fn unclosed_inline_marker_walls_stay_bounded() {
+    // A wall of inline markers whose closer never appears used to send the
+    // inline-format repair passes to the end of the sequence once per opener:
+    // the strike shed-close scan, the script pair-close scan and the
+    // monospace link-close scan were quadratic in the opener count.
+    let cases = [
+        ("--a ", 4096),
+        ("--] ", 4096),
+        (",,a ", 4096),
+        ("{", 4096),
+        ("{{", 2048),
+    ];
+    for (unit, count) in cases {
+        let input = unit.repeat(count);
+        let (html, elapsed) = render_timed(&input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{unit:?} x {count} took {elapsed:?}",
+        );
+        assert!(!html.is_empty(), "{unit:?} x {count} rendered nothing");
+    }
+}
+
+#[test]
+fn nested_monospace_brace_walls_stay_bounded() {
+    // A monospace container holding a wall of brace openers and closers used
+    // to rescan the whole child prefix for a link once per candidate closer.
+    for count in [1024usize, 2048, 4096] {
+        let input = format!("{}x\n{}", "{{".repeat(count), "}}".repeat(count));
+        let (html, elapsed) = render_timed(&input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{count} brace pairs took {elapsed:?}",
+        );
+        assert!(
+            html.contains("<tt>"),
+            "{count} brace pairs no longer form monospace: {html:?}",
+        );
+    }
+}
+
+#[test]
+fn closed_inline_markers_are_unchanged() {
+    // Positive controls for the linearized repair scans: closed markers must
+    // still pair into the same elements.
+    let cases = [
+        ("--struck--", "line-through"),
+        (",,subscript,,", "<sub>"),
+        ("^^superscript^^", "<sup>"),
+        ("{{monospace}}", "<tt>"),
+        ("**--bold strike--**", "<strong>"),
+    ];
+    for (input, expected) in cases {
+        let (html, elapsed) = render_timed(input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{input:?} took {elapsed:?}"
+        );
+        assert!(
+            html.contains(expected),
+            "{input:?} should render {expected:?}, got {html:?}",
+        );
+    }
+}

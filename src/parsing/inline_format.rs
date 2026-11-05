@@ -935,24 +935,35 @@ fn repair_strike_split_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
 }
 
 fn strike_split_close(children: &[Element<'_>]) -> Option<(usize, String, String)> {
-    (1..children.len().saturating_sub(1)).find_map(|child_index| {
+    if children.len() < 3 {
+        return None;
+    }
+    let links = link_prefix_counts(children);
+    for child_index in 1..children.len() - 1 {
         let Element::Text(value) = &children[child_index] else {
-            return None;
+            continue;
         };
-        let (prefix, suffix) = strike_close_split(value.as_ref())?;
+        let Some((prefix, suffix)) = strike_close_split(value.as_ref()) else {
+            continue;
+        };
         if prefix.is_empty() && element_ends_with_ascii_space(&children[child_index - 1])
         {
-            return None;
+            continue;
         }
-        if !children[..child_index].iter().any(element_contains_link) {
-            return None;
+        if links[child_index] == links[0] {
+            continue;
         }
-        Some((child_index, prefix.to_string(), suffix.to_string()))
-    })
+        return Some((child_index, prefix.to_string(), suffix.to_string()));
+    }
+    None
 }
 
 fn repair_strike_shed_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     let mut input = take_elements(elements);
+    // Both repeated forward searches are answered from one suffix sweep each.
+    let next_close = strike_shed_close_candidates(&input);
+    let next_link =
+        next_matching_indices(&input, |_, element| element_contains_link(element));
     let mut output = Vec::with_capacity(input.len());
     let mut changed = false;
     let mut index = 0;
@@ -963,7 +974,8 @@ fn repair_strike_shed_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
             index += 1;
             continue;
         };
-        let Some((close, prefix, suffix)) = strike_shed_close(&input, index, opener_len)
+        let Some((close, prefix, suffix)) =
+            strike_shed_close(&input, index, opener_len, &next_close, &next_link)
         else {
             output.push(take_element(&mut input, index));
             index += 1;
@@ -1008,44 +1020,115 @@ fn strike_shed_opener(
     Some((1, run_len - 2))
 }
 
+/// Suffix array of positions whose text can close a shed strike.
+fn strike_shed_close_candidates(input: &[Option<Element<'_>>]) -> Vec<Option<usize>> {
+    next_matching_indices(input, |index, element| {
+        if index == 0 {
+            return false;
+        }
+        let Element::Text(value) = element else {
+            return false;
+        };
+        let Some((prefix, _)) = strike_close_split(value.as_ref()) else {
+            return false;
+        };
+        !prefix.is_empty()
+            || !input[index - 1]
+                .as_ref()
+                .is_some_and(|previous| element_ends_with_ascii_space(previous))
+    })
+}
+
 fn strike_shed_close(
     input: &[Option<Element<'_>>],
     opener: usize,
     opener_len: usize,
+    next_close: &[Option<usize>],
+    next_link: &[Option<usize>],
 ) -> Option<(usize, String, String)> {
     let first = opener + opener_len;
-    let (close, prefix, suffix) = (first..input.len()).find_map(|close_index| {
-        let element = input[close_index].as_ref()?;
-        let Element::Text(value) = element else {
-            return None;
-        };
-        let (prefix, suffix) = strike_close_split(value.as_ref())?;
-        if prefix.is_empty()
-            && input[close_index - 1]
-                .as_ref()
-                .is_some_and(|previous| element_ends_with_ascii_space(previous))
-        {
-            return None;
-        }
-        if close_index == first && prefix.is_empty() {
-            return None;
-        }
-        Some((close_index, prefix.to_string(), suffix.to_string()))
-    })?;
-    if !input[first..close]
-        .iter()
-        .filter_map(|element| element.as_ref())
-        .any(element_contains_link)
-    {
+    // The single forward scan the original performed is now two suffix
+    // lookups: the first candidate close, then the first link at or after the
+    // opener. Only that first close is considered: when no link precedes it
+    // the original gives up instead of looking further.
+    let mut close = next_close.get(first).copied().flatten()?;
+    let mut pieces = strike_shed_close_at(input, close)?;
+    if close == first && pieces.0.is_empty() {
+        close = next_close.get(close + 1).copied().flatten()?;
+        pieces = strike_shed_close_at(input, close)?;
+    }
+    let link = next_link.get(first).copied().flatten()?;
+    if link >= close {
         return None;
     }
-    Some((close, prefix, suffix))
+    Some((close, pieces.0.to_string(), pieces.1.to_string()))
+}
+
+fn strike_shed_close_at<'a, 't>(
+    input: &'a [Option<Element<'t>>],
+    index: usize,
+) -> Option<(&'a str, &'a str)> {
+    let Element::Text(value) = input.get(index)?.as_ref()? else {
+        return None;
+    };
+    strike_close_split(value.as_ref())
 }
 
 pub(crate) fn element_contains_link(element: &Element<'_>) -> bool {
     matches!(element, Element::Link { .. })
         || formatter_children(element)
             .is_some_and(|children| children.iter().any(element_contains_link))
+}
+
+/// Prefix counts of "element contains a link", so a range query
+/// elements[start..end].iter().any(element_contains_link) costs O(1)
+/// instead of rescanning the range for every candidate the repair passes
+/// consider. Without this, a container holding many marker candidates but
+/// no link walks its whole child list once per candidate.
+fn link_prefix_counts(elements: &[Element<'_>]) -> Vec<usize> {
+    let mut counts = Vec::with_capacity(elements.len() + 1);
+    counts.push(0);
+    let mut total = 0usize;
+    for element in elements {
+        total += usize::from(element_contains_link(element));
+        counts.push(total);
+    }
+    counts
+}
+
+/// link_prefix_counts over an input whose slots are taken as repairs run.
+fn taken_link_prefix_counts(elements: &[Option<Element<'_>>]) -> Vec<usize> {
+    let mut counts = Vec::with_capacity(elements.len() + 1);
+    counts.push(0);
+    let mut total = 0usize;
+    for element in elements {
+        if let Some(element) = element {
+            total += usize::from(element_contains_link(element));
+        }
+        counts.push(total);
+    }
+    counts
+}
+
+/// For every position, the next index at or after it whose element matches
+/// the predicate. One O(n) sweep replaces the per-opener forward scans that
+/// repeated repair passes would otherwise replay over the same suffix.
+fn next_matching_indices<'t>(
+    elements: &[Option<Element<'t>>],
+    matches: impl Fn(usize, &Element<'t>) -> bool,
+) -> Vec<Option<usize>> {
+    let mut result = vec![None; elements.len()];
+    let mut next = None;
+    for index in (0..elements.len()).rev() {
+        if elements[index]
+            .as_ref()
+            .is_some_and(|element| matches(index, element))
+        {
+            next = Some(index);
+        }
+        result[index] = next;
+    }
+    result
 }
 
 fn is_shed_char(c: char) -> bool {
@@ -1779,24 +1862,32 @@ fn script_split_close(
     kind: FormatKind,
 ) -> Option<(usize, String, String)> {
     let marker = kind.close_marker();
-    (1..children.len()).find_map(|child_index| {
+    let links = link_prefix_counts(children);
+    for child_index in 1..children.len() {
         let Element::Text(value) = &children[child_index] else {
-            return None;
+            continue;
         };
-        let (prefix, suffix) = shed_text_pair_split(value.as_ref(), marker)?;
+        let Some((prefix, suffix)) = shed_text_pair_split(value.as_ref(), marker) else {
+            continue;
+        };
         if prefix.is_empty() && element_ends_with_ascii_space(&children[child_index - 1])
         {
-            return None;
+            continue;
         }
-        if !children[..child_index].iter().any(element_contains_link) {
-            return None;
+        if links[child_index] == links[0] {
+            continue;
         }
-        Some((child_index, prefix.to_string(), suffix.to_string()))
-    })
+        return Some((child_index, prefix.to_string(), suffix.to_string()));
+    }
+    None
 }
 
 fn repair_script_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     let mut input = take_elements(elements);
+    // Every opener would otherwise rescan the same suffix for a closer; one
+    // suffix sweep per script marker answers all of them.
+    let next_superscript = script_pair_candidates(&input, FormatKind::Superscript);
+    let next_subscript = script_pair_candidates(&input, FormatKind::Subscript);
     let mut output = Vec::with_capacity(input.len());
     let mut changed = false;
     let mut index = 0;
@@ -1811,7 +1902,13 @@ fn repair_script_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
                 continue;
             }
         };
-        let Some((close, prefix, suffix)) = script_pair_close(&input, index, kind) else {
+        let candidates = match kind {
+            FormatKind::Superscript => &next_superscript,
+            _ => &next_subscript,
+        };
+        let Some((close, prefix, suffix)) =
+            script_pair_close(&input, index, kind, candidates)
+        else {
             output.push(take_element(&mut input, index));
             index += 1;
             continue;
@@ -1834,34 +1931,57 @@ fn repair_script_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     changed
 }
 
+/// Suffix array of positions whose text can close a script span for `kind`.
+fn script_pair_candidates(
+    input: &[Option<Element<'_>>],
+    kind: FormatKind,
+) -> Vec<Option<usize>> {
+    let marker = kind.close_marker();
+    next_matching_indices(input, |index, element| {
+        if index == 0 {
+            return false;
+        }
+        let Element::Text(value) = element else {
+            return false;
+        };
+        let Some((prefix, _)) = shed_text_pair_split(value.as_ref(), marker) else {
+            return false;
+        };
+        !prefix.is_empty()
+            || !input[index - 1]
+                .as_ref()
+                .is_some_and(|previous| element_ends_with_ascii_space(previous))
+    })
+}
+
+fn shed_text_pair_at<'a>(
+    element: &'a Element<'_>,
+    marker: &str,
+) -> Option<(&'a str, &'a str)> {
+    let Element::Text(value) = element else {
+        return None;
+    };
+    shed_text_pair_split(value.as_ref(), marker)
+}
+
 fn script_pair_close(
     input: &[Option<Element<'_>>],
     index: usize,
     kind: FormatKind,
+    next_candidates: &[Option<usize>],
 ) -> Option<(usize, String, String)> {
     let next = input.get(index + 1)?.as_ref()?;
     if element_starts_with_ascii_space(next) {
         return None;
     }
     let marker = kind.close_marker();
-    (index + 1..input.len()).find_map(|close_index| {
-        let element = input[close_index].as_ref()?;
-        let Element::Text(value) = element else {
-            return None;
-        };
-        let (prefix, suffix) = shed_text_pair_split(value.as_ref(), marker)?;
-        if prefix.is_empty()
-            && input[close_index - 1]
-                .as_ref()
-                .is_some_and(|previous| element_ends_with_ascii_space(previous))
-        {
-            return None;
-        }
-        if close_index == index + 1 && prefix.is_empty() {
-            return None;
-        }
-        Some((close_index, prefix.to_string(), suffix.to_string()))
-    })
+    let mut close = next_candidates.get(index + 1).copied().flatten()?;
+    let mut pieces = shed_text_pair_at(input.get(close)?.as_ref()?, marker)?;
+    if close == index + 1 && pieces.0.is_empty() {
+        close = next_candidates.get(close + 1).copied().flatten()?;
+        pieces = shed_text_pair_at(input.get(close)?.as_ref()?, marker)?;
+    }
+    Some((close, pieces.0.to_string(), pieces.1.to_string()))
 }
 
 fn repair_monospace_split_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
@@ -1904,24 +2024,38 @@ fn repair_monospace_split_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> boo
 }
 
 fn monospace_split_close(children: &[Element<'_>]) -> Option<(usize, String, String)> {
-    (1..children.len().saturating_sub(1)).find_map(|child_index| {
+    if children.len() < 3 {
+        return None;
+    }
+    let links = link_prefix_counts(children);
+    for child_index in 1..children.len() - 1 {
         let Element::Text(value) = &children[child_index] else {
-            return None;
+            continue;
         };
-        let (prefix, suffix) = monospace_close_split(value.as_ref())?;
+        let Some((prefix, suffix)) = monospace_close_split(value.as_ref()) else {
+            continue;
+        };
         if prefix.is_empty() && element_ends_with_ascii_space(&children[child_index - 1])
         {
-            return None;
+            continue;
         }
-        if !children[..child_index].iter().any(element_contains_link) {
-            return None;
+        if links[child_index] == links[0] {
+            continue;
         }
-        Some((child_index, prefix.to_string(), suffix.to_string()))
-    })
+        return Some((child_index, prefix.to_string(), suffix.to_string()));
+    }
+    None
 }
 
 fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     let mut input = take_elements(elements);
+    // Both repeated searches of this pass are answered from one sweep each:
+    // the next child that can close a monospace span, and link presence in
+    // the span between an opener and that close.
+    let links = taken_link_prefix_counts(&input);
+    let next_close = next_matching_indices(&input, |_, element| {
+        text(element).is_some_and(|value| monospace_close_split(value).is_some())
+    });
     let mut output = Vec::with_capacity(input.len());
     let mut changed = false;
     let mut index = 0;
@@ -1931,16 +2065,13 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
             .as_ref()
             .is_some_and(|element| is_exact_text(element, "{{"));
         let close = is_opener
-            .then(|| monospace_link_close(&input, index))
+            .then(|| monospace_link_close(&input, index, &next_close))
             .flatten()
             .filter(|(close, _, _)| {
                 // This repair exists to close a monospace span that the
                 // base parser left open over a URL (issue #833). Brace
                 // text around anything else is already owned content.
-                input[index + 1..*close]
-                    .iter()
-                    .filter_map(|element| element.as_ref())
-                    .any(element_contains_link)
+                links[*close] != links[index + 1]
             });
         let Some((close, prefix, suffix)) = close else {
             output.push(take_element(&mut input, index));
@@ -1977,12 +2108,12 @@ fn repair_monospace_link_close_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool
 fn monospace_link_close(
     input: &[Option<Element<'_>>],
     opener: usize,
+    next_close: &[Option<usize>],
 ) -> Option<(usize, String, String)> {
-    ((opener + 1)..input.len()).find_map(|index| {
-        let element = input[index].as_ref()?;
-        let (prefix, suffix) = monospace_close_split(text(element)?)?;
-        Some((index, prefix.to_string(), suffix.to_string()))
-    })
+    let index = next_close.get(opener + 1).copied().flatten()?;
+    let element = input.get(index)?.as_ref()?;
+    let (prefix, suffix) = monospace_close_split(text(element)?)?;
+    Some((index, prefix.to_string(), suffix.to_string()))
 }
 
 fn take_leading_monospace_padding<'t>(
