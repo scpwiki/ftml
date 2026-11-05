@@ -1,0 +1,18 @@
+{
+    "elements": [
+        {
+            "element": "iframe",
+            "data": {
+                "url": "http://e.com",
+                "attributes": {}
+            }
+        },
+        {
+            "element": "iframe",
+            "data": {
+                "url": "http://f.com",
+                "attributes": {}
+            }
+        }
+    ]
+}
