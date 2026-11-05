@@ -1,0 +1,7 @@
+[[date 1000000000 format="%g"]]
+
+[[date 1000000000 format="a%gb"]]
+
+[[date 1000000000 format=""]]
+
+[[date 1000000000 format="%Y-%m-%d"]]

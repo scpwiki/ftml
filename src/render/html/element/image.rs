@@ -151,17 +151,13 @@ fn render_image_element_wikidot(
         image_url
     };
     let get = |name| attributes.get().get(name).map(|value| value.as_ref());
-    let default_alt = if image_url.contains("&#") {
-        image_url.rsplit('/').next().unwrap_or("")
-    } else {
-        image_url
-            .split(['?', '#'])
-            .next()
-            .unwrap_or(image_url)
-            .rsplit('/')
-            .next()
-            .unwrap_or("")
-    };
+    // Live Wikidot derives the default alt text from everything after the
+    // last slash, keeping any query string or fragment.
+    let default_alt = image_url
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("");
     let alt = get("alt").or(attachment_alt).unwrap_or(default_alt);
     let class = get("class").unwrap_or("image");
     let width = get("width");

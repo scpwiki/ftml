@@ -105,6 +105,7 @@ pub(crate) struct RuleAttemptKey {
     accepts_partial_offset: Option<isize>,
     in_footnote: bool,
     in_note: bool,
+    in_color: bool,
     has_footnote_block: bool,
     start_of_line: bool,
     wikidot: WikidotState,
@@ -252,6 +253,7 @@ pub struct Parser<'r, 't> {
     accepts_partial_depth: u16,
     in_footnote: bool,
     in_note: bool,
+    in_color: bool,
     has_footnote_block: bool,
     start_of_line: bool,
     native_blockquote_depth: Option<usize>,
@@ -334,6 +336,7 @@ impl<'r, 't> Parser<'r, 't> {
             accepts_partial_depth: 0,
             in_footnote: false,
             in_note: false,
+            in_color: false,
             has_footnote_block: false,
             start_of_line: true,
             native_blockquote_depth: None,
@@ -905,6 +908,16 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     #[inline]
+    pub fn in_color(&self) -> bool {
+        self.in_color
+    }
+
+    #[inline]
+    pub fn set_color_flag(&mut self, value: bool) {
+        self.in_color = value;
+    }
+
+    #[inline]
     pub fn in_footnote(&self) -> bool {
         self.in_footnote
     }
@@ -1352,6 +1365,7 @@ impl<'r, 't> Parser<'r, 't> {
             accepts_partial_offset,
             in_footnote: self.in_footnote,
             in_note: self.in_note,
+            in_color: self.in_color,
             has_footnote_block: self.has_footnote_block,
             start_of_line: self.start_of_line,
             wikidot: self.wikidot.attempt_key(),
@@ -2022,6 +2036,7 @@ impl<'r, 't> Parser<'r, 't> {
         self.accepts_partial_depth = parser.accepts_partial_depth;
         self.in_footnote = parser.in_footnote;
         self.in_note = parser.in_note;
+        self.in_color = parser.in_color;
         self.has_footnote_block = parser.has_footnote_block;
         self.start_of_line = parser.start_of_line;
         self.native_blockquote_depth = parser.native_blockquote_depth;

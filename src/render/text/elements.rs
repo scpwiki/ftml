@@ -91,8 +91,29 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
             ctx.add_newline();
         }
         Element::Module(_) => {}
-        Element::Text(text) | Element::Raw(text) | Element::Email(text) => {
+        Element::Text(text) | Element::Raw(text) => {
             ctx.push_str(text);
+        }
+        Element::Email(email) => {
+            // Table-of-contents entries show the rendered heading text, so
+            // an email reads as its obfuscated form, matching live Wikidot.
+            if ctx.title_mode() && ctx.settings().layout.legacy() {
+                // Mirror the Wikidot legacy email obfuscation (see
+                // `wikidot_obfuscated_email` in the HTML element renderer);
+                // the span wrapper is presentation, not plain-text title.
+                match email.split_once('@') {
+                    Some((local, domain)) => {
+                        let local_rev: String = local.chars().rev().collect();
+                        let domain_rev: String = domain.chars().rev().collect();
+                        ctx.push_str(&format!(
+                            "{domain_rev}|{local_rev}#{domain_rev}|{local_rev}"
+                        ));
+                    }
+                    None => ctx.push_str(email),
+                }
+            } else {
+                ctx.push_str(email);
+            }
         }
         Element::Delayed(_) => {
             panic!("unbound delayed element reached the text renderer")
@@ -208,16 +229,38 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         Element::TableOfContents { .. } => {}
         Element::Footnote(index) => {
             if ctx.title_mode() {
+                // The rendered heading joins the reference number to the
+                // preceding text, so drop any whitespace between them.
+                if ctx.settings().layout.legacy() {
+                    let trimmed =
+                        ctx.buffer().trim_end_matches([' ', '\t', '\n', '\r']).len();
+                    ctx.buffer().truncate(trimmed);
+                }
                 ctx.push_str(&index.to_string());
             }
         }
         Element::FootnoteBlock { .. }
         | Element::BibliographyCite { .. }
         | Element::BibliographyBlock { .. } => {}
-        Element::User { name, .. } => ctx.push_str(name),
+        Element::User { name, .. } => {
+            if ctx.title_mode() && ctx.settings().layout.legacy() {
+                render_user_title(ctx, name);
+            } else {
+                ctx.push_str(name);
+            }
+        }
         Element::Date { value, format, .. } => {
             let formatted = if ctx.settings().layout.legacy() {
-                value.format_or_default_wikidot(format.as_deref(), ctx.language())
+                if ctx.title_mode() {
+                    // Table-of-contents entries show the rendered heading,
+                    // whose static date text always uses the default format.
+                    value.format_or_default_wikidot(
+                        Some(crate::tree::WIKIDOT_DEFAULT_DATE_FORMAT),
+                        "en",
+                    )
+                } else {
+                    value.format_or_default_wikidot(format.as_deref(), ctx.language())
+                }
             } else {
                 value.format_or_default(format.as_deref(), ctx.language())
             };
@@ -229,9 +272,19 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
             ctx.push_str(contents);
             ctx.add_newline();
         }
-        Element::Math { .. } | Element::MathInline { .. } => {}
+        Element::Math { .. } => {}
+        Element::MathInline { latex_source } => {
+            // Table-of-contents entries show the rendered heading text,
+            // where inline math reads as its dollar-delimited source.
+            if ctx.title_mode() && ctx.settings().layout.legacy() {
+                str_write!(ctx, "${latex_source}$");
+            }
+        }
         Element::EquationReference(name) => {
-            str_write!(ctx, "[{name}]");
+            // The rendered anchor carries no text, so neither does the entry.
+            if !(ctx.title_mode() && ctx.settings().layout.legacy()) {
+                str_write!(ctx, "[{name}]");
+            }
         }
         Element::Embed(_) | Element::Html { .. } | Element::Iframe { .. } => {}
         Element::Include {
@@ -258,6 +311,24 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         }
         Element::HorizontalRule => {}
         Element::Partial(partial) => render_partial(ctx, partial),
+    }
+}
+
+/// Render a user reference as table-of-contents entry text, mirroring the
+/// rendered heading: the anonymous name reads as "Anonymous", a missing user
+/// reads as the full error sentence, and any other name reads as authored.
+fn render_user_title(ctx: &mut TextContext, name: &str) {
+    use crate::render::UserInfoResolver as _;
+
+    if name.eq_ignore_ascii_case("anonymous") {
+        ctx.push_str("Anonymous");
+    } else if ctx.handle().user_info(name).is_none() {
+        let language = ctx.info().language.clone();
+        ctx.push_str(ctx.handle().get_message(&language, "user-missing-pre"));
+        ctx.push_str(name);
+        ctx.push_str(ctx.handle().get_message(&language, "user-missing-post"));
+    } else {
+        ctx.push_str(name);
     }
 }
 

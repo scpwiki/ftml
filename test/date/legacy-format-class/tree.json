@@ -1,0 +1,72 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "2001-09-09 01:46:40.0 +00:00:00",
+                            "format": "%g",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "2001-09-09 01:46:40.0 +00:00:00",
+                            "format": "a%gb",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "2001-09-09 01:46:40.0 +00:00:00",
+                            "format": "",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "2001-09-09 01:46:40.0 +00:00:00",
+                            "format": "%Y-%m-%d",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

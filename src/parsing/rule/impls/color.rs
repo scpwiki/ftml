@@ -45,6 +45,19 @@ fn try_consume_fn<'r, 't>(
     assert_step(parser, Token::Color)?;
 
     let legacy = parser.settings().layout.legacy();
+    eprintln!(
+        "DEBUG color attempt span={:?} legacy={} in_color={}",
+        parser.current().span,
+        legacy,
+        parser.in_color(),
+    );
+
+    // Live Wikidot does not nest colors: a `##name|` opener inside color
+    // content stays literal text, so a nested color attempt fails here.
+    if legacy && parser.in_color() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let color_close = if legacy {
         &[
             ParseCondition::current(Token::Pipe),
@@ -137,11 +150,23 @@ fn try_consume_fn<'r, 't>(
     };
     let invalid = [ParseCondition::current(Token::ParagraphBreak)];
     let body_start = parser.current().span.start;
-    let body = if table_owned {
-        collect_consume_before(parser, RULE_COLOR, close, &invalid, None)?
+    // The no-nesting flag is set around body collection only; it is reset
+    // before `body?` so an abandoned color never leaks into siblings.
+    parser.set_color_flag(legacy && !table_owned);
+    let body_result = if table_owned {
+        collect_consume_before(parser, RULE_COLOR, close, &invalid, None)
+    } else if legacy {
+        collect_color_body_skipping_empty_close(parser, RULE_COLOR, close, &invalid)
     } else {
-        collect_consume_keep(parser, RULE_COLOR, close, &invalid, None)?
+        collect_consume_keep(parser, RULE_COLOR, close, &invalid, None)
     };
+    parser.set_color_flag(false);
+    let body = body_result?;
+    } else {
+        collect_consume_keep(parser, RULE_COLOR, close, &invalid, None)
+    };
+    parser.set_color_flag(false);
+    let body = body_result?;
     let ((mut elements, terminator), errors, paragraph_safe) = body.into();
     let unformed_dash = legacy
         && !table_owned
@@ -248,6 +273,51 @@ fn try_consume_fn<'r, 't>(
     }
 
     ok!(paragraph_safe; Elements::Multiple(output), errors)
+}
+
+/// Collect a Wikidot color body, treating a `##` that would close over an
+/// empty body as literal text and continuing the scan.
+///
+/// Live Wikidot closes a color span at the first `##` that leaves non-empty
+/// content, so a nested `##name|` opener reads as literal text. Stopping at
+/// the first `##` unconditionally would end the body immediately for
+/// `##blue|##red|a##`, and the resulting empty body would fail the whole span.
+fn collect_color_body_skipping_empty_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    rule: Rule,
+    close: &[ParseCondition],
+    invalid: &[ParseCondition],
+) -> ParseResult<'r, 't, (Vec<Element<'t>>, &'r ExtractedToken<'t>)> {
+    let mut elements = Vec::new();
+    let mut errors = Vec::new();
+    let mut paragraph_safe = true;
+    let terminator = loop {
+        eprintln!(
+            "DEBUG color body loop at {:?} in_color={}",
+            parser.current(),
+            parser.in_color(),
+        );
+        let body = collect_consume_keep(parser, rule, close, invalid, None)?;
+        let ((new_elements, term), new_errors, new_safe) = body.into();
+        eprintln!(
+            "DEBUG color body iter elements={} term={:?}",
+            new_elements.len(),
+            term.token,
+        );
+        errors.extend(new_errors);
+        paragraph_safe &= new_safe;
+        if term.token == Token::Color && new_elements.is_empty() && elements.is_empty() {
+            elements.push(text!("##"));
+            continue;
+        }
+        elements.extend(new_elements);
+        break term;
+    };
+    Ok(ParseSuccess::new(
+        (elements, terminator),
+        errors,
+        paragraph_safe,
+    ))
 }
 
 fn ws_color_space_survives(

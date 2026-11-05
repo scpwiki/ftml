@@ -1706,20 +1706,34 @@ where
                 block_rule_end_names(block_rule, parser.settings().layout.legacy())
             {
                 if name.eq_ignore_ascii_case(end_block_name) {
+                    // Live Wikidot gives code, math, bibliography and the
+                    // alignment blocks line-owned closers: trailing text
+                    // after the closer voids the block. The alignment
+                    // closers are strict (not even trailing blanks), while
+                    // the other blocks tolerate a blank remainder.
+                    let strict_line_end = matches!(
+                        block_rule.name,
+                        "block-align-center"
+                            | "block-align-left"
+                            | "block-align-right"
+                            | "block-align-justify"
+                    );
                     if parser.settings().layout.legacy()
                         && !parser.discarding_hidden_body()
-                        && matches!(
+                        && (matches!(
                             block_rule.name,
                             "block-code" | "block-math" | "block-bibliography"
-                        )
+                        ) || strict_line_end)
+                        && !(block_rule.name == "block-math" && parser.in_footnote())
                         && !(matches!(
                             parser.current().token,
                             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
-                        ) || parser.at_blank_line_remainder()
-                            || (block_rule.name == "block-code"
-                                && parser.at_wikidot_code_close_terminator())
-                            || (block_rule.name == "block-math"
-                                && parser.current().token == Token::Whitespace))
+                        ) || (!strict_line_end
+                            && (parser.at_blank_line_remainder()
+                                || (block_rule.name == "block-code"
+                                    && parser.at_wikidot_code_close_terminator())
+                                || (block_rule.name == "block-math"
+                                    && parser.current().token == Token::Whitespace))))
                     {
                         return Ok(false);
                     }

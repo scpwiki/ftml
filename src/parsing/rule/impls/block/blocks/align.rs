@@ -88,6 +88,26 @@ pub fn parse_alignment_block<'r, 't>(
             % 2
             == 1;
 
+    // Live Wikidot gives these blocks line-owned openers: the opener must
+    // start its line and be followed immediately by a line break. A mid-line
+    // opener or trailing text after it renders literally.
+    if parser.settings().layout.legacy() && !in_head {
+        if !parser.start_of_line() {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+        let head_end = source[opener_start..]
+            .find("]]")
+            .map(|offset| opener_start + offset + 2)
+            .unwrap_or(source.len());
+        if !source[head_end..]
+            .as_bytes()
+            .first()
+            .is_some_and(|byte| matches!(*byte, b'\n' | b'\r'))
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+    }
+
     let body_start = parser.get_head_none_with_body_start(block_rule, in_head)?;
 
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)

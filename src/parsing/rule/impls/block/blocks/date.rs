@@ -74,8 +74,18 @@ fn parse_fn<'r, 't>(
     let arg_timezone = arguments.get("tz");
     let hover = arguments.get("hover").as_deref() == Some("true") || ago_hover;
 
+    // Live Wikidot renders a blank date value with no arguments as nothing
+    // at all, while a missing value is literal text (handled above as a
+    // missing name) and a blank value with arguments is also literal.
     if parser.settings().layout.legacy()
-        && (value.starts_with('+') || value.parse::<i64>().is_err())
+        && value.trim().is_empty()
+        && arguments.is_empty()
+    {
+        return ok!(Elements::None);
+    }
+
+    if parser.settings().layout.legacy()
+        && (value.starts_with('+') || value.parse::<i128>().is_err())
     {
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
@@ -159,10 +169,20 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
 
     if let Ok(timestamp) = value.parse::<i64>() {
         trace!("Was UNIX timestamp '{timestamp}'");
-        let date =
-            OffsetDateTime::from_unix_timestamp(timestamp).map_err(|_| DateParseError)?;
+        match OffsetDateTime::from_unix_timestamp(timestamp) {
+            Ok(date) => return Ok(date.into()),
+            // Live Wikidot still renders timestamps outside the calendar
+            // range with its algorithmic date, so the raw value is kept.
+            Err(_) => return Ok(DateItem::Timestamp(timestamp)),
+        }
+    }
 
-        return Ok(date.into());
+    // Live Wikidot clamps out-of-range integers to the i64 bounds.
+    if let Ok(timestamp) = value.parse::<i128>() {
+        trace!("Was out-of-range UNIX timestamp '{timestamp}'");
+        return Ok(DateItem::Timestamp(
+            timestamp.clamp(i64::MIN as i128, i64::MAX as i128) as i64,
+        ));
     }
 
     if let Ok(datetime_tz) = OffsetDateTime::parse(value, &Rfc3339) {

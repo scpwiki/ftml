@@ -1,0 +1,13 @@
++ a@b.c
+
++ a [[footnote]]b[[/footnote]]
+
++ [[date 0]]
+
++ [[$ x $]]
+
++ a [[eref e]]
+
++ [[user nosuchu]]
+
+[[toc]]

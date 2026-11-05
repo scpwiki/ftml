@@ -1,0 +1,52 @@
+{
+    "elements": [
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "url",
+                        "data": "https://example.com/a.png?b=c"
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        },
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "url",
+                        "data": "https://example.com/a.png#frag"
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        },
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "url",
+                        "data": "https://example.com/"
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        }
+    ]
+}

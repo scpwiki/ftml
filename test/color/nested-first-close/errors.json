@@ -1,0 +1,110 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            14,
+            16
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            16,
+            18
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            40,
+            42
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            34,
+            36
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "color",
+        "span": [
+            40,
+            42
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            38,
+            40
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "color",
+        "span": [
+            64,
+            64
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            58,
+            60
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "color",
+        "span": [
+            64,
+            64
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "color",
+        "rule": "fallback",
+        "span": [
+            62,
+            64
+        ],
+        "kind": "no-rules-match"
+    }
+]

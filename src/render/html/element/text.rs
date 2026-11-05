@@ -60,7 +60,7 @@ pub fn render_email(ctx: &mut HtmlContext, email: &str) {
     }
 }
 
-fn wikidot_obfuscated_email(email: &str) -> String {
+pub(crate) fn wikidot_obfuscated_email(email: &str) -> String {
     let Some((local, domain)) = email.split_once('@') else {
         return email.to_owned();
     };
