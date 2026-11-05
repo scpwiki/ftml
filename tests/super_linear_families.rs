@@ -141,3 +141,50 @@ fn div_line_scans_stay_linear_in_opener_count() {
         );
     }
 }
+
+#[test]
+fn triple_link_runs_keep_the_local_link_scan_linear() {
+    // Every `[` candidate that does not open a `[[` block asked for the end of
+    // its physical line by scanning the rest of the document for a newline.
+    // A single-line document has none, so that scan ran to end-of-input once
+    // per candidate: quadratic in the number of triple links. Typography
+    // output (and therefore the rendered HTML) must stay unchanged.
+    for count in [4096usize, 8192, 16384] {
+        let input = "[[[x]]] ".repeat(count);
+        let (html, elapsed) = render_timed(&input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{count} triple links took {elapsed:?}",
+        );
+        assert!(
+            html.matches("href=\"/x\"").count() >= count / 2,
+            "{count} triple links no longer render as links",
+        );
+    }
+
+    // A document that does contain a `[/` still takes the scan (the
+    // document-level necessary-condition gate cannot skip it), so the carried
+    // line-end cursor has to keep this shape linear too.
+    for count in [4096usize, 8192, 16384] {
+        let input = "[//a] ".repeat(count);
+        let (_, elapsed) = render_timed(&input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{count} local-link candidates took {elapsed:?}",
+        );
+    }
+}
+
+#[test]
+fn triple_links_still_render_as_links() {
+    let (html, elapsed) = render_timed("[[[x]]] [[[some-page|Label]]]");
+    assert!(elapsed < Duration::from_secs(5), "took {elapsed:?}");
+    assert!(
+        html.contains("href=\"/x\""),
+        "triple link target lost, got {html:?}",
+    );
+    assert!(
+        html.contains(">Label</a>"),
+        "triple link label lost, got {html:?}",
+    );
+}

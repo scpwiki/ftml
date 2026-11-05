@@ -266,8 +266,22 @@ fn contains_closed_conditional(
 }
 
 fn wikidot_local_link_separator_ranges(text: &str) -> Vec<Range<usize>> {
+    // A range is only emitted for a target that starts with `/`, which means
+    // the source must hold a `[/` at the opener. Without one the scan cannot
+    // produce anything, so skip it instead of walking the document.
+    if !text.contains("[/") {
+        return Vec::new();
+    }
+
     let mut ranges = Vec::new();
     let mut cursor = 0usize;
+    // Each candidate needs the end of its physical line. Candidate body
+    // starts advance monotonically, so carry the last located newline forward
+    // rather than rescanning the document tail for every candidate; the tail
+    // rescan was quadratic on a long line with many `[` openers.
+    // `Some(text.len())` is the sentinel for "no newline at or after the last
+    // candidate".
+    let mut line_end_hint = Some(0usize);
     while let Some(relative_open) = text[cursor..].find('[') {
         let open = cursor + relative_open;
         let body_start = open + '['.len_utf8();
@@ -275,9 +289,16 @@ fn wikidot_local_link_separator_ranges(text: &str) -> Vec<Range<usize>> {
             cursor = body_start + '['.len_utf8();
             continue;
         }
-        let line_end = text[body_start..]
-            .find('\n')
-            .map_or(text.len(), |offset| body_start + offset);
+        let line_end = match line_end_hint {
+            Some(newline) if newline >= body_start => newline,
+            _ => {
+                let newline = text[body_start..]
+                    .find('\n')
+                    .map_or(text.len(), |offset| body_start + offset);
+                line_end_hint = Some(newline);
+                newline
+            }
+        };
         let Some(relative_close) = text[body_start..line_end].find(']') else {
             break;
         };
