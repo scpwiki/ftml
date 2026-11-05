@@ -1,0 +1,53 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": "label=\"a",
+                "latex-source": "b\"]]\nx"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "label=\"a",
+                "latex-source": "b\"]]"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "type=\"a",
+                "latex-source": "b\"]]\nx"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "label=\"a]b\"",
+                "latex-source": "x"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "label=\"a",
+                "latex-source": "b\" ]]\nx"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "label=\"a",
+                "latex-source": "b]]\nx"
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": "label=\"a",
+                "latex-source": "b\"] ]]\nx"
+            }
+        }
+    ]
+}

@@ -1,0 +1,26 @@
+[[math label="a]]b"]]
+x
+[[/math]]
+
+[[math label="a]]b"]]
+[[/math]]
+
+[[math type="a]]b"]]
+x
+[[/math]]
+
+[[math label="a]b"]]
+x
+[[/math]]
+
+[[math label="a]]b" ]]
+x
+[[/math]]
+
+[[math label="a]]b]]
+x
+[[/math]]
+
+[[math label="a]]b"] ]]
+x
+[[/math]]

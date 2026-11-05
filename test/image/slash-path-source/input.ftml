@@ -1,0 +1,21 @@
+[[image /local--files/x.png]]
+
+[[image /local--files/page/x.png]]
+
+[[image local--files/x.png]]
+
+[[image /x.png]]
+
+[[image /page/x.png]]
+
+[[image page/x.png]]
+
+[[image //example.com/x.png]]
+
+[[image /local--resized-images/x.png]]
+
+[[image /local--files/]]
+
+[[image a/b/c.png]]
+
+[[image page/]]

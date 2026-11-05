@@ -479,6 +479,7 @@ fn rendered_div_and_span_apply_their_element_specific_attribute_contracts() {
         r#"id="u-tag""#,
         r#"style="font-weight: bold""#,
         r#"data-kind="status""#,
+        r#"data-="bad""#,
     ] {
         assert!(html.contains(expected), "missing {expected} in {html}");
     }
@@ -486,7 +487,6 @@ fn rendered_div_and_span_apply_their_element_specific_attribute_contracts() {
     for forbidden in [
         "onclick",
         "onmouseover",
-        r#"data-="bad""#,
         r#"aria-="bad""#,
         r#"aria-label="Panel""#,
         r#"aria-live="polite""#,

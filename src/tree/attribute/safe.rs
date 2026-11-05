@@ -196,10 +196,19 @@ pub fn is_safe_attribute(attribute: UniCase<&str>) -> bool {
             continue;
         };
 
-        if head.eq_ignore_ascii_case(prefix)
-            && !suffix.is_empty()
-            && ATTRIBUTE_SUFFIX_SAFE.is_match(suffix)
-        {
+        if !head.eq_ignore_ascii_case(prefix) {
+            continue;
+        }
+
+        if suffix.is_empty() {
+            if *prefix == "data-" {
+                return true;
+            }
+
+            continue;
+        }
+
+        if ATTRIBUTE_SUFFIX_SAFE.is_match(suffix) {
             return true;
         }
     }

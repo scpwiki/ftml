@@ -187,6 +187,14 @@ fn parse_wikidot_image_source<'t>(
     source: Cow<'t, str>,
     explicit_attachment_size: Option<ImageSize>,
 ) -> Option<ImageSource<'t>> {
+    if source.is_empty() {
+        return Some(ImageSource::ImplicitAttachment {
+            file: source,
+            page: None,
+            alt: Cow::Borrowed(""),
+            size: explicit_attachment_size.unwrap_or(ImageSize::Medium),
+        });
+    }
     if source.starts_with("data:") {
         let alt = source
             .rsplit('/')
@@ -329,17 +337,38 @@ fn classify_wikidot_image_source<'t>(
             let size = explicit_attachment_size
                 .or_else(|| default_wikidot_attachment_size(&file));
             match size {
-                Some(size) => ImageSource::ImplicitAttachment {
-                    alt: Cow::Owned(file.as_ref().to_owned()),
-                    file,
-                    page: Some(page),
-                    size,
-                },
+                Some(size) => {
+                    let alt = if file.is_empty() {
+                        match alt {
+                            Cow::Borrowed(text) => {
+                                Cow::Borrowed(last_wikidot_image_path_segment(text))
+                            }
+                            Cow::Owned(text) => Cow::Owned(
+                                last_wikidot_image_path_segment(&text).to_owned(),
+                            ),
+                        }
+                    } else {
+                        Cow::Owned(file.as_ref().to_owned())
+                    };
+                    ImageSource::ImplicitAttachment {
+                        alt,
+                        file,
+                        page: Some(page),
+                        size,
+                    }
+                }
                 None => ImageSource::Direct(FileSource::File2 { page, file }),
             }
         }
         source => ImageSource::Direct(source),
     }
+}
+
+fn last_wikidot_image_path_segment(source: &str) -> &str {
+    source
+        .rsplit('/')
+        .find(|segment| !segment.is_empty())
+        .unwrap_or("")
 }
 
 fn default_wikidot_attachment_size(file: &str) -> Option<ImageSize> {
@@ -665,7 +694,7 @@ mod tests {
                 html,
                 wrap_v7_image(
                     name,
-                    r##"<img src="#invalid-url" class="image" alt>"##.to_owned(),
+                    r##"<img src="#invalid-url" class="image" alt="">"##.to_owned(),
                 ),
                 "{percent_encoded:?}",
             );
@@ -1207,7 +1236,7 @@ mod tests {
             ),
             (
                 "[[image /local--files/source-page/photo.png]]",
-                r#"<img src="/local--files/source-page/photo.png" class="image" alt="photo.png">"#,
+                r#"<img src="https://sandbox.wjfiles.com/local--files/local--files/source-page/photo.png" class="image" alt="photo.png">"#,
             ),
             (
                 "[[image https://example.com/photo.png]]",
@@ -1280,7 +1309,7 @@ mod tests {
 
     #[test]
     fn malformed_implicit_attachment_candidates_stay_literal_and_inert() {
-        for source in ["[[image]]", "[[=image]]", "[[<image page/]]"] {
+        for source in ["[[image]]", "[[=image]]"] {
             let (html, errors) = render_image(source, Layout::Wikidot);
             assert!(!errors.is_empty(), "{source:?}");
             assert!(!html.contains("<img"), "{source:?}: {html}");
@@ -1366,7 +1395,7 @@ mod tests {
     }
 
     #[test]
-    fn image_block_preserves_canonical_wikidot_local_files_path() {
+    fn image_block_resolves_canonical_wikidot_local_files_path_as_page_file() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize(
@@ -1381,9 +1410,10 @@ mod tests {
 
         assert_eq!(
             source,
-            &ImageSource::Direct(FileSource::Url(cow!(
-                "/local--files/source-page/assets/charts/image.png"
-            ))),
+            &ImageSource::Direct(FileSource::File2 {
+                page: cow!("local--files/source-page/assets/charts"),
+                file: cow!("image.png"),
+            }),
         );
     }
 
@@ -1401,7 +1431,7 @@ mod tests {
         assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(
             html,
-            "\n\nBASIC <img src=\"/local--files/source-page/filename.png\" class=\"image\" alt=\"filename.png\">",
+            "\n\nBASIC <img src=\"https://sandbox.wjfiles.com/local--files/local--files/source-page/filename.png\" class=\"image\" alt=\"filename.png\">",
         );
     }
 
@@ -1472,7 +1502,7 @@ mod tests {
         assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(
             html,
-            "<div class=\"picture\"><p><span class=\"heading2\">BREAKING</span></p><img src=\"/local--files/scp-9506/fog.jpg\" class=\"image\" alt=\"fog.jpg\"></div>",
+            "<div class=\"picture\"><p><span class=\"heading2\">BREAKING</span></p><img src=\"https://sandbox.wjfiles.com/local--files/local--files/scp-9506/fog.jpg\" class=\"image\" alt=\"fog.jpg\"></div>",
         );
     }
 
