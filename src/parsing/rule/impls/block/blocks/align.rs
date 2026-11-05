@@ -19,7 +19,10 @@
  */
 
 use super::prelude::*;
-use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
+use super::{
+    consume_wikidot_flat_head_break, trim_wikidot_trailing_explicit_list_break,
+    wikidot_flat_pair_for_head,
+};
 use crate::delayed::DelayedElement;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{Alignment, AttributeMap, PartialElement, WikidotBlockShell};
@@ -167,7 +170,10 @@ pub fn parse_alignment_block<'r, 't>(
     if wikidot_center {
         parser.leave_wikidot_center_body();
     }
-    let (elements, errors, _) = body?.into();
+    let (mut elements, errors, _) = body?.into();
+    if parser.settings().layout.legacy() {
+        trim_wikidot_trailing_explicit_list_break(&mut elements);
+    }
 
     let element = Element::Container(Container::new(
         ContainerType::Align(alignment),

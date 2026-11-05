@@ -19,7 +19,10 @@
  */
 
 use super::prelude::*;
-use super::{consume_wikidot_flat_head_break, wikidot_flat_pair_for_head};
+use super::{
+    consume_wikidot_flat_head_break, trim_wikidot_trailing_explicit_list_break,
+    wikidot_flat_pair_for_head,
+};
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
@@ -404,6 +407,9 @@ fn parse_fn<'r, 't>(
     };
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_COLLAPSIBLE);
     parser.set_in_wikidot_collapsible(previous_collapsible_context);
+    if parser.settings().layout.legacy() {
+        trim_wikidot_trailing_explicit_list_break(&mut elements);
+    }
     if parser.settings().layout.legacy()
         && parser.pending_wikidot_collapsible_closer()
         && parser.current().token == Token::LineBreak

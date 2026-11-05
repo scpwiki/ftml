@@ -24,6 +24,7 @@ pub(crate) struct LostOwnerBlock<'t> {
     pub body: Vec<Element<'t>>,
     pub errors: Vec<ParseError>,
     pub append_unquoted_close_break: bool,
+    pub hoisted_list: bool,
 }
 
 enum BlockHead<'t> {
@@ -203,10 +204,20 @@ fn parse_lost_owner_block<'r, 't>(
 where
     'r: 't,
 {
+    let entry_parser = parser.clone();
     let (name, in_head, segment) = parser.get_block_name(false)?;
     if !parser.head_word_is_actionable(&name, matches!(name, Cow::Borrowed(_)), segment) {
         return Ok(None);
     }
+
+    let view = name.strip_suffix('_').unwrap_or(&name);
+    if matches!(owner, LineOwner::Quote { .. } | LineOwner::List { .. })
+        && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
+        && lost_owner_list_body_is_unowned(&entry_parser)
+    {
+        return parse_lost_owner_list_block(entry_parser, parser);
+    }
+
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {
         parser.set_block(&BLOCK_DIV);
         let (mut arguments, body_start) =
@@ -344,6 +355,67 @@ where
         body,
         errors,
         append_unquoted_close_break,
+        hoisted_list: false,
+    }))
+}
+
+/// Whether the explicit list head on a line-owner line has an unowned body.
+/// Live hoists the list out of the line container only when the body lines are
+/// not themselves owned by it; a fully owned body (every line carries the same
+/// quote or list prefix) keeps the list inside the container.
+fn lost_owner_list_body_is_unowned(parser: &Parser<'_, '_>) -> bool {
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start.min(source.len());
+    let Some(offset) = source[start..].find('\n') else {
+        return false;
+    };
+    let body_start = start + offset + 1;
+    source[body_start..]
+        .lines()
+        .next()
+        .is_some_and(|line| line.trim_start().starts_with("[["))
+}
+
+fn parse_lost_owner_list_block<'r, 't>(
+    entry: Parser<'r, 't>,
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<LostOwnerBlock<'t>>, ParseError>
+where
+    'r: 't,
+{
+    let mut candidate = entry.clone_with_rule(super::RULE_BLOCK);
+    let previous_depth = candidate.native_blockquote_depth();
+    let previous_cursor = candidate.quote_body_cursor();
+    candidate.set_native_blockquote_depth(None);
+    candidate.set_quote_body_cursor(None);
+    let parsed = super::RULE_BLOCK.try_consume(&mut candidate);
+    candidate.set_native_blockquote_depth(previous_depth);
+    candidate.set_quote_body_cursor(previous_cursor);
+    let success = match parsed {
+        Ok(success) => success,
+        Err(_) => return Ok(None),
+    };
+    let (elements, errors, _) = success.into();
+    let elements: Vec<Element<'t>> = elements.into_iter().collect();
+    let explicit_list_at_start = matches!(
+        elements.first(),
+        Some(Element::List {
+            wikidot_explicit_block: true,
+            ..
+        })
+    ) && elements[1..]
+        .iter()
+        .all(|element| matches!(element, Element::LineBreak));
+    if !explicit_list_at_start {
+        return Ok(None);
+    }
+    parser.update(&candidate);
+    Ok(Some(LostOwnerBlock {
+        control: None,
+        body: elements,
+        errors,
+        append_unquoted_close_break: false,
+        hoisted_list: true,
     }))
 }
 

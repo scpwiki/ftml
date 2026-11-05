@@ -6,6 +6,11 @@ pub(super) fn substitute_wikidot(text: &mut String) {
         return;
     }
 
+    elide_comment_only_lines(text);
+    if !text.contains("[!--") {
+        return;
+    }
+
     let literal_regions = LiteralRegionIndex::new(text);
     let block_name_comments = regular_block_name_comment_starts(text);
     let spec_comments = iftags_spec_comment_starts(text);
@@ -63,6 +68,112 @@ pub(super) fn substitute_wikidot(text: &mut String) {
     }
 }
 
+/// Live Wikidot removes a whole physical line whose only content is a
+/// column-0 comment: the comment and the newline that ends the comment's last
+/// line both disappear, so the lines around it become adjacent. A remainder
+/// after the closer (even a space) keeps the line in place and is left to the
+/// ordinary comment path. Comments that open inside another comment (a closer
+/// written as `[!----]`) are never treated as lines of their own.
+fn elide_comment_only_lines(text: &mut String) {
+    let literal_regions = LiteralRegionIndex::new(text);
+    let block_name_comments = regular_block_name_comment_starts(text);
+    let spec_comments = iftags_spec_comment_starts(text);
+    let code_closer_comments = code_closer_comment_starts(text);
+
+    let mut output = String::with_capacity(text.len());
+    let mut copied_until = 0usize;
+    let mut scan = 0usize;
+    let mut removed = false;
+    while let Some(relative_open) = text[scan..].find("[!--") {
+        let open = scan + relative_open;
+        if literal_regions.contains(open)
+            || block_name_comments.contains(&open)
+            || spec_comments.contains(&open)
+            || code_closer_comments.contains(&open)
+        {
+            scan = open + "[!--".len();
+            continue;
+        }
+        let line_start = text[..open].rfind('\n').map_or(0, |newline| newline + 1);
+        if open != line_start {
+            scan = open + "[!--".len();
+            continue;
+        }
+        let close_search = open + "[!--".len();
+        let Some(relative_close) = text[close_search..].find("--]") else {
+            break;
+        };
+        let close = close_search + relative_close + "--]".len();
+        if comment_contains_iftags_head(&text[open..close]) {
+            scan = close;
+            continue;
+        }
+
+        let bytes = text.as_bytes();
+        let mut end = close;
+        if bytes.get(end) == Some(&b'\r') {
+            end += 1;
+        }
+        let break_end = match bytes.get(end) {
+            Some(b'\n') => Some(end + 1),
+            None => Some(end),
+            _ => None,
+        };
+        let Some(break_end) = break_end else {
+            scan = close;
+            continue;
+        };
+        if previous_line_is_blank(text, line_start) && next_line_is_blank(text, break_end)
+        {
+            scan = close;
+            continue;
+        }
+        output.push_str(&text[copied_until..line_start]);
+        copied_until = break_end;
+        scan = break_end;
+        removed = true;
+    }
+
+    if removed {
+        output.push_str(&text[copied_until..]);
+        *text = output;
+    }
+}
+
+fn previous_line_is_blank(text: &str, line_start: usize) -> bool {
+    if line_start == 0 {
+        return false;
+    }
+    let before = &text[..line_start - 1];
+    let start = before.rfind('\n').map_or(0, |offset| offset + 1);
+    before[start..]
+        .bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r'))
+}
+
+fn next_line_is_blank(text: &str, line_start: usize) -> bool {
+    if line_start >= text.len() {
+        return false;
+    }
+    let line_end = text[line_start..]
+        .find('\n')
+        .map_or(text.len(), |offset| line_start + offset);
+    text[line_start..line_end]
+        .bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r'))
+}
+
+/// Live Wikidot keeps the definition-list prefix width when a comment between
+/// the marker and the first separator is elided: `: [!-- c --] : e` behaves
+/// like `:  : e` (an empty key), not like `: : e`.
+fn seam_run_starts_definition_list(text: &str, start: usize) -> bool {
+    if start == 0 || text.as_bytes()[start - 1] != b':' {
+        return false;
+    }
+    let colon = start - 1;
+    colon == 0 || text.as_bytes()[colon - 1] == b'\n'
+}
+
 fn collapse_comment_seams(output: &mut String, seams: &[usize]) {
     if seams.is_empty() {
         return;
@@ -82,6 +193,7 @@ fn collapse_comment_seams(output: &mut String, seams: &[usize]) {
                 && !heads
                     .iter()
                     .any(|head| head.start <= start && index <= head.end)
+                && !seam_run_starts_definition_list(output, start)
             {
                 ranges.push(start..index);
             }

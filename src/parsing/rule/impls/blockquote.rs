@@ -404,6 +404,26 @@ fn is_iftags_open_at(source: &str, at: usize) -> bool {
         && bytes[6] != b'_'
 }
 
+/// Whether the token stream after a hoisted list begins a block construct on
+/// the next line. Live keeps the list's line break only before a block; inline
+/// text on the next line joins the list without one.
+fn next_line_starts_block(parser: &Parser<'_, '_>) -> bool {
+    if parser.current().token != Token::LineBreak {
+        return false;
+    }
+    parser.look_ahead(0).is_some_and(|token| {
+        matches!(
+            token.token,
+            Token::LeftBlock
+                | Token::Quote
+                | Token::Heading
+                | Token::BulletItem
+                | Token::NumberedItem
+                | Token::Colon
+        )
+    })
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -517,8 +537,20 @@ fn try_consume_fn<'r, 't>(
             } else {
                 consumed_pruned_row = true;
             }
+            if lost.hoisted_list
+                && let Some((_, _, row)) = depths.last_mut()
+            {
+                // A list hoisted out of the quote interrupts the row paragraph:
+                // live leaves the preceding row bare with its line break.
+                row.paragraph_safe = false;
+                if !matches!(row.elements.last(), Some(Element::LineBreak)) {
+                    row.elements.push(Element::LineBreak);
+                }
+            }
             escaped_elements.extend(lost.body);
-            if lost.append_unquoted_close_break {
+            if lost.append_unquoted_close_break
+                || lost.hoisted_list && next_line_starts_block(parser)
+            {
                 escaped_elements.push(Element::LineBreak);
             }
             break;

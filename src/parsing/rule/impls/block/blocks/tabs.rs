@@ -20,6 +20,7 @@
 
 use super::super::mapping::get_block_rule_with_name_for_layout;
 use super::prelude::*;
+use super::trim_wikidot_trailing_explicit_list_break;
 use crate::parsing::ParserWrap;
 use crate::parsing::collect::{
     consume_iftags_segment_fused, consume_valid_comment, iftags_segment_fused,
@@ -2010,6 +2011,9 @@ fn parse_tab<'r, 't>(
     }
     if legacy && parser.wikidot_tab_quote_ejection() {
         trim_wikidot_quote_tab_body_break(&mut elements);
+    }
+    if legacy {
+        trim_wikidot_trailing_explicit_list_break(&mut elements);
     }
 
     let element = Element::Partial(PartialElement::Tab(Tab { label, elements }));

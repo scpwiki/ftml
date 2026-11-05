@@ -23,7 +23,7 @@ use super::line_owner::{
     LineOwner, try_consume_literal_list_alignment, try_consume_lost_owner_block,
 };
 use super::prelude::*;
-use crate::parsing::collect::collect_consume_keep_split;
+use crate::parsing::collect::{collect_consume_keep_split, consume_valid_comment};
 use crate::parsing::paragraph::ParagraphStack;
 use crate::parsing::{
     DepthItem, DepthList, ParagraphSplitEntry, ParagraphSplitKind, ParseSuccess,
@@ -96,6 +96,9 @@ fn try_consume_fn<'r, 't>(
 
     let mut ended = false;
     while !ended {
+        if !depths.is_empty() && skip_wikidot_list_comment_lines(parser, &depths)? {
+            continue;
+        }
         match parse_next_list_item(
             parser,
             &mut errors,
@@ -613,6 +616,67 @@ where
     *paragraph_safe &= item_paragraph_safe;
     parser.update(&sub_parser);
     Ok(ListItemStep::Item((depth, list_type, elements), ends_run))
+}
+
+/// Live Wikidot does not split a list at a comment-only line between items:
+/// the comment line disappears and the following item continues the list. The
+/// continuation only happens when the next marker is the same list kind; any
+/// other next line leaves the comment to the surrounding parser.
+fn skip_wikidot_list_comment_lines<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    depths: &[(usize, ListType, Vec<Element<'t>>)],
+) -> Result<bool, ParseError>
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() {
+        return Ok(false);
+    }
+    let Some((_, last_type, _)) = depths.last() else {
+        return Ok(false);
+    };
+    let expected = match last_type {
+        ListType::Bullet => Token::BulletItem,
+        ListType::Numbered => Token::NumberedItem,
+        ListType::Generic => return Ok(false),
+    };
+
+    let state = parser.get_mutable_state();
+    let mut candidate = parser.clone();
+    let mut skipped = false;
+    loop {
+        let mut probe = candidate.clone();
+        if probe.current().token == Token::Whitespace {
+            probe.step()?;
+        }
+        if probe.current().token != Token::LeftComment {
+            break;
+        }
+        if consume_valid_comment(&mut probe).is_err()
+            || probe.current().token != Token::LineBreak
+        {
+            parser.reset_mutable_state(state);
+            return Ok(false);
+        }
+        probe.step()?;
+        candidate = probe;
+        skipped = true;
+    }
+    if !skipped {
+        parser.reset_mutable_state(state);
+        return Ok(false);
+    }
+
+    let mut probe = candidate.clone();
+    if probe.current().token == Token::Whitespace {
+        probe.step()?;
+    }
+    if probe.current().token != expected {
+        parser.reset_mutable_state(state);
+        return Ok(false);
+    }
+    parser.update(&candidate);
+    Ok(true)
 }
 
 fn at_lost_owner_close<'r, 't>(parser: &Parser<'r, 't>) -> bool
