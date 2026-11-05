@@ -678,5 +678,301 @@
       "\n\n<p><span style=\"color: red\">a<strong>b</strong></span><strong>c</strong>d##</p>\n<p>plain</p>\n"
     ],
     "det": true
+  },
+  "odm-d5-b-i-sub-sup": {
+    "source": "--a##red|xb**//,,^^--c##--^^,,//**##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em><sup><strong><em><sub>c</sub>&#8212;</em></strong></sup>##</em></strong></span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><em><sup><strong><em><sub>c</sub>&#8212;</em></strong></sup>##</em></strong></span></span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-d5-sub-sup-b-i": {
+    "source": "--a##red|xb,,^^**//--c##--//**^^,,##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sub><sup><em><sub><sup><strong>c</strong>&#8212;</sup></sub></em>##</sup></sub></span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sub><sup><em><sub><sup><strong>c</strong>&#8212;</sup></sub></em>##</sup></sub></span></span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-d4-sup-b-sub": {
+    "source": "--a##red|xb^^**,,--c##--,,**^^##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sup><sub><sup><strong>c</strong>&#8212;</sup></sub></sup>##</span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sup><sub><sup><strong>c</strong>&#8212;</sup></sub></sup>##</span></span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-nostrike-b-i-sub": {
+    "source": "##red|a**//,,b##c,,//**##",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a<strong><em><sub>b</sub></em><sub><strong><em>c</em></strong>##</sub></strong></span></p>\n",
+      "\n\n<p><span style=\"color: red\">a<strong><em><sub>b</sub></em><sub><strong><em>c</em></strong>##</sub></strong></span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-nocolor-b-i-sub": {
+    "source": "--a**//,,--c--,,//**",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<strong><sub><strong><em>c&#8212;</em></strong></sub></strong></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<strong><sub><strong><em>c&#8212;</em></strong></sub></strong></span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-xx-b-i-sub": {
+    "source": "--a##red|xb**//,,--cXX--,,//**##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><sub><strong><em>cXX&#8212;</em></strong></sub></strong></span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><sub><strong><em>cXX&#8212;</em></strong></sub></strong></span></span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-sub-i-u": {
+    "source": "--a##red|xb,,//__--c##--__//,,##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sub><em>c</em>&#8212;</sub></span></span>##</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sub><em>c</em>&#8212;</sub></span></span>##</p>\n"
+    ],
+    "det": true
+  },
+  "odm-u-i-sub": {
+    "source": "--a##red|xb__//,,--c##--,,//__##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<span style=\"text-decoration: underline;\"><sub><em>c</em>&#8212;</sub></span></span>##</span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<span style=\"text-decoration: underline;\"><sub><em>c</em>&#8212;</sub></span></span>##</span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-four-cross": {
+    "source": "**a//b{{c,,d**e//f}}g,,h",
+    "runs": [
+      "\n\n<p><strong>a<em>b<tt>c<sub>d</sub></tt><sub><em><tt>e</tt></em><tt>f</tt>g</sub>h</em></strong></p>\n",
+      "\n\n<p><strong>a<em>b<tt>c<sub>d</sub></tt><sub><em><tt>e</tt></em><tt>f</tt>g</sub>h</em></strong></p>\n"
+    ],
+    "det": true
+  },
+  "odm-four-ctrl": {
+    "source": "**a//b{{c,,d,,e}}f//g**",
+    "runs": [
+      "\n\n<p><strong>a<em>b<tt>c<sub>d</sub>e</tt>f</em>g</strong></p>\n",
+      "\n\n<p><strong>a<em>b<tt>c<sub>d</sub>e</tt>f</em>g</strong></p>\n"
+    ],
+    "det": true
+  },
+  "odm-sub-sup-repeat": {
+    "source": ",,a^^b,,c^^d,,e^^f,,g^^",
+    "runs": [
+      "\n\n<p><sub>a<sup>b</sup></sub><sup>c</sup>d<sub>e<sup>f</sup></sub><sup>g</sup></p>\n",
+      "\n\n<p><sub>a<sup>b</sup></sub><sup>c</sup>d<sub>e<sup>f</sup></sub><sup>g</sup></p>\n"
+    ],
+    "det": true
+  },
+  "odm-b-i-alternate": {
+    "source": "**a//b**c**d//e**",
+    "runs": [
+      "\n\n<p><strong>a<em>b</em></strong><em>c<strong>d</strong></em><strong>e</strong></p>\n",
+      "\n\n<p><strong>a<em>b</em></strong><em>c<strong>d</strong></em><strong>e</strong></p>\n"
+    ],
+    "det": true
+  },
+  "odm-b-i-alternate2": {
+    "source": "**a//b**c//d**e**f",
+    "runs": [
+      "\n\n<p><strong>a<em>b</em></strong><em>c</em>d<strong>e</strong>f</p>\n",
+      "\n\n<p><strong>a<em>b</em></strong><em>c</em>d<strong>e</strong>f</p>\n"
+    ],
+    "det": true
+  },
+  "odm-span-pop-para": {
+    "source": "[[span]]--a##red|b--c##d\n\ne[[/span]]f",
+    "runs": [
+      "\n\n<p><span><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b</span>c</span>d</span></p>\n<p>ef</p>\n",
+      "\n\n<p><span><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b</span>c</span>d</span></p>\n<p>ef</p>\n"
+    ],
+    "det": true
+  },
+  "odm-span-in-b": {
+    "source": "[[span style=\"color:blue\"]]**a[[span class=\"k\"]]b**c[[/span]]d[[/span]]e",
+    "runs": [
+      "\n\n<p><span style=\"color:blue\"><strong>a<span class=\"k\">b</span>c</strong>d</span>e</p>\n",
+      "\n\n<p><span style=\"color:blue\"><strong>a<span class=\"k\">b</span>c</strong>d</span>e</p>\n"
+    ],
+    "det": true
+  },
+  "odm-u-strike-lifo": {
+    "source": "__a--b__c--d",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: underline;\">a<span style=\"text-decoration: line-through;\">b</span>c</span>d</p>\n",
+      "\n\n<p><span style=\"text-decoration: underline;\">a<span style=\"text-decoration: line-through;\">b</span>c</span>d</p>\n"
+    ],
+    "det": true
+  },
+  "odm-u-color-lifo": {
+    "source": "__a##red|b__c##d",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: underline;\">a<span style=\"color: red\">b</span>c</span>d</p>\n",
+      "\n\n<p><span style=\"text-decoration: underline;\">a<span style=\"color: red\">b</span>c</span>d</p>\n"
+    ],
+    "det": true
+  },
+  "odm-tt-strike-tail": {
+    "source": "{{a--b}}c--d{{e}}",
+    "runs": [
+      "\n\n<p><tt>a<span style=\"text-decoration: line-through;\">b</span></tt><span style=\"text-decoration: line-through;\">c</span>d<tt>e</tt></p>\n",
+      "\n\n<p><tt>a<span style=\"text-decoration: line-through;\">b</span></tt><span style=\"text-decoration: line-through;\">c</span>d<tt>e</tt></p>\n"
+    ],
+    "det": true
+  },
+  "odm-strike-tt-pair": {
+    "source": "--a{{b--c}}d{{e--f}}",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<tt>b</tt></span><tt>c</tt>d<tt>e&#8212;f</tt></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<tt>b</tt></span><tt>c</tt>d<tt>e&#8212;f</tt></p>\n"
+    ],
+    "det": true
+  },
+  "odm-xb-tt-dash": {
+    "source": "--a##red|xb{{c}}--d##--",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt>c</tt></span>d</span>&#8212;</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt>c</tt></span>d</span>&#8212;</p>\n"
+    ],
+    "det": true
+  },
+  "odm-strike-bold-mid": {
+    "source": "--a##red|b**c--d##e--f**g##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b<strong>c</strong></span><strong>d</strong>e&#8212;f</span>g##</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b<strong>c</strong></span><strong>d</strong>e&#8212;f</span>g##</p>\n"
+    ],
+    "det": true
+  },
+  "odm-five-dash": {
+    "source": "--a##red|b--c--d##e--",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b</span>c<span style=\"text-decoration: line-through;\">d</span>e</span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b</span>c<span style=\"text-decoration: line-through;\">d</span>e</span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-xx-four-dash": {
+    "source": "--a##red|xb__--cXX--__YY--##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xbcXXYY</span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xbcXXYY</span></span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-u-three-dash": {
+    "source": "--a__--b--__c--",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">abc</span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">abc</span></p>\n"
+    ],
+    "det": true
+  },
+  "odm-color-strike": {
+    "source": "##red|a--b##c--d",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a<span style=\"text-decoration: line-through;\">b</span>c</span>d</p>\n",
+      "\n\n<p><span style=\"color: red\">a<span style=\"text-decoration: line-through;\">b</span>c</span>d</p>\n"
+    ],
+    "det": true
+  },
+  "odm-color-pair": {
+    "source": "##red|a##blue|b##c##d",
+    "runs": [
+      "\n\n<p><span style=\"color: red\">a</span>blue|b##c##d</p>\n",
+      "\n\n<p><span style=\"color: red\">a</span>blue|b##c##d</p>\n"
+    ],
+    "det": true
+  },
+  "odm-color-mid-close": {
+    "source": "--a##red|b**c##d--e**f",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b<strong>c</strong></span><strong>d</strong>e</span>f</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">b<strong>c</strong></span><strong>d</strong>e</span>f</p>\n"
+    ],
+    "det": true
+  },
+  "odm-tt-b-cross": {
+    "source": "**a{{b**c}}d",
+    "runs": [
+      "\n\n<p><strong>a<tt>b</tt></strong><tt>c</tt>d</p>\n",
+      "\n\n<p><strong>a<tt>b</tt></strong><tt>c</tt>d</p>\n"
+    ],
+    "det": true
+  },
+  "odm-i-sub-repeat": {
+    "source": "//a,,b//c,,d//e,,f//g,,h",
+    "runs": [
+      "\n\n<p><em>a<sub>b</sub></em><sub>c</sub>d<em>e<sub>f</sub></em><sub>g</sub>h</p>\n",
+      "\n\n<p><em>a<sub>b</sub></em><sub>c</sub>d<em>e<sub>f</sub></em><sub>g</sub>h</p>\n"
+    ],
+    "det": true
+  },
+  "odm-plain-five": {
+    "source": "--a--b--c--d--",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a</span>b<span style=\"text-decoration: line-through;\">c</span>d&#8212;</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a</span>b<span style=\"text-decoration: line-through;\">c</span>d&#8212;</p>\n"
+    ],
+    "det": true
+  },
+  "odm-m1-p2": {
+    "source": "--a##red|xb**{{c}}--d##--**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong></span><strong>d</strong>&#8212;</span>##</p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong></span><strong>d</strong>&#8212;</span>##</p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "odm-m3-p2": {
+    "source": "--a##red|xb**{{c--d}}##--**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong><tt><strong>d</strong></tt>&#8212;</span>##</span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><tt>c</tt></strong><tt><strong>d</strong></tt>&#8212;</span>##</span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "odm-m5-p2": {
+    "source": "--a##red|xb**{{--c##--{{**##}}}}\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt><strong>c</strong>&#8212;{{</tt>##}}</span></span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<tt><strong>c</strong>&#8212;{{</tt>##}}</span></span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "odm-ts-b-i-sub-p2": {
+    "source": "--a##red|xb**//,,--c##--,,//**##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><sub><strong><em>c</em>&#8212;</strong></sub></strong>##</span></span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<strong><sub><strong><em>c</em>&#8212;</strong></sub></strong>##</span></span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "odm-ts-sub-i-b-p2": {
+    "source": "--a##red|xb,,//**--c##--**//,,##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sub><strong><sub><em>c</em>&#8212;</sub></strong></sub>##</span></span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xb<sub><strong><sub><em>c</em>&#8212;</sub></strong></sub>##</span></span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "odm-d5-xx-p2": {
+    "source": "--a##red|xb__--cXX--__##\n\nplain",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xbcXX&#8212;</span></span></p>\n<p>plain</p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xbcXX&#8212;</span></span></p>\n<p>plain</p>\n"
+    ],
+    "det": true
+  },
+  "odm-d5-xx": {
+    "source": "--a##red|xb__--cXX--__##",
+    "runs": [
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xbcXX&#8212;</span></span></p>\n",
+      "\n\n<p><span style=\"text-decoration: line-through;\">a<span style=\"color: red\">xbcXX&#8212;</span></span></p>\n"
+    ],
+    "det": true
   }
 }
