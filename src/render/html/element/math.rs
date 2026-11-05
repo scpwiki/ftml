@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use crate::tree::{AnchorTarget, AttributeMap, PartialElement};
 use cfg_if::cfg_if;
 use std::num::NonZeroUsize;
 
@@ -35,7 +36,12 @@ cfg_if! {
     }
 }
 
-pub fn render_math_block(ctx: &mut HtmlContext, name: Option<&str>, latex_source: &str) {
+pub fn render_math_block(
+    ctx: &mut HtmlContext,
+    name: Option<&str>,
+    latex_source: &str,
+    open_elements: &[Element],
+) {
     debug!(
         "Rendering math block (name '{}', source '{}')",
         name.unwrap_or("<none>"),
@@ -47,7 +53,7 @@ pub fn render_math_block(ctx: &mut HtmlContext, name: Option<&str>, latex_source
         if let Some(name) = name {
             ctx.register_named_equation(name, index);
         }
-        render_wikidot_math_block(ctx, index, latex_source);
+        render_wikidot_math_block(ctx, index, latex_source, open_elements);
         return;
     }
 
@@ -58,6 +64,7 @@ fn render_wikidot_math_block(
     ctx: &mut HtmlContext,
     index: NonZeroUsize,
     latex_source: &str,
+    open_elements: &[Element],
 ) {
     let environment = if latex_source.contains('{') || latex_source.contains('\\') {
         "align"
@@ -77,15 +84,65 @@ fn render_wikidot_math_block(
     };
     let id = format!("equation-{index}");
 
-    ctx.html()
-        .span()
-        .attr(attr!("class" => "equation-number"))
-        .inner(|ctx| str_write!(ctx, "({index})"));
+    render_wikidot_equation_number(ctx, index, open_elements);
     ctx.push_raw('\n');
     ctx.html()
         .div()
         .attr(attr!("class" => "math-equation", "id" => &id))
         .contents(&wrapped);
+}
+
+fn render_wikidot_equation_number(
+    ctx: &mut HtmlContext,
+    index: NonZeroUsize,
+    open_elements: &[Element],
+) {
+    let mut anchors = Vec::new();
+    for element in open_elements {
+        match element {
+            Element::Anchor {
+                elements,
+                attributes,
+                target,
+            } => {
+                debug_assert!(elements.iter().all(|element| matches!(
+                    element,
+                    Element::Partial(PartialElement::WikidotEmptyInlineOwner)
+                )));
+                anchors.push((attributes, target));
+            }
+            other => render_elements(ctx, std::slice::from_ref(other)),
+        }
+    }
+    render_wikidot_equation_number_anchors(ctx, index, &anchors);
+}
+
+fn render_wikidot_equation_number_anchors(
+    ctx: &mut HtmlContext,
+    index: NonZeroUsize,
+    anchors: &[(&AttributeMap, &Option<AnchorTarget>)],
+) {
+    let Some((&(attributes, target), rest)) = anchors.split_first() else {
+        ctx.html()
+            .span()
+            .attr(attr!("class" => "equation-number"))
+            .inner(|ctx| str_write!(ctx, "({index})"));
+        return;
+    };
+    let target_value = match target {
+        Some(target) => target.html_attr(),
+        None => "",
+    };
+    ctx.html()
+        .a()
+        .attr(attr!(
+            "href" => ""; if !attributes.get().contains_key("href"),
+            "target" => target_value; if target.is_some();;
+            attributes,
+        ))
+        .inner(|ctx| {
+            render_wikidot_equation_number_anchors(ctx, index, rest);
+        });
 }
 
 pub fn render_math_inline(ctx: &mut HtmlContext, latex_source: &str) {

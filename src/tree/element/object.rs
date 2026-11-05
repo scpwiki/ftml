@@ -279,6 +279,8 @@ pub enum Element<'t> {
     Math {
         name: Option<Cow<'t, str>>,
         latex_source: Cow<'t, str>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        wikidot_block_open_elements: Vec<Element<'t>>,
     },
 
     #[serde(rename_all = "kebab-case")]
@@ -798,9 +800,16 @@ impl Element<'_> {
                 elements: elements_to_owned(elements),
             },
             Element::Code(code_block) => Element::Code(code_block.to_owned()),
-            Element::Math { name, latex_source } => Element::Math {
+            Element::Math {
+                name,
+                latex_source,
+                wikidot_block_open_elements,
+            } => Element::Math {
                 name: option_string_to_owned(name),
                 latex_source: string_to_owned(latex_source),
+                wikidot_block_open_elements: elements_to_owned(
+                    wikidot_block_open_elements,
+                ),
             },
             Element::MathInline { latex_source } => Element::MathInline {
                 latex_source: string_to_owned(latex_source),

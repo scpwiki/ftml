@@ -251,11 +251,13 @@ mod tests {
                 contents: Cow::Borrowed(""),
                 language: None,
                 name: None,
+                wikidot_block_open_elements: Vec::new(),
             }),
             Element::Code(CodeBlock {
                 contents: Cow::Borrowed("body"),
                 language: None,
                 name: None,
+                wikidot_block_open_elements: Vec::new(),
             }),
         ];
 

@@ -2355,7 +2355,9 @@ fn lower_sequence<'t>(
             }
             run.push(element);
             run_has_content = true;
-        } else if has_lowerable_children(&element) {
+        } else if has_lowerable_children(&element)
+            || matches!(element, Element::Code(_) | Element::Math { .. })
+        {
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
@@ -2396,6 +2398,26 @@ fn lower_sequence<'t>(
                         );
                         active.enter_block();
                         if let Element::Collapsible {
+                            wikidot_block_open_elements,
+                            ..
+                        } = &mut element
+                            && active.has_anchor_scope()
+                        {
+                            *wikidot_block_open_elements = active.nested_empty_copies();
+                            if let Some(position) = active.anchor_position() {
+                                active.kill_from(position);
+                            }
+                        }
+                        if let Element::Code(code_block) = &mut element
+                            && active.has_anchor_scope()
+                        {
+                            code_block.wikidot_block_open_elements =
+                                active.nested_empty_copies();
+                            if let Some(position) = active.anchor_position() {
+                                active.kill_from(position);
+                            }
+                        }
+                        if let Element::Math {
                             wikidot_block_open_elements,
                             ..
                         } = &mut element
@@ -2940,6 +2962,8 @@ fn parent_is_block_segment(element: &Element<'_>) -> bool {
         | Element::Table(_)
         | Element::TabView(_)
         | Element::WikidotBlockFrame { .. }
+        | Element::Code(_)
+        | Element::Math { .. }
         | Element::DefinitionList(_) => true,
         Element::Partial(partial) => matches!(
             partial,
@@ -3462,9 +3486,6 @@ fn lower_children<'t>(
     let mut lowered = false;
     let mut visit = |children: &mut Vec<Element<'t>>| {
         lowered = true;
-        if std::env::var("L83DUMP").is_ok() && eject {
-            eprintln!("L83DUMP pre: {:?}", children);
-        }
         lower_sequence(
             children,
             valid,
@@ -3481,9 +3502,6 @@ fn lower_children<'t>(
         if eject {
             eject_segment_trailing_space(children);
             strip_trailing_space_from_vec(children);
-        }
-        if std::env::var("L83DUMP").is_ok() && eject {
-            eprintln!("L83DUMP post: {:?}", children);
         }
     };
     visit_children_mut(element, &mut visit);

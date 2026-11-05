@@ -18,7 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::clone::{option_string_to_owned, string_to_owned};
+use super::clone::{
+    elements_to_owned, option_string_to_owned, string_to_owned,
+};
+use super::element::Element;
 use std::borrow::Cow;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
@@ -26,6 +29,8 @@ pub struct CodeBlock<'t> {
     pub contents: Cow<'t, str>,
     pub language: Option<Cow<'t, str>>,
     pub name: Option<Cow<'t, str>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wikidot_block_open_elements: Vec<Element<'t>>,
 }
 
 impl CodeBlock<'_> {
@@ -34,6 +39,9 @@ impl CodeBlock<'_> {
             contents: string_to_owned(&self.contents),
             language: option_string_to_owned(&self.language),
             name: option_string_to_owned(&self.name),
+            wikidot_block_open_elements: elements_to_owned(
+                &self.wikidot_block_open_elements,
+            ),
         }
     }
 }

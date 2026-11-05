@@ -311,9 +311,24 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             contents,
             language,
             name: _,
-        }) => render_code(ctx, ref_cow!(language), contents),
-        Element::Math { name, latex_source } => {
-            render_math_block(ctx, ref_cow!(name), latex_source)
+            wikidot_block_open_elements,
+        }) => render_code(
+            ctx,
+            ref_cow!(language),
+            contents,
+            wikidot_block_open_elements,
+        ),
+        Element::Math {
+            name,
+            latex_source,
+            wikidot_block_open_elements,
+        } => {
+            render_math_block(
+                ctx,
+                ref_cow!(name),
+                latex_source,
+                wikidot_block_open_elements,
+            )
         }
         Element::MathInline { latex_source } => render_math_inline(ctx, latex_source),
         Element::EquationReference(name) => render_equation_reference(ctx, name),

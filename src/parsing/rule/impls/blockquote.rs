@@ -992,19 +992,6 @@ fn push_native_quote_row<'t>(
         .cloned();
     // A row carrying a flat block closer leaves following content unwrapped
     // and keeps its own trailing break (mirrors top-level closer lines).
-    if std::env::var("L83DUMP").is_ok()
-        && row.elements.iter().any(|element| {
-            matches!(
-                element,
-                Element::Partial(PartialElement::WikidotBlockClose(_))
-            )
-        })
-    {
-        eprintln!(
-            "L83DUMP quoterow safe={} split={:?} elements={:?}",
-            row.paragraph_safe, row.paragraph_split, row.elements
-        );
-    }
     let wikidot_block_close_row = wikidot
         && row.elements.iter().any(|element| {
             matches!(

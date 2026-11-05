@@ -1,0 +1,33 @@
+{
+    "elements": [
+        {
+            "element": "anchor",
+            "data": {
+                "target": null,
+                "attributes": {
+                    "href": "https://e.com/"
+                },
+                "elements": [
+                    {
+                        "element": "code",
+                        "data": {
+                            "contents": "x",
+                            "language": null,
+                            "name": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    }
+                ]
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "x",
+            "language": null,
+            "name": null
+        }
+    ]
+}

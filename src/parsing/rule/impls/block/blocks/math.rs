@@ -67,7 +67,11 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let element = Element::Math { name, latex_source };
+    let element = Element::Math {
+        name,
+        latex_source,
+        wikidot_block_open_elements: Vec::new(),
+    };
 
     success_elements(element)
 }

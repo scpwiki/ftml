@@ -68,7 +68,12 @@ fn wikidot_obfuscated_email(email: &str) -> String {
     format!("{reversed_domain}|{reversed_local}#{reversed_domain}|{reversed_local}")
 }
 
-pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str) {
+pub fn render_code(
+    ctx: &mut HtmlContext,
+    language: Option<&str>,
+    contents: &str,
+    open_elements: &[Element],
+) {
     debug!(
         "Rendering code block (language {})",
         language.unwrap_or("<none>"),
@@ -77,7 +82,7 @@ pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str
     ctx.handle().post_code(index, contents);
 
     if ctx.layout().legacy() {
-        render_wikidot_code(ctx, language, contents);
+        render_wikidot_code(ctx, language, contents, open_elements);
         return;
     }
 
@@ -127,11 +132,17 @@ pub fn render_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str
         });
 }
 
-fn render_wikidot_code(ctx: &mut HtmlContext, language: Option<&str>, contents: &str) {
+fn render_wikidot_code(
+    ctx: &mut HtmlContext,
+    language: Option<&str>,
+    contents: &str,
+    open_elements: &[Element],
+) {
     ctx.html()
         .div()
         .attr(attr!("class" => "code"))
         .inner(|ctx| {
+            render_elements(ctx, open_elements);
             if contents.is_empty() {
                 return;
             }

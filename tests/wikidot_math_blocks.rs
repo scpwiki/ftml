@@ -206,9 +206,15 @@ fn formula_body_preserves_literal_bytes_in_the_math_element() {
     let (tree, errors) = ftml::parse(&tokenization, &page_info, &settings).into();
 
     assert!(errors.is_empty(), "{errors:#?}");
-    let [Element::Math { name, latex_source }] = tree.elements.as_slice() else {
+    let [Element::Math {
+        name,
+        latex_source,
+        wikidot_block_open_elements,
+    }] = tree.elements.as_slice()
+    else {
         panic!("expected one math element, got {:#?}", tree.elements);
     };
+    assert!(wikidot_block_open_elements.is_empty());
     assert!(name.is_none());
     assert_eq!(latex_source, "A  [[bold]]B[[/bold]]\tC");
 }
