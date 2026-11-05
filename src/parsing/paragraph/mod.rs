@@ -543,14 +543,7 @@ where
 }
 
 fn wikidot_div_closes_on_current_line(parser: &Parser<'_, '_>) -> bool {
-    let source = parser.full_text().inner();
-    let start = parser.current().span.start;
-    let line = source[start..]
-        .split_once(['\n', '\r'])
-        .map_or(&source[start..], |(line, _)| line);
-    line.as_bytes()
-        .windows("[[/div]]".len())
-        .any(|window| window.eq_ignore_ascii_case(b"[[/div]]"))
+    parser.wikidot_div_closes_on_physical_line(parser.current().span.start)
 }
 
 fn elements_contain_div(elements: &Elements<'_>) -> bool {

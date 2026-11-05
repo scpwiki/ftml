@@ -43,6 +43,8 @@ pub(super) struct UnmatchedCloseScanCache {
     owner_scans: [Option<OwnerLineScan>; 3],
     link_region: Option<(usize, usize)>,
     link_no_head: Option<(usize, usize, usize)>,
+    div_line_close: Option<(usize, Option<usize>)>,
+    next_line_break: Option<(usize, Option<usize>)>,
     target_failures: BTreeMap<(usize, bool, bool), ()>,
     label_failures: BTreeMap<(usize, bool, bool, bool), ()>,
     #[cfg(test)]
@@ -163,6 +165,52 @@ fn find_forward(
     (found, scanned)
 }
 
+/// ASCII-case-insensitive variant of [`find_forward`]: returns the first
+/// occurrence of `needle` at or after `start`, reusing the slot when the
+/// previous search already covers `start`.
+fn find_forward_ignore_ascii_case(
+    source: &str,
+    slot: &mut Option<(usize, Option<usize>)>,
+    needle: &[u8],
+    start: usize,
+) -> (Option<usize>, usize) {
+    if let Some((scanned_from, found)) = *slot
+        && scanned_from <= start
+        && found.is_none_or(|found| found >= start)
+    {
+        return (found, 0);
+    }
+    let bytes = source.as_bytes();
+    let found = (start..bytes.len().saturating_sub(needle.len() - 1)).find(|&offset| {
+        bytes[offset..offset + needle.len()].eq_ignore_ascii_case(needle)
+    });
+    let scanned = found.map_or(bytes.len(), |found| found + needle.len()) - start;
+    *slot = Some((start, found));
+    (found, scanned)
+}
+
+/// First `\r` or `\n` at or after `start`, with the same reuse rules as
+/// [`find_forward`].
+fn find_forward_line_break(
+    source: &str,
+    slot: &mut Option<(usize, Option<usize>)>,
+    start: usize,
+) -> (Option<usize>, usize) {
+    if let Some((scanned_from, found)) = *slot
+        && scanned_from <= start
+        && found.is_none_or(|found| found >= start)
+    {
+        return (found, 0);
+    }
+    let found = source.as_bytes()[start..]
+        .iter()
+        .position(|byte| matches!(byte, b'\r' | b'\n'))
+        .map(|offset| start + offset);
+    let scanned = found.map_or(source.len(), |found| found + 1) - start;
+    *slot = Some((start, found));
+    (found, scanned)
+}
+
 fn end_block_link_region_end(source: &str, start: usize) -> usize {
     let text = source;
     let bytes = text.as_bytes();
@@ -265,6 +313,32 @@ impl<'r, 't> Parser<'r, 't> {
         let outcome = owner_opener_before_scan(&computed, close_start);
         scan.owner_scans[slot] = Some(computed);
         Some(outcome)
+    }
+
+    /// Whether a `[[/div]]` closer (ASCII-case-insensitive) starts on the
+    /// physical line that begins at `start`.
+    ///
+    /// `paragraph::wikidot_div_closes_on_current_line` asks this once per
+    /// `[[div]]` opener, and a document with no newlines makes every ask
+    /// scan to the end of the input: input consisting of repeated `[[div]]`
+    /// openers grew quadratically. Both searches are monotone while the
+    /// parser advances, so the shared slots keep the total work linear; the
+    /// answer is identical to scanning the line slice directly.
+    pub(crate) fn wikidot_div_closes_on_physical_line(&self, start: usize) -> bool {
+        let source = self.full_text().inner();
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let scan = &mut cache.unmatched_close_scan;
+        let (close, _close_scanned) = find_forward_ignore_ascii_case(
+            source,
+            &mut scan.div_line_close,
+            b"[[/div]]",
+            start,
+        );
+        let (line_break, _break_scanned) =
+            find_forward_line_break(source, &mut scan.next_line_break, start);
+        #[cfg(test)]
+        scan.add_visits(_close_scanned + _break_scanned);
+        close.is_some_and(|close| line_break.is_none_or(|line_break| close < line_break))
     }
 
     pub(crate) fn cached_end_block_link_region(
@@ -455,6 +529,77 @@ mod tests {
                     input.len(),
                 );
             }
+        }
+    }
+
+    #[test]
+    fn div_line_close_matches_uncached_line_scan() {
+        let page_info = PageInfo::dummy();
+        let settings = settings();
+        let lines = [
+            "[[div]][[/div]]",
+            "[[div]] [[/DIV]]",
+            "[[div]] no closer",
+            "[[div]][[/div]]\n[[div]]",
+            "[[div]]\r\n[[/div]]",
+            "[[di]][[div]]",
+            "[[divx]][[/divx]]",
+            "[[div]][[/div]] [[/div]]",
+            "\u{1f600}[[div]][[/div]]",
+        ];
+        for source in lines {
+            let tokenization = crate::tokenize(source);
+            let parser = Parser::new(&tokenization, &page_info, &settings);
+            let mut positions: Vec<usize> = (0..=source.len()).collect();
+            for &start in &positions {
+                if !source.is_char_boundary(start) {
+                    continue;
+                }
+                let line = source[start..]
+                    .split_once(['\n', '\r'])
+                    .map_or(&source[start..], |(line, _)| line);
+                let cached = parser.wikidot_div_closes_on_physical_line(start);
+                let uncached = line
+                    .as_bytes()
+                    .windows("[[/div]]".len())
+                    .any(|window| window.eq_ignore_ascii_case(b"[[/div]]"));
+                assert_eq!(cached, uncached, "{source:?} @{start}");
+            }
+            positions.reverse();
+            for &start in &positions {
+                if !source.is_char_boundary(start) {
+                    continue;
+                }
+                let line = source[start..]
+                    .split_once(['\n', '\r'])
+                    .map_or(&source[start..], |(line, _)| line);
+                let cached = parser.wikidot_div_closes_on_physical_line(start);
+                let uncached = line
+                    .as_bytes()
+                    .windows("[[/div]]".len())
+                    .any(|window| window.eq_ignore_ascii_case(b"[[/div]]"));
+                assert_eq!(cached, uncached, "{source:?} @{start} reversed");
+            }
+        }
+    }
+
+    #[test]
+    fn div_line_close_scans_scale_linearly() {
+        // Kept below the default recursion limit: this helper parses on the
+        // test thread, which has no deep-parse stack.
+        for source in [
+            "[[div]]".repeat(96),
+            "[[/div]]".repeat(96),
+            "[[div]]\n".repeat(96),
+            format!("{}[[/div]]", "[[div]]".repeat(96)),
+            "[[div]]. ".repeat(96),
+        ] {
+            let visits = scan_visits(&source);
+            assert!(
+                visits <= source.len() * 16,
+                "{visits} visits for {} bytes",
+                source.len(),
+            );
         }
     }
 
