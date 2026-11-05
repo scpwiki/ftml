@@ -315,6 +315,7 @@ where
                         Some(&mut bibliographies),
                     );
                 heading::normalize_wikidot_headings(&mut elements);
+                inline_format::lower_wikidot_root_dash_runs(&mut elements);
                 for footnote in &mut footnotes {
                     inline_scope::lower_wikidot_inline_size_scopes_inline(footnote);
                 }

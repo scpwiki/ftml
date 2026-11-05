@@ -115,12 +115,13 @@ fn try_consume_split_delimiter<'r, 't>(
     finish_collected(parser, collected)
 }
 
-fn bold_body_crosses_formed_div(elements: &Elements<'_>) -> bool {
+fn bold_body_crosses_flow_block(elements: &Elements<'_>) -> bool {
     let Elements::Single(Element::Container(container)) = elements else {
         return false;
     };
     container.elements().iter().any(|element| match element {
         Element::Container(inner) => inner.ctype() == ContainerType::Div,
+        Element::Table(_) => true,
         Element::Partial(
             PartialElement::WikidotBlockOpen(WikidotBlockShell::Div { .. })
             | PartialElement::WikidotBlockClose(WikidotBlockCloseKind::Div { .. }),
@@ -144,7 +145,7 @@ fn finish_collected<'r, 't>(
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    if parser.settings().layout.legacy() && bold_body_crosses_formed_div(&elements) {
+    if parser.settings().layout.legacy() && bold_body_crosses_flow_block(&elements) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if parser.settings().layout.legacy()

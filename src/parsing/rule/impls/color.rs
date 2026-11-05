@@ -21,7 +21,7 @@
 use super::inline_delimiter::{ReachableCloseMode, validate_reachable_close};
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
-use crate::tree::Container;
+use crate::tree::{Container, PartialElement, WikidotBlockShell};
 use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
@@ -157,6 +157,9 @@ fn try_consume_fn<'r, 't>(
     parser.set_color_flag(false);
     let body = body_result?;
     let ((mut elements, terminator), errors, paragraph_safe) = body.into();
+    if legacy && !table_owned && elements.iter().any(wikidot_flow_block_element) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let unformed_dash = legacy
         && !table_owned
         && terminator.token == Token::Color
@@ -262,6 +265,25 @@ fn try_consume_fn<'r, 't>(
     }
 
     ok!(paragraph_safe; Elements::Multiple(output), errors)
+}
+
+fn wikidot_flow_block_element(element: &Element<'_>) -> bool {
+    match element {
+        Element::Container(container) => matches!(
+            container.ctype(),
+            ContainerType::Div | ContainerType::Note
+        ),
+        Element::Table(_) | Element::Collapsible { .. } => true,
+        Element::Partial(partial) => matches!(
+            partial,
+            PartialElement::WikidotBlockOpen(
+                WikidotBlockShell::Div { .. }
+                    | WikidotBlockShell::Note { .. }
+                    | WikidotBlockShell::Collapsible { .. }
+            )
+        ),
+        _ => false,
+    }
 }
 
 /// Collect a Wikidot color body, treating a `##` that sits at the very start
