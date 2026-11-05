@@ -70,6 +70,7 @@ pub fn parse_alignment_block<'r, 't>(
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let block_name = block_rule.name;
+    eprintln!("L85DBG ALIGN pos={} name={}", parser.current().span.start, block_name);
     debug!(
         "Parsing align block {name}/{block_name}/{}, in-head {in_head}",
         alignment.name(),

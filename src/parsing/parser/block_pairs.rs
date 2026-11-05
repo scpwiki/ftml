@@ -3323,6 +3323,7 @@ mod tests {
         let mut inexact: Vec<String> = Vec::new();
         let mut total_pairs = 0_usize;
         for case in &cases {
+            eprintln!("L85DBG CASE {}", case.id);
             let tokenization = crate::tokenize(&case.source);
             let repaired = crate::parsing::repaired_tokenization_for_test(
                 &tokenization,

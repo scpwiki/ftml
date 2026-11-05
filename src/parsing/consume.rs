@@ -686,6 +686,7 @@ where
                 parser.update(&close);
                 // L85: a silently taken crossed close absorbs its line break
                 // (closeout keeps a single break around `[[/div]]`).
+                eprintln!("L85DBG XCROSS pos={}", parser.current().span.start);
                 if parser.current().token == Token::LineBreak {
                     let _ = parser.step();
                 }

@@ -263,6 +263,7 @@ where
         || (parser.in_wikidot_single_line_content()
             && parser.accepts_partial() != crate::tree::AcceptsPartial::ListItem)
     {
+        eprintln!("L85DBG FLATBRK pos={}", parser.current().span.start);
         return Ok(());
     }
     if parser.current().token == Token::Whitespace {
