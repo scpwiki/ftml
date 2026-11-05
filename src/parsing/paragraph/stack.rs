@@ -324,6 +324,121 @@ impl<'t> ParagraphStack<'t> {
         self.wikidot_post_empty_list_break = false;
     }
 
+    fn wikidot_element_contains_unaligned_image(element: &Element<'_>) -> bool {
+        match element {
+            Element::Image {
+                alignment: None, ..
+            } => true,
+            Element::Delayed(delayed) => delayed.image_alignment() == Some(None),
+            Element::Container(container) => container
+                .elements()
+                .iter()
+                .any(Self::wikidot_element_contains_unaligned_image),
+            Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+                elements
+                    .iter()
+                    .any(Self::wikidot_element_contains_unaligned_image)
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn wikidot_run_ends_with_scored_alias(elements: &[Element<'_>]) -> bool {
+        let mut rest = elements;
+        while let Some((last, head)) = rest.split_last() {
+            let skip = match last {
+                Element::LineBreak | Element::LineBreaks(_) => true,
+                Element::Delayed(delayed) => delayed.is_suppression_seam(),
+                _ => false,
+            };
+            if !skip {
+                break;
+            }
+            rest = head;
+        }
+        let scored_kind = match rest.last() {
+            Some(Element::Partial(PartialElement::InlineSpanClose(_))) => 0,
+            Some(Element::Partial(PartialElement::InlineAnchorClose(_))) => 1,
+            _ => return false,
+        };
+        let mut depth = 0usize;
+        for element in rest.iter().rev() {
+            match element {
+                Element::Partial(PartialElement::InlineSpanClose(_))
+                    if scored_kind == 0 =>
+                {
+                    depth += 1
+                }
+                Element::Partial(PartialElement::InlineAnchorClose(_))
+                    if scored_kind == 1 =>
+                {
+                    depth += 1
+                }
+                Element::Partial(PartialElement::InlineSpanOpen(attributes, ..))
+                    if scored_kind == 0 =>
+                {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        return attributes.get().contains_key("data-ftml-score-span");
+                    }
+                }
+                Element::Partial(PartialElement::InlineAnchorOpen(attributes, ..))
+                    if scored_kind == 1 =>
+                {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        return attributes.get().contains_key(
+                            crate::parsing::inline_scope::WIKIDOT_SCORE_ANCHOR_ATTRIBUTE,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    pub(crate) fn wikidot_element_is_scored_alias_open(element: &Element<'_>) -> bool {
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(attributes, ..)) => {
+                attributes.get().contains_key("data-ftml-score-span")
+            }
+            Element::Partial(PartialElement::InlineAnchorOpen(attributes, ..)) => {
+                attributes.get().contains_key(
+                    crate::parsing::inline_scope::WIKIDOT_SCORE_ANCHOR_ATTRIBUTE,
+                )
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the current run would end with a paired scored span or anchor
+    /// close once trailing ASCII spaces are trimmed.
+    fn wikidot_trailing_space_after_scored_alias(&self) -> bool {
+        let mut index = self.current.len();
+        let mut saw_space = false;
+        while index > 0 {
+            index -= 1;
+            match &self.current[index] {
+                Element::Text(text) if text == " " => saw_space = true,
+                Element::Delayed(delayed) if delayed.is_suppression_seam() => {}
+                _ => {
+                    return saw_space
+                        && Self::wikidot_run_ends_with_scored_alias(
+                            &self.current[..=index],
+                        );
+                }
+            }
+        }
+        false
+    }
+
     fn wikidot_element_has_run_content(element: &Element<'_>) -> bool {
         match element {
             Element::LineBreak | Element::LineBreaks(_) | Element::Delayed(_) => false,
@@ -929,6 +1044,9 @@ impl<'t> ParagraphStack<'t> {
             {
                 self.wikidot_absorb_post_list_break_for_prose(!paragraph_break_separated);
             }
+            if self.wikidot && Self::wikidot_element_contains_unaligned_image(&element) {
+                self.current_unwrapped = true;
+            }
             self.current.push(element);
         } else {
             let invisible_block_line = self.wikidot && element == Element::LineBreak;
@@ -1142,6 +1260,13 @@ impl<'t> ParagraphStack<'t> {
 
     pub fn push_paragraph_safe_elements(&mut self, mut elements: Vec<Element<'t>>) {
         if self.wikidot
+            && elements
+                .iter()
+                .any(Self::wikidot_element_contains_unaligned_image)
+        {
+            self.current_unwrapped = true;
+        }
+        if self.wikidot
             && !self.wikidot_current_has_run_content()
             && elements.iter().any(Self::wikidot_element_has_run_content)
         {
@@ -1249,6 +1374,16 @@ impl<'t> ParagraphStack<'t> {
     }
 
     fn trim_trailing_ascii_space(&mut self) {
+        // Live Wikidot trims the trailing space from the output but still lets
+        // it count as content after a scored close: `[[span_]]x[[/span]] `
+        // keeps its paragraph wrapper. Leave the space for the root lowering,
+        // which decides the wrapper and then ejects it.
+        if self.wikidot
+            && !self.current_unwrapped
+            && self.wikidot_trailing_space_after_scored_alias()
+        {
+            return;
+        }
         while let Some(index) = self.current.iter().rposition(|element| {
             !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
         }) {

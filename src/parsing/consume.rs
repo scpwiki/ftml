@@ -935,14 +935,37 @@ fn try_consume_text_token<'r, 't>(
             parser.look_ahead(0).map(|next| next.token),
             Some(Token::LineBreak | Token::ParagraphBreak | Token::InputEnd)
         );
+    // Live Wikidot counts a trailing space after a scored span/anchor close
+    // as content: the run keeps its paragraph wrapper. Keep the space for the
+    // root lowering to see and then drop from the output.
+    let keep_trailing_space = trailing_whitespace
+        && !parser.in_wikidot_single_line_content()
+        && wikidot_trailing_space_after_scored_alias_close(parser);
     parser.step()?;
-    if trailing_whitespace {
+    if trailing_whitespace && !keep_trailing_space {
         Ok(Some(Elements::None))
     } else if token == Token::Whitespace {
         Ok(Some(text!(" ").into()))
     } else {
         Ok(Some(text!(slice).into()))
     }
+}
+
+fn wikidot_trailing_space_after_scored_alias_close(parser: &Parser<'_, '_>) -> bool {
+    if !parser.settings().layout.legacy() {
+        return false;
+    }
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start.min(source.len());
+    let prefix = source[..start].trim_end_matches([' ', '\t']);
+    let Some(inner) = prefix.strip_suffix("]]") else {
+        return false;
+    };
+    let Some(open) = inner.rfind("[[/") else {
+        return false;
+    };
+    let name = inner[open + 3..].trim_matches([' ', '\t']);
+    name.eq_ignore_ascii_case("span") || name.eq_ignore_ascii_case("a")
 }
 
 fn try_consume_line_break<'r, 't>(
@@ -996,7 +1019,7 @@ where
     } else {
         0
     };
-    let skip = parser.look_ahead(next_offset).is_some_and(|token| {
+    let looks_skippable = parser.look_ahead(next_offset).is_some_and(|token| {
         let following = parser.look_ahead(next_offset + 1).map(|next| next.token);
         let valid_shape = match token.token {
             Token::Heading | Token::BulletItem | Token::NumberedItem => {
@@ -1027,6 +1050,17 @@ where
                     Token::Quote | Token::BulletItem | Token::NumberedItem
                 ))
     });
+    // A marker line owns its break only when the list really forms: a list
+    // live rejects stays literal, and live keeps the break in front of it.
+    let skip = if looks_skippable
+        && matches!(
+            parser.look_ahead(next_offset).map(|token| token.token),
+            Some(Token::BulletItem | Token::NumberedItem)
+        ) {
+        crate::parsing::rule::impls::line_break_skipped_for_own_line_block(parser)
+    } else {
+        looks_skippable
+    };
 
     parser.step()?;
     if skip {

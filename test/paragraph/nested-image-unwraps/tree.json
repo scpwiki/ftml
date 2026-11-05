@@ -1,0 +1,40 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "bold",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "image",
+                                    "data": {
+                                        "source": {
+                                            "type": "direct",
+                                            "data": {
+                                                "type": "file1",
+                                                "data": {
+                                                    "file": "a.png"
+                                                }
+                                            }
+                                        },
+                                        "link": null,
+                                        "alignment": null,
+                                        "attributes": {},
+                                        "target": null
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

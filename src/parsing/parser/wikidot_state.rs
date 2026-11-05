@@ -15,18 +15,40 @@ const DEFINITION_LIST_LINE: u16 = 1 << 8;
 const SINGLE_LINE_CONTENT: u16 = 1 << 9;
 const DIV_LITERAL_RECOVERED: u16 = 1 << 10;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+/// Sentinel for "no scored div direct body" in the packed field.
+const SCORED_DIV_DIRECT_INACTIVE: u32 = u32::MAX;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WikidotState {
     div_body_depth: u16,
     scored_div_body_depth: u16,
-    scored_span_body_depth: u32,
-    span_body_depth: u32,
-    anchor_body_depth: u32,
+    scored_div_direct: (u32, u16),
+    scored_span_body_depth: u16,
+    span_body_depth: u16,
+    anchor_body_depth: u16,
     bibliography_body_depth: u16,
     literal_triple_link_depth: u16,
     simple_table_crossed_closers: u16,
-    center_body_depth: u32,
+    center_body_depth: u16,
     flags: u16,
+}
+
+impl Default for WikidotState {
+    fn default() -> Self {
+        Self {
+            div_body_depth: 0,
+            scored_div_body_depth: 0,
+            scored_div_direct: (SCORED_DIV_DIRECT_INACTIVE, 0),
+            scored_span_body_depth: 0,
+            span_body_depth: 0,
+            anchor_body_depth: 0,
+            bibliography_body_depth: 0,
+            literal_triple_link_depth: 0,
+            simple_table_crossed_closers: 0,
+            center_body_depth: 0,
+            flags: 0,
+        }
+    }
 }
 
 impl WikidotState {
@@ -90,6 +112,57 @@ impl Parser<'_, '_> {
     pub(crate) fn leave_wikidot_scored_div_body(&mut self) {
         self.wikidot.scored_div_body_depth =
             self.wikidot.scored_div_body_depth.saturating_sub(1);
+    }
+
+    #[inline]
+    pub(crate) fn enter_wikidot_scored_div_direct_body(
+        &mut self,
+        body_start: usize,
+        boundary_depth: usize,
+    ) -> (u32, u16) {
+        let saved = self.wikidot.scored_div_direct;
+        self.wikidot.scored_div_direct = (
+            u32::try_from(body_start).unwrap_or(SCORED_DIV_DIRECT_INACTIVE - 1),
+            boundary_depth.min(u16::MAX as usize) as u16,
+        );
+        saved
+    }
+
+    #[inline]
+    pub(crate) fn leave_wikidot_scored_div_direct_body(&mut self, saved: (u32, u16)) {
+        self.wikidot.scored_div_direct = saved;
+    }
+
+    pub(crate) fn wikidot_scored_div_first_line_suppresses_at(&self, pos: usize) -> bool {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return false;
+        }
+        let (body_start, _) = self.wikidot.scored_div_direct;
+        if body_start == SCORED_DIV_DIRECT_INACTIVE {
+            return false;
+        }
+        let body_start = body_start as usize;
+        if pos < body_start {
+            return false;
+        }
+        self.full_text()
+            .inner()
+            .get(body_start..pos)
+            .is_some_and(|gap| {
+                gap.bytes()
+                    .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+            })
+    }
+
+    pub(crate) fn wikidot_in_scored_div_direct_body(&self) -> bool {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return false;
+        }
+        let (body_start, boundary_depth) = self.wikidot.scored_div_direct;
+        if body_start == SCORED_DIV_DIRECT_INACTIVE {
+            return false;
+        }
+        self.body_end_boundary_depth() == boundary_depth as usize + 1
     }
 
     #[inline]

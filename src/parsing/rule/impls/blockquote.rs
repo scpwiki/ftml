@@ -939,7 +939,10 @@ fn build_blockquote_element(
     }
 
     stack.pop_line_break();
-    let elements = stack.into_elements();
+    let mut elements = stack.into_elements();
+    if wikidot {
+        elements = unwrap_scored_alias_quote_paragraphs(elements);
+    }
     if elements.is_empty() {
         return None;
     }
@@ -949,6 +952,29 @@ fn build_blockquote_element(
         elements,
         AttributeMap::new(),
     )))
+}
+
+/// Live Wikidot leaves a quote line unwrapped when a paired scored span or
+/// anchor opens it or closes it: `> [[span_]]x[[/span]] tail` renders bare
+/// inside the blockquote, as does `> y [[span_]]z[[/span]]`.
+fn unwrap_scored_alias_quote_paragraphs(elements: Vec<Element<'_>>) -> Vec<Element<'_>> {
+    let mut output = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            Element::Container(mut container)
+                if container.ctype() == ContainerType::Paragraph
+                    && (container.elements().first().is_some_and(
+                        ParagraphStack::wikidot_element_is_scored_alias_open,
+                    ) || ParagraphStack::wikidot_run_ends_with_scored_alias(
+                        container.elements(),
+                    )) =>
+            {
+                output.append(container.elements_mut());
+            }
+            other => output.push(other),
+        }
+    }
+    output
 }
 
 fn demote_ungrounded_indented_list_rows(

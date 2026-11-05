@@ -2379,6 +2379,8 @@ fn lower_sequence<'t>(
                 }
                 if scored {
                     effects.scored_span_closed = true;
+                    effects.scored_span_closed_anywhere = true;
+                    effects.scored_span_content_after = false;
                     *trim_next_break = true;
                 }
                 preserve_space_before_footnote |= preserve_empty_owner_space;

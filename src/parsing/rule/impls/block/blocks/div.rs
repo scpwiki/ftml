@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::BLOCK_ANCHOR;
 use super::BLOCK_SPAN;
 use super::prelude::*;
 use super::{
@@ -547,18 +548,28 @@ fn normalize_wikidot_div_elements(elements: &mut Vec<Element<'_>>, flag_score: b
     if flag_score {
         let item_count = elements.len();
         let mut unwrapped = Vec::with_capacity(item_count.saturating_mul(2));
+        let mut previous_unwrapped_paragraph = false;
         for (index, element) in elements.drain(..).enumerate() {
-            if index > 0 {
-                unwrapped.push(text!("\n"));
-            }
             match element {
                 Element::Container(container)
                     if container.ctype() == ContainerType::Paragraph
                         && (index == 0 || index + 1 == item_count) =>
                 {
+                    // Live joins the paragraphs of a scored div body with no
+                    // separator, so a blank line between runs vanishes.
+                    if index > 0 && !previous_unwrapped_paragraph {
+                        unwrapped.push(text!("\n"));
+                    }
                     unwrapped.extend(Vec::<Element>::from(container));
+                    previous_unwrapped_paragraph = true;
                 }
-                element => unwrapped.push(element),
+                element => {
+                    if index > 0 {
+                        unwrapped.push(text!("\n"));
+                    }
+                    unwrapped.push(element);
+                    previous_unwrapped_paragraph = false;
+                }
             }
         }
         *elements = unwrapped;
@@ -660,6 +671,69 @@ fn skip_trailing_head_space<'r, 't>(
     }
 }
 
+fn try_consume_wikidot_div_scored_alias_head<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    opener_start: usize,
+    head_end: usize,
+    body_start: BlockBodyStart,
+) -> Result<Option<Element<'t>>, ParseError>
+where
+    'r: 't,
+{
+    let mut scan = parser.clone();
+    loop {
+        let skip = match scan.current().token {
+            Token::Whitespace => true,
+            Token::LineBreak | Token::ParagraphBreak
+                if body_start != BlockBodyStart::Inline =>
+            {
+                true
+            }
+            _ => false,
+        };
+        if !skip {
+            break;
+        }
+        if scan.step().is_err() {
+            return Ok(None);
+        }
+    }
+    if scan.current().token != Token::LeftBlock {
+        return Ok(None);
+    }
+    let gap_end = scan.clone();
+    let Ok((name, in_head, _)) = scan.get_block_name(false) else {
+        return Ok(None);
+    };
+    let Some(base) = name.strip_suffix('_') else {
+        return Ok(None);
+    };
+    let block = if base.eq_ignore_ascii_case("span") {
+        &BLOCK_SPAN
+    } else if base.eq_ignore_ascii_case("a") {
+        &BLOCK_ANCHOR
+    } else {
+        return Ok(None);
+    };
+    if scan.get_head_map_wikidot(block, in_head).is_err()
+        || !scan.has_body_end_block(block)
+    {
+        return Ok(None);
+    }
+    let source = parser.full_text().inner();
+    let alias_start = gap_end.current().span.start;
+    let gap = &source[head_end..alias_start];
+    let mut literal =
+        elide_comments_from_literal(&source[opener_start..head_end]).into_owned();
+    // Live keeps same-line spaces after the head but drops a gap that
+    // spans a line break.
+    if !gap.contains(['\r', '\n']) {
+        literal.push_str(gap);
+    }
+    parser.update(&gap_end);
+    Ok(Some(Element::Text(literal.into())))
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -675,6 +749,13 @@ fn parse_fn<'r, 't>(
 
     let head = parser.get_head_map_with_body_start_wikidot(&BLOCK_DIV, in_head)?;
     let (mut arguments, mut body_start) = head;
+    let source_bytes = parser.full_text().inner().as_bytes();
+    let mut head_end = parser.current().span.start;
+    while head_end > opener_start
+        && matches!(source_bytes[head_end - 1], b' ' | b'\t' | b'\r' | b'\n')
+    {
+        head_end -= 1;
+    }
     if parser.settings().layout.legacy() && body_start == BlockBodyStart::Inline {
         body_start = skip_trailing_head_space(parser, body_start)?;
     }
@@ -685,6 +766,20 @@ fn parse_fn<'r, 't>(
         && !parser.wikidot_alias_has_compatible_close(&BLOCK_DIV, opener_start)
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    // A body that opens with a paired scored span or anchor alias keeps the
+    // div from forming: live drops the head onto a literal line and parses
+    // the alias inline.
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && let Some(head_literal) = try_consume_wikidot_div_scored_alias_head(
+            parser,
+            opener_start,
+            head_end,
+            body_start,
+        )?
+    {
+        return ok!(head_literal);
     }
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
         && pair.kind == WikidotBlockKind::Div
@@ -848,12 +943,20 @@ fn parse_fn<'r, 't>(
     }
 
     let wrap_paragraphs = !flag_score;
-    if parser.settings().layout.legacy() {
+    let saved_scored_div_direct = if parser.settings().layout.legacy() {
         parser.enter_wikidot_div_body();
         if flag_score {
             parser.enter_wikidot_scored_div_body();
+            Some(parser.enter_wikidot_scored_div_direct_body(
+                parser.current().span.start,
+                parser.body_end_boundary_depth(),
+            ))
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
     let parse_as_paragraphs =
         wrap_paragraphs || parser.settings().layout.legacy() && flag_score;
     let body = parser.get_body_elements_with_context(
@@ -863,6 +966,9 @@ fn parse_fn<'r, 't>(
     );
     if parser.settings().layout.legacy() {
         if flag_score {
+            parser.leave_wikidot_scored_div_direct_body(
+                saved_scored_div_direct.expect("scored div records its direct body"),
+            );
             parser.leave_wikidot_scored_div_body();
         }
         parser.leave_wikidot_div_body();

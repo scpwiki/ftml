@@ -1,0 +1,38 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {
+                    "class": "outer"
+                },
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {
+                                "class": "inner"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "雪"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "Ω"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

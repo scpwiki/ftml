@@ -58,6 +58,10 @@ impl<'r, 't> Parser<'r, 't> {
             .clone()
     }
 
+    pub(crate) fn body_end_boundary_depth(&self) -> usize {
+        self.block_end_scan_cache.borrow().body_end_boundaries.len()
+    }
+
     pub(crate) fn body_end_boundaries_is_empty(&self) -> bool {
         self.block_end_scan_cache
             .borrow()
