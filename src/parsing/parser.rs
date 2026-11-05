@@ -165,6 +165,11 @@ pub(super) struct BlockScanCache<'t> {
     /// Monotone scan slot for the Wikidot anchor-label walk's termination
     /// bytes; see `Parser::anchor_label_reaches_input_end`.
     anchor_label_stop: Option<(usize, Option<usize>)>,
+    /// Monotone scan slots for the link-walk end-of-input fast paths; see
+    /// `Parser::link_target_reaches_input_end` and
+    /// `Parser::raw_forbids_link_reaches_input_end`.
+    link_target_stop: [Option<(usize, Option<usize>)>; 2],
+    raw_forbids_stop: Option<(usize, Option<usize>)>,
     last_virtual_gate_end: Cell<Option<usize>>,
     /// Monotone "no closer ahead" memos for forward closer scans in parser
     /// rules; see `parser/closer_scan.rs`.
@@ -2303,6 +2308,94 @@ impl<'r, 't> Parser<'r, 't> {
             .closer_scan
             .record_math_absence(start);
     }
+    /// Whether the Wikidot link-target token walk that starts at byte
+    /// `start` is certain to step over every remaining token and fail at
+    /// `InputEnd` with `EndOfInput`.
+    ///
+    /// `collect_comment_elided_keep_from_inner` only stops early at a
+    /// close/invalid token, a valid comment, or a fused `[[iftags]]`
+    /// segment. `triple` selects the triple-link URL walk; between the two
+    /// callers the stopping tokens are:
+    ///
+    /// - `Whitespace` (' ' or '\t'), `Pipe` ('|');
+    /// - `LineBreak` / `ParagraphBreak` ('\n' or '\r', or the
+    ///   tokenizer's terminal-backslash `LineBreak`);
+    /// - `RightLink` (`]]]`, needs ']');
+    /// - a valid comment or a fused segment, both of which need a later
+    ///   ']' to close;
+    /// - a generated/runtime token, which needs a delayed marker.
+    ///
+    /// If none of those can occur at or after `start`, every token falls
+    /// into the step-over arm and the walk reaches `InputEnd` and returns
+    /// the same `EndOfInput` error (at the trailing token, under the same
+    /// rule), so the caller can reproduce it without walking.
+    ///
+    /// The scan is monotone-cached per walk: successive walk starts only
+    /// move forward, so a document is scanned once per kind.
+    pub(crate) fn link_target_reaches_input_end(
+        &self,
+        start: usize,
+        triple: bool,
+    ) -> bool {
+        const SINGLE_STOP: &[u8] = b" \t\n\r\\]";
+        const TRIPLE_STOP: &[u8] = b"|]\n\r\\";
+        if self.delayed_markers.range(start..).next().is_some() {
+            return false;
+        }
+        let (stop, slot) = if triple {
+            (TRIPLE_STOP, 1)
+        } else {
+            (SINGLE_STOP, 0)
+        };
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        find_stop_byte_forward(
+            self.full_text().inner(),
+            &mut cache.link_target_stop[slot],
+            stop,
+            start,
+        )
+        .is_none()
+    }
+
+    /// Whether `single_link_raw_forbids_link`'s probe walk that starts at
+    /// byte `start` is certain to reach `InputEnd` and return `false`.
+    ///
+    /// That walk only returns `true` through a successful `RULE_RAW`
+    /// attempt, and it only attempts `RULE_RAW` at a `Raw`/`LeftRaw`
+    /// token, which the tokenizer only produces from `@@`/`@<` bytes.
+    /// Without a `@` byte at or after `start` the walk can only step to
+    /// `InputEnd` (or to a token that already returns `false`), and it
+    /// cannot error, so it returns `false`.
+    pub(crate) fn raw_forbids_link_reaches_input_end(&self, start: usize) -> bool {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        find_stop_byte_forward(
+            self.full_text().inner(),
+            &mut cache.raw_forbids_stop,
+            b"@",
+            start,
+        )
+        .is_none()
+    }
+}
+
+/// First byte from `stop` at or after `start`, reusing a monotone scan
+/// slot when the previous search already covers `start`.
+fn find_stop_byte_forward(
+    source: &str,
+    slot: &mut Option<(usize, Option<usize>)>,
+    stop: &[u8],
+    start: usize,
+) -> Option<usize> {
+    if let Some((scanned_from, found)) = *slot
+        && scanned_from <= start
+        && found.is_none_or(|found| found >= start)
+    {
+        return found;
+    }
+    let bytes = source.as_bytes();
+    let found = (start..bytes.len()).find(|&offset| stop.contains(&bytes[offset]));
+    *slot = Some((start, found));
+    found
 }
 
 #[derive(Debug, Copy, Clone)]

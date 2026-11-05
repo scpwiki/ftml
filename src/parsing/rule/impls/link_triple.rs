@@ -128,6 +128,15 @@ fn try_consume_link<'r, 't>(
         &native_url_invalid[..]
     };
     let (url, last, authored_url_prefix_is_url) = if parser.settings().layout.legacy() {
+        // The URL walk only stops early at `|`, `]]]`, a paragraph
+        // break, a valid comment, or a fused segment; the last two need a
+        // later `]`. With none of those left, the walk is certain to reach
+        // `InputEnd` and fail with `EndOfInput`, so reproduce that error
+        // instead of walking (a long unclosed `[` run used to walk the
+        // rest of the document once per triple-link opener).
+        if parser.link_target_reaches_input_end(parser.current().span.start, true) {
+            return Err(parser.make_end_of_input_err());
+        }
         let (url, last) =
             collect_comment_elided_keep(parser, &url_close, url_invalid, None, None)?;
         let authored_url_prefix_is_url =

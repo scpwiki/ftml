@@ -199,6 +199,115 @@ fn nested_iftags_gates_keep_their_balanced_end_head() {
     }
 }
 
+fn bracket_run_repair_probes_stay_bounded() {
+    // A run of `[` lexes as alternating `[` + `[[[` tokens, so the
+    // bracket-run re-split repair probes thousands of candidate pairs. Each
+    // probe used to build a parser (whole-document block-pair scan) and
+    // step from the start of the document, then walk the rest of the
+    // document for a block-head terminator; the link rules walked the same
+    // unclosed tail once per bracket token as well. Nothing in the run can
+    // end a block head, so those probes can only fail and are now skipped.
+    // The run must still render literally.
+    for (unit, count) in [("[", 16384usize), ("[[", 8192)] {
+        let input = unit.repeat(count);
+        let (html, elapsed) = render_timed(&input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{unit:?} x {count} took {elapsed:?}",
+        );
+        assert_eq!(
+            html.matches('[').count(),
+            count * unit.len(),
+            "{unit:?} x {count} no longer renders literally",
+        );
+    }
+}
+
+#[test]
+fn comment_unclosed_link_probe_stays_bounded() {
+    // `[!--` without a `--]` closer is not a comment token, so every `[`
+    // starts a single-link attempt whose raw-span probe walked the rest of
+    // the document before giving up: quadratic in the opener count. With
+    // no `@` left the probe is now certain to return `false` and is
+    // skipped. The run must still render its brackets literally.
+    let unit = "[!-- a ";
+    let count = 32768usize;
+    let input = unit.repeat(count);
+    let (html, elapsed) = render_timed(&input);
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "{unit:?} x {count} took {elapsed:?}",
+    );
+    assert_eq!(
+        html.matches('[').count(),
+        count,
+        "{unit:?} x {count} no longer renders its brackets literally",
+    );
+}
+
+#[test]
+fn link_target_fast_paths_keep_links_and_raw_spans() {
+    // The end-of-input fast paths must not change real links, comment
+    // elision inside a target, or raw spans (the raw opener keeps the full
+    // probe walk).
+    for (input, expected) in [
+        (
+            "[https://example.com label]",
+            r#"href="https://example.com""#,
+        ),
+        (
+            "[[[https://example.com|label]]]",
+            r#"href="https://example.com""#,
+        ),
+        (
+            "[https://example.com[!--c--] label]",
+            r#"href="https://example.com""#,
+        ),
+        ("@@raw@@", "white-space: pre-wrap"),
+        (
+            "@@raw@@ [https://example.com label]",
+            r#"href="https://example.com""#,
+        ),
+    ] {
+        let (html, elapsed) = render_timed(input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{input:?} took {elapsed:?}",
+        );
+        assert!(html.contains(expected), "{input:?} rendered {html:?}");
+    }
+}
+
+#[test]
+fn bracket_run_repair_positive_controls_are_unchanged() {
+    // A closed block, and the two live-Wikidot readings the repair exists
+    // for: a comment-seamed head and an iftags-seamed head. These must
+    // still commit, not fall back to literal text.
+    let (html, elapsed) = render_timed("[[div]]\nx\n[[/div]]");
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "closed div took {elapsed:?}",
+    );
+    assert!(html.contains("<div>"), "closed div did not form: {html:?}");
+    for (input, expected) in [
+        ("[[[!--x--]div]]\nx\n[[/div]]", "<div><p>x</p></div>"),
+        (
+            "[[[[iftags -zzz]][[/iftags]]span class=\"c\"]]x[[/span]]",
+            "<span class=\"c\">x</span>",
+        ),
+    ] {
+        let (html, elapsed) = render_timed(input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{input:?} took {elapsed:?}",
+        );
+        assert!(
+            html.contains(expected),
+            "{input:?} no longer forms its block: {html:?}",
+        );
+    }
+}
+
 #[test]
 fn unclosed_anchor_label_scans_stay_bounded() {
     // Each `[# name ` opener with no closing `]` used to walk the rest of
@@ -318,6 +427,10 @@ fn closed_inline_markers_are_unchanged() {
             html.contains(expected),
             "{input:?} should render {expected:?}, got {html:?}",
         );
+    }
+}
+
+#[test]
 fn unmatched_inline_openers_do_not_rescan_the_document() {
     // Every `{{` opener asks the delimiter preflight whether a `}}` is
     // reachable, and every `[[$` opener asks the Wikidot math collector for
