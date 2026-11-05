@@ -1,0 +1,142 @@
+{
+    "elements": [
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "title=\"A\"",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "title=\"A B\"",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "title=\"A\" class=\"c\"",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "class=\"c\"",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "foo=\"A\"",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "class=\"c\" A",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "x"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -28,15 +28,23 @@
 
 pub fn isolate_ids(id_string: &str) -> String {
     const PREFIX: &str = "u-";
+    if id_string.is_empty() {
+        return String::new();
+    }
     let mut words = id_string.split_whitespace();
     let Some(first) = words.next() else {
-        return String::new();
+        return PREFIX.to_owned();
     };
+    let leading_space = id_string.starts_with(char::is_whitespace);
+    let prefixed = first.starts_with(PREFIX);
 
-    let mut isolated_ids = String::with_capacity(id_string.len() + PREFIX.len());
+    let mut isolated_ids = String::with_capacity(id_string.len() + PREFIX.len() + 1);
 
-    if !first.starts_with(PREFIX) {
+    if !prefixed {
         isolated_ids.push_str(PREFIX);
+    }
+    if leading_space && !prefixed {
+        isolated_ids.push(' ');
     }
 
     isolated_ids.push_str(first);
@@ -62,14 +70,20 @@ fn test_isolate_ids() {
     }
 
     test!("", "");
-    test!("  ", "");
+    test!("  ", "u-");
+    test!(" ", "u-");
+    test!("\ta", "u- a");
+    test!("  a", "u- a");
+    test!(" a ", "u- a");
+    test!(" a b", "u- a b");
+    test!("u- a", "u- a");
     test!("apple", "u-apple");
     test!("apple banana", "u-apple banana");
     test!("apple  banana", "u-apple banana");
-    test!(" apple  banana", "u-apple banana");
-    test!(" apple   banana ", "u-apple banana");
+    test!(" apple  banana", "u- apple banana");
+    test!(" apple   banana ", "u- apple banana");
     test!("apple banana cherry", "u-apple banana cherry");
-    test!("  apple  banana\tcherry", "u-apple banana cherry");
+    test!("  apple  banana\tcherry", "u- apple banana cherry");
     test!("u-apple", "u-apple");
     test!("u-apple banana cherry", "u-apple banana cherry");
     test!("u-apple u-banana cherry", "u-apple u-banana cherry");

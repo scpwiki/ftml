@@ -132,7 +132,13 @@ impl<'t> AttributeMap<'t> {
             && let Some(value) = self.inner.get_mut("id")
         {
             trace!("Found 'id' attribute, isolating value");
-            *value = Cow::Owned(isolate_ids(value));
+            let isolated = isolate_ids(value);
+            if isolated.is_empty() {
+                self.inner.remove("id");
+                self.order.retain(|key| key.as_ref() != "id");
+            } else {
+                *value = Cow::Owned(isolated);
+            }
         }
     }
 

@@ -1570,41 +1570,159 @@ fn finish_tab_label_at_construct<'r, 't>(
     Err(parser.make_err(ParseErrorKind::EndOfInput))
 }
 
-/// A Wikidot tab head written as a quoted attribute map is not title text:
-/// unknown keys are ignored and a missing `title` falls back to `untitled`.
-fn wikidot_tab_head_attribute_title(text: &str) -> Option<String> {
-    let mut rest = text.trim();
-    let mut title = None;
-    let mut seen = false;
-    while !rest.is_empty() {
-        let key_len = rest
-            .find(|ch: char| {
-                !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ':'))
-            })
-            .unwrap_or(rest.len());
-        if key_len == 0 {
-            return None;
-        }
-        let key = &rest[..key_len];
-        let after_key = &rest[key_len..];
-        let after_eq = after_key.strip_prefix('=')?;
-        let after_quote = after_eq.strip_prefix('"')?;
-        let value_end = after_quote.find('"')?;
-        let value = &after_quote[..value_end];
-        rest = &after_quote[value_end + 1..];
-        if !rest.is_empty() && !rest.starts_with([' ', '\t']) {
-            return None;
-        }
-        rest = rest.trim_start_matches([' ', '\t']);
-        if key.eq_ignore_ascii_case("title") {
-            title = Some(value);
-        }
-        seen = true;
+struct WikidotTabHeadToken<'t> {
+    key: Option<(&'t str, &'t str)>,
+    raw: &'t str,
+}
+
+fn wikidot_tab_head_argument_at(text: &str, start: usize) -> Option<(&str, &str, usize)> {
+    let bytes = text.as_bytes();
+    let mut index = start;
+    while index < bytes.len()
+        && (bytes[index].is_ascii_alphanumeric() || matches!(bytes[index], b'_' | b'-'))
+    {
+        index += 1;
     }
-    if !seen {
+    if index == start
+        || bytes.get(index) != Some(&b'=')
+        || bytes.get(index + 1) != Some(&b'"')
+    {
         return None;
     }
-    Some(title.unwrap_or("untitled").to_owned())
+    let value_start = index + 2;
+    let value_end = value_start + text[value_start..].find('"')?;
+    if value_end == value_start {
+        return None;
+    }
+    let end = value_end + 1;
+    if bytes
+        .get(end)
+        .is_some_and(|byte| !byte.is_ascii_whitespace())
+    {
+        return None;
+    }
+    Some((&text[start..index], &text[value_start..value_end], end))
+}
+
+fn wikidot_tab_head_tokens(text: &str) -> Vec<WikidotTabHeadToken<'_>> {
+    let bytes = text.as_bytes();
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index].is_ascii_whitespace() {
+            index += 1;
+            continue;
+        }
+        if let Some((key, value, end)) = wikidot_tab_head_argument_at(text, index) {
+            tokens.push(WikidotTabHeadToken {
+                key: Some((key, value)),
+                raw: &text[index..end],
+            });
+            index = end;
+            continue;
+        }
+        let mut end = index;
+        while end < bytes.len() && !bytes[end].is_ascii_whitespace() {
+            end += 1;
+        }
+        tokens.push(WikidotTabHeadToken {
+            key: None,
+            raw: &text[index..end],
+        });
+        index = end;
+    }
+    tokens
+}
+
+fn wikidot_tab_head_normalize(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    for word in text.split_ascii_whitespace() {
+        if !output.is_empty() {
+            output.push(' ');
+        }
+        output.push_str(word);
+    }
+    output
+}
+
+fn wikidot_tab_head_label(text: &str) -> String {
+    let tokens = wikidot_tab_head_tokens(text);
+    if tokens.is_empty() {
+        return "untitled".to_owned();
+    }
+
+    if tokens.len() == 1
+        && let Some((key, value)) = tokens[0].key
+    {
+        return if key == "title" {
+            wikidot_tab_head_normalize(value)
+        } else {
+            "untitled".to_owned()
+        };
+    }
+
+    let trailing_whitespace = text
+        .as_bytes()
+        .last()
+        .is_some_and(|byte| byte.is_ascii_whitespace());
+    let mut suffix_start = tokens.len();
+    if !trailing_whitespace {
+        while suffix_start > 0 && tokens[suffix_start - 1].key.is_some() {
+            suffix_start -= 1;
+        }
+    }
+    let suffix = &tokens[suffix_start..];
+    let rest = &tokens[..suffix_start];
+
+    let title = if rest.is_empty()
+        && let Some(("title", value)) = suffix.first().and_then(|token| token.key)
+    {
+        Some(value)
+    } else {
+        suffix.iter().rev().find_map(|token| match token.key {
+            Some(("title", value)) => Some(value),
+            _ => None,
+        })
+    };
+    if let Some(title) = title {
+        return wikidot_tab_head_normalize(title);
+    }
+    if rest.is_empty() {
+        return "untitled".to_owned();
+    }
+
+    let mut joined = String::new();
+    for token in rest {
+        if !joined.is_empty() {
+            joined.push(' ');
+        }
+        joined.push_str(token.raw);
+    }
+    let joined = wikidot_tab_head_normalize(&joined);
+    if wikidot_tab_head_has_raw_construct(&joined) {
+        return String::new();
+    }
+    joined
+}
+
+fn wikidot_tab_head_has_raw_construct(text: &str) -> bool {
+    let mut search = 0;
+    while let Some(offset) = text[search..].find("@@") {
+        let close = offset + 2;
+        if text[close..].contains("@@") {
+            return true;
+        }
+        search = close;
+    }
+    let mut search = 0;
+    while let Some(offset) = text[search..].find("@<") {
+        let close = offset + 2;
+        if text[close..].contains(">@") {
+            return true;
+        }
+        search = close;
+    }
+    false
 }
 
 /// The line break that ends the last quoted row of a tab body is the row
@@ -1691,6 +1809,27 @@ fn parse_tab<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    let head_has_elided_footnoteblock = legacy && in_head && {
+        let head_start = parser.current().span.start;
+        let mut end = head_start;
+        for token in std::iter::once(parser.current()).chain(parser.remaining()) {
+            if matches!(
+                token.token,
+                Token::RightBlock
+                    | Token::RightLink
+                    | Token::LineBreak
+                    | Token::ParagraphBreak
+                    | Token::InputEnd
+            ) {
+                end = token.span.start;
+                break;
+            }
+        }
+        parser.full_text().inner()[head_start..end]
+            .to_ascii_lowercase()
+            .contains("[[footnoteblock")
+    };
+
     let (label, leftover, saw_title_unit) = if in_head {
         let checkpoint = parser.clone();
         let records_before = parser.degraded_title_record_count();
@@ -1726,14 +1865,10 @@ fn parse_tab<'r, 't>(
         match label {
             None => std::borrow::Cow::Borrowed("untitled"),
             Some(value) => {
-                if !leading_space && !saw_title_unit && value.trim().is_empty() {
-                    std::borrow::Cow::Borrowed("untitled")
-                } else if !saw_title_unit
-                    && let Some(title) = wikidot_tab_head_attribute_title(&value)
-                {
-                    std::borrow::Cow::Owned(title)
-                } else {
+                if saw_title_unit || head_has_elided_footnoteblock {
                     value
+                } else {
+                    std::borrow::Cow::Owned(wikidot_tab_head_label(&value))
                 }
             }
         }

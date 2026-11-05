@@ -269,10 +269,9 @@ fn try_consume_fn<'r, 't>(
 
 fn wikidot_flow_block_element(element: &Element<'_>) -> bool {
     match element {
-        Element::Container(container) => matches!(
-            container.ctype(),
-            ContainerType::Div | ContainerType::Note
-        ),
+        Element::Container(container) => {
+            matches!(container.ctype(), ContainerType::Div | ContainerType::Note)
+        }
         Element::Table(_) | Element::Collapsible { .. } => true,
         Element::Partial(partial) => matches!(
             partial,

@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use crate::id_prefix::isolate_ids;
 use crate::parsing::{ParseError, ParseErrorKind, Parser, parse_boolean};
 use crate::settings::WikitextSettings;
 use crate::tree::{AttributeMap, RawModuleArgument};
@@ -33,6 +34,17 @@ macro_rules! make_err {
     ($parser:expr) => {
         $parser.make_err(ParseErrorKind::BlockMalformedArguments)
     };
+}
+
+fn normalize_wikidot_html_id_value<'t>(
+    value: &Cow<'t, str>,
+    settings: &WikitextSettings,
+) -> Cow<'t, str> {
+    if !(settings.layout.legacy() && settings.isolate_user_ids) {
+        return normalize_wikidot_html_attribute_value(value);
+    }
+    let isolated = isolate_ids(value.as_ref());
+    normalize_wikidot_html_attribute_value(&Cow::Owned(isolated))
 }
 
 fn normalize_wikidot_html_attribute_value<'t>(value: &Cow<'t, str>) -> Cow<'t, str> {
@@ -391,7 +403,11 @@ impl<'t> Arguments<'t> {
             if !WIKIDOT_ANCHOR_ATTRIBUTE_KEYS.contains(&name) {
                 continue;
             }
-            let value = normalize_wikidot_html_attribute_value(value);
+            let value = if settings.layout.legacy() && name.eq_ignore_ascii_case("id") {
+                normalize_wikidot_html_id_value(value, settings)
+            } else {
+                normalize_wikidot_html_attribute_value(value)
+            };
             if value.is_empty() {
                 continue;
             }
@@ -460,7 +476,11 @@ impl<'t> Arguments<'t> {
             };
 
             let value = if settings.layout.legacy() {
-                normalize_wikidot_html_attribute_value(value)
+                if key.eq_ignore_ascii_case("id") {
+                    normalize_wikidot_html_id_value(value, settings)
+                } else {
+                    normalize_wikidot_html_attribute_value(value)
+                }
             } else {
                 value.clone()
             };
