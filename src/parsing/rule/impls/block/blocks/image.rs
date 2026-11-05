@@ -1393,7 +1393,7 @@ mod tests {
     }
 
     #[test]
-    fn blank_line_after_unaligned_image_preserves_wikidot_separator() {
+    fn blank_line_after_unaligned_image_drops_wikidot_separator() {
         let mut page_info = PageInfo::dummy();
         page_info.site = cow!("sandbox");
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
@@ -1408,7 +1408,7 @@ mod tests {
             html,
             concat!(
                 "\n\nBASIC <img src=\"https://sandbox.wjfiles.com/local--files/some-page/filename.png\" class=\"image\" alt=\"filename.png\">",
-                " <p>LEFT</p>",
+                "<p>LEFT</p>",
             ),
         );
     }

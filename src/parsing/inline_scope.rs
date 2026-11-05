@@ -875,6 +875,7 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
             &mut None,
         );
         eject_segment_trailing_space(elements);
+        drop_empty_inline_scopes(elements);
     }
     bibliography.set_reopened_wrappers(reopened);
 }
@@ -1475,6 +1476,10 @@ fn flush_paragraph_group<'t>(
         return;
     }
     eject_segment_trailing_space(&mut elements);
+    strip_trailing_run_before_newline_tail(&mut elements);
+    if elements.is_empty() {
+        return;
+    }
     if wrapped {
         output.push(Element::Container(Container::new(
             ContainerType::Paragraph,
@@ -2460,6 +2465,7 @@ fn lower_bibliography_block<'t>(
             &mut None,
         );
         eject_segment_trailing_space(elements);
+        drop_empty_inline_scopes(elements);
     }
     bibliography.set_reopened_wrappers(reopened);
 }
@@ -2679,16 +2685,152 @@ fn empty_inline_scope_vanishes(element: &Element<'_>) -> bool {
 fn drop_empty_inline_scopes(elements: &mut Vec<Element>) {
     for element in elements.iter_mut() {
         visit_children_mut(element, &mut |children| drop_empty_inline_scopes(children));
+        strip_leading_run_for_block_parent(element);
     }
     let mut index = 0;
     while index < elements.len() {
         if empty_inline_scope_vanishes(&elements[index])
             || emptied_block_vanishes(&elements[index])
         {
+            let dropped_color = matches!(&elements[index], Element::Color { .. });
+            let forward_deletes =
+                dropped_color && vanished_color_deletes_preceding_run(elements, index);
             elements.remove(index);
+            if dropped_color && index > 0 {
+                let preceding_is_text = matches!(&elements[index - 1], Element::Text(_));
+                if !preceding_is_text || forward_deletes {
+                    strip_vanish_run_tail(&mut elements[index - 1]);
+                    if matches!(
+                        &elements[index - 1],
+                        Element::Text(text) if text.is_empty()
+                    ) || empty_inline_scope_vanishes(&elements[index - 1])
+                    {
+                        elements.remove(index - 1);
+                        index -= 1;
+                    }
+                }
+            }
             merge_space_across_vanished(elements, index);
+        } else if index + 1 < elements.len()
+            && is_separator_run(&elements[index])
+            && is_separator_run(&elements[index + 1])
+        {
+            elements.remove(index + 1);
+            elements[index] = Element::Text(Cow::Borrowed(" "));
         } else {
             index += 1;
+        }
+    }
+}
+
+fn is_separator_run(element: &Element) -> bool {
+    matches!(element, Element::Text(text) if !text.is_empty() && text.chars().all(|c| c == ' ' || c == '\t'))
+}
+
+fn strip_vanish_run_tail(element: &mut Element) {
+    match element {
+        Element::Text(_) => strip_trailing_separators(element),
+        Element::Container(container)
+            if matches!(container.ctype(), ContainerType::Span | ContainerType::Size) =>
+        {
+            strip_scope_run_tail(container.elements_mut());
+        }
+        Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+            strip_scope_run_tail(elements);
+        }
+        _ => {}
+    }
+}
+
+fn strip_scope_run_tail(elements: &mut Vec<Element>) {
+    if let Some(last) = elements.last_mut() {
+        strip_vanish_run_tail(last);
+    }
+    while elements.last().is_some_and(|element| {
+        matches!(element, Element::Text(text) if text.is_empty())
+            || empty_inline_scope_vanishes(element)
+    }) {
+        elements.pop();
+    }
+}
+
+fn vanished_color_deletes_preceding_run(elements: &[Element], index: usize) -> bool {
+    let mut next = index + 1;
+    while next < elements.len()
+        && matches!(
+            &elements[next],
+            Element::Color { elements, .. } if elements_render_empty(elements)
+        )
+    {
+        next += 1;
+    }
+    match elements.get(next) {
+        None => true,
+        Some(Element::LineBreak | Element::LineBreaks(_)) => true,
+        Some(Element::Text(text)) if text.chars().all(|c| c == '\n' || c == '\r') => true,
+        Some(Element::Text(text)) => text.chars().all(|c| c == ' ' || c == '\t'),
+        Some(_) => false,
+    }
+}
+
+fn strip_leading_run_for_block_parent(element: &mut Element) {
+    match element {
+        Element::Container(container)
+            if container.ctype() == ContainerType::Paragraph =>
+        {
+            strip_leading_separators(container.elements_mut());
+        }
+        Element::Table(table) => {
+            for row in &mut table.rows {
+                for cell in &mut row.cells {
+                    strip_leading_separators(&mut cell.elements);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn strip_leading_separators(elements: &mut Vec<Element>) {
+    let Some(Element::Text(text)) = elements.first() else {
+        return;
+    };
+    let stripped = text.trim_start_matches([' ', '\t']);
+    if stripped.len() == text.len() {
+        return;
+    }
+    if stripped.is_empty() {
+        elements.remove(0);
+    } else {
+        elements[0] = Element::Text(Cow::Owned(stripped.to_owned()));
+    }
+}
+
+fn strip_trailing_separators(element: &mut Element) {
+    if let Element::Text(text) = element {
+        let keep = text.trim_end_matches([' ', '\t']).len();
+        text.to_mut().truncate(keep);
+    }
+}
+
+fn strip_trailing_run_before_newline_tail(elements: &mut Vec<Element>) {
+    let mut index = elements.len();
+    while index > 0 {
+        match &elements[index - 1] {
+            Element::Text(text) if text.chars().all(|c| c == '\n' || c == '\r') => {
+                index -= 1;
+            }
+            Element::Text(_) => {
+                strip_trailing_separators(&mut elements[index - 1]);
+                if matches!(
+                    &elements[index - 1],
+                    Element::Text(text) if text.is_empty()
+                ) {
+                    elements.remove(index - 1);
+                }
+                return;
+            }
+            _ => return,
         }
     }
 }
@@ -2828,6 +2970,7 @@ fn drop_segment_trailing_space(elements: &mut Vec<Element<'_>>) {
     if stripped && elements.last().is_some_and(scope_wrapper_is_empty) {
         elements.pop();
     }
+    strip_trailing_run_before_newline_tail(elements);
 }
 
 fn eject_segment_trailing_space(elements: &mut Vec<Element<'_>>) {
@@ -3108,9 +3251,13 @@ fn trim_trailing_space(elements: &mut Vec<Element<'_>>) {
         elements: inner, ..
     } = last
     {
+        let was_empty = inner.is_empty();
         trim_trailing_space(inner);
         if inner.is_empty() {
             elements.pop();
+            if was_empty && let Some(previous) = elements.last_mut() {
+                strip_vanish_run_tail(previous);
+            }
         }
         return;
     }

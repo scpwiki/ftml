@@ -182,7 +182,13 @@ pub fn render_color(
     ctx.html()
         .span()
         .attr(attr!("style" => &style))
-        .inner(|ctx| render_elements(ctx, elements));
+        .inner(|ctx| match elements.split_last() {
+            Some((Element::LineBreak, rest)) if ctx.layout().legacy() => {
+                render_elements(ctx, rest);
+                ctx.html().br();
+            }
+            _ => render_elements(ctx, elements),
+        });
 }
 
 fn choose_id(ctx: &mut HtmlContext, tag_spec: &HtmlTag) -> Option<String> {
