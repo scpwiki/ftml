@@ -213,30 +213,31 @@ fn is_format_event(element: &Element<'_>) -> bool {
 }
 
 fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
-    let mut index = 0;
-    while index < elements.len() {
-        if is_segment_container(&elements[index]) {
-            if !normalize_segment_container_with_run(elements, index) {
-                normalize_segment_container(&mut elements[index]);
+    let mut normalized = Vec::with_capacity(elements.len());
+    for mut element in mem::take(elements) {
+        if is_segment_container(&element) {
+            if !normalize_segment_container_with_run(&mut normalized, &mut element) {
+                normalize_segment_container(&mut element);
             }
         } else if matches!(
-            &elements[index],
+            &element,
             Element::Container(container)
                 if container.ctype() == ContainerType::Monospace
         ) {
-            visit_children_mut(&mut elements[index], normalize_sequence_inside_monospace);
+            visit_children_mut(&mut element, normalize_sequence_inside_monospace);
         } else {
-            visit_children_mut(&mut elements[index], normalize_sequence);
+            visit_children_mut(&mut element, normalize_sequence);
         }
-        index += 1;
+        normalized.push(element);
     }
+    *elements = normalized;
 }
 
 fn normalize_segment_container_with_run<'t>(
-    elements: &mut Vec<Element<'t>>,
-    index: usize,
+    preceding: &mut Vec<Element<'t>>,
+    container: &mut Element<'t>,
 ) -> bool {
-    let joinable = match &elements[index] {
+    let joinable = match container {
         Element::Table(table) => table.table_type == TableType::Simple,
         Element::DefinitionList(_) => true,
         _ => false,
@@ -245,27 +246,23 @@ fn normalize_segment_container_with_run<'t>(
         return false;
     }
 
-    let mut run_start = index;
+    let mut run_start = preceding.len();
     while run_start > 0 {
-        let candidate = &elements[run_start - 1];
+        let candidate = &preceding[run_start - 1];
         if matches!(candidate, Element::LineBreaks(_)) || !candidate.paragraph_safe() {
             break;
         }
         run_start -= 1;
     }
-    if run_start == index {
+    if run_start == preceding.len() {
         return false;
     }
 
-    let mut rest = elements.split_off(run_start);
-    let mut after = rest.split_off(index - run_start + 1);
-    let mut container = rest.split_off(index - run_start);
-    let mut segments: Vec<&mut Vec<Element<'t>>> = vec![&mut rest];
-    segments.extend(segment_vecs_mut(&mut container[0]));
+    let mut run = preceding.split_off(run_start);
+    let mut segments: Vec<&mut Vec<Element<'t>>> = vec![&mut run];
+    segments.extend(segment_vecs_mut(container));
     normalize_segments(&mut segments);
-    rest.append(&mut container);
-    rest.append(&mut after);
-    elements.append(&mut rest);
+    preceding.append(&mut run);
     true
 }
 
