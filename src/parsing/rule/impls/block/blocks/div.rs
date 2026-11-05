@@ -231,6 +231,57 @@ fn wikidot_div_line_has_segment(parser: &Parser<'_, '_>, owner_start: usize) -> 
         || line.contains("[[ifcategory")
 }
 
+fn wikidot_nested_div_literal<'t>(
+    parser: &mut Parser<'_, 't>,
+    source: &'t str,
+    opener_start: usize,
+    literal_end: usize,
+    trailing_break: bool,
+) -> (Elements<'t>, bool) {
+    let line_start = source[..opener_start]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    let line_broken = line_start > 0
+        && source.as_bytes()[line_start - 1] == b'\n'
+        && source[line_start..opener_start].trim().is_empty();
+    if parser.wikidot_line_follows_block() {
+        parser.mark_wikidot_bare_div_literal();
+        let start = if line_broken {
+            line_start - 1
+        } else {
+            opener_start
+        };
+        let literal =
+            Element::Text(elide_comments_from_literal(&source[start..literal_end]));
+        if trailing_break {
+            (Elements::Multiple(vec![literal, Element::LineBreak]), false)
+        } else {
+            (Elements::Single(literal), false)
+        }
+    } else if line_broken {
+        let literal = Element::Text(elide_comments_from_literal(
+            &source[opener_start..literal_end],
+        ));
+        if trailing_break {
+            (
+                Elements::Multiple(vec![Element::LineBreak, literal, Element::LineBreak]),
+                true,
+            )
+        } else {
+            (Elements::Multiple(vec![Element::LineBreak, literal]), true)
+        }
+    } else {
+        let literal = Element::Text(elide_comments_from_literal(
+            &source[opener_start..literal_end],
+        ));
+        if trailing_break {
+            (Elements::Multiple(vec![literal, Element::LineBreak]), true)
+        } else {
+            (Elements::Single(literal), true)
+        }
+    }
+}
+
 fn try_recover_wikidot_div_literal<'r, 't>(
     parser: &mut Parser<'r, 't>,
     owner_start: usize,
@@ -475,34 +526,13 @@ where
                 .rfind("[[")
                 .map_or(line_start, |offset| line_start + offset)
         };
-        if inline_scored_line_literal {
-            let body_start = parser.current().span.start;
-            let mut body = parser.clone();
-            let body_text = body.get_body_text(&BLOCK_DIV)?;
-            let body_end = body_start + body_text.len();
-            let mut close = parser.clone();
-            while close.current().span.start < body_end {
-                close.step()?;
-            }
-            parser.update(&close);
-            return Ok(Some(ParseSuccess::new(
-                Element::Text(elide_comments_from_literal(
-                    &source[line_start - 1..body_end],
-                ))
-                .into(),
-                Vec::new(),
-                false,
-            )));
-        }
-        let literal = Element::Text(elide_comments_from_literal(
-            &source[opener_start..literal_end],
-        ));
-        let elements = if body_start == BlockBodyStart::NextPhysicalLine {
-            Elements::Multiple(vec![literal, Element::LineBreak])
-        } else {
-            literal.into()
-        };
-        let paragraph_safe = elements.paragraph_safe();
+        let (elements, paragraph_safe) = wikidot_nested_div_literal(
+            parser,
+            source,
+            opener_start,
+            literal_end,
+            body_start == BlockBodyStart::NextPhysicalLine,
+        );
         return Ok(Some(ParseSuccess::new(
             elements,
             Vec::new(),
@@ -794,11 +824,8 @@ fn parse_fn<'r, 't>(
     {
         let head_end = parser.current().span.start;
         let literal_end = source[..head_end].trim_end_matches(['\r', '\n']).len();
-        let literal = Element::Text(elide_comments_from_literal(
-            &source[opener_start..literal_end],
-        ));
-        let elements = Elements::Multiple(vec![literal, Element::LineBreak]);
-        let paragraph_safe = elements.paragraph_safe();
+        let (elements, paragraph_safe) =
+            wikidot_nested_div_literal(parser, source, opener_start, literal_end, true);
         return Ok(ParseSuccess::new(elements, Vec::new(), paragraph_safe));
     }
 
@@ -1200,7 +1227,7 @@ mod tests {
         let source = "[[div]]\n[[div]]\nx\n[[/div]]\n[[div]]\ny\n[[/div]]\n";
         assert_eq!(
             render_preprocessed_wikidot(source),
-            "<div><div><p>x</p></div><p>[[div]]<br>\ny</p></div>",
+            "<div><div><p>x</p></div>\n[[div]]<br>\ny</div>",
         );
     }
 

@@ -2689,6 +2689,7 @@ where
                 continue;
             }
 
+            self.set_wikidot_line_follows_block(false);
             match consume(self) {
                 Ok(consumed) => {
                     let crate::parsing::ParseSuccess {
@@ -2924,6 +2925,7 @@ where
             }
             let before = self.remaining();
             let before_token = self.current().token;
+            self.set_wikidot_line_follows_block(false);
             match consume(self) {
                 Ok(consumed) => {
                     self.take_wikidot_mixed_paragraph_ownership();
@@ -3281,6 +3283,7 @@ where
             if clear_cursor {
                 self.set_quote_body_cursor(None);
             }
+            self.set_wikidot_line_follows_block(false);
             let consume_result = consume(self);
             if clear_cursor {
                 self.set_quote_body_cursor(saved_cursor);
@@ -3512,6 +3515,7 @@ where
             }
 
             first = false;
+            self.set_wikidot_line_follows_block(false);
             match consume(self) {
                 Ok(consumed) => {
                     self.take_wikidot_mixed_paragraph_ownership();
