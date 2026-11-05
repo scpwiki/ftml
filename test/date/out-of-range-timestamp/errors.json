@@ -1,0 +1,29 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "block-date",
+        "span": [
+            199,
+            201
+        ],
+        "kind": "block-malformed-arguments"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            189,
+            191
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            197,
+            199
+        ],
+        "kind": "no-rules-match"
+    }
+]

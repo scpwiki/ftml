@@ -94,6 +94,9 @@ fn parse_note_block<'r, 't>(
         arguments.to_attribute_map(parser.settings()),
     ));
 
+    // In the Wikidot layout the note stays paragraph-unsafe: text following
+    // the closer is a bare continuation with no fresh paragraph, exactly like
+    // the generic div block.
     ok!(paragraph_safe && !legacy; element, errors)
 }
 

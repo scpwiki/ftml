@@ -845,6 +845,42 @@ fn trim_one_trailing_ascii_space(elements: &mut Vec<Element<'_>>) {
     }
 }
 
+/// Decide whether a `||=` / `||~` / `||>` marker applies.
+///
+/// Live Wikidot only treats the marker as an alignment or header marker when
+/// a space or tab follows it. At the end of a line (or input) the marker is
+/// dead and the cell is plain and empty; glued to other text the marker
+/// character itself is literal text and the cell is plain. Returns `None`
+/// when a space follows (existing handling applies), `Some(None)` for the
+/// dead end-of-line marker, and `Some(Some(marker))` for the glued marker.
+fn wikidot_cell_marker_without_space<'t>(
+    parser: &Parser<'_, 't>,
+    marker: &'t str,
+) -> Option<Option<&'t str>> {
+    if matches!(parser.current().token, Token::Whitespace) {
+        let mut lookahead = parser.clone();
+        while lookahead.current().token == Token::Whitespace {
+            if lookahead.step().is_err() {
+                break;
+            }
+        }
+        if matches!(
+            lookahead.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            return Some(None);
+        }
+        return None;
+    }
+    if matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    ) {
+        return Some(None);
+    }
+    Some(Some(marker))
+}
+
 fn parse_cell_start<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<TableCellStart<'t>>, ParseError> {
@@ -864,6 +900,18 @@ fn parse_cell_start<'r, 't>(
                 let marker_start = parser.current().span.end - 1;
                 increase_span!();
                 if parser.settings().layout.legacy()
+                    && let Some(plain) = wikidot_cell_marker_without_space(parser, "~")
+                {
+                    if plain.is_some() {
+                        // A marker glued to more markers is one literal run.
+                        literal_prefix = Some(
+                            take_repeated_cell_marker(parser, marker_start, b'~')?
+                                .unwrap_or("~"),
+                        );
+                    }
+                    break (None, false);
+                }
+                if parser.settings().layout.legacy()
                     && let Some(prefix) =
                         take_repeated_cell_marker(parser, marker_start, b'~')?
                 {
@@ -882,6 +930,18 @@ fn parse_cell_start<'r, 't>(
                 let marker_start = parser.current().span.end - 1;
                 increase_span!();
                 if parser.settings().layout.legacy()
+                    && let Some(plain) = wikidot_cell_marker_without_space(parser, "=")
+                {
+                    if plain.is_some() {
+                        // A marker glued to more markers is one literal run.
+                        literal_prefix = Some(
+                            take_repeated_cell_marker(parser, marker_start, b'=')?
+                                .unwrap_or("="),
+                        );
+                    }
+                    break (None, false);
+                }
+                if parser.settings().layout.legacy()
                     && let Some(prefix) =
                         take_repeated_cell_marker(parser, marker_start, b'=')?
                 {
@@ -895,7 +955,20 @@ fn parse_cell_start<'r, 't>(
                 break (Some(Alignment::Center), false);
             }
             Token::TableColumnRight => {
+                let marker_start = parser.current().span.end - 1;
                 increase_span!();
+                if parser.settings().layout.legacy()
+                    && let Some(plain) = wikidot_cell_marker_without_space(parser, ">")
+                {
+                    if plain.is_some() {
+                        // A marker glued to more markers is one literal run.
+                        literal_prefix = Some(
+                            take_repeated_cell_marker(parser, marker_start, b'>')?
+                                .unwrap_or(">"),
+                        );
+                    }
+                    break (None, false);
+                }
                 if parser.settings().layout.legacy() && parser.current().slice == "~" {
                     literal_prefix = Some(">");
                     break (None, false);

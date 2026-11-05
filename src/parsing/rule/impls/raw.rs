@@ -168,6 +168,46 @@ fn try_consume_fn<'r, 't>(
             }
         }
 
+        // Live Wikidot closes an angle-raw at the final `>@` even when that
+        // `>` is glued to a preceding `>` run. The tokenizer emits the run
+        // as a single Quote token, so no RightRaw token follows; the `@`
+        // after the run is the closer's second half (`@<a>>@` is raw `a>`).
+        if ending_token == Token::RightRaw
+            && token == Token::Quote
+            && parser.look_ahead(0).is_some_and(|trailing| {
+                trailing.token == Token::Other
+                    && trailing.slice == "@"
+                    && parser.generated_for(trailing).is_none()
+            })
+        {
+            // `slice_partial` excludes its end token, so the quote run's
+            // text is appended manually minus the closer's `>`.
+            let quote_slice = parser.current().slice.to_owned();
+            let quote_end = parser.current().span.end;
+            let slice = parser.full_text().slice_partial(start, parser.current());
+            let Some(quote_head) = quote_slice.strip_suffix('>') else {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            };
+            let content_range = start.span.start..quote_end - 1;
+            let content = format!("{slice}{quote_head}");
+            parser.step_n(2)?;
+
+            if parser.settings().layout.legacy() && content.is_empty() {
+                return ok!(Elements::None);
+            }
+
+            if !generated.is_empty() {
+                return success_elements(Element::Delayed(DelayedElement::raw(
+                    parser.full_text().inner(),
+                    content_range,
+                    &generated,
+                )));
+            }
+
+            let raw = decode_semicolon_entities(&content).into_owned();
+            return success_elements(Element::Raw(Cow::Owned(raw)));
+        }
+
         if matches!(token, Token::RightRaw | Token::Raw) {
             if token == ending_token {
                 trace!("Reached end of raw, returning");

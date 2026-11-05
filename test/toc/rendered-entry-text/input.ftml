@@ -1,0 +1,15 @@
++ a@b.c
+
++ a [[footnote]]b[[/footnote]]
+
++ [[date 0]]
+
++ [[$ x $]]
+
++ a [[eref e]]
+
++ a [[eref e]] c
+
++ [[user anonymous]]
+
+[[toc]]

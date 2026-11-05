@@ -64,18 +64,36 @@ fn parse_fn<'r, 't>(
 
     let (value, mut arguments) =
         parser.get_head_name_map_wikidot(&BLOCK_DATE, in_head)?;
-    let (format, ago_hover) = split_ago_hover_format(arguments.get("format"));
-    let format = if parser.settings().layout.legacy() {
-        format
+    let authored_format = arguments.get("format");
+    let (format, ago_hover) = split_ago_hover_format(authored_format.clone());
+    // Live Wikidot keeps an authored |agohover suffix inside the format class
+    // string verbatim and ignores a hover attribute, so the Wikidot layout
+    // keeps the authored format whole. The native layout uses the flag.
+    let (format, hover) = if parser.settings().layout.legacy() {
+        (authored_format, false)
     } else {
-        filter_supported_format(format)
+        (
+            filter_supported_format(format),
+            arguments.get("hover").as_deref() == Some("true") || ago_hover,
+        )
     };
     let timezone_count = arguments.count_key("tz");
     let arg_timezone = arguments.get("tz");
-    let hover = arguments.get("hover").as_deref() == Some("true") || ago_hover;
+
+    // Live Wikidot renders a blank date value with no arguments as nothing
+    // at all, while a missing value is literal text (handled above as a
+    // missing name) and a blank value with arguments is also literal.
+    if parser.settings().layout.legacy()
+        && value.trim().is_empty()
+        && arguments.is_empty()
+    {
+        return ok!(Elements::None);
+    }
 
     if parser.settings().layout.legacy()
-        && (value.starts_with('+') || value.parse::<i64>().is_err())
+        && (value.starts_with('+')
+            || (value.parse::<i128>().is_err()
+                && saturate_long_unix_timestamp(&value).is_none()))
     {
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
@@ -149,6 +167,20 @@ fn split_ago_hover_format<'t>(
     }
 }
 
+/// Clamp a decimal integer too long for i128 to the i64 bounds, the way
+/// live Wikidot saturates its integer parse.
+fn saturate_long_unix_timestamp(value: &str) -> Option<i64> {
+    let digits = value.strip_prefix('-').unwrap_or(value);
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    Some(if value.starts_with('-') {
+        i64::MIN
+    } else {
+        i64::MAX
+    })
+}
+
 fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
     debug!("Parsing possible date value '{value}'");
 
@@ -159,10 +191,26 @@ fn parse_date(value: &str) -> Result<DateItem, DateParseError> {
 
     if let Ok(timestamp) = value.parse::<i64>() {
         trace!("Was UNIX timestamp '{timestamp}'");
-        let date =
-            OffsetDateTime::from_unix_timestamp(timestamp).map_err(|_| DateParseError)?;
+        match OffsetDateTime::from_unix_timestamp(timestamp) {
+            Ok(date) => return Ok(date.into()),
+            // Live Wikidot still renders timestamps outside the calendar
+            // range with its algorithmic date, so the raw value is kept.
+            Err(_) => return Ok(DateItem::Timestamp(timestamp)),
+        }
+    }
 
-        return Ok(date.into());
+    // Live Wikidot clamps out-of-range integers to the i64 bounds.
+    if let Ok(timestamp) = value.parse::<i128>() {
+        trace!("Was out-of-range UNIX timestamp '{timestamp}'");
+        return Ok(DateItem::Timestamp(
+            timestamp.clamp(i64::MIN as i128, i64::MAX as i128) as i64,
+        ));
+    }
+
+    // Integers too long for i128 clamp to the same bounds.
+    if let Some(timestamp) = saturate_long_unix_timestamp(value) {
+        trace!("Was over-long UNIX timestamp '{timestamp}'");
+        return Ok(DateItem::Timestamp(timestamp));
     }
 
     if let Ok(datetime_tz) = OffsetDateTime::parse(value, &Rfc3339) {

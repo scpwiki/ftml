@@ -849,6 +849,10 @@ fn replace_wikidot_angle_quotes_deferring(text: &mut String, buffer: &mut String
         replace_angle_quotes_in_segment_deferring(
             &source[cursor..range.start],
             cursor,
+            // A segment inherits a real line start only when it opens the
+            // text or follows a newline; a protected run (such as an
+            // angle-raw) ends mid-line, so a `>>` after it still converts.
+            cursor == 0 || source.as_bytes()[cursor - 1] == b'\n',
             &left_deferred,
             &right_deferred,
             &mut output,
@@ -860,6 +864,7 @@ fn replace_wikidot_angle_quotes_deferring(text: &mut String, buffer: &mut String
     replace_angle_quotes_in_segment_deferring(
         &source[cursor..],
         cursor,
+        cursor == 0 || source.as_bytes()[cursor - 1] == b'\n',
         &left_deferred,
         &right_deferred,
         &mut output,
@@ -871,6 +876,7 @@ fn replace_wikidot_angle_quotes_deferring(text: &mut String, buffer: &mut String
 fn replace_angle_quotes_in_segment_deferring(
     segment: &str,
     segment_start: usize,
+    zero_is_line_start: bool,
     left_deferred: &[Range<usize>],
     right_deferred: &[Range<usize>],
     output: &mut String,
@@ -901,10 +907,20 @@ fn replace_angle_quotes_in_segment_deferring(
         .iter()
         .all(|range| range.end <= segment_start || range.start >= segment_end)
     {
-        replace_right_angle_quotes(&mut converted, buffer);
+        replace_right_angle_quotes(&mut converted, buffer, zero_is_line_start);
         output.push_str(&converted);
         return;
     }
+    // A part inherits the segment's line start only at offset zero;
+    // otherwise its first run follows converted text, so only a newline
+    // directly before it keeps the blockquote gate.
+    let part_zero_is_line_start = |converted: &str, offset: usize| {
+        if offset == 0 {
+            zero_is_line_start
+        } else {
+            converted.as_bytes()[offset - 1] == b'\n'
+        }
+    };
     let mut cursor = 0usize;
     for range in right_deferred {
         if range.end <= segment_start || range.start >= segment_end {
@@ -916,13 +932,21 @@ fn replace_angle_quotes_in_segment_deferring(
             continue;
         }
         let mut part = converted[cursor..local_start].to_owned();
-        replace_right_angle_quotes(&mut part, buffer);
+        replace_right_angle_quotes(
+            &mut part,
+            buffer,
+            part_zero_is_line_start(&converted, cursor),
+        );
         output.push_str(&part);
         output.push_str(&converted[local_start..local_end]);
         cursor = local_end;
     }
     let mut part = converted[cursor..].to_owned();
-    replace_right_angle_quotes(&mut part, buffer);
+    replace_right_angle_quotes(
+        &mut part,
+        buffer,
+        part_zero_is_line_start(&converted, cursor),
+    );
     output.push_str(&part);
 }
 
@@ -1149,7 +1173,7 @@ fn replace_wikidot_angle_quotes_outside_owners(text: &mut String, buffer: &mut S
     let protected = wikidot_angle_quote_protected_ranges(text, true);
     if protected.is_empty() {
         LEFT_ANGLE_QUOTES.replace(text, buffer);
-        replace_right_angle_quotes(text, buffer);
+        replace_right_angle_quotes(text, buffer, true);
         return;
     }
 
@@ -1159,28 +1183,39 @@ fn replace_wikidot_angle_quotes_outside_owners(text: &mut String, buffer: &mut S
     for range in protected {
         replace_angle_quotes_in_segment(
             &source[cursor..range.start],
+            cursor == 0 || source.as_bytes()[cursor - 1] == b'\n',
             &mut output,
             buffer,
         );
         output.push_str(&source[range.clone()]);
         cursor = range.end;
     }
-    replace_angle_quotes_in_segment(&source[cursor..], &mut output, buffer);
+    replace_angle_quotes_in_segment(
+        &source[cursor..],
+        cursor == 0 || source.as_bytes()[cursor - 1] == b'\n',
+        &mut output,
+        buffer,
+    );
     *text = output;
 }
 
 fn replace_angle_quotes_in_segment(
     segment: &str,
+    zero_is_line_start: bool,
     output: &mut String,
     buffer: &mut String,
 ) {
     let mut segment = segment.to_owned();
     LEFT_ANGLE_QUOTES.replace(&mut segment, buffer);
-    replace_right_angle_quotes(&mut segment, buffer);
+    replace_right_angle_quotes(&mut segment, buffer, zero_is_line_start);
     output.push_str(&segment);
 }
 
-fn replace_right_angle_quotes(text: &mut String, buffer: &mut String) {
+fn replace_right_angle_quotes(
+    text: &mut String,
+    buffer: &mut String,
+    zero_is_line_start: bool,
+) {
     if !text.contains(">>") {
         return;
     }
@@ -1207,7 +1242,14 @@ fn replace_right_angle_quotes(text: &mut String, buffer: &mut String) {
             cursor += 1;
         }
         let count = cursor - start;
-        let eligible = start > 0 && bytes[start - 1] != b'\n';
+        // A run opens a blockquote only at a real line start. Position
+        // zero counts as one unless the caller places the segment mid-line
+        // (after a protected run such as an angle-raw).
+        let eligible = if start > 0 {
+            bytes[start - 1] != b'\n'
+        } else {
+            !zero_is_line_start
+        };
         if eligible && count >= 2 {
             for _ in 0..count / 2 {
                 buffer.push('\u{00bb}');

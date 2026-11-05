@@ -31,6 +31,10 @@ impl LiteralRegionIndex {
         collect_wikidot_literal_blocks(source, &mut ranges);
         ranges.extend(crate::wikidot_code::active_ranges(source));
         collect_same_line_paired_ranges(source, "@@", "@@", &mut ranges);
+        // Live Wikidot parses @<...>@ with a same-line closer as raw, so
+        // preprocessing (typography, comments, whitespace, block scans)
+        // must leave its contents alone exactly like @@...@@.
+        collect_same_line_paired_ranges(source, "@<", ">@", &mut ranges);
         collect_html_literal_ranges(source, &mut ranges);
         ranges.sort_unstable_by_key(|range| (range.start, range.end));
 
@@ -528,5 +532,17 @@ mod tests {
 
         assert!(!index.contains(source.find("outside").unwrap()));
         assert!(index.ranges.is_empty());
+    }
+
+    #[test]
+    fn angle_raw_regions_cover_a_same_line_closer() {
+        let source = "outside @<inside>@ outside\nunclosed @<not-inside...\n@<a>@<b>@";
+        let index = LiteralRegionIndex::new(source);
+
+        assert!(!index.contains(source.find("outside").unwrap()));
+        assert!(index.contains(source.find("inside").unwrap()));
+        assert!(!index.contains(source.find("not-inside").unwrap()));
+        assert!(index.contains(source.find("@<a>").unwrap()));
+        assert!(index.contains(source.find("@<b>").unwrap()));
     }
 }

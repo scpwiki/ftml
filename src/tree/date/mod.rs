@@ -42,12 +42,19 @@ enum DateFormatFlavor {
 
 mod cache;
 
+/// The default Wikidot date format, used when no explicit format is given.
+pub const WIKIDOT_DEFAULT_DATE_FORMAT: &str = "%d %b %Y %H:%M";
+
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum DateItem {
     Date(Date),
     DateTime(PrimitiveDateTime),
     DateTimeTz(OffsetDateTime),
+    /// A Unix timestamp outside the calendar range (before year 0 or after
+    /// year 9999). Live Wikidot still renders these with its algorithmic
+    /// date, so the raw value is kept for the renderers to format directly.
+    Timestamp(i64),
 }
 
 impl DateItem {
@@ -55,6 +62,11 @@ impl DateItem {
         let datetime_tz = match self {
             DateItem::Date(date) => date.midnight().assume_offset(offset),
             DateItem::DateTime(datetime) => datetime.assume_offset(offset),
+            DateItem::Timestamp(timestamp) => {
+                return Some(DateItem::Timestamp(
+                    timestamp.saturating_add(i64::from(offset.whole_seconds())),
+                ));
+            }
             DateItem::DateTimeTz(_) => return None,
         };
 
@@ -66,11 +78,13 @@ impl DateItem {
             DateItem::Date(date) => date.midnight().assume_utc().unix_timestamp(),
             DateItem::DateTime(datetime) => datetime.assume_utc().unix_timestamp(),
             DateItem::DateTimeTz(datetime_tz) => datetime_tz.unix_timestamp(),
+            DateItem::Timestamp(timestamp) => timestamp,
         }
     }
 
     pub fn time_since(self) -> i64 {
-        self.timestamp() - now().timestamp()
+        // Out-of-range timestamps can sit past the i64 difference bounds.
+        self.timestamp().saturating_sub(now().timestamp())
     }
 
     pub fn to_datetime_tz(self) -> OffsetDateTime {
@@ -78,7 +92,63 @@ impl DateItem {
             DateItem::Date(date) => date.midnight().assume_utc(),
             DateItem::DateTime(datetime) => datetime.assume_utc(),
             DateItem::DateTimeTz(datetime_tz) => datetime_tz,
+            DateItem::Timestamp(_) => {
+                // Out-of-range timestamps have no calendar representation;
+                // the formatting entry points render them directly.
+                unreachable!("Timestamp cannot convert to OffsetDateTime");
+            }
         }
+    }
+
+    /// Render an out-of-range Unix timestamp the way live Wikidot does: a
+    /// proleptic Gregorian date with a zero-padded day, abbreviated month,
+    /// full year (zero-padded to four digits), and 24-hour time.
+    pub fn format_timestamp(timestamp: i64) -> String {
+        const MONTHS: [&str; 12] = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+            "Dec",
+        ];
+
+        let days = timestamp.div_euclid(86_400);
+        let seconds = timestamp.rem_euclid(86_400);
+        // Howard Hinnant's civil-from-days with C-truncation era division.
+        let z = days + 719_468;
+        let era = if z >= 0 {
+            z / 146_097
+        } else {
+            (z - 146_096) / 146_097
+        };
+        let day_of_era = z - era * 146_097;
+        let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524
+            - day_of_era / 146_096)
+            / 365;
+        let mut year = year_of_era + era * 400;
+        let day_of_year =
+            day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+        let month_prime = (5 * day_of_year + 2) / 153;
+        let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+        let month = if month_prime < 10 {
+            month_prime + 3
+        } else {
+            month_prime - 9
+        } as usize;
+        if month <= 2 {
+            year += 1;
+        }
+
+        let year_text = if year < 0 {
+            format!("-{:04}", -year)
+        } else {
+            format!("{:04}", year)
+        };
+        format!(
+            "{:02} {} {} {:02}:{:02}",
+            day,
+            MONTHS[month - 1],
+            year_text,
+            seconds / 3_600,
+            seconds % 3_600 / 60,
+        )
     }
 
     pub fn format(self, format: Option<&str>, language: &str) -> io::Result<String> {
@@ -125,6 +195,12 @@ impl DateItem {
     ) -> io::Result<String> {
         if !date_format_within_limits(format) {
             return Err(date_format_limit_error());
+        }
+
+        // Live Wikidot's static date text always uses the default format,
+        // so an explicit format only affects the rendered class.
+        if let DateItem::Timestamp(timestamp) = self {
+            return Ok(DateItem::format_timestamp(timestamp));
         }
 
         let datetime = self.to_datetime_tz();
@@ -191,6 +267,10 @@ impl DateItem {
     }
 
     fn format_default(self, language: &str) -> io::Result<String> {
+        if let DateItem::Timestamp(timestamp) = self {
+            return Ok(DateItem::format_timestamp(timestamp));
+        }
+
         let datetime = self.to_datetime_tz();
         let locale = cache::locale_from_language(language);
         let mut rendered = String::new();

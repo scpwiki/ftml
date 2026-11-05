@@ -55,7 +55,16 @@ impl TextRender {
         settings: &WikitextSettings,
         wikitext_len: usize,
     ) -> String {
-        self.render_partial_mode(elements, page_info, settings, wikitext_len, true)
+        let rendered =
+            self.render_partial_mode(elements, page_info, settings, wikitext_len, true);
+        // Live Wikidot builds the table-of-contents entry from the heading's
+        // rendered text with whitespace collapsed and the ends trimmed, so
+        // element boundaries do not leave doubled or trailing spaces.
+        if settings.layout.legacy() {
+            collapse_title_whitespace(&rendered)
+        } else {
+            rendered
+        }
     }
 
     fn render_partial_mode(
@@ -110,6 +119,24 @@ impl TextRender {
 
         ctx.into()
     }
+}
+
+/// Collapse whitespace runs to a single space and trim both ends.
+fn collapse_title_whitespace(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut pending_space = false;
+    for character in text.chars() {
+        if matches!(character, ' ' | '\t' | '\n' | '\r' | '\u{0b}' | '\u{0c}') {
+            pending_space = !output.is_empty();
+        } else {
+            if pending_space {
+                output.push(' ');
+                pending_space = false;
+            }
+            output.push(character);
+        }
+    }
+    output
 }
 
 fn trim_outer_newlines(buffer: &mut String) {

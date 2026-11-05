@@ -145,6 +145,10 @@ fn parse_evidenced_file_link_str<'t, 'v>(
         Some(value) => value,
         None => return Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
     };
+    // Live Wikidot splits on a pipe only when something follows it, so the
+    // split decision uses the raw value: trimming first would erase the
+    // difference between `a/b.txt|` and `a/b.txt| `.
+    let raw_pipe_split = value.split_once('|');
     let value = if parser.settings().layout.legacy() {
         trim_wikidot_ascii(value)
     } else {
@@ -160,37 +164,39 @@ fn parse_evidenced_file_link_str<'t, 'v>(
         return Ok((file, label));
     }
 
-    let (file, label) = match value.split_once('|') {
-        Some((file, label)) => {
-            let file = file.trim_matches([' ', '\t', '\r', '\n']);
-            let label = label.trim_matches([' ', '\t', '\r', '\n']);
-            (
-                file,
-                if label.is_empty() {
-                    file_name(file)
-                } else {
-                    label
-                },
-            )
+    let (file, label) = match raw_pipe_split {
+        // A pipe with nothing after it is part of the target, not a
+        // separator: live Wikidot keeps it in both the file and the label.
+        Some((raw_file, raw_label))
+            if raw_label.is_empty() && !raw_file.trim().is_empty() =>
+        {
+            (value, value)
         }
-        None => (
-            value,
-            if value.bytes().any(|byte| matches!(byte, b' ' | b'\t')) {
-                value
-            } else {
-                file_name(value)
-            },
-        ),
+        _ => match value.split_once('|') {
+            Some((file, label)) => {
+                let file = file.trim_matches([' ', '\t', '\r', '\n']);
+                let label = label.trim_matches([' ', '\t', '\r', '\n']);
+                (
+                    file,
+                    if label.is_empty() {
+                        // Live Wikidot shows the full authored target as the
+                        // default label, not just the base name.
+                        file
+                    } else {
+                        label
+                    },
+                )
+            }
+            // Live Wikidot shows the full authored target as the default
+            // label, not just the base name.
+            None => (value, value),
+        },
     };
     if !is_evidenced_wikidot_file_source(file) {
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
     Ok((file, label))
-}
-
-fn file_name(source: &str) -> &str {
-    source.rsplit('/').next().unwrap_or(source)
 }
 
 fn is_evidenced_wikidot_file_source(source: &str) -> bool {

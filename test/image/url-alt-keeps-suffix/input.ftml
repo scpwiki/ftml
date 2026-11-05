@@ -1,0 +1,5 @@
+[[image https://example.com/a.png?b=c]]
+
+[[image https://example.com/a.png#frag]]
+
+[[image https://example.com/]]

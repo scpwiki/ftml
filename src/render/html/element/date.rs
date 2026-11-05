@@ -19,9 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::{DateItem, date_format_within_limits};
-
-const WIKIDOT_DEFAULT_DATE_FORMAT: &str = "%d %b %Y %H:%M";
+use crate::tree::{DateItem, WIKIDOT_DEFAULT_DATE_FORMAT, date_format_within_limits};
 
 pub fn render_date(
     ctx: &mut HtmlContext,
@@ -61,6 +59,16 @@ fn render_date_wikidot(
 ) {
     let timestamp = date.timestamp();
     let mut class = format!("odate time_{timestamp}");
+    // Live Wikidot substitutes every %g with "ago" in the format class and
+    // omits the format class entirely for an empty format string.
+    let substituted;
+    let date_format = match date_format.filter(|format| !format.is_empty()) {
+        Some(format) if format.contains("%g") => {
+            substituted = format.replace("%g", "ago");
+            Some(substituted.as_str())
+        }
+        format => format,
+    };
     push_date_format_class(&mut class, date_format, hover);
     ctx.html()
         .span()
