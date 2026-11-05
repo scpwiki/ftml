@@ -241,6 +241,17 @@ where
 {
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
+
+    // A label with no closer walks to the end of the token stream and fails
+    // with `EndOfInput`; the rule attempt is rolled back, so every later
+    // `[#` opener rescans the same unclosed tail (quadratic). When no token
+    // that could stop the walk exists at or after `start`, reproduce the
+    // exact end-of-input failure without the repeated walk.
+    if parser.anchor_label_reaches_input_end(start) {
+        parser.jump_to_input_end();
+        return Err(parser.make_err(ParseErrorKind::EndOfInput));
+    }
+
     let mut copied_until = start;
     let mut without_comments = None::<String>;
     let mut delayed = Vec::<Element<'t>>::new();
@@ -385,6 +396,32 @@ mod tests {
             render("[#my-anchor Label text]"),
             "<p><a href=\"#my-anchor\">Label text</a></p>",
         );
+    }
+
+    #[test]
+    fn unclosed_anchor_labels_keep_the_end_of_input_failure() {
+        // The unclosed-label fast path must reproduce the exact error the
+        // full token walk produced: `EndOfInput`, under the anchor rule, at
+        // the trailing token, once per attempted opener.
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = "[# x ".repeat(8);
+        let tokenization = crate::tokenize(&source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(html.contains("[# x "), "{html}");
+        let anchor_errors: Vec<_> = errors
+            .iter()
+            .filter(|error| {
+                error.kind() == crate::parsing::ParseErrorKind::EndOfInput
+                    && error.rule() == "link-anchor"
+            })
+            .collect();
+        assert_eq!(anchor_errors.len(), 8, "{errors:#?}");
+        for error in anchor_errors {
+            assert_eq!(error.span(), source.len()..source.len(), "{error:#?}");
+        }
     }
 
     #[test]

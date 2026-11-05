@@ -200,6 +200,47 @@ fn nested_iftags_gates_keep_their_balanced_end_head() {
 }
 
 #[test]
+fn unclosed_anchor_label_scans_stay_bounded() {
+    // Each `[# name ` opener with no closing `]` used to walk the rest of
+    // the token stream and then fail there, once per opener: quadratic in
+    // the opener count. The failed attempts still render literally.
+    for count in [4096usize, 8192, 16384] {
+        let input = "[# x ".repeat(count);
+        let (html, elapsed) = render_timed(&input);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "{count} unclosed anchor openers took {elapsed:?}",
+        );
+        assert!(
+            html.contains("[# x "),
+            "{count} unclosed anchor openers should render literally: {html:.80}",
+        );
+    }
+}
+
+#[test]
+fn anchor_labels_that_close_still_form_anchors() {
+    // Positive control for the anchor-label fast path: a label that really
+    // closes must still be collected, including a long one.
+    let (html, elapsed) = render_timed("[#name Label]");
+    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    assert_eq!(html, r##"<p><a href="#name">Label</a></p>"##);
+
+    let long = format!("[#name {}]", "x ".repeat(4096));
+    let (html, elapsed) = render_timed(&long);
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "long closed anchor label took {elapsed:?}",
+    );
+    assert!(html.contains(r##"href="#name""##), "{html:.80}");
+    assert!(html.ends_with("x</a></p>"), "{html:.80}");
+
+    // No label and no closer: `[#` keeps rendering literally.
+    let (html, _) = render_timed("[#");
+    assert_eq!(html, "<p>[#</p>");
+}
+
+#[test]
 fn div_line_scans_stay_linear_in_opener_count() {
     // Each `[[div]]` opener asks whether a `[[/div]]` starts on its physical
     // line. With no line break in the document that scan used to run to the
