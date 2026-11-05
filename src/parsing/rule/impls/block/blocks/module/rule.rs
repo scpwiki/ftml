@@ -58,8 +58,8 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let (subname, arguments, body_start) =
-        parser.get_head_name_map_with_body_start_wikidot(&BLOCK_MODULE, in_head)?;
+    let (subname, arguments, body_start) = parser
+        .get_module_head_name_map_with_body_start_wikidot(&BLOCK_MODULE, in_head)?;
 
     if parser.settings().layout.legacy()
         && let Some(literal) = wikidot_extra_bracket_css_literal(parser, opener_start)
@@ -71,12 +71,33 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let module_rule = match get_module_rule_with_name(subname) {
+    let resolved_module = get_module_rule_with_name(subname);
+    let owns_opener_line = resolved_module.is_some_and(|rule| rule.owns_opener_line);
+
+    let mut same_line_close_consumed = false;
+    if parser.settings().layout.legacy()
+        && !owns_opener_line
+        && body_start == BlockBodyStart::Inline
+        && !parser.wikidot_module_head_rest_is_line_end()?
+    {
+        let has_separator =
+            parser.wikidot_module_head_has_separator(opener_start, name, subname);
+        if has_separator
+            && parser.consume_wikidot_module_same_line_close(&BLOCK_MODULE)?
+        {
+            same_line_close_consumed = true;
+        } else {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+    }
+
+    let module_rule = match resolved_module {
         Some(rule) => rule,
         None if parser.settings().layout.legacy() => {
             let has_body_end = parser.has_body_end_block(&BLOCK_MODULE);
             if arguments.is_empty()
                 && body_start == BlockBodyStart::Inline
+                && !same_line_close_consumed
                 && parser.current().token != Token::InputEnd
             {
                 let source = parser.full_text().inner();
@@ -104,10 +125,17 @@ fn parse_fn<'r, 't>(
         None => return Err(parser.make_err(ParseErrorKind::NoSuchModule)),
     };
 
+    if same_line_close_consumed {
+        parser.mark_wikidot_module_empty_body();
+    } else if parser.settings().layout.legacy() && !module_rule.reads_body {
+        parser.skip_wikidot_module_body(&BLOCK_MODULE);
+    }
+
     parser.set_module(module_rule);
 
     let output = (module_rule.parse_fn)(parser, subname, arguments, opener_start)?;
     let (elements, errors, paragraph_safe) = output.into();
+    let _ = parser.take_wikidot_module_empty_body();
 
     success_elements_with_paragraph_safety(paragraph_safe, elements, errors)
 }
@@ -172,6 +200,7 @@ fn module_opener_has_leading_space(parser: &Parser<'_, '_>) -> bool {
 mod tests {
     use crate::data::PageInfo;
     use crate::layout::Layout;
+    use crate::parsing::ParseErrorKind;
     use crate::render::{Render, html::HtmlRender};
     use crate::settings::{WikitextMode, WikitextSettings};
     use crate::tree::{Element, Module};
@@ -261,7 +290,12 @@ mod tests {
             crate::tokenize("[[module UnknownOracleModule]]preserved body[[/module]]");
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
 
-        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.kind() == ParseErrorKind::RuleFailed),
+            "{errors:#?}",
+        );
         assert_eq!(
             HtmlRender.render(&tree, &page_info, &settings).body,
             "<p>[[module UnknownOracleModule]]preserved body[[/module]]</p>",
@@ -281,12 +315,18 @@ mod tests {
             let tokenization = crate::tokenize(input);
             let (tree, errors) =
                 crate::parse(&tokenization, &page_info, &settings).into();
-            assert!(errors.is_empty(), "{input:?}: {errors:#?}");
 
             let body = HtmlRender.render(&tree, &page_info, &settings).body;
             if literal {
                 assert_eq!(body, format!("<p>{input}</p>"), "{input:?}");
+                assert!(
+                    errors
+                        .iter()
+                        .any(|error| error.kind() == ParseErrorKind::RuleFailed),
+                    "{input:?}: {errors:#?}",
+                );
             } else {
+                assert!(errors.is_empty(), "{input:?}: {errors:#?}");
                 assert!(
                     body.starts_with(r#"<div class="error-block">[[module <em>UnknownOracleModule</em>]] No such module"#),
                     "{input:?}: {body}",
@@ -302,7 +342,12 @@ mod tests {
         let inline_tail =
             crate::tokenize("[[module UnknownOracleModule]]TAIL\n[[module RandomPage]]");
         let (tree, errors) = crate::parse(&inline_tail, &page_info, &settings).into();
-        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.kind() == ParseErrorKind::RuleFailed),
+            "{errors:#?}",
+        );
         assert!(
             HtmlRender
                 .render(&tree, &page_info, &settings)

@@ -24,6 +24,8 @@ pub const MODULE_RATE: ModuleRule = ModuleRule {
     name: "module-rate",
     accepts_names: &["Rate"],
     parse_fn,
+    reads_body: false,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(

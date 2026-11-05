@@ -24,6 +24,8 @@ pub const MODULE_REDIRECT: ModuleRule = ModuleRule {
     name: "module-redirect",
     accepts_names: &["Redirect"],
     parse_fn,
+    reads_body: false,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(

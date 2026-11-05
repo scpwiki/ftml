@@ -24,6 +24,8 @@ pub const MODULE_BACKLINKS: ModuleRule = ModuleRule {
     name: "module-backlinks",
     accepts_names: &["Backlinks"],
     parse_fn,
+    reads_body: false,
+    owns_opener_line: false,
 };
 
 fn parse_fn<'r, 't>(
