@@ -262,6 +262,40 @@
                     }
                 ]
             }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "raw",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": "»"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "«"
+                    },
+                    {
+                        "element": "raw",
+                        "data": "a"
+                    }
+                ]
+            }
         }
     ]
 }

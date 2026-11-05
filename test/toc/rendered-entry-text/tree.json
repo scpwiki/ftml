@@ -124,9 +124,43 @@
                 "attributes": {},
                 "elements": [
                     {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "equation-reference",
+                        "data": "e"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "c"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "header": {
+                        "level": 1,
+                        "has-toc": true
+                    }
+                },
+                "attributes": {},
+                "elements": [
+                    {
                         "element": "user",
                         "data": {
-                            "name": "nosuchu",
+                            "name": "anonymous",
                             "show-avatar": false
                         }
                     }
@@ -243,7 +277,24 @@
                                     "type": "table-of-contents",
                                     "link": "#toc5",
                                     "label": {
-                                        "text": "nosuchu"
+                                        "text": "a [e] c"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc6",
+                                    "label": {
+                                        "text": "anonymous"
                                     },
                                     "target": null
                                 }

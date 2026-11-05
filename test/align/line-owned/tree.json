@@ -27,13 +27,101 @@
         {
             "element": "container",
             "data": {
+                "type": {
+                    "align": "center"
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "tail"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "n"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
                 "type": "paragraph",
                 "attributes": {},
                 "elements": [
                     {
                         "element": "text",
-                        "data": " "
-                    },
+                        "data": "x"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "align": "center"
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "n"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "align": "center"
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "n"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
                     {
                         "element": "text",
                         "data": "tail"
@@ -68,23 +156,6 @@
         {
             "element": "container",
             "data": {
-                "type": "paragraph",
-                "attributes": {},
-                "elements": [
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "tail"
-                    }
-                ]
-            }
-        },
-        {
-            "element": "container",
-            "data": {
                 "type": {
                     "align": "right"
                 },
@@ -109,23 +180,6 @@
         {
             "element": "container",
             "data": {
-                "type": "paragraph",
-                "attributes": {},
-                "elements": [
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "tail"
-                    }
-                ]
-            }
-        },
-        {
-            "element": "container",
-            "data": {
                 "type": {
                     "align": "justify"
                 },
@@ -143,23 +197,6 @@
                                 }
                             ]
                         }
-                    }
-                ]
-            }
-        },
-        {
-            "element": "container",
-            "data": {
-                "type": "paragraph",
-                "attributes": {},
-                "elements": [
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "tail"
                     }
                 ]
             }

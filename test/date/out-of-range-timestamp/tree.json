@@ -43,7 +43,41 @@
                     {
                         "element": "date",
                         "data": {
+                            "value": 9223372036854775807,
+                            "format": null,
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
                             "value": -99999999999999,
+                            "format": null,
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": -9223372036854775808,
                             "format": null,
                             "hover": false
                         }

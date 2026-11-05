@@ -54,11 +54,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "paragraph-break",
+        "token": "input-end",
         "rule": "block-file",
         "span": [
             55,
-            57
+            55
         ],
         "kind": "block-malformed-arguments"
     },
@@ -77,33 +77,6 @@
         "span": [
             53,
             55
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "input-end",
-        "rule": "block-file",
-        "span": [
-            73,
-            73
-        ],
-        "kind": "block-malformed-arguments"
-    },
-    {
-        "token": "left-block",
-        "rule": "fallback",
-        "span": [
-            57,
-            59
-        ],
-        "kind": "no-rules-match"
-    },
-    {
-        "token": "right-block",
-        "rule": "fallback",
-        "span": [
-            71,
-            73
         ],
         "kind": "no-rules-match"
     }

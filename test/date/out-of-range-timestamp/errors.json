@@ -3,8 +3,8 @@
         "token": "paragraph-break",
         "rule": "block-date",
         "span": [
-            92,
-            94
+            199,
+            201
         ],
         "kind": "block-malformed-arguments"
     },
@@ -12,8 +12,8 @@
         "token": "left-block",
         "rule": "fallback",
         "span": [
-            82,
-            84
+            189,
+            191
         ],
         "kind": "no-rules-match"
     },
@@ -21,8 +21,8 @@
         "token": "right-block",
         "rule": "fallback",
         "span": [
-            90,
-            92
+            197,
+            199
         ],
         "kind": "no-rules-match"
     }

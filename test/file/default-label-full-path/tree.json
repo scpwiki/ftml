@@ -146,51 +146,6 @@
                     }
                 ]
             }
-        },
-        {
-            "element": "container",
-            "data": {
-                "type": "paragraph",
-                "attributes": {},
-                "elements": [
-                    {
-                        "element": "text",
-                        "data": "[["
-                    },
-                    {
-                        "element": "text",
-                        "data": "file"
-                    },
-                    {
-                        "element": "text",
-                        "data": " "
-                    },
-                    {
-                        "element": "text",
-                        "data": "a"
-                    },
-                    {
-                        "element": "text",
-                        "data": "."
-                    },
-                    {
-                        "element": "text",
-                        "data": "txt"
-                    },
-                    {
-                        "element": "text",
-                        "data": "|"
-                    },
-                    {
-                        "element": "text",
-                        "data": "b"
-                    },
-                    {
-                        "element": "text",
-                        "data": "]]"
-                    }
-                ]
-            }
         }
     ]
 }
