@@ -322,53 +322,52 @@ where
     // footnote list; a footnote registered by a probe block that does not own
     // this closer must not survive into the real parse.
     let footnote_count = parser.footnote_count();
-    let head_claimed =
-        if let Some(outcome) = parser.end_block_link_head_outcome(tokens, region_end) {
-            outcome
-        } else {
-            let mut saw_left_block = false;
-            let mut head_claimed = false;
-            for (index, token) in tokens
-                .iter()
-                .take_while(|token| token.span.start < region_end)
-                .enumerate()
-            {
-                if token.token != Token::LeftBlock || token.span.start <= start {
-                    continue;
-                }
-                saw_left_block = true;
-                let mut probe = parser.clone();
-                let mut stepped = true;
-                for _ in 0..=index {
-                    if probe.step().is_err() {
-                        stepped = false;
-                        break;
-                    }
-                }
-                if !stepped {
-                    continue;
-                }
-                if let Ok(success) = super::RULE_BLOCK.try_consume(&mut probe) {
-                    let (elements, _, _) = success.into();
-                    if elements
-                        .into_iter()
-                        .any(|element| !matches!(element, crate::tree::Element::Text(_)))
-                    {
-                        head_claimed = true;
-                        break;
-                    }
+    let context = parser.end_block_link_head_context();
+    let head_claimed = if let Some(outcome) =
+        parser.end_block_link_head_outcome(tokens, region_end, context)
+    {
+        outcome
+    } else {
+        let mut saw_left_block = false;
+        let mut claimed_index = None;
+        for (index, token) in tokens
+            .iter()
+            .take_while(|token| token.span.start < region_end)
+            .enumerate()
+        {
+            if token.token != Token::LeftBlock || token.span.start <= start {
+                continue;
+            }
+            saw_left_block = true;
+            let mut probe = parser.clone();
+            probe.step_to_remaining(index);
+            if let Ok(success) = super::RULE_BLOCK.try_consume(&mut probe) {
+                let (elements, _, _) = success.into();
+                if elements
+                    .into_iter()
+                    .any(|element| !matches!(element, crate::tree::Element::Text(_)))
+                {
+                    claimed_index = Some(index);
+                    break;
                 }
             }
-            #[cfg(test)]
-            parser.add_unmatched_close_scan_visits(
-                tokens
-                    .iter()
-                    .take_while(|token| token.span.start < region_end)
-                    .count(),
-            );
-            parser.cache_end_block_link_head_outcome(tokens, region_end, saw_left_block);
-            head_claimed
-        };
+        }
+        #[cfg(test)]
+        parser.add_unmatched_close_scan_visits(
+            tokens
+                .iter()
+                .take_while(|token| token.span.start < region_end)
+                .count(),
+        );
+        parser.cache_end_block_link_head_outcome(
+            tokens,
+            region_end,
+            saw_left_block,
+            context,
+            claimed_index,
+        );
+        claimed_index.is_some()
+    };
     if parser.footnote_count() != footnote_count {
         parser.truncate_footnotes(footnote_count);
     }
