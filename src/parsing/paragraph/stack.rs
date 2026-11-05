@@ -146,10 +146,6 @@ impl<'t> ParagraphStack<'t> {
                         })
                     )
                 )
-                    )
-                )
-                    )
-                )
             })
     }
 
