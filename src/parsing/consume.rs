@@ -392,7 +392,7 @@ fn render_interior_line_prefix(source: &str, byte: usize) -> &str {
 fn wikidot_render_interior_close_kind_at<'r, 't>(
     parser: &Parser<'r, 't>,
     closer_byte: usize,
-) -> Option<WikidotBlockCloseKind>
+) -> Option<WikidotBlockCloseKind<'t>>
 where
     'r: 't,
 {
@@ -400,7 +400,7 @@ where
     if !pair.kind.emits_flat() {
         return None;
     }
-    let kind = wikidot_flat_close_kind_at(parser, closer_byte)?;
+    let kind = wikidot_flat_close_kind_at_byte(parser, closer_byte)?;
     if !parser.wikidot_head_on_table_row_line(pair.head_byte)
         && !parser.wikidot_byte_on_list_item_line(pair.head_byte)
     {
