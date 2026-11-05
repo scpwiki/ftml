@@ -326,7 +326,9 @@ impl<'r, 't> Parser<'r, 't> {
                 },
                 closer_scan: CloserScanCache::new(tokenization.tokens().len()),
                 wikidot_line_runs: if settings.layout.legacy() {
-                    block_pairs::compute_wikidot_line_runs(tokenization.full_text().inner())
+                    block_pairs::compute_wikidot_line_runs(
+                        tokenization.full_text().inner(),
+                    )
                 } else {
                     block_pairs::WikidotLineRuns::default()
                 },
@@ -515,11 +517,8 @@ impl<'r, 't> Parser<'r, 't> {
         closes: Vec<WikidotLiClose>,
     ) {
         let mut cache = self.block_end_scan_cache.borrow_mut();
-        let mut boundaries: Vec<usize> = cache
-            .wikidot_li_paired_heads
-            .iter()
-            .copied()
-            .collect();
+        let mut boundaries: Vec<usize> =
+            cache.wikidot_li_paired_heads.iter().copied().collect();
         for close in &closes {
             let Some(pair) = close.paired else {
                 continue;
@@ -602,7 +601,10 @@ impl<'r, 't> Parser<'r, 't> {
             && !runs.on_table_row_line(head_byte)
     }
 
-    pub(crate) fn wikidot_li_items_at_depth(&self, depth: usize) -> (Vec<usize>, Vec<usize>) {
+    pub(crate) fn wikidot_li_items_at_depth(
+        &self,
+        depth: usize,
+    ) -> (Vec<usize>, Vec<usize>) {
         let cache = self.block_end_scan_cache.borrow();
         let heads: Vec<usize> = cache
             .wikidot_li_heads
@@ -621,7 +623,11 @@ impl<'r, 't> Parser<'r, 't> {
         (heads, closes)
     }
 
-    pub(crate) fn wikidot_li_straddles_bodies(&self, first: usize, second: usize) -> bool {
+    pub(crate) fn wikidot_li_straddles_bodies(
+        &self,
+        first: usize,
+        second: usize,
+    ) -> bool {
         let (lo, hi) = if first < second {
             (first, second)
         } else if first > second {
@@ -640,15 +646,10 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_li_cross_scan
             .as_ref()
-            .is_some_and(|scan| {
-                byte > scan.region_start && byte < scan.region_end
-            })
+            .is_some_and(|scan| byte > scan.region_start && byte < scan.region_end)
     }
 
-    pub(crate) fn wikidot_li_cross_pair_crossed(
-        &self,
-        closer_byte: usize,
-    ) -> bool {
+    pub(crate) fn wikidot_li_cross_pair_crossed(&self, closer_byte: usize) -> bool {
         self.block_end_scan_cache
             .borrow()
             .wikidot_li_cross_scan
@@ -660,7 +661,10 @@ impl<'r, 't> Parser<'r, 't> {
             })
     }
 
-    pub(crate) fn wikidot_pair_goes_flat(&self, pair: &block_pairs::WikidotBlockPair) -> bool {
+    pub(crate) fn wikidot_pair_goes_flat(
+        &self,
+        pair: &block_pairs::WikidotBlockPair,
+    ) -> bool {
         if !pair.kind.emits_flat() {
             return false;
         }
@@ -685,7 +689,9 @@ impl<'r, 't> Parser<'r, 't> {
         }
         let cache = self.block_end_scan_cache.borrow();
         let runs = &cache.wikidot_line_runs;
-        if runs.on_list_item_line(pair.head_byte) || runs.on_list_item_line(pair.closer_byte) {
+        if runs.on_list_item_line(pair.head_byte)
+            || runs.on_list_item_line(pair.closer_byte)
+        {
             return true;
         }
         if runs.quote_run_id(pair.head_byte).is_some()

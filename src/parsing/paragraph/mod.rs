@@ -271,8 +271,7 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
-            let ends_with_explicit_list =
-                elements_end_with_explicit_list(&elements);
+            let ends_with_explicit_list = elements_end_with_explicit_list(&elements);
             let embed_error_has_same_line_residual = embed_opener
                 && !paragraph_safe
                 && active_div
@@ -325,9 +324,7 @@ where
             // L85: a recovered literal div alongside a formed block is
             // nested (e.g. in a list item), never a genuine literal-div
             // line; don't start a literal run for it (e25-shape `<p><ul>`).
-            if div_literal_recovered
-                && !elements_contain_formed_block(&elements)
-            {
+            if div_literal_recovered && !elements_contain_formed_block(&elements) {
                 stack.note_wikidot_div_literal_push();
             }
             if empty_quote_control && !paragraph_safe && elements.is_empty() {
@@ -690,9 +687,7 @@ fn elements_contain_formed_block(elements: &Elements<'_>) -> bool {
         | Element::TabView(_)
         | Element::Gallery(_)
         | Element::DefinitionList(_) => true,
-        Element::Container(container) => {
-            container.ctype() != ContainerType::Paragraph
-        }
+        Element::Container(container) => container.ctype() != ContainerType::Paragraph,
         _ => false,
     };
     match elements {
@@ -715,9 +710,7 @@ fn elements_end_with_explicit_list(elements: &Elements<'_>) -> bool {
     };
     match elements {
         Elements::Single(element) => is_explicit(element),
-        Elements::Multiple(elements) => {
-            elements.last().is_some_and(is_explicit)
-        }
+        Elements::Multiple(elements) => elements.last().is_some_and(is_explicit),
         Elements::None => false,
     }
 }

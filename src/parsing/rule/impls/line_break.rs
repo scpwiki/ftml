@@ -117,6 +117,20 @@ where
             return Ok(false);
         }
 
+        // L85 scope-5: live keeps the break before a table in item bodies
+        // (li-table-contained); the top-level path keeps it too.
+        if parser.settings().layout.legacy()
+            && parser.wikidot_li_inside_item_body()
+            && matches!(
+                parser.current().token,
+                Token::TableColumn
+                    | Token::TableColumnRight
+                    | Token::TableColumnCenter
+                    | Token::TableColumnTitle
+            )
+        {
+            return Ok(false);
+        }
         let rules = own_line_rules(parser.current().token);
         Ok(rules.iter().any(|rule| rule.try_consume(parser).is_ok()))
     })

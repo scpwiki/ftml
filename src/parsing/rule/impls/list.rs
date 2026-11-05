@@ -282,8 +282,7 @@ fn wikidot_escape_batch_breaks_block(element: &Element) -> bool {
     if matches!(
         element,
         Element::Partial(
-            PartialElement::WikidotBlockOpen(_)
-                | PartialElement::WikidotBlockClose(_)
+            PartialElement::WikidotBlockOpen(_) | PartialElement::WikidotBlockClose(_)
         )
     ) {
         return false;
@@ -304,7 +303,11 @@ fn wikidot_escape_batches(escaped: &[Element]) -> Vec<ParagraphSplitEntry> {
             Element::Partial(PartialElement::WikidotBlockClose(_))
         ) {
             if index > run_start {
-                entries.push((index - run_start, run_safe, ParagraphSplitKind::Paragraph));
+                entries.push((
+                    index - run_start,
+                    run_safe,
+                    ParagraphSplitKind::Paragraph,
+                ));
             }
             run_start = index;
             run_safe = false;
@@ -312,7 +315,11 @@ fn wikidot_escape_batches(escaped: &[Element]) -> Vec<ParagraphSplitEntry> {
             index += 1;
         } else if wikidot_escape_batch_breaks_block(element) {
             if index > run_start {
-                entries.push((index - run_start, run_safe, ParagraphSplitKind::Paragraph));
+                entries.push((
+                    index - run_start,
+                    run_safe,
+                    ParagraphSplitKind::Paragraph,
+                ));
             }
             entries.push((1, false, ParagraphSplitKind::Paragraph));
             index += 1;
@@ -322,7 +329,11 @@ fn wikidot_escape_batches(escaped: &[Element]) -> Vec<ParagraphSplitEntry> {
         } else {
             let safe = !bare;
             if safe != run_safe && index > run_start {
-                entries.push((index - run_start, run_safe, ParagraphSplitKind::Paragraph));
+                entries.push((
+                    index - run_start,
+                    run_safe,
+                    ParagraphSplitKind::Paragraph,
+                ));
                 run_start = index;
                 run_safe = safe;
             }
@@ -478,10 +489,7 @@ where
             elements.push(open);
         }
         if escaped.is_empty() {
-            return Ok(ListItemStep::Item(
-                (depth, list_type, elements),
-                true,
-            ));
+            return Ok(ListItemStep::Item((depth, list_type, elements), true));
         }
         let control = Some((depth, list_type, elements));
         // L8.5: partition the escape into paragraph batches. Leading

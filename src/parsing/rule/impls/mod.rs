@@ -77,9 +77,9 @@ mod variable;
 
 pub use self::anchor::RULE_ANCHOR;
 pub use self::bibcite::RULE_BIBCITE;
+pub(crate) use self::block::blocks::parse_wikidot_implicit_list_block;
 pub(crate) use self::block::blocks::wikidot_math_name;
 pub(crate) use self::block::blocks::wikidot_scored_div_close_compatible;
-pub(crate) use self::block::blocks::parse_wikidot_implicit_list_block;
 pub(crate) use self::block::head_word_names_known_block;
 pub use self::block::{RULE_BLOCK, RULE_BLOCK_SKIP_NEWLINE, RULE_BLOCK_STAR};
 pub(crate) use self::block::{

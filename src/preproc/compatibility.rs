@@ -737,7 +737,9 @@ fn canonicalize_collapsible_closers_sharing_lines(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
     let mut open_depths: Vec<(usize, bool)> = Vec::new();
     let mut output = Vec::with_capacity(lines.len());
-    for (line_number, (line, literal)) in lines.iter().zip(literal_lines.iter()).enumerate() {
+    for (line_number, (line, literal)) in
+        lines.iter().zip(literal_lines.iter()).enumerate()
+    {
         let (body, ending) = split_line(line);
         if *literal {
             output.push(line.clone());

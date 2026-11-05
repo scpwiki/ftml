@@ -2000,8 +2000,7 @@ where
         let mut li_events: BTreeSet<usize> = BTreeSet::new();
         let mut depth = 0usize;
         let mut sat: VecDeque<CrossFrame> = VecDeque::new();
-        let mut pairs: BTreeMap<usize, (WikidotLiCrossKind, bool)> =
-            BTreeMap::new();
+        let mut pairs: BTreeMap<usize, (WikidotLiCrossKind, bool)> = BTreeMap::new();
         let mut redundant: BTreeSet<usize> = BTreeSet::new();
         let mut implicit: BTreeSet<usize> = BTreeSet::new();
 
@@ -2020,8 +2019,7 @@ where
         }
 
         loop {
-            if scan.current().token == Token::InputEnd
-                || scan.at_hard_body_end_boundary()
+            if scan.current().token == Token::InputEnd || scan.at_hard_body_end_boundary()
             {
                 break;
             }
@@ -2066,17 +2064,12 @@ where
                                         stack.pop();
                                         stack.push((CrossFrame::Li, start, false));
                                     }
-                                    Some(CrossFrame::Div)
-                                    | Some(CrossFrame::Coll) => {
+                                    Some(CrossFrame::Div) | Some(CrossFrame::Coll) => {
                                         stack.push((CrossFrame::List, start, false));
                                         stack.push((CrossFrame::Li, start, false));
                                         implicit.insert(start);
                                     }
-                                    _ => stack.push((
-                                        CrossFrame::Li,
-                                        start,
-                                        false,
-                                    )),
+                                    _ => stack.push((CrossFrame::Li, start, false)),
                                 }
                             }
                         } else if name.eq_ignore_ascii_case("div") {
@@ -2107,10 +2100,8 @@ where
                                     let token = name_probe.current();
                                     Some((
                                         std::borrow::Cow::Owned(
-                                            scan.full_text().inner()[token
-                                                .span
-                                                .start
-                                                ..token.span.end]
+                                            scan.full_text().inner()
+                                                [token.span.start..token.span.end]
                                                 .to_owned(),
                                         ),
                                         false,
@@ -2126,13 +2117,10 @@ where
                     };
                     let name = raw_name.strip_suffix('_').unwrap_or(&raw_name);
                     let opaque = self.wikidot_li_cross_byte_opaque(close_pos);
-                    if name.eq_ignore_ascii_case("ul")
-                        || name.eq_ignore_ascii_case("ol")
+                    if name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
                     {
                         if depth == 0 {
-                            if !opaque
-                                && sat.front() == Some(&CrossFrame::List)
-                            {
+                            if !opaque && sat.front() == Some(&CrossFrame::List) {
                                 sat.pop_front();
                                 redundant.insert(close_pos);
                             }
@@ -2141,9 +2129,10 @@ where
                         depth -= 1;
                         if !opaque {
                             li_events.insert(close_pos);
-                            if let Some(index) = stack.iter().rposition(
-                                |(kind, _, _)| *kind == CrossFrame::List,
-                            ) {
+                            if let Some(index) = stack
+                                .iter()
+                                .rposition(|(kind, _, _)| *kind == CrossFrame::List)
+                            {
                                 pop_through!(index);
                             } else if sat.front() == Some(&CrossFrame::List) {
                                 sat.pop_front();
@@ -2171,9 +2160,10 @@ where
                             } else if sat.front() == Some(&CrossFrame::Li) {
                                 sat.pop_front();
                                 redundant.insert(close_pos);
-                            } else if let Some(index) = stack.iter().rposition(
-                                |(kind, _, _)| *kind == CrossFrame::Li,
-                            ) {
+                            } else if let Some(index) = stack
+                                .iter()
+                                .rposition(|(kind, _, _)| *kind == CrossFrame::Li)
+                            {
                                 stack[index].2 = true;
                                 redundant.insert(close_pos);
                             }
@@ -2187,18 +2177,15 @@ where
                         || name.eq_ignore_ascii_case("collapsible")
                     {
                         if !opaque {
-                            let (frame, kind) = if name.eq_ignore_ascii_case("div")
-                            {
+                            let (frame, kind) = if name.eq_ignore_ascii_case("div") {
                                 (CrossFrame::Div, WikidotLiCrossKind::Div)
                             } else {
-                                (
-                                    CrossFrame::Coll,
-                                    WikidotLiCrossKind::Collapsible,
-                                )
+                                (CrossFrame::Coll, WikidotLiCrossKind::Collapsible)
                             };
-                            if let Some(index) = stack.iter().rposition(
-                                |(stack_kind, _, _)| *stack_kind == frame,
-                            ) {
+                            if let Some(index) = stack
+                                .iter()
+                                .rposition(|(stack_kind, _, _)| *stack_kind == frame)
+                            {
                                 let open_byte = stack[index].1;
                                 let crossed = li_events
                                     .range(open_byte + 1..close_pos)
@@ -2209,9 +2196,7 @@ where
                             } else if sat.front() == Some(&frame) {
                                 sat.pop_front();
                             } else {
-                                while let Some((stack_kind, _, seen)) =
-                                    stack.pop()
-                                {
+                                while let Some((stack_kind, _, seen)) = stack.pop() {
                                     if !seen {
                                         sat.push_back(stack_kind);
                                     }
@@ -2356,10 +2341,7 @@ where
 
     /// L85: whether an implicit-list `[[li]]` stands here inside a
     /// div/collapsible body (cross shapes).
-    pub(crate) fn wikidot_li_cross_implicit_li_here(
-        &self,
-        rule_name: &str,
-    ) -> bool {
+    pub(crate) fn wikidot_li_cross_implicit_li_here(&self, rule_name: &str) -> bool {
         if !self.settings().layout.legacy() || self.discarding_hidden_body() {
             return false;
         }

@@ -1286,7 +1286,9 @@ where
     // the interior tail keeps its paragraph shape (live shows no break).
     if parser.settings().layout.legacy() {
         let closer_ahead = match next.1 {
-            Some(Token::LeftBlockEnd) => parser.look_ahead(0).map(|token| token.span.start),
+            Some(Token::LeftBlockEnd) => {
+                parser.look_ahead(0).map(|token| token.span.start)
+            }
             Some(Token::Whitespace) => parser
                 .look_ahead(1)
                 .filter(|token| token.token == Token::LeftBlockEnd)
@@ -1342,6 +1344,17 @@ where
                 && matches!(
                     token.token,
                     Token::Quote | Token::BulletItem | Token::NumberedItem
+                ))
+            // L85 scope-5: live keeps the break before a table in item
+            // bodies (li-table-contained).
+            && !(parser.settings().layout.legacy()
+                && parser.wikidot_li_inside_item_body()
+                && matches!(
+                    token.token,
+                    Token::TableColumn
+                        | Token::TableColumnRight
+                        | Token::TableColumnCenter
+                        | Token::TableColumnTitle
                 ))
     });
     // A marker line owns its break only when the list really forms: a list
@@ -1574,9 +1587,7 @@ fn try_consume_wikidot_li_cross_implicit_list<'r, 't>(
     if !parser.wikidot_top_boundary_is_div_or_collapsible() {
         return None;
     }
-    if !parser
-        .wikidot_li_cross_implicit_li_at(parser.current().span.start)
-    {
+    if !parser.wikidot_li_cross_implicit_li_at(parser.current().span.start) {
         return None;
     }
     let mut probe = parser.clone();

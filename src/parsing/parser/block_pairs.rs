@@ -269,7 +269,9 @@ fn is_simple_table_row_line(line: &str) -> bool {
 
 impl WikidotLineRuns {
     pub(crate) fn line_of(&self, byte: usize) -> usize {
-        self.line_starts.partition_point(|start| *start <= byte).saturating_sub(1)
+        self.line_starts
+            .partition_point(|start| *start <= byte)
+            .saturating_sub(1)
     }
 
     pub(crate) fn line_start(&self, line: usize) -> usize {

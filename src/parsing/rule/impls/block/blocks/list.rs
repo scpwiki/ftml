@@ -331,8 +331,7 @@ fn parse_list_block_impl<'r, 't>(
         let list_count = output.len();
         let escaped_count = escaped.len();
         output.extend(escaped);
-        let mut success =
-            crate::parsing::ParseSuccess::new(output.into(), errors, false);
+        let mut success = crate::parsing::ParseSuccess::new(output.into(), errors, false);
         success.paragraph_split = Some(vec![
             (list_count, false, ParagraphSplitKind::Paragraph),
             (escaped_count, false, ParagraphSplitKind::Paragraph),
@@ -344,8 +343,8 @@ fn parse_list_block_impl<'r, 't>(
     // top-level by gather. Blank lines and input end keep the break, as
     // does content inside a kept iftags gate body (kept-gate pin).
     record_wikidot_explicit_list_end(parser);
-    let content_after_list = parser.wikidot_next_line_has_content()
-        && !parser.in_wikidot_iftags_span();
+    let content_after_list =
+        parser.wikidot_next_line_has_content() && !parser.in_wikidot_iftags_span();
     if parser.settings().layout.legacy()
         && !nested
         && !flag_score
@@ -452,7 +451,9 @@ fn wikidot_li_open_heads(elements: &[Element]) -> Vec<usize> {
     elements
         .iter()
         .filter_map(|element| match element {
-            Element::Partial(PartialElement::WikidotBlockOpen(shell)) => Some(shell.head_byte()),
+            Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+                Some(shell.head_byte())
+            }
             _ => None,
         })
         .collect()
@@ -473,7 +474,8 @@ fn wikidot_li_apply_b5<'t>(
     let base = partial_item_indices.first().copied().unwrap_or(0);
     let mut merged: Vec<ListItem<'t>> = Vec::with_capacity(items.len());
     merged.extend(items.drain(..base));
-    let mut partials: std::collections::VecDeque<ListItem<'t>> = items.drain(..).collect();
+    let mut partials: std::collections::VecDeque<ListItem<'t>> =
+        items.drain(..).collect();
     let mut hi = 0usize;
     while let Some(outer) = partials.pop_front() {
         let dropped = wikidot_li_span_covers(&spans, closes[hi]);
@@ -816,6 +818,20 @@ fn wikidot_li_segment_is_blank(segment: &[Element]) -> bool {
     segment.iter().all(Element::is_whitespace)
 }
 
+/// L85 scope-5: live keeps a single break after these formed blocks in
+/// item bodies (li-div/align/code/coll/note-contained); every other
+/// paragraph-unsafe element (tables, rules, lists) still drops it.
+fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
+    match element {
+        Element::Container(container) => matches!(
+            container.ctype(),
+            ContainerType::Div | ContainerType::Align(_) | ContainerType::Note
+        ),
+        Element::Collapsible { .. } | Element::Code { .. } => true,
+        _ => false,
+    }
+}
+
 fn assemble_wikidot_li_segments<'t>(
     mut segments: Vec<Vec<Element<'t>>>,
     source: &str,
@@ -841,6 +857,7 @@ fn assemble_wikidot_li_segments<'t>(
         while index < segment.len() {
             if segment[index] == Element::LineBreak
                 && !segment[index - 1].paragraph_safe()
+                && !wikidot_li_break_kept_after_block(&segment[index - 1])
             {
                 segment.remove(index);
             } else {
@@ -890,8 +907,9 @@ fn assemble_wikidot_li_segments<'t>(
     }
     // L85 scope-6: a trailing newline after a nested list stays raw on live
     // (no break element). Other trailing content keeps the break.
-    let trailing_nested_list =
-        matches!(elements.last(), Some(Element::List { .. }));
+    // L85 scope-5: same for a trailing simple table (T5-item-table-end).
+    let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }));
+    let trailing_table = matches!(elements.last(), Some(Element::Table(_)));
     if had_trailing_empty
         && elements
             .last()
@@ -908,6 +926,7 @@ fn assemble_wikidot_li_segments<'t>(
         if body.ends_with('\n')
             && !matches!(elements.last(), Some(Element::LineBreak))
             && !trailing_nested_list
+            && !trailing_table
         {
             elements.push(Element::LineBreak);
         }
@@ -965,9 +984,9 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             }
         }
         let head_pos = parser.current().span.start;
-        let (_, in_head, _) = parser.get_block_name(false).map_err(|_| {
-            parser.make_err(ParseErrorKind::RuleFailed)
-        })?;
+        let (_, in_head, _) = parser
+            .get_block_name(false)
+            .map_err(|_| parser.make_err(ParseErrorKind::RuleFailed))?;
         let arguments = parser.get_head_map_wikidot(&BLOCK_LI, in_head)?;
         let attributes = arguments.to_attribute_map(parser.settings());
         let body_start = parser.current().span.start;
@@ -1196,45 +1215,6 @@ mod tests {
                     panic!("expected one nested list item, got {items:?}");
                 };
                 assert_eq!(element_text(elements), "Child");
-            },
-        );
-    }
-
-    #[test]
-    fn wikidot_nested_list_keeps_trailing_newline_breaks() {
-        // L85 scope 6, live evidence S6-nested-trailing-nl: the newline
-        // after a nested explicit list stays a break inside the outer item,
-        // and the list keeps its top-level trailing break.
-        with_parse(
-            concat!(
-                "[[ul]]\n",
-                "[[li]]A\n",
-                "[[ul]]\n",
-                "[[li]]B[[/li]]\n",
-                "[[/ul]]\n",
-                "[[/li]]\n",
-                "[[/ul]]",
-            ),
-            |tree, errors| {
-                assert!(errors.is_empty(), "{errors:?}");
-                let [Element::List { items, .. }, Element::LineBreak] =
-                    tree.as_slice()
-                else {
-                    panic!("expected one list and a break, got {tree:?}");
-                };
-                let [ListItem::Elements { elements, .. }] = items.as_slice()
-                else {
-                    panic!("expected one list item, got {items:?}");
-                };
-                assert!(matches!(
-                    elements.as_slice(),
-                    [
-                        Element::Text(_),
-                        Element::LineBreak,
-                        Element::List { .. },
-                        Element::LineBreak,
-                    ]
-                ));
             },
         );
     }

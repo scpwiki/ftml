@@ -400,8 +400,32 @@ where
         let body_text = probe.get_body_text(&BLOCK_DIV)?;
         let owner_end = probe.current().span.start;
         let closer_start = body_start + body_text.len();
-        let literal_start = if line_started_after_physical_newline {
+        // L85 scope-5: in item bodies a newline swallowed before a literal
+        // div becomes a break element (single newline, e25) or nothing
+        // (blank line joins directly, e17); elsewhere the old literal
+        // slice is kept.
+        let li_body = parser.wikidot_li_inside_item_body();
+        let blank_before = li_body && line_started_after_physical_newline && {
+            let bytes = source[..owner_start].as_bytes();
+            let mut i = bytes.len();
+            while i > 0 && (bytes[i - 1] == b' ' || bytes[i - 1] == b'\t') {
+                i -= 1;
+            }
+            let mut newlines = 0;
+            while i > 0 && bytes[i - 1] == b'\n' {
+                newlines += 1;
+                i -= 1;
+            }
+            newlines >= 2
+        };
+        let restore_break =
+            li_body && line_started_after_physical_newline && !blank_before;
+        let literal_start = if line_started_after_physical_newline
+            && !(li_body && (blank_before || restore_break))
+        {
             line_start - 1
+        } else if li_body && (blank_before || restore_break) {
+            line_start
         } else {
             owner_start
         };
@@ -466,11 +490,17 @@ where
                     &source[closer_start..owner_end],
                 )));
             }
-            if literal_end > owner_end && parser.current().span.start == owner_end {
+            // L85 scope-5: in item bodies the newline after a literal div
+            // is left for the real break token (e25/e18/e32 trail it bare);
+            // elsewhere the old text newline is kept.
+            if literal_end > owner_end
+                && parser.current().span.start == owner_end
+                && !parser.wikidot_li_inside_item_body()
+            {
                 elements.push(text!("\n"));
             }
         }
-        let elements = if paragraph_safe {
+        let mut elements = if paragraph_safe {
             elements
         } else {
             let mut merged: Vec<Element<'t>> = Vec::with_capacity(elements.len());
@@ -488,6 +518,9 @@ where
             }
             merged
         };
+        if restore_break {
+            elements.insert(0, Element::LineBreak);
+        }
         let elements = match elements.len() {
             1 => Elements::Single(elements.into_iter().next().unwrap()),
             _ => Elements::Multiple(elements),

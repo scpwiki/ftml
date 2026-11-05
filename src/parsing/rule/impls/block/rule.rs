@@ -142,6 +142,18 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
                     && matches!(
                         block_rule.name,
                         "block-list-unordered" | "block-list-ordered"
+                    ))
+                // L85 scope-5: live keeps the break before an align block in
+                // item bodies (li-align-contained; family-uniform per ruling
+                // treatment, only [[=]] directly probed).
+                && !(parser.settings().layout.legacy()
+                    && parser.wikidot_li_inside_item_body()
+                    && matches!(
+                        block_rule.name,
+                        "block-align-center"
+                            | "block-align-justify"
+                            | "block-align-left"
+                            | "block-align-right"
                     ))),
             None => Ok(false),
         }

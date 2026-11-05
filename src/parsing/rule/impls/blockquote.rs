@@ -74,7 +74,10 @@ fn trim_wikidot_flat_close_rest(rest: &mut Vec<Element>) {
     }
 }
 
-fn find_external_flat_close(parser: &Parser<'_, '_>, elements: &[Element]) -> Option<usize> {
+fn find_external_flat_close(
+    parser: &Parser<'_, '_>,
+    elements: &[Element],
+) -> Option<usize> {
     elements.iter().position(|element| {
         let Element::Partial(PartialElement::WikidotBlockClose(kind)) = element else {
             return false;
@@ -118,21 +121,24 @@ fn build_flat_split_segments<'t>(
         }
     };
     let mut quote_run: Vec<(usize, (), NativeQuoteRow<'t>)> = Vec::new();
-    let flush_quote_run = |quote_run: &mut Vec<(usize, (), NativeQuoteRow<'t>)>,
-                           segments: &mut Vec<(Vec<Element<'t>>, bool)>| {
-        if quote_run.is_empty() {
-            return;
-        }
-        let run = std::mem::take(quote_run);
-        let depth_lists = process_depths((), run);
-        let mut elements: Vec<Element> = depth_lists
-            .into_iter()
-            .filter_map(|(_, depth_list)| build_blockquote_element(depth_list, wikidot))
-            .collect();
-        if !elements.is_empty() {
-            segments.push((elements, false));
-        }
-    };
+    let flush_quote_run =
+        |quote_run: &mut Vec<(usize, (), NativeQuoteRow<'t>)>,
+         segments: &mut Vec<(Vec<Element<'t>>, bool)>| {
+            if quote_run.is_empty() {
+                return;
+            }
+            let run = std::mem::take(quote_run);
+            let depth_lists = process_depths((), run);
+            let mut elements: Vec<Element> = depth_lists
+                .into_iter()
+                .filter_map(|(_, depth_list)| {
+                    build_blockquote_element(depth_list, wikidot)
+                })
+                .collect();
+            if !elements.is_empty() {
+                segments.push((elements, false));
+            }
+        };
     for (depth, row) in split.rows {
         let rerouted = depth.saturating_sub(split.base_depth);
         if rerouted > 0 {

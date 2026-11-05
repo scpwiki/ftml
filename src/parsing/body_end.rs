@@ -103,10 +103,11 @@ impl<'r, 't> Parser<'r, 't> {
     /// Confines implicit-list parsing to genuine div/collapsible bodies.
     pub(crate) fn wikidot_top_boundary_is_div_or_collapsible(&self) -> bool {
         self.body_end_boundaries().last().is_some_and(|boundary| {
-            !boundary.confined && boundary.accepts_names.iter().any(|accepted| {
-                accepted.eq_ignore_ascii_case("div")
-                    || accepted.eq_ignore_ascii_case("collapsible")
-            })
+            !boundary.confined
+                && boundary.accepts_names.iter().any(|accepted| {
+                    accepted.eq_ignore_ascii_case("div")
+                        || accepted.eq_ignore_ascii_case("collapsible")
+                })
         })
     }
 
