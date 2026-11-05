@@ -96,6 +96,11 @@ pub(crate) const WIKIDOT_EMPTY_QUOTE_MARKER: &str = "data-ftml-empty-quote";
 /// Lists the attributes whose Wikidot head value evaluated to empty, so the
 /// renderer emits `key=""` for them the way live does; stripped when rendered.
 pub(crate) const WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER: &str = "data-ftml-empty-value";
+
+/// Stands in for a label whose Wikidot head value evaluated to empty through
+/// raw inline markup (which live renders as an empty label, unlike an authored
+/// empty value that falls back to the default label). Never reaches output.
+pub(crate) const WIKIDOT_EXPLICIT_EMPTY_LABEL_MARKER: &str = "\u{E002}";
 pub(crate) const WIKIDOT_WS_MONO_VANISH_MARKER: &str = "data-ftml-ws-mono-vanish";
 /// Marks a Wikidot heading whose line carries a dropped block closer (or an
 /// ended collapsible head). The implicit label span is then produced by the

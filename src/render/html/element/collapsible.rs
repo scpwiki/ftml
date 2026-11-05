@@ -193,6 +193,9 @@ fn wikidot_link_label(text: Option<&str>, show: bool) -> &str {
     } else {
         "– hide block"
     };
+    if text == Some(crate::tree::WIKIDOT_EXPLICIT_EMPTY_LABEL_MARKER) {
+        return "";
+    }
     text.filter(|text| !text.is_empty() && *text != "0")
         .unwrap_or(default)
 }

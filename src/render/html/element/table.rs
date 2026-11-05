@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::{AttributeMap, Table, TableType};
+use crate::tree::{Table, TableType};
 use std::num::NonZeroU32;
 
 pub fn render_table(ctx: &mut HtmlContext, table: &Table) {
@@ -37,10 +37,7 @@ pub fn render_table(ctx: &mut HtmlContext, table: &Table) {
     };
 
     let table_attributes = if table_class.is_empty() {
-        attr!(
-            "class" => ""; if has_empty_class(&table.attributes);;
-            &table.attributes,
-        )
+        attr!(;; &table.attributes)
     } else {
         attr!(
             "class" => table_class;;
@@ -70,10 +67,7 @@ fn render_rows(
     for row in &table.rows {
         ctx.html()
             .tr()
-            .attr(attr!(
-                "class" => ""; if layout.legacy() && has_empty_class(&row.attributes);;
-                &row.attributes,
-            ))
+            .attr(attr!(;; &row.attributes))
             .inner(|ctx| {
                 if layout.legacy() {
                     ctx.push_raw('\n');
@@ -86,8 +80,6 @@ fn render_rows(
                         column_span_buf.clear();
                         str_write!(column_span_buf, "{}", cell.column_span);
                     }
-                    let empty_class =
-                        layout.legacy() && has_empty_class(&cell.attributes);
                     let attributes = match (cell.align, layout) {
                         (Some(align), Layout::Wikidot) => attr!(
                             "colspan" => &column_span_buf; if cell.column_span > value_one && !has_authored_column_span,
@@ -100,8 +92,7 @@ fn render_rows(
                             &cell.attributes,
                         ),
                         (None, _) => attr!(
-                            "colspan" => &column_span_buf; if cell.column_span > value_one && !has_authored_column_span,
-                            "class" => ""; if empty_class;;
+                            "colspan" => &column_span_buf; if cell.column_span > value_one && !has_authored_column_span;;
                             &cell.attributes,
                         ),
                     };
@@ -118,13 +109,6 @@ fn render_rows(
             ctx.push_raw('\n');
         }
     }
-}
-
-fn has_empty_class(attributes: &AttributeMap<'_>) -> bool {
-    attributes
-        .get()
-        .get("class")
-        .is_some_and(|value| value.is_empty())
 }
 
 #[cfg(test)]

@@ -21,6 +21,7 @@
 use super::attributes::AddedAttributes;
 use super::context::HtmlContext;
 use super::render::ItemRender;
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 macro_rules! tag_method {
@@ -227,15 +228,31 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         };
         let attribute_map = attribute_map.get();
         let legacy = self.ctx.layout().legacy();
+        // Attributes whose Wikidot value evaluated to empty through raw inline
+        // markup are written `key=""` by live, whatever the attribute name.
+        let explicit_empty = explicit_empty_names(attribute_map, legacy);
 
         if attributes.entries.is_empty() {
             for (key, value) in attribute_map {
                 if omit_internal_attribute_marker(key, legacy)
                     || omit_empty_user_class(key, value)
+                    || explicit_empty.iter().any(|name| *name == key.as_ref())
                 {
                     continue;
                 }
+                if legacy && value.is_empty() {
+                    if matches!(key.as_ref(), "class" | "id" | "role" | "style" | "type")
+                    {
+                        continue;
+                    }
+                    self.attr_single_quoted(key, &[]);
+                    continue;
+                }
                 self.attr_single(key, &[value]);
+            }
+
+            for name in &explicit_empty {
+                self.attr_single_quoted(name, &[]);
             }
 
             return self.chain();
@@ -245,6 +262,10 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         let mut merged_value = Vec::new();
 
         for (key, value_parts) in filter_attribute_entries(&attributes) {
+            if explicit_empty.contains(&key) {
+                merged.insert(key);
+                continue;
+            }
             if let Some(map_value) = attribute_map.get(&cow!(key)) {
                 if omit_empty_user_class(key, map_value) {
                     self.attr_single(key, value_parts);
@@ -271,10 +292,23 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
         for (key, value) in attribute_map {
             if !merged.contains(key.as_ref())
                 && !omit_internal_attribute_marker(key, legacy)
+                && !explicit_empty.iter().any(|name| *name == key.as_ref())
                 && !omit_empty_user_class(key, value)
             {
+                if legacy && value.is_empty() {
+                    if matches!(key.as_ref(), "class" | "id" | "role" | "style" | "type")
+                    {
+                        continue;
+                    }
+                    self.attr_single_quoted(key, &[]);
+                    continue;
+                }
                 self.attr_single(key, &[value]);
             }
+        }
+
+        for name in &explicit_empty {
+            self.attr_single_quoted(name, &[]);
         }
 
         self.chain()
@@ -338,10 +372,30 @@ fn omit_empty_user_class(key: &str, value: &str) -> bool {
     key == "class" && value.is_empty()
 }
 
-/// Internal `data-ftml-*` markers ride along in Wikidot attribute maps to keep
-/// tree state; they are never authored output.
-fn omit_internal_attribute_marker(key: &str, legacy: bool) -> bool {
-    legacy && key.starts_with("data-ftml-")
+/// Attribute names live writes as `key=""` in the Wikidot layout because their
+/// quoted head value held raw inline markup.
+fn explicit_empty_names<'a>(
+    attribute_map: &'a std::collections::BTreeMap<Cow<'a, str>, Cow<'a, str>>,
+    legacy: bool,
+) -> Vec<&'a str> {
+    if !legacy {
+        return Vec::new();
+    }
+    attribute_map
+        .get(crate::tree::WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER)
+        .map(|names| {
+            names
+                .split(' ')
+                .filter(|name| !name.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+/// Internal `data-ftml-*` markers ride along in attribute maps to keep tree
+/// state; they are never authored output in any layout.
+fn omit_internal_attribute_marker(key: &str, _legacy: bool) -> bool {
+    key.starts_with("data-ftml-")
 }
 
 #[inline]

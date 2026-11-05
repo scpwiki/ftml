@@ -1,0 +1,5 @@
+[[image a.png alt="@@a@@"]]
+
+[[image @@a@@]]
+
+[[image a@@b@@c.png]]

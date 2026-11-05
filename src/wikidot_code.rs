@@ -304,37 +304,12 @@ fn code_opener_end_checked(
     let relative_end = close_brackets.next_at(head_start)? - head_start;
     let head_end = head_start + relative_end;
     let head = &source[head_start..head_end];
-    if head_has_malformed_nested_marker(head) {
-        return None;
-    }
     let name_end = head
         .find(|character: char| character.is_ascii_whitespace())
         .unwrap_or(head.len());
     let name = &head[..name_end];
 
     name.eq_ignore_ascii_case("code").then_some(head_end + 2)
-}
-
-fn head_has_malformed_nested_marker(head: &str) -> bool {
-    // The head ends at the first close marker, so a nested opener inside
-    // it is an unclosed fragment. An iftags segment opener fragment is
-    // live behavior: Wikidot ends the head at the segment's own close
-    // marker and treats the rest as body, so the candidate stands. Any
-    // other fragment (a closer, or another block's opener) leaves the
-    // head malformed, since it could let the head steal a closer that
-    // belongs to a later block.
-    let mut rest = head;
-    while let Some(index) = rest.find("[[") {
-        let fragment = &rest[index + 2..];
-        let name_end = fragment
-            .find(|character: char| character.is_ascii_whitespace())
-            .unwrap_or(fragment.len());
-        if !fragment[..name_end].eq_ignore_ascii_case("iftags") {
-            return true;
-        }
-        rest = &fragment[name_end..];
-    }
-    false
 }
 
 fn code_closer_end(
@@ -600,15 +575,17 @@ mod tests {
     }
 
     #[test]
-    fn malformed_head_cannot_create_a_reverse_body_range() {
+    fn candidate_body_ranges_are_never_reversed() {
         let source = "[[code type=\"cssV][[/code]]\n[[code]][[/code]]";
 
-        let malformed = source.find("[[code type=\"cssV]").unwrap();
         let later = source.rfind("[[code]]").unwrap();
         let candidates = candidates(source);
 
-        assert!(!candidates.contains_key(&malformed));
         let candidate = candidates.get(&later).expect("later valid code candidate");
         assert!(candidate.body.start <= candidate.body.end);
+        for candidate in candidates.values() {
+            assert!(candidate.body.start <= candidate.body.end);
+            assert!(candidate.body.end <= candidate.owner_end);
+        }
     }
 }

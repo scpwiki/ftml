@@ -92,19 +92,47 @@ fn wikidot_failed_tab_gap_valid(lower: &[u8], start: usize, end: usize) -> bool 
         .all(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
 }
 
-fn wikidot_find_failed_opener(lower: &[u8], from: usize) -> Option<usize> {
-    let mut best = None;
+fn wikidot_find_failed_opener(lower: &[u8], from: usize) -> Option<(usize, usize)> {
+    let mut best: Option<(usize, usize)> = None;
     for pattern in [b"[[tab ]]" as &[u8], b"[[tab\n]]"] {
         let mut offset = from;
         while offset + pattern.len() <= lower.len() {
             if &lower[offset..offset + pattern.len()] == pattern {
-                if best.is_none_or(|found| offset < found) {
-                    best = Some(offset);
+                if best.is_none_or(|(found, _)| offset < found) {
+                    best = Some((offset, offset + pattern.len()));
                 }
                 break;
             }
             offset += 1;
         }
+    }
+
+    // A tab opener whose head holds a lone `]` fails too (`[[tab a]b]]`): the
+    // opener stays literal but the surrounding tabview still forms.
+    let mut offset = from;
+    while offset + 5 <= lower.len() {
+        if &lower[offset..offset + 5] == b"[[tab"
+            && matches!(lower.get(offset + 5), Some(b' ' | b'\t' | b'\n' | b']'))
+        {
+            let mut cursor = offset + 5;
+            let mut lone = false;
+            while cursor < lower.len() {
+                if lower[cursor] == b']' {
+                    if lower.get(cursor + 1) == Some(&b']') {
+                        if lone {
+                            let end = cursor + 2;
+                            if best.is_none_or(|(found, _)| offset < found) {
+                                best = Some((offset, end));
+                            }
+                        }
+                        break;
+                    }
+                    lone = true;
+                }
+                cursor += 1;
+            }
+        }
+        offset += 1;
     }
     best
 }
@@ -221,10 +249,10 @@ fn wikidot_tabview_failed_content_gate(items: &[TabViewItem]) -> bool {
                 let single = wikidot_find_failed_opener(bytes, pos);
                 let leading = wikidot_find_leading_opener(bytes, pos);
                 let next_opener = match (single, leading) {
-                    (Some(open), Some((start, end))) if start < open => {
-                        Some((start, end, true))
+                    (Some((open, _end)), Some((start, end2))) if start < open => {
+                        Some((start, end2, true))
                     }
-                    (Some(open), _) => Some((open, open + 8, false)),
+                    (Some((open, end)), _) => Some((open, end, false)),
                     (None, Some((start, end))) => Some((start, end, true)),
                     (None, None) => None,
                 };
@@ -805,11 +833,8 @@ fn tab_label_finish<'t>(
     output: Option<String>,
     copied_until: usize,
     end: usize,
-    saw_unit: bool,
+    _saw_unit: bool,
 ) -> std::borrow::Cow<'t, str> {
-    if saw_unit {
-        return std::borrow::Cow::Borrowed("");
-    }
     match output {
         Some(mut output) => {
             if end >= copied_until {
@@ -1304,12 +1329,16 @@ where
     'r: 't,
 {
     let source = parser.full_text().inner();
-    let start = parser.current().span.start;
+    let start = parser.wikidot_head_control_start();
     let mut copied_until = start;
     let mut output = None::<String>;
     let mut saw_unit = false;
     let mut link_unit_end = None::<usize>;
     let mut elided_footnoteblock = false;
+    // A lone `]` ends a Wikidot tab head unless it sits inside a quoted
+    // argument value (`title="a]b"`); outside one the opener stays literal.
+    let mut in_argument_value = false;
+    let mut previous_token = None;
 
     loop {
         let current = parser.current();
@@ -1488,7 +1517,12 @@ where
                     parser.step()?;
                     return Ok((std::borrow::Cow::Borrowed(""), None, saw_unit));
                 }
-                parser.step()?;
+                if in_argument_value {
+                    previous_token = Some(current.token);
+                    parser.step()?;
+                    continue;
+                }
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
             Token::LeftLink => {
                 if let Some((unit, _fused_end)) = tab_title_link_unit(parser) {
@@ -1508,7 +1542,15 @@ where
                     saw_unit,
                 );
             }
+            Token::DoubleQuote => {
+                in_argument_value = matches!(previous_token, Some(Token::Equals));
+                previous_token = Some(current.token);
+                parser.step()?;
+            }
             _ => {
+                if !matches!(current.token, Token::Whitespace) {
+                    previous_token = Some(current.token);
+                }
                 parser.step()?;
             }
         }
@@ -1604,12 +1646,16 @@ fn wikidot_tab_head_argument_at(text: &str, start: usize) -> Option<(&str, &str,
     Some((&text[start..index], &text[value_start..value_end], end))
 }
 
+fn wikidot_tab_head_token_space(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\n' | b'\r')
+}
+
 fn wikidot_tab_head_tokens(text: &str) -> Vec<WikidotTabHeadToken<'_>> {
     let bytes = text.as_bytes();
     let mut tokens = Vec::new();
     let mut index = 0;
     while index < bytes.len() {
-        if bytes[index].is_ascii_whitespace() {
+        if wikidot_tab_head_token_space(bytes[index]) {
             index += 1;
             continue;
         }
@@ -1622,7 +1668,7 @@ fn wikidot_tab_head_tokens(text: &str) -> Vec<WikidotTabHeadToken<'_>> {
             continue;
         }
         let mut end = index;
-        while end < bytes.len() && !bytes[end].is_ascii_whitespace() {
+        while end < bytes.len() && !wikidot_tab_head_token_space(bytes[end]) {
             end += 1;
         }
         tokens.push(WikidotTabHeadToken {
@@ -1655,7 +1701,7 @@ fn wikidot_tab_head_label(text: &str) -> String {
         && let Some((key, value)) = tokens[0].key
     {
         return if key == "title" {
-            wikidot_tab_head_normalize(value)
+            wikidot_tab_head_title_value(value)
         } else {
             "untitled".to_owned()
         };
@@ -1685,7 +1731,7 @@ fn wikidot_tab_head_label(text: &str) -> String {
         })
     };
     if let Some(title) = title {
-        return wikidot_tab_head_normalize(title);
+        return wikidot_tab_head_title_value(title);
     }
     if rest.is_empty() {
         return "untitled".to_owned();
@@ -1703,6 +1749,53 @@ fn wikidot_tab_head_label(text: &str) -> String {
         return String::new();
     }
     joined
+}
+
+/// The label of a tab head that held an inline construct: live keeps only the
+/// trailing argument suffix after the last construct, and only its `title`
+/// argument names the tab (`[[tab [[span]]x[[/span]] title="B"]]` -> `B`).
+fn wikidot_tab_head_construct_label(text: &str) -> String {
+    let tokens = wikidot_tab_head_tokens(text);
+    if tokens.is_empty() {
+        return String::new();
+    }
+
+    let trailing_whitespace = text
+        .as_bytes()
+        .last()
+        .is_some_and(|byte| byte.is_ascii_whitespace());
+    let mut suffix_start = tokens.len();
+    if !trailing_whitespace {
+        while suffix_start > 0 && tokens[suffix_start - 1].key.is_some() {
+            suffix_start -= 1;
+        }
+    }
+    if suffix_start == tokens.len() {
+        return String::new();
+    }
+
+    let suffix = &tokens[suffix_start..];
+    let rest = &tokens[..suffix_start];
+    let title = if rest.is_empty()
+        && let Some(("title", value)) = suffix.first().and_then(|token| token.key)
+    {
+        Some(value)
+    } else {
+        suffix.iter().rev().find_map(|token| match token.key {
+            Some(("title", value)) => Some(value),
+            _ => None,
+        })
+    };
+    title.map(wikidot_tab_head_title_value).unwrap_or_default()
+}
+
+/// A title argument whose value holds raw inline markup evaluates to the empty
+/// label, matching live's escaped placeholder handling.
+fn wikidot_tab_head_title_value(value: &str) -> String {
+    if wikidot_tab_head_has_raw_construct(value) {
+        return String::new();
+    }
+    wikidot_tab_head_normalize(value)
 }
 
 fn wikidot_tab_head_has_raw_construct(text: &str) -> bool {
@@ -1865,8 +1958,10 @@ fn parse_tab<'r, 't>(
         match label {
             None => std::borrow::Cow::Borrowed("untitled"),
             Some(value) => {
-                if saw_title_unit || head_has_elided_footnoteblock {
+                if head_has_elided_footnoteblock {
                     value
+                } else if saw_title_unit {
+                    std::borrow::Cow::Owned(wikidot_tab_head_construct_label(&value))
                 } else {
                     std::borrow::Cow::Owned(wikidot_tab_head_label(&value))
                 }

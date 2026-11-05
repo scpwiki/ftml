@@ -123,18 +123,10 @@ fn push_date_format_class(
 
 fn encode_date_format(date_format: &str) -> String {
     let mut encoded = String::new();
-    for byte in date_format.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                encoded.push(char::from(byte));
-            }
-            _ => {
-                encoded.push('%');
-                str_write!(&mut encoded, "{byte:02X}");
-            }
-        }
-    }
-
+    crate::wikidot_raw_escape::push_percent_encoded_placeholders(
+        &mut encoded,
+        date_format,
+    );
     encoded
 }
 

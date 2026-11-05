@@ -85,8 +85,8 @@ where
 {
     let (mut arguments, body_start) =
         parser.get_head_map_with_body_start_wikidot(&BLOCK_COLLAPSIBLE, in_head)?;
-    let show_text = arguments.get("show");
-    let hide_text = arguments.get("hide");
+    let show_text = wikidot_collapsible_label(&mut arguments, "show");
+    let hide_text = wikidot_collapsible_label(&mut arguments, "hide");
     let start_open = if parser.settings().layout.legacy() {
         matches!(arguments.get("folded").as_deref(), Some("no" | "false"))
     } else {
@@ -191,6 +191,23 @@ fn collect_wikidot_heading_line_tail<'r, 't>(
     }
     elements.extend(tail);
     Ok(crate::parsing::ParseSuccess::new(elements, errors, false))
+}
+
+/// Live renders an empty label when the head value evaluated to empty through
+/// raw inline markup, and the default label for an authored empty value.
+fn wikidot_collapsible_label<'t>(
+    arguments: &mut Arguments<'t>,
+    key: &'t str,
+) -> Option<std::borrow::Cow<'t, str>> {
+    let explicit_empty = arguments.is_explicit_empty(key);
+    let value = arguments.get(key);
+    if explicit_empty {
+        Some(std::borrow::Cow::Borrowed(
+            crate::tree::WIKIDOT_EXPLICIT_EMPTY_LABEL_MARKER,
+        ))
+    } else {
+        value
+    }
 }
 
 fn parse_fn<'r, 't>(

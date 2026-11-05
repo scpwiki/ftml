@@ -1,0 +1,5 @@
+x
+
+[[code type="a[[/code]]
+y
+[[/code]]
