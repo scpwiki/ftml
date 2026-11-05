@@ -124,11 +124,22 @@ pub fn render_link(
     match layout {
         Layout::Wikidot => match link {
             LinkLocation::Url(_) => {
-                write_a!(attr!(
-                    "href" => &url,
-                    "target" => target_value; if target.is_some(),
-                    "rel" => "noopener noreferrer"; if opens_new_tab,
-                ));
+                if ltype == LinkType::Interwiki {
+                    // Live renders a resolved interwiki link in a new window
+                    // through an inline handler on the anchor, not a target.
+                    write_a!(attr!(
+                        "href" => &url,
+                        "onclick" => "window.open(this.href, '_blank'); return false;",
+                        "target" => target_value; if target.is_some(),
+                        "rel" => "noopener noreferrer"; if opens_new_tab,
+                    ));
+                } else {
+                    write_a!(attr!(
+                        "href" => &url,
+                        "target" => target_value; if target.is_some(),
+                        "rel" => "noopener noreferrer"; if opens_new_tab,
+                    ));
+                }
             }
             LinkLocation::Page(page) => {
                 if !page.page().is_empty() && ctx.page_exists(page) {
