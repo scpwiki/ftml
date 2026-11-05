@@ -391,7 +391,14 @@ fn parse_tabview<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
     }
 
-    if runs > 0 && !native && !wikidot_tabview_failed_content_gate(&items) {
+    // A failed tab head (one whose title is an elided footnoteblock) leaves its
+    // source literal inside the view; live keeps the view and renders that
+    // content instead of failing the whole tabview.
+    if runs > 0
+        && !native
+        && runs > records_added
+        && !wikidot_tabview_failed_content_gate(&items)
+    {
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
     }
 
@@ -587,6 +594,95 @@ fn flush_quote_scan_segment<'t>(
     }
 }
 
+fn empty_blockquote_nest<'t>(nesting: usize) -> Vec<Element<'t>> {
+    let mut inner: Vec<Element<'t>> = Vec::new();
+    for _ in 0..nesting {
+        let mut attributes = AttributeMap::new();
+        attributes.insert(crate::tree::WIKIDOT_EMPTY_QUOTE_MARKER, cow!(""));
+        inner = vec![Element::Container(Container::new(
+            ContainerType::Blockquote,
+            inner,
+            attributes,
+        ))];
+    }
+    inner
+}
+
+fn append_blockquote_tail<'t>(elements: &mut Vec<Element<'t>>, nesting: usize) {
+    if matches!(
+        elements.last(),
+        Some(Element::Container(container))
+            if container.ctype() == ContainerType::Blockquote
+    ) {
+        if let Some(Element::Container(container)) = elements.last_mut() {
+            append_blockquote_tail(container.elements_mut(), nesting);
+        }
+        return;
+    }
+    elements.extend(empty_blockquote_nest(nesting));
+}
+
+fn quote_scan_segment_open_depth(segment: &[Element]) -> usize {
+    let mut depth = 0;
+    let mut current = segment;
+    loop {
+        match current.last() {
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Blockquote =>
+            {
+                depth += 1;
+                current = container.elements();
+            }
+            _ => break,
+        }
+    }
+    depth
+}
+
+fn quote_scan_open_depth<'t>(units: &[QuoteEscapedUnit<'t>]) -> usize {
+    match units.last() {
+        Some(QuoteEscapedUnit::Elements(segment, _)) => {
+            quote_scan_segment_open_depth(segment)
+        }
+        Some(QuoteEscapedUnit::Row(depth, _, _)) => *depth,
+        None => 0,
+    }
+}
+
+/// After a tab ejection the rows holding the remaining tab/tabview closers
+/// still open their blockquote run in live, even though their content is
+/// consumed: the run survives as an empty blockquote (nested when the closer
+/// rows are deeper than the row that was open).
+fn append_quote_scan_closer_nest<'t>(
+    units: &mut Vec<QuoteEscapedUnit<'t>>,
+    closer_depth: usize,
+) {
+    let open_depth = quote_scan_open_depth(units);
+    if closer_depth <= open_depth {
+        return;
+    }
+    let nesting = closer_depth - open_depth;
+    match units.last_mut() {
+        Some(QuoteEscapedUnit::Elements(segment, _)) => {
+            append_blockquote_tail(segment, nesting);
+        }
+        Some(QuoteEscapedUnit::Row(row_depth, _, _)) => {
+            let row_depth = *row_depth;
+            units.push(QuoteEscapedUnit::Row(
+                row_depth,
+                empty_blockquote_nest(nesting),
+                false,
+            ));
+        }
+        None => {
+            units.push(QuoteEscapedUnit::Elements(
+                empty_blockquote_nest(nesting),
+                false,
+            ));
+        }
+    }
+}
+
 fn scan_tab_close_after_soft_end<'r, 't>(
     parser: &mut Parser<'r, 't>,
     required_depth: usize,
@@ -597,6 +693,7 @@ where
 {
     let mut units: Vec<QuoteEscapedUnit<'t>> = Vec::new();
     let mut pending_segment: Option<(usize, Vec<Element<'t>>)> = None;
+    let mut saw_content = false;
     loop {
         match parser.current().token {
             Token::InputEnd => {
@@ -629,9 +726,13 @@ where
                             parser.get_body_elements(&BLOCK_TAB, true)?.into();
                         errors.extend(close_errors);
                         flush_quote_scan_segment(&mut units, &mut pending_segment);
+                        if saw_content {
+                            append_quote_scan_closer_nest(&mut units, depth);
+                        }
                         break;
                     }
                     _ => {
+                        saw_content = true;
                         let saved_cursor = parser.quote_body_cursor();
                         let saved_depth = parser.native_blockquote_depth();
                         while parser.current().token == Token::Quote {
@@ -685,6 +786,7 @@ where
                 }
             }
             _ => {
+                saw_content = true;
                 flush_quote_scan_segment(&mut units, &mut pending_segment);
                 let (elements, safe) = gather_quote_ejecta_run(parser, errors)?;
                 units.push(QuoteEscapedUnit::Elements(elements, safe));
@@ -1232,9 +1334,7 @@ where
                     saw_unit,
                 );
                 if elided_footnoteblock && !saw_unit && text.is_empty() {
-                    if !parser.settings().layout.legacy() {
-                        parser.record_degraded_title(current.span.start);
-                    }
+                    parser.record_degraded_title(current.span.start);
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
                 parser.step()?;
@@ -1250,9 +1350,7 @@ where
                     saw_unit,
                 );
                 if elided_footnoteblock && !saw_unit && text.is_empty() {
-                    if !parser.settings().layout.legacy() {
-                        parser.record_degraded_title(current.span.start);
-                    }
+                    parser.record_degraded_title(current.span.start);
                     return Err(parser.make_err(ParseErrorKind::RuleFailed));
                 }
                 let leftover = &source[current.span.start + 2..current.span.end];
@@ -1299,9 +1397,7 @@ where
                         if title_so_far_empty
                             && (fused_end || tab_title_remainder_empty(&elided))
                         {
-                            if !parser.settings().layout.legacy() {
-                                parser.record_degraded_title(current.span.start);
-                            }
+                            parser.record_degraded_title(current.span.start);
                             return Err(parser.make_err(ParseErrorKind::RuleFailed));
                         }
                         let construct_start = current.span.start;
@@ -1322,9 +1418,7 @@ where
                                 saw_unit,
                             );
                             if elided_footnoteblock && !saw_unit && text.is_empty() {
-                                if !parser.settings().layout.legacy() {
-                                    parser.record_degraded_title(current.span.start);
-                                }
+                                parser.record_degraded_title(current.span.start);
                                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
                             }
                             parser.step()?;
@@ -1476,6 +1570,92 @@ fn finish_tab_label_at_construct<'r, 't>(
     Err(parser.make_err(ParseErrorKind::EndOfInput))
 }
 
+/// A Wikidot tab head written as a quoted attribute map is not title text:
+/// unknown keys are ignored and a missing `title` falls back to `untitled`.
+fn wikidot_tab_head_attribute_title(text: &str) -> Option<String> {
+    let mut rest = text.trim();
+    let mut title = None;
+    let mut seen = false;
+    while !rest.is_empty() {
+        let key_len = rest
+            .find(|ch: char| {
+                !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ':'))
+            })
+            .unwrap_or(rest.len());
+        if key_len == 0 {
+            return None;
+        }
+        let key = &rest[..key_len];
+        let after_key = &rest[key_len..];
+        let after_eq = after_key.strip_prefix('=')?;
+        let after_quote = after_eq.strip_prefix('"')?;
+        let value_end = after_quote.find('"')?;
+        let value = &after_quote[..value_end];
+        rest = &after_quote[value_end + 1..];
+        if !rest.is_empty() && !rest.starts_with([' ', '\t']) {
+            return None;
+        }
+        rest = rest.trim_start_matches([' ', '\t']);
+        if key.eq_ignore_ascii_case("title") {
+            title = Some(value);
+        }
+        seen = true;
+    }
+    if !seen {
+        return None;
+    }
+    Some(title.unwrap_or("untitled").to_owned())
+}
+
+/// The line break that ends the last quoted row of a tab body is the row
+/// terminator, not content: live drops it before the panel paragraph closes.
+fn trim_wikidot_quote_tab_body_break<'t>(elements: &mut Vec<Element<'t>>) {
+    let Some(Element::Container(paragraph)) = elements.last_mut() else {
+        return;
+    };
+    if paragraph.ctype() != ContainerType::Paragraph {
+        return;
+    }
+    if !matches!(paragraph.elements().last(), Some(Element::LineBreak)) {
+        return;
+    }
+    let inner = paragraph.elements_mut();
+    inner.pop();
+    if inner.is_empty() {
+        elements.pop();
+    }
+}
+
+/// A tab head whose title is an elided `[[footnoteblock]]` fails, but live
+/// keeps the head as literal tab content with the footnoteblock construct
+/// removed: `[[tab [[footnoteblock]]]]` renders `[[tab ]]`.
+fn wikidot_degraded_tab_head_literal<'t>(
+    source: &'t str,
+    opener_start: usize,
+) -> Option<(std::borrow::Cow<'t, str>, usize)> {
+    let head_end = source[opener_start..]
+        .find('\n')
+        .map_or(source.len(), |offset| opener_start + offset);
+    let head = &source[opener_start..head_end];
+    let lower = head.to_ascii_lowercase();
+    let mut search = 0;
+    let construct_start = loop {
+        let found = lower[search..].find("[[footnoteblock")? + search;
+        let after_name = found + 2 + "footnoteblock".len();
+        match lower.as_bytes().get(after_name) {
+            Some(b']') | Some(b' ') | Some(b'\t') => break found,
+            Some(_) => search = after_name,
+            None => return None,
+        }
+    };
+    let construct_end = head[construct_start..].find("]]")? + construct_start + 2;
+    let closer = head[construct_end..].find("]]")? + construct_end;
+    let mut literal = String::new();
+    literal.push_str(&head[..construct_start]);
+    literal.push_str(&head[closer..closer + 2]);
+    Some((std::borrow::Cow::Owned(literal), opener_start + closer + 2))
+}
+
 fn parse_tab<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -1512,11 +1692,32 @@ fn parse_tab<'r, 't>(
     }
 
     let (label, leftover, saw_title_unit) = if in_head {
-        let (label, leftover, saw_unit) = collect_tab_label(parser)?;
-        if leftover.is_none() && parser.current().token == Token::LineBreak {
-            parser.step()?;
+        let checkpoint = parser.clone();
+        let records_before = parser.degraded_title_record_count();
+        match collect_tab_label(parser) {
+            Ok((label, leftover, saw_unit)) => {
+                if leftover.is_none() && parser.current().token == Token::LineBreak {
+                    parser.step()?;
+                }
+                (Some(label), leftover, saw_unit)
+            }
+            Err(error) => {
+                if legacy
+                    && parser.degraded_title_record_count() > records_before
+                    && let Some((literal, head_end)) = wikidot_degraded_tab_head_literal(
+                        parser.full_text().inner(),
+                        opener_start,
+                    )
+                {
+                    parser.update(&checkpoint);
+                    while parser.current().span.start < head_end {
+                        parser.step()?;
+                    }
+                    return ok!(true; Elements::Single(Element::Text(literal)), Vec::new());
+                }
+                return Err(error);
+            }
         }
-        (Some(label), leftover, saw_unit)
     } else {
         (None, None, false)
     };
@@ -1527,6 +1728,10 @@ fn parse_tab<'r, 't>(
             Some(value) => {
                 if !leading_space && !saw_title_unit && value.trim().is_empty() {
                     std::borrow::Cow::Borrowed("untitled")
+                } else if !saw_title_unit
+                    && let Some(title) = wikidot_tab_head_attribute_title(&value)
+                {
+                    std::borrow::Cow::Owned(title)
                 } else {
                     value
                 }
@@ -1557,7 +1762,24 @@ fn parse_tab<'r, 't>(
         }
     }
     if let Some(leftover) = leftover {
-        elements.insert(0, Element::Text(std::borrow::Cow::Borrowed(leftover)));
+        // Live keeps the residual closer of a malformed tab head in the tab
+        // body's inline flow, so it joins the leading body paragraph.
+        let mut joined = false;
+        if legacy
+            && let Some(Element::Container(paragraph)) = elements.first_mut()
+            && paragraph.ctype() == ContainerType::Paragraph
+        {
+            paragraph
+                .elements_mut()
+                .insert(0, Element::Text(std::borrow::Cow::Borrowed(leftover)));
+            joined = true;
+        }
+        if !joined {
+            elements.insert(0, Element::Text(std::borrow::Cow::Borrowed(leftover)));
+        }
+    }
+    if legacy && parser.wikidot_tab_quote_ejection() {
+        trim_wikidot_quote_tab_body_break(&mut elements);
     }
 
     let element = Element::Partial(PartialElement::Tab(Tab { label, elements }));

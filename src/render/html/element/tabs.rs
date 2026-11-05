@@ -141,7 +141,12 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                                     .a()
                                     .attr(attr!("href" => "javascript:;"))
                                     .inner(|ctx| {
-                                        ctx.html().em().contents(&tab.label);
+                                        // Live emits an empty anchor, not an
+                                        // empty <em> wrapper, when the title
+                                        // resolves to nothing.
+                                        if !tab.label.is_empty() {
+                                            ctx.html().em().contents(&tab.label);
+                                        }
                                     });
                             });
                         ctx.push_raw('\n');

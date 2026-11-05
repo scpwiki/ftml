@@ -90,6 +90,9 @@ use crate::parsing::{ParseError, ParseOutcome};
 
 pub(crate) const WIKIDOT_GENERATED_EMPTY_CLASS_MARKER: &str =
     "data-ftml-generated-empty-class";
+/// Marks the empty blockquote runs live leaves behind after a tab eject so the
+/// tree cleanup keeps them; stripped when rendered.
+pub(crate) const WIKIDOT_EMPTY_QUOTE_MARKER: &str = "data-ftml-empty-quote";
 pub(crate) const WIKIDOT_WS_MONO_VANISH_MARKER: &str = "data-ftml-ws-mono-vanish";
 use std::borrow::Cow;
 use std::collections::HashSet;
