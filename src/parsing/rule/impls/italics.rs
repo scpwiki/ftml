@@ -20,7 +20,8 @@
 
 use super::inline_delimiter::{
     ReachableCloseMode, append_split_close_leftover, assert_unpadded_open, block_name_at,
-    is_block_name, link_name_at, prepend_split_close_leftover, validate_reachable_close,
+    inline_body_padded_through_seams, is_block_name, link_name_at,
+    prepend_split_close_leftover, validate_reachable_close,
 };
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
@@ -142,6 +143,15 @@ fn finish_collected<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let leftover = collected.split_close_leftover.clone();
     let (elements, errors, paragraph_safe) = collected.into();
+    if parser.settings().layout.legacy()
+        && matches!(
+            &elements,
+            Elements::Single(Element::Container(container))
+                if inline_body_padded_through_seams(container.elements())
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if parser.settings().layout.legacy()
         && matches!(
             &elements,

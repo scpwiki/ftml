@@ -106,7 +106,7 @@ fn try_consume_fn<'r, 't>(
         && terminator.token == Token::RightMonospace
         && unform_strike_ate_close(&mut elements);
 
-    let trailing_padding = if parser.current().token == Token::RightMonospace {
+    let mut trailing_padding = if parser.current().token == Token::RightMonospace {
         elements.push(text!("}}"));
         while parser.next_two_tokens()
             == (Token::RightMonospace, Some(Token::RightMonospace))
@@ -141,6 +141,15 @@ fn try_consume_fn<'r, 't>(
     {
         elements.push(text!("}"));
         parser.step()?;
+    }
+
+    if parser.settings().layout.legacy() && terminator.token == Token::RightMonospace {
+        if strip_seam_edge_spaces(&mut elements, true) {
+            leading_padding = true;
+        }
+        if strip_seam_edge_spaces(&mut elements, false) {
+            trailing_padding = true;
+        }
     }
 
     if parser.settings().layout.legacy()
@@ -251,6 +260,59 @@ fn wikidot_shed_close(elements: &[Element<'_>]) -> Option<(usize, String, String
         suffix.to_string(),
         trailing_space,
     ))
+}
+
+fn strip_seam_edge_spaces(elements: &mut Vec<Element<'_>>, leading: bool) -> bool {
+    if leading {
+        let mut index = 0usize;
+        let mut saw_hidden = false;
+        let mut spaces = Vec::new();
+        while index < elements.len() {
+            if matches!(&elements[index], Element::Delayed(delayed) if delayed.is_suppression_seam())
+            {
+                saw_hidden = saw_hidden
+                    || matches!(&elements[index], Element::Delayed(delayed) if !delayed.is_typography_boundary());
+                index += 1;
+            } else if matches!(&elements[index], Element::Text(text) if !text.is_empty() && text.bytes().all(|byte| byte == b' ' || byte == b'\t'))
+            {
+                spaces.push(index);
+                index += 1;
+            } else {
+                break;
+            }
+        }
+        if saw_hidden && !spaces.is_empty() {
+            for at in spaces.into_iter().rev() {
+                elements.remove(at);
+            }
+            return true;
+        }
+        return false;
+    }
+    let mut index = elements.len();
+    let mut saw_hidden = false;
+    let mut spaces = Vec::new();
+    while index > 0 {
+        if matches!(&elements[index - 1], Element::Delayed(delayed) if delayed.is_suppression_seam())
+        {
+            saw_hidden = saw_hidden
+                || matches!(&elements[index - 1], Element::Delayed(delayed) if !delayed.is_typography_boundary());
+            index -= 1;
+        } else if matches!(&elements[index - 1], Element::Text(text) if !text.is_empty() && text.bytes().all(|byte| byte == b' ' || byte == b'\t'))
+        {
+            spaces.push(index - 1);
+            index -= 1;
+        } else {
+            break;
+        }
+    }
+    if saw_hidden && !spaces.is_empty() {
+        for at in spaces {
+            elements.remove(at);
+        }
+        return true;
+    }
+    false
 }
 
 fn is_wikidot_edge_padding(token: &ExtractedToken<'_>) -> bool {

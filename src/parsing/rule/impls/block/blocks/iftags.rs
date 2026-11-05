@@ -260,6 +260,9 @@ fn opener_starts_line(parser: &Parser<'_, '_>, name: &str) -> bool {
         return false;
     }
     start -= 2;
+    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t' | b'\0') {
+        start -= 1;
+    }
     start == 0 || bytes[start - 1] == b'\n'
 }
 
@@ -449,7 +452,9 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "IfTags doesn't allow score flag");
     assert_block_name(&BLOCK_IFTAGS, name);
 
-    let opener_at_line_start = opener_starts_line(parser, name);
+    let opener_at_line_start = opener_starts_line(parser, name)
+        || (parser.settings().layout.legacy()
+            && parser.virtual_gate_chain_reaches(opener_start));
 
     if parser.in_wikidot_iftags_span() {
         return literal_span_gate(parser, name);
@@ -580,6 +585,9 @@ fn parse_fn<'r, 't>(
                     )
                 {
                     parser.mark_virtual_start_of_line();
+                    if parser.settings().layout.legacy() {
+                        parser.record_virtual_gate_end(parser.current().span.start);
+                    }
                     ok!(true; Elements::Multiple(vec![Element::LineBreak, suppressed]), Vec::new())
                 } else {
                     ok!(true; suppressed, Vec::new())
@@ -930,6 +938,9 @@ fn parse_fn<'r, 't>(
     }
     if opener_at_line_start && result_is_invisible(&result) {
         parser.mark_virtual_start_of_line();
+        if parser.settings().layout.legacy() {
+            parser.record_virtual_gate_end(parser.current().span.start);
+        }
     }
     result
 }

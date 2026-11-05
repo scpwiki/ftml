@@ -55,6 +55,37 @@ pub(super) fn append_wikidot_line_close_space(
     }
 }
 
+pub(super) fn inline_body_padded_through_seams(elements: &[Element]) -> bool {
+    let mut start = 0usize;
+    let mut skipped_hidden = false;
+    while start < elements.len() && is_suppression_seam(&elements[start]) {
+        skipped_hidden = skipped_hidden || is_hidden_gate(&elements[start]);
+        start += 1;
+    }
+    if skipped_hidden && start < elements.len() && is_space_text(&elements[start]) {
+        return true;
+    }
+    let mut end = elements.len();
+    skipped_hidden = false;
+    while end > start && is_suppression_seam(&elements[end - 1]) {
+        skipped_hidden = skipped_hidden || is_hidden_gate(&elements[end - 1]);
+        end -= 1;
+    }
+    skipped_hidden && end > start && is_space_text(&elements[end - 1])
+}
+
+fn is_suppression_seam(element: &Element) -> bool {
+    matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
+}
+
+fn is_hidden_gate(element: &Element) -> bool {
+    matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam() && !delayed.is_typography_boundary())
+}
+
+fn is_space_text(element: &Element) -> bool {
+    matches!(element, Element::Text(text) if !text.is_empty() && text.bytes().all(|byte| byte == b' ' || byte == b'\t'))
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(super) enum ReachableCloseMode {
     Standard,

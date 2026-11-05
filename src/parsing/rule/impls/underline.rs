@@ -19,7 +19,8 @@
  */
 
 use super::inline_delimiter::{
-    ReachableCloseMode, assert_unpadded_open, validate_reachable_close,
+    ReachableCloseMode, assert_unpadded_open, inline_body_padded_through_seams,
+    validate_reachable_close,
 };
 use super::prelude::*;
 
@@ -50,6 +51,15 @@ fn try_consume_fn<'r, 't>(
     let collected =
         collect_container(parser, RULE_UNDERLINE, ctype, &close, &invalid, None)?;
     let (elements, errors, paragraph_safe) = collected.into();
+    if parser.settings().layout.legacy()
+        && matches!(
+            &elements,
+            Elements::Single(Element::Container(container))
+                if inline_body_padded_through_seams(container.elements())
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if parser.settings().layout.legacy()
         && matches!(
             &elements,

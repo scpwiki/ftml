@@ -157,6 +157,7 @@ pub(super) struct BlockScanCache<'t> {
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
     pub(super) unmatched_close_scan: super::unmatched_close_scan::UnmatchedCloseScanCache,
+    last_virtual_gate_end: Cell<Option<usize>>,
 }
 
 #[derive(Debug)]
@@ -1683,6 +1684,31 @@ impl<'r, 't> Parser<'r, 't> {
     #[inline]
     pub(crate) fn mark_virtual_start_of_line(&mut self) {
         self.start_of_line = true;
+    }
+
+    #[inline]
+    pub(crate) fn record_virtual_gate_end(&self, gate_end: usize) {
+        self.block_end_scan_cache
+            .borrow()
+            .last_virtual_gate_end
+            .set(Some(gate_end));
+    }
+
+    pub(crate) fn virtual_gate_chain_reaches(&self, gate_open: usize) -> bool {
+        let Some(gate_end) = self
+            .block_end_scan_cache
+            .borrow()
+            .last_virtual_gate_end
+            .get()
+        else {
+            return false;
+        };
+        if gate_end > gate_open {
+            return false;
+        }
+        self.full_text().inner()[gate_end..gate_open]
+            .bytes()
+            .all(|byte| byte == b' ' || byte == b'\t')
     }
 
     #[inline]

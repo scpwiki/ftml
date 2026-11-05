@@ -67,6 +67,7 @@ fn collapse_comment_seams(output: &mut String, seams: &[usize]) {
     if seams.is_empty() {
         return;
     }
+    let heads = block_head_ranges(output);
     let bytes = output.as_bytes();
     let mut ranges = Vec::new();
     let mut index = 0;
@@ -78,6 +79,9 @@ fn collapse_comment_seams(output: &mut String, seams: &[usize]) {
             }
             if index - start > 1
                 && seams.iter().any(|&seam| start <= seam && seam <= index)
+                && !heads
+                    .iter()
+                    .any(|head| head.start <= start && index <= head.end)
             {
                 ranges.push(start..index);
             }
@@ -88,6 +92,24 @@ fn collapse_comment_seams(output: &mut String, seams: &[usize]) {
     for range in ranges.into_iter().rev() {
         output.replace_range(range, " ");
     }
+}
+
+fn block_head_ranges(text: &str) -> Vec<std::ops::Range<usize>> {
+    let literal_regions = LiteralRegionIndex::new(text);
+    let mut ranges = Vec::new();
+    let mut search = 0usize;
+    while let Some(relative_open) = text[search..].find("[[") {
+        let open = search + relative_open;
+        if literal_regions.contains(open) {
+            search = open + "[[".len();
+            continue;
+        }
+        if let Some(relative_close) = text[open + "[[".len()..].find("]]") {
+            ranges.push(open..open + "[[".len() + relative_close + "]]".len());
+        }
+        search = open + "[[".len();
+    }
+    ranges
 }
 
 /// Whether a comment's text carries an iftags head. Live Wikidot

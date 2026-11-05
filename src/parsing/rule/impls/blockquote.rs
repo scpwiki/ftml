@@ -121,6 +121,163 @@ pub const RULE_BLOCKQUOTE: Rule = Rule {
     try_consume_fn,
 };
 
+struct VirtualGateQuote {
+    tight: bool,
+    strict_line_start: bool,
+}
+
+fn virtual_gate_quote_leader(parser: &Parser<'_, '_>) -> Option<VirtualGateQuote> {
+    if parser.current().token != Token::Quote {
+        return None;
+    }
+    let source = parser.full_text().inner();
+    let scan = scan_virtual_gate_line(source, parser.current().span.start);
+    if scan.gates == 0 {
+        return None;
+    }
+    let mut probe = parser.clone();
+    while probe.current().token == Token::Quote {
+        if probe.step().is_err() {
+            break;
+        }
+    }
+    let tight = !matches!(
+        probe.current().token,
+        Token::Whitespace | Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    );
+    Some(VirtualGateQuote {
+        tight,
+        strict_line_start: scan.strict_line_start,
+    })
+}
+
+struct VirtualGateLineScan {
+    gates: usize,
+    strict_line_start: bool,
+}
+
+fn scan_virtual_gate_line(source: &str, quote_start: usize) -> VirtualGateLineScan {
+    let bytes = source.as_bytes();
+    let mut pos = quote_start.min(bytes.len());
+    let mut gates = 0usize;
+    let mut strict = true;
+    let before_quote = pos;
+    while pos > 0
+        && (bytes[pos - 1] == b' ' || bytes[pos - 1] == b'\t' || bytes[pos - 1] == b'\0')
+    {
+        pos -= 1;
+    }
+    if pos != before_quote {
+        strict = false;
+    }
+    while let Some(open_start) = match_iftags_gate_backward(source, pos) {
+        gates += 1;
+        pos = open_start;
+        let before_ws = pos;
+        while pos > 0
+            && (bytes[pos - 1] == b' '
+                || bytes[pos - 1] == b'\t'
+                || bytes[pos - 1] == b'\0')
+        {
+            pos -= 1;
+        }
+        if match_iftags_gate_backward(source, pos).is_none() {
+            break;
+        }
+        if pos != before_ws {
+            strict = false;
+        }
+    }
+    let at_line_start = pos == 0
+        || (pos <= bytes.len() && (bytes[pos - 1] == b'\n' || bytes[pos - 1] == b'\r'));
+    VirtualGateLineScan {
+        gates,
+        strict_line_start: strict && at_line_start,
+    }
+}
+
+fn match_iftags_gate_backward(source: &str, pos: usize) -> Option<usize> {
+    let close_start = match_iftags_close_backward(source, pos)?;
+    let mut depth = 1usize;
+    let mut search = close_start;
+    while depth > 0 {
+        let open_at = source[..search].rfind("[[")?;
+        if is_iftags_close_at(source, open_at) {
+            depth += 1;
+            search = open_at;
+        } else if is_iftags_open_at(source, open_at) {
+            depth -= 1;
+            search = open_at;
+        } else {
+            return None;
+        }
+    }
+    Some(search)
+}
+
+fn match_iftags_close_backward(source: &str, pos: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    if pos < "]]".len() || bytes[pos - "]]".len()..pos] != *b"]]" {
+        return None;
+    }
+    let mut inner_end = pos - "]]".len();
+    while inner_end > 0 && (bytes[inner_end - 1] == b' ' || bytes[inner_end - 1] == b'\t')
+    {
+        inner_end -= 1;
+    }
+    if inner_end < "iftags".len()
+        || !bytes[inner_end - "iftags".len()..inner_end].eq_ignore_ascii_case(b"iftags")
+    {
+        return None;
+    }
+    let mut inner_start = inner_end - "iftags".len();
+    while inner_start > 0
+        && (bytes[inner_start - 1] == b' ' || bytes[inner_start - 1] == b'\t')
+    {
+        inner_start -= 1;
+    }
+    if inner_start < "[[/".len()
+        || bytes[inner_start - "[[/".len()..inner_start] != *b"[[/"
+    {
+        return None;
+    }
+    Some(inner_start - "[[/".len())
+}
+
+fn is_iftags_close_at(source: &str, at: usize) -> bool {
+    let Some(rest) = source.get(at + "[[".len()..) else {
+        return false;
+    };
+    let rest = rest.trim_start_matches([' ', '\t']);
+    let Some(after_slash) = rest.strip_prefix('/') else {
+        return false;
+    };
+    let after_slash = after_slash.trim_start_matches([' ', '\t']);
+    let bytes = after_slash.as_bytes();
+    bytes.len() > "iftags".len()
+        && bytes[..6].eq_ignore_ascii_case(b"iftags")
+        && !bytes[6].is_ascii_alphanumeric()
+        && bytes[6] != b'_'
+}
+
+fn is_iftags_open_at(source: &str, at: usize) -> bool {
+    let Some(rest) = source.get(at + "[[".len()..) else {
+        return false;
+    };
+    if rest.starts_with('/') {
+        return false;
+    }
+    let rest = rest.trim_start_matches([' ', '\t']);
+    if rest.starts_with('/') {
+        return false;
+    }
+    let bytes = rest.as_bytes();
+    bytes.len() > "iftags".len()
+        && bytes[..6].eq_ignore_ascii_case(b"iftags")
+        && !bytes[6].is_ascii_alphanumeric()
+        && bytes[6] != b'_'
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -143,6 +300,27 @@ fn try_consume_fn<'r, 't>(
     let mut quote_run_active = true;
     let mut flatten_following_rows = false;
     let mut append_unquoted_close_break = false;
+
+    if parser.settings().layout.legacy()
+        && let Some(gate_quote) = virtual_gate_quote_leader(parser)
+    {
+        if gate_quote.tight {
+            if gate_quote.strict_line_start {
+                while !matches!(
+                    parser.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                ) {
+                    parser.step()?;
+                }
+                return ok!(false; Elements::None, errors);
+            }
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        } else if parser.native_blockquote_depth().is_some()
+            || parser.quote_body_cursor().is_some()
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+    }
 
     while quote_run_active
         && parser.prepare_quote_body_line()? != QuoteBodyLineStatus::Boundary
