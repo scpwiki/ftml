@@ -1,0 +1,114 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "span",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "A1"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "size"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "150"
+                    },
+                    {
+                        "element": "text",
+                        "data": "%"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "A2"
+                    },
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "X"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "Y"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": "[[/"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": "size"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": "]]"
+                                        },
+                                        {
+                                            "element": "text",
+                                            "data": "Z"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "B"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "C"
+                    }
+                ]
+            }
+        }
+    ]
+}

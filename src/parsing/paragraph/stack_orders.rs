@@ -23,7 +23,8 @@ use crate::delayed::DelayedElement;
 use crate::tree::Alignment;
 use crate::tree::FloatAlignment;
 use crate::tree::{
-    AttributeMap, Element, FileSource, ImageSource, Table, TableCell, TableRow, TableType,
+    AttributeMap, Element, FileSource, ImageSource, ListType, Table, TableCell, TableRow,
+    TableType,
 };
 use std::cell::RefCell;
 use std::num::NonZeroU32;
@@ -37,6 +38,9 @@ const OPS: &[&str] = &[
     "push-simple-table",
     "push-aligned-image",
     "push-plain-image",
+    "push-explicit-list",
+    "push-unsafe-break",
+    "mark-empty-list-break",
     "defer-seam",
     "end-paragraph",
     "end-paragraph-at-break",
@@ -76,6 +80,15 @@ fn simple_table() -> Element<'static> {
     })
 }
 
+fn explicit_list() -> Element<'static> {
+    Element::List {
+        ltype: ListType::Bullet,
+        attributes: AttributeMap::new(),
+        items: Vec::new(),
+        wikidot_explicit_block: true,
+    }
+}
+
 fn apply(stack: &mut ParagraphStack<'static>, op: usize) {
     match op {
         0 => stack.push_element(text!("t"), true),
@@ -91,18 +104,21 @@ fn apply(stack: &mut ParagraphStack<'static>, op: usize) {
             true,
         ),
         6 => stack.push_element(image(None), true),
-        7 => stack.defer_suppression_seam(Element::Delayed(
+        7 => stack.push_element(explicit_list(), false),
+        8 => stack.push_element(Element::LineBreak, false),
+        9 => stack.mark_wikidot_empty_list_break(),
+        10 => stack.defer_suppression_seam(Element::Delayed(
             DelayedElement::typography_boundary(),
         )),
-        8 => stack.end_paragraph(),
-        9 => stack.end_paragraph_at_break(),
-        10 => stack.pop_line_break(),
-        11 => stack.merge_wikidot_adjacent_simple_tables(),
-        12 => stack.mark_current_unwrapped(),
-        13 => stack.mark_next_unwrapped(),
-        14 => stack.mark_wikidot_terminal_backslash(),
-        15 => stack.ensure_wikidot_trailing_line_break(),
-        16 => stack.mark_discarded_control(),
+        11 => stack.end_paragraph(),
+        12 => stack.end_paragraph_at_break(),
+        13 => stack.pop_line_break(),
+        14 => stack.merge_wikidot_adjacent_simple_tables(),
+        15 => stack.mark_current_unwrapped(),
+        16 => stack.mark_next_unwrapped(),
+        17 => stack.mark_wikidot_terminal_backslash(),
+        18 => stack.ensure_wikidot_trailing_line_break(),
+        19 => stack.mark_discarded_control(),
         _ => unreachable!("operation table and apply() disagree"),
     }
 }

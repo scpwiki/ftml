@@ -88,11 +88,13 @@ mutate "footnote reopening armed even without a preceding paragraph" \
   '        self.wikidot_reopen_for_footnote = self.wikidot;'
 mutate "finished-list pop_line_break removes the wrong index" \
   'self.finished.remove(index);
+            self.shift_wikidot_div_literal_run_before(index);
         }
     }
 
     pub(crate) fn ensure_wikidot_trailing_line_break' \
   'self.finished.remove(index + 1);
+            self.shift_wikidot_div_literal_run_before(index);
         }
     }
 

@@ -187,6 +187,7 @@ fn parse_list_block_impl<'r, 't>(
             return if nested {
                 ok!(false; Elements::None, errors)
             } else {
+                record_wikidot_explicit_list_end(parser);
                 ok!(false; Element::LineBreak, errors)
             };
         }
@@ -262,6 +263,7 @@ fn parse_list_block_impl<'r, 't>(
             return if nested {
                 ok!(false; Elements::None, errors)
             } else {
+                record_wikidot_explicit_list_end(parser);
                 ok!(false; Element::LineBreak, errors)
             };
         }
@@ -274,6 +276,7 @@ fn parse_list_block_impl<'r, 't>(
         attributes,
         wikidot_explicit_block: parser.settings().layout.legacy(),
     };
+    record_wikidot_explicit_list_end(parser);
     if parser.settings().layout.legacy()
         && !nested
         && !flag_score
@@ -289,6 +292,12 @@ fn parse_list_block_impl<'r, 't>(
         ok!(false; vec![element, text!("]")], errors)
     } else {
         success_elements_with_paragraph_safety(false, element, errors)
+    }
+}
+
+fn record_wikidot_explicit_list_end(parser: &Parser) {
+    if parser.settings().layout.legacy() {
+        parser.record_wikidot_explicit_list_end(parser.current().span.start);
     }
 }
 

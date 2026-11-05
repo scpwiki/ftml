@@ -140,6 +140,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_li_heads: Vec<WikidotLiHead>,
     wikidot_li_closes: Vec<WikidotLiClose>,
     wikidot_li_collect_stack: Vec<Option<usize>>,
+    wikidot_explicit_list_ends: std::collections::BTreeSet<usize>,
     gate_items_allowed: Cell<bool>,
     title_footnote_fused_end: Cell<bool>,
     degraded_title_records: Vec<usize>,
@@ -442,6 +443,21 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_li_paired_heads
             .contains(&position)
+    }
+
+    pub(crate) fn record_wikidot_explicit_list_end(&self, position: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_explicit_list_ends
+            .insert(position);
+    }
+
+    pub(crate) fn wikidot_line_follows_explicit_list(&self, position: usize) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let text = self.full_text().inner();
+        cache.wikidot_explicit_list_ends.iter().any(|end| {
+            *end < position && matches!(text.get(*end..position), Some("\n" | "\r\n"))
+        })
     }
 
     pub(crate) fn wikidot_li_pairing_depth(&self) -> usize {

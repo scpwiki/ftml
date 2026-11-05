@@ -85,6 +85,9 @@ pub struct ParagraphStack<'t> {
     next_element_started_line: bool,
     wikidot_simple_table_boundary: bool,
     wikidot_reopen_for_footnote: bool,
+    wikidot_bare_after_explicit_list: bool,
+    wikidot_explicit_pre_candidate: bool,
+    wikidot_post_empty_list_break: bool,
 
     finished: Vec<Element<'t>>,
 
@@ -156,6 +159,212 @@ impl<'t> ParagraphStack<'t> {
         if self.wikidot {
             self.wikidot_empty_list_break = true;
         }
+    }
+
+    fn wikidot_post_explicit_list_break(&self) -> bool {
+        if !self.wikidot || self.finished.len() < 2 {
+            return false;
+        }
+        let len = self.finished.len();
+        matches!(self.finished[len - 1], Element::LineBreak)
+            && matches!(
+                self.finished[len - 2],
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            )
+    }
+
+    fn wikidot_poppable_post_list_break(&self) -> bool {
+        self.wikidot_post_explicit_list_break()
+            || (self.wikidot_post_empty_list_break
+                && matches!(self.finished.last(), Some(Element::LineBreak)))
+    }
+
+    fn wikidot_pop_post_list_break(&mut self) {
+        if self.wikidot_poppable_post_list_break() {
+            let index = self.finished.len() - 1;
+            self.finished.remove(index);
+            self.shift_wikidot_div_literal_run_before(index);
+        }
+        self.wikidot_post_empty_list_break = false;
+    }
+
+    fn wikidot_post_list_break_absorber(element: &Element<'_>) -> bool {
+        match element {
+            Element::List { .. } | Element::Code(_) | Element::TabView(_) => true,
+            Element::Table(table) => table.table_type != TableType::Simple,
+            _ => false,
+        }
+    }
+
+    fn wikidot_post_list_blank_swallower(element: &Element<'_>) -> bool {
+        match element {
+            Element::List {
+                wikidot_explicit_block: false,
+                ..
+            }
+            | Element::Code(_)
+            | Element::Collapsible { .. }
+            | Element::HorizontalRule
+            | Element::BibliographyBlock { .. }
+            | Element::DefinitionList(_)
+            | Element::Gallery(_)
+            | Element::Math { .. }
+            | Element::Embed(_)
+            | Element::Iframe { .. }
+            | Element::Html { .. }
+            | Element::TableOfContents { .. }
+            | Element::FootnoteBlock { .. }
+            | Element::Module(_)
+            | Element::ClearFloat(_)
+            | Element::Image {
+                alignment: Some(_), ..
+            } => true,
+            Element::Table(table) => table.table_type != TableType::Simple,
+            Element::Container(container) => matches!(
+                container.ctype(),
+                ContainerType::Div
+                    | ContainerType::Note
+                    | ContainerType::Blockquote
+                    | ContainerType::Align(_)
+                    | ContainerType::Header(_)
+            ),
+            _ => false,
+        }
+    }
+
+    fn wikidot_explicit_pre_dissolver(element: &Element<'_>, attached: bool) -> bool {
+        if !attached {
+            return match element {
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+                | Element::TabView(_) => true,
+                Element::Table(table) => table.table_type == TableType::Simple,
+                _ => false,
+            };
+        }
+        match element {
+            Element::List {
+                wikidot_explicit_block: false,
+                ..
+            }
+            | Element::Code(_) => false,
+            Element::Table(table) => table.table_type == TableType::Simple,
+            _ => true,
+        }
+    }
+
+    fn wikidot_dissolve_explicit_pre_candidate(&mut self) {
+        self.wikidot_explicit_pre_candidate = false;
+        let len = self.finished.len();
+        if len < 2 {
+            return;
+        }
+        let paragraph_index = if matches!(self.finished[len - 1], Element::LineBreak) {
+            if len < 3 {
+                return;
+            }
+            len - 3
+        } else {
+            len - 2
+        };
+        if !matches!(
+            self.finished.get(paragraph_index),
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Paragraph
+        ) || !matches!(
+            self.finished.get(paragraph_index + 1),
+            Some(Element::List {
+                wikidot_explicit_block: true,
+                ..
+            })
+        ) {
+            return;
+        }
+        let paragraph = self.finished.remove(paragraph_index);
+        self.shift_wikidot_div_literal_run_before(paragraph_index);
+        let Element::Container(container) = paragraph else {
+            return;
+        };
+        let elements: Vec<Element<'t>> = container.into();
+        for (offset, element) in elements.into_iter().enumerate() {
+            self.finished.insert(paragraph_index + offset, element);
+        }
+    }
+
+    fn wikidot_note_explicit_pre_candidate(&mut self, pre_attached: bool) {
+        if !self.wikidot || !pre_attached || self.finished.len() < 2 {
+            return;
+        }
+        let len = self.finished.len();
+        if matches!(
+            self.finished[len - 2],
+            Element::Container(ref container)
+                if container.ctype() == ContainerType::Paragraph
+        ) {
+            self.wikidot_explicit_pre_candidate = true;
+        }
+    }
+
+    fn wikidot_clear_post_explicit_list_state(&mut self) {
+        self.wikidot_bare_after_explicit_list = false;
+        self.wikidot_explicit_pre_candidate = false;
+        self.wikidot_post_empty_list_break = false;
+    }
+
+    fn wikidot_element_has_run_content(element: &Element<'_>) -> bool {
+        match element {
+            Element::LineBreak | Element::LineBreaks(_) | Element::Delayed(_) => false,
+            Element::Text(text) | Element::Raw(text) => {
+                !text.chars().all(|character| character.is_whitespace())
+            }
+            _ => true,
+        }
+    }
+
+    fn wikidot_current_has_run_content(&self) -> bool {
+        self.current
+            .iter()
+            .any(Self::wikidot_element_has_run_content)
+    }
+
+    fn wikidot_absorb_post_list_break_for_prose(&mut self, attached: bool) {
+        if !self.wikidot {
+            return;
+        }
+        if attached {
+            self.wikidot_pop_post_list_break();
+        }
+        self.wikidot_explicit_pre_candidate = false;
+    }
+
+    fn wikidot_handle_post_list_block_follower(
+        &mut self,
+        element: &Element<'_>,
+        attached: bool,
+    ) {
+        if !self.wikidot
+            || (!self.wikidot_bare_after_explicit_list
+                && !self.wikidot_explicit_pre_candidate)
+        {
+            return;
+        }
+        if self.wikidot_poppable_post_list_break()
+            && (attached && Self::wikidot_post_list_break_absorber(element)
+                || !attached && Self::wikidot_post_list_blank_swallower(element))
+        {
+            self.wikidot_pop_post_list_break();
+        }
+        if self.wikidot_explicit_pre_candidate
+            && Self::wikidot_explicit_pre_dissolver(element, attached)
+        {
+            self.wikidot_dissolve_explicit_pre_candidate();
+        }
+        self.wikidot_clear_post_explicit_list_state();
     }
 
     #[inline]
@@ -622,12 +831,19 @@ impl<'t> ParagraphStack<'t> {
 
         if wikidot_html_block {
             self.end_paragraph();
+            if !self.wikidot_current_has_run_content() {
+                self.wikidot_absorb_post_list_break_for_prose(!paragraph_break_separated);
+            }
             self.current.push(element);
         } else if aligned_image {
             if self.wikidot && !self.current.is_empty() {
                 self.pop_line_break();
             }
             self.end_paragraph();
+            self.wikidot_handle_post_list_block_follower(
+                &element,
+                !paragraph_break_separated,
+            );
             self.finished.push(element);
         } else if unaligned_image {
             if self.wikidot
@@ -643,6 +859,9 @@ impl<'t> ParagraphStack<'t> {
                 self.finished.pop();
             }
             self.pending_unwrapped_separator = false;
+            if !self.wikidot_current_has_run_content() {
+                self.wikidot_absorb_post_list_break_for_prose(!paragraph_break_separated);
+            }
             self.current.push(element);
             self.current_unwrapped = true;
         } else if paragraph_safe {
@@ -689,6 +908,11 @@ impl<'t> ParagraphStack<'t> {
             if element == Element::LineBreak {
                 self.trim_trailing_ascii_space();
             }
+            if Self::wikidot_element_has_run_content(&element)
+                && !self.wikidot_current_has_run_content()
+            {
+                self.wikidot_absorb_post_list_break_for_prose(!paragraph_break_separated);
+            }
             self.current.push(element);
         } else {
             let invisible_block_line = self.wikidot && element == Element::LineBreak;
@@ -721,12 +945,14 @@ impl<'t> ParagraphStack<'t> {
                 self.current.push(Element::LineBreak);
                 self.current_unwrapped = true;
             }
-            if invisible_block_line {
+            let empty_list_break = if invisible_block_line {
                 if !self.wikidot_empty_list_break {
                     self.pop_line_break();
                 }
-                self.wikidot_empty_list_break = false;
-            }
+                mem::take(&mut self.wikidot_empty_list_break)
+            } else {
+                false
+            };
             if escaped_note_prefix {
                 self.current_unwrapped = true;
             }
@@ -734,7 +960,35 @@ impl<'t> ParagraphStack<'t> {
                 self.trim_trailing_ascii_space();
                 self.current.push(text!("\n"));
             }
+            let is_explicit_list = matches!(
+                &element,
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            );
+            if is_explicit_list && self.wikidot {
+                let len = self.current.len();
+                if len >= 2
+                    && self.current[len - 1] == Element::LineBreak
+                    && self.current[len - 2] == Element::LineBreak
+                {
+                    self.current.pop();
+                }
+            }
             self.end_paragraph();
+            if !invisible_block_line {
+                if element.paragraph_safe() {
+                    self.wikidot_absorb_post_list_break_for_prose(
+                        !paragraph_break_separated,
+                    );
+                } else {
+                    self.wikidot_handle_post_list_block_follower(
+                        &element,
+                        !paragraph_break_separated,
+                    );
+                }
+            }
             if self.pending_wikidot_div_literal {
                 self.pending_wikidot_div_literal = false;
                 self.finished.push(element);
@@ -748,6 +1002,16 @@ impl<'t> ParagraphStack<'t> {
                 );
                 self.close_wikidot_div_literal_run(followed_by_div);
                 self.finished.push(element);
+            }
+            if invisible_block_line {
+                if empty_list_break {
+                    self.wikidot_post_empty_list_break = true;
+                    self.wikidot_bare_after_explicit_list = true;
+                } else if self.wikidot_post_explicit_list_break() {
+                    self.wikidot_bare_after_explicit_list = true;
+                }
+            } else if is_explicit_list {
+                self.wikidot_note_explicit_pre_candidate(!paragraph_break_separated);
             }
             if wikidot_collapsible {
                 self.unwrapped_after_block_line =
@@ -861,6 +1125,14 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn push_paragraph_safe_elements(&mut self, mut elements: Vec<Element<'t>>) {
+        if self.wikidot
+            && !self.wikidot_current_has_run_content()
+            && elements.iter().any(Self::wikidot_element_has_run_content)
+        {
+            self.wikidot_absorb_post_list_break_for_prose(
+                !self.paragraph_break_since_element,
+            );
+        }
         if let Some(index) = elements
             .iter()
             .position(|element| *element != Element::LineBreak)
@@ -984,6 +1256,12 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn end_paragraph(&mut self) {
+        if self.wikidot_bare_after_explicit_list && !self.current.is_empty() {
+            self.current_unwrapped = true;
+            self.unwrapped_after_block_line = true;
+            self.wikidot_bare_after_explicit_list = false;
+            self.trim_unwrapped_trailing_line_break = false;
+        }
         let finished_before = self.finished.len();
         if self.pending_aligned_image_separator.is_some() && !self.current.is_empty() {
             if self.current_unwrapped {
@@ -1098,6 +1376,9 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn into_result<'r>(mut self) -> ParseResult<'r, 't, Vec<Element<'t>>> {
+        if self.wikidot_explicit_pre_candidate {
+            self.wikidot_dissolve_explicit_pre_candidate();
+        }
         self.end_paragraph();
         self.remove_pending_aligned_image_separator();
         self.close_wikidot_div_literal_run(false);
@@ -1111,6 +1392,9 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn into_elements(mut self) -> Vec<Element<'t>> {
+        if self.wikidot_explicit_pre_candidate {
+            self.wikidot_dissolve_explicit_pre_candidate();
+        }
         self.end_paragraph();
         self.remove_pending_aligned_image_separator();
         self.close_wikidot_div_literal_run(false);

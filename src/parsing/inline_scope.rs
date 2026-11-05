@@ -138,7 +138,9 @@ struct ActiveScopes<'t> {
     watches: Vec<(usize, Vec<InlineTag>)>,
     space_eject_floor: Option<Option<usize>>,
     close_pairs: BTreeMap<usize, usize>,
+    lifo_close_pairs: BTreeMap<usize, usize>,
     open_instances: BTreeMap<usize, usize>,
+    consumed: BTreeSet<usize>,
     istack: Vec<IstEntry<'t>>,
     cell_local: bool,
 }
@@ -271,7 +273,43 @@ impl<'t> ActiveScopes<'t> {
         });
     }
 
+    fn drop_consumed_scopes(&mut self) {
+        if self.consumed.is_empty() {
+            return;
+        }
+        let mut drops = Vec::new();
+        let mut position = self.active_tail;
+        while let Some(current) = position {
+            if self.consumed.contains(&self.scopes[current].origin) {
+                drops.push(current);
+            }
+            position = self.scopes[current].previous_active;
+        }
+        if drops.is_empty() {
+            return;
+        }
+        for entry in &drops {
+            self.unlink(*entry);
+        }
+        self.istack.retain(|entry| match entry {
+            IstEntry::Scope { position, .. } => !drops.contains(position),
+            IstEntry::Inline { .. } => true,
+        });
+    }
+
+    fn note_close_fired(&mut self, close_ordinal: usize) {
+        let lineage = self
+            .lifo_close_pairs
+            .get(&close_ordinal)
+            .and_then(|open| self.open_instances.get(open))
+            .copied();
+        if let Some(lineage) = lineage {
+            self.consumed.insert(lineage);
+        }
+    }
+
     fn truncate_to_outermost(&mut self) {
+        self.drop_consumed_scopes();
         let Some(outermost) = self.outer_active_position() else {
             return;
         };
@@ -781,7 +819,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     flatten_crossing_inline_containers(elements);
     build_wikidot_block_frames(elements, true);
     let mut lowered = Vec::new();
-    let (valid, close_pairs) = match bibliographies.as_deref_mut() {
+    let (valid, close_pairs, lifo_close_pairs) = match bibliographies.as_deref_mut() {
         Some(list) => {
             lowered = vec![false; list.slice().len()];
             for bibliography in list.slice_mut() {
@@ -796,8 +834,11 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     };
 
     let mut ordinal = 0;
-    let mut active = ActiveScopes::default();
-    active.close_pairs = close_pairs;
+    let mut active = ActiveScopes {
+        close_pairs,
+        lifo_close_pairs,
+        ..Default::default()
+    };
     let mut trim_next_break = false;
     let mut bib = bibliographies.map(|list| BibliographyLowering {
         bibliographies: list,
@@ -821,11 +862,14 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 ) {
     flatten_crossing_inline_containers(elements);
     build_wikidot_block_frames(elements, false);
-    let (valid, close_pairs) = collect_valid_scope_pairs(elements);
+    let (valid, close_pairs, lifo_close_pairs) = collect_valid_scope_pairs(elements);
 
     let mut ordinal = 0;
-    let mut active = ActiveScopes::default();
-    active.close_pairs = close_pairs;
+    let mut active = ActiveScopes {
+        close_pairs,
+        lifo_close_pairs,
+        ..Default::default()
+    };
     let mut trim_next_break = false;
     lower_sequence(
         elements,
@@ -862,8 +906,11 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
     }
     pending.finish_weak(&mut valid);
 
-    let mut active = ActiveScopes::default();
-    active.close_pairs = pending.pairs;
+    let mut active = ActiveScopes {
+        close_pairs: pending.pairs,
+        lifo_close_pairs: pending.lifo_pairs,
+        ..Default::default()
+    };
     let mut ordinal = 0;
     let mut trim_next_break = false;
     let mut reopened = Vec::with_capacity(bibliography.slice().len());
@@ -887,7 +934,11 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
 
 fn collect_valid_scope_pairs(
     elements: &[Element<'_>],
-) -> (BTreeSet<usize>, BTreeMap<usize, usize>) {
+) -> (
+    BTreeSet<usize>,
+    BTreeMap<usize, usize>,
+    BTreeMap<usize, usize>,
+) {
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
@@ -901,13 +952,17 @@ fn collect_valid_scope_pairs(
     );
     pending.finish_weak(&mut valid);
 
-    (valid, pending.pairs)
+    (valid, pending.pairs, pending.lifo_pairs)
 }
 
 fn collect_valid_scope_pairs_with_bibliographies(
     elements: &[Element<'_>],
     bibliographies: &BibliographyList<'_>,
-) -> (BTreeSet<usize>, BTreeMap<usize, usize>) {
+) -> (
+    BTreeSet<usize>,
+    BTreeMap<usize, usize>,
+    BTreeMap<usize, usize>,
+) {
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
     let mut valid = BTreeSet::new();
@@ -921,7 +976,7 @@ fn collect_valid_scope_pairs_with_bibliographies(
     );
     pending.finish_weak(&mut valid);
 
-    (valid, pending.pairs)
+    (valid, pending.pairs, pending.lifo_pairs)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -942,6 +997,9 @@ struct PendingScopes {
     anchors: VecDeque<PendingScope>,
     active_count: usize,
     pairs: BTreeMap<usize, usize>,
+    lifo_pairs: BTreeMap<usize, usize>,
+    lifo_sizes: Vec<usize>,
+    lifo_spans: Vec<usize>,
     weak: Vec<WeakPair>,
 }
 
@@ -971,6 +1029,11 @@ impl PendingScopes {
             ordinal: *ordinal,
             accepted,
         });
+        match class {
+            ScopeClass::Size => self.lifo_sizes.push(*ordinal),
+            ScopeClass::Span => self.lifo_spans.push(*ordinal),
+            _ => {}
+        }
         *ordinal += 1;
     }
 
@@ -983,6 +1046,14 @@ impl PendingScopes {
     ) {
         let close = *ordinal;
         *ordinal += 1;
+        let lifo_open = match class {
+            ScopeClass::Size => self.lifo_sizes.pop(),
+            ScopeClass::Span => self.lifo_spans.pop(),
+            _ => None,
+        };
+        if let Some(open) = lifo_open {
+            self.lifo_pairs.insert(close, open);
+        }
         let stack = self.stack_mut(class);
         let popped = if !synthetic
             && matches!(class, ScopeClass::Span | ScopeClass::Size)
@@ -1330,6 +1401,32 @@ fn lower_root_sequence<'t>(
     *elements = output;
 }
 
+fn scope_tail_ends_with_break(elements: &[Element<'_>]) -> bool {
+    let mut current = elements.last();
+    loop {
+        match current {
+            Some(Element::LineBreak) => return true,
+            Some(Element::Container(container))
+                if is_inline_scope_ctype(container.ctype()) =>
+            {
+                current = container.elements().last();
+            }
+            Some(Element::Color { elements, .. })
+            | Some(Element::Anchor { elements, .. }) => {
+                current = elements.last();
+            }
+            _ => return false,
+        }
+    }
+}
+
+fn paragraph_group_has_content(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| {
+        !matches!(element, Element::Partial(_))
+            && !matches!(element, Element::Text(text) if text.is_empty())
+    })
+}
+
 fn scope_break_unit_chain<'t>(
     element: &Element<'t>,
 ) -> Option<Vec<(ContainerType, AttributeMap<'t>)>> {
@@ -1401,6 +1498,14 @@ fn fold_scope_break_unit<'t>(
     let Some(chain) = scope_break_unit_chain(first) else {
         return;
     };
+    if let Some(Element::Container(container)) = output.last()
+        && container.ctype() == ContainerType::Paragraph
+        && !scope_tail_ends_with_break(container.elements())
+        && paragraph_group_has_content(container.elements())
+    {
+        sequence.remove(0);
+        return;
+    }
     let amended = match output.last_mut() {
         Some(Element::Container(container))
             if container.ctype() == ContainerType::Paragraph =>
@@ -1428,6 +1533,7 @@ fn flush_root_pending<'t>(
         return false;
     }
     flush_paragraph_group(output, paragraph_group);
+    active.drop_consumed_scopes();
     let scope_before = active.outer_active_position();
     let scope_open_at_start = active.has_active_scope();
     let mut sequence = mem::take(pending);
@@ -1749,6 +1855,7 @@ fn lower_sequence<'t>(
             let current = *ordinal;
             *ordinal += 1;
             if valid.contains(&current) {
+                active.note_close_fired(current);
                 if trailing_space {
                     run.pop();
                 }
@@ -1917,6 +2024,7 @@ fn lower_sequence<'t>(
                 *ordinal += 1;
                 continue;
             }
+            active.note_close_fired(current);
             if scored {
                 while matches!(
                     run.last(),
@@ -2485,7 +2593,6 @@ fn lower_sequence<'t>(
                         wrapped,
                         AttributeMap::new(),
                     )));
-                    *trim_next_break = true;
                     last_run_outer_scope.reset();
                 } else if active_after == 0 {
                     output.extend(wrap_scope_elements(&scopes, vec![Element::LineBreak]));
@@ -3547,9 +3654,12 @@ fn lower_children<'t>(
         for row in &mut table.rows {
             for cell in &mut row.cells {
                 let start = *ordinal;
-                let mut cell_active = ActiveScopes::default();
-                cell_active.close_pairs = active.close_pairs.clone();
-                cell_active.cell_local = true;
+                let mut cell_active = ActiveScopes {
+                    close_pairs: active.close_pairs.clone(),
+                    lifo_close_pairs: active.lifo_close_pairs.clone(),
+                    cell_local: true,
+                    ..Default::default()
+                };
                 let mut cell_trim = false;
                 lower_sequence(
                     &mut cell.elements,
@@ -3631,8 +3741,12 @@ fn lower_children<'t>(
             )
         );
     let mut lowered = false;
+    let truncate_at_entry = matches!(element, Element::List { .. });
     let mut visit = |children: &mut Vec<Element<'t>>| {
         lowered = true;
+        if truncate_at_entry {
+            active.truncate_to_outermost();
+        }
         lower_sequence(
             children,
             valid,
