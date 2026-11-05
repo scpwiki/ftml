@@ -387,6 +387,87 @@ fn block_rule_accepts_end_name(
         .any(|accepted| name.eq_ignore_ascii_case(accepted))
 }
 
+/// Wikidot block bodies that must close with an explicit `[[/name]]` end
+/// head. Without one the rule cannot succeed: the body scan runs to the end
+/// of input and fails with `EndOfInput`, and the head renders literally.
+///
+/// Repeated unclosed openers of these blocks used to rescan the rest of the
+/// page once per opener (quadratic). When no end head exists after the head,
+/// the same failure is known in advance, so the body scan is skipped. Blocks
+/// that may legally end at a boundary instead of an end head (`[[tab]]`,
+/// `[[li]]`), and the bibliography block whose speculative unclosed path
+/// reports a different diagnostic, are deliberately absent.
+fn wikidot_body_requires_end_head(block_rule: &BlockRule) -> bool {
+    matches!(
+        block_rule.name,
+        "block-div"
+            | "block-collapsible"
+            | "block-note"
+            | "block-align-left"
+            | "block-align-right"
+            | "block-align-center"
+            | "block-align-justify"
+            | "block-html"
+            | "block-math"
+            | "block-code"
+            | "block-raw"
+            | "block-embed"
+            | "block-footnote"
+            | "block-ruby"
+            | "block-paragraph"
+            | "block-blockquote"
+            | "block-ifcategory"
+            | "block-tabview"
+    )
+}
+
+/// Whether a block end head (any `[[/`) starts at or after `start`, with the
+/// position of the first one. The search shares one monotone slot, so
+/// advancing heads stay linear.
+///
+/// It is deliberately coarse: it matches any `[[/` prefix instead of the
+/// exact end name, because Wikidot's end-head grammar also accepts fused and
+/// bracket-prefixed forms whose text does not start with the plain name. A
+/// false positive only means the original scan still runs.
+fn find_block_close_marker(
+    source: &str,
+    slot: &mut Option<(usize, Option<usize>)>,
+    start: usize,
+) -> Option<usize> {
+    if let Some((scanned_from, found)) = *slot
+        && scanned_from <= start
+        && found.is_none_or(|found| found >= start)
+    {
+        return found;
+    }
+
+    let found = source[start..].find("[[/").map(|offset| start + offset);
+    *slot = Some((start, found));
+    found
+}
+
+/// The next `\r` or `\n` at or after `start`, with the same monotone reuse as
+/// [`find_block_close_marker`].
+fn find_line_break_marker(
+    source: &str,
+    slot: &mut Option<(usize, Option<usize>)>,
+    start: usize,
+) -> Option<usize> {
+    if let Some((scanned_from, found)) = *slot
+        && scanned_from <= start
+        && found.is_none_or(|found| found >= start)
+    {
+        return found;
+    }
+
+    let found = source.as_bytes()[start..]
+        .iter()
+        .position(|byte| matches!(byte, b'\r' | b'\n'))
+        .map(|offset| start + offset);
+    *slot = Some((start, found));
+    found
+}
+
 fn wikidot_alias_pair_cache_name(block_rule: &BlockRule) -> &'static str {
     match block_rule.name {
         "block-div" => "block-div-alias-pair",
@@ -716,6 +797,52 @@ impl<'r, 't> Parser<'r, 't>
 where
     'r: 't,
 {
+    /// The `\n`-delimited physical line around `position`, cached so a
+    /// document with no line break does not rescan its whole tail per
+    /// caller. Mirrors `source[..position].rfind('\n')` and
+    /// `source[position..].find('\n')` exactly (only `\n` splits).
+    pub(crate) fn wikidot_lf_line_bounds(&self, position: usize) -> (usize, usize) {
+        let source = self.full_text().inner();
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        if let Some((line_start, line_end)) = cache.wikidot_lf_line_bounds
+            && line_start <= position
+            && position <= line_end
+        {
+            return (line_start, line_end);
+        }
+        let line_start = source[..position]
+            .rfind('\n')
+            .map_or(0, |offset| offset + 1);
+        let line_end = source[position..]
+            .find('\n')
+            .map_or(source.len(), |offset| position + offset);
+        cache.wikidot_lf_line_bounds = Some((line_start, line_end));
+        (line_start, line_end)
+    }
+
+    /// Whether a block body could still close: any `[[/` marker ahead.
+    pub(crate) fn wikidot_block_close_marker_ahead(&self) -> bool {
+        let source = self.full_text().inner();
+        let start = self.current().span.start;
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        find_block_close_marker(source, &mut cache.wikidot_end_head_scan, start).is_some()
+    }
+
+    /// The error an unclosed Wikidot body would produce after scanning to the
+    /// end of input, or `None` when the body can still close or the rule may
+    /// legitimately end at a boundary. Skipping the doomed scan keeps
+    /// repeated unclosed openers linear instead of quadratic.
+    fn wikidot_unclosed_body_error(&self, block_rule: &BlockRule) -> Option<ParseError> {
+        if !self.settings().layout.legacy()
+            || self.discarding_hidden_body()
+            || !wikidot_body_requires_end_head(block_rule)
+            || self.wikidot_block_close_marker_ahead()
+        {
+            return None;
+        }
+        Some(self.make_end_of_input_err())
+    }
+
     pub(crate) fn take_wikidot_crossed_list_break_sentinel(
         &mut self,
     ) -> Result<bool, ParseError> {
@@ -1796,6 +1923,10 @@ where
     where
         F: FnMut(&mut Parser<'r, 't>) -> Result<(), ParseError>,
     {
+        if let Some(error) = self.wikidot_unclosed_body_error(block_rule) {
+            return Err(error);
+        }
+
         let has_end_names = !block_rule.accepts_names.is_empty();
         debug_assert!(has_end_names, "block body has no valid end names");
 
@@ -2188,6 +2319,10 @@ where
         restrict_quote_close: bool,
         allow_inline_quote_close: bool,
     ) -> ParseResult<'r, 't, Vec<Element<'t>>> {
+        if let Some(error) = self.wikidot_unclosed_body_error(block_rule) {
+            return Err(error);
+        }
+
         let track_boundary = self.discarding_hidden_body();
         if track_boundary {
             self.push_hidden_body_boundary(
@@ -3639,6 +3774,27 @@ where
     }
 
     pub fn has_body_end_block(&self, block_rule: &BlockRule) -> bool {
+        // An end head needs a `[[/` token, so a source with none left cannot
+        // close this body. Checking the cached marker first keeps repeated
+        // unclosed openers from rescanning the rest of the token stream.
+        {
+            let source = self.full_text().inner();
+            let start = self.current().span.start;
+            let mut cache = self.block_end_scan_cache.borrow_mut();
+            let found =
+                find_block_close_marker(source, &mut cache.wikidot_end_head_scan, start);
+            if found.is_none() {
+                drop(cache);
+                // No end head can occur from here, in either iteration mode.
+                self.cache_block_end_scan_outcomes(
+                    block_rule.name,
+                    &[(start, true), (start, false)],
+                    false,
+                );
+                return false;
+            }
+        }
+
         let mut parser = self.clone();
         let mut first = true;
         let mut traversed_token_states = Vec::new();
@@ -3926,6 +4082,25 @@ where
     }
 
     pub fn has_body_end_block_on_line(&self, block_rule: &BlockRule) -> bool {
+        // An end head needs a `[[/` on this physical line. Checking the source
+        // first keeps a document with no line break from rescanning the whole
+        // remaining token stream once per candidate opener.
+        {
+            let source = self.full_text().inner();
+            let start = self.current().span.start;
+            let mut cache = self.block_end_scan_cache.borrow_mut();
+            let Some(close) =
+                find_block_close_marker(source, &mut cache.wikidot_end_head_scan, start)
+            else {
+                return false;
+            };
+            let line_break =
+                find_line_break_marker(source, &mut cache.wikidot_line_break_scan, start);
+            if line_break.is_some_and(|line_break| line_break < close) {
+                return false;
+            }
+        }
+
         let mut parser = self.clone();
 
         loop {
@@ -4864,6 +5039,46 @@ mod tests {
         BLOCK_COLLAPSIBLE, BLOCK_DIV, BLOCK_IFTAGS,
     };
     use crate::settings::{WikitextMode, WikitextSettings};
+
+    #[test]
+    fn close_marker_search_matches_uncached_textual_scan() {
+        let sources = [
+            "[[note]]body[[/note]]",
+            "[[note]]body[[/ NOTE]]",
+            "[[note]]body[[/notex]]",
+            "[[note]]body[!--[[/note]]--]",
+            "[[note]]body[[/div]]",
+            "[[div]][[/div]][[note]]",
+            "[[note]]body [[/ note ]]",
+            "[[note]]body",
+            "[[/[[footnote]]",
+            "[[/foot[[iftags -z]][[/iftags]]note]]",
+        ];
+        for source in sources {
+            for start in 0..=source.len() {
+                if !source.is_char_boundary(start) {
+                    continue;
+                }
+                let mut slot = None;
+                let found = super::find_block_close_marker(source, &mut slot, start);
+                assert_eq!(
+                    found,
+                    source[start..].find("[[/").map(|offset| start + offset),
+                    "{source:?} @{start}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn end_head_requirement_whitelist_excludes_boundary_closed_blocks() {
+        use crate::parsing::rule::impls::block::blocks::{BLOCK_LI, BLOCK_TAB};
+
+        assert!(super::wikidot_body_requires_end_head(&BLOCK_DIV));
+        assert!(super::wikidot_body_requires_end_head(&BLOCK_COLLAPSIBLE));
+        assert!(!super::wikidot_body_requires_end_head(&BLOCK_TAB));
+        assert!(!super::wikidot_body_requires_end_head(&BLOCK_LI));
+    }
 
     #[test]
     fn wikidot_attribute_offsets_preserve_multibyte_malformed_recovery() {

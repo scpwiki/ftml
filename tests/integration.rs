@@ -213,3 +213,6 @@ mod wikidot_param_bracket_values;
 
 #[path = "wikidot_date_format_directives.rs"]
 mod wikidot_date_format_directives;
+
+#[path = "super_linear_families.rs"]
+mod super_linear_families;

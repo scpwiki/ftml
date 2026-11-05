@@ -45,10 +45,13 @@ pub const BLOCK_DIV: BlockRule = BlockRule {
     parse_fn,
 };
 
-fn wikidot_div_head_started_physical_line(
-    parser: &Parser<'_, '_>,
+fn wikidot_div_head_started_physical_line<'r, 't>(
+    parser: &Parser<'r, 't>,
     body_start: BlockBodyStart,
-) -> bool {
+) -> bool
+where
+    'r: 't,
+{
     let source = parser.full_text().inner();
     let head_end = parser.current().span.start;
     let head_line_end = if body_start == BlockBodyStart::NextPhysicalLine {
@@ -56,15 +59,11 @@ fn wikidot_div_head_started_physical_line(
     } else {
         head_end
     };
-    let line_start = source[..head_line_end]
-        .rfind('\n')
-        .map_or(0, |offset| offset + 1);
+    let (line_start, _) = parser.wikidot_lf_line_bounds(head_line_end);
     let physical_line_end = if body_start == BlockBodyStart::NextPhysicalLine {
         head_line_end
     } else {
-        source[head_end..]
-            .find('\n')
-            .map_or(source.len(), |offset| head_end + offset)
+        parser.wikidot_lf_line_bounds(head_end).1
     };
     wikidot_line_head_resolves_to_div(&source[line_start..physical_line_end])
 }
