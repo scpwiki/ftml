@@ -2304,7 +2304,12 @@ where
                 Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
                     return false;
                 }
-                Token::LeftBlockEnd => return false,
+                // A line led by a block head is a structural boundary, not
+                // same-paragraph content (live keeps the post-list break
+                // before a following div: explicit-pre-dissolves-before-div).
+                Token::LeftBlock | Token::LeftBlockStar | Token::LeftBlockEnd => {
+                    return false;
+                }
                 _ => return true,
             }
         }

@@ -271,6 +271,16 @@ pub(crate) fn wikidot_own_line_prefix(source: &str, byte: usize) -> bool {
     source[start..end].trim_matches([' ', '\t']).is_empty()
 }
 
+/// Own line inside a quote run: only quote markers and spacing precede the
+/// byte (`> [[/div]]` counts, `> text [[/div]]` does not).
+fn wikidot_quoted_own_line_prefix(source: &str, byte: usize) -> bool {
+    let end = byte.min(source.len());
+    let start = source[..end].rfind('\n').map_or(0, |offset| offset + 1);
+    source[start..end]
+        .chars()
+        .all(|character| matches!(character, '>' | ' ' | '\t'))
+}
+
 fn wikidot_closer_ends_line(source: &str, byte: usize) -> bool {
     let start = byte.min(source.len());
     let end = source[start..]
@@ -735,7 +745,7 @@ impl<'r, 't> Parser<'r, 't> {
         }
         if head_run.is_none() && closer_run.is_some() {
             let source = self.full_text().inner();
-            if wikidot_own_line_prefix(source, pair.closer_byte)
+            if wikidot_quoted_own_line_prefix(source, pair.closer_byte)
                 || !wikidot_closer_ends_line(source, pair.closer_byte)
             {
                 return true;

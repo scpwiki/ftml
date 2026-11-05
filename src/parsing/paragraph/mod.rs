@@ -60,6 +60,9 @@ where
     if parser.settings().layout.legacy() && close_condition_fn.is_none() {
         stack.enable_wikidot_div_literal_run_wrap();
     }
+    if parser.settings().layout.legacy() && close_condition_fn.is_some() {
+        stack.suppress_wikidot_explicit_pre_dissolve();
+    }
 
     let mut finished = false;
     let mut literal_gallery_pending = false;

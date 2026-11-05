@@ -53,6 +53,10 @@ struct QuoteFlatSplit<'t> {
     rest: Vec<Element<'t>>,
     rows: Vec<(usize, NativeQuoteRow<'t>)>,
     base_depth: usize,
+    /// The closed row's own trailing break. Live keeps it when the flat close
+    /// ends the quoted run (no quoted content follows the closer), giving
+    /// `</div><br>` before the following unquoted line.
+    trailing_break: bool,
 }
 
 fn trim_wikidot_flat_close_rest(rest: &mut Vec<Element>) {
@@ -93,6 +97,7 @@ fn build_flat_split_segments<'t>(
     let mut segments: Vec<(Vec<Element<'t>>, bool)> = Vec::new();
     let mut bare: Vec<Element<'t>> = vec![split.close];
     bare.extend(split.rest);
+    let mut bare_extended_by_rows = false;
     // L8.5: a bare batch still carrying the closer (same-row rest)
     // stays bare, but a fresh batch after a flush boundary (spaced
     // blank, quote run) is a closed paragraph so following text
@@ -158,8 +163,12 @@ fn build_flat_split_segments<'t>(
             bare.push(Element::LineBreak);
         }
         bare.extend(row.elements);
+        bare_extended_by_rows = true;
     }
     flush_quote_run(&mut quote_run, &mut segments);
+    if split.trailing_break && !bare_extended_by_rows {
+        bare.push(Element::LineBreak);
+    }
     flush_bare(&mut bare, &mut segments);
     segments
 }
@@ -725,12 +734,16 @@ fn try_consume_fn<'r, 't>(
             && parser.settings().layout.legacy()
             && let Some(close_index) = find_external_flat_close(parser, &elements)
         {
-            if matches!(elements.last(), Some(Element::LineBreak)) {
+            let trailing_break = matches!(elements.last(), Some(Element::LineBreak));
+            if trailing_break {
                 elements.pop();
             }
             let mut rest = elements.split_off(close_index);
             let close = rest.remove(0);
             trim_wikidot_flat_close_rest(&mut rest);
+            // Only a closer that ends its row (nothing follows it on that
+            // line) carries the row's break over to the unquoted line.
+            let trailing_break = trailing_break && rest.is_empty();
             if first_row_depth.is_none() {
                 first_row_depth = Some(depth);
             }
@@ -763,6 +776,7 @@ fn try_consume_fn<'r, 't>(
                 rest,
                 rows: Vec::new(),
                 base_depth,
+                trailing_break,
             });
             push_quote_row_units(
                 &mut depths,
