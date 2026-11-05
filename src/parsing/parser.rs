@@ -429,6 +429,17 @@ impl<'r, 't> Parser<'r, 't> {
             .push(position);
     }
 
+    /// Whether an iftags end swallow is pending at `position`, without
+    /// consuming it. The pending list is empty for pages without iftags, and
+    /// the caller scans the rest of the line on a clone before it would learn
+    /// that, which is quadratic for repeated unmatched closers on one line.
+    pub(crate) fn has_pending_iftags_end_swallow(&self, position: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .pending_iftags_end_swallows
+            .contains(&position)
+    }
+
     pub(crate) fn take_pending_iftags_end_swallow(&self, position: usize) -> bool {
         let mut cache = self.block_end_scan_cache.borrow_mut();
         match cache

@@ -1095,11 +1095,24 @@ where
     /// legitimately end at a boundary. Skipping the doomed scan keeps
     /// repeated unclosed openers linear instead of quadratic.
     fn wikidot_unclosed_body_error(&self, block_rule: &BlockRule) -> Option<ParseError> {
-        if !self.settings().layout.legacy()
-            || self.discarding_hidden_body()
-            || !wikidot_body_requires_end_head(block_rule)
-            || self.wikidot_block_close_marker_ahead()
-        {
+        if self.discarding_hidden_body() || self.wikidot_block_close_marker_ahead() {
+            return None;
+        }
+        let requires_end_head = if self.settings().layout.legacy() {
+            wikidot_body_requires_end_head(block_rule)
+        } else {
+            // The native-layout div body has the same failure shape: without an
+            // end head anywhere ahead it scans to the end of input and reports
+            // an end-of-input error on the div rule and the input-end token,
+            // which is exactly what this preflight returns. Repeated unclosed
+            // native div runs would otherwise replay the document once per
+            // opener. Every other native block stays on the scanning path: the
+            // fixture corpus shows their unclosed diagnostics differ (tabview
+            // can end at a boundary, embed and ifcategory report their own head
+            // errors first).
+            block_rule.name == "block-div"
+        };
+        if !requires_end_head {
             return None;
         }
         Some(self.make_end_of_input_err())
