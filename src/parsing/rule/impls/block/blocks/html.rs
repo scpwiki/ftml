@@ -47,9 +47,6 @@ fn parse_fn<'r, 't>(
     assert_block_name(&BLOCK_HTML, name);
 
     if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
-        if in_head {
-            return Err(parser.make_err(ParseErrorKind::RuleFailed));
-        }
         let source = parser.full_text().inner();
         if opener_start > 0 && !source[..opener_start].ends_with('\n') {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -57,7 +54,7 @@ fn parse_fn<'r, 't>(
     }
 
     let (arguments, body_start) =
-        parser.get_head_map_with_body_start(&BLOCK_HTML, in_head)?;
+        parser.get_head_map_with_body_start_wikidot(&BLOCK_HTML, in_head)?;
     if !parser.settings().enable_html_blocks {
         if parser.native_blockquote_depth().is_some() {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -221,14 +218,96 @@ mod tests {
     }
 
     #[test]
-    fn wikidot_html_block_with_arguments_remains_literal() {
+    fn wikidot_html_block_with_head_arguments_renders_styled_iframe() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-        let tokenization = crate::tokenize("[[html garbage]]x[[/html]]");
-        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
 
-        assert!(tree.html_blocks.is_empty(), "{tree:#?}");
-        assert!(!format!("{tree:?}").contains("Html {"), "{tree:#?}");
+        for (source, body, expected_attributes) in [
+            (r#"[[html]]y[[/html]]"#, "y", r#"class="html-block-iframe""#),
+            (
+                r#"[[html class="c"]]y[[/html]]"#,
+                "y",
+                r#"class="c html-block-iframe""#,
+            ),
+            (
+                r#"[[html class="a b"]]y[[/html]]"#,
+                "y",
+                r#"class="a b html-block-iframe""#,
+            ),
+            (
+                r#"[[html style="color:red"]]y[[/html]]"#,
+                "y",
+                r#"style="color:red" class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html class="c" style="color:red"]]y[[/html]]"#,
+                "y",
+                r#"style="color:red" class="c html-block-iframe""#,
+            ),
+            (
+                r#"[[html id="i"]]y[[/html]]"#,
+                "y",
+                r#"class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html width="100" height="50"]]y[[/html]]"#,
+                "y",
+                r#"class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html align="left" scrolling="no" frameborder="1"]]y[[/html]]"#,
+                "y",
+                r#"class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html class=c]]y[[/html]]"#,
+                "y",
+                r#"class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html class='a']]y[[/html]]"#,
+                "y",
+                r#"class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html class = "a"]]y[[/html]]"#,
+                "y",
+                r#"class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html foo]]x[[/html]]"#,
+                "x",
+                r#"class="html-block-iframe""#,
+            ),
+            (
+                r#"[[html ]]x[[/html]]"#,
+                "x",
+                r#"class="html-block-iframe""#,
+            ),
+            ("[[html\n]]x[[/html]]", "x", r#"class="html-block-iframe""#),
+            (
+                r#"[[html =]]x[[/html]]"#,
+                "x",
+                r#"class="html-block-iframe""#,
+            ),
+        ] {
+            let tokenization = crate::tokenize(source);
+            let (tree, errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            let html = crate::render::html::HtmlRender
+                .render(&tree, &page_info, &settings)
+                .body;
+
+            assert!(errors.is_empty(), "{source:?}: {errors:?}");
+            assert_eq!(tree.html_blocks, [body], "{source:?}: {tree:#?}");
+            assert_eq!(
+                html,
+                format!(
+                    r#"<p><iframe src="https://example.com/" allowtransparency="true" frameborder="0" {expected_attributes}></iframe></p>"#,
+                ),
+                "{source:?}",
+            );
+        }
     }
 
     #[test]

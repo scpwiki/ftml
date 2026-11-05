@@ -1,0 +1,275 @@
+{
+    "elements": [
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "c"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "a b"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "style": "color:red"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "id": "i"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "height": "50",
+                    "width": "100"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "align": "left",
+                    "frameborder": "1"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "title": "t"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "data-x": "1"
+                }
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "html"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "class"
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": "c"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "y"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "html"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "html"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "class"
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": "'"
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": "'"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "y"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "html"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "y",
+                "attributes": {
+                    "class": "a"
+                }
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "x",
+                "attributes": {}
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "x",
+                "attributes": {}
+            }
+        },
+        {
+            "element": "html",
+            "data": {
+                "contents": "x",
+                "attributes": {}
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "html"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": "x"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "html"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        }
+    ],
+    "html-blocks": [
+        "y",
+        "y",
+        "y",
+        "y",
+        "y",
+        "y",
+        "y",
+        "y",
+        "y",
+        "x",
+        "x",
+        "x"
+    ]
+}
