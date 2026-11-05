@@ -29,7 +29,8 @@ use crate::parsing::paragraph::{ParagraphStack, gather_paragraphs};
 use crate::parsing::parser::{QuoteBodyLineStatus, QuoteEscapedUnit};
 use crate::parsing::rule::impls::block::parser::WikidotHeadSpaceRegion;
 use crate::tree::{
-    AcceptsPartial, AttributeMap, Container, PartialElement, Tab, TabViewItem,
+    AcceptsPartial, AttributeMap, Container, LinkLabel, LinkLocation, PartialElement,
+    Tab, TabViewItem,
 };
 
 pub const BLOCK_TABVIEW: BlockRule = BlockRule {
@@ -108,6 +109,34 @@ fn wikidot_find_failed_opener(lower: &[u8], from: usize) -> Option<usize> {
     best
 }
 
+fn wikidot_find_leading_opener(lower: &[u8], from: usize) -> Option<(usize, usize)> {
+    let mut offset = from;
+    while offset + 7 <= lower.len() {
+        if lower[offset] == b'['
+            && lower[offset + 1] == b'['
+            && matches!(lower[offset + 2], b' ' | b'\t')
+        {
+            let mut cursor = offset + 2;
+            while cursor < lower.len() && matches!(lower[cursor], b' ' | b'\t') {
+                cursor += 1;
+            }
+            if lower[cursor..].starts_with(b"tab") {
+                let mut end = cursor + 3;
+                while end < lower.len()
+                    && !matches!(lower[end], b'\n' | b'\r' | b'[' | b']')
+                {
+                    end += 1;
+                }
+                if lower[end..].starts_with(b"]]") {
+                    return Some((offset, end + 2));
+                }
+            }
+        }
+        offset += 1;
+    }
+    None
+}
+
 fn wikidot_find_tab_closer(lower: &[u8], from: usize) -> Option<usize> {
     let pattern = b"[[/tab]]" as &[u8];
     let mut offset = from;
@@ -120,66 +149,134 @@ fn wikidot_find_tab_closer(lower: &[u8], from: usize) -> Option<usize> {
     None
 }
 
-fn wikidot_failed_tab_content_valid(elements: &[Element]) -> Option<usize> {
-    let mut joined = String::new();
-    for element in elements {
-        match element {
-            Element::Text(text) => joined.push_str(text),
-            Element::LineBreak => joined.push('\n'),
-            _ => joined.push('\0'),
+fn wikidot_failed_tab_push_link_target(joined: &mut String, link: &LinkLocation) {
+    match link {
+        LinkLocation::Url(url) => joined.push_str(url),
+        LinkLocation::Page(page) => {
+            joined.push_str(&page.page);
+            if let Some(extra) = &page.extra {
+                joined.push_str(extra);
+            }
         }
     }
-    let lower = joined.to_ascii_lowercase();
-    let bytes = lower.as_bytes();
-    let mut pos = 0usize;
-    let mut inside = false;
-    let mut openers = 0usize;
-    loop {
-        if inside {
-            let close = wikidot_find_tab_closer(bytes, pos)?;
-            pos = close + 8;
-            inside = false;
-        } else {
-            let next_opener = wikidot_find_failed_opener(bytes, pos);
-            let next_closer = wikidot_find_tab_closer(bytes, pos);
-            match (next_opener, next_closer) {
-                (None, None) => {
-                    if wikidot_failed_tab_gap_valid(bytes, pos, bytes.len()) {
-                        return Some(openers);
+}
+
+fn wikidot_tabview_failed_content_gate(items: &[TabViewItem]) -> bool {
+    let tab_count = items
+        .iter()
+        .filter(|item| matches!(item, TabViewItem::Tab(_)))
+        .count();
+    let last_tab = items
+        .iter()
+        .rposition(|item| matches!(item, TabViewItem::Tab(_)));
+    let content_after_last_tab = match last_tab {
+        Some(index) => items[index + 1..]
+            .iter()
+            .any(|item| matches!(item, TabViewItem::Content(_))),
+        None => false,
+    };
+    let mut singles = 0usize;
+    let mut inside: Option<bool> = None;
+    for item in items {
+        let TabViewItem::Content(content) = item else {
+            continue;
+        };
+        let mut joined = String::new();
+        for element in content {
+            match element {
+                Element::Text(text) => joined.push_str(text),
+                Element::LineBreak => joined.push('\n'),
+                Element::Link { link, label, .. } => {
+                    joined.push('[');
+                    wikidot_failed_tab_push_link_target(&mut joined, link);
+                    joined.push(' ');
+                    match label {
+                        LinkLabel::Text(text)
+                        | LinkLabel::Slug(text)
+                        | LinkLabel::Title(text) => {
+                            joined.push_str(text);
+                        }
+                        LinkLabel::Url | LinkLabel::Page => {
+                            wikidot_failed_tab_push_link_target(&mut joined, link);
+                        }
                     }
-                    return None;
+                    joined.push(']');
                 }
-                (None, Some(close)) => {
-                    if !wikidot_failed_tab_gap_valid(bytes, pos, close) {
-                        return None;
+                _ => joined.push('\0'),
+            }
+        }
+        let lower = joined.to_ascii_lowercase();
+        let bytes = lower.as_bytes();
+        let mut pos = 0usize;
+        loop {
+            if inside.is_some() {
+                match wikidot_find_tab_closer(bytes, pos) {
+                    Some(close) => {
+                        pos = close + 8;
+                        inside = None;
                     }
-                    pos = close + 8;
+                    None => break,
                 }
-                (Some(open), None) => {
-                    if !wikidot_failed_tab_gap_valid(bytes, pos, open) {
-                        return None;
+            } else {
+                let single = wikidot_find_failed_opener(bytes, pos);
+                let leading = wikidot_find_leading_opener(bytes, pos);
+                let next_opener = match (single, leading) {
+                    (Some(open), Some((start, end))) if start < open => {
+                        Some((start, end, true))
                     }
-                    pos = open + 8;
-                    inside = true;
-                    openers += 1;
-                }
-                (Some(open), Some(close)) => {
-                    if close < open {
+                    (Some(open), _) => Some((open, open + 8, false)),
+                    (None, Some((start, end))) => Some((start, end, true)),
+                    (None, None) => None,
+                };
+                let next_closer = wikidot_find_tab_closer(bytes, pos);
+                match (next_opener, next_closer) {
+                    (None, None) => {
+                        if !wikidot_failed_tab_gap_valid(bytes, pos, bytes.len()) {
+                            return false;
+                        }
+                        break;
+                    }
+                    (None, Some(close)) => {
                         if !wikidot_failed_tab_gap_valid(bytes, pos, close) {
-                            return None;
+                            return false;
                         }
                         pos = close + 8;
-                    } else {
+                    }
+                    (Some((open, end, leading)), None) => {
                         if !wikidot_failed_tab_gap_valid(bytes, pos, open) {
-                            return None;
+                            return false;
                         }
-                        pos = open + 8;
-                        inside = true;
-                        openers += 1;
+                        pos = end;
+                        inside = Some(leading);
+                        if !leading {
+                            singles += 1;
+                        }
+                    }
+                    (Some((open, end, leading)), Some(close)) => {
+                        if close < open {
+                            if !wikidot_failed_tab_gap_valid(bytes, pos, close) {
+                                return false;
+                            }
+                            pos = close + 8;
+                        } else {
+                            if !wikidot_failed_tab_gap_valid(bytes, pos, open) {
+                                return false;
+                            }
+                            pos = end;
+                            inside = Some(leading);
+                            if !leading {
+                                singles += 1;
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+    match inside {
+        Some(true) => false,
+        Some(false) => tab_count > 0 && !content_after_last_tab,
+        None => tab_count > 0 || singles > 0,
     }
 }
 
@@ -203,6 +300,17 @@ fn parse_tabview<'r, 't>(
     }
 
     if parser.settings().layout.legacy() && parser.in_wikidot_bibliography_body() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    if parser.settings().layout.legacy()
+        && parser
+            .full_text()
+            .inner()
+            .as_bytes()
+            .get(opener_start + 2)
+            .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
+    {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
@@ -283,27 +391,8 @@ fn parse_tabview<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
     }
 
-    if runs > 0 && !native {
-        let mut failed_openers = 0usize;
-        let mut tab_count = 0usize;
-        let mut allows = true;
-        for item in &items {
-            match item {
-                TabViewItem::Tab(_) => tab_count += 1,
-                TabViewItem::Content(content) => {
-                    match wikidot_failed_tab_content_valid(content) {
-                        Some(count) => failed_openers += count,
-                        None => {
-                            allows = false;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        if !allows || (tab_count == 0 && failed_openers == 0) {
-            return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
-        }
+    if runs > 0 && !native && !wikidot_tabview_failed_content_gate(&items) {
+        return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
     }
 
     if items.is_empty() {
@@ -1402,13 +1491,15 @@ fn parse_tab<'r, 't>(
 
     let legacy = parser.settings().layout.legacy();
     let leading_space = legacy
-        && in_head
         && parser
             .full_text()
             .inner()
             .as_bytes()
             .get(opener_start + 2)
             .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'));
+    if legacy && leading_space {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if legacy
         && in_head
         && !leading_space

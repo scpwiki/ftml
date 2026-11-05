@@ -746,6 +746,18 @@ fn parse_fn<'r, 't>(
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    if parser.settings().layout.legacy()
+        && parser.settings().mode != WikitextMode::List
+        && !parser.in_wikidot_div_body()
+        && !parser.in_native_blockquote_line()
+        && !flag_score
+        && body_start == BlockBodyStart::Inline
+        && parser.has_body_end_block_on_line(&BLOCK_DIV)
+        && !wikidot_div_line_has_segment(parser, opener_start)
+        && parser.accepts_partial() == AcceptsPartial::Tab
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if let Some(recovered) = try_recover_wikidot_div_literal(
         parser,
         opener_start,

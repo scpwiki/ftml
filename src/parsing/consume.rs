@@ -515,6 +515,51 @@ where
     }))
 }
 
+fn wikidot_adjacent_link_div_head_after(source: &str, from: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let mut offset = from;
+    while matches!(bytes.get(offset), Some(b' ' | b'\t')) {
+        offset += 1;
+    }
+    if offset == from {
+        return None;
+    }
+    let rest = bytes.get(offset..)?;
+    if rest.len() < 5
+        || !rest.starts_with(b"[[")
+        || !rest[2..5].eq_ignore_ascii_case(b"div")
+    {
+        return None;
+    }
+    let mut scan = offset + 2;
+    while scan < bytes.len() {
+        if bytes[scan] == b'\n' {
+            return None;
+        }
+        if bytes[scan..].starts_with(b"[[/") {
+            return None;
+        }
+        if bytes[scan..].starts_with(b"]]") {
+            return Some(offset);
+        }
+        scan += 1;
+    }
+    None
+}
+
+fn wikidot_absorb_adjacent_div_head(url_extra: &mut String, run: &str) {
+    let bytes = run.as_bytes();
+    if bytes.len() >= 5
+        && bytes.starts_with(b"[[")
+        && bytes[2..5].eq_ignore_ascii_case(b"div")
+    {
+        url_extra.push_str("[[div");
+        url_extra.push_str(&run[5..]);
+    } else {
+        url_extra.push_str(run);
+    }
+}
+
 fn try_consume_wikidot_adjacent_unmatched_closes_as_link<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<Elements<'t>>, ParseError>
@@ -579,17 +624,71 @@ where
         return Ok(None);
     }
     let first_end = scan.current().span.start;
+    let mut url_extra = String::new();
+    let mut label_from = first_end;
+    while let Some(head_start) = wikidot_adjacent_link_div_head_after(source, label_from)
+    {
+        let bytes = source.as_bytes();
+        let mut run_end = head_start;
+        while run_end < bytes.len()
+            && !matches!(bytes[run_end], b' ' | b'\t' | b'\n' | b'\r')
+        {
+            run_end += 1;
+        }
+        wikidot_absorb_adjacent_div_head(&mut url_extra, &source[head_start..run_end]);
+        label_from = run_end;
+    }
+    while scan.current().span.start < label_from {
+        scan.step()?;
+    }
+    if scan.current().token == Token::InputEnd {
+        return Ok(None);
+    }
+    if !url_extra.is_empty() {
+        loop {
+            match scan.current().token {
+                Token::RightBracket | Token::RightBlock | Token::RightLink => break,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                    return Ok(None);
+                }
+                _ => {
+                    scan.step()?;
+                }
+            }
+        }
+        let label_end = scan.current().span.start;
+        let label = source[label_from..label_end].trim();
+        if label.is_empty() {
+            return Ok(None);
+        }
+        scan.step()?;
+        let url = format!("{}{}", &source[first_start + 2..first_end], url_extra);
+        parser.update(&scan);
+        return Ok(Some(Elements::Multiple(vec![
+            text!("["),
+            Element::Link {
+                ltype: LinkType::Direct,
+                link: LinkLocation::Url(Cow::Owned(url)),
+                label: LinkLabel::Text(cow!(label)),
+                target: None,
+            },
+            text!("]"),
+        ])));
+    }
     scan.step()?;
     while !matches!(
         scan.current().token,
         Token::LeftBlock
             | Token::LeftBlockEnd
+            | Token::LeftLink
             | Token::LineBreak
             | Token::ParagraphBreak
             | Token::InputEnd
     ) {
         scan.step()?;
     }
+    // Live r10: a `[[[` link between the closes forms on its own and the
+    // div stays literal — the bridge must not span across it.
     if !matches!(scan.current().token, Token::LeftBlock | Token::LeftBlockEnd) {
         return Ok(None);
     }
@@ -644,14 +743,18 @@ where
         return Ok(None);
     }
 
-    let url = &first[2..];
-    let label = source[first_end..second_end - 2].trim();
+    let url = if url_extra.is_empty() {
+        cow!(&first[2..])
+    } else {
+        Cow::Owned(format!("{}{}", &first[2..], url_extra))
+    };
+    let label = source[label_from..second_end - 2].trim();
     parser.update(&scan);
     Ok(Some(Elements::Multiple(vec![
         text!("["),
         Element::Link {
             ltype: LinkType::Direct,
-            link: LinkLocation::Url(cow!(url)),
+            link: LinkLocation::Url(url),
             label: LinkLabel::Text(cow!(label)),
             target: None,
         },

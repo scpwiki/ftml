@@ -158,13 +158,7 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                 .attr(attr!("class" => "yui-content"))
                 .inner(|ctx| {
                     if tab_count == 0 {
-                        ctx.html().tag("p").inner(|ctx| {
-                            for item in items {
-                                if let TabViewItem::Content(elements) = item {
-                                    render_elements(ctx, elements);
-                                }
-                            }
-                        });
+                        render_wikidot_tabview_content_only(ctx, items);
                         return;
                     }
                     let mut tab_index = 0usize;
@@ -185,6 +179,70 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                     }
                 });
         });
+}
+
+fn render_wikidot_tabview_content_group(
+    ctx: &mut HtmlContext,
+    group: &[&Element],
+    paragraph: bool,
+) {
+    if group.is_empty() {
+        return;
+    }
+    if paragraph {
+        ctx.html().tag("p").inner(|ctx| {
+            for element in group {
+                render_element(ctx, element);
+            }
+        });
+    } else {
+        for element in group {
+            render_element(ctx, element);
+        }
+    }
+}
+
+fn render_wikidot_tabview_content_only(ctx: &mut HtmlContext, items: &[TabViewItem]) {
+    let mut flat: Vec<&Element> = Vec::new();
+    for item in items {
+        if let TabViewItem::Content(elements) = item {
+            flat.extend(elements.iter());
+        }
+    }
+    if flat.iter().all(|element| element.paragraph_safe()) {
+        ctx.html().tag("p").inner(|ctx| {
+            for element in &flat {
+                render_element(ctx, element);
+            }
+        });
+        return;
+    }
+    let mut group: Vec<&Element> = Vec::new();
+    let mut first_group = true;
+    for element in &flat {
+        if element.paragraph_safe() {
+            group.push(*element);
+            continue;
+        }
+        let mut stripped = false;
+        while matches!(group.last(), Some(Element::LineBreak)) {
+            group.pop();
+            stripped = true;
+        }
+        let trailing_space = match group.last() {
+            Some(Element::Text(text)) => text.ends_with([' ', '\t']),
+            _ => false,
+        };
+        let paragraph = first_group && (stripped || !trailing_space);
+        first_group = false;
+        render_wikidot_tabview_content_group(ctx, &group, paragraph);
+        group.clear();
+        render_element(ctx, element);
+    }
+    while matches!(group.last(), Some(Element::LineBreak)) {
+        group.pop();
+    }
+    render_wikidot_tabview_content_group(ctx, &group, false);
 }
 
 fn generate_ids(random: &mut Random, len: usize) -> Vec<String> {
