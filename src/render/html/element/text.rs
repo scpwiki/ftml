@@ -165,6 +165,23 @@ fn render_wikidot_code(
         .inner(|ctx| {
             render_elements(ctx, open_elements);
             if contents.is_empty() {
+                // Live keeps an empty hl-main wrapper (without a <pre>) when
+                // the type maps to a highlighter; plain and unmapped code
+                // render nothing inside the code div.
+                if let Some(language) = language
+                    && super::highlight::is_highlighted_language(language)
+                {
+                    ctx.html()
+                        .div()
+                        .attr(attr!("class" => "hl-main"))
+                        .inner(|ctx| {
+                            render_wikidot_code_contents(
+                                ctx,
+                                label_spans,
+                                &mut |_ctx: &mut HtmlContext| {},
+                            );
+                        });
+                }
                 return;
             }
 
@@ -180,23 +197,24 @@ fn render_wikidot_code(
             };
 
             match language {
-                Some(language) => match super::highlight::highlight_code(language, contents) {
-                    Some(highlighted) => {
-                        ctx.html()
-                            .div()
-                            .attr(attr!("class" => "hl-main"))
-                            .inner(|ctx| {
-                                ctx.html().pre().inner(|ctx| {
-                                    render_wikidot_code_contents(
-                                        ctx,
-                                        label_spans,
-                                        &mut |ctx| ctx.push_raw_str(&highlighted),
-                                    );
-                                });
-                            });
+                Some(language) => {
+                    match super::highlight::highlight_code(language, contents) {
+                        Some(highlighted) => {
+                            ctx.html().div().attr(attr!("class" => "hl-main")).inner(
+                                |ctx| {
+                                    ctx.html().pre().inner(|ctx| {
+                                        render_wikidot_code_contents(
+                                            ctx,
+                                            label_spans,
+                                            &mut |ctx| ctx.push_raw_str(&highlighted),
+                                        );
+                                    });
+                                },
+                            );
+                        }
+                        None => render_plain(ctx),
                     }
-                    None => render_plain(ctx),
-                },
+                }
                 None => render_plain(ctx),
             }
         });

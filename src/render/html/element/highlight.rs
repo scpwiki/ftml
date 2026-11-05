@@ -34,7 +34,7 @@
 //! preserved) and reimplemented as [`HlCustom`] matchers below, mirroring the
 //! upstream match semantics exactly.
 
-use regex::bytes::Regex;
+use regex::bytes::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -53,8 +53,6 @@ pub enum HlCustom {
     HtmlTagname,
     PerlQqw,
     PerlQ,
-    PerlSubst2,
-    PerlSubst1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -178,8 +176,17 @@ struct CompiledState {
     regex: Option<Regex>,
 }
 
+/// A region-end pattern, compiled once per language instead of once per
+/// region entry (highlighting a string-heavy block otherwise rebuilds the
+/// same small regex for every quoted string).
+enum CompiledEnd {
+    Pattern(Regex),
+    Custom(HlCustomEnd),
+}
+
 struct CompiledLang {
     states: HashMap<i32, CompiledState>,
+    ends: HashMap<i32, CompiledEnd>,
     keywords: HashMap<(&'static str, &'static str), Regex>,
     def_class: &'static str,
     kwmap: HashMap<&'static str, &'static str>,
@@ -224,8 +231,7 @@ fn compile_keywords(
                 for (group, pattern) in groups {
                     map.entry((*group, *pattern)).or_insert_with(|| {
                         let stripped = strip_preg_delimiters(pattern);
-                        Regex::new(&format!("(?:{stripped})"))
-                            .expect("invalid highlight keyword pattern")
+                        compile_pattern(&format!("(?:{stripped})"))
                     });
                 }
             }
@@ -243,17 +249,25 @@ fn compile_lang(lang: &'static HlLang) -> CompiledLang {
         let regex = if alts.is_empty() {
             None
         } else {
-            Some(
-                Regex::new(&format!("(?:{})", alts.join("|")))
-                    .expect("invalid highlight alternation"),
-            )
+            Some(compile_pattern(&format!("(?:{})", alts.join("|"))))
         };
         states.insert(*state_id, CompiledState { regex });
+    }
+    let mut ends = HashMap::with_capacity(lang.ends.len());
+    for (state_id, end) in lang.ends {
+        let compiled = match end {
+            HlEnd::Pattern(pattern) => {
+                CompiledEnd::Pattern(compile_pattern(&format!("(?:{pattern})")))
+            }
+            HlEnd::Custom(id) => CompiledEnd::Custom(*id),
+        };
+        ends.insert(*state_id, compiled);
     }
     let mut keywords = HashMap::new();
     compile_keywords(lang, &mut keywords);
     CompiledLang {
         states,
+        ends,
         keywords,
         def_class: lang.def_class,
         kwmap: lang.kwmap.iter().copied().collect(),
@@ -284,8 +298,21 @@ fn prev_byte_is(text: &str, pos: usize, byte: u8) -> bool {
     pos > 0 && text.as_bytes()[pos - 1] == byte
 }
 
+/// Compiles one highlight pattern in the upstream engine's byte mode.
+///
+/// Text_Highlighter runs PCRE over byte strings without the `u` flag, so
+/// `\w`, `\d`, `\s` and case folding are ASCII-only; a UTF-8-aware
+/// compilation would fold non-ASCII text into identifier/keyword runs that
+/// live leaves unclassified (e.g. `x変数` is `x` plus a code gap).
+fn compile_pattern(pattern: &str) -> Regex {
+    RegexBuilder::new(pattern)
+        .unicode(false)
+        .build()
+        .expect("invalid highlight pattern")
+}
+
 fn static_regex(pattern: &'static str) -> Regex {
-    Regex::new(pattern).expect("invalid static highlight pattern")
+    compile_pattern(pattern)
 }
 
 fn py_ident_re() -> Regex {
@@ -390,7 +417,10 @@ fn find_css_selector(text: &str, pos: usize) -> Option<CustomHit> {
         let end = found.end();
         // Guard 1 (from `(?![a-z\d\-])`): the base match is already minimal
         // in the regex sense, so verify the next byte directly.
-        let guard1 = end >= bytes.len() || !is_css_name_continue(bytes[end]);
+        // (?![a-z\d\-]) is attached to the selector-name branch only; the
+        // "*" alternative has no such guard (so "*html" is one identifier).
+        let star = end - found.start() == 1 && bytes[found.start()] == b'*';
+        let guard1 = star || end >= bytes.len() || !is_css_name_continue(bytes[end]);
         // Guard 2 (from `(?!\s*:\s*[\s\{])`): after skipping whitespace, a
         // colon must NOT be followed by another whitespace-or-`{` character.
         // The second `\s*` may match empty, so the very next byte after the
@@ -424,122 +454,21 @@ fn find_css_selector(text: &str, pos: usize) -> Option<CustomHit> {
     }
 }
 
-// `s`, `tr`, `m` delimiters: `|` `#` `~` backtick `!` `@` `$` `%` `^` `&`
-// `*` `+` `=` `\` `;` `:` `'` `"` `,` `.` `/` `?`. (`-`, space, and brackets
-// are not delimiters; `-` forms a range inside the upstream class.)
-fn is_perl_subst_delim(byte: u8) -> bool {
-    matches!(
-        byte,
-        b'|' | b'#'
-            | b'~'
-            | b'`'
-            | b'!'
-            | b'@'
-            | b'$'
-            | b'%'
-            | b'^'
-            | b'&'
-            | b'*'
-            | b'+'
-            | b'='
-            | b'\\'
-            | b';'
-            | b':'
-            | b'\''
-            | b'"'
-            | b','
-            | b'.'
-            | b'/'
-            | b'?'
-    )
-}
-
-fn is_perl_subst_modifier(byte: u8) -> bool {
-    matches!(byte, b'e' | b'c' | b'g' | b'i' | b'm' | b'o' | b's' | b'x')
-}
-
-/// Scans one `((\\.|[^\x5c])*?)` content run ending at an unescaped `delim`.
-/// Returns the end of the content (the delimiter position).
-fn scan_perl_content(bytes: &[u8], mut pos: usize, delim: u8) -> Option<usize> {
-    while pos < bytes.len() {
-        let byte = bytes[pos];
-        if byte == b'\\' {
-            if pos + 1 >= bytes.len() || bytes[pos + 1] == b'\n' {
-                return None;
-            }
-            pos += 2;
-        } else if byte == delim {
-            return Some(pos);
-        } else {
-            pos += 1;
-        }
-    }
-    None
-}
-
-fn find_perl_subst(text: &str, pos: usize, with_two_parts: bool) -> Option<CustomHit> {
-    let bytes = text.as_bytes();
-    let mut search = pos;
-    while search < bytes.len() {
-        let rest = &bytes[search..];
-        let op_len = if rest.starts_with(b"tr") {
-            2
-        } else if rest.starts_with(b"s") || rest.starts_with(b"m") {
-            let is_m = rest.starts_with(b"m");
-            if with_two_parts == is_m {
-                search = next_boundary(text, search + 1);
-                continue;
-            }
-            1
-        } else {
-            search = next_boundary(text, search + 1);
-            continue;
-        };
-        let mut cursor = search + op_len;
-        if cursor >= bytes.len() || !is_perl_subst_delim(bytes[cursor]) {
-            search = next_boundary(text, search + 1);
-            continue;
-        }
-        let delim = bytes[cursor];
-        cursor += 1;
-        let first = match scan_perl_content(bytes, cursor, delim) {
-            Some(end) => end,
-            None => {
-                search = next_boundary(text, search + 1);
-                continue;
-            }
-        };
-        cursor = first + 1;
-        if with_two_parts {
-            let second = match scan_perl_content(bytes, cursor, delim) {
-                Some(end) => end,
-                None => {
-                    search = next_boundary(text, search + 1);
-                    continue;
-                }
-            };
-            cursor = second + 1;
-        }
-        while cursor < bytes.len() && is_perl_subst_modifier(bytes[cursor]) {
-            cursor += 1;
-        }
-        if !text.is_char_boundary(cursor) {
-            search = next_boundary(text, search + 1);
-            continue;
-        }
-        return Some(CustomHit {
-            start: search,
-            end: cursor,
-            groups: vec![Some((search, cursor))],
-        });
-    }
-    None
-}
-
-/// Matches `q`, `qw`, or `qq` quote-like operators. `two_letter` selects the
-/// `q[wq]` rule (index 7) versus the plain-`q` rule (index 8); the engine
-/// tries both and keeps the leftmost, breaking ties by rule order, exactly
-/// like the upstream alternation.
+/// Matches `q`, `qw`, or `qq` quote-like operator openers. `two_letter`
+/// selects the `q[wq]` rule versus the plain-`q` rule; the engine tries both
+/// and keeps the leftmost match, breaking ties by rule order, exactly like
+/// the upstream alternation.
+///
+/// Upstream's opener regex is
+/// `\b(q[wq]?\s*(\{|...|(<)|([\W\S])))(?=...closing-delimiter...)`. Inside the
+/// combined per-state alternation the conditional lookahead collapses in two
+/// different ways, and live output follows that:
+///
+/// - a named bracket delimiter (`{`, `(`, `[`, `<`) needs no matching close
+///   (an unterminated `qw(a b` still opens a region at end of input);
+/// - an arbitrary delimiter still requires a closing occurrence, and PCRE
+///   backtracks the `\s*` run so that a space itself can be the delimiter
+///   (`q = 1` opens with the space, not the `=`).
 fn find_perl_qquote(text: &str, pos: usize, two_letter: bool) -> Option<CustomHit> {
     let bytes = text.as_bytes();
     let mut search = pos;
@@ -556,71 +485,74 @@ fn find_perl_qquote(text: &str, pos: usize, two_letter: bool) -> Option<CustomHi
                 continue;
             }
         }
-        let mut cursor = search + 1;
+        let mut op_end = search + 1;
         if two_letter {
-            if cursor >= bytes.len()
-                || (bytes[cursor] != b'w'
-                    && bytes[cursor] != b'q'
-                    && bytes[cursor] != b'W'
-                    && bytes[cursor] != b'Q')
-            {
+            let Some(&second) = bytes.get(op_end) else {
+                return None;
+            };
+            if !matches!(second, b'w' | b'q' | b'W' | b'Q') {
                 search = next_boundary(text, search + 1);
                 continue;
             }
-            cursor += 1;
+            op_end += 1;
         }
-        while cursor < bytes.len() && is_perl_space(bytes[cursor]) {
-            cursor += 1;
+        let mut ws_end = op_end;
+        while ws_end < bytes.len() && is_perl_space(bytes[ws_end]) {
+            ws_end += 1;
         }
-        if cursor >= bytes.len() {
+        if ws_end >= bytes.len() {
             return None;
         }
-        let delim = bytes[cursor];
-        let delim_pos = cursor;
-        cursor += 1;
-        let close = match delim {
-            b'{' => b'}',
-            b'(' => b')',
-            b'[' => b']',
-            b'<' => b'>',
-            _ => delim,
-        };
-        if !text.is_char_boundary(delim_pos) || !text.is_char_boundary(cursor) {
-            search = next_boundary(text, search + 1);
-            continue;
+        // Greedy delimiter first, then backtrack one whitespace byte at a time.
+        for delim_pos in (op_end..=ws_end).rev() {
+            let delim = bytes[delim_pos];
+            let opener_end = delim_pos + 1;
+            if !text.is_char_boundary(opener_end) {
+                continue;
+            }
+            let bracket_close = match delim {
+                b'{' => Some(b'}'),
+                b'(' => Some(b')'),
+                b'[' => Some(b']'),
+                b'<' => Some(b'>'),
+                _ => None,
+            };
+            match bracket_close {
+                // Vacuous lookahead for named brackets in the deployed engine.
+                Some(_) => {}
+                // Arbitrary delimiters still need a closing occurrence.
+                None if bytes[opener_end..].contains(&delim) => {}
+                None => continue,
+            }
+            let bracket_group = match delim {
+                b'{' => 3,
+                b'(' => 4,
+                b'[' => 5,
+                b'<' => 6,
+                _ => 0,
+            };
+            let mut groups = vec![
+                Some((search, opener_end)),
+                Some((search, opener_end)),
+                Some((delim_pos, opener_end)),
+                None,
+                None,
+                None,
+                None,
+                None,
+            ];
+            if bracket_group >= 3 {
+                groups[bracket_group] = Some((delim_pos, opener_end));
+            } else {
+                groups[7] = Some((delim_pos, opener_end));
+            }
+            return Some(CustomHit {
+                start: search,
+                end: opener_end,
+                groups,
+            });
         }
-        // The upstream lookahead gate only requires that a close exists.
-        if !bytes[cursor..].contains(&close) {
-            search = next_boundary(text, search + 1);
-            continue;
-        }
-        let bracket_group = match delim {
-            b'{' => 3,
-            b'(' => 4,
-            b'[' => 5,
-            b'<' => 6,
-            _ => 0,
-        };
-        let mut groups = vec![
-            Some((search, cursor)),
-            Some((search, cursor)),
-            Some((delim_pos, cursor)),
-            None,
-            None,
-            None,
-            None,
-            None,
-        ];
-        if bracket_group >= 3 {
-            groups[bracket_group] = Some((delim_pos, cursor));
-        } else {
-            groups[7] = Some((delim_pos, cursor));
-        }
-        return Some(CustomHit {
-            start: search,
-            end: cursor,
-            groups,
-        });
+        search = next_boundary(text, search + 1);
     }
     None
 }
@@ -634,15 +566,9 @@ fn find_custom(id: HlCustom, text: &str, pos: usize) -> Option<CustomHit> {
         HlCustom::HtmlTagname => find_html_tagname(text, pos),
         HlCustom::PerlQqw => find_perl_qquote(text, pos, true),
         HlCustom::PerlQ => find_perl_qquote(text, pos, false),
-        HlCustom::PerlSubst2 => find_perl_subst(text, pos, true),
-        HlCustom::PerlSubst1 => find_perl_subst(text, pos, false),
     }
 }
 
-// ---------- custom end matchers ----------
-
-/// Finds the end of a `//` line comment that continues past a trailing
-/// backslash: the first line end not preceded by `\`. Returns an empty match.
 fn find_cpp_line_end(text: &str, pos: usize) -> Option<(usize, usize)> {
     let bytes = text.as_bytes();
     let mut cursor = pos;
@@ -692,8 +618,8 @@ fn find_php_code_end(text: &str, pos: usize) -> Option<(usize, usize)> {
     Some((end, end))
 }
 
-/// Finds the next normal-diff hunk header line (`a…`/`d…`); the end of the
-/// `normNew` region. The match is always empty.
+/// Finds the next normal-diff hunk header line (`a...`/`d...`); the end of
+/// the `normNew` region. The match is always empty.
 fn find_diff_norm_end(text: &str, pos: usize) -> Option<(usize, usize)> {
     diff_norm_re()
         .find_at(text.as_bytes(), pos)
@@ -900,10 +826,11 @@ struct RawToken {
 
 fn tokenize(compiled: &CompiledLang, table: &HlLang, text: &str) -> Vec<RawToken> {
     let mut out = Vec::new();
+    // Zero-width tokens are kept: they render nothing but they are region
+    // boundaries in the live output, and the live renderer never joins spans
+    // across one (see merge_tokens).
     let mut emit = |class: &'static str, start: usize, end: usize| {
-        if start < end {
-            out.push(RawToken { class, start, end });
-        }
+        out.push(RawToken { class, start, end });
     };
     let state_rules = |state: i32| -> &'static [HlRule] {
         table
@@ -914,13 +841,10 @@ fn tokenize(compiled: &CompiledLang, table: &HlLang, text: &str) -> Vec<RawToken
             .unwrap_or(&[])
     };
     let state_end = |state: i32| -> EndState {
-        match table.ends.iter().find(|(id, _)| *id == state) {
+        match compiled.ends.get(&state) {
             None => EndState::Top,
-            Some((_, HlEnd::Pattern(pattern))) => EndState::State(
-                Regex::new(&format!("(?:{pattern})"))
-                    .expect("invalid highlight end pattern"),
-            ),
-            Some((_, HlEnd::Custom(id))) => EndState::Custom(*id),
+            Some(CompiledEnd::Pattern(regex)) => EndState::State(regex.clone()),
+            Some(CompiledEnd::Custom(id)) => EndState::Custom(*id),
         }
     };
     let mut state: i32 = -1;
@@ -982,10 +906,7 @@ fn tokenize(compiled: &CompiledLang, table: &HlLang, text: &str) -> Vec<RawToken
                             &hit.groups,
                             rule.groups.saturating_sub(1),
                         );
-                    EndState::Remember(
-                        Regex::new(&format!("(?:{substituted})"))
-                            .expect("invalid substituted highlight end"),
-                    )
+                    EndState::Remember(compile_pattern(&format!("(?:{substituted})")))
                 } else {
                     state_end(rule.target)
                 };
@@ -1073,14 +994,26 @@ fn tokenize(compiled: &CompiledLang, table: &HlLang, text: &str) -> Vec<RawToken
 
 fn merge_tokens(tokens: &[RawToken]) -> Vec<(&'static str, usize, usize)> {
     let mut merged: Vec<(&'static str, usize, usize)> = Vec::with_capacity(tokens.len());
+    let mut joinable = false;
     for token in tokens {
-        if let Some(last) = merged.last_mut() {
-            if last.0 == token.class && last.2 == token.start {
-                last.2 = token.end;
-                continue;
-            }
+        if token.start >= token.end {
+            // A zero-width token (a zero-width region end, such as the CSS
+            // property-value end before a semicolon) emits nothing, but live
+            // never joins two same-class spans across it. Break the run and
+            // skip the token itself.
+            joinable = false;
+            continue;
+        }
+        if joinable
+            && let Some(last) = merged.last_mut()
+            && last.0 == token.class
+            && last.2 == token.start
+        {
+            last.2 = token.end;
+            continue;
         }
         merged.push((token.class, token.start, token.end));
+        joinable = true;
     }
     merged
 }
@@ -1125,6 +1058,14 @@ fn compiled(language: &str) -> Option<&'static CompiledLang> {
         "xml" => Some(compiled_xml()),
         _ => None,
     }
+}
+
+/// Whether Wikidot maps a `[[code]]` type to a Text_Highlighter language.
+///
+/// Live keeps an empty `hl-main` wrapper for such a type even when the body
+/// is empty, while plain and unmapped types render no inner markup at all.
+pub fn is_highlighted_language(language: &str) -> bool {
+    compiled(language).is_some()
 }
 
 /// Highlights a trimmed code body for a Wikidot `[[code]]` language.

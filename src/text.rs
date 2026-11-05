@@ -89,6 +89,11 @@ impl<'t> FullText<'t> {
         self.slice_impl("partial", start, end)
     }
 
+    /// Slices an arbitrary byte range of the full text.
+    pub fn slice_range(&self, start: usize, end: usize) -> &'t str {
+        self.slice_impl("range", start, end)
+    }
+
     fn slice_impl(&self, slice_kind: &'static str, start: usize, end: usize) -> &'t str {
         debug!("Extracting {slice_kind} slice ({start}-{end}) from full text");
 

@@ -108,7 +108,7 @@ fn parse_fn<'r, 't>(
     let code = if skip_end_blocks > 0 {
         parser.get_body_text_after_skipping_end_blocks(&BLOCK_CODE, skip_end_blocks)?
     } else {
-        parser.get_body_text(&BLOCK_CODE)?
+        parser.get_body_text_keeping_continued_break(&BLOCK_CODE)?
     };
 
     // Wikidot trims code bodies: leading blank lines are dropped and
@@ -323,11 +323,14 @@ mod tests {
                 "[[code type=\"python\"[[iftags -zzz]][[/iftags]]]]x = 1[[/code]]",
                 concat!(
                     "<div class=\"code\"><div class=\"hl-main\"><pre>",
-                    "<span class=\"hl-identifier\">[[/iftags]]]]x</span>",
-                    "<span class=\"hl-code\"> </span>",
-                    "<span class=\"hl-identifier\">=</span>",
-                    "<span class=\"hl-code\"> </span>",
-                    "<span class=\"hl-identifier\">1</span>",
+                    "<span class=\"hl-brackets\">[[</span>",
+                    "<span class=\"hl-code\">/</span>",
+                    "<span class=\"hl-identifier\">iftags</span>",
+                    "<span class=\"hl-brackets\">]]</span>",
+                    "<span class=\"hl-code\">]]</span>",
+                    "<span class=\"hl-identifier\">x</span>",
+                    "<span class=\"hl-code\"> = </span>",
+                    "<span class=\"hl-number\">1</span>",
                     "</pre></div></div>",
                 ),
             ),
