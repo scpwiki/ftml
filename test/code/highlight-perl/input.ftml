@@ -1,0 +1,3 @@
+[[code type="perl"]]
+if (x == 1) { return "a"; } // c
+[[/code]]

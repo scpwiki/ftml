@@ -134,6 +134,24 @@ pub fn render_code(
         });
 }
 
+/// Escapes plain (unhighlighted) code bodies for the Wikidot layout the way
+/// live does: `&`, `<`, `>`, and `"` are escaped, while `'` is left as-is.
+/// (The shared escaped-content path would render `'` as `&#39;`, which live
+/// never emits inside code.)
+fn escape_wikidot_code(contents: &str) -> String {
+    let mut out = String::with_capacity(contents.len());
+    for ch in contents.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
 fn render_wikidot_code(
     ctx: &mut HtmlContext,
     language: Option<&str>,
@@ -150,34 +168,36 @@ fn render_wikidot_code(
                 return;
             }
 
-            match language {
-                Some("css" | "python" | "java") => {
-                    ctx.html()
-                        .div()
-                        .attr(attr!("class" => "hl-main"))
-                        .inner(|ctx| {
-                            ctx.html().pre().inner(|ctx| {
-                                render_wikidot_code_contents(
-                                    ctx,
-                                    label_spans,
-                                    &mut |ctx| {
-                                        render_wikidot_highlight(
-                                            ctx,
-                                            language.unwrap(),
-                                            contents,
-                                        );
-                                    },
-                                );
-                            });
-                        });
-                }
-                _ => {
-                    ctx.html().pre().inner(|ctx| {
-                        render_wikidot_code_contents(ctx, label_spans, &mut |ctx| {
-                            ctx.html().code().contents(contents);
+            let render_plain = |ctx: &mut HtmlContext| {
+                let escaped = escape_wikidot_code(contents);
+                ctx.html().pre().inner(|ctx| {
+                    render_wikidot_code_contents(ctx, label_spans, &mut |ctx| {
+                        ctx.html().code().inner(|ctx| {
+                            ctx.push_raw_str(&escaped);
                         });
                     });
-                }
+                });
+            };
+
+            match language {
+                Some(language) => match super::highlight::highlight_code(language, contents) {
+                    Some(highlighted) => {
+                        ctx.html()
+                            .div()
+                            .attr(attr!("class" => "hl-main"))
+                            .inner(|ctx| {
+                                ctx.html().pre().inner(|ctx| {
+                                    render_wikidot_code_contents(
+                                        ctx,
+                                        label_spans,
+                                        &mut |ctx| ctx.push_raw_str(&highlighted),
+                                    );
+                                });
+                            });
+                    }
+                    None => render_plain(ctx),
+                },
+                None => render_plain(ctx),
             }
         });
 }
@@ -195,110 +215,6 @@ fn render_wikidot_code_contents(
         .span()
         .attr(attr!(;; attributes))
         .inner(|ctx| render_wikidot_code_contents(ctx, remaining, contents));
-}
-
-fn render_wikidot_highlight(ctx: &mut HtmlContext, language: &str, contents: &str) {
-    let mut rest = contents;
-    let mut prev_is_property = false;
-    while !rest.is_empty() {
-        let (mut class, length) = wikidot_highlight_token(language, rest);
-        let (token, next) = rest.split_at(length);
-        if language == "css" && prev_is_property && class == "hl-identifier" {
-            let is_bare_value = !token.contains(['(', ')', '\'', '"', '/']);
-            if is_bare_value {
-                class = "hl-var";
-            }
-        }
-        prev_is_property =
-            (language == "css" && class == "hl-reserved" && token.ends_with(':'))
-                || (class == "hl-code" && prev_is_property);
-        ctx.html()
-            .span()
-            .attr(attr!("class" => class))
-            .contents(token);
-        rest = next;
-    }
-}
-
-fn wikidot_highlight_token(language: &str, input: &str) -> (&'static str, usize) {
-    let first = input.as_bytes()[0];
-    if first.is_ascii_whitespace() || first == b';' {
-        let mut length = input
-            .bytes()
-            .take_while(|byte| byte.is_ascii_whitespace() || *byte == b';')
-            .count();
-        if language == "css" && input[length..].starts_with("--") {
-            length += 2;
-        }
-        return ("hl-code", length);
-    }
-    if language == "css" && input.starts_with("--") {
-        return ("hl-code", 2);
-    }
-    if matches!(first, b'{' | b'}') {
-        let length = input
-            .bytes()
-            .take_while(|byte| matches!(byte, b'{' | b'}'))
-            .count();
-        return ("hl-brackets", length);
-    }
-    if language == "css" && first == b':' {
-        let length = input
-            .bytes()
-            .take_while(|byte| {
-                !byte.is_ascii_whitespace() && !matches!(byte, b'{' | b'}' | b';')
-            })
-            .count();
-        return ("hl-special", length);
-    }
-    if language == "css" && first.is_ascii_digit() {
-        let length = input
-            .bytes()
-            .take_while(|byte| byte.is_ascii_digit() || *byte == b'.')
-            .count();
-        return ("hl-number", length);
-    }
-    if language == "css" && first == b'%' {
-        return ("hl-string", 1);
-    }
-
-    let length = input
-        .bytes()
-        .take_while(|byte| {
-            !byte.is_ascii_whitespace() && !matches!(byte, b'{' | b'}' | b';')
-        })
-        .count();
-    let token = &input[..length];
-    if language == "css"
-        && let Some(split) = css_pseudo_split(token)
-    {
-        return ("hl-identifier", split);
-    }
-    let class = match language {
-        "css" if token.ends_with(':') => "hl-reserved",
-        "css" if token == "none" => "hl-string",
-        "python" if token == "import" => "hl-reserved",
-        "java" if matches!(token, "public" | "abstract" | "interface" | "class") => {
-            "hl-reserved"
-        }
-        "java" if matches!(token, "static" | "final") => "hl-types",
-        _ => "hl-identifier",
-    };
-    (class, length)
-}
-
-fn css_pseudo_split(token: &str) -> Option<usize> {
-    let split = token.bytes().position(|byte| byte == b':')?;
-    if split == 0
-        || token.ends_with(':')
-        || token.as_bytes()[split + 1] == b'/'
-        || !(token.as_bytes()[split + 1].is_ascii_alphabetic()
-            || token.as_bytes()[split + 1] == b':')
-        || token[..split].contains(['"', '\'', '(', '/'])
-    {
-        return None;
-    }
-    Some(split)
 }
 
 #[cfg(test)]

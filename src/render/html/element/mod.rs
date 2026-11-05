@@ -32,6 +32,7 @@ mod embed_video;
 mod file;
 mod footnotes;
 mod gallery;
+mod highlight;
 mod iframe;
 mod image;
 mod include;

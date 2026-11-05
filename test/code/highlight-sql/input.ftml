@@ -1,0 +1,3 @@
+[[code type="sql"]]
+SELECT a FROM b WHERE c = 'd';
+[[/code]]

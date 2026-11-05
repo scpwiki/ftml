@@ -1,0 +1,6 @@
+[[code type="python"]]
+def f(x):
+    return x + 1  # c
+
+class A: pass
+[[/code]]
