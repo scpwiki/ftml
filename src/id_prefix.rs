@@ -20,7 +20,7 @@
 
 //! Utility to prefix HTML IDs for isolation.
 //!
-//! This adds `u-` to all IDs in the string (if non-empty)
+//! This adds `u-` to the ID value (if non-empty)
 //! to ensure non-collision with generated elements.
 //!
 //! However it is intelligent, and doesn't add the `u-` if
@@ -28,20 +28,22 @@
 
 pub fn isolate_ids(id_string: &str) -> String {
     const PREFIX: &str = "u-";
-    let mut isolated_ids = String::new();
+    let mut words = id_string.split_whitespace();
+    let Some(first) = words.next() else {
+        return String::new();
+    };
 
-    for class in id_string.split_whitespace() {
-        // Add space separator between each class
-        if !isolated_ids.is_empty() {
-            isolated_ids.push(' ');
-        }
+    let mut isolated_ids = String::with_capacity(id_string.len() + PREFIX.len());
 
-        // Prefix if not already present
-        if !class.starts_with(PREFIX) {
-            isolated_ids.push_str(PREFIX);
-        }
+    if !first.starts_with(PREFIX) {
+        isolated_ids.push_str(PREFIX);
+    }
 
-        isolated_ids.push_str(class);
+    isolated_ids.push_str(first);
+
+    for word in words {
+        isolated_ids.push(' ');
+        isolated_ids.push_str(word);
     }
 
     isolated_ids
@@ -62,16 +64,17 @@ fn test_isolate_ids() {
     test!("", "");
     test!("  ", "");
     test!("apple", "u-apple");
-    test!("apple banana", "u-apple u-banana");
-    test!("apple  banana", "u-apple u-banana");
-    test!(" apple  banana", "u-apple u-banana");
-    test!(" apple   banana ", "u-apple u-banana");
-    test!("apple banana cherry", "u-apple u-banana u-cherry");
-    test!("apple  banana cherry", "u-apple u-banana u-cherry");
-    test!("  apple  banana\tcherry", "u-apple u-banana u-cherry");
-    test!("u-apple banana cherry", "u-apple u-banana u-cherry");
-    test!("u-apple u-banana cherry", "u-apple u-banana u-cherry");
+    test!("apple banana", "u-apple banana");
+    test!("apple  banana", "u-apple banana");
+    test!(" apple  banana", "u-apple banana");
+    test!(" apple   banana ", "u-apple banana");
+    test!("apple banana cherry", "u-apple banana cherry");
+    test!("  apple  banana\tcherry", "u-apple banana cherry");
+    test!("u-apple", "u-apple");
+    test!("u-apple banana cherry", "u-apple banana cherry");
+    test!("u-apple u-banana cherry", "u-apple u-banana cherry");
     test!("u-apple u-banana u-cherry", "u-apple u-banana u-cherry");
-    test!("apple u-banana cherry", "u-apple u-banana u-cherry");
+    test!("apple u-banana cherry", "u-apple u-banana cherry");
+    test!("u-", "u-");
     test!("u-u-apple", "u-u-apple");
 }
