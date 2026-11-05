@@ -372,7 +372,7 @@ pub(crate) fn parse_gallery_head_arguments(
         return None;
     }
     let tail = &inner[name_end..];
-    parse_gallery_arguments(tail)
+    parse_gallery_arguments(tail, false)
         .or_else(|| (recover_non_assignment && !tail.contains('=')).then(Vec::new))
 }
 
@@ -415,7 +415,7 @@ pub(crate) fn parse_explicit_gallery_entries<'t>(
             return Some((entries, owner_end, residual));
         }
 
-        entries.push(parse_gallery_entry(line)?);
+        entries.push(parse_raw_explicit_entry(line)?);
         if line_end == source.len() {
             return None;
         }
@@ -439,16 +439,40 @@ pub(crate) fn parse_gallery_entry_owned(line: String) -> Option<GalleryEntry<'st
 }
 
 pub(crate) fn parse_gallery_entry(line: &str) -> Option<GalleryEntry<'_>> {
+    parse_gallery_entry_with_tail(line, true)
+}
+
+pub(crate) fn parse_gallery_entry_strict(line: &str) -> Option<GalleryEntry<'_>> {
+    parse_gallery_entry_with_tail(line, false)
+}
+
+fn parse_gallery_entry_with_tail(
+    line: &str,
+    entry_tail: bool,
+) -> Option<GalleryEntry<'_>> {
     let content = line.trim_start_matches([' ', '\t']);
     let tail = content.strip_prefix(':')?.trim_start_matches([' ', '\t']);
     let (image_source, arguments_source) = split_gallery_entry_source(tail)?;
     let image = classify_gallery_entry_source(image_source);
-    let arguments = parse_gallery_arguments(arguments_source)?;
+    let arguments = parse_gallery_arguments(arguments_source, entry_tail)?;
     Some(GalleryEntry {
         source: Cow::Borrowed(line),
         image,
         arguments,
     })
+}
+
+pub(crate) fn parse_raw_explicit_entry(line: &str) -> Option<GalleryEntry<'_>> {
+    let entry = parse_gallery_entry(line)?;
+    if parse_gallery_entry_strict(line).is_some() {
+        return Some(entry);
+    }
+    // A seamed image source needs token-aware resolution, which only the
+    // resolved path performs. The raw path must not claim it: the strict
+    // shape above is what the resolved path expects to see.
+    let seamed =
+        entry.image().source().contains("[[") || entry.image().source().contains("[!--");
+    (!seamed).then_some(entry)
 }
 
 fn split_gallery_entry_source(value: &str) -> Option<(&str, &str)> {
@@ -491,10 +515,28 @@ fn classify_gallery_entry_source(source: &str) -> GalleryEntrySource<'_> {
     }
 }
 
-fn parse_gallery_arguments(value: &str) -> Option<Vec<GalleryArgument<'_>>> {
+fn parse_gallery_arguments(
+    value: &str,
+    entry_tail: bool,
+) -> Option<Vec<GalleryArgument<'_>>> {
+    // Gallery heads require every token to be a well-formed name=value
+    // argument. Gallery entries instead accept a trailing caption zone:
+    // live creates the item and renders no visible caption, so parsing
+    // stops at the first token that is not a well-formed argument and
+    // keeps the arguments parsed so far. The full line stays preserved
+    // in the entry source slice either way.
     let bytes = value.as_bytes();
     let mut cursor = 0;
     let mut output = Vec::new();
+    macro_rules! malformed {
+        () => {
+            if entry_tail {
+                break;
+            } else {
+                return None;
+            }
+        };
+    }
     while cursor < bytes.len() {
         while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
             cursor += 1;
@@ -509,7 +551,7 @@ fn parse_gallery_arguments(value: &str) -> Option<Vec<GalleryArgument<'_>>> {
             cursor += 1;
         }
         if cursor == start {
-            return None;
+            malformed!();
         }
         let name = &value[start..cursor];
         while bytes
@@ -519,7 +561,7 @@ fn parse_gallery_arguments(value: &str) -> Option<Vec<GalleryArgument<'_>>> {
             cursor += 1;
         }
         if bytes.get(cursor) != Some(&b'=') {
-            return None;
+            malformed!();
         }
         cursor += 1;
         while bytes
@@ -536,7 +578,7 @@ fn parse_gallery_arguments(value: &str) -> Option<Vec<GalleryArgument<'_>>> {
                     cursor += 1;
                 }
                 if bytes.get(cursor) != Some(&quote) {
-                    return None;
+                    malformed!();
                 }
                 let content_end = cursor;
                 cursor += 1;
@@ -552,7 +594,7 @@ fn parse_gallery_arguments(value: &str) -> Option<Vec<GalleryArgument<'_>>> {
                 }
                 (content_start, cursor)
             }
-            None => return None,
+            None => malformed!(),
         };
         output.push(GalleryArgument {
             source: Cow::Borrowed(&value[start..cursor]),

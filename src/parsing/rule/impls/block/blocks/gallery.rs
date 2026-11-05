@@ -20,7 +20,7 @@ use crate::parsing::condition::ParseCondition;
 use crate::tree::{
     Gallery, GalleryArgument, GalleryEntry, GallerySelection, gallery_head_end,
     parse_explicit_gallery_entries, parse_gallery_entry, parse_gallery_entry_owned,
-    parse_gallery_head_arguments,
+    parse_gallery_entry_strict, parse_gallery_head_arguments, parse_raw_explicit_entry,
 };
 use std::borrow::Cow;
 
@@ -605,9 +605,9 @@ fn parse_resolved_gallery_entries<'r: 't, 't>(
         }
 
         let entry = match parse_gallery_entry(line) {
-            Some(entry) if !(wikidot && gallery_entry_line_has_seam(line)) => Some(entry),
+            Some(entry) if !gallery_entry_line_has_seam(line) => Some(entry),
             _ => resolve_gallery_entry(parser, line, line_start, line_end, &mut splices)
-                .or_else(|| parse_gallery_entry(line)),
+                .or_else(|| parse_gallery_entry_strict(line)),
         };
         entries.push(entry?);
         if line_end == source.len() {
@@ -738,7 +738,7 @@ fn resolve_gallery_entry<'r: 't, 't>(
     resolved_line.push_str(&resolved);
     resolved_line.push_str(&line[span_end..]);
     if resolved_line == line {
-        return parse_gallery_entry(line);
+        return parse_raw_explicit_entry(line);
     }
     let entry = parse_gallery_entry_owned(resolved_line.clone())?;
     splices.push((line_start, line_end, resolved_line));

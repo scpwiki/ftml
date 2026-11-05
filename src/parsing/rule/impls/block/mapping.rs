@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use unicase::UniCase;
 
-pub const BLOCK_RULES: [BlockRule; 69] = [
+pub const BLOCK_RULES: [BlockRule; 70] = [
     BLOCK_ALIGN_CENTER,
     BLOCK_ALIGN_JUSTIFY,
     BLOCK_ALIGN_LEFT,
@@ -44,6 +44,7 @@ pub const BLOCK_RULES: [BlockRule; 69] = [
     BLOCK_DEL,
     BLOCK_DIV,
     BLOCK_EMBED,
+    BLOCK_EMBED_AUDIO,
     BLOCK_EMBED_VIDEO,
     BLOCK_EQUATION_REF,
     BLOCK_FILE,

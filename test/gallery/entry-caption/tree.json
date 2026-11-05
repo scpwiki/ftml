@@ -1,0 +1,33 @@
+{
+    "elements": [
+        {
+            "element": "gallery",
+            "data": {
+                "source": "[[gallery]]\n: http://e.com/a.png caption\n: http://e.com/b.png \"quoted caption\"\n[[/gallery]]",
+                "arguments": [],
+                "selection": {
+                    "type": "explicit",
+                    "entries": [
+                        {
+                            "source": ": http://e.com/a.png caption",
+                            "image": {
+                                "type": "http-url",
+                                "source": "http://e.com/a.png"
+                            },
+                            "arguments": []
+                        },
+                        {
+                            "source": ": http://e.com/b.png \"quoted caption\"",
+                            "image": {
+                                "type": "http-url",
+                                "source": "http://e.com/b.png"
+                            },
+                            "arguments": []
+                        }
+                    ]
+                },
+                "source-sha256": "72818d3e489592ff044bf78ec6e1f5dece8c07719b4dc8b03931f81439da7cbf"
+            }
+        }
+    ]
+}
