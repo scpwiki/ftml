@@ -471,6 +471,12 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    if parser.settings().layout.legacy()
+        && parser.wikidot_line_follows_explicit_list(parser.current().span.start)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let mut rows = Vec::new();
     let mut errors = Vec::new();
     let mut paragraph_break = false;

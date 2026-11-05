@@ -901,7 +901,10 @@ fn try_consume_text_token<'r, 't>(
 
 fn try_consume_line_break<'r, 't>(
     parser: &mut Parser<'r, 't>,
-) -> Result<Option<Elements<'t>>, ParseError> {
+) -> Result<Option<Elements<'t>>, ParseError>
+where
+    'r: 't,
+{
     if parser.current().token != Token::LineBreak {
         return Ok(None);
     }
@@ -931,7 +934,12 @@ fn try_consume_line_break<'r, 't>(
     if starts_definition
         || (starts_block && !upcoming_block_ends_with_single_bracket(parser))
     {
-        return Ok(None);
+        let keep_for_explicit_list = parser.settings().layout.legacy()
+            && matches!(next.1, Some(Token::LeftBlock))
+            && wikidot_upcoming_explicit_list(parser);
+        if !keep_for_explicit_list {
+            return Ok(None);
+        }
     }
 
     let next_offset = if matches!(
@@ -980,6 +988,26 @@ fn try_consume_line_break<'r, 't>(
     } else {
         Ok(Some(Element::LineBreak.into()))
     }
+}
+
+fn wikidot_upcoming_explicit_list<'r: 't, 't>(parser: &Parser<'r, 't>) -> bool {
+    let mut probe = parser.clone();
+    if probe.step().is_err() {
+        return false;
+    }
+    if probe.current().token != Token::LeftBlock {
+        return false;
+    }
+    probe.get_block_name(false).is_ok_and(|(name, _, segment)| {
+        let view = name.strip_suffix('_').unwrap_or(&name);
+        (view.eq_ignore_ascii_case("ol") || view.eq_ignore_ascii_case("ul"))
+            && probe.head_word_view_is_actionable(
+                &name,
+                matches!(name, Cow::Borrowed(_)),
+                segment,
+                view,
+            )
+    })
 }
 
 fn upcoming_block_ends_with_single_bracket(parser: &Parser<'_, '_>) -> bool {
