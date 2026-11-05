@@ -1,0 +1,11 @@
+[[tabview]]
+[[tab Good]] g [[/tab]]
+[[ tab]] x [[/tab]]
+[[/tabview]]
+Good
+
+ g
+
+x
+
+ y

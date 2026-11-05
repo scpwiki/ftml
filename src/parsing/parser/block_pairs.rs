@@ -2324,6 +2324,221 @@ impl<'t> Scanner<'t> {
         result
     }
 
+    /// T1: mirror of the consumer's single-separator tab-title failure
+    /// (`WikidotHeadSpaceRegion::SingleSeparator` in `parse_tab`). A tab head
+    /// whose argument region (comments stripped) is exactly one space or one
+    /// newline fails; the tree keeps it as failed content, never a Tab, so
+    /// the scan predicts no pair for it while still scanning its body.
+    fn tab_head_failed_title(&self, head: &HeadRead) -> bool {
+        let Some(name_token) = self.tokens.get(head.name_end) else {
+            return false;
+        };
+        let Some(close_token) = self.tokens.get(head.head_end.wrapping_sub(1)) else {
+            return false;
+        };
+        if !matches!(close_token.token, Token::RightBlock | Token::RightLink) {
+            return false;
+        }
+        let (start, end) = (name_token.span.start, close_token.span.start);
+        let region = if start <= end {
+            self.source.get(start..end).unwrap_or("")
+        } else {
+            return false;
+        };
+        let mut stripped = String::new();
+        let mut rest = region;
+        loop {
+            match rest.find("[!--") {
+                None => {
+                    stripped.push_str(rest);
+                    break;
+                }
+                Some(open) => {
+                    stripped.push_str(&rest[..open]);
+                    match rest[open + 4..].find("--]") {
+                        Some(close) => {
+                            rest = &rest[open + 4 + close + 3..];
+                        }
+                        None => return false,
+                    }
+                }
+            }
+        }
+        stripped == " " || stripped == "\n"
+    }
+
+    /// T1: leading-space tab heads (`[[ tab]]`, T4) fail on live. The tree
+    /// keeps them as failed content; the scan skips the head and its body
+    /// without a pair. Unlike single-separator failures they do not count
+    /// toward view formation (a view of only leading-space heads fails).
+    fn tab_leading_space_head(&self, pos: usize) -> bool {
+        if !matches!(
+            self.tokens.get(pos).map(|token| token.token),
+            Some(Token::LeftBlock)
+        ) {
+            return false;
+        }
+        let mut j = pos + 1;
+        if !matches!(
+            self.tokens.get(j).map(|token| token.token),
+            Some(Token::Whitespace)
+        ) {
+            return false;
+        }
+        while matches!(
+            self.tokens.get(j).map(|token| token.token),
+            Some(Token::Whitespace)
+        ) {
+            j += 1;
+        }
+        let mut end = j;
+        while let Some(token) = self.tokens.get(end) {
+            match token.token {
+                Token::Whitespace
+                | Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::RightBlock
+                | Token::InputEnd => break,
+                _ => end += 1,
+            }
+        }
+        let text: String = self.tokens[j..end]
+            .iter()
+            .map(|token| token.slice)
+            .collect();
+        text.eq_ignore_ascii_case("tab")
+    }
+
+    fn tab_head_footnote_first(&self, pos: usize, head: &HeadRead) -> bool {
+        let mut name_end = pos + 1;
+        while name_end < head.head_end
+            && !matches!(
+                self.tokens[name_end].token,
+                Token::Whitespace
+                    | Token::LineBreak
+                    | Token::ParagraphBreak
+                    | Token::RightBlock
+                    | Token::RightLink
+            )
+        {
+            name_end += 1;
+        }
+        let first_content = (name_end..head.head_end)
+            .find(|&t| self.tokens[t].token != Token::Whitespace);
+        if let Some(t) = first_content
+            && matches!(
+                self.tokens[t].token,
+                Token::LeftBlock | Token::LeftBlockStar
+            )
+        {
+            let inner_name: String = (t + 1..head.head_end)
+                .take_while(|&k| {
+                    !matches!(
+                        self.tokens[k].token,
+                        Token::Whitespace
+                            | Token::RightBlock
+                            | Token::RightLink
+                            | Token::LineBreak
+                            | Token::ParagraphBreak
+                            | Token::InputEnd
+                    )
+                })
+                .map(|k| self.tokens[k].slice)
+                .collect();
+            if inner_name.eq_ignore_ascii_case("footnote")
+                || inner_name.eq_ignore_ascii_case("footnoteblock")
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// T1: scan a failed tab head's body for nested real tabs. A failed
+    /// outer tab containing a good inner tab still forms the inner (T2),
+    /// so unlike `find_tab_end` (which skips nested heads) this pairs good
+    /// inner heads into the measure and recurses into failed ones. End
+    /// detection mirrors `find_tab_end`: the first tab closer ends the
+    /// body, a tabview closer or the limit bails. Returns
+    /// (body_end, closer, closer_end) like `find_tab_end`.
+    fn scan_failed_tab_body(
+        &self,
+        start: usize,
+        limit: usize,
+        depth: usize,
+        measure: &mut Measure,
+    ) -> Option<(usize, usize, usize)> {
+        if depth > MAX_SCAN_DEPTH {
+            return None;
+        }
+        let mut j = start;
+        loop {
+            if j >= limit {
+                return None;
+            }
+            if let Some(zone_end) = self.zone_end(j) {
+                j = zone_end.min(limit);
+                continue;
+            }
+            match self.tokens[j].token {
+                Token::LeftComment => {
+                    j = self.skip_comment(j)?;
+                }
+                Token::LeftBlock | Token::LeftBlockStar => {
+                    if let Some(inner) = self.read_kind_head(j, WikidotBlockKind::Tab) {
+                        if self.tab_head_failed_title(&inner)
+                            || self.tab_head_footnote_first(j, &inner)
+                        {
+                            let (_, _, inner_end) = self.scan_failed_tab_body(
+                                inner.head_end,
+                                limit,
+                                depth + 1,
+                                measure,
+                            )?;
+                            j = inner_end;
+                        } else {
+                            let (inner_body, inner_closer, inner_end) =
+                                self.find_tab_end(inner.head_end, limit, depth + 1)?;
+                            measure.children.push((inner.head_end, inner_body));
+                            let head_byte = self.head_byte(j);
+                            measure.pairs.push(WikidotBlockPair {
+                                kind: WikidotBlockKind::Tab,
+                                scored: false,
+                                head: j,
+                                head_end: inner.head_end,
+                                head_byte,
+                                closer: inner_closer,
+                                closer_end: inner_end,
+                                flat: false,
+                            });
+                            j = inner_end;
+                        }
+                    } else if self.tab_leading_space_head(j) {
+                        let (_, _, inner_end) =
+                            self.scan_failed_tab_body(j + 1, limit, depth + 1, measure)?;
+                        j = inner_end;
+                    } else {
+                        j = self.skip_construct_in_body(j, limit, depth)?;
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    if let Some(close) = self.read_head(j, true) {
+                        match self.classify(&close).and_then(Self::kind_of) {
+                            Some(WikidotBlockKind::Tab) => {
+                                return Some((j, j, close.head_end));
+                            }
+                            Some(WikidotBlockKind::TabView) => return None,
+                            _ => j = close.head_end,
+                        }
+                    } else {
+                        j += 1;
+                    }
+                }
+                _ => j += 1,
+            }
+        }
+    }
+
     fn measure_tabview_inner(
         &self,
         head_index: usize,
@@ -2372,66 +2587,57 @@ impl<'t> Scanner<'t> {
             if self.line_head_indented(pos) || self.quote_depth_outside(pos, head_depth) {
                 return None;
             }
-            tabs += 1;
-            let tab_head = self.read_kind_head(pos, WikidotBlockKind::Tab)?;
-            let mut name_end = pos + 1;
-            while name_end < tab_head.head_end
-                && !matches!(
-                    self.tokens[name_end].token,
-                    Token::Whitespace
-                        | Token::LineBreak
-                        | Token::ParagraphBreak
-                        | Token::RightBlock
-                        | Token::RightLink
-                )
-            {
-                name_end += 1;
-            }
-            let first_content = (name_end..tab_head.head_end)
-                .find(|&t| self.tokens[t].token != Token::Whitespace);
-            if let Some(t) = first_content
-                && matches!(
-                    self.tokens[t].token,
-                    Token::LeftBlock | Token::LeftBlockStar
-                )
-            {
-                let inner_name: String = (t + 1..tab_head.head_end)
-                    .take_while(|&k| {
-                        !matches!(
-                            self.tokens[k].token,
-                            Token::Whitespace
-                                | Token::RightBlock
-                                | Token::RightLink
-                                | Token::LineBreak
-                                | Token::ParagraphBreak
-                                | Token::InputEnd
-                        )
-                    })
-                    .map(|k| self.tokens[k].slice)
-                    .collect();
-                if inner_name.eq_ignore_ascii_case("footnote")
-                    || inner_name.eq_ignore_ascii_case("footnoteblock")
-                {
+            // T1: stray tab closers are failed content, not heads. The
+            // consumer skips them without failing the view; mirror that
+            // instead of bailing the whole view prediction.
+            let tab_head = match self.read_kind_head(pos, WikidotBlockKind::Tab) {
+                Some(tab_head) => tab_head,
+                None => {
+                    if let Some(stray) = self.read_kind_closer(pos, WikidotBlockKind::Tab)
+                    {
+                        pos = stray.head_end;
+                        continue;
+                    }
+                    if self.tab_leading_space_head(pos) {
+                        let (body_end, tab_closer, tab_closer_end) = self
+                            .scan_failed_tab_body(pos + 1, limit, depth, &mut measure)?;
+                        if self.quote_depth_outside(tab_closer, head_depth) {
+                            return None;
+                        }
+                        measure.children.push((pos + 1, body_end));
+                        pos = tab_closer_end;
+                        continue;
+                    }
                     return None;
                 }
+            };
+            tabs += 1;
+            let failed = self.tab_head_failed_title(&tab_head);
+            if self.tab_head_footnote_first(pos, &tab_head) {
+                return None;
             }
-            let (body_end, tab_closer, tab_closer_end) =
-                self.find_tab_end(tab_head.head_end, limit, depth)?;
+            let (body_end, tab_closer, tab_closer_end) = if failed {
+                self.scan_failed_tab_body(tab_head.head_end, limit, depth, &mut measure)?
+            } else {
+                self.find_tab_end(tab_head.head_end, limit, depth)?
+            };
             if self.quote_depth_outside(tab_closer, head_depth) {
                 return None;
             }
             measure.children.push((tab_head.head_end, body_end));
-            let head_byte = self.head_byte(pos);
-            measure.pairs.push(WikidotBlockPair {
-                kind: WikidotBlockKind::Tab,
-                scored: false,
-                head: pos,
-                head_end: tab_head.head_end,
-                head_byte,
-                closer: tab_closer,
-                closer_end: tab_closer_end,
-                flat: false,
-            });
+            if !failed {
+                let head_byte = self.head_byte(pos);
+                measure.pairs.push(WikidotBlockPair {
+                    kind: WikidotBlockKind::Tab,
+                    scored: false,
+                    head: pos,
+                    head_end: tab_head.head_end,
+                    head_byte,
+                    closer: tab_closer,
+                    closer_end: tab_closer_end,
+                    flat: false,
+                });
+            }
             pos = tab_closer_end;
         }
     }
@@ -2752,7 +2958,13 @@ mod tests {
                                 if let Some(items) =
                                     map.get("data").and_then(|d| d.as_array())
                                 {
-                                    bump(counts, WikidotBlockKind::Tab, items.len());
+                                    // T1: count real tabs only. Failed heads
+                                    // form content runs, never Tab pairs.
+                                    let tabs = items
+                                        .iter()
+                                        .filter(|item| item.get("label").is_some())
+                                        .count();
+                                    bump(counts, WikidotBlockKind::Tab, tabs);
                                 }
                             }
                             "table" => {
