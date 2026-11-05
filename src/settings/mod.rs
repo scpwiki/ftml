@@ -24,7 +24,9 @@ use crate::layout::Layout;
 use crate::next_index::Incrementer;
 use std::str::FromStr;
 
-pub use self::interwiki::{DEFAULT_INTERWIKI, EMPTY_INTERWIKI, InterwikiSettings};
+pub use self::interwiki::{
+    DEFAULT_INTERWIKI, EMPTY_INTERWIKI, InterwikiSettings, WIKIDOT_INTERWIKI,
+};
 
 const DEFAULT_MINIFY_CSS: bool = true;
 const DEFAULT_ENABLE_HTML_BLOCKS: bool = true;
@@ -109,7 +111,10 @@ pub struct WikitextSettings {
 
 impl WikitextSettings {
     pub fn from_mode(mode: WikitextMode, layout: Layout) -> Self {
-        let interwiki = DEFAULT_INTERWIKI.clone();
+        let interwiki = match layout {
+            Layout::Wikidot => WIKIDOT_INTERWIKI.clone(),
+            Layout::Wikijump => DEFAULT_INTERWIKI.clone(),
+        };
 
         match mode {
             WikitextMode::Page => WikitextSettings {
@@ -305,6 +310,31 @@ mod test {
         assert!(settings.minify_css);
         assert!(settings.allow_local_paths);
         assert_eq!(settings.interwiki, *DEFAULT_INTERWIKI);
+    }
+
+    #[test]
+    fn wikidot_layout_settings_use_live_interwiki_table() {
+        let wikidot = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let wikijump = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
+
+        assert_eq!(wikidot.interwiki, *WIKIDOT_INTERWIKI);
+        assert_eq!(wikijump.interwiki, *DEFAULT_INTERWIKI);
+
+        assert_eq!(
+            wikidot
+                .interwiki
+                .build("wikipedia:Albert_Einstein")
+                .as_deref(),
+            Some("https://en.wikipedia.org/wiki/Albert_Einstein"),
+        );
+        assert_eq!(wikidot.interwiki.build("wp:SCP_Foundation"), None);
+        assert_eq!(
+            wikijump
+                .interwiki
+                .build("wikipedia:Albert_Einstein")
+                .as_deref(),
+            Some("https://wikipedia.org/wiki/Albert_Einstein"),
+        );
     }
 
     #[test]

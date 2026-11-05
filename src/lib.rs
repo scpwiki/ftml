@@ -153,8 +153,8 @@ pub mod prelude {
     pub use super::parsing::{ParseError, ParseResult, parse};
     pub use super::render::Render;
     pub use super::settings::{
-        DEFAULT_INTERWIKI, EMPTY_INTERWIKI, InterwikiSettings, WikitextMode,
-        WikitextSettings,
+        DEFAULT_INTERWIKI, EMPTY_INTERWIKI, InterwikiSettings, WIKIDOT_INTERWIKI,
+        WikitextMode, WikitextSettings,
     };
     pub use super::tokenizer::{Tokenization, tokenize};
     pub use super::tree::{Element, SyntaxTree};

@@ -217,6 +217,10 @@ where
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    if let Some(elements) = wikidot_unlabeled_interwiki(parser, target) {
+        return success_elements(elements);
+    }
+
     let (url, authored_prefix_has_link_authority) = collect_wikidot_target(parser)?;
     wikidot_link_from_target(
         parser,
@@ -225,6 +229,75 @@ where
         authored_prefix_has_link_authority,
         false,
     )
+}
+
+// Live's unlabeled form ("[wikipedia:Albert_Einstein]") links the article and
+// uses the path as the label. Its target walk ends at the closing bracket
+// instead of at a whitespace, so it is consumed before the labeled walk below
+// (probe on a clone: a whitespace first means the labeled form).
+fn wikidot_unlabeled_interwiki<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    target: Option<AnchorTarget>,
+) -> Option<Elements<'t>>
+where
+    'r: 't,
+{
+    if target.is_some() {
+        return None;
+    }
+
+    // A cheap source check keeps the extra walk off every other single link;
+    // the case-sensitive table lookup below is what leaves "[WIKIPEDIA:X]"
+    // literal while the labeled form resolves it.
+    let source = parser.full_text().inner();
+    let rest = source.get(parser.current().span.start..)?;
+    let mut prefix_len = 0;
+    for byte in rest.bytes().take(64) {
+        if byte == b':' {
+            break;
+        }
+        if !byte.is_ascii_alphabetic() {
+            return None;
+        }
+        prefix_len += 1;
+    }
+    if prefix_len == 0 || rest.as_bytes().get(prefix_len) != Some(&b':') {
+        return None;
+    }
+    if parser.link_target_reaches_input_end(parser.current().span.start, false) {
+        return None;
+    }
+
+    let mut attempt = parser.clone();
+    let closes = [ParseCondition::current(Token::RightBracket)];
+    let invalids = [
+        ParseCondition::current(Token::Whitespace),
+        ParseCondition::current(Token::LineBreak),
+        ParseCondition::current(Token::ParagraphBreak),
+    ];
+    let (field, last) =
+        collect_comment_elided_keep(&mut attempt, &closes, &invalids, None, None).ok()?;
+    if last.token != Token::RightBracket {
+        return None;
+    }
+
+    let url = discard_wikidot_controls(field.into_cow());
+    if url.is_empty()
+        || url.len() > MAX_WIKIDOT_SINGLE_LINK_TARGET_BYTES
+        || wikidot_link_disposition(&url) != WikidotLinkDisposition::LabelOnly
+    {
+        return None;
+    }
+
+    let expanded = attempt.settings().interwiki.build(&url)?;
+    let label = wikidot_interwiki_path_label(&url);
+    parser.update(&attempt);
+    Some(Elements::Single(Element::Link {
+        ltype: LinkType::Interwiki,
+        link: LinkLocation::Url(Cow::Owned(expanded)),
+        label: LinkLabel::Text(label),
+        target: None,
+    }))
 }
 
 pub fn try_consume_wikidot_end_block_link<'r, 't>(
@@ -423,6 +496,14 @@ where
         return Err(parser.make_err(ParseErrorKind::InvalidUrl));
     }
 
+    // A starred single link only takes a destination live renders as a link
+    // ("[*/path label]", "[*https://example.com/ label]"). Live keeps the whole
+    // bracket literal for a scheme-shaped target ("[*wikipedia:X label]",
+    // "[*foo:bar label]"), where the unstarred form still keeps the label.
+    if disposition == WikidotLinkDisposition::LabelOnly && target.is_some() {
+        return Err(parser.make_err(ParseErrorKind::InvalidUrl));
+    }
+
     if target.is_none()
         && let Cow::Borrowed(url) = &url
         && let Some(generated) = parser.current_generated().cloned()
@@ -439,30 +520,74 @@ where
         )));
     }
 
+    // This walk reaches a label: live resolves a scheme-shaped target against
+    // its interwiki table without regard to ASCII case when a label is
+    // authored ("[WIKIPEDIA:Albert_Einstein Upper]" links). The unlabeled form
+    // is consumed by wikidot_unlabeled_interwiki before this walk.
+    let interwiki_url = match disposition {
+        WikidotLinkDisposition::LabelOnly => wikidot_interwiki_url(parser, &url),
+        WikidotLinkDisposition::Link | WikidotLinkDisposition::Literal => None,
+    };
+
     let WikidotLabel {
         text: label,
         residual_closer,
     } = collect_wikidot_label(parser, link_memo)?;
     let label = trim_wikidot_ascii_cow(discard_wikidot_controls(label));
-    if label.is_empty() {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
-    }
 
-    let element = match disposition {
-        WikidotLinkDisposition::Link => Element::Link {
-            ltype: LinkType::Direct,
-            link: LinkLocation::Url(url),
-            label: LinkLabel::Text(label),
-            target,
-        },
-        WikidotLinkDisposition::LabelOnly => Element::Text(label),
-        WikidotLinkDisposition::Literal => unreachable!(),
+    let element = match (disposition, interwiki_url) {
+        (WikidotLinkDisposition::LabelOnly, Some(expanded)) => {
+            if label.is_empty() {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            Element::Link {
+                ltype: LinkType::Interwiki,
+                link: LinkLocation::Url(Cow::Owned(expanded)),
+                label: LinkLabel::Text(label),
+                target,
+            }
+        }
+        (WikidotLinkDisposition::LabelOnly, None) => {
+            if label.is_empty() {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            Element::Text(label)
+        }
+        (WikidotLinkDisposition::Link, _) => {
+            if label.is_empty() {
+                return Err(parser.make_err(ParseErrorKind::RuleFailed));
+            }
+            Element::Link {
+                ltype: LinkType::Direct,
+                link: LinkLocation::Url(url),
+                label: LinkLabel::Text(label),
+                target,
+            }
+        }
+        (WikidotLinkDisposition::Literal, _) => unreachable!(),
     };
 
     if residual_closer.is_empty() {
         success_elements(element)
     } else {
         success_elements(vec![element, text!(residual_closer)])
+    }
+}
+
+fn wikidot_interwiki_url(parser: &Parser<'_, '_>, url: &str) -> Option<String> {
+    parser.settings().interwiki.build_ignore_ascii_case(url)
+}
+
+fn wikidot_interwiki_path_label<'t>(url: &Cow<'t, str>) -> Cow<'t, str> {
+    match url {
+        Cow::Borrowed(url) => match url.split_once(':') {
+            Some((_, path)) => Cow::Borrowed(path),
+            None => Cow::Borrowed(""),
+        },
+        Cow::Owned(url) => match url.split_once(':') {
+            Some((_, path)) => Cow::Owned(path.to_owned()),
+            None => Cow::Owned(String::new()),
+        },
     }
 }
 
@@ -1167,14 +1292,44 @@ fn wikidot_link_disposition(url: &str) -> WikidotLinkDisposition {
         return WikidotLinkDisposition::Link;
     }
 
-    let Some((scheme, _)) = url.split_once(':') else {
+    let Some((scheme, rest)) = url.split_once(':') else {
         return WikidotLinkDisposition::Literal;
     };
     if !valid_bounded_scheme(scheme) || scheme.eq_ignore_ascii_case("data") {
         return WikidotLinkDisposition::Literal;
     }
+    if rest.is_empty() || !wikidot_scheme_target_rest_is_visible(rest) {
+        return WikidotLinkDisposition::Literal;
+    }
 
     WikidotLinkDisposition::LabelOnly
+}
+
+// Live keeps a scheme-shaped single-link target as text (and resolves it as an
+// interwiki when the prefix is known) only when every character after the
+// colon is one it accepts there. Saved-page probes (2026-11-06) show that a
+// target containing "%", "?", "'", a quote, "*", ",", "@", "!", "^", "\", a
+// backtick, braces, a pipe, "[", "<", ">" or a non-ASCII character renders the
+// whole bracket literally instead, for both known and unknown prefixes.
+fn wikidot_scheme_target_rest_is_visible(rest: &str) -> bool {
+    rest.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'#' | b'&'
+                    | b'('
+                    | b')'
+                    | b'+'
+                    | b'-'
+                    | b'.'
+                    | b'/'
+                    | b':'
+                    | b';'
+                    | b'='
+                    | b'_'
+                    | b'~'
+            )
+    })
 }
 
 fn valid_bounded_scheme(scheme: &str) -> bool {
@@ -1214,7 +1369,7 @@ mod tests {
     use crate::settings::{WikitextMode, WikitextSettings};
 
     #[test]
-    fn wikijump_legacy_single_bracket_interwiki_resolves_known_prefixes() {
+    fn wikijump_single_bracket_interwiki_resolves_known_prefixes() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
         let render = |source: &str| {
@@ -1234,12 +1389,6 @@ mod tests {
         );
 
         let html = render("[nosuchwiki:Mallard The duck]");
-        assert!(!html.contains("<a "), "{html}");
-
-        let wikidot = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-        let tokenization = crate::tokenize("[wikipedia:Mallard The duck]");
-        let (tree, _) = crate::parse(&tokenization, &page_info, &wikidot).into();
-        let html = HtmlRender.render(&tree, &page_info, &wikidot).body;
         assert!(!html.contains("<a "), "{html}");
     }
 
@@ -1276,6 +1425,42 @@ mod tests {
             );
         }
         for url in ["", "example.com", "data:text/plain,x", "DATA:text/html,x"] {
+            assert_eq!(
+                wikidot_link_disposition(url),
+                WikidotLinkDisposition::Literal,
+                "{url}",
+            );
+        }
+    }
+
+    #[test]
+    fn wikidot_single_link_scheme_targets_require_live_visible_characters() {
+        for url in [
+            "foo:bar",
+            "foo:Val/ue",
+            "foo.bar:Value",
+            "wikipedia:Albert_Einstein#Sec",
+            "wikipedia:it:Albert_Einstein",
+            "google:free+wiki",
+            "dictionary:wiki",
+        ] {
+            assert_eq!(
+                wikidot_link_disposition(url),
+                WikidotLinkDisposition::LabelOnly,
+                "{url}",
+            );
+        }
+
+        for url in [
+            "foo:",
+            "foo:bar%20baz",
+            "foo:Bar?x=1",
+            "foo:A!B",
+            "wikipedia:Albert,E",
+            "wikipedia:A|B",
+            "wikipedia:A<B",
+            "wikipedia:日本",
+        ] {
             assert_eq!(
                 wikidot_link_disposition(url),
                 WikidotLinkDisposition::Literal,

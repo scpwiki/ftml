@@ -899,9 +899,9 @@ fn parse_link_location<'r, 't>(
     }
 
     if let Some(interwiki) = url.strip_prefix('!') {
-        if let Some(expanded) = parser.settings().interwiki.build(interwiki) {
-            return Some((LinkLocation::Url(Cow::Owned(expanded)), LinkType::Interwiki));
-        }
+        // Live has no interwiki form inside triple-bracket links: the "!" is
+        // dropped and the remainder is an ordinary page target, even for a
+        // prefix its single-bracket interwiki table defines.
         let local = interwiki.strip_prefix(':').unwrap_or(interwiki);
         return Some((
             LinkLocation::Page(PageRef::page_only(local)),
