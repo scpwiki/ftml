@@ -21,6 +21,7 @@
 use super::comment::comment_bridge_end;
 use super::prelude::*;
 use crate::parsing::ElementCondition;
+use crate::parsing::rule::impls::block::blocks::iftags_conditions_match;
 use std::borrow::Cow;
 use std::ops::Range;
 
@@ -238,11 +239,8 @@ fn scan_segment_ctx<'a, 't>(
     }
     let spec = source[spec_start..spec_end].trim();
 
-    let legacy = ctx.legacy;
-    let conditions = if legacy && spec == "-" {
-        Vec::new()
-    } else if spec.is_empty() {
-        if legacy {
+    let conditions = if spec.is_empty() {
+        if ctx.legacy {
             Vec::new()
         } else {
             return None;
@@ -250,11 +248,7 @@ fn scan_segment_ctx<'a, 't>(
     } else {
         ElementCondition::parse(spec)
     };
-    let include_body = if conditions.is_empty() && legacy {
-        !ctx.tags.is_empty()
-    } else {
-        ElementCondition::check(&conditions, ctx.tags)
-    };
+    let include_body = iftags_conditions_match(&conditions, ctx.tags);
 
     let body_start = window.get(index).map_or(head_end, |token| token.span.start);
     let mut depth = 1usize;

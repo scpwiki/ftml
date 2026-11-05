@@ -176,6 +176,7 @@ pub use self::html::BLOCK_HTML;
 pub use self::ifcategory::BLOCK_IFCATEGORY;
 pub use self::iframe::BLOCK_IFRAME;
 pub use self::iftags::BLOCK_IFTAGS;
+pub(crate) use self::iftags::{iftags_conditions_match, iftags_head_keeps_inline_body};
 pub use self::image::BLOCK_IMAGE;
 pub use self::include_elements::BLOCK_INCLUDE_ELEMENTS;
 pub use self::include_wikidot::BLOCK_INCLUDE_WIKIDOT;

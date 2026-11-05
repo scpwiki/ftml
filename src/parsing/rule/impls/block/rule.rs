@@ -27,7 +27,7 @@ use super::{
     BlockRule,
     blocks::{
         BLOCK_COLLAPSIBLE, BLOCK_EMBED, BLOCK_EMBED_AUDIO, BLOCK_EMBED_VIDEO, BLOCK_HTML,
-        BLOCK_SPAN, BLOCK_TABVIEW,
+        BLOCK_IFTAGS, BLOCK_SPAN, BLOCK_TABVIEW, iftags_head_keeps_inline_body,
     },
 };
 use crate::parsing::inline_scope::WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE;
@@ -117,6 +117,16 @@ where
     .is_some()
 }
 
+fn preserves_preceding_line_break<'r, 't>(
+    parser: &Parser<'r, 't>,
+    block_rule: &BlockRule,
+) -> bool
+where
+    'r: 't,
+{
+    block_rule.name == BLOCK_IFTAGS.name && iftags_head_keeps_inline_body(parser)
+}
+
 fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     let current = parser.step()?;
     let flag_star = current.token == Token::LeftBlockStar;
@@ -154,7 +164,10 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
                             | "block-align-justify"
                             | "block-align-left"
                             | "block-align-right"
-                    ))),
+                    ))
+                // Live keeps the break before a kept [[iftags]] body that
+                // starts on the opener's line.
+                && !preserves_preceding_line_break(parser, block_rule)),
             None => Ok(false),
         }
     });

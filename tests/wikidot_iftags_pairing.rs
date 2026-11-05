@@ -213,7 +213,7 @@ fn closer_inside_raw_span_does_not_pair() {
 }
 
 #[test]
-fn bare_iftags_keeps_tag_dependent_semantics() {
+fn bare_iftags_never_keeps() {
     assert_eq!(render("[[iftags]]body[[/iftags]]"), "");
     assert_eq!(
         render_layout(
@@ -221,7 +221,7 @@ fn bare_iftags_keeps_tag_dependent_semantics() {
             Layout::Wikidot,
             vec![Cow::Borrowed("essay")],
         ),
-        "body",
+        "",
     );
 }
 
