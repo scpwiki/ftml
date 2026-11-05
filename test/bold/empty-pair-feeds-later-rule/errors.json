@@ -1,0 +1,38 @@
+[
+    {
+        "token": "paragraph-break",
+        "rule": "italics",
+        "span": [
+            32,
+            34
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            15,
+            17
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "italics",
+        "rule": "italics",
+        "span": [
+            26,
+            28
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            26,
+            28
+        ],
+        "kind": "no-rules-match"
+    }
+]

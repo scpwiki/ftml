@@ -1,0 +1,272 @@
+[
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            7,
+            9
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            7,
+            9
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            15,
+            17
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            15,
+            17
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            22,
+            24
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            22,
+            24
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "italics",
+        "rule": "italics",
+        "span": [
+            30,
+            32
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            30,
+            32
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "italics",
+        "rule": "italics",
+        "span": [
+            44,
+            46
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            44,
+            46
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "paragraph-break",
+        "rule": "superscript",
+        "span": [
+            73,
+            75
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            52,
+            54
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "underline",
+        "rule": "underline",
+        "span": [
+            67,
+            69
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [
+            67,
+            69
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "underline",
+        "rule": "underline",
+        "span": [
+            75,
+            77
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [
+            75,
+            77
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            108,
+            110
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            108,
+            110
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "bold",
+        "rule": "bold",
+        "span": [
+            118,
+            120
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "bold",
+        "rule": "fallback",
+        "span": [
+            118,
+            120
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "superscript",
+        "span": [
+            156,
+            156
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            126,
+            128
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "superscript",
+        "rule": "superscript",
+        "span": [
+            138,
+            140
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "superscript",
+        "rule": "fallback",
+        "span": [
+            138,
+            140
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "underline",
+        "rule": "underline",
+        "span": [
+            146,
+            148
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [
+            146,
+            148
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "underline",
+        "rule": "underline",
+        "span": [
+            150,
+            152
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "underline",
+        "rule": "fallback",
+        "span": [
+            150,
+            152
+        ],
+        "kind": "no-rules-match"
+    }
+]

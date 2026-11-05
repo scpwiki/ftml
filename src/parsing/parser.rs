@@ -45,6 +45,7 @@ use std::{mem, ptr};
 
 pub(crate) mod block_pairs;
 pub(crate) mod closer_scan;
+pub(crate) mod inline_pairs;
 mod wikidot_state;
 use self::closer_scan::CloserScanCache;
 use self::wikidot_state::WikidotState;
@@ -137,6 +138,7 @@ pub(super) struct BlockScanCache<'t> {
     pub(super) wikidot_li_cross_scan: Option<block_pairs::WikidotLiCrossScan>,
     wikidot_li_body_boundaries: Vec<usize>,
     wikidot_table_cut_boundary: Cell<bool>,
+    wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
     literal_ranges: Option<Vec<Range<usize>>>,
@@ -333,13 +335,8 @@ impl<'r, 't> Parser<'r, 't> {
             footnotes: make_shared_vec(),
             bibliographies: Rc::new(RefCell::new(BibliographyList::new())),
             quote_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
-            block_end_scan_cache: Rc::new(RefCell::new(BlockScanCache {
-                wikidot_div_stream_marks: if settings.layout.legacy() {
-                    wikidot_state::compute_wikidot_div_stream_marks(tokenization.tokens())
-                } else {
-                    BTreeMap::new()
-                },
-                wikidot_block_pairs: if settings.layout.legacy() {
+            block_end_scan_cache: Rc::new(RefCell::new({
+                let wikidot_block_pairs = if settings.layout.legacy() {
                     block_pairs::compute_wikidot_block_pairs(
                         tokenization.tokens(),
                         tokenization.full_text().inner(),
@@ -347,16 +344,35 @@ impl<'r, 't> Parser<'r, 't> {
                     )
                 } else {
                     block_pairs::WikidotBlockPairs::default()
-                },
-                closer_scan: CloserScanCache::new(tokenization.tokens().len()),
-                wikidot_line_runs: if settings.layout.legacy() {
-                    block_pairs::compute_wikidot_line_runs(
-                        tokenization.full_text().inner(),
+                };
+                let wikidot_inline_markers = if settings.layout.legacy() {
+                    inline_pairs::compute_wikidot_inline_markers(
+                        tokenization.tokens(),
+                        &wikidot_block_pairs,
                     )
                 } else {
-                    block_pairs::WikidotLineRuns::default()
-                },
-                ..Default::default()
+                    inline_pairs::WikidotInlineMarkers::default()
+                };
+                BlockScanCache {
+                    wikidot_div_stream_marks: if settings.layout.legacy() {
+                        wikidot_state::compute_wikidot_div_stream_marks(
+                            tokenization.tokens(),
+                        )
+                    } else {
+                        BTreeMap::new()
+                    },
+                    wikidot_block_pairs,
+                    wikidot_inline_markers,
+                    closer_scan: CloserScanCache::new(tokenization.tokens().len()),
+                    wikidot_line_runs: if settings.layout.legacy() {
+                        block_pairs::compute_wikidot_line_runs(
+                            tokenization.full_text().inner(),
+                        )
+                    } else {
+                        block_pairs::WikidotLineRuns::default()
+                    },
+                    ..Default::default()
+                }
             })),
             two_block_end_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
             single_link_label_owner_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -386,6 +402,20 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_block_pairs
             .clone()
+    }
+
+    pub(crate) fn wikidot_inline_marker_role(
+        &self,
+    ) -> Option<inline_pairs::InlineMarkerRole> {
+        let current = self.current();
+        if !inline_pairs::is_marker(current.token) {
+            return None;
+        }
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_inline_markers
+            .role_at_byte(current.span.start)
+            .cloned()
     }
 
     pub(crate) fn wikidot_block_pair_at_head_byte(

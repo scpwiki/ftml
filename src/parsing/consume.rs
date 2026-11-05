@@ -21,6 +21,7 @@
 use super::Parser;
 use super::parser::QuoteBodyLineStatus;
 use super::parser::block_pairs::WikidotBlockKind;
+use super::parser::inline_pairs::InlineMarkerRole;
 use super::parser::wikidot_own_line_prefix;
 use super::prelude::*;
 use super::rule::{
@@ -1177,6 +1178,9 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
 fn try_consume_text_token<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<Elements<'t>>, ParseError> {
+    if let Some(elements) = try_consume_wikidot_inline_marker(parser)? {
+        return Ok(Some(elements));
+    }
     if parser.settings().layout.legacy()
         && parser.current().slice == "\u{fffd}"
         && parser
@@ -1636,6 +1640,44 @@ fn try_consume_wikidot_li_cross_redundant_close<'r, 't>(
         Vec::new(),
         true,
     )))
+}
+
+fn try_consume_wikidot_inline_marker<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<Elements<'t>>, ParseError> {
+    let Some(role) = parser.wikidot_inline_marker_role() else {
+        return Ok(None);
+    };
+    let element = match role {
+        InlineMarkerRole::Open(kind) => {
+            Element::Partial(PartialElement::InlineFormatOpen(kind))
+        }
+        InlineMarkerRole::Close(kind) => {
+            Element::Partial(PartialElement::InlineFormatClose(kind))
+        }
+        InlineMarkerRole::ColorOpen { color, body_start } => {
+            while parser.current().span.start < body_start {
+                parser.step()?;
+            }
+            return Ok(Some(
+                Element::Partial(PartialElement::InlineColorOpen(
+                    Cow::Owned(color),
+                    false,
+                ))
+                .into(),
+            ));
+        }
+        InlineMarkerRole::ColorClose => {
+            Element::Partial(PartialElement::InlineColorClose)
+        }
+        InlineMarkerRole::Literal => text!(parser.current().slice),
+        InlineMarkerRole::Removed => {
+            parser.step()?;
+            return Ok(Some(Elements::None));
+        }
+    };
+    parser.step()?;
+    Ok(Some(element.into()))
 }
 
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {

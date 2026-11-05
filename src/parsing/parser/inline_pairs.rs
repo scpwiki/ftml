@@ -1,0 +1,459 @@
+//! Wikidot's per-construct inline pairing, computed over the token stream.
+//!
+//! Each Wikidot inline construct pairs its own markers, first fit, over the
+//! whole line chunk, and never looks at any other construct. Two pairs can
+//! therefore interleave (`**a//b**c//`), which a recursive parser cannot
+//! represent, and a marker with no partner can sit inside another pair
+//! (`**a//b **c//`), which a recursive parser pairs by accident. For such a
+//! chunk this scan assigns every marker token a role, and `consume` emits the
+//! flat events directly. The lowering stack then nests them.
+//!
+//! Any other chunk gets no roles and parses normally. So does a chunk holding
+//! anything whose text the scan cannot see through, such as a link, whose label
+//! Wikidot tokenizes before any inline construct runs.
+
+use super::block_pairs::WikidotBlockPairs;
+use crate::parsing::rule::impls::normalize_wikidot_color;
+use crate::parsing::{ExtractedToken, Token};
+use crate::tree::InlineFormatKind;
+use std::collections::BTreeMap;
+use std::ops::Range;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum InlineMarkerRole {
+    Open(InlineFormatKind),
+    Close(InlineFormatKind),
+    ColorOpen { color: String, body_start: usize },
+    ColorClose,
+    Literal,
+    Removed,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct WikidotInlineMarkers {
+    roles: BTreeMap<usize, InlineMarkerRole>,
+}
+
+impl WikidotInlineMarkers {
+    pub(crate) fn role_at_byte(&self, byte: usize) -> Option<&InlineMarkerRole> {
+        self.roles.get(&byte)
+    }
+}
+
+/// Keeps the head scan constant per `##`, which keeps the whole pass linear.
+const MAX_COLOR_HEAD_TOKENS: usize = 32;
+
+pub(crate) fn is_marker(token: Token) -> bool {
+    matches!(
+        token,
+        Token::Bold
+            | Token::Italics
+            | Token::Underline
+            | Token::DoubleDash
+            | Token::Superscript
+            | Token::Subscript
+            | Token::LeftMonospace
+            | Token::RightMonospace
+            | Token::Color
+    )
+}
+
+enum TokenClass {
+    Inert,
+    Opaque,
+    InlineScope(usize),
+    Barrier(usize),
+}
+
+fn block_name<'t>(tokens: &[ExtractedToken<'t>], index: usize) -> Option<&'t str> {
+    let name = tokens.get(index + 1)?;
+    (name.token == Token::Identifier).then_some(name.slice)
+}
+
+fn head_end(tokens: &[ExtractedToken<'_>], index: usize) -> Option<usize> {
+    for (offset, token) in tokens[index..].iter().enumerate() {
+        match token.token {
+            Token::RightBlock => return Some(index + offset + 1),
+            Token::ParagraphBreak | Token::InputEnd => return None,
+            token if is_marker(token) => return None,
+            _ => {}
+        }
+    }
+    None
+}
+
+fn classify_block(
+    tokens: &[ExtractedToken<'_>],
+    index: usize,
+    pairs: &WikidotBlockPairs,
+) -> TokenClass {
+    let Some(name) = block_name(tokens, index) else {
+        return TokenClass::Opaque;
+    };
+    let Some(end) = head_end(tokens, index) else {
+        return TokenClass::Opaque;
+    };
+    if name.eq_ignore_ascii_case("span") || name.eq_ignore_ascii_case("size") {
+        return TokenClass::InlineScope(end);
+    }
+    let byte = tokens[index].span.start;
+    let paired = if tokens[index].token == Token::LeftBlock {
+        pairs.pair_at_head_byte(byte).is_some()
+    } else {
+        pairs.pair_at_closer_byte(byte).is_some()
+    };
+    if paired
+        && (name.eq_ignore_ascii_case("div") || name.eq_ignore_ascii_case("collapsible"))
+    {
+        TokenClass::Barrier(end)
+    } else {
+        TokenClass::Opaque
+    }
+}
+
+fn classify(
+    tokens: &[ExtractedToken<'_>],
+    index: usize,
+    line_start: bool,
+    pairs: &WikidotBlockPairs,
+) -> TokenClass {
+    let token = tokens[index].token;
+    match token {
+        Token::ParagraphBreak | Token::InputEnd => TokenClass::Barrier(index + 1),
+        Token::LeftBlock | Token::LeftBlockEnd => classify_block(tokens, index, pairs),
+        Token::Equals | Token::Colon if line_start => TokenClass::Opaque,
+        Token::Identifier
+        | Token::Other
+        | Token::Whitespace
+        | Token::LineBreak
+        | Token::Pipe
+        | Token::Equals
+        | Token::Colon
+        | Token::Underscore
+        | Token::DoubleQuote
+        | Token::RightBracket
+        | Token::RightBlock
+        | Token::RightParentheses
+        | Token::InputStart => TokenClass::Inert,
+        token if is_marker(token) => TokenClass::Inert,
+        _ => TokenClass::Opaque,
+    }
+}
+
+pub(crate) fn compute_wikidot_inline_markers(
+    tokens: &[ExtractedToken<'_>],
+    pairs: &WikidotBlockPairs,
+) -> WikidotInlineMarkers {
+    let mut markers = WikidotInlineMarkers::default();
+    let mut start = 0;
+    let mut opaque = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        let line_start = index == start || tokens[index - 1].token == Token::LineBreak;
+        match classify(tokens, index, line_start, pairs) {
+            TokenClass::Inert => index += 1,
+            TokenClass::Opaque => {
+                opaque = true;
+                index += 1;
+            }
+            TokenClass::InlineScope(end) => index = end,
+            TokenClass::Barrier(end) => {
+                if !opaque {
+                    scan_chunk(tokens, start..index, &mut markers);
+                }
+                start = end;
+                opaque = false;
+                index = end;
+            }
+        }
+    }
+    if !opaque {
+        scan_chunk(tokens, start..tokens.len(), &mut markers);
+    }
+    markers
+}
+
+struct Pair {
+    open: usize,
+    close: usize,
+    role: PairKind,
+}
+
+enum PairKind {
+    Format(InlineFormatKind),
+    Color { color: String, pipe: usize },
+}
+
+/// The state one chunk builds up rule by rule, in Wikidot's rule order. An empty
+/// pair leaves nothing behind, so a later rule sees the tokens around it as
+/// adjacent: `x//**** a//b` keeps its `//` literal because `Strong` runs first
+/// and leaves `// a//`, while `x//____ a//b` forms because `Underline` runs after
+/// `Emphasis`.
+struct ChunkScan<'a, 't> {
+    tokens: &'a [ExtractedToken<'t>],
+    range: Range<usize>,
+    removed: Vec<bool>,
+    pairs: Vec<Pair>,
+}
+
+impl ChunkScan<'_, '_> {
+    fn is_removed(&self, index: usize) -> bool {
+        self.removed[index - self.range.start]
+    }
+
+    fn remove(&mut self, index: usize) {
+        self.removed[index - self.range.start] = true;
+    }
+
+    fn next_visible(&self, index: usize) -> Option<usize> {
+        (index + 1..self.range.end).find(|&next| !self.is_removed(next))
+    }
+
+    fn previous_visible(&self, index: usize) -> Option<usize> {
+        (self.range.start..index)
+            .rev()
+            .find(|&previous| !self.is_removed(previous))
+    }
+
+    fn is_space(&self, index: Option<usize>) -> bool {
+        index.is_none_or(|index| self.tokens[index].token == Token::Whitespace)
+    }
+}
+
+fn scan_chunk(
+    tokens: &[ExtractedToken<'_>],
+    range: Range<usize>,
+    markers: &mut WikidotInlineMarkers,
+) {
+    let mut scan = ChunkScan {
+        tokens,
+        removed: vec![false; range.len()],
+        range: range.clone(),
+        pairs: Vec::new(),
+    };
+    pair_color(&mut scan);
+    pair_symmetric(&mut scan, Token::Bold, InlineFormatKind::Bold);
+    pair_symmetric(&mut scan, Token::Italics, InlineFormatKind::Italics);
+    pair_symmetric(&mut scan, Token::Underline, InlineFormatKind::Underline);
+    pair_symmetric(
+        &mut scan,
+        Token::DoubleDash,
+        InlineFormatKind::Strikethrough,
+    );
+    if !pair_monospace(&mut scan) {
+        return;
+    }
+    pair_symmetric(&mut scan, Token::Superscript, InlineFormatKind::Superscript);
+    pair_symmetric(&mut scan, Token::Subscript, InlineFormatKind::Subscript);
+
+    let mut kinds: Vec<Token> = Vec::new();
+    let mut marker_count = 0;
+    let mut removed_count = 0;
+    for (offset, token) in tokens[range.clone()].iter().enumerate() {
+        if !is_marker(token.token) {
+            continue;
+        }
+        if scan.removed[offset] {
+            removed_count += 1;
+        }
+        marker_count += 1;
+        let kind = match token.token {
+            Token::RightMonospace => Token::LeftMonospace,
+            kind => kind,
+        };
+        if !kinds.contains(&kind) {
+            kinds.push(kind);
+        }
+    }
+    let paired = scan.pairs.len() * 2 + removed_count;
+    let unpaired_marker = paired > 0 && marker_count > paired && kinds.len() > 1;
+    if !unpaired_marker && !pairs_interleave(&scan.pairs) {
+        return;
+    }
+
+    for (offset, token) in tokens[range.clone()].iter().enumerate() {
+        if is_marker(token.token) {
+            let role = if scan.removed[offset] {
+                InlineMarkerRole::Removed
+            } else {
+                InlineMarkerRole::Literal
+            };
+            markers.roles.insert(token.span.start, role);
+        }
+    }
+    for pair in scan.pairs {
+        let (open, close) = match pair.role {
+            PairKind::Format(kind) => {
+                (InlineMarkerRole::Open(kind), InlineMarkerRole::Close(kind))
+            }
+            PairKind::Color { color, pipe } => (
+                InlineMarkerRole::ColorOpen {
+                    color,
+                    body_start: tokens[pipe].span.end,
+                },
+                InlineMarkerRole::ColorClose,
+            ),
+        };
+        markers.roles.insert(tokens[pair.open].span.start, open);
+        markers.roles.insert(tokens[pair.close].span.start, close);
+    }
+}
+
+/// `M(|[^\s](?:.*[^\s])?)M` ungreedy, except that a strike has no empty form.
+fn pair_symmetric(scan: &mut ChunkScan<'_, '_>, token: Token, kind: InlineFormatKind) {
+    let positions: Vec<usize> = scan
+        .range
+        .clone()
+        .filter(|&index| scan.tokens[index].token == token && !scan.is_removed(index))
+        .collect();
+    let mut next_close = vec![None; positions.len() + 1];
+    for slot in (0..positions.len()).rev() {
+        let unpadded = !scan.is_space(scan.previous_visible(positions[slot]));
+        next_close[slot] = if unpadded {
+            Some(slot)
+        } else {
+            next_close[slot + 1]
+        };
+    }
+    let mut slot = 0;
+    while slot < positions.len() {
+        let open = positions[slot];
+        let next = scan.next_visible(open);
+        let adjacent = next.is_some() && positions.get(slot + 1).copied() == next;
+        if adjacent && kind != InlineFormatKind::Strikethrough {
+            scan.remove(open);
+            scan.remove(positions[slot + 1]);
+            slot += 2;
+            continue;
+        }
+        let first_candidate = slot + 1 + usize::from(adjacent);
+        let close = if scan.is_space(next) {
+            None
+        } else {
+            next_close.get(first_candidate).copied().flatten()
+        };
+        if let Some(close) = close {
+            scan.pairs.push(Pair {
+                open,
+                close: positions[close],
+                role: PairKind::Format(kind),
+            });
+            slot = close + 1;
+        } else {
+            slot += 1;
+        }
+    }
+}
+
+/// `{{({*?.*}*?)}}` with the U flag: the body runs to the first `}}`, and an
+/// adjacent `}}` extends it. Returns false for a stray `}` next to the close,
+/// which splits a token, so the chunk keeps its normal parse.
+fn pair_monospace(scan: &mut ChunkScan<'_, '_>) -> bool {
+    let mut index = scan.range.start;
+    while index < scan.range.end {
+        if scan.tokens[index].token != Token::LeftMonospace {
+            index += 1;
+            continue;
+        }
+        let Some(first) = (index + 1..scan.range.end)
+            .find(|&candidate| scan.tokens[candidate].token == Token::RightMonospace)
+        else {
+            return true;
+        };
+        let mut close = first;
+        while close + 1 < scan.range.end
+            && scan.tokens[close + 1].token == Token::RightMonospace
+        {
+            close += 1;
+        }
+        if close + 1 < scan.range.end && scan.tokens[close + 1].slice.starts_with('}') {
+            return false;
+        }
+        if scan.next_visible(index) == Some(close) {
+            scan.remove(index);
+            scan.remove(close);
+        } else {
+            scan.pairs.push(Pair {
+                open: index,
+                close,
+                role: PairKind::Format(InlineFormatKind::Monospace),
+            });
+        }
+        index = close + 1;
+    }
+    true
+}
+
+/// `##(.+?)\|(.+?)##`, with a color Wikidot accepts.
+fn pair_color(scan: &mut ChunkScan<'_, '_>) {
+    let mut index = scan.range.start;
+    while index < scan.range.end {
+        if scan.tokens[index].token != Token::Color {
+            index += 1;
+            continue;
+        }
+        let Some((color, pipe)) = color_head(scan.tokens, index, scan.range.end) else {
+            index += 1;
+            continue;
+        };
+        let close = (pipe + 2..scan.range.end)
+            .find(|&candidate| scan.tokens[candidate].token == Token::Color);
+        let Some(close) = close else {
+            index += 1;
+            continue;
+        };
+        for head_token in index + 1..=pipe {
+            scan.remove(head_token);
+        }
+        scan.pairs.push(Pair {
+            open: index,
+            close,
+            role: PairKind::Color { color, pipe },
+        });
+        index = close + 1;
+    }
+}
+
+fn color_head(
+    tokens: &[ExtractedToken<'_>],
+    open: usize,
+    end: usize,
+) -> Option<(String, usize)> {
+    let mut text = String::new();
+    let head_end = end.min(open + 1 + MAX_COLOR_HEAD_TOKENS);
+    for (offset, token) in tokens[open + 1..head_end].iter().enumerate() {
+        match token.token {
+            Token::Pipe => {
+                let color = normalize_wikidot_color(&text)?.into_owned();
+                return Some((color, open + 1 + offset));
+            }
+            Token::Identifier
+            | Token::Other
+            | Token::Whitespace
+            | Token::Color
+            | Token::DoubleDash
+            | Token::RightParentheses => {
+                text.push_str(token.slice);
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+fn pairs_interleave(pairs: &[Pair]) -> bool {
+    let mut sorted: Vec<(usize, usize)> =
+        pairs.iter().map(|pair| (pair.open, pair.close)).collect();
+    sorted.sort_unstable();
+    let mut open_closes: Vec<usize> = Vec::new();
+    for (open, close) in sorted {
+        while open_closes.last().is_some_and(|&last| last < open) {
+            open_closes.pop();
+        }
+        if open_closes.last().is_some_and(|&last| last < close) {
+            return true;
+        }
+        open_closes.push(close);
+    }
+    false
+}
