@@ -61,6 +61,10 @@ impl BibliographyScopeWrapper<'_> {
 pub struct Bibliography<'t> {
     entries: Vec<(Cow<'t, str>, Vec<Element<'t>>)>,
     label_index: HashMap<String, IndexedReference>,
+    /// Per-entry citation number, parallel to `entries` (residual entries
+    /// hold 0). Derived from the labels, so it is rebuilt whenever entries
+    /// are created.
+    citations: Vec<usize>,
     reopened_wrappers: Vec<Vec<BibliographyScopeWrapper<'t>>>,
     title_wrappers: Vec<BibliographyScopeWrapper<'t>>,
 }
@@ -110,6 +114,7 @@ impl<'t> Bibliography<'t> {
         let mut bibliography = Bibliography {
             entries,
             label_index: HashMap::new(),
+            citations: Vec::new(),
             reopened_wrappers: Vec::new(),
             title_wrappers: Vec::new(),
         };
@@ -118,13 +123,17 @@ impl<'t> Bibliography<'t> {
     }
 
     fn rebuild_label_index(&mut self) {
+        let entries = &self.entries;
         self.label_index.clear();
-        let mut citation = 0;
-        for (position, (label, _)) in self.entries.iter().enumerate() {
+        self.citations.clear();
+        self.citations.reserve(entries.len());
+        for (position, (label, _)) in entries.iter().enumerate() {
             if Self::is_residual(label) {
+                self.citations.push(0);
                 continue;
             }
-            citation += 1;
+            let citation = self.label_index.len() + 1;
+            self.citations.push(citation);
             self.label_index.insert(
                 label.as_ref().to_owned(),
                 IndexedReference { citation, position },
@@ -132,18 +141,25 @@ impl<'t> Bibliography<'t> {
         }
     }
 
+    /// The number live Wikidot prints for the definition at `position`:
+    /// one plus the number of *distinct* labels defined before it.
+    ///
+    /// Duplicate labels do not extend the distinct set, so a repeated
+    /// definition reuses the next number while the labels after it keep
+    /// numbering as if the duplicate still counted. Live renders
+    /// `bell, bell, guy` as `1.`, `2.`, `2.` (captured 2026-11-05).
+    pub fn citation_at(&self, position: usize) -> usize {
+        self.citations.get(position).copied().unwrap_or(0)
+    }
+
     pub fn add(&mut self, label: Cow<'t, str>, elements: Vec<Element<'t>>) {
-        let citation = self
-            .entries
-            .iter()
-            .filter(|(existing, _)| !Self::is_residual(existing))
-            .count()
-            + 1;
+        let citation = self.label_index.len() + 1;
         let position = self.entries.len();
         self.label_index.insert(
             label.as_ref().to_owned(),
             IndexedReference { citation, position },
         );
+        self.citations.push(citation);
         self.entries.push((label, elements));
     }
 
@@ -153,6 +169,7 @@ impl<'t> Bibliography<'t> {
         {
             elements.push(element);
         } else {
+            self.citations.push(0);
             self.entries
                 .push((Cow::Borrowed(RESIDUAL_LABEL), vec![element]));
         }
@@ -174,15 +191,13 @@ impl<'t> Bibliography<'t> {
     }
 
     fn get_by_scan(&self, label: &str) -> Option<(usize, &[Element<'t>])> {
-        let mut index = 0;
         let mut found: Option<(usize, &[Element<'t>])> = None;
-        for (ref_label, elements) in &self.entries {
+        for (position, (ref_label, elements)) in self.entries.iter().enumerate() {
             if Self::is_residual(ref_label) {
                 continue;
             }
-            index += 1;
             if label == ref_label {
-                found = Some((index, elements));
+                found = Some((self.citation_at(position), elements));
             }
         }
 
@@ -341,8 +356,13 @@ fn bibliography_helpers_resolve_latest_reference() {
     bibliography.add(cow!("alpha"), duplicate.clone());
     bibliography.add(cow!("beta"), second.clone());
 
+    // Live numbers by distinct labels: the duplicate alpha keeps the next
+    // number and does not advance beta, so both end at 2.
     assert_eq!(bibliography.get("alpha"), Some((2, duplicate.as_slice())));
-    assert_eq!(bibliography.get("beta"), Some((3, second.as_slice())));
+    assert_eq!(bibliography.get("beta"), Some((2, second.as_slice())));
+    assert_eq!(bibliography.citation_at(0), 1);
+    assert_eq!(bibliography.citation_at(1), 2);
+    assert_eq!(bibliography.citation_at(2), 2);
     assert_eq!(bibliography.slice().len(), 3);
     assert_eq!(
         bibliography.to_owned().get("alpha"),
