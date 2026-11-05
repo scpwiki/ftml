@@ -183,20 +183,48 @@ fn try_consume_fn<'r, 't>(
             terminator.span.end,
             table_owned,
         );
+    let trailing_break_space = legacy
+        && !spaces_vanish
+        && terminator.token == Token::Color
+        && matches!(elements.last(), Some(Element::LineBreak))
+        && trailing_break_space_survives(
+            parser.full_text().inner(),
+            terminator.span.end,
+            table_owned,
+        );
+    let leading_run_eaten = legacy
+        && !spaces_vanish
+        && !starts_line
+        && leading_space.is_none()
+        && !matches!(
+            elements.first(),
+            Some(Element::Text(text)) if text.starts_with([' ', '\t'])
+        )
+        && parser
+            .full_text()
+            .inner()
+            .as_bytes()
+            .get(first_terminator.span.end)
+            .is_some_and(|byte| matches!(byte, b' ' | b'\t'));
     let element = color_element(spec, elements);
     let mut output = Vec::with_capacity(3);
-    if !starts_line
-        && !spaces_vanish
-        && let Some(space) = leading_space
-    {
-        output.push(space);
+    if !starts_line && !spaces_vanish {
+        if let Some(space) = leading_space {
+            output.push(space);
+        } else if leading_run_eaten {
+            output.push(text!(" "));
+        }
     }
     if space_survives {
         output.push(text!(" "));
     }
     output.push(element);
-    if !spaces_vanish && let Some(space) = trailing_space {
-        output.push(space);
+    if !spaces_vanish {
+        if let Some(space) = trailing_space {
+            output.push(space);
+        } else if trailing_break_space {
+            output.push(text!(" "));
+        }
     }
     if unformed_dash {
         output.push(text!("--"));
@@ -220,22 +248,30 @@ fn ws_color_space_survives(
     if matches!(prev, b' ' | b'\t' | b'\n' | b'\r') {
         return false;
     }
-    if prev == b']' {
-        let before = &source[..head_start];
-        if before.ends_with("]]")
-            && let Some(open) = before.rfind("[[")
-        {
-            let after = &before[open + 2..];
-            if !after.starts_with('/') && !after.starts_with('[') {
-                return false;
-            }
-        }
-    }
     let next = bytes[close_end];
     if matches!(next, b' ' | b'\t' | b'\n' | b'\r') {
         return false;
     }
     if source[close_end..].starts_with("[[/") {
+        return false;
+    }
+    if table_owned && next == b'|' {
+        return false;
+    }
+    true
+}
+
+fn trailing_break_space_survives(
+    source: &str,
+    close_end: usize,
+    table_owned: bool,
+) -> bool {
+    let bytes = source.as_bytes();
+    if close_end >= bytes.len() {
+        return false;
+    }
+    let next = bytes[close_end];
+    if matches!(next, b' ' | b'\t' | b'\n' | b'\r') {
         return false;
     }
     if table_owned && next == b'|' {

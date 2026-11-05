@@ -559,7 +559,7 @@ fn issue_803_wdpr_block_fail_input_matches_live_structure() {
             "<br>\n<br>\n<br>\n<br>\n<br>\n<br>\n",
             "<ul>\n<li style=\"list-style: none\">Foo</li>\n</ul><br>\n",
             "<ol>\n<li style=\"list-style: none\">Bar</li>\n</ol><br>\n",
-            "[[li]]<br>\nBaz<br>\n[[/li]] <ul>\n",
+            "[[li]]<br>\nBaz<br>\n[[/li]]<ul>\n",
             "<li style=\"list-style: none\">[[li_]]<br>\n",
             "ALPHA<br>\n[[/li]]\n",
             "<p>[[li_]]</p>\n\n<p>BETA</p>\n[[/li]]</li>\n",
@@ -570,7 +570,7 @@ fn issue_803_wdpr_block_fail_input_matches_live_structure() {
     assert_eq!(
         text,
         concat!(
-            "Foo\n\nBar\n\n[[li]]\nBaz\n[[/li]] \n",
+            "Foo\n\nBar\n\n[[li]]\nBaz\n[[/li]]\n",
             "[[li_]]\nALPHA\n[[/li]]\n[[li_]]\n\nBETA\n[[/li]]\n",
             "GAMMA[[li_]] DELTA [[/li]]",
         ),

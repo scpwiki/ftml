@@ -1,0 +1,44 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "x",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "x"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "color",
+                        "data": {
+                            "color": "red",
+                            "background": false,
+                            "elements": []
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "y"
+                    }
+                ]
+            }
+        }
+    ]
+}
