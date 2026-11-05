@@ -197,6 +197,23 @@ impl Handle {
         )))
     }
 
+    pub fn get_local_file_path_link<'a>(
+        &self,
+        path: &'a str,
+        info: &PageInfo,
+        settings: &WikitextSettings,
+    ) -> Option<Cow<'a, str>> {
+        if !settings.allow_local_paths {
+            warn!("Specified path file source when local paths are disabled");
+            return None;
+        }
+
+        Some(Cow::Owned(format!(
+            "https://{}.wjfiles.com/local--files/{path}",
+            info.site,
+        )))
+    }
+
     /// Resolves the display and original-file URLs for an attachment image.
     ///
     /// The parser retains the attachment filename. This handle materializes

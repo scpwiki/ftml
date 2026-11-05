@@ -12,7 +12,7 @@
 
 use super::prelude::*;
 use crate::parsing::collect::{CommentElidedText, consume_iftags_segment};
-use crate::parsing::trim_wikidot_ascii;
+use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii};
 use std::borrow::Cow;
 pub const BLOCK_FILE: BlockRule = BlockRule {
     name: "block-file",
@@ -122,85 +122,103 @@ fn parse_evidenced_file_link<'t>(
     }
 
     match value {
-        Some(Cow::Borrowed(value)) => {
-            let (file, label) = parse_evidenced_file_link_str(parser, Some(value))?;
-            Ok((Cow::Borrowed(file), Cow::Borrowed(label)))
-        }
+        Some(Cow::Borrowed(value)) => parse_evidenced_file_link_str(parser, Some(value)),
         Some(Cow::Owned(value)) => {
             let (file, label) = parse_evidenced_file_link_str(parser, Some(&value))?;
-            Ok((Cow::Owned(file.to_owned()), Cow::Owned(label.to_owned())))
+            Ok((
+                Cow::Owned(file.into_owned()),
+                Cow::Owned(label.into_owned()),
+            ))
         }
-        None => {
-            let (file, label) = parse_evidenced_file_link_str(parser, None)?;
-            Ok((Cow::Borrowed(file), Cow::Borrowed(label)))
-        }
+        None => Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
     }
 }
 
 fn parse_evidenced_file_link_str<'t, 'v>(
     parser: &Parser<'_, 't>,
     value: Option<&'v str>,
-) -> Result<(&'v str, &'v str), ParseError> {
+) -> Result<(Cow<'v, str>, Cow<'v, str>), ParseError> {
+    if !parser.settings().allow_local_paths {
+        return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
+    }
+
     let value = match value {
         Some(value) => value,
         None => return Err(parser.make_err(ParseErrorKind::BlockMissingArguments)),
     };
-    // Live Wikidot splits on a pipe only when something follows it, so the
-    // split decision uses the raw value: trimming first would erase the
-    // difference between `a/b.txt|` and `a/b.txt| `.
-    let raw_pipe_split = value.split_once('|');
-    let value = if parser.settings().layout.legacy() {
-        trim_wikidot_ascii(value)
-    } else {
-        value.trim()
-    };
+
     if !parser.settings().layout.legacy() {
+        let value = value.trim();
         let Some((file, label)) = value.split_once(" | ") else {
             return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
         };
         if !is_evidenced_file_name(file) || label.is_empty() || label.contains('|') {
             return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
         }
-        return Ok((file, label));
+        return Ok((Cow::Borrowed(file), Cow::Borrowed(label)));
     }
 
-    let (file, label) = match raw_pipe_split {
-        // A pipe with nothing after it is part of the target, not a
-        // separator: live Wikidot keeps it in both the file and the label.
-        Some((raw_file, raw_label))
-            if raw_label.is_empty() && !raw_file.trim().is_empty() =>
-        {
-            (value, value)
-        }
-        _ => match value.split_once('|') {
-            Some((file, label)) => {
-                let file = file.trim_matches([' ', '\t', '\r', '\n']);
-                let label = label.trim_matches([' ', '\t', '\r', '\n']);
-                (
-                    file,
-                    if label.is_empty() {
-                        // Live Wikidot shows the full authored target as the
-                        // default label, not just the base name.
-                        file
-                    } else {
-                        label
-                    },
-                )
-            }
-            // Live Wikidot shows the full authored target as the default
-            // label, not just the base name.
-            None => (value, value),
-        },
-    };
-    if !is_evidenced_wikidot_file_source(file) {
+    if trim_wikidot_ascii(value).is_empty() {
         return Err(parser.make_err(ParseErrorKind::BlockMalformedArguments));
     }
 
-    Ok((file, label))
+    Ok(parse_wikidot_file_link_parts(value))
 }
 
-fn is_evidenced_wikidot_file_source(source: &str) -> bool {
-    !source.is_empty()
+fn parse_wikidot_file_link_parts(value: &str) -> (Cow<'_, str>, Cow<'_, str>) {
+    let separator = value.match_indices('|').find_map(|(index, _)| {
+        let file = &value[..index];
+        let label = &value[index + 1..];
+        (!is_blank_wikidot_file_part(file) && !label.is_empty()).then_some(index)
+    });
+
+    match separator {
+        Some(index) => {
+            let file = normalize_wikidot_file_head(&value[..index]);
+            let label = normalize_wikidot_file_head(&value[index + 1..]);
+            let label = if label.is_empty() {
+                file.clone()
+            } else {
+                label
+            };
+            (file, label)
+        }
+        None => {
+            let file = normalize_wikidot_file_head(value);
+            (file.clone(), file)
+        }
+    }
+}
+
+fn normalize_wikidot_file_head(value: &str) -> Cow<'_, str> {
+    let value = trim_wikidot_ascii(value);
+    let filtered = discard_wikidot_controls(Cow::Borrowed(value));
+    let mut normalized = String::with_capacity(filtered.len());
+    let mut pending_space = false;
+
+    for character in filtered.chars() {
+        if matches!(character, ' ' | '\t' | '\r' | '\n') {
+            pending_space = !normalized.is_empty();
+        } else {
+            if pending_space {
+                normalized.push(' ');
+                pending_space = false;
+            }
+            normalized.push(character);
+        }
+    }
+
+    if normalized == value {
+        Cow::Borrowed(value)
+    } else {
+        Cow::Owned(normalized)
+    }
+}
+
+fn is_blank_wikidot_file_part(part: &str) -> bool {
+    part.chars().all(|character| {
+        matches!(character, ' ' | '\t' | '\r' | '\n' | '\u{b}' | '\u{c}')
+    })
 }
 
 fn is_evidenced_file_name(source: &str) -> bool {
@@ -321,8 +339,8 @@ mod tests {
                     paragraph.elements()
                 );
             };
-            assert_eq!(actual_file, file, "{source}");
-            assert_eq!(actual_label, label, "{source}");
+            assert_eq!(actual_file.as_ref(), file, "{source}");
+            assert_eq!(actual_label.as_ref(), label, "{source}");
             assert_eq!(rest == [text!("]")], trailing, "{source}");
         }
     }

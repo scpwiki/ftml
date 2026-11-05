@@ -1,0 +1,19 @@
+[[file x.pdf]]
+
+[[file other-page/elements.tsv]]
+
+[[file https://example.com/x.pdf]]
+
+[[file ftp://host/x.pdf]]
+
+[[file mailto:a@b.c]]
+
+[[file /local--files/x.pdf]]
+
+[[file /x.pdf]]
+
+[[file //x.pdf]]
+
+[[file HTTPS://EXAMPLE.COM/X.PDF]]
+
+[[file page/../x.pdf]]
