@@ -1,0 +1,9 @@
+[[a href="/x" class="@@a@@"]]y[[/a]]
+
+[[a href="/x" id="@@a@@" style="@@b@@"]]y[[/a]]
+
+[[a href="@@a@@"]]y[[/a]]
+
+[[a href="/x@@a@@"]]y[[/a]]
+
+[[a href="/x" class=" "]]z[[/a]]

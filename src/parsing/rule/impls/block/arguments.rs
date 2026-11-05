@@ -137,6 +137,9 @@ pub struct Arguments<'t> {
     /// Wikidot head attributes whose quoted value evaluated to empty because it
     /// contained raw inline markup; live emits these as `key=""`.
     explicit_empty: HashSet<ArgumentKey<'t>>,
+    /// Authored values that are only whitespace: live keeps the attribute and
+    /// serializes its normalized-empty value as `key=""`.
+    whitespace_empty: HashSet<ArgumentKey<'t>>,
     case_sensitive: bool,
     empty_key_present: bool,
     source_present: bool,
@@ -206,11 +209,39 @@ impl<'t> Arguments<'t> {
         self.bare.insert(argument_key);
     }
 
+    /// Whether the quoted value of `key` evaluated to empty because it held
+    /// complete raw inline markup, which live serializes as `key=""`.
+    pub(crate) fn is_explicit_empty(&self, key: &str) -> bool {
+        self.explicit_empty.contains(&self.key(key))
+    }
+
+    /// Take the raw-escaped placeholder text live kept for an attribute whose
+    /// value evaluated to empty (the date format class exposes it).
+    #[must_use = "non-idempotent getter method"]
+    pub(crate) fn take_explicit_empty_value(
+        &mut self,
+        key: &'t str,
+    ) -> Option<Cow<'t, str>> {
+        let key = self.key(key);
+        if !self.explicit_empty.contains(&key) {
+            return None;
+        }
+        self.bare.remove(&key);
+        self.inner.remove(&key)
+    }
+
     #[must_use = "non-idempotent getter method"]
     pub fn get(&mut self, key: &'t str) -> Option<Cow<'t, str>> {
         let key = self.key(key);
         self.bare.remove(&key);
-        self.inner.remove(&key)
+        let explicit_empty = self.explicit_empty.contains(&key);
+        self.inner.remove(&key).map(|value| {
+            if explicit_empty {
+                Cow::Borrowed("")
+            } else {
+                value
+            }
+        })
     }
 
     #[must_use = "the normalized Wikidot class value must be used"]
@@ -220,15 +251,30 @@ impl<'t> Arguments<'t> {
             case_sensitive: true,
         };
         self.bare.remove(&key);
-        self.inner
-            .remove(&key)
-            .map(|value| normalize_wikidot_html_attribute_value(&value))
+        let explicit_empty = self.explicit_empty.contains(&key);
+        self.inner.remove(&key).map(|value| {
+            if explicit_empty {
+                Cow::Borrowed("")
+            } else {
+                normalize_wikidot_html_attribute_value(&value)
+            }
+        })
     }
 
     pub fn get_with_bare(&mut self, key: &'t str) -> Option<(Cow<'t, str>, bool)> {
         let key = self.key(key);
         let bare = self.bare.remove(&key);
-        self.inner.remove(&key).map(|value| (value, bare))
+        let explicit_empty = self.explicit_empty.contains(&key);
+        self.inner.remove(&key).map(|value| {
+            (
+                if explicit_empty {
+                    Cow::Borrowed("")
+                } else {
+                    value
+                },
+                bare,
+            )
+        })
     }
 
     #[must_use = "non-idempotent getter method"]
@@ -237,7 +283,11 @@ impl<'t> Arguments<'t> {
         parser: &Parser<'_, 't>,
         key: &'t str,
     ) -> Result<Option<bool>, ParseError> {
-        match self.get(key) {
+        let key = self.key(key);
+        self.bare.remove(&key);
+        let explicit_empty = self.explicit_empty.contains(&key);
+        match self.inner.remove(&key) {
+            Some(_) if explicit_empty => Ok(None),
             Some(argument) => match parse_boolean(argument) {
                 Ok(value) => Ok(Some(value)),
                 Err(_) => Err(make_err!(parser)),
@@ -252,7 +302,11 @@ impl<'t> Arguments<'t> {
         parser: &Parser<'_, 't>,
         key: &'t str,
     ) -> Result<Option<T>, ParseError> {
-        match self.get(key) {
+        let argument_key = self.key(key);
+        self.bare.remove(&argument_key);
+        let explicit_empty = self.explicit_empty.contains(&argument_key);
+        match self.inner.remove(&argument_key) {
+            Some(_) if explicit_empty => Ok(None),
             Some(argument) => match argument.parse() {
                 Ok(value) => Ok(Some(value)),
                 Err(_) => Err(make_err!(parser)),
@@ -293,26 +347,54 @@ impl<'t> Arguments<'t> {
         self.explicit_empty.insert(key);
     }
 
+    #[inline]
+    pub(crate) fn mark_whitespace_empty(&mut self, key: Cow<'t, str>) {
+        let key = self.key_cow(key);
+        self.whitespace_empty.insert(key);
+    }
+
     /// Records the attributes whose Wikidot-layout value evaluated to empty in
     /// the block's attribute map, so the renderer can emit `key=""` for them.
     pub(crate) fn insert_explicit_empty_marker(&self, attributes: &mut AttributeMap<'t>) {
-        if self.explicit_empty.is_empty() {
-            return;
+        let mut names: Vec<Cow<'t, str>> = Vec::new();
+        let mut push_name = |name: Cow<'t, str>| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        };
+
+        // Keep authored order for the serialized attributes, with attributes
+        // live drops from the map (an isolated empty id) at their raw position.
+        for argument in &self.raw {
+            let key = self.key_cow(argument.name.clone());
+            let explicit = self.explicit_empty.contains(&key);
+            let whitespace_only = self.whitespace_empty.contains(&key);
+            if !explicit && !whitespace_only {
+                continue;
+            }
+            if let Some((stored, _)) = attributes
+                .get()
+                .iter()
+                .find(|(stored, _)| stored.as_ref() == key.as_str())
+            {
+                push_name(stored.clone());
+            } else if explicit && key.as_str() == "id" {
+                push_name(Cow::Borrowed("id"));
+            }
         }
 
-        let names: Vec<&str> = self
-            .explicit_empty
-            .iter()
-            .map(|key| key.as_str())
-            .filter(|name| attributes.get().keys().any(|key| key.as_ref() == *name))
-            .collect();
         if names.is_empty() {
             return;
         }
 
+        let joined = names
+            .iter()
+            .map(|name| name.as_ref())
+            .collect::<Vec<_>>()
+            .join(" ");
         attributes.insert(
             crate::tree::WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER,
-            Cow::Owned(names.join(" ")),
+            Cow::Owned(joined),
         );
     }
 
@@ -335,8 +417,13 @@ impl<'t> Arguments<'t> {
         self.inner
             .iter()
             .map(|(key, value)| {
+                let explicit_empty = self.explicit_empty.contains(key);
                 let key = key.value.clone();
-                let value = value.clone();
+                let value = if explicit_empty {
+                    Cow::Borrowed("")
+                } else {
+                    value.clone()
+                };
 
                 (key, value)
             })
@@ -344,13 +431,30 @@ impl<'t> Arguments<'t> {
     }
 
     pub fn into_raw_vec(self) -> Vec<RawModuleArgument<'t>> {
+        let explicit_empty = self.explicit_empty.clone();
         self.raw
+            .into_iter()
+            .map(|argument| {
+                let explicit = explicit_empty
+                    .iter()
+                    .any(|key| key.value.eq_ignore_ascii_case(argument.name.as_ref()));
+                if explicit {
+                    RawModuleArgument {
+                        name: argument.name,
+                        value: Cow::Borrowed(""),
+                    }
+                } else {
+                    argument
+                }
+            })
+            .collect()
     }
 
     #[inline]
     pub fn to_attribute_map(&self, settings: &WikitextSettings) -> AttributeMap<'t> {
         let mut map = self.attribute_map_from_entries(settings, |_, _| true);
         map.isolate_id(settings);
+        self.insert_explicit_empty_marker(&mut map);
         map
     }
 
@@ -381,9 +485,12 @@ impl<'t> Arguments<'t> {
                 continue;
             }
             seen.push(name);
-            let Some(value) = self.inner.get(&self.key_cow(argument.name.clone())) else {
+            let argument_key = self.key_cow(argument.name.clone());
+            let Some(value) = self.inner.get(&argument_key) else {
                 continue;
             };
+            let authored_value = value.clone();
+            let explicit_empty = self.explicit_empty.contains(&argument_key);
             if name.eq_ignore_ascii_case("href") {
                 continue;
             }
@@ -391,10 +498,12 @@ impl<'t> Arguments<'t> {
                 continue;
             }
             if name.starts_with("data-") {
-                map.insert_raw(
-                    Cow::Owned(name.to_ascii_lowercase()),
-                    normalize_wikidot_html_attribute_value(value),
-                );
+                let value = if explicit_empty {
+                    Cow::Borrowed("")
+                } else {
+                    normalize_wikidot_html_attribute_value(value)
+                };
+                map.insert_raw(Cow::Owned(name.to_ascii_lowercase()), value);
                 continue;
             }
             if self.case_sensitive && name.bytes().any(|byte| byte.is_ascii_uppercase()) {
@@ -403,18 +512,26 @@ impl<'t> Arguments<'t> {
             if !WIKIDOT_ANCHOR_ATTRIBUTE_KEYS.contains(&name) {
                 continue;
             }
-            let value = if settings.layout.legacy() && name.eq_ignore_ascii_case("id") {
+            let value = if explicit_empty {
+                Cow::Borrowed("")
+            } else if settings.layout.legacy() && name.eq_ignore_ascii_case("id") {
                 normalize_wikidot_html_id_value(value, settings)
             } else {
                 normalize_wikidot_html_attribute_value(value)
             };
-            if value.is_empty() {
+            if value.is_empty() && !explicit_empty && authored_value.is_empty() {
                 continue;
             }
             map.insert(name, value);
         }
         if let Some(href) = self.inner.get(&self.key("href")) {
-            if wikidot_anchor_href_is_verbatim(href) {
+            if self.explicit_empty.contains(&self.key("href"))
+                && wikidot_anchor_href_is_verbatim(href)
+            {
+                // Live rejects a verbatim href whose value is an escaped raw
+                // placeholder, leaving the attribute explicitly empty.
+                map.insert_wikidot_relative_href(Cow::Borrowed(""));
+            } else if wikidot_anchor_href_is_verbatim(href) {
                 let value = normalize_wikidot_html_attribute_value(href);
                 let spaced = value.replace(' ', "%20");
                 let encoded = crate::url::percent_encode_non_ascii(&spaced);
@@ -430,6 +547,7 @@ impl<'t> Arguments<'t> {
             }
         }
         map.isolate_id(settings);
+        self.insert_explicit_empty_marker(&mut map);
         map
     }
 
@@ -442,6 +560,7 @@ impl<'t> Arguments<'t> {
             !self.bare.contains(key) && include(key.as_str(), value)
         });
         map.isolate_id(settings);
+        self.insert_explicit_empty_marker(&mut map);
         map
     }
 
@@ -457,6 +576,8 @@ impl<'t> Arguments<'t> {
                 continue;
             }
 
+            let explicit_empty =
+                self.explicit_empty.contains(key) || self.whitespace_empty.contains(key);
             let key = key.as_str();
             if settings.layout.legacy() && key.eq_ignore_ascii_case("hidden") {
                 continue;
@@ -475,7 +596,9 @@ impl<'t> Arguments<'t> {
                 Cow::Borrowed(key)
             };
 
-            let value = if settings.layout.legacy() {
+            let value = if explicit_empty {
+                Cow::Borrowed("")
+            } else if settings.layout.legacy() {
                 if key.eq_ignore_ascii_case("id") {
                     normalize_wikidot_html_id_value(value, settings)
                 } else {
@@ -564,6 +687,31 @@ pub(crate) fn retain_wikidot_html_attributes(attributes: &mut AttributeMap<'_>) 
 
     for key in rejected {
         attributes.remove(&key);
+    }
+
+    // The explicit-empty marker lists attributes by name; drop names whose
+    // attribute did not survive the filter so the renderer never re-adds an
+    // attribute live omits.
+    let marker_names = attributes
+        .get()
+        .get(crate::tree::WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER)
+        .map(|names| names.to_string());
+    if let Some(marker_names) = marker_names {
+        let kept: Vec<&str> = marker_names
+            .split(' ')
+            .filter(|name| {
+                !name.is_empty()
+                    && attributes.get().keys().any(|key| key.as_ref() == *name)
+            })
+            .collect();
+        if kept.is_empty() {
+            attributes.remove(crate::tree::WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER);
+        } else {
+            attributes.insert(
+                crate::tree::WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER,
+                Cow::Owned(kept.join(" ")),
+            );
+        }
     }
 }
 

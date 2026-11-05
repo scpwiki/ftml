@@ -58,6 +58,12 @@ impl<'t> CommentElidedText<'t> {
         &self.source[self.span.clone()]
     }
 
+    /// The whole source text this head was collected from, used to resolve
+    /// Wikidot raw-escape placeholder ordinals.
+    pub(crate) fn full_source(&self) -> &'t str {
+        self.source
+    }
+
     pub(crate) fn span(&self) -> Range<usize> {
         self.span.clone()
     }

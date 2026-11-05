@@ -1,0 +1,60 @@
+{
+    "elements": [
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "file1",
+                        "data": {
+                            "file": "a.png"
+                        }
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {
+                    "alt": "@@a@@"
+                },
+                "target": null
+            }
+        },
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "file1",
+                        "data": {
+                            "file": "@@a@@"
+                        }
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        },
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "file1",
+                        "data": {
+                            "file": "a@@b@@c.png"
+                        }
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        }
+    ]
+}

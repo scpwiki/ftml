@@ -64,7 +64,11 @@ fn parse_fn<'r, 't>(
 
     let (value, mut arguments) =
         parser.get_head_name_map_wikidot(&BLOCK_DATE, in_head)?;
-    let authored_format = arguments.get("format");
+    // A format whose value evaluated to empty through raw inline markup keeps
+    // live's escape placeholders; its class serializes as `format_%FF<n>%FF`.
+    let authored_format = arguments
+        .take_explicit_empty_value("format")
+        .or_else(|| arguments.get("format"));
     let (format, ago_hover) = split_ago_hover_format(authored_format.clone());
     // Live Wikidot keeps an authored |agohover suffix inside the format class
     // string verbatim and ignores a hover attribute, so the Wikidot layout

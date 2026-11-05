@@ -21,6 +21,7 @@
 use super::prelude::*;
 use crate::parsing::parse_boolean;
 use crate::parsing::rule::impls::comment_closer_token_count;
+use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 
 pub const BLOCK_FOOTNOTE: BlockRule = BlockRule {
@@ -158,7 +159,14 @@ fn parse_footnote_block<'r, 't>(
 
     let mut arguments = parser.get_head_map_wikidot(&BLOCK_FOOTNOTE_BLOCK, in_head)?;
 
-    let title = arguments.get("title");
+    let title_explicit_empty = arguments.is_explicit_empty("title");
+    let title = arguments.get("title").map(|title| {
+        if title_explicit_empty {
+            Cow::Borrowed(crate::tree::WIKIDOT_EXPLICIT_EMPTY_LABEL_MARKER)
+        } else {
+            title
+        }
+    });
     let hide = arguments
         .get("hide")
         .map(|value| parse_boolean(value.as_ref()).unwrap_or(false))

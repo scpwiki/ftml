@@ -1,0 +1,17 @@
+[[tabview]]
+[[tab [[span]]x[[/span]] title="B"]]
+x
+[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab [[span]]x[[/span]] class="c"]]
+y
+[[/tab]]
+[[/tabview]]
+
+[[tabview]]
+[[tab [[span]]x[[/span]]]]
+z
+[[/tab]]
+[[/tabview]]

@@ -118,6 +118,7 @@ mod text;
 mod url;
 mod utf16;
 mod wikidot_code;
+mod wikidot_raw_escape;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

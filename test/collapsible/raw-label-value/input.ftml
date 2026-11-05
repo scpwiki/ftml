@@ -1,0 +1,7 @@
+[[collapsible show="@@a@@"]]
+x
+[[/collapsible]]
+
+[[collapsible hide="@@b@@"]]
+y
+[[/collapsible]]

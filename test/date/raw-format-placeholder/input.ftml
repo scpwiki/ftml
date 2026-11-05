@@ -1,0 +1,8 @@
+[[date 0 format="@@a@@"]]
+
+@@x@@
+[[date 0 format="@@b@@"]]
+
+[[date 0 format="@@c@@ @<d>@ @@e@@"]]
+
+[[date 0 format="%Y@@f@@%m"]]

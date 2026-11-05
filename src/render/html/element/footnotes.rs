@@ -143,8 +143,11 @@ pub fn render_footnote_block(
     );
 
     let title_default;
+    let explicit_empty_title =
+        title == Some(crate::tree::WIKIDOT_EXPLICIT_EMPTY_LABEL_MARKER);
     let title: &str = match title {
-        Some(title) => title,
+        Some(title) if !explicit_empty_title => title,
+        Some(_) => "",
         None => {
             title_default = ctx
                 .handle()
@@ -155,7 +158,7 @@ pub fn render_footnote_block(
     };
 
     if ctx.layout() == Layout::Wikidot {
-        let title = (!title.is_empty()).then_some(title);
+        let title = (explicit_empty_title || !title.is_empty()).then_some(title);
         ctx.html()
             .div()
             .attr(attr!("class" => "footnotes-footer"))

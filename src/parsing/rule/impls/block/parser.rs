@@ -37,6 +37,7 @@ use crate::parsing::{
     ParseResult, Parser, Token, gather_paragraphs,
 };
 use crate::tree::{AttributeMap, Container, ContainerType, Element, Elements};
+use crate::wikidot_raw_escape::{PLACEHOLDER_CLOSE, PLACEHOLDER_OPEN, raw_escapes};
 use regex::Regex;
 use std::borrow::Cow;
 use std::sync::LazyLock;
@@ -817,11 +818,18 @@ fn wikidot_head_scan(block_rule: &BlockRule) -> WikidotHeadScan {
     match block_rule.name() {
         "block-div" => WikidotHeadScan::LineEndGreedy,
         "block-table" | "block-toc" => WikidotHeadScan::QuotedValuesAreLiteral,
-        "block-span"
+        "block-anchor"
+        | "block-span"
         | "block-code"
         | "block-gallery"
+        | "block-footnote-block"
         | "block-list-unordered"
-        | "block-list-ordered" => WikidotHeadScan::EndsAtSingleBracket,
+        | "block-list-ordered"
+        | "block-list-item"
+        | "block-table-row"
+        | "block-table-cell-regular"
+        | "block-table-cell-header"
+        | "block-table-cell-body" => WikidotHeadScan::EndsAtSingleBracket,
         _ => WikidotHeadScan::Plain,
     }
 }
@@ -921,6 +929,10 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
         let end = segment.end.saturating_sub(span.start).min(source.len());
         elision_mask[start..end].fill(true);
     }
+    for range in wikidot_head_formfeed_garble_ranges(source) {
+        comment_mask[range.clone()].fill(true);
+        elision_mask[range].fill(true);
+    }
 
     let bytes = source.as_bytes();
     let mut delimiters = Vec::new();
@@ -967,20 +979,28 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
                 (segment_start..segment_start, next_key_start..segment_end)
             }
         };
-        let value_range = span.start + value_range.start..span.start + value_range.end;
-        let value = field.elide_range(value_range);
+        let absolute_range = span.start + value_range.start..span.start + value_range.end;
+        let value = field.elide_range(absolute_range.clone());
         let raw_elided = wikidot_attribute_value_raw_elides(&value);
         if key.is_empty() {
             arguments.mark_empty_key_present();
         } else {
             let value = if raw_elided {
-                Cow::Borrowed("")
+                wikidot_encoded_attribute_value(field, absolute_range)
+                    .map_or(Cow::Borrowed(""), Cow::Owned)
             } else {
                 wikidot_stripslashes(value)
             };
+            let whitespace_only = !value.is_empty()
+                && value.chars().all(|character| {
+                    character.is_whitespace()
+                        || matches!(character, '\u{0000}'..='\u{001F}' | '\u{007F}')
+                });
             arguments.insert_cow(key.clone(), value);
             if raw_elided {
                 arguments.mark_explicit_empty(key);
+            } else if whitespace_only {
+                arguments.mark_whitespace_empty(key);
             }
         }
         key = wikidot_attribute_key(field, &comment_mask, next_key_range);
@@ -990,6 +1010,101 @@ fn parse_wikidot_attribute_field<'t>(field: &CommentElidedText<'t>) -> Arguments
     }
 
     arguments
+}
+
+/// The runs a formfeed garbles in a Wikidot head. A formfeed outside a quoted
+/// value drops the following two quoted runs, which is why
+/// `[[span class="a"\x0cstyle="b"]]` keeps `class` and drops `style` while
+/// `[[span\x0cclass="a"]]` has no attributes.
+fn wikidot_head_formfeed_garble_ranges(head: &str) -> Vec<std::ops::Range<usize>> {
+    let bytes = head.as_bytes();
+    let mut ranges = Vec::new();
+    let mut index = 0;
+    let mut in_quote = false;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'"' => {
+                in_quote = !in_quote;
+                index += 1;
+            }
+            0x0C if !in_quote => {
+                let mut cursor = index + 1;
+                let mut quotes = 0;
+                while cursor < bytes.len() && quotes < 2 {
+                    if bytes[cursor] == b'"' {
+                        quotes += 1;
+                    }
+                    cursor += 1;
+                }
+                ranges.push(index..cursor);
+                index = cursor;
+                in_quote = false;
+            }
+            _ => index += 1,
+        }
+    }
+    ranges
+}
+
+/// Encode the complete raw constructs inside an absolute source range as
+/// placeholder sentinels, eliding comment and iftags-segment text, so the value
+/// keeps live's placeholder bytes (used by the date format class).
+fn wikidot_encoded_attribute_value(
+    field: &CommentElidedText<'_>,
+    range: std::ops::Range<usize>,
+) -> Option<String> {
+    let full = field.full_source();
+    let escapes = raw_escapes(full);
+    let mut contained: Vec<(usize, &crate::wikidot_raw_escape::RawEscape)> = escapes
+        .iter()
+        .enumerate()
+        .filter(|(_, escape)| escape.start >= range.start && escape.end <= range.end)
+        .collect();
+    if contained.is_empty() {
+        return None;
+    }
+    // Ordinals follow live's pass order (`@<...>@` first), the replacement
+    // itself follows source order.
+    contained.sort_by_key(|(_, escape)| escape.start);
+
+    let mut elisions: Vec<std::ops::Range<usize>> = Vec::new();
+    elisions.extend(field.comment_ranges().iter().cloned());
+    elisions.extend(field.segment_ranges().iter().cloned());
+    elisions.sort_by_key(|elision| elision.start);
+
+    let mut output = String::with_capacity(range.len());
+    let mut cursor = range.start;
+    for (ordinal, escape) in contained {
+        push_wikidot_attribute_plain(&mut output, full, cursor..escape.start, &elisions);
+        output.push(PLACEHOLDER_OPEN);
+        output.push_str(&(ordinal + 1).to_string());
+        output.push(PLACEHOLDER_CLOSE);
+        cursor = escape.end;
+    }
+    push_wikidot_attribute_plain(&mut output, full, cursor..range.end, &elisions);
+    Some(output)
+}
+
+fn push_wikidot_attribute_plain(
+    output: &mut String,
+    source: &str,
+    range: std::ops::Range<usize>,
+    elisions: &[std::ops::Range<usize>],
+) {
+    let mut cursor = range.start;
+    for elision in elisions {
+        if elision.end <= cursor || elision.start >= range.end {
+            continue;
+        }
+        let start = elision.start.max(cursor);
+        if start > cursor {
+            output.push_str(&source[cursor..start]);
+        }
+        cursor = elision.end.min(range.end);
+    }
+    if cursor < range.end {
+        output.push_str(&source[cursor..range.end]);
+    }
 }
 
 fn parse_wikidot_module_argument_field<'t>(
@@ -1368,6 +1483,61 @@ where
         Ok(true)
     }
 
+    /// The raw offset where a Wikidot block head starts, including discarded
+    /// control bytes the name collector consumed before the current token.
+    pub(crate) fn wikidot_head_control_start(&self) -> usize {
+        fn is_control(byte: u8) -> bool {
+            matches!(
+                byte,
+                0x00..=0x08 | 0x0B..=0x0C | 0x0E..=0x1A | 0x1C..=0x1F
+            )
+        }
+
+        let bytes = self.full_text().inner().as_bytes();
+        let mut position = self.current().span.start;
+        if self.current().token == Token::DiscardedControl {
+            while position > 0 && matches!(bytes[position - 1], b' ' | b'\t') {
+                position -= 1;
+            }
+            return position;
+        }
+        while position > 0 && matches!(bytes[position - 1], b' ' | b'\t') {
+            position -= 1;
+        }
+        let mut saw_control = false;
+        while position > 0 && is_control(bytes[position - 1]) {
+            position -= 1;
+            saw_control = true;
+        }
+        if !saw_control {
+            return self.current().span.start;
+        }
+        while position > 0 && matches!(bytes[position - 1], b' ' | b'\t') {
+            position -= 1;
+        }
+        position
+    }
+
+    /// Consume discarded control tokens (and the spaces around them) before a
+    /// Wikidot head word. Live treats formfeed-like controls as separators when
+    /// reading block names and head fields.
+    fn skip_head_discarded_controls(&mut self) -> Result<(), ParseError> {
+        let mut seen = false;
+        loop {
+            match self.current().token {
+                Token::DiscardedControl => {
+                    self.step()?;
+                    seen = true;
+                }
+                Token::Whitespace if seen => {
+                    self.step()?;
+                }
+                _ => break,
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_block_name(
         &mut self,
         flag_star: bool,
@@ -1394,9 +1564,43 @@ where
             }
         }
 
-        self.get_optional_space()?;
+        // Live Wikidot requires the block name immediately after the opener
+        // (`[[ span]]` stays literal); only the native layout tolerates
+        // whitespace between the brackets and the name.
+        if !consume_bracket || !self.settings().layout.legacy() {
+            self.get_optional_space()?;
+        }
 
-        self.get_head_word_tracked(ParseErrorKind::BlockMissingName)
+        if !self.settings().layout.legacy() {
+            return self.get_head_word_tracked(ParseErrorKind::BlockMissingName);
+        }
+
+        // Live's opener regexes accept a vertical tab or formfeed as the
+        // separator after the name (`[[span\x0cclass="a"]]`); the scanner
+        // keeps those in the collected word, so split the name there and
+        // rewind the parser to the control token.
+        let checkpoint = self.clone();
+        let start_offset = self.current().span.start;
+        let (name, in_head, segment_consumed) =
+            self.get_head_word_tracked(ParseErrorKind::BlockMissingName)?;
+        if let Some((split, _)) = name
+            .char_indices()
+            .find(|(_, character)| matches!(*character, '\u{000B}' | '\u{000C}'))
+        {
+            let split = start_offset + split;
+            let source = self.full_text().inner();
+            let prefix = source
+                .get(start_offset..split)
+                .filter(|prefix| !prefix.is_empty());
+            if let Some(prefix) = prefix {
+                self.update(&checkpoint);
+                while self.current().span.start < split {
+                    self.step()?;
+                }
+                return Ok((Cow::Borrowed(prefix), true, segment_consumed));
+            }
+        }
+        Ok((name, in_head, segment_consumed))
     }
 
     pub(crate) fn head_word_is_actionable(
@@ -1440,14 +1644,18 @@ where
         &mut self,
         kind: ParseErrorKind,
     ) -> Result<(&'t str, bool), ParseError> {
+        let legacy = self.settings().layout.legacy();
+        if legacy {
+            self.skip_head_discarded_controls()?;
+        }
         let end_conditions = [
             ParseCondition::current(Token::Whitespace),
             ParseCondition::current(Token::LineBreak),
             ParseCondition::current(Token::ParagraphBreak),
             ParseCondition::current(Token::RightBlock),
         ];
+        let stops = &end_conditions[..];
         let rule = self.rule();
-        let stops = &end_conditions;
         collect_text_keep(self, rule, stops, &[], Some(kind)).map(|(name, last)| {
             let name = if self.settings().layout.legacy() {
                 name.trim_matches([' ', '\t', '\r', '\n'])
@@ -1491,6 +1699,10 @@ where
                     self.step()?;
                 }
             }
+        }
+        let legacy = self.settings().layout.legacy();
+        if legacy {
+            self.skip_head_discarded_controls()?;
         }
         let end_conditions = [
             ParseCondition::current(Token::Whitespace),
@@ -6021,6 +6233,20 @@ where
                 (parse_arguments(&head), true)
             } else {
                 let start = self.current();
+                // The block-name collector consumes a discarded control that
+                // the scanner dropped; restore it into the head span so the
+                // formfeed attribute rule below sees it.
+                let control_start = self.wikidot_head_control_start();
+                let start = if control_start < start.span.start {
+                    let source = self.full_text().inner();
+                    crate::parsing::ExtractedToken {
+                        token: start.token,
+                        slice: &source[control_start..start.span.end],
+                        span: control_start..start.span.end,
+                    }
+                } else {
+                    start.clone()
+                };
                 let mut comments = Vec::new();
                 let mut elisions = Vec::new();
                 let raw_head = block_rule.name == "block-code";
@@ -6134,14 +6360,54 @@ where
                     self.step()?;
                 }
                 let span = start.span.start..self.current().span.start;
+                let begins_with_control = start.span.start < self.current().span.start
+                    && self
+                        .full_text()
+                        .inner()
+                        .as_bytes()
+                        .get(start.span.start)
+                        .is_some_and(|byte| {
+                            matches!(
+                                byte,
+                                0x00..=0x08 | 0x0B..=0x0C | 0x0E..=0x1A | 0x1C..=0x1F
+                            )
+                        });
                 let head_begins_with_close =
                     matches!(start.token, Token::RightBlock | Token::RightLink);
                 if !same_line
                     && scan == WikidotHeadScan::LineEndGreedy
                     && head_begins_with_close
+                    && !begins_with_control
                     && !span.is_empty()
                 {
                     return Err(self.make_err(ParseErrorKind::BlockMalformedArguments));
+                }
+                // Live's per-kind opener regexes need something after the
+                // whitespace separator: a head that is exactly one discarded
+                // control fails the opener for most kinds (a doubled control
+                // still forms it).
+                if !same_line
+                    && block_rule.name != "block-div"
+                    && block_rule.name != "block-code"
+                    && block_rule.name != "block-date"
+                    && block_rule.name != "block-image"
+                    && block_rule.name != "block-tab"
+                    && block_rule.name != "block-tabview"
+                    && span.end > span.start
+                    && span.end - span.start == 1
+                    && self
+                        .full_text()
+                        .inner()
+                        .as_bytes()
+                        .get(span.start)
+                        .is_some_and(|byte| {
+                            matches!(
+                                byte,
+                                0x00..=0x08 | 0x0B..=0x0C | 0x0E..=0x1A | 0x1C..=0x1F
+                            )
+                        })
+                {
+                    return Err(self.make_err(ParseErrorKind::RuleFailed));
                 }
                 let head =
                     CommentElidedText::new(self.full_text().inner(), span, comments)

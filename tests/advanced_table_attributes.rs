@@ -135,7 +135,8 @@ fn advanced_table_element_attribute_matrix_matches_live_wikidot() {
         (r#" CLASS="grid""#, ""),
         (r#" Class="grid""#, ""),
         (r#" class="""#, ""),
-        (r#" class=" ""#, " class"),
+        // Live serializes a whitespace-normalized empty value as `class=""`.
+        (r#" class=" ""#, r#" class="""#),
         (r#" class="a" class="b""#, r#" class="b""#),
         (r#" class="A[!--x--]B""#, r#" class="AB""#),
         (r#" class="日本語""#, r#" class="日本語""#),
@@ -193,7 +194,7 @@ fn advanced_table_span_lexeme_matrix_matches_live_wikidot() {
             let cell = only_cell(&tree);
             let expected_attribute = expected_value.map_or_else(String::new, |value| {
                 if value.is_empty() {
-                    format!(" {attribute}")
+                    format!(r#" {attribute}="""#)
                 } else {
                     format!(r#" {attribute}="{value}""#)
                 }

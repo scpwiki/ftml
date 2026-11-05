@@ -1,0 +1,5 @@
+[[spanclass="a"]]x[[/span]]
+
+y
+
+[[span ]]z[[/span]]

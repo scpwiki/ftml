@@ -87,9 +87,20 @@ fn only_the_exact_targetless_marker_bypasses_invalid_include() {
         assert!(html.contains(marker), "{marker:?}: {html}");
     }
 
+    // Live keeps a spaced opener literal, so it never reaches the include
+    // rule and carries no InvalidInclude error; only the spelling/visibility
+    // contract applies.
+    for spaced in ["[[ include]]", "[[\tinclude]]"] {
+        let (text, _html, _errors, pages) = expand_parse_render(spaced);
+        assert!(pages.is_empty(), "{spaced:?}: {pages:?}");
+        assert!(
+            text.starts_with("[[") && text.ends_with("]]"),
+            "{spaced:?}: {text:?}",
+        );
+    }
+
     for malformed in [
         "[[include ]]",
-        "[[ include]]",
         "[[include\t]]",
         "[[include | key=value]]",
         "[[include :scp-wiki:]]",

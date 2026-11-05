@@ -1442,15 +1442,16 @@ fn delayed_raw_decodes_entities_and_div_shell_keeps_the_parsed_opener() {
         );
     }
 
-    for source in [
-        "[[   div]]%%title_linked%%[[/div]]",
-        "[[\u{2003}div]]%%title_linked%%[[/div]]",
+    // Live rejects whitespace between `[[` and the block name and collapses a
+    // leading ASCII run to one space, while a Unicode space stays verbatim.
+    for (source, opener) in [
+        ("[[   div]]%%title_linked%%[[/div]]", "[[ div]]"),
+        ("[[\u{2003}div]]%%title_linked%%[[/div]]", "[[\u{2003}div]]"),
     ] {
         let html = render(source);
-        let opener = source.split("%%title_linked%%").next().unwrap();
         assert!(
             html.contains(opener),
-            "delayed div shell must preserve the complete opener {opener:?}: {html}",
+            "delayed div shell must preserve the parsed opener {opener:?}: {html}",
         );
     }
 }

@@ -1,0 +1,92 @@
+[
+    {
+        "token": "identifier",
+        "rule": "block",
+        "span": [
+            18,
+            19
+        ],
+        "kind": "no-such-block"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            16,
+            18
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            19,
+            22
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            26,
+            28
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "discarded-control",
+        "rule": "block-span",
+        "span": [
+            77,
+            78
+        ],
+        "kind": "block-malformed-arguments"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            70,
+            72
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            78,
+            80
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            81,
+            84
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            88,
+            90
+        ],
+        "kind": "no-rules-match"
+    }
+]

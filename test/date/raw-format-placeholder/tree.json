@@ -1,0 +1,79 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "1970-01-01 00:00:00.0 +00:00:00",
+                            "format": "@@a@@",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "raw",
+                        "data": "x"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "1970-01-01 00:00:00.0 +00:00:00",
+                            "format": "@@b@@",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "1970-01-01 00:00:00.0 +00:00:00",
+                            "format": "@@c@@ @<d>@ @@e@@",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "date",
+                        "data": {
+                            "value": "1970-01-01 00:00:00.0 +00:00:00",
+                            "format": "%Y@@f@@%m",
+                            "hover": false
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

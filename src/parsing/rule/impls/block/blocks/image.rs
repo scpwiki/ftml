@@ -41,7 +41,7 @@ pub const BLOCK_IMAGE: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -90,6 +90,18 @@ fn parse_fn<'r, 't>(
             let source_prefix_is_url = is_url(&source);
             (source, source_prefix_is_url, arguments)
         };
+    if parser.settings().layout.legacy() {
+        // A complete raw inline construct anywhere in the opener head makes
+        // live reject the image block, leaving the whole opener literal.
+        let head_end = parser.current().span.start;
+        let source_text = parser.full_text().inner();
+        if crate::wikidot_raw_escape::raw_escapes(source_text)
+            .iter()
+            .any(|escape| escape.start >= opener_start && escape.end <= head_end)
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+    }
     let (link, target) = if parser.settings().layout.legacy() {
         match arguments.get("link") {
             None => (None, None),

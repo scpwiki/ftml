@@ -65,15 +65,23 @@ fn render_wikidot_anchor(
     let map = attributes.get();
     let mut tag = ctx.html().a();
 
+    let internal_marker = |key: &str| key.starts_with("data-ftml-");
+
     for key in ["id", "class", "style", "role", "type"] {
         if let Some(value) = map.get(key) {
             tag.attr_quoted(key, value);
+        } else if let Some(names) =
+            map.get(crate::tree::WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER)
+            && names.split(' ').any(|name| name == key)
+        {
+            tag.attr_quoted(key, "");
         }
     }
 
     let mut ordered = Vec::new();
     for key in attributes.ordered_keys() {
         if key.starts_with("data-")
+            && !internal_marker(key)
             && let Some(value) = map.get(key.as_ref())
         {
             tag.attr_quoted(key, value);
@@ -81,7 +89,10 @@ fn render_wikidot_anchor(
         }
     }
     for (key, value) in map {
-        if key.starts_with("data-") && !ordered.contains(&key.as_ref()) {
+        if key.starts_with("data-")
+            && !internal_marker(key)
+            && !ordered.contains(&key.as_ref())
+        {
             tag.attr_quoted(key, value);
         }
     }
