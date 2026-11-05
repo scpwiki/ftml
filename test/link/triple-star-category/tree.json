@@ -1,0 +1,56 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": ":a",
+                            "label": {
+                                "slug": ":a"
+                            },
+                            "target": "new-tab"
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "::a",
+                            "label": {
+                                "slug": "a"
+                            },
+                            "target": "new-tab"
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a-b:c",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "b:c"
+                            },
+                            "target": "new-tab"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

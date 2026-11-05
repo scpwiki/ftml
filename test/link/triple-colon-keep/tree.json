@@ -1,0 +1,96 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a-b:c",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "b:c"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a-b-c:d",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "b:c:d"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "::a",
+                            "label": {
+                                "slug": "a"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "a"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a:b",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": ":b"
+                            },
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

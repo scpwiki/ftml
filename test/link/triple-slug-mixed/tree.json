@@ -1,0 +1,82 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "a日b",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "a日b"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "aäb",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "aÄb"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "日本語-a",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "日本語-a"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "page",
+                            "link": {
+                                "site": null,
+                                "page": "scp-1-x",
+                                "extra": null
+                            },
+                            "label": {
+                                "slug": "SCP-1「x」"
+                            },
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
