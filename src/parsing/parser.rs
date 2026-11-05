@@ -265,6 +265,20 @@ pub struct Parser<'r, 't> {
     wikidot: WikidotState,
 }
 
+pub(crate) fn wikidot_own_line_prefix(source: &str, byte: usize) -> bool {
+    let end = byte.min(source.len());
+    let start = source[..end].rfind('\n').map_or(0, |offset| offset + 1);
+    source[start..end].trim_matches([' ', '\t']).is_empty()
+}
+
+fn wikidot_closer_ends_line(source: &str, byte: usize) -> bool {
+    let start = byte.min(source.len());
+    let end = source[start..]
+        .find('\n')
+        .map_or(source.len(), |offset| start + offset);
+    source[start..end].trim_end().ends_with("]]")
+}
+
 impl<'r, 't> Parser<'r, 't> {
     pub(crate) fn new(
         tokenization: &'r Tokenization<'t>,
@@ -704,10 +718,28 @@ impl<'r, 't> Parser<'r, 't> {
         if runs.on_list_item_line(pair.head_byte) {
             return true;
         }
-        if runs.quote_run_id(pair.head_byte).is_some()
-            || runs.quote_run_id(pair.closer_byte).is_some()
-        {
+        // L85: a quote crossing is flat when only one end sits in a quote run
+        // and the closer side keeps live's shapes:
+        // - head quoted, closer outside (q-open-in-quote, q-cross-pair);
+        // - closer quoted on its own line (q-close-in-quote) or with
+        //   same-line content after it (q-close-in-quote-mid).
+        // A closer that merely ends a quoted content line keeps the recursive
+        // path, because live keeps that line's break
+        // (wikidot_div_closes_at_closer_on_quote_line). Pairs entirely inside
+        // one quote run are flat only through the scan's crossing set
+        // (q-both-in-quote-cross).
+        let head_run = runs.quote_run_id(pair.head_byte);
+        let closer_run = runs.quote_run_id(pair.closer_byte);
+        if head_run.is_some() && closer_run.is_none() {
             return true;
+        }
+        if head_run.is_none() && closer_run.is_some() {
+            let source = self.full_text().inner();
+            if wikidot_own_line_prefix(source, pair.closer_byte)
+                || !wikidot_closer_ends_line(source, pair.closer_byte)
+            {
+                return true;
+            }
         }
         if runs.on_table_row_line(pair.head_byte) {
             let line = runs.line_of(pair.head_byte);

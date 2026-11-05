@@ -21,6 +21,7 @@
 use super::Parser;
 use super::parser::QuoteBodyLineStatus;
 use super::parser::block_pairs::WikidotBlockKind;
+use super::parser::wikidot_own_line_prefix;
 use super::prelude::*;
 use super::rule::{
     get_rules_for_token,
@@ -680,13 +681,19 @@ where
         && parser.current().token == Token::LeftBlockEnd
     {
         let mut close = parser.clone();
+        let close_pos = parser.current().span.start;
         if let Ok(name) = close.get_end_block() {
             let name = name.strip_suffix('_').unwrap_or(&name);
+            let closer_own_line =
+                wikidot_own_line_prefix(parser.full_text().inner(), close_pos);
             if parser.take_wikidot_crossed_close(name) {
                 parser.update(&close);
-                // L85: a silently taken crossed close absorbs its line break
-                // (closeout keeps a single break around `[[/div]]`).
-                if parser.current().token == Token::LineBreak {
+                // L85: a silently taken crossed close that starts its own line
+                // absorbs that line's break (closeout keeps a single break
+                // around `[[/div]]`, q-close-in-quote drops it). A closer that
+                // ends a content line keeps the break
+                // (wikidot_div_closes_at_closer_on_quote_line).
+                if closer_own_line && parser.current().token == Token::LineBreak {
                     let _ = parser.step();
                 }
                 return Ok(Some(Elements::None));
