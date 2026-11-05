@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "if (x == 1) { return \"a\"; } // c",
+                "language": "perl",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "if (x == 1) { return \"a\"; } // c",
+            "language": "perl",
+            "name": null
+        }
+    ]
+}

@@ -1,3 +1,4 @@
 [[code type="javascript"]]
-var a;
+var re = /ab+c/gi;
+var n = 1; // c
 [[/code]]

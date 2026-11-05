@@ -1,0 +1,2 @@
+var re = /ab+c/gi;
+var n = 1; // c

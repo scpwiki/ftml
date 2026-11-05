@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "<a b=\"c\"/>",
+                "language": "xml",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "<a b=\"c\"/>",
+            "language": "xml",
+            "name": null
+        }
+    ]
+}

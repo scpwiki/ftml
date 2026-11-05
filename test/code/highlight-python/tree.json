@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "def f(x):\n    return x + 1  # c\n\nclass A: pass",
+                "language": "python",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "def f(x):\n    return x + 1  # c\n\nclass A: pass",
+            "language": "python",
+            "name": null
+        }
+    ]
+}

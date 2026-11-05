@@ -1,0 +1,44 @@
+LEAD-BLANKS
+
+
+
+x
+
+
+
+TRAIL-SPACES
+
+  x  
+
+MID-SPACE-KEPT
+
+x 
+y 
+
+TABS
+
+    y    
+
+NBSP
+
+ x 
+
+IDEOGRAPHIC
+
+　x　
+
+WS-LINE-BLANKED
+
+x
+
+y
+
+LEAD-WS-LINES
+
+
+
+x
+
+
+
+ALL-BLANK

@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "import java.util.*;\nint a;\nList<String> l = new ArrayList<>();",
+                "language": "java",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "import java.util.*;\nint a;\nList<String> l = new ArrayList<>();",
+            "language": "java",
+            "name": null
+        }
+    ]
+}

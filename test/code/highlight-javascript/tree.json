@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "var re = /ab+c/gi;\nvar n = 1; // c",
+                "language": "javascript",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "var re = /ab+c/gi;\nvar n = 1; // c",
+            "language": "javascript",
+            "name": null
+        }
+    ]
+}

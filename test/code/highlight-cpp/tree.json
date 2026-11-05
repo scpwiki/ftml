@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "/* c */ int main(void) { printf(\"%d\\n\", 1.5e3); }",
+                "language": "cpp",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "/* c */ int main(void) { printf(\"%d\\n\", 1.5e3); }",
+            "language": "cpp",
+            "name": null
+        }
+    ]
+}

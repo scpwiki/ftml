@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "+a\n-b",
+                "language": "diff",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "+a\n-b",
+            "language": "diff",
+            "name": null
+        }
+    ]
+}

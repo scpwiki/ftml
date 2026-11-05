@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "<a href=\"b\">c</a> &amp;",
+                "language": "dtd",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "<a href=\"b\">c</a> &amp;",
+            "language": "dtd",
+            "name": null
+        }
+    ]
+}

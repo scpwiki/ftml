@@ -1,0 +1,19 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "<?php echo 1;",
+                "language": "php",
+                "name": null
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "<?php echo 1;",
+            "language": "php",
+            "name": null
+        }
+    ]
+}
