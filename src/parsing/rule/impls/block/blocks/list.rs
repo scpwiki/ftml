@@ -284,9 +284,17 @@ fn parse_list_block_impl<'r, 't>(
     {
         let mut output = vec![element];
         if fused_close {
+            // A fused closer's residual `]` occupies the line-end slot: live
+            // renders `[[/ul]]]` at EOF as `</ul>]` and a following blank
+            // line ends the run without a break, but a single source line
+            // break still shows as `<br />` (captured 2026-11-05).
             output.push(text!("]"));
+            if parser.current().token == Token::LineBreak {
+                output.push(Element::LineBreak);
+            }
+        } else {
+            output.push(Element::LineBreak);
         }
-        output.push(Element::LineBreak);
         ok!(false; output, errors)
     } else if fused_close {
         ok!(false; vec![element, text!("]")], errors)
