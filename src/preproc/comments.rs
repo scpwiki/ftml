@@ -122,17 +122,12 @@ fn comment_contains_iftags_head(comment: &str) -> bool {
     lower.contains("[[iftags") || lower.contains("[[/iftags")
 }
 
-fn exposed_line_start_construct(tail: &str) -> bool {
-    let lower = tail
-        .get(..tail.len().min("[[gallery".len()))
-        .unwrap_or(tail);
-    tail.starts_with("~~~~")
-        || tail.starts_with('+')
-        || tail.starts_with("----")
-        || tail.starts_with("* ")
-        || tail.starts_with("# ")
-        || tail.starts_with("====")
-        || lower.eq_ignore_ascii_case("[[gallery")
+/// Live Wikidot (anonymous PagePreview, 2026-11-05) elides a column-0 comment
+/// and one preceding line break whatever follows it: list markers, headings,
+/// rules, separators and gallery heads all stay literal text joined to the
+/// previous line. No construct is exempt.
+fn exposed_line_start_construct(_tail: &str) -> bool {
+    false
 }
 
 fn line_remainder_splices(

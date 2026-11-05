@@ -11,7 +11,15 @@ Date: 2026-11-05. Base: `c1dc640` (main). Branch: `claude/audit-corpus-fixtures-
 - Audited **231 of 986** fixtures that have a `wikidot.html`. Every fixture in `color`, `code`, `list`, `span`, `misc` and `monospace` was checked, plus 23 of 69 in `strikethrough`. Results: **200 match**, **8 context-only** (PagePreview cannot show what the fixture runner renders), **23 mismatch**. Of the 23 mismatches, **6 are bug-encoded** and **17 are stale but harmless**.
 - Settled one bug-encoded family with 20+ targeted live probes, and identified the rule live follows: line-start comment newline elision (below).
 
+**Fixed (commit "Match live column-0 comment elision before list/heading/rule constructs")**
+
+- B1 preprocessor half: removed the `exposed_line_start_construct` carve-out in `src/preproc/comments.rs`. Prose, heading, rule, separator and gallery heads after a column-0 comment now match live (`a\n[!--c--]* item` → `<p>a* item</p>`). Full `cargo test` passes.
+- `heading/comment-line-start` was a second B1 victim; live gives `<h1>Head++ Sub</h1>`. Its `wikidot.html` is corrected.
+- New live-confirmed fixture `misc/comment-line-start-exposed-constructs` pins the rule (live: `<p>a* item</p><p>b+ Head</p><p>c&#8212;&#8212;<br />d</p>`).
+
 **Partial**
+
+- B1 remaining: when the *previous* line is a list item and the comment-led line starts with a list marker (`* item\n[!--a--]# item`, `# one\n[!--a--]* two`), the preprocessor now drops the break correctly (`"* item[!--a--]* item2"`), but the list parser still splits the items; live gives one item (`item* item2`). `list/comment-line-start` therefore still encodes the bug. Next step: find where the list rule re-detects the marker after the comment (not `start_of_line`, which is false there).
 
 - `strikethrough` was cut off after 23 of its 69 fixtures when the sweep was stopped.
 - The 6 bug-encoded fixtures are identified and evidenced, but **none is fixed yet**. No implementation or fixture file has been changed. The only commits are the harness and this report.
