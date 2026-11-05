@@ -3769,26 +3769,6 @@ impl<'t> WikidotFrameAssembly<'t> {
             Element::Partial(PartialElement::WikidotBlockClose(kind)) => {
                 self.close_kind(kind);
             }
-            Element::Container(mut container)
-                if container.ctype() == ContainerType::Paragraph
-                    && !self.stack.is_empty() =>
-            {
-                // Bare text directly abutting a paragraph inside a frame is a
-                // mid-line chunk split (e.g. after a literalised inline
-                // container); rejoin the trailing run into the paragraph front.
-                let mut run = Vec::new();
-                while matches!(self.top().last(), Some(Element::Text(_))) {
-                    run.push(self.top().pop().expect("checked above"));
-                }
-                if !run.is_empty() {
-                    run.reverse();
-                    let paragraph = container.elements_mut();
-                    let mut rejoined = run;
-                    rejoined.extend(mem::take(paragraph));
-                    *paragraph = rejoined;
-                }
-                self.top().push(Element::Container(container));
-            }
             element => {
                 self.top().push(element);
             }
@@ -3952,7 +3932,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                 if container.ctype() == ContainerType::Paragraph =>
             {
                 let elements = container.elements_mut();
-                while matches!(elements.last(), Some(Element::LineBreak)) {
+                if matches!(elements.last(), Some(Element::LineBreak)) {
                     elements.pop();
                 }
                 elements.is_empty()
@@ -3987,7 +3967,7 @@ impl<'t> WikidotFrameAssembly<'t> {
         if frame.scored_div {
             unwrap_scored_frame_edges(&mut frame.children);
         }
-        while matches!(frame.children.last(), Some(Element::LineBreak)) {
+        if matches!(frame.children.last(), Some(Element::LineBreak)) {
             frame.children.pop();
         }
         self.top().push(Element::WikidotBlockFrame {
