@@ -89,8 +89,11 @@ where
         ParseCondition::current(Token::ParagraphBreak),
         ParseCondition::current(Token::LineBreak),
     ];
+    let mut separator_width = 0usize;
     let url = if parser.settings().layout.legacy() {
-        collect_wikidot_anchor_name(parser)?
+        let (name, width) = collect_wikidot_anchor_name(parser)?;
+        separator_width = width;
+        name
     } else {
         collect_text_resolved_fused(
             parser,
@@ -150,7 +153,7 @@ where
     } else {
         trim_cow(label)
     };
-    if parser.settings().layout.legacy() && label.is_empty() {
+    if parser.settings().layout.legacy() && label.is_empty() && separator_width <= 1 {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
@@ -173,7 +176,7 @@ where
 
 fn collect_wikidot_anchor_name<'r, 't>(
     parser: &mut Parser<'r, 't>,
-) -> Result<Cow<'t, str>, ParseError>
+) -> Result<(Cow<'t, str>, usize), ParseError>
 where
     'r: 't,
 {
@@ -198,13 +201,14 @@ where
         match parser.current().token {
             Token::Whitespace => {
                 let end = parser.current().span.start;
+                let separator_width = parser.current().slice.len();
                 parser.step()?;
-                return Ok(finish!(end));
+                return Ok((finish!(end), separator_width));
             }
             Token::Other if parser.current().slice == "\u{a0}" => {
                 let end = parser.current().span.start;
                 parser.step()?;
-                return Ok(finish!(end));
+                return Ok((finish!(end), 0));
             }
             Token::RightBracket | Token::LineBreak | Token::ParagraphBreak => {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));

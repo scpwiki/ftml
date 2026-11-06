@@ -351,6 +351,7 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
         normalize_wikidot_code_body_bytes(text);
         expand_wikidot_list_indentation_tabs(text);
         preserve_adjacent_wikidot_tab_link_spacing(text);
+        preserve_wikidot_tab_empty_label_link_spacing(text);
     }
 
     if wikidot_compatibility {
@@ -573,6 +574,95 @@ fn preserve_adjacent_wikidot_tab_link_spacing(text: &mut String) {
         {
             insertions.insert(open);
         }
+    }
+
+    if insertions.is_empty() {
+        return;
+    }
+
+    let mut output = String::with_capacity(text.len() + insertions.len());
+    let mut copied = 0;
+    for insertion in insertions {
+        output.push_str(&text[copied..insertion]);
+        output.push(' ');
+        copied = insertion;
+    }
+    output.push_str(&text[copied..]);
+    *text = output;
+}
+
+fn preserve_wikidot_tab_empty_label_link_spacing(text: &mut String) {
+    if !text.contains('\t') || !text.contains('[') {
+        return;
+    }
+
+    let literal_regions = LiteralRegionIndex::new(text);
+    let mut protected_ranges = literal_regions.ranges().to_vec();
+    protected_ranges.extend(wikidot_comment_ranges(text));
+    let merged_ranges = merge_protected_ranges(protected_ranges);
+
+    let bytes = text.as_bytes();
+    let mut insertions = BTreeSet::new();
+    let mut cursor = 0;
+    while let Some(relative_open) = text[cursor..].find('[') {
+        let open = cursor + relative_open;
+        cursor = open + 1;
+        if index_in_ranges(&merged_ranges, open) || text[open..].starts_with("[[") {
+            continue;
+        }
+        let mut back = open;
+        while back > 0 && bytes[back - 1] == b' ' {
+            back -= 1;
+        }
+        if back >= 2 && bytes[back - 2] == b'[' && bytes[back - 1] == b'[' {
+            continue;
+        }
+
+        let target_start = if text[open..].starts_with("[*") {
+            open + 2
+        } else {
+            open + 1
+        };
+        let mut target_end = target_start;
+        while target_end < text.len() {
+            let character = text[target_end..]
+                .chars()
+                .next()
+                .expect("target cursor remains on a character boundary");
+            if matches!(character, ' ' | '\t' | ']' | '\n' | '\r') {
+                break;
+            }
+            target_end += character.len_utf8();
+        }
+
+        let mut run_end = target_end;
+        let mut has_tab = false;
+        while run_end < text.len() && matches!(bytes[run_end], b' ' | b'\t') {
+            if bytes[run_end] == b'\t' {
+                has_tab = true;
+            }
+            run_end += 1;
+        }
+        if !has_tab || run_end == target_end {
+            continue;
+        }
+        if bytes.get(run_end) != Some(&b']') {
+            continue;
+        }
+        if index_in_ranges(&merged_ranges, target_end) {
+            continue;
+        }
+
+        let target = &text[target_start..target_end];
+        if target.is_empty()
+            || !(target.starts_with('/')
+                || target.starts_with('#')
+                || target.contains(':'))
+        {
+            continue;
+        }
+
+        insertions.insert(target_end);
     }
 
     if insertions.is_empty() {
