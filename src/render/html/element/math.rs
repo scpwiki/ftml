@@ -38,6 +38,7 @@ cfg_if! {
 
 pub fn render_math_block(
     ctx: &mut HtmlContext,
+    assigned_index: Option<NonZeroUsize>,
     name: Option<&str>,
     latex_source: &str,
     environment: Option<&str>,
@@ -50,7 +51,7 @@ pub fn render_math_block(
         latex_source,
     );
 
-    let index = ctx.next_equation_index();
+    let index = assigned_index.unwrap_or_else(|| ctx.next_equation_index());
     if ctx.layout().legacy() {
         if let Some(name) = name {
             ctx.register_named_equation(name, index);
@@ -642,13 +643,36 @@ pub fn render_equation_reference(ctx: &mut HtmlContext, name: &str) {
 /// footnote and bibliography bodies at their blocks) and records each
 /// name, so forward references resolve to the same numbers the renderer
 /// then assigns. Later rendering re-registers the same values.
+/// Live Wikidot numbers `[[math]]` blocks in source order: its math rule runs
+/// before the footnote rule moves footnote bodies to the footer, so a body's
+/// equations take their numbers at the footnote reference.
 pub fn preregister_wikidot_equations(ctx: &mut HtmlContext, tree: &SyntaxTree) {
     let mut index = NonZeroUsize::new(1).unwrap();
-    preregister_wikidot_equation_slices(ctx, tree, &[&tree.elements], &mut index);
+    let mut footnote_walked = vec![false; ctx.footnotes().len()];
+    preregister_wikidot_equation_slices(
+        ctx,
+        tree,
+        &[&tree.elements],
+        &mut index,
+        &mut footnote_walked,
+    );
     if tree.needs_footnote_block {
-        let bodies: Vec<&[Element]> = ctx.footnotes().iter().map(Vec::as_slice).collect();
-        preregister_wikidot_equation_slices(ctx, tree, &bodies, &mut index);
+        let bodies: Vec<&[Element]> = ctx
+            .footnotes()
+            .iter()
+            .zip(&footnote_walked)
+            .filter(|(_, walked)| !**walked)
+            .map(|(body, _)| body.as_slice())
+            .collect();
+        preregister_wikidot_equation_slices(
+            ctx,
+            tree,
+            &bodies,
+            &mut index,
+            &mut footnote_walked,
+        );
     }
+    ctx.continue_equation_index_at(index);
 }
 
 fn preregister_wikidot_equation_slices(
@@ -656,6 +680,7 @@ fn preregister_wikidot_equation_slices(
     tree: &SyntaxTree,
     initial: &[&[Element<'_>]],
     index: &mut NonZeroUsize,
+    footnote_walked: &mut [bool],
 ) {
     let mut stack: Vec<(&[Element], usize)> =
         initial.iter().rev().map(|slice| (*slice, 0)).collect();
@@ -719,9 +744,24 @@ fn preregister_wikidot_equation_slices(
             }
             Element::Color { elements, .. } => stack.push((elements.as_slice(), 0)),
             Element::Include { elements, .. } => stack.push((elements.as_slice(), 0)),
+            Element::Footnote(number) => {
+                if let Some(walked) = number
+                    .checked_sub(1)
+                    .and_then(|slot| footnote_walked.get_mut(slot))
+                    && !*walked
+                {
+                    *walked = true;
+                    stack.push((ctx.footnotes()[number - 1].as_slice(), 0));
+                }
+            }
             Element::FootnoteBlock { .. } => {
-                for body in ctx.footnotes().iter().rev() {
-                    stack.push((body.as_slice(), 0));
+                for (body, walked) in
+                    ctx.footnotes().iter().zip(footnote_walked.iter_mut()).rev()
+                {
+                    if !*walked {
+                        *walked = true;
+                        stack.push((body.as_slice(), 0));
+                    }
                 }
             }
             Element::BibliographyBlock {
@@ -738,6 +778,10 @@ fn preregister_wikidot_equation_slices(
                 if let Some(name) = name {
                     ctx.register_named_equation(name, *index);
                 }
+                ctx.assign_wikidot_equation_number(
+                    std::ptr::from_ref(element) as usize,
+                    *index,
+                );
                 *index = NonZeroUsize::new(index.get() + 1).unwrap();
             }
             Element::Partial(partial) => match partial {

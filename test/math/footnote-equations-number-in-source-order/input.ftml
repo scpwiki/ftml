@@ -1,0 +1,17 @@
+[[math]]
+a
+[[/math]]
+
+x[[footnote]]
+[[math]]
+b
+[[/math]]
+[[/footnote]] y[[footnote]]
+[[math]]
+c
+[[/math]]
+[[/footnote]]
+
+[[math]]
+d
+[[/math]]
