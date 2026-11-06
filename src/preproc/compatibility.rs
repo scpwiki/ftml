@@ -1850,7 +1850,7 @@ fn join_wikidot_div_prefilter(text: &mut String) {
 
     let mut output = String::with_capacity(text.len());
     let mut copied = 0usize;
-    let mut open_divs = 0usize;
+    let mut open_divs: Vec<bool> = Vec::new();
     let mut scanned = 0usize;
     while let Some(relative) = text[scanned..].find("[[") {
         let marker = scanned + relative;
@@ -1859,28 +1859,30 @@ fn join_wikidot_div_prefilter(text: &mut String) {
             continue;
         }
         if is_wikidot_div_closer_at(text, marker) {
-            if open_divs > 0 {
-                let mut next = marker + "[[/div]]".len();
-                while text
-                    .as_bytes()
-                    .get(next)
-                    .is_some_and(u8::is_ascii_whitespace)
-                {
-                    next += 1;
-                }
-                if !in_literal(next) && wikidot_div_opener_prefix_at(text, next) {
-                    output.push_str(&text[copied..marker]);
-                    output.push_str("[[/div]][[div");
-                    copied = next + "[[div".len();
-                    scanned = copied;
-                    continue;
-                }
+            let Some(standalone) = open_divs.pop() else {
+                continue;
+            };
+            if !standalone {
+                continue;
             }
-            open_divs = open_divs.saturating_sub(1);
+            let mut next = marker + "[[/div]]".len();
+            while text
+                .as_bytes()
+                .get(next)
+                .is_some_and(u8::is_ascii_whitespace)
+            {
+                next += 1;
+            }
+            if !in_literal(next) && wikidot_div_opener_prefix_at(text, next) {
+                output.push_str(&text[copied..marker]);
+                output.push_str("[[/div]][[div");
+                copied = next + "[[div".len();
+                scanned = copied;
+            }
             continue;
         }
         if is_wikidot_div_opener_at(text, marker) {
-            open_divs += 1;
+            open_divs.push(wikidot_div_opener_is_standalone(text, marker));
         }
     }
     if copied == 0 {
@@ -1888,6 +1890,24 @@ fn join_wikidot_div_prefilter(text: &mut String) {
     }
     output.push_str(&text[copied..]);
     std::mem::swap(text, &mut output);
+}
+
+/// Live's `Div` rule only forms when the opener occupies its own line
+/// (`(\n)?[[div…]] *\n`). A div written mid-line stays literal, so the
+/// failed-div recovery already reproduces live's output for it; joining its
+/// closer in preprocessing would instead change that recovery.
+fn wikidot_div_opener_is_standalone(text: &str, index: usize) -> bool {
+    let Some(rest) = text.as_bytes().get(index..) else {
+        return false;
+    };
+    let Some(close) = rest.windows(2).position(|window| window == b"]]") else {
+        return false;
+    };
+    let mut tail = close + 2;
+    while matches!(rest.get(tail), Some(b' ' | b'\t')) {
+        tail += 1;
+    }
+    matches!(rest.get(tail), None | Some(b'\n'))
 }
 
 fn is_wikidot_div_closer_at(text: &str, index: usize) -> bool {

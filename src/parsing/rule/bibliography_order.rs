@@ -142,8 +142,8 @@ const WIKIDOT_RULES: &[(&str, BibliographyBodyFormation)] = &[
     ("tighten", BeforeJoin),
 ];
 
-/// Position of `Bibliography` in [`WIKIDOT_RULES`].
-const BIBLIOGRAPHY_POSITION: usize = 23;
+/// Zero-based index in [`WIKIDOT_RULES`] of live's position 23 (`Bibliography`).
+const BIBLIOGRAPHY_POSITION: usize = 22;
 
 #[inline]
 fn formation_for_live_rule(live_name: &str) -> Option<BibliographyBodyFormation> {
