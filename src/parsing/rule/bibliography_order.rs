@@ -142,9 +142,6 @@ const WIKIDOT_RULES: &[(&str, BibliographyBodyFormation)] = &[
     ("tighten", BeforeJoin),
 ];
 
-/// Zero-based index in [`WIKIDOT_RULES`] of live's position 23 (`Bibliography`).
-const BIBLIOGRAPHY_POSITION: usize = 22;
-
 #[inline]
 fn formation_for_live_rule(live_name: &str) -> Option<BibliographyBodyFormation> {
     WIKIDOT_RULES
@@ -244,9 +241,13 @@ mod tests {
 
     #[test]
     fn bibliography_position_is_the_rule_list_position() {
-        assert_eq!(WIKIDOT_RULES[BIBLIOGRAPHY_POSITION].0, "bibliography");
+        let position = WIKIDOT_RULES
+            .iter()
+            .position(|(name, _)| *name == "bibliography")
+            .expect("bibliography is in the live rule list");
+        assert_eq!(position, 22, "live position 23, zero-based");
         assert_eq!(
-            WIKIDOT_RULES[BIBLIOGRAPHY_POSITION].1,
+            WIKIDOT_RULES[position].1,
             BibliographyBodyFormation::BeforeJoin,
         );
     }
