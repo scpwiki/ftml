@@ -11,6 +11,7 @@
 
 ## Development
 
+- Never run an unbounded search rooted at the home directory (`find /home/roku`, `find ~`, or a recursive `rg` / `grep` started from `~`). The home directory holds very large trees - the SCP Wiki translation corpus at `~/src/Rokurolize/scp-wiki-translation`, other checkouts and worktrees, and build output - so a casual home-wide search can run for minutes, time out, and load the machine. Start every search from the specific repository or directory the task concerns, state the starting point and exclusions first, list files inside a repository with `git ls-files`, and search contents with `rg`. When `find` is unavoidable, prune heavy trees explicitly: at minimum the translation corpus (unless it is the task target), and any `target/`, `node_modules/`, and `.git/` directory.
 - Search existing tests and helpers before adding parser or renderer behavior. Add focused positive and negative regression fixtures for changed syntax.
 - A behavior confirmed against live Wikidot is pinned once, as a corpus fixture whose directory and input carry the intent; do not duplicate the same shape as a per-shape Rust test. Adjudicate a suspected divergence against existing pins and frozen parity captures before probing live.
 - `FTML_UPDATE_TESTS=1` rewrites unrelated fixtures (a known `rel="noopener"` drift); revert every rewrite outside the fixtures the change owns before committing.
