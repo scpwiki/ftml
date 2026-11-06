@@ -1379,6 +1379,7 @@ fn lower_root_sequence<'t>(
     let mut output = Vec::with_capacity(elements.len());
     let mut paragraph_group: Option<ParagraphGroup<'t>> = None;
     let mut previous_scored_close = false;
+    let mut previous_heading_collapsible_tail = false;
     let mut pending: Vec<Element<'t>> = Vec::new();
 
     for mut element in mem::take(elements) {
@@ -1426,20 +1427,32 @@ fn lower_root_sequence<'t>(
                 }
                 active.kill_from(position);
             }
-            let paragraph_attributes = container.attributes().clone();
+            let mut paragraph_attributes = container.attributes().clone();
+            // A collapsible body paragraph after a heading-line collapsible
+            // head begins live's next chunk: it wraps even though a block
+            // frame (not a heading/list/table) precedes it.
+            let collapsible_heading_body = paragraph_attributes
+                .remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER)
+                .is_some();
+            let collapsible_heading_tail = paragraph_attributes
+                .remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER)
+                .is_some();
             let starts_in_scored_span = active.has_scored_scope();
             let starts_in_inline_scope = active.has_active_scope();
-            let previous_is_own_chunk_block = matches!(
-                output.last(),
-                Some(Element::List { .. } | Element::Table(_))
-            ) || matches!(
-                output.last(),
-                Some(Element::Container(container))
-                    if matches!(
-                        container.ctype(),
-                        ContainerType::Header(_) | ContainerType::Blockquote
-                    )
-            );
+            let previous_is_own_chunk_block = collapsible_heading_body
+                || previous_heading_collapsible_tail
+                || matches!(
+                    output.last(),
+                    Some(Element::List { .. } | Element::Table(_))
+                )
+                || matches!(
+                                output.last(),
+                                Some(Element::Container(container))
+                                    if matches!(
+                                        container.ctype(),
+                                        ContainerType::Header(_) | ContainerType::Blockquote
+                                    )
+                );
             let reopens_paragraph_after_separator = starts_in_inline_scope
                 && output.last().is_some_and(|element| {
                     matches!(element, Element::HorizontalRule)
@@ -1454,6 +1467,7 @@ fn lower_root_sequence<'t>(
                 )
             );
             if starts_in_inline_scope
+                && !collapsible_heading_tail
                 && !reopens_paragraph_after_separator
                 && !follows_table
                 && !previous_is_own_chunk_block
@@ -1485,11 +1499,12 @@ fn lower_root_sequence<'t>(
                 flush_paragraph_group(&mut output, &mut paragraph_group);
             }
             let group = paragraph_group.get_or_insert_with(|| ParagraphGroup {
-                wrapped: follows_table
-                    || reopens_paragraph_after_separator
-                    || !effects.scored_span_opened_unwrapped_at_start
-                        && !starts_in_scored_span
-                        && (!starts_in_inline_scope || continued_from_paragraph),
+                wrapped: !collapsible_heading_tail
+                    && (follows_table
+                        || reopens_paragraph_after_separator
+                        || !effects.scored_span_opened_unwrapped_at_start
+                            && !starts_in_scored_span
+                            && (!starts_in_inline_scope || continued_from_paragraph)),
                 attributes: paragraph_attributes,
                 elements: Vec::new(),
                 ends_with_scored_span: false,
@@ -1498,6 +1513,7 @@ fn lower_root_sequence<'t>(
             group.elements.append(container.elements_mut());
             group.ends_with_scored_span = effects.scored_span_at_end;
             previous_scored_close = effects.scored_span_at_end;
+            previous_heading_collapsible_tail = collapsible_heading_tail;
             continue;
         }
 
@@ -1540,6 +1556,7 @@ fn lower_root_sequence<'t>(
             scope_before.is_some() && scope_before == active.outer_active_position();
         append_root_sequence(&mut output, &mut sequence, scope_continues);
         previous_scored_close = false;
+        previous_heading_collapsible_tail = false;
     }
 
     flush_root_pending(
