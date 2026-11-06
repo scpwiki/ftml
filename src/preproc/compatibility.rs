@@ -1315,6 +1315,28 @@ fn standalone_named_block_marker(line: &str, prefix: &str, name: &str) -> Option
     }
 }
 
+fn formed_collapsible_open_before(lines: &[String], literal_lines: &[bool]) -> Vec<bool> {
+    let mut open: std::collections::HashMap<String, bool> =
+        std::collections::HashMap::new();
+    let mut before = vec![false; lines.len()];
+    for (index, line) in lines.iter().enumerate() {
+        if literal_lines.get(index).copied().unwrap_or(false) {
+            continue;
+        }
+        let Some((prefix, marker)) = marker_line(line) else {
+            continue;
+        };
+        let state = open.entry(prefix.to_owned()).or_insert(false);
+        before[index] = *state;
+        match marker {
+            Marker::CollapsibleOpen if !*state => *state = true,
+            Marker::CollapsibleClose if *state => *state = false,
+            _ => {}
+        }
+    }
+    before
+}
+
 fn canonicalize_crossed_outer_owner_closers(
     lines: &mut [String],
     literal_lines: &[bool],
@@ -1328,6 +1350,8 @@ fn canonicalize_crossed_outer_owner_closers(
     ];
 
     for &(outer, inner, retain_outer_break) in PAIRS {
+        let collapsible_open = (inner == "collapsible")
+            .then(|| formed_collapsible_open_before(lines, literal_lines));
         let mut index = 0;
         while index + 1 < lines.len() {
             if literal_lines[index] || literal_lines[index + 1] {
@@ -1343,6 +1367,13 @@ fn canonicalize_crossed_outer_owner_closers(
             if standalone_named_block_marker(&lines[index], &prefix, outer) != Some(true)
                 || standalone_named_block_marker(&lines[index + 1], &prefix, inner)
                     != Some(true)
+            {
+                index += 1;
+                continue;
+            }
+            if collapsible_open
+                .as_ref()
+                .is_some_and(|open| open[index + 1])
             {
                 index += 1;
                 continue;
@@ -3389,6 +3420,88 @@ mod tests {
                 "[[/>]]\n",
                 "[[/collapsible]]\n",
                 "[[/>]]",
+            ),
+        );
+    }
+
+    #[test]
+    fn formed_collapsible_open_before_tracks_first_fit_owners() {
+        let lines = [
+            "[[collapsible]]\n".to_owned(),
+            "A\n".to_owned(),
+            "[[collapsible]]\n".to_owned(),
+            "B\n".to_owned(),
+            "[[/collapsible]]\n".to_owned(),
+            "C\n".to_owned(),
+            "[[/collapsible]]\n".to_owned(),
+        ];
+        let literal_lines = [false; 7];
+
+        assert_eq!(
+            formed_collapsible_open_before(&lines, &literal_lines),
+            [false, false, true, false, true, false, false],
+        );
+
+        let literal_lines = [false, true, true, true, false];
+        let lines = [
+            "[[collapsible]]\n".to_owned(),
+            "[[code]]\n".to_owned(),
+            "[[collapsible]]\n".to_owned(),
+            "[[/code]]\n".to_owned(),
+            "[[/collapsible]]\n".to_owned(),
+        ];
+
+        assert_eq!(
+            formed_collapsible_open_before(&lines, &literal_lines),
+            [false, false, false, false, true],
+        );
+    }
+
+    #[test]
+    fn crossed_center_nested_tail_collapsible_head_stays_literal() {
+        let original = concat!(
+            "[[=]]\n",
+            "[[div class=\"card\"]]\n",
+            "title\n",
+            "[[collapsible show=\"outer\"]]\n",
+            "[[/=]]\n",
+            "[[div class=\"tail\"]]\n",
+            "[[collapsible show=\"inner\"]]\n",
+            "inner body\n",
+            "[[/collapsible]]\n",
+            "[[/div]]\n",
+            "[[/collapsible]]\n",
+            "[[/div]]\n",
+        )
+        .to_owned();
+        let mut source = original.clone();
+
+        substitute_for_layout(&mut source, true);
+
+        assert_eq!(source, original);
+    }
+
+    #[test]
+    fn crossed_outer_owner_swap_survives_outside_an_open_collapsible() {
+        let mut source = concat!(
+            "[[div]]\n",
+            "[[collapsible]]\n",
+            "A\n",
+            "[[/div]]\n",
+            "[[/collapsible]]\n",
+        )
+        .to_owned();
+
+        substitute_for_layout(&mut source, true);
+
+        assert_eq!(
+            source,
+            concat!(
+                "[[div]]\n",
+                "[[collapsible]]\n",
+                "A\n",
+                "[[/collapsible]]\n",
+                "[[/div]]\n",
             ),
         );
     }

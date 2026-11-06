@@ -1,0 +1,97 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "align": "center"
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "div",
+                            "attributes": {
+                                "class": "card"
+                            },
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "paragraph",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "title"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "collapsible",
+                                    "data": {
+                                        "elements": [
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "div",
+                                                    "attributes": {
+                                                        "class": "tail"
+                                                    },
+                                                    "elements": [
+                                                        {
+                                                            "element": "collapsible",
+                                                            "data": {
+                                                                "elements": [
+                                                                    {
+                                                                        "element": "container",
+                                                                        "data": {
+                                                                            "type": "paragraph",
+                                                                            "attributes": {},
+                                                                            "elements": [
+                                                                                {
+                                                                                    "element": "text",
+                                                                                    "data": "inner"
+                                                                                },
+                                                                                {
+                                                                                    "element": "text",
+                                                                                    "data": " "
+                                                                                },
+                                                                                {
+                                                                                    "element": "text",
+                                                                                    "data": "body"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ],
+                                                                "attributes": {},
+                                                                "start-open": false,
+                                                                "show-text": "inner",
+                                                                "hide-text": null,
+                                                                "show-top": true,
+                                                                "show-bottom": false
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ],
+                                        "attributes": {},
+                                        "start-open": false,
+                                        "show-text": "outer",
+                                        "hide-text": null,
+                                        "show-top": true,
+                                        "show-bottom": false
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
