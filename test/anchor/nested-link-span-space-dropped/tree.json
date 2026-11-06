@@ -1,0 +1,73 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "A"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "link",
+                                    "data": {
+                                        "type": "page",
+                                        "link": {
+                                            "site": null,
+                                            "page": "p",
+                                            "extra": null
+                                        },
+                                        "label": {
+                                            "text": "q"
+                                        },
+                                        "target": null
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        }
+    ]
+}

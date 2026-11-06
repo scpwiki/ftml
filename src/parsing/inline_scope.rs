@@ -2354,6 +2354,7 @@ fn lower_sequence<'t>(
                     matches!(source.peek(), Some(Element::Text(text)) if text == " ");
                 if leading_space {
                     source.next();
+                    let at_start = output.is_empty() && run.is_empty();
                     if span_leading_space_hoists(at_start, active, &output) {
                         run.push(text!(" "));
                         flush_run(
@@ -3656,6 +3657,26 @@ fn wikidot_close_anchor_scope<'t>(
         output.push(wrapper.wrap(vec![Element::Partial(
             PartialElement::WikidotEmptyInlineOwner,
         )]));
+        last_run_outer_scope.reset();
+        return;
+    }
+    if run.iter().all(element_is_whitespace_only)
+        && let ScopeWrapper::Anchor {
+            attributes,
+            target,
+        } = active.scope_wrapper(position)
+        && let Some(Element::Anchor {
+            target: flushed_target,
+            attributes: flushed_attributes,
+            elements,
+        }) = output.last_mut()
+        && *flushed_target == *target
+        && *flushed_attributes == *attributes
+        && elements.iter().all(element_is_whitespace_only)
+    {
+        *elements = vec![Element::Partial(PartialElement::WikidotEmptyInlineOwner)];
+        active.kill_from(position);
+        active.pop_istack_through_anchor();
         last_run_outer_scope.reset();
         return;
     }
