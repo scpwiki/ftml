@@ -219,6 +219,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
     close_unclosed_div_after_literal_iftags(&mut lines, &literal_lines);
     canonicalize_extra_block_head_closers(&mut lines, &literal_lines);
     *text = lines.concat();
+    join_wikidot_div_prefilter(text);
 }
 
 /// Live Wikidot's footnoteblock rule (position 21) replaces the first
@@ -1827,6 +1828,100 @@ fn literal_block_close(lower: &str) -> Option<&'static str> {
     }
 }
 
+/// Live Wikidot's Divprefilter rule (position 25) removes the whitespace between a
+/// `[[/div]]` closer and the following `[[div` opener: `/\[\[\/div\]\](\s*?)\[\[div/msi`
+/// replaced by `[[/div]][[div`. The joined close means the newline between the two
+/// div blocks never becomes a `<br>`.
+///
+/// The rule runs after Code, Math, Comment and Raw were tokenized, so literal
+/// bodies are opaque here. It also only matters once a real div block opened:
+/// joining stray closers next to non-div text is invisible to the output and the
+/// unmatched-opener guard keeps live's Iframe-token swallows intact.
+fn join_wikidot_div_prefilter(text: &mut String) {
+    if !text.contains("[[") {
+        return;
+    }
+    let literal_ranges = super::whitespace::wikidot_literal_body_ranges(text);
+    let in_literal = |index: usize| {
+        literal_ranges
+            .iter()
+            .any(|range| range.start <= index && index < range.end)
+    };
+
+    let mut output = String::with_capacity(text.len());
+    let mut copied = 0usize;
+    let mut open_divs = 0usize;
+    let mut scanned = 0usize;
+    while let Some(relative) = text[scanned..].find("[[") {
+        let marker = scanned + relative;
+        scanned = marker + "[[".len();
+        if in_literal(marker) {
+            continue;
+        }
+        if is_wikidot_div_closer_at(text, marker) {
+            if open_divs > 0 {
+                let mut next = marker + "[[/div]]".len();
+                while text
+                    .as_bytes()
+                    .get(next)
+                    .is_some_and(u8::is_ascii_whitespace)
+                {
+                    next += 1;
+                }
+                if !in_literal(next) && wikidot_div_opener_prefix_at(text, next) {
+                    output.push_str(&text[copied..marker]);
+                    output.push_str("[[/div]][[div");
+                    copied = next + "[[div".len();
+                    scanned = copied;
+                    continue;
+                }
+            }
+            open_divs = open_divs.saturating_sub(1);
+            continue;
+        }
+        if is_wikidot_div_opener_at(text, marker) {
+            open_divs += 1;
+        }
+    }
+    if copied == 0 {
+        return;
+    }
+    output.push_str(&text[copied..]);
+    std::mem::swap(text, &mut output);
+}
+
+fn is_wikidot_div_closer_at(text: &str, index: usize) -> bool {
+    text.as_bytes()
+        .get(index..)
+        .and_then(|rest| rest.get(.."[[/div]]".len()))
+        .is_some_and(|marker| marker.eq_ignore_ascii_case(b"[[/div]]"))
+}
+
+fn wikidot_div_opener_prefix_at(text: &str, index: usize) -> bool {
+    text.as_bytes()
+        .get(index..)
+        .and_then(|rest| rest.get(.."[[div".len()))
+        .is_some_and(|marker| marker.eq_ignore_ascii_case(b"[[div"))
+}
+
+fn is_wikidot_div_opener_at(text: &str, index: usize) -> bool {
+    let Some(rest) = text.as_bytes().get(index..) else {
+        return false;
+    };
+    let Some(head) = rest.strip_prefix(b"[[") else {
+        return false;
+    };
+    if head.len() < 3 || !head[..3].eq_ignore_ascii_case(b"div") {
+        return false;
+    }
+    let tail = head[3..].strip_prefix(b"_").unwrap_or(&head[3..]);
+    match tail.first() {
+        Some(b']') => tail.get(1) == Some(&b']'),
+        Some(b' ' | b'\t' | b'\r' | b'\n') => true,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1835,6 +1930,37 @@ mod tests {
     use crate::render::{Render, html::HtmlRender};
     use crate::settings::{WikitextMode, WikitextSettings};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn wikidot_div_prefilter_joins_closer_and_next_opener() {
+        let mut source = "[[div]]\nx\n[[/div]]\n[[div]]\nD".to_owned();
+        substitute_wikidot(&mut source);
+        assert_eq!(source, "[[div]]\nx\n[[/div]][[div]]\nD");
+    }
+
+    #[test]
+    fn wikidot_div_prefilter_requires_a_preceding_unclosed_div() {
+        let mut iframe = "[[iframe http://e.com]]\n[[/div]]\n[[div]]".to_owned();
+        substitute_wikidot(&mut iframe);
+        assert_eq!(iframe, "[[iframe http://e.com]]\n[[/div]]\n[[div]]");
+
+        let mut balanced = "[[div]]\nx\n[[/div]]\n[[/div]]\n[[div]]".to_owned();
+        substitute_wikidot(&mut balanced);
+        assert_eq!(balanced, "[[div]]\nx\n[[/div]]\n[[/div]]\n[[div]]");
+    }
+
+    #[test]
+    fn wikidot_div_prefilter_skips_literal_bodies() {
+        for source in [
+            "[[code]]\n[[/div]]\n[[div]]\n[[/code]]",
+            "[[math]]\n[[/div]]\n[[div]]\n[[/math]]",
+            "[[div]]\n[[code]]\n[[/div]]\n[[div]]\n[[/code]]",
+        ] {
+            let mut preprocessed = source.to_owned();
+            substitute_wikidot(&mut preprocessed);
+            assert_eq!(preprocessed, *source);
+        }
+    }
 
     #[test]
     fn malformed_iftags_score_close_leaves_the_following_div_open() {
