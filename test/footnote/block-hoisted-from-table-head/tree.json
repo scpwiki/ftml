@@ -1,0 +1,58 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        },
+        {
+            "element": "table",
+            "data": {
+                "type": "simple",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": true,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "footnote-block",
+                                        "data": {
+                                            "title": null,
+                                            "hide": false
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "b"
+            }
+        ]
+    ]
+}

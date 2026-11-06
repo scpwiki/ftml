@@ -1094,6 +1094,15 @@ fn join_continued_lines(
     std::mem::swap(text, buffer);
 }
 
+/// Body ranges of Wikidot's literal code-like and standalone math blocks, in
+/// source order. Used by preprocessor passes that must not rewrite literal text.
+pub(super) fn wikidot_literal_body_ranges(source: &str) -> Vec<Range<usize>> {
+    let mut ranges = wikidot_math_body_ranges(source);
+    ranges.extend(crate::wikidot_code::active_body_ranges(source));
+    ranges.sort_by_key(|range| range.start);
+    ranges
+}
+
 fn wikidot_math_body_ranges(source: &str) -> Vec<Range<usize>> {
     if !source.contains("[[") {
         return Vec::new();

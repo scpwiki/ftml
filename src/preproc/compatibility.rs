@@ -221,6 +221,73 @@ pub(super) fn substitute_wikidot(text: &mut String) {
     *text = lines.concat();
 }
 
+/// Live Wikidot's footnoteblock rule (position 21) replaces the first
+/// `[[footnoteblock]]` with `"\n" + footer + "\n"` before the line rules run,
+/// so a marker authored on a definition-list or table line splits that line.
+/// The tree hoist models the list, quote and header cases; definition lists and
+/// tables depend on which line fragments the line rules then claim, so the
+/// split happens at the source level here.
+pub(super) fn inject_wikidot_footnote_block_lines(text: &mut String) {
+    let Some((start, end)) = first_footnoteblock_range(text) else {
+        return;
+    };
+    let literal_ranges = super::whitespace::wikidot_literal_body_ranges(text);
+    if literal_ranges
+        .iter()
+        .any(|range| range.contains(&start) || range.contains(&end))
+    {
+        return;
+    }
+
+    let line_start = text[..start].rfind('\n').map_or(0, |index| index + 1);
+    let line_end = text[end..]
+        .find('\n')
+        .map_or(text.len(), |index| end + index);
+    let line = &text[line_start..line_end];
+    let trimmed = line.trim_start_matches([' ', '\t']);
+    let definition_line = trimmed.starts_with(": ");
+    let table_line = trimmed.starts_with("||");
+    if !definition_line && !table_line {
+        return;
+    }
+
+    let mut output = String::with_capacity(text.len() + 2);
+    output.push_str(&text[..start]);
+    output.push('\n');
+    output.push_str(&text[start..end]);
+    if table_line {
+        output.push('\n');
+    }
+    output.push_str(&text[end..]);
+    *text = output;
+}
+
+/// Byte range of the first `[[footnoteblock]]` or `[[footnoteblock args]]`.
+fn first_footnoteblock_range(text: &str) -> Option<(usize, usize)> {
+    const NEEDLE: &[u8] = b"[[footnoteblock";
+    let bytes = text.as_bytes();
+    let mut cursor = 0usize;
+    while cursor + NEEDLE.len() <= bytes.len() {
+        let relative = bytes[cursor..]
+            .windows(NEEDLE.len())
+            .position(|window| window.eq_ignore_ascii_case(NEEDLE))?;
+        let start = cursor + relative;
+        let after_name = start + NEEDLE.len();
+        let ends_name = matches!(
+            bytes.get(after_name),
+            Some(b' ' | b'\t' | b'\r' | b'\n' | b']')
+        );
+        if !ends_name {
+            cursor = after_name;
+            continue;
+        }
+        let tail = &text[after_name..];
+        let relative_close = tail.find("]]")?;
+        return Some((start, after_name + relative_close + 2));
+    }
+    None
+}
+
 fn canonicalize_extra_block_head_closers(lines: &mut [String], literal_lines: &[bool]) {
     const OWNERS: &[&str] = &[
         "bibliography",

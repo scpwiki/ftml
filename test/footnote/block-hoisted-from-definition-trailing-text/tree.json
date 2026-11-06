@@ -1,0 +1,64 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        },
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "k",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "k"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "v"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "footnote-block",
+                            "data": {
+                                "title": null,
+                                "hide": false
+                            }
+                        },
+                        {
+                            "element": "text",
+                            "data": "r"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "b"
+            }
+        ]
+    ]
+}
