@@ -170,6 +170,8 @@ pub enum ParseErrorKind {
     InvalidUrl,
 
     NotSupportedInline,
+
+    AnchorBlockWithInsufficientClosers,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

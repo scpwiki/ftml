@@ -52,6 +52,24 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy() && !parser.has_body_end_block(&BLOCK_ANCHOR) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    if (name.eq_ignore_ascii_case("a") || name.eq_ignore_ascii_case("anchor"))
+        && !flag_score
+    {
+        let full = parser.full_text().inner();
+        let remaining = crate::parsing::parser::wikidot_remaining_anchor_closer_markers(
+            full,
+            opener_start,
+        );
+        let depth_before = crate::parsing::parser::wikidot_anchor_block_open_depth_before(
+            full,
+            opener_start,
+        );
+        if remaining <= depth_before {
+            return Err(
+                parser.make_err(ParseErrorKind::AnchorBlockWithInsufficientClosers)
+            );
+        }
+    }
     // A greedy iframe URL tail can absorb the anchor's only closer; live then
     // leaves the opener literal instead of dropping the open tag.
     if parser.settings().layout.legacy()
