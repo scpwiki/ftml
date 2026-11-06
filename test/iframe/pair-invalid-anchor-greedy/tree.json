@@ -1,0 +1,22 @@
+{
+    "elements": [
+        {
+            "element": "anchor",
+            "data": {
+                "target": null,
+                "attributes": {
+                    "href": "/x"
+                },
+                "elements": [
+                    {
+                        "element": "iframe",
+                        "data": {
+                            "url": "http://example.org/embed",
+                            "attributes": {}
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

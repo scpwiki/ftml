@@ -241,6 +241,12 @@ fn filter_tail(tail: &str) -> String {
 }
 
 fn wikidot_iframe_url(url: &str) -> bool {
+    // A double quote opens a quoted head field in live's block scanner, so a
+    // URL that contains one never reaches the iframe rule: the whole opener
+    // stays literal. A single quote does not have that effect.
+    if url.contains('"') {
+        return false;
+    }
     [
         "http://",
         "https://",

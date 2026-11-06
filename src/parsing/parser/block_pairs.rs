@@ -182,6 +182,18 @@ impl WikidotBlockPairs {
             .any(|&(start, _)| from <= start && start < to)
     }
 
+    /// The greedy iframe URL tail that covers the byte, if any.
+    pub(crate) fn greedy_range_covering(&self, byte: usize) -> Option<(usize, usize)> {
+        let index = self
+            .greedy_ranges
+            .partition_point(|&(start, _)| start <= byte);
+        if index == 0 {
+            return None;
+        }
+        let range = self.greedy_ranges[index - 1];
+        (byte < range.1).then_some(range)
+    }
+
     pub(crate) fn shows_stolen_head(
         &self,
         kind: WikidotBlockKind,
