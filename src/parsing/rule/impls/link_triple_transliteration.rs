@@ -495,6 +495,7 @@ pub(crate) fn transliterate_character(character: char) -> Option<&'static str> {
         'ԝ' => "w",
         'ẞ' => "ss",
         'Å' => "a",
+        'K' => "k",
         _ => return None,
     })
 }

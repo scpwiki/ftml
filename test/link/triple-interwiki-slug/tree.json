@@ -1,0 +1,38 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "interwiki",
+                            "link": "https://wikipedia.org/wiki/ä",
+                            "label": {
+                                "slug": "ä"
+                            },
+                            "target": null
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "interwiki",
+                            "link": "https://wikipedia.org/wiki/日本",
+                            "label": {
+                                "slug": "日本"
+                            },
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
