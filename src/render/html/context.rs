@@ -73,6 +73,7 @@ where
     equation_index: NonZeroUsize,
     rendering_wikidot_bibliography: bool,
     named_equations: HashMap<String, NonZeroUsize>,
+    wikidot_equation_numbers: HashMap<usize, NonZeroUsize>,
     bibliography_render_stack: Vec<String>,
     footnote_render_stack: Vec<usize>,
 }
@@ -169,6 +170,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             equation_index: NonZeroUsize::new(1).unwrap(),
             rendering_wikidot_bibliography: false,
             named_equations: HashMap::new(),
+            wikidot_equation_numbers: HashMap::new(),
             bibliography_render_stack: Vec::new(),
             footnote_render_stack: Vec::new(),
         }
@@ -333,6 +335,25 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
 
     pub fn get_named_equation(&self, name: &str) -> Option<NonZeroUsize> {
         self.named_equations.get(name).copied()
+    }
+
+    /// Wikidot numbers a `[[math]]` block where its source sits, so the
+    /// number is fixed before rendering; keyed by the element's address in
+    /// the syntax tree.
+    pub fn assign_wikidot_equation_number(
+        &mut self,
+        element: usize,
+        index: NonZeroUsize,
+    ) {
+        self.wikidot_equation_numbers.insert(element, index);
+    }
+
+    pub fn wikidot_equation_number(&self, element: usize) -> Option<NonZeroUsize> {
+        self.wikidot_equation_numbers.get(&element).copied()
+    }
+
+    pub fn continue_equation_index_at(&mut self, index: NonZeroUsize) {
+        self.equation_index = index;
     }
 
     #[inline]
