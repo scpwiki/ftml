@@ -160,6 +160,7 @@ where
             div_opener && wikidot_div_closes_on_current_line(parser);
         let embed_opener = wikidot_embed_opener(parser);
         let inline_div_opener = div_opener && !parser.start_of_line();
+        let inline_note_opener = wikidot_note_opener(parser) && !parser.start_of_line();
         stack.record_next_element_line_start(
             parser.start_of_line()
                 || matches!(
@@ -342,8 +343,9 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
-            let note_has_same_line_residual = parser.settings().layout.legacy()
-                && elements_contain_note(&elements)
+            let active_note =
+                parser.settings().layout.legacy() && elements_contain_note(&elements);
+            let note_has_same_line_residual = active_note
                 && !matches!(
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
@@ -382,6 +384,9 @@ where
                 stack.push_element(Element::LineBreak, true);
             }
             if inline_div_opener && active_div {
+                stack.mark_wikidot_continued_block_boundary();
+            }
+            if inline_note_opener && active_note {
                 stack.mark_wikidot_continued_block_boundary();
             }
             // L85: a recovered literal div alongside a formed block is
@@ -860,26 +865,41 @@ where
     name.eq_ignore_ascii_case("div").then_some(scored)
 }
 
-fn wikidot_embed_opener<'r, 't>(parser: &Parser<'r, 't>) -> bool
+fn wikidot_block_opener_name<'r, 't>(parser: &Parser<'r, 't>) -> Option<&'t str>
 where
     'r: 't,
 {
     if !parser.settings().layout.legacy() || parser.current().token != Token::LeftBlock {
-        return false;
+        return None;
     }
 
     let source = parser.full_text().inner();
     let candidate = &source[parser.current().span.start..];
-    let Some(after_open) = candidate.strip_prefix("[[") else {
-        return false;
-    };
+    let after_open = candidate.strip_prefix("[[")?;
     let after_open = after_open.trim_start_matches([' ', '\t']);
     let name_end = after_open
         .find(|character: char| character.is_whitespace() || character == ']')
         .unwrap_or(after_open.len());
-    let name = &after_open[..name_end];
-    let name = name.strip_suffix('_').unwrap_or(name);
-    name.eq_ignore_ascii_case("embed")
+    Some(&after_open[..name_end])
+}
+
+fn wikidot_note_opener<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    wikidot_block_opener_name(parser)
+        .is_some_and(|name| name.eq_ignore_ascii_case("note"))
+}
+
+fn wikidot_embed_opener<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    wikidot_block_opener_name(parser).is_some_and(|name| {
+        name.strip_suffix('_')
+            .unwrap_or(name)
+            .eq_ignore_ascii_case("embed")
+    })
 }
 
 fn wikidot_div_closes_on_current_line(parser: &Parser<'_, '_>) -> bool {
