@@ -191,12 +191,102 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                                 tab_index += 1;
                             }
                             TabViewItem::Content(elements) => {
-                                render_elements(ctx, elements);
+                                let flat: Vec<&Element> = elements.iter().collect();
+                                if wikidot_tabview_content_has_literal_tabview_closer(
+                                    &flat,
+                                ) {
+                                    render_wikidot_tabview_content_stream(
+                                        ctx,
+                                        &flat,
+                                        tab_count > 1,
+                                    );
+                                } else {
+                                    render_elements(ctx, elements);
+                                }
                             }
                         }
                     }
                 });
         });
+}
+
+fn wikidot_tabview_content_has_literal_tabview_closer(elements: &[&Element]) -> bool {
+    let mut buf = String::new();
+    for element in elements {
+        if let Element::Text(text) = element {
+            buf.push_str(text.as_ref());
+            if buf.contains("[[/tabview]]") || buf.contains("[[/tabs]]") {
+                return true;
+            }
+            if buf.len() > 32 {
+                buf.clear();
+            }
+        }
+    }
+    false
+}
+
+fn match_wikidot_literal_text_run<'t>(
+    elements: &[&'t Element<'t>],
+    start: usize,
+    pattern: &str,
+) -> Option<usize> {
+    let mut i = start;
+    let mut need = pattern;
+    while !need.is_empty() {
+        let Element::Text(text) = elements.get(i)? else {
+            return None;
+        };
+        let frag = text.as_ref();
+        if frag.is_empty() {
+            i += 1;
+            continue;
+        }
+        if need.starts_with(frag) {
+            need = &need[frag.len()..];
+            i += 1;
+        } else {
+            return None;
+        }
+    }
+    Some(i)
+}
+
+fn compact_wikidot_literal_adjacent_tabview_recovery<'t>(
+    elements: &[&'t Element<'t>],
+    multi_tab_recovery: bool,
+) -> Vec<&'t Element<'t>> {
+    if !multi_tab_recovery {
+        return elements.to_vec();
+    }
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < elements.len() {
+        let compact_range = (|| {
+            let close_end = match_wikidot_literal_text_run(elements, i, "[[/tabview]]")?;
+            if close_end >= elements.len() {
+                return None;
+            }
+            if !matches!(
+                *elements[close_end],
+                Element::LineBreak | Element::LineBreaks { .. }
+            ) {
+                return None;
+            }
+            let open_end =
+                match_wikidot_literal_text_run(elements, close_end + 1, "[[tabview]]")?;
+            Some((close_end, open_end))
+        })();
+        if let Some((close_end, open_end)) = compact_range {
+            out.extend_from_slice(&elements[i..close_end]);
+            out.extend_from_slice(&elements[(close_end + 1)..open_end]);
+            i = open_end;
+        } else {
+            out.push(elements[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 fn render_wikidot_tabview_content_group(
@@ -217,6 +307,18 @@ fn render_wikidot_tabview_content_group(
         for element in group {
             render_element(ctx, element);
         }
+    }
+}
+
+fn render_wikidot_tabview_content_stream<'t>(
+    ctx: &mut HtmlContext,
+    elements: &[&'t Element<'t>],
+    multi_tab_recovery: bool,
+) {
+    let flat =
+        compact_wikidot_literal_adjacent_tabview_recovery(elements, multi_tab_recovery);
+    for element in flat {
+        render_element(ctx, element);
     }
 }
 
