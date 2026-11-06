@@ -367,15 +367,25 @@ fn parse_tabview<'r, 't>(
     let records_at_entry = parser.degraded_title_record_count();
 
     let previous_ejection = parser.wikidot_tab_quote_ejection();
+    let previous_split = quote_ejection.then(|| {
+        (
+            parser.wikidot_tabview_ejected(),
+            parser.wikidot_tabview_tab_ordinal(),
+            parser.take_wikidot_tabview_remote_ordinals(),
+        )
+    });
     if quote_ejection {
         parser.set_wikidot_tab_quote_ejection(true);
         parser.set_wikidot_body_soft_ended(false);
+        parser.set_wikidot_tabview_ejected(false);
+        parser.set_wikidot_tabview_tab_ordinal(0);
     }
 
     let (elements, mut errors, _) =
         match parser.get_body_elements_with_context(&BLOCK_TABVIEW, false, body_start) {
             Ok(success) => success.into(),
             Err(error) => {
+                restore_wikidot_tabview_split_state(parser, previous_split.clone());
                 if quote_ejection {
                     parser.set_wikidot_tab_quote_ejection(previous_ejection);
                 }
@@ -384,6 +394,7 @@ fn parse_tabview<'r, 't>(
             }
         };
 
+    let mut remote_ordinals = Vec::new();
     if quote_ejection {
         let soft_ended = parser.take_wikidot_body_soft_ended();
         let degraded = if soft_ended {
@@ -393,9 +404,11 @@ fn parse_tabview<'r, 't>(
         };
         parser.set_wikidot_tab_quote_ejection(previous_ejection);
         if let Err(error) = degraded {
+            restore_wikidot_tabview_split_state(parser, previous_split.clone());
             parser.truncate_degraded_title_records(records_at_entry);
             return Err(error);
         }
+        remote_ordinals = parser.take_wikidot_tabview_remote_ordinals();
     }
 
     let mut items = Vec::new();
@@ -422,6 +435,7 @@ fn parse_tabview<'r, 't>(
     parser.truncate_degraded_title_records(records_at_entry);
 
     if runs > 0 && native && runs != records_added {
+        restore_wikidot_tabview_split_state(parser, previous_split);
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
     }
 
@@ -433,14 +447,38 @@ fn parse_tabview<'r, 't>(
         && runs > records_added
         && !wikidot_tabview_failed_content_gate(&items)
     {
+        restore_wikidot_tabview_split_state(parser, previous_split);
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
     }
 
     if items.is_empty() {
+        restore_wikidot_tabview_split_state(parser, previous_split);
         return Err(parser.make_err(ParseErrorKind::TabViewEmpty));
     }
 
+    // Tabs whose opener lives in a later quote segment stay in the nav but
+    // render their panel outside the navset (the bare panel element was
+    // already placed in that segment by parse_tab).
+    if !remote_ordinals.is_empty() {
+        let mut ordinal = 0usize;
+        for item in items.iter_mut() {
+            if !matches!(item, TabViewItem::Tab(_)) {
+                continue;
+            }
+            if remote_ordinals.contains(&ordinal) {
+                let TabViewItem::Tab(tab) =
+                    std::mem::replace(item, TabViewItem::Content(Vec::new()))
+                else {
+                    unreachable!("item was just matched as a tab");
+                };
+                *item = TabViewItem::Remote(tab);
+            }
+            ordinal += 1;
+        }
+    }
+
     let tabview = Element::TabView(items);
+    restore_wikidot_tabview_split_state(parser, previous_split);
     if parser.settings().layout.legacy()
         && let Some(name) = tabview_name
     {
@@ -656,6 +694,46 @@ fn append_blockquote_tail<'t>(elements: &mut Vec<Element<'t>>, nesting: usize) {
     elements.extend(empty_blockquote_nest(nesting));
 }
 
+fn restore_wikidot_tabview_split_state<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    state: Option<(bool, usize, Vec<usize>)>,
+) where
+    'r: 't,
+{
+    if let Some((ejected, ordinal, remote)) = state {
+        parser.set_wikidot_tabview_ejected(ejected);
+        parser.set_wikidot_tabview_tab_ordinal(ordinal);
+        parser.set_wikidot_tabview_remote_ordinals(remote);
+    }
+}
+
+/// Where the physical line ended after a tab head's residual closer text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TabLeftoverGap {
+    /// The tab body starts on the following physical line: live keeps the
+    /// residual text and that body line in one paragraph separated by a break.
+    Line,
+    /// A blank line separates the residual from the body: the residual is its
+    /// own paragraph.
+    Paragraph,
+}
+
+/// The bare panel div live leaves in a later quote segment when a tab's opener
+/// lives there: `<div id="wiki-tab-0-N" style="display:none">…body…</div>`.
+/// The marker attribute carries the tab panel index; the Wikidot renderer
+/// consumes it and writes the live-shaped div, never the marker.
+fn wikidot_split_tab_panel_element<'t>(
+    index: usize,
+    elements: Vec<Element<'t>>,
+) -> Element<'t> {
+    let mut attributes = AttributeMap::new();
+    attributes.insert_raw(
+        cow!(crate::tree::WIKIDOT_TAB_PANEL_MARKER),
+        std::borrow::Cow::Owned(index.to_string()),
+    );
+    Element::Container(Container::new(ContainerType::Div, elements, attributes))
+}
+
 fn quote_scan_segment_open_depth(segment: &[Element]) -> usize {
     let mut depth = 0;
     let mut current = segment;
@@ -823,6 +901,11 @@ where
                 saw_content = true;
                 flush_quote_scan_segment(&mut units, &mut pending_segment);
                 let (elements, safe) = gather_quote_ejecta_run(parser, errors)?;
+                if !elements.is_empty() {
+                    // From here on, every later tab opener in this view sits in
+                    // a later quote segment (Wikidot's cross-segment split).
+                    parser.set_wikidot_tabview_ejected(true);
+                }
                 units.push(QuoteEscapedUnit::Elements(elements, safe));
             }
         }
@@ -1982,6 +2065,22 @@ fn parse_tab<'r, 't>(
         }
     };
 
+    let quote_split = legacy && parser.wikidot_tab_quote_ejection();
+    let tab_ordinal = quote_split.then(|| parser.wikidot_tabview_tab_ordinal());
+    let late_anchor = tab_ordinal
+        .filter(|_| parser.wikidot_tabview_ejected())
+        .map(|_| parser.quote_escaped_units_len())
+        .filter(|anchor| *anchor > 0);
+    let leftover_gap = if legacy && leftover.is_some() {
+        match parser.current().token {
+            Token::LineBreak => Some(TabLeftoverGap::Line),
+            Token::ParagraphBreak => Some(TabLeftoverGap::Paragraph),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
     let (mut elements, mut errors, _) =
         parser.get_body_elements(&BLOCK_TAB, true)?.into();
     if parser.settings().layout.legacy()
@@ -1999,19 +2098,36 @@ fn parse_tab<'r, 't>(
     }
     if let Some(leftover) = leftover {
         // Live keeps the residual closer of a malformed tab head in the tab
-        // body's inline flow, so it joins the leading body paragraph.
+        // body's inline flow. When the body starts on the next physical line,
+        // that newline survives as a break inside the same paragraph; when the
+        // next line starts its own block, or a blank line follows, the residual
+        // text becomes a paragraph of its own.
+        let text = Element::Text(std::borrow::Cow::Borrowed(leftover));
         let mut joined = false;
         if legacy
+            && matches!(leftover_gap, None | Some(TabLeftoverGap::Line))
             && let Some(Element::Container(paragraph)) = elements.first_mut()
             && paragraph.ctype() == ContainerType::Paragraph
         {
-            paragraph
-                .elements_mut()
-                .insert(0, Element::Text(std::borrow::Cow::Borrowed(leftover)));
+            if leftover_gap == Some(TabLeftoverGap::Line) {
+                paragraph.elements_mut().insert(0, Element::LineBreak);
+            }
+            paragraph.elements_mut().insert(0, text.clone());
             joined = true;
         }
         if !joined {
-            elements.insert(0, Element::Text(std::borrow::Cow::Borrowed(leftover)));
+            if leftover_gap.is_some() {
+                elements.insert(
+                    0,
+                    Element::Container(Container::new(
+                        ContainerType::Paragraph,
+                        vec![text],
+                        AttributeMap::new(),
+                    )),
+                );
+            } else {
+                elements.insert(0, text);
+            }
         }
     }
     if legacy && parser.wikidot_tab_quote_ejection() {
@@ -2019,6 +2135,31 @@ fn parse_tab<'r, 't>(
     }
     if legacy {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
+    }
+
+    // A tab whose opener sits in a later quote segment (after an ejection in
+    // this view) renders its panel as a bare div in that segment, not inside
+    // segment 1's navset. The scan that handled the ejection left that segment
+    // as the trailing blockquote chain of the last escaped unit; the unit count
+    // captured at the opener identifies it.
+    let mut remote_tab = false;
+    if let (Some(anchor), Some(ordinal)) = (late_anchor, tab_ordinal)
+        && parser.quote_split_segment_available(anchor)
+    {
+        let panel =
+            wikidot_split_tab_panel_element(ordinal, std::mem::take(&mut elements));
+        let inserted = parser.append_quote_split_segment_element(anchor, panel);
+        debug_assert!(
+            inserted,
+            "quote split segment availability was just checked"
+        );
+        remote_tab = inserted;
+    }
+    if let Some(ordinal) = tab_ordinal {
+        parser.set_wikidot_tabview_tab_ordinal(ordinal + 1);
+        if remote_tab {
+            parser.push_wikidot_tabview_remote_ordinal(ordinal);
+        }
     }
 
     let element = Element::Partial(PartialElement::Tab(Tab { label, elements }));

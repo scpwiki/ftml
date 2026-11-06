@@ -41,20 +41,25 @@ impl Tab<'_> {
 #[serde(untagged)]
 pub enum TabViewItem<'t> {
     Tab(Tab<'t>),
+    /// A tab that is listed in the view's nav but whose panel is rendered
+    /// outside the navset (Wikidot's cross-segment tabview split). This is
+    /// produced only by the Wikidot layout's quoted-tabview ejection path;
+    /// the native layout never emits it.
+    Remote(Tab<'t>),
     Content(Vec<Element<'t>>),
 }
 
 impl<'t> TabViewItem<'t> {
     pub fn elements(&self) -> &[Element<'t>] {
         match self {
-            TabViewItem::Tab(tab) => &tab.elements,
+            TabViewItem::Tab(tab) | TabViewItem::Remote(tab) => &tab.elements,
             TabViewItem::Content(elements) => elements,
         }
     }
 
     pub fn elements_mut(&mut self) -> &mut Vec<Element<'t>> {
         match self {
-            TabViewItem::Tab(tab) => &mut tab.elements,
+            TabViewItem::Tab(tab) | TabViewItem::Remote(tab) => &mut tab.elements,
             TabViewItem::Content(elements) => elements,
         }
     }
@@ -62,6 +67,7 @@ impl<'t> TabViewItem<'t> {
     pub fn to_owned(&self) -> TabViewItem<'static> {
         match self {
             TabViewItem::Tab(tab) => TabViewItem::Tab(tab.to_owned()),
+            TabViewItem::Remote(tab) => TabViewItem::Remote(tab.to_owned()),
             TabViewItem::Content(elements) => {
                 TabViewItem::Content(elements_to_owned(elements))
             }

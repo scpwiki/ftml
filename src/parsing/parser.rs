@@ -174,6 +174,15 @@ pub(super) struct BlockScanCache<'t> {
     pub(super) wikidot_lf_line_bounds: Option<(usize, usize)>,
     wikidot_tab_quote_ejection: Cell<bool>,
     wikidot_body_soft_ended: Cell<bool>,
+    /// Set once a quoted tabview's tab body has soft-ended at an unquoted
+    /// ejection: every later tab opener in that view lives in a later quote
+    /// segment (Wikidot's cross-segment panel split).
+    wikidot_tabview_ejected: Cell<bool>,
+    /// Ordinal of the next tab parsed inside the current quoted tabview.
+    wikidot_tabview_tab_ordinal: Cell<usize>,
+    /// Ordinals of tabs whose panels render outside the navset (bare panel in
+    /// a later quote segment).
+    wikidot_tabview_remote_ordinals: Vec<usize>,
     colon_line_vanished: Cell<bool>,
     line_follows_block: Cell<bool>,
     bare_div_literal: Cell<bool>,
@@ -1570,6 +1579,132 @@ impl<'r, 't> Parser<'r, 't> {
         let value = cache.wikidot_body_soft_ended.get();
         cache.wikidot_body_soft_ended.set(false);
         value
+    }
+
+    pub(crate) fn wikidot_tabview_ejected(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_tabview_ejected
+            .get()
+    }
+
+    pub(crate) fn set_wikidot_tabview_ejected(&self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_tabview_ejected
+            .set(value);
+    }
+
+    pub(crate) fn wikidot_tabview_tab_ordinal(&self) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_tabview_tab_ordinal
+            .get()
+    }
+
+    pub(crate) fn set_wikidot_tabview_tab_ordinal(&self, value: usize) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_tabview_tab_ordinal
+            .set(value);
+    }
+
+    pub(crate) fn push_wikidot_tabview_remote_ordinal(&self, ordinal: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_tabview_remote_ordinals
+            .push(ordinal);
+    }
+
+    pub(crate) fn take_wikidot_tabview_remote_ordinals(&self) -> Vec<usize> {
+        mem::take(
+            &mut self
+                .block_end_scan_cache
+                .borrow_mut()
+                .wikidot_tabview_remote_ordinals,
+        )
+    }
+
+    pub(crate) fn set_wikidot_tabview_remote_ordinals(&self, value: Vec<usize>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_tabview_remote_ordinals = value;
+    }
+
+    pub(crate) fn quote_escaped_units_len(&self) -> usize {
+        self.block_end_scan_cache.borrow().quote_escaped_units.len()
+    }
+
+    /// Whether a late tab's opener segment can receive a bare panel: the
+    /// escaped unit recorded at `anchor` ends in the trailing blockquote chain
+    /// the ejection scan leaves behind.
+    pub(crate) fn quote_split_segment_available(&self, anchor: usize) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let Some(index) = anchor.checked_sub(1) else {
+            return false;
+        };
+        let Some(QuoteEscapedUnit::Elements(elements, _)) =
+            cache.quote_escaped_units.get(index)
+        else {
+            return false;
+        };
+        let mut current: &[Element<'t>] = elements;
+        let mut descended = false;
+        loop {
+            match current.last() {
+                Some(Element::Container(container))
+                    if container.ctype() == crate::tree::ContainerType::Blockquote =>
+                {
+                    current = container.elements();
+                    descended = true;
+                }
+                _ => break,
+            }
+        }
+        descended
+    }
+
+    /// Appends a block element to the quote segment opened just after the last
+    /// escaped unit when a late tab's opener was parsed (`anchor` is the
+    /// escaped-unit count captured at that opener). The segment is the trailing
+    /// blockquote chain the ejection scan leaves in that unit.
+    pub(crate) fn append_quote_split_segment_element(
+        &self,
+        anchor: usize,
+        element: Element<'t>,
+    ) -> bool {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let Some(index) = anchor.checked_sub(1) else {
+            return false;
+        };
+        let Some(QuoteEscapedUnit::Elements(elements, _)) =
+            cache.quote_escaped_units.get_mut(index)
+        else {
+            return false;
+        };
+        fn descend<'a, 't>(
+            elements: &'a mut Vec<Element<'t>>,
+            descended: bool,
+        ) -> (bool, &'a mut Vec<Element<'t>>) {
+            let is_blockquote = matches!(
+                elements.last(),
+                Some(Element::Container(container))
+                    if container.ctype() == crate::tree::ContainerType::Blockquote
+            );
+            if !is_blockquote {
+                return (descended, elements);
+            }
+            let Some(Element::Container(container)) = elements.last_mut() else {
+                unreachable!("match above proved the last element is a container");
+            };
+            descend(container.elements_mut(), true)
+        }
+        let (descended, current) = descend(elements, false);
+        if !descended {
+            return false;
+        }
+        current.push(element);
+        true
     }
 
     pub(crate) fn push_quote_escaped_unit(&self, unit: QuoteEscapedUnit<'t>) {

@@ -32,7 +32,7 @@ pub fn render_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
 
     let tab_count = items
         .iter()
-        .filter(|item| matches!(item, TabViewItem::Tab(_)))
+        .filter(|item| matches!(item, TabViewItem::Tab(_) | TabViewItem::Remote(_)))
         .count();
     let button_ids = generate_ids(ctx.random(), tab_count);
     let tab_ids = generate_ids(ctx.random(), tab_count);
@@ -52,7 +52,8 @@ pub fn render_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                 .inner(|ctx| {
                     let mut tab_index = 0usize;
                     for item in items {
-                        let TabViewItem::Tab(tab) = item else {
+                        let (TabViewItem::Tab(tab) | TabViewItem::Remote(tab)) = item
+                        else {
                             continue;
                         };
                         let (tab_selected, tab_position) = if tab_index == 0 {
@@ -86,7 +87,7 @@ pub fn render_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                     let mut tab_index = 0usize;
                     for item in items {
                         match item {
-                            TabViewItem::Tab(tab) => {
+                            TabViewItem::Tab(tab) | TabViewItem::Remote(tab) => {
                                 ctx.html()
                                     .div()
                                     .attr(attr!(
@@ -128,7 +129,8 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                 .inner(|ctx| {
                     let mut tab_index = 0usize;
                     for item in items {
-                        let TabViewItem::Tab(tab) = item else {
+                        let (TabViewItem::Tab(tab) | TabViewItem::Remote(tab)) = item
+                        else {
                             continue;
                         };
                         ctx.html()
@@ -156,7 +158,9 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
 
             let tab_count = items
                 .iter()
-                .filter(|item| matches!(item, TabViewItem::Tab(_)))
+                .filter(|item| {
+                    matches!(item, TabViewItem::Tab(_) | TabViewItem::Remote(_))
+                })
                 .count();
             ctx.html()
                 .div()
@@ -179,6 +183,11 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                                         "style" => "display:none"; if tab_index > 0,
                                     ))
                                     .contents(&tab.elements);
+                                tab_index += 1;
+                            }
+                            // The panel is rendered as a bare div in a later
+                            // quote segment; only the nav entry lives here.
+                            TabViewItem::Remote(_) => {
                                 tab_index += 1;
                             }
                             TabViewItem::Content(elements) => {
