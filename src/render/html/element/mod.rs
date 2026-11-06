@@ -116,6 +116,13 @@ pub fn render_elements(ctx: &mut HtmlContext, elements: &[Element]) {
                 render_element(ctx, element);
                 index += 1;
                 if ctx.layout().legacy()
+                    && matches!(element, Element::Collapsible { .. })
+                    && matches!(elements.get(index), Some(Element::LineBreak))
+                {
+                    index += 1;
+                    continue;
+                }
+                if ctx.layout().legacy()
                     && matches!(element, Element::HorizontalRule)
                     && matches!(elements.get(index), Some(Element::HorizontalRule))
                 {
@@ -143,6 +150,30 @@ fn wikidot_separates_adjacent_horizontal_rules_with_a_text_newline() {
     assert_eq!(
         HtmlRender.render(&tree, &page_info, &settings).body,
         "<hr>\n<hr>",
+    );
+}
+
+#[test]
+fn wikidot_root_collapsible_does_not_emit_trailing_br_at_eof() {
+    use crate::data::PageInfo;
+    use crate::layout::Layout;
+    use crate::render::Render;
+    use crate::render::html::HtmlRender;
+    use crate::settings::{WikitextMode, WikitextSettings};
+
+    let page_info = PageInfo::dummy();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let mut source =
+        "[[collapsible show=\"+ x\" hide=\"- y\"]]\nbody\n[[/collapsible]]\n".to_owned();
+    crate::preprocess_for_layout(&mut source, settings.layout);
+    let tokenization = crate::tokenize(&source);
+    let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+    assert!(errors.is_empty(), "{errors:#?}");
+
+    let html = HtmlRender.render(&tree, &page_info, &settings).body;
+    assert!(
+        html.ends_with("</div></div></div>"),
+        "unexpected trailing markup: {html:?}",
     );
 }
 

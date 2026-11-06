@@ -168,6 +168,19 @@ fn continued_line_is_one_line_break_token() {
 }
 
 #[test]
+fn comma_run_three_or_more_is_a_single_other_token() {
+    let input = "a,,,b";
+    assert_fast_tokens_match_pest(input);
+    let tokens = Token::extract_all(input);
+    let middle = tokens
+        .iter()
+        .find(|token| token.token == Token::Other && token.slice.starts_with(','))
+        .expect("comma run token");
+    assert_eq!(middle.slice, ",,,");
+    assert_eq!(middle.span, 1..4);
+}
+
+#[test]
 fn fast_tokenizer_matches_pest_on_fixture_inputs() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("test");
     let mut inputs = Vec::new();

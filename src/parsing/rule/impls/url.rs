@@ -413,9 +413,10 @@ where
         url = without_last_character(url);
     }
 
-    let at_sentence_boundary =
-        matches!(parser.current().token, Token::Whitespace | Token::InputEnd)
-            || suffix.is_some();
+    let at_sentence_boundary = matches!(
+        parser.current().token,
+        Token::Whitespace | Token::InputEnd | Token::LineBreak | Token::ParagraphBreak
+    ) || suffix.is_some();
     let mut trailing = Vec::new();
     if at_sentence_boundary {
         while let Some(last) = url.chars().next_back() {
@@ -550,6 +551,19 @@ mod tests {
             expected.clone(),
         );
         assert_url_rule("https://example.com/test.", Layout::Wikidot, expected);
+    }
+
+    #[test]
+    fn wikidot_url_rule_splits_terminal_period_before_line_break() {
+        let expected = Elements::Multiple(vec![
+            link("https://snippets.wikidot.com/code:collapsible-block-unleashed"),
+            text!("."),
+        ]);
+        assert_url_rule(
+            "https://snippets.wikidot.com/code:collapsible-block-unleashed.\n",
+            Layout::Wikidot,
+            expected,
+        );
     }
 
     #[test]

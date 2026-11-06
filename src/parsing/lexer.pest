@@ -83,6 +83,7 @@ token = _{
     italics |
     underline |
     superscript |
+    comma_run |
     subscript |
     color |
     left_monospace |
@@ -230,6 +231,7 @@ bold = @{ "**" }
 italics = @{ "//" }
 underline = @{ "__" }
 superscript = @{ "^^" }
+comma_run = @{ ","{3,} }
 subscript = @{ ",," }
 color = @{ "##" }
 left_monospace = @{ "{{" }

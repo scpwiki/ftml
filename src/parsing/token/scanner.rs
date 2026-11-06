@@ -252,7 +252,15 @@ fn scan_literal(
         b'/' if has(bytes, start, b"//") => (Token::Italics, start + 2),
         b'_' if has(bytes, start, b"__") => (Token::Underline, start + 2),
         b'^' if has(bytes, start, b"^^") => (Token::Superscript, start + 2),
-        b',' if has(bytes, start, b",,") => (Token::Subscript, start + 2),
+        b',' if has(bytes, start, b",,") => {
+            let run_end = scan_same(bytes, start, b',');
+            let run_len = run_end - start;
+            if run_len >= 3 {
+                (Token::Other, run_end)
+            } else {
+                (Token::Subscript, start + 2)
+            }
+        }
         b'#' if has(bytes, start, b"##") => (Token::Color, start + 2),
         b'{' if has(bytes, start, b"{{") => (Token::LeftMonospace, start + 2),
         b'}' if has(bytes, start, b"}}") => (Token::RightMonospace, start + 2),

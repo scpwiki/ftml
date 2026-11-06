@@ -3661,10 +3661,8 @@ fn wikidot_close_anchor_scope<'t>(
         return;
     }
     if run.iter().all(element_is_whitespace_only)
-        && let ScopeWrapper::Anchor {
-            attributes,
-            target,
-        } = active.scope_wrapper(position)
+        && let ScopeWrapper::Anchor { attributes, target } =
+            active.scope_wrapper(position)
         && let Some(Element::Anchor {
             target: flushed_target,
             attributes: flushed_attributes,
