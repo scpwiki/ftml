@@ -1783,6 +1783,25 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         return ok!(elements);
     }
 
+    if parser.settings().layout.legacy()
+        && matches!(
+            parser.current().token,
+            Token::TableColumn
+                | Token::TableColumnRight
+                | Token::TableColumnCenter
+                | Token::TableColumnTitle
+        )
+        && crate::parsing::rule::impls::wikidot_simple_table_markers_literal_on_line_after_explicit_li(
+            parser,
+            parser.current().span.start,
+        )
+    {
+        let literal = parser.current().slice;
+        parser.step()?;
+        parser.depth_decrement();
+        return ok!(text!(literal));
+    }
+
     if let Some(elements) = try_consume_text_token(parser)? {
         parser.depth_decrement();
         return ok!(elements);

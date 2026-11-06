@@ -130,6 +130,7 @@ pub use self::strikethrough::{RULE_STRIKETHROUGH_DASH, RULE_STRIKETHROUGH_TILDE}
 pub use self::subscript::RULE_SUBSCRIPT;
 pub use self::superscript::RULE_SUPERSCRIPT;
 pub use self::table::RULE_TABLE;
+pub(crate) use self::table::wikidot_simple_table_markers_literal_on_line_after_explicit_li;
 pub use self::text::RULE_TEXT;
 pub use self::underline::RULE_UNDERLINE;
 pub use self::underscore_line_break::RULE_UNDERSCORE_LINE_BREAK;
