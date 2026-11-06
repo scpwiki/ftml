@@ -31,6 +31,7 @@ use super::{
     },
 };
 use crate::parsing::inline_scope::WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE;
+use crate::parsing::rule::bibliography_order;
 use crate::settings::WikitextMode;
 use crate::tree::PartialElement;
 use std::borrow::Cow;
@@ -581,17 +582,8 @@ where
 
     if parser.settings().layout.legacy()
         && parser.in_wikidot_bibliography_body()
-        && matches!(
-            block.name,
-            "block-div"
-                | "block-note"
-                | "block-align-center"
-                | "block-align-right"
-                | "block-align-left"
-                | "block-align-justify"
-                | "block-toc"
-                | "block-html"
-        )
+        && (bibliography_order::block_rule_cannot_form_in_bibliography_body(block.name)
+            || block.name == "block-html")
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }

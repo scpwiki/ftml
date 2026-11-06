@@ -328,7 +328,12 @@ fn parse_tabview<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    if parser.settings().layout.legacy() && parser.in_wikidot_bibliography_body() {
+    if parser.settings().layout.legacy()
+        && parser.in_wikidot_bibliography_body()
+        && crate::parsing::rule::bibliography_order::block_rule_cannot_form_in_bibliography_body(
+            "block-tabview",
+        )
+    {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 

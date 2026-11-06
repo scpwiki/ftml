@@ -24,6 +24,8 @@ use std::fmt::{self, Debug};
 
 mod mapping;
 
+pub(crate) mod bibliography_order;
+
 pub mod impls;
 
 pub use self::mapping::get_rules_for_token;

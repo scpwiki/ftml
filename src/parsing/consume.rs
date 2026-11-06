@@ -1782,15 +1782,8 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
             continue;
         }
         if parser.in_wikidot_bibliography_body()
-            && matches!(
+            && crate::parsing::rule::bibliography_order::line_rule_cannot_form_in_bibliography_body(
                 rule.name(),
-                "center"
-                    | "header"
-                    | "blockquote"
-                    | "table"
-                    | "horizontal-rule"
-                    | "clear-float"
-                    | "list"
             )
         {
             continue;
