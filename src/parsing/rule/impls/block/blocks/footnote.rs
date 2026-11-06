@@ -58,7 +58,11 @@ fn parse_footnote_ref<'r, 't>(
     }
 
     if parser.in_footnote() {
-        return Err(parser.make_err(ParseErrorKind::FootnotesNested));
+        return Err(parser.make_err(if parser.settings().layout.legacy() {
+            ParseErrorKind::RuleFailed
+        } else {
+            ParseErrorKind::FootnotesNested
+        }));
     }
 
     let parser = &mut ParserWrap::new(parser);
@@ -154,7 +158,11 @@ fn parse_footnote_block<'r, 't>(
     }
 
     if parser.in_footnote() {
-        return Err(parser.make_err(ParseErrorKind::FootnotesNested));
+        return Err(parser.make_err(if parser.settings().layout.legacy() {
+            ParseErrorKind::RuleFailed
+        } else {
+            ParseErrorKind::FootnotesNested
+        }));
     }
 
     if parser.settings().layout.legacy() && parser.has_footnote_block() {
@@ -399,6 +407,7 @@ mod tests {
     use crate::layout::Layout;
     use crate::render::{Render, html::HtmlRender};
     use crate::settings::{WikitextMode, WikitextSettings};
+    use crate::tree::Element;
 
     fn render_wikidot(source: &str) -> (String, Vec<ParseError>) {
         let page_info = PageInfo::dummy();
@@ -409,41 +418,67 @@ mod tests {
     }
 
     #[test]
-    fn footnote_rejects_nested_footnotes() {
+    fn wikidot_nested_footnote_opener_in_footnote_body_stays_literal() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
         let tokenization = crate::tokenize(
             "[[footnote]]outer [[footnote]]inner[[/footnote]][[/footnote]]",
         );
-        let (_tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
 
         assert!(
             errors
                 .iter()
-                .any(|error| error.kind() == ParseErrorKind::FootnotesNested)
+                .any(|error| error.kind() == ParseErrorKind::RuleFailed),
+            "{errors:#?}",
+        );
+        let body_concat: String = tree
+            .footnotes
+            .get(0)
+            .map(|body| {
+                body.iter()
+                    .filter_map(|el| match el {
+                        Element::Text(t) => Some(t.as_ref()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+            .unwrap_or_default();
+        assert!(
+            body_concat.contains("[[footnote]]inner"),
+            "expected inner opener literal in footnote body: {body_concat:?}",
         );
     }
 
     #[test]
     fn footnote_rejects_nested_footnote_blocks() {
-        for layout in [Layout::Wikidot, Layout::Wikijump] {
-            let page_info = PageInfo::dummy();
-            let settings = WikitextSettings::from_mode(WikitextMode::Page, layout);
-            let tokenization =
-                crate::tokenize("[[footnote]][[footnoteblock]][[/footnote]]");
-            let (tree, errors) =
-                crate::parse(&tokenization, &page_info, &settings).into();
+        let page_info = PageInfo::dummy();
+        let wikidot = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("[[footnote]][[footnoteblock]][[/footnote]]");
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &wikidot).into();
 
-            assert!(
-                errors
-                    .iter()
-                    .any(|error| error.kind() == ParseErrorKind::FootnotesNested),
-                "{layout:?}: {errors:#?}",
-            );
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.kind() == ParseErrorKind::RuleFailed),
+            "Wikidot: {errors:#?}",
+        );
 
-            let html = HtmlRender.render(&tree, &page_info, &settings).body;
-            assert!(html.contains("footnoteblock"), "{layout:?}: {html}");
-        }
+        let html = HtmlRender.render(&tree, &page_info, &wikidot).body;
+        assert!(html.contains("footnoteblock"), "Wikidot: {html}");
+
+        let wikijump = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
+        let (tree_j, errors_j) =
+            crate::parse(&tokenization, &page_info, &wikijump).into();
+        assert!(
+            errors_j
+                .iter()
+                .any(|error| error.kind() == ParseErrorKind::FootnotesNested),
+            "Wikijump: {errors_j:#?}",
+        );
+        let html_j = HtmlRender.render(&tree_j, &page_info, &wikijump).body;
+        assert!(html_j.contains("footnoteblock"), "Wikijump: {html_j}");
     }
 
     #[test]
