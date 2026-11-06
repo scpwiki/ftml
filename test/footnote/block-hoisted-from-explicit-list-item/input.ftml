@@ -1,0 +1,4 @@
+a[[footnote]]b[[/footnote]]
+[[ul]]
+[[li]][[footnoteblock]][[/li]]
+[[/ul]]

@@ -1,0 +1,4 @@
+a[[footnote]]b[[/footnote]]
+* a
+ * b
+ * [[footnoteblock]]
