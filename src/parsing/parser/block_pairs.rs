@@ -3276,7 +3276,8 @@ impl<'t> Scanner<'t> {
         match self.tokens[pos].token {
             Token::LeftComment => self.skip_comment(pos),
             Token::LeftBlock | Token::LeftBlockStar => {
-                if let Some(candidate) = self.code_candidates.get(&self.tokens[pos].span.start)
+                if let Some(candidate) =
+                    self.code_candidates.get(&self.tokens[pos].span.start)
                     && self.raw_name_is(pos, "code")
                 {
                     return Some(self.token_at_or_after(candidate.owner_end));

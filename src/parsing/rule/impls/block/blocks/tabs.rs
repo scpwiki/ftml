@@ -315,9 +315,7 @@ fn wikidot_tabview_failed_content_gate(items: &[TabViewItem]) -> bool {
 /// first, even though an attached `[[/tabview]]` closer follows later. The
 /// probe predictions this rule was frozen against live in
 /// `co-parse/work/b19-predictions2.json` (q2, q6).
-fn wikidot_tabview_body_starts_with_tab_head<'r, 't>(
-    parser: &Parser<'r, 't>,
-) -> bool
+fn wikidot_tabview_body_starts_with_tab_head<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,
 {
