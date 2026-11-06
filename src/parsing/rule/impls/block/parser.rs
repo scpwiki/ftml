@@ -2082,6 +2082,20 @@ where
                 parser.get_end_block()?
             };
 
+            // Live pairs a tabview closer only when it attaches directly after
+            // the body's last tab closer. A closer after prose stays literal
+            // content and the body keeps scanning for a later attached closer
+            // (tabview/tab-stray-fails). Quoted bodies apply the same rule
+            // through quote_body_close_follows_tab_close below.
+            if parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && block_rule.name == "block-tabview"
+                && !restrict_quote_close
+                && !parser.wikidot_tabview_close_follows_tab_close(end_start)
+            {
+                return Ok(false);
+            }
+
             // A Wikidot [[html]] closer only ends the block when the next byte
             // is ASCII whitespace or the end of input; otherwise the closer text
             // is part of the raw captured body. Pinned by the saved-page

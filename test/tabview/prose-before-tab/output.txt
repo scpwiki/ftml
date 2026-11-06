@@ -1,0 +1,4 @@
+[[tabview]]
+prose
+[[tab Good]] g [[/tab]]
+[[/tabview]]
