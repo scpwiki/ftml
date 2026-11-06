@@ -31,6 +31,7 @@ use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
 use crate::parsing::parser::{
     QuoteBodyLineStatus, QuoteScanOutcome, WikidotLiClose, WikidotLiHead,
+    wikidot_first_block_close_after_from_heads,
 };
 use crate::parsing::{
     ExtractedToken, ParagraphSplitEntry, ParagraphSplitKind, ParseError, ParseErrorKind,
@@ -695,33 +696,9 @@ fn wikidot_body_requires_end_head(block_rule: &BlockRule) -> bool {
     )
 }
 
-/// Whether a block end head (any `[[/`) starts at or after `start`, with the
-/// position of the first one. The search shares one monotone slot, so
-/// advancing heads stay linear.
-///
-/// It is deliberately coarse: it matches any `[[/` prefix instead of the
-/// exact end name, because Wikidot's end-head grammar also accepts fused and
-/// bracket-prefixed forms whose text does not start with the plain name. A
-/// false positive only means the original scan still runs.
-fn find_block_close_marker(
-    source: &str,
-    slot: &mut Option<(usize, Option<usize>)>,
-    start: usize,
-) -> Option<usize> {
-    if let Some((scanned_from, found)) = *slot
-        && scanned_from <= start
-        && found.is_none_or(|found| found >= start)
-    {
-        return found;
-    }
-
-    let found = source[start..].find("[[/").map(|offset| start + offset);
-    *slot = Some((start, found));
-    found
-}
-
 /// The next `\r` or `\n` at or after `start`, with the same monotone reuse as
-/// [`find_block_close_marker`].
+/// the block-close scan.
+
 fn find_line_break_marker(
     source: &str,
     slot: &mut Option<(usize, Option<usize>)>,
@@ -1425,10 +1402,11 @@ where
 
     /// Whether a block body could still close: any `[[/` marker ahead.
     pub(crate) fn wikidot_block_close_marker_ahead(&self) -> bool {
-        let source = self.full_text().inner();
         let start = self.current().span.start;
-        let mut cache = self.block_end_scan_cache.borrow_mut();
-        find_block_close_marker(source, &mut cache.wikidot_end_head_scan, start).is_some()
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_first_block_close_after(start)
+            .is_some()
     }
 
     /// The error an unclosed Wikidot body would produce after scanning to the
@@ -5839,11 +5817,9 @@ where
         // close this body. Checking the cached marker first keeps repeated
         // unclosed openers from rescanning the rest of the token stream.
         {
-            let source = self.full_text().inner();
             let start = self.current().span.start;
             let mut cache = self.block_end_scan_cache.borrow_mut();
-            let found =
-                find_block_close_marker(source, &mut cache.wikidot_end_head_scan, start);
+            let found = cache.wikidot_first_block_close_after(start);
             if found.is_none() {
                 drop(cache);
                 // No end head can occur from here, in either iteration mode.
@@ -6157,9 +6133,7 @@ where
             let source = self.full_text().inner();
             let start = self.current().span.start;
             let mut cache = self.block_end_scan_cache.borrow_mut();
-            let Some(close) =
-                find_block_close_marker(source, &mut cache.wikidot_end_head_scan, start)
-            else {
+            let Some(close) = cache.wikidot_first_block_close_after(start) else {
                 return false;
             };
             let line_break =
@@ -7315,13 +7289,36 @@ mod tests {
             "[[/[[footnote]]",
             "[[/foot[[iftags -z]][[/iftags]]note]]",
         ];
+        fn end_heads(source: &str) -> Vec<(usize, usize)> {
+            let mut heads = Vec::new();
+            let mut search = 0usize;
+            while let Some(rel) = source.get(search..).and_then(|s| s.find("[[/")) {
+                let close_start = search + rel;
+                let name_start = close_start + 3;
+                let name_end = source
+                    .get(name_start..)
+                    .map(|after_slash| {
+                        name_start
+                            + after_slash
+                                .find(|c: char| c.is_whitespace() || c == ']')
+                                .unwrap_or(after_slash.len())
+                    })
+                    .unwrap_or(name_start);
+                heads.push((close_start, name_end));
+                search = close_start + 3;
+            }
+            heads
+        }
+
         for source in sources {
+            let heads = end_heads(source);
             for start in 0..=source.len() {
                 if !source.is_char_boundary(start) {
                     continue;
                 }
                 let mut slot = None;
-                let found = super::find_block_close_marker(source, &mut slot, start);
+                let found =
+                    wikidot_first_block_close_after_from_heads(&heads, &mut slot, start);
                 assert_eq!(
                     found,
                     source[start..].find("[[/").map(|offset| start + offset),
