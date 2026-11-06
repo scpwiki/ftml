@@ -1850,6 +1850,10 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
             Err(error) => {
                 parser.truncate_footnotes(footnote_count);
 
+                if error.kind() == ParseErrorKind::AnchorBlockWithInsufficientClosers {
+                    continue;
+                }
+
                 if parser.discarding_hidden_body() {
                     if parser.at_hidden_body_boundary() {
                         parser.depth_decrement();

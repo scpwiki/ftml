@@ -1,14 +1,5 @@
 [
     {
-        "token": "input-end",
-        "rule": "block-anchor",
-        "span": [
-            39,
-            39
-        ],
-        "kind": "end-of-input"
-    },
-    {
         "token": "left-block",
         "rule": "fallback",
         "span": [

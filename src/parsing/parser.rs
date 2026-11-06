@@ -313,6 +313,88 @@ fn wikidot_closer_ends_line(source: &str, byte: usize) -> bool {
     source[start..end].trim_end().ends_with("]]")
 }
 
+/// Count `[[/a]]` and `[[/anchor]]` closers from `from_byte` to EOF in source
+/// text (best-effort; matches the common Wikidot closer shape).
+pub(crate) fn wikidot_remaining_anchor_closer_markers(
+    source: &str,
+    from_byte: usize,
+) -> usize {
+    let mut count = 0usize;
+    let mut pos = from_byte.min(source.len());
+    while let Some(rel) = source.get(pos..).and_then(|suffix| suffix.find("[[/")) {
+        let start = pos + rel + 3;
+        let Some(rest) = source.get(start..) else {
+            break;
+        };
+        let Some(close_rel) = rest.find("]]") else {
+            break;
+        };
+        let name = rest[..close_rel].trim();
+        if name.eq_ignore_ascii_case("a") || name.eq_ignore_ascii_case("anchor") {
+            count += 1;
+        }
+        pos = start + close_rel + 2;
+    }
+    count
+}
+
+/// How many `[[a]]` / `[[anchor]]` block heads are still open immediately before
+/// `from_byte` (opens seen in the prefix minus `[[/a]]` / `[[/anchor]]` closers).
+pub(crate) fn wikidot_anchor_block_open_depth_before(
+    source: &str,
+    from_byte: usize,
+) -> usize {
+    let end = from_byte.min(source.len());
+    let prefix = &source[..end];
+    let mut depth = 0usize;
+    let mut search = 0usize;
+    while let Some(rel) = prefix[search..].find("[[") {
+        let idx = search + rel;
+        if idx + 2 >= end {
+            break;
+        }
+        if prefix.as_bytes().get(idx + 2).copied() == Some(b'/') {
+            let name_start = idx + 3;
+            let Some(tail) = prefix.get(name_start..) else {
+                search = idx + 2;
+                continue;
+            };
+            let Some(close_rel) = tail.find("]]") else {
+                break;
+            };
+            let name = tail[..close_rel].trim();
+            if name.eq_ignore_ascii_case("a") || name.eq_ignore_ascii_case("anchor") {
+                depth = depth.saturating_sub(1);
+            }
+            search = name_start + close_rel + 2;
+            continue;
+        }
+        let Some(after) = prefix.get(idx + 2..) else {
+            break;
+        };
+        let Some(head_rel) = after.find("]]") else {
+            break;
+        };
+        let head = &after[..head_rel];
+        let mut parts = head.split(|c: char| c.is_whitespace() || c == ']');
+        let Some(first) = parts.next() else {
+            search = idx + 2;
+            continue;
+        };
+        if first.is_empty() {
+            search = idx + 2;
+            continue;
+        }
+        if first.eq_ignore_ascii_case("a") || first.eq_ignore_ascii_case("anchor") {
+            depth += 1;
+            search = idx + 2 + head_rel + 2;
+            continue;
+        }
+        search = idx + 2;
+    }
+    depth
+}
+
 impl<'r, 't> Parser<'r, 't> {
     pub(crate) fn new(
         tokenization: &'r Tokenization<'t>,

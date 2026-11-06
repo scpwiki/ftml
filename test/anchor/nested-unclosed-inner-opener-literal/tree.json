@@ -1,0 +1,72 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "anchor",
+                        "data": {
+                            "target": null,
+                            "attributes": {
+                                "href": "/A"
+                            },
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[["
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "a"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "href"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "="
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "\""
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "B"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "\""
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "y"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
