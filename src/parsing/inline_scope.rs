@@ -1,7 +1,7 @@
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
-    Container, ContainerType, Element, Heading, HeadingLevel, HeadingReopen,
-    InlineFormatKind, ListItem, PartialElement, TableType, WIKIDOT_HEADING_REOPEN_MARKER,
+    Container, ContainerType, Element, Heading, HeadingReopen, InlineFormatKind,
+    ListItem, PartialElement, TableType, WIKIDOT_HEADING_REOPEN_MARKER,
     WIKIDOT_WS_MONO_VANISH_MARKER, WikidotBlockCloseKind, WikidotBlockShell,
     WikidotFrameLink,
 };
