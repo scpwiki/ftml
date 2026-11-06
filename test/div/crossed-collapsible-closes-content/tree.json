@@ -1,0 +1,263 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "div"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "style"
+                    },
+                    {
+                        "element": "text",
+                        "data": "="
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "text"
+                    },
+                    {
+                        "element": "text",
+                        "data": "-"
+                    },
+                    {
+                        "element": "text",
+                        "data": "align"
+                    },
+                    {
+                        "element": "text",
+                        "data": ":"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "center"
+                    },
+                    {
+                        "element": "text",
+                        "data": ";"
+                    },
+                    {
+                        "element": "text",
+                        "data": "\""
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {
+                    "class": "addendum",
+                    "style": "border-style: dashed; border-width: 1px; padding-bottom: 0.7rem; border-radius: 4px; padding: 0 1.5rem; border-color: #d6d6d6"
+                },
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "link",
+                                    "data": {
+                                        "type": "direct",
+                                        "link": "https://scp-wiki.wikidot.com/scp-8982",
+                                        "label": {
+                                            "text": "SCP-8982: A Seer's Stupor"
+                                        },
+                                        "target": null
+                                    }
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "Genre"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "("
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "s"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": ")"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": ":"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "Emotional"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": ","
+                                },
+                                {
+                                    "element": "text",
+                                    "data": " "
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "Character"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "-"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "driven"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "."
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "collapsible",
+                        "data": {
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "paragraph",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "[[/"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "div"
+                                            },
+                                            {
+                                                "element": "text",
+                                                "data": "]]"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "div",
+                                        "attributes": {
+                                            "class": "addendum",
+                                            "style": "text-align: left;"
+                                        },
+                                        "elements": [
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "paragraph",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "My"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": " "
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "first"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": " "
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "contribution"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": " "
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "to"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": " "
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "the"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": " "
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "site"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "."
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ],
+                            "attributes": {},
+                            "start-open": false,
+                            "show-text": "Ramblings",
+                            "hide-text": "shut the fuck up man",
+                            "show-top": true,
+                            "show-bottom": false
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
