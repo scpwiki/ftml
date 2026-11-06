@@ -51,24 +51,13 @@ fn parse_conditions<'r, 't>(
 fn literal_span_gate<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
+    opener_start: usize,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let text = parser.full_text().inner();
-    let mut start = parser.current().span.start;
-    let bytes = text.as_bytes();
-    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
-        start -= 1;
-    }
-    if start < name.len() || !text[start - name.len()..start].eq_ignore_ascii_case(name) {
+    if !opener_head_matches(text, opener_start, name) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    start -= name.len();
-    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
-        start -= 1;
-    }
-    if start < 2 || &text[start - 2..start] != "[[" {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
-    }
-    start -= 2;
+    let start = opener_start;
 
     loop {
         match parser.current().token {
@@ -241,24 +230,26 @@ fn gate_pre_break(source: &[u8], opener_start: usize) -> bool {
         .any(|byte| !matches!(byte, b' ' | b'\t' | b'>'))
 }
 
-fn opener_starts_line(parser: &Parser<'_, '_>, name: &str) -> bool {
+fn opener_head_matches(text: &str, opener_start: usize, name: &str) -> bool {
+    let Some(rest) = text.get(opener_start..) else {
+        return false;
+    };
+    let Some(head) = rest.strip_prefix("[[") else {
+        return false;
+    };
+    head.trim_start()
+        .as_bytes()
+        .get(..name.len())
+        .is_some_and(|word| word.eq_ignore_ascii_case(name.as_bytes()))
+}
+
+fn opener_starts_line(parser: &Parser<'_, '_>, name: &str, opener_start: usize) -> bool {
     let text = parser.full_text().inner();
+    if !opener_head_matches(text, opener_start, name) {
+        return false;
+    }
     let bytes = text.as_bytes();
-    let mut start = parser.current().span.start;
-    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
-        start -= 1;
-    }
-    if start < name.len() || !text[start - name.len()..start].eq_ignore_ascii_case(name) {
-        return false;
-    }
-    start -= name.len();
-    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
-        start -= 1;
-    }
-    if start < 2 || &text[start - 2..start] != "[[" {
-        return false;
-    }
-    start -= 2;
+    let mut start = opener_start;
     while start > 0 && matches!(bytes[start - 1], b' ' | b'\t' | b'\0') {
         start -= 1;
     }
@@ -508,12 +499,12 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "IfTags doesn't allow score flag");
     assert_block_name(&BLOCK_IFTAGS, name);
 
-    let opener_at_line_start = opener_starts_line(parser, name)
+    let opener_at_line_start = opener_starts_line(parser, name, opener_start)
         || (parser.settings().layout.legacy()
             && parser.virtual_gate_chain_reaches(opener_start));
 
     if parser.in_wikidot_iftags_span() {
-        return literal_span_gate(parser, name);
+        return literal_span_gate(parser, name, opener_start);
     }
 
     let (conditions, body_start, head_close) = parser.get_gate_head_with_body_start(

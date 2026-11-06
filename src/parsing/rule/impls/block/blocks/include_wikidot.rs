@@ -32,7 +32,7 @@ pub const BLOCK_INCLUDE_WIKIDOT: BlockRule = BlockRule {
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -42,22 +42,33 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Include (Wikidot) doesn't allow score flag");
     assert_block_name(&BLOCK_INCLUDE_WIKIDOT, name);
 
-    if !in_head {
-        let marker_end = parser.current().span.start;
-        let marker_len = name.len() + "[[]]".len();
-        if let Some(marker_start) = marker_end.checked_sub(marker_len) {
-            let marker = &parser.full_text().inner()[marker_start..marker_end];
-            if marker
-                .strip_prefix("[[")
-                .and_then(|inner| inner.strip_suffix("]]"))
-                .is_some_and(|inner| inner.eq_ignore_ascii_case("include"))
-            {
-                debug!("Preserving exact targetless include marker as literal text");
-                return success_elements(text!(marker));
-            }
-        }
+    if !in_head
+        && let Some(marker) =
+            targetless_include_marker(parser.full_text().inner(), opener_start, name)
+    {
+        debug!("Preserving exact targetless include marker as literal text");
+        return success_elements(text!(marker));
     }
 
     debug!("Found invalid include block");
     Err(parser.make_err(ParseErrorKind::InvalidInclude))
+}
+
+fn targetless_include_marker<'t>(
+    source: &'t str,
+    opener_start: usize,
+    name: &str,
+) -> Option<&'t str> {
+    let rest = source.get(opener_start..)?;
+    if !rest.starts_with("[[") {
+        return None;
+    }
+    let close = rest.find("]]")?;
+    let marker = &rest[..close + 2];
+    let inner = marker.strip_prefix("[[")?.strip_suffix("]]")?;
+    if inner.trim().eq_ignore_ascii_case(name) {
+        Some(marker)
+    } else {
+        None
+    }
 }

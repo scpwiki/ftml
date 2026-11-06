@@ -1390,3 +1390,60 @@ fn decoded_text_entities_cannot_inject_markup() {
         "<script>alert(1)</script> <b> \"'&lt; [[div]] **x**",
     );
 }
+
+#[test]
+fn unicode_trimmed_block_names_do_not_panic() {
+    for source in ["[[\u{2003}include]]", "[[\u{2003}iftags +a]]x[[/iftags]]"] {
+        let (tree, _errors) = parse_with_errors(source, Layout::Wikijump);
+        std::hint::black_box(render_text(&tree, Layout::Wikijump));
+        std::hint::black_box(render_html(&tree, Layout::Wikijump));
+    }
+
+    for space in [
+        "\u{00a0}", "\u{1680}", "\u{2003}", "\u{2009}", "\u{2028}", "\u{205f}",
+        "\u{3000}",
+    ] {
+        for source in [
+            format!("[[{space}include]]"),
+            format!("[[{space}INCLUDE]]"),
+            format!("[[{space}iftags +a]]x[[/iftags]]"),
+            format!("> [[{space}iftags +a]]x[[/iftags]]"),
+            format!("[[{space}iftags -missing]]x[[/iftags]]"),
+        ] {
+            let (tree, _errors) = parse_with_errors(&source, Layout::Wikijump);
+            std::hint::black_box(render_text(&tree, Layout::Wikijump));
+            std::hint::black_box(render_html(&tree, Layout::Wikijump));
+        }
+    }
+}
+
+#[test]
+fn unicode_trimmed_block_names_keep_valid_rendering() {
+    let (tree, errors) = parse_with_errors("[[include]]", Layout::Wikijump);
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.kind() != ParseErrorKind::InvalidInclude),
+        "{errors:?}",
+    );
+    assert_eq!(render_text(&tree, Layout::Wikijump), "[[include]]");
+    assert!(
+        render_html(&tree, Layout::Wikijump).contains("[[include]]"),
+        "{:?}",
+        render_html(&tree, Layout::Wikijump),
+    );
+
+    let spaced = "[[\u{2003}iftags +a]]x[[/iftags]]";
+    let plain = "[[iftags +a]]x[[/iftags]]";
+    let (spaced_tree, spaced_errors) = parse_with_errors(spaced, Layout::Wikijump);
+    let (plain_tree, plain_errors) = parse_with_errors(plain, Layout::Wikijump);
+    assert_eq!(
+        render_text(&spaced_tree, Layout::Wikijump),
+        render_text(&plain_tree, Layout::Wikijump),
+    );
+    assert_eq!(
+        render_html(&spaced_tree, Layout::Wikijump),
+        render_html(&plain_tree, Layout::Wikijump),
+    );
+    assert_eq!(spaced_errors.len(), plain_errors.len());
+}
