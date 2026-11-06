@@ -16,6 +16,8 @@ const SINGLE_LINE_CONTENT: u16 = 1 << 9;
 const DIV_LITERAL_RECOVERED: u16 = 1 << 10;
 const MODULE_EMPTY_BODY: u16 = 1 << 11;
 const HEADING_LINE: u16 = 1 << 12;
+/// Parsing the body of an advanced `[[cell]]` / `[[hcell]]` block (legacy `[[table]]` grid).
+const ADVANCED_TABLE_CELL_BODY: u16 = 1 << 13;
 
 /// Sentinel for "no scored div direct body" in the packed field.
 const SCORED_DIV_DIRECT_INACTIVE: u32 = u32::MAX;
@@ -394,6 +396,14 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_in_wikidot_heading_line(&mut self, value: bool) {
         set_flag(&mut self.wikidot.flags, HEADING_LINE, value);
+    }
+
+    pub(crate) fn in_wikidot_advanced_table_cell_body(&self) -> bool {
+        self.wikidot.flags & ADVANCED_TABLE_CELL_BODY != 0
+    }
+
+    pub(crate) fn set_in_wikidot_advanced_table_cell_body(&mut self, value: bool) {
+        set_flag(&mut self.wikidot.flags, ADVANCED_TABLE_CELL_BODY, value);
     }
 
     pub(crate) fn in_wikidot_simple_table_cell(&self) -> bool {

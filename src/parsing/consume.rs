@@ -582,6 +582,69 @@ where
     Ok(elements)
 }
 
+fn try_consume_wikidot_fused_span_close_then_table_column<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<Elements<'t>>, ParseError>
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() || parser.current().token != Token::LeftBlockEnd
+    {
+        return Ok(None);
+    }
+    if !parser.in_wikidot_span_body() {
+        return Ok(None);
+    }
+    let start = parser.current().span.start;
+    let source = parser.full_text().inner();
+    if !source.get(start..).is_some_and(|rest| {
+        rest.len() >= "[[/span]]".len()
+            && rest[.."[[/span]]".len()].eq_ignore_ascii_case("[[/span]]")
+    }) {
+        return Ok(None);
+    }
+    let mut probe = parser.clone();
+    let Ok(name) = probe.get_end_block() else {
+        return Ok(None);
+    };
+    let name_ref = name.as_ref();
+    let base = name_ref.strip_suffix('_').unwrap_or(name_ref);
+    if !base.eq_ignore_ascii_case("span") || name_ref.len() != base.len() {
+        return Ok(None);
+    }
+    let column_start = probe.current().span.start;
+    if column_start < 2 || source.get(column_start - 2..column_start) != Some("]]") {
+        return Ok(None);
+    }
+    if !matches!(
+        probe.current().token,
+        Token::TableColumn
+            | Token::TableColumnRight
+            | Token::TableColumnCenter
+            | Token::TableColumnTitle,
+    ) {
+        return Ok(None);
+    }
+    // 7031 pool loss: `* … [[/span]]||**` on a list/bold line — `||` closes bold (`**`),
+    // it is not table-column syntax. This case is not inside advanced `[[cell]]`
+    // (which never sets `in_wikidot_simple_table_cell`); d3-54 fuses `[[/span]]||`
+    // with nothing but whitespace/newline after `||`.
+    let column_end = probe.current().span.end;
+    if !parser.in_wikidot_advanced_table_cell_body()
+        && source
+            .get(column_end..)
+            .is_some_and(|tail| tail.starts_with("**"))
+    {
+        return Ok(None);
+    }
+    let closes_scored_span = parser.wikidot_span_alias_close_is_scored(start);
+    parser.update(&probe);
+    let literal = parser.current().slice;
+    parser.step()?;
+    parser.leave_wikidot_span_body(closes_scored_span);
+    Ok(Some(text!(literal).into()))
+}
+
 fn try_consume_wikidot_render_interior_close<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<ParseResult<'r, 't, Elements<'t>>>, ParseError>
@@ -1745,6 +1808,13 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     if let Some(result) = try_consume_wikidot_render_interior_close(parser)? {
         parser.depth_decrement();
         return result;
+    }
+
+    if let Some(elements) =
+        try_consume_wikidot_fused_span_close_then_table_column(parser)?
+    {
+        parser.depth_decrement();
+        return ok!(elements);
     }
 
     let pending_unquoted_collapsible_close = parser.settings().layout.legacy()

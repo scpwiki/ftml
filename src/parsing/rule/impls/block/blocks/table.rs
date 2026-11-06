@@ -154,12 +154,23 @@ where
 
     let as_paragraphs = parser.settings().layout.legacy()
         && attribute_owner == AdvancedTableElement::Cell;
-    let body = parser.get_body_elements_with_context(
-        block_rule,
-        as_paragraphs,
-        body_start,
-        None,
-    )?;
+    let advanced_cell_body = parser.settings().layout.legacy()
+        && attribute_owner == AdvancedTableElement::Cell;
+    let body = {
+        if advanced_cell_body {
+            parser.set_in_wikidot_advanced_table_cell_body(true);
+        }
+        let body = parser.get_body_elements_with_context(
+            block_rule,
+            as_paragraphs,
+            body_start,
+            None,
+        );
+        if advanced_cell_body {
+            parser.set_in_wikidot_advanced_table_cell_body(false);
+        }
+        body
+    }?;
     let (elements, errors, _) = body.into();
 
     let parsed = ParsedBlock {

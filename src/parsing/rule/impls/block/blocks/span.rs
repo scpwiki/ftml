@@ -238,6 +238,23 @@ fn parse_fn<'r, 't>(
     result
 }
 
+fn wikidot_span_close_then_simple_table_delimiter_on_same_line(
+    close: &mut Parser,
+) -> bool {
+    let text = close.full_text().inner();
+    let rest_start = close.current().span.start;
+    let line_end = text[rest_start..]
+        .find(['\r', '\n'])
+        .map(|offset| rest_start + offset)
+        .unwrap_or(text.len());
+    let mut index = rest_start;
+    while index < line_end && text.as_bytes()[index].is_ascii_whitespace() {
+        index += 1;
+    }
+    text.get(index..line_end)
+        .is_some_and(|suffix| suffix.starts_with("||"))
+}
+
 fn has_wikidot_composite_span_close_on_line<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,
@@ -265,9 +282,13 @@ where
         match scan.current().token {
             Token::LeftBlockEnd => {
                 let mut close = scan.clone();
-                if close.get_wikidot_end_block_with_residual().is_ok_and(
-                    |(name, residual)| residual && name.eq_ignore_ascii_case("span"),
-                ) {
+                if let Ok((name, residual)) = close.get_wikidot_end_block_with_residual()
+                    && name.eq_ignore_ascii_case("span")
+                    && (residual
+                        || wikidot_span_close_then_simple_table_delimiter_on_same_line(
+                            &mut close,
+                        ))
+                {
                     parser.cache_wikidot_composite_span_close_outcomes(
                         &traversed_token_starts,
                         true,
@@ -275,13 +296,14 @@ where
                     return true;
                 }
             }
-            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+            Token::ParagraphBreak | Token::InputEnd => {
                 parser.cache_wikidot_composite_span_close_outcomes(
                     &traversed_token_starts,
                     false,
                 );
                 return false;
             }
+            Token::LineBreak => {}
             _ => {}
         }
         if scan.step().is_err() {
@@ -366,6 +388,23 @@ fn follows_separator_or_line_start(before: &str) -> bool {
     }
 }
 
+pub(super) fn wikidot_head_source<'r, 't>(
+    parser: &Parser<'r, 't>,
+    opener_start: usize,
+) -> Cow<'t, str> {
+    let source = parser.full_text().inner();
+    let end = parser.current().span.start;
+    if opener_start > end {
+        return Cow::Borrowed("");
+    }
+    let slice = source[opener_start..end].trim_end_matches([' ', '\t']);
+    if slice.ends_with("]]") {
+        Cow::Borrowed(slice)
+    } else {
+        Cow::Borrowed("")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,7 +473,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn wikidot_span_keeps_unmatched_end_blocks_literal() {
         for (source, expected) in [
             (
@@ -461,6 +499,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn wikidot_span_bold_markers_pair_across_span_boundary() {
         let source = "[[span class=\"a\"]]**X[[/span]][[span class=\"b\"]]:** [[/span]]";
         let page_info = PageInfo::dummy();
@@ -692,22 +731,5 @@ mod tests {
         assert!(errors.is_empty(), "{errors:?}");
         let html = HtmlRender.render(&tree, &page_info, &settings).body;
         assert_eq!(html, "<p><span>one</span><span>two</span></p>");
-    }
-}
-
-pub(super) fn wikidot_head_source<'r, 't>(
-    parser: &Parser<'r, 't>,
-    opener_start: usize,
-) -> Cow<'t, str> {
-    let source = parser.full_text().inner();
-    let end = parser.current().span.start;
-    if opener_start > end {
-        return Cow::Borrowed("");
-    }
-    let slice = source[opener_start..end].trim_end_matches([' ', '\t']);
-    if slice.ends_with("]]") {
-        Cow::Borrowed(slice)
-    } else {
-        Cow::Borrowed("")
     }
 }

@@ -1,0 +1,38 @@
+[
+  {
+    "token": "table-column",
+    "rule": "bold",
+    "span": [
+      2,
+      4
+    ],
+    "kind": "not-start-of-line"
+  },
+  {
+    "token": "table-column",
+    "rule": "fallback",
+    "span": [
+      2,
+      4
+    ],
+    "kind": "no-rules-match"
+  },
+  {
+    "token": "table-column",
+    "rule": "bold",
+    "span": [
+      56,
+      58
+    ],
+    "kind": "not-start-of-line"
+  },
+  {
+    "token": "table-column",
+    "rule": "fallback",
+    "span": [
+      56,
+      58
+    ],
+    "kind": "no-rules-match"
+  }
+]
