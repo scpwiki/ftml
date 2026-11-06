@@ -139,7 +139,7 @@ where
         return Ok(None);
     }
 
-    if parser.in_wikidot_span_body() {
+    if parser.in_wikidot_span_body() || parser.in_wikidot_size_body() {
         return Ok(None);
     }
 
@@ -809,6 +809,9 @@ where
     if !scored_close && normalized.eq_ignore_ascii_case("span") {
         parser.leave_wikidot_span_body(closes_scored_span);
     }
+    if !scored_close && normalized.eq_ignore_ascii_case("size") {
+        parser.leave_wikidot_size_body();
+    }
     if !scored_close && normalized.eq_ignore_ascii_case("a") {
         parser.leave_wikidot_anchor_body();
     }
@@ -999,6 +1002,14 @@ where
     // div stays literal — the bridge must not span across it.
     if !matches!(scan.current().token, Token::LeftBlock | Token::LeftBlockEnd) {
         return Ok(None);
+    }
+    if parser.in_wikidot_size_body() && scan.current().token == Token::LeftBlockEnd {
+        let mut probe = scan.clone();
+        if let Ok(name) = probe.get_end_block()
+            && name.eq_ignore_ascii_case("size")
+        {
+            return Ok(None);
+        }
     }
     if scan.at_body_end_boundary() {
         return Ok(None);
