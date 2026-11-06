@@ -1,0 +1,48 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "y"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "span",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "x"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
