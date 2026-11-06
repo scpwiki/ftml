@@ -510,6 +510,13 @@ fn merge_protected_ranges(mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
     merged
 }
 
+fn wikidot_triple_link_opener_bracket(text: &str, open: usize) -> bool {
+    open >= 2
+        && text
+            .get(open.saturating_sub(2)..open + 1)
+            .is_some_and(|probe| probe == "[[[")
+}
+
 fn preserve_adjacent_wikidot_tab_link_spacing(text: &mut String) {
     if !text.contains('\t') || !text.contains('[') {
         return;
@@ -526,6 +533,9 @@ fn preserve_adjacent_wikidot_tab_link_spacing(text: &mut String) {
         let open = cursor + relative_open;
         cursor = open + 1;
         if index_in_ranges(&merged_ranges, open) || text[open..].starts_with("[[") {
+            continue;
+        }
+        if wikidot_triple_link_opener_bracket(text, open) {
             continue;
         }
 
@@ -608,6 +618,9 @@ fn preserve_wikidot_tab_empty_label_link_spacing(text: &mut String) {
         let open = cursor + relative_open;
         cursor = open + 1;
         if index_in_ranges(&merged_ranges, open) || text[open..].starts_with("[[") {
+            continue;
+        }
+        if wikidot_triple_link_opener_bracket(text, open) {
             continue;
         }
         let mut back = open;
@@ -804,9 +817,17 @@ fn replace_tabs(text: &mut String, buffer: &mut String, wikidot_compatibility: b
         let open = cursor + open_offset;
         append_replaced_tabs(buffer, &text[cursor..open], 1);
 
-        let end = text[open + 2..]
-            .find("]]")
-            .map_or(text.len(), |close_offset| open + 2 + close_offset + 2);
+        let end = if text.len() >= open + 3 && &text[open..open + 3] == "[[[" {
+            text[open + 3..]
+                .find("]]]")
+                .map(|close_offset| open + 3 + close_offset + 3)
+                .unwrap_or(text.len())
+        } else {
+            text[open + 2..]
+                .find("]]")
+                .map(|close_offset| open + 2 + close_offset + 2)
+                .unwrap_or(text.len())
+        };
         append_wikidot_block_head_tabs(buffer, &text[open..end]);
         cursor = end;
         if cursor == text.len() {
