@@ -22,8 +22,8 @@ use super::prelude::*;
 use crate::parsing::consume::wikidot_flat_close_kind_at_byte;
 use crate::parsing::rule::impls::block::parser::parse_wikidot_attributes;
 use crate::tree::{
-    Bibliography, LinkLabel, LinkLocation, LinkType, PartialElement,
-    WikidotBlockCloseKind,
+    AttributeMap, Bibliography, Container, ContainerType, Element, LinkLabel,
+    LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind,
 };
 use std::borrow::Cow;
 
@@ -151,13 +151,13 @@ fn parse_fn<'r, 't>(
 
             _ if element.is_whitespace() && !in_residual => continue,
 
-            _ => {
-                let element =
-                    if wikidot_candidate && matches!(element, Element::LineBreak) {
-                        text!(" ")
-                    } else {
-                        element
-                    };
+            mut element => {
+                if wikidot_candidate && matches!(element, Element::LineBreak) {
+                    element = text!(" ");
+                }
+                if wikidot_candidate {
+                    convert_nested_bibliography_items(&mut element, &mut bibliography);
+                }
                 bibliography.add_residual(element);
                 in_residual = true;
             }
@@ -212,6 +212,49 @@ fn parse_fn<'r, 't>(
         ],
         errors
     )
+}
+
+/// Live Bibitem (position 22) runs on the whole body text before the later line
+/// rules, so a `: label : text` line becomes a bibitem token even when a table,
+/// list or collapsible later wraps the line. Such an item is rendered from its
+/// nested tree position: replace the nested definition list with the bibitem
+/// element live produces and number it in source order.
+fn convert_nested_bibliography_items<'t>(
+    element: &mut Element<'t>,
+    bibliography: &mut Bibliography<'t>,
+) {
+    crate::parsing::inline_scope::visit_children_mut(element, &mut |children| {
+        let mut output = Vec::with_capacity(children.len());
+        for child in children.drain(..) {
+            let items = match child {
+                Element::DefinitionList(items) => items,
+                mut other => {
+                    convert_nested_bibliography_items(&mut other, bibliography);
+                    output.push(other);
+                    continue;
+                }
+            };
+            for item in items {
+                let citation = bibliography.add_nested(item.key_string);
+                let mut contents = Vec::with_capacity(item.value_elements.len() + 1);
+                if item.value_elements.is_empty() {
+                    contents.push(Element::Text(Cow::Owned(format!("{citation}."))));
+                } else {
+                    contents.push(Element::Text(Cow::Owned(format!("{citation}. "))));
+                    contents.extend(item.value_elements);
+                }
+                let mut attributes = AttributeMap::new();
+                attributes.insert("class", Cow::Borrowed("bibitem"));
+                attributes.insert("id", Cow::Owned(format!("bibitem-{citation}")));
+                output.push(Element::Container(Container::new(
+                    ContainerType::Div,
+                    contents,
+                    attributes,
+                )));
+            }
+        }
+        *children = output;
+    });
 }
 
 fn wikidot_crossed_frames<'r, 't>(parser: &Parser<'r, 't>, body_start: usize) -> usize

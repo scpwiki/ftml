@@ -22,7 +22,7 @@ use super::prelude::*;
 use crate::parsing::{ParagraphSplitKind, ParserWrap, strip_newlines};
 use crate::tree::{
     AcceptsPartial, AttributeMap, Container, ContainerType, ListItem, ListType,
-    PartialElement,
+    PartialElement, WikidotBlockCloseKind,
 };
 
 pub const BLOCK_UL: BlockRule = BlockRule {
@@ -723,6 +723,19 @@ fn join_lines<'t>(lines: Vec<Vec<Element<'t>>>) -> Vec<Element<'t>> {
     elements
 }
 
+/// Live's Bibliography rule ends its replacement with a newline of its own, so a
+/// source line break after the bibliography block is a blank line: no `<br>`
+/// is produced for it. The list item raw-body heuristic must not add one.
+fn trailing_wikidot_bibliography(elements: &[Element<'_>]) -> bool {
+    matches!(
+        elements.last(),
+        Some(Element::BibliographyBlock { .. })
+            | Some(Element::Partial(PartialElement::WikidotBlockClose(
+                WikidotBlockCloseKind::BibliographyCrossed { .. }
+            )))
+    )
+}
+
 fn parse_list_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -765,7 +778,11 @@ fn parse_list_item<'r, 't>(
         let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_LI);
         let (segments, errors, _) = body.into();
         let source = &parser.full_text().inner()[body_start..source_end];
-        let mut elements = assemble_wikidot_li_segments(segments, source);
+        let mut elements = assemble_wikidot_li_segments(
+            segments,
+            source,
+            parser.in_wikidot_bibliography_body(),
+        );
         if fused_close {
             elements.push(text!("]"));
         }
@@ -795,6 +812,8 @@ fn parse_list_item<'r, 't>(
             strip_newlines(&mut elements);
         } else if body.ends_with('\n')
             && !matches!(elements.last(), Some(Element::LineBreak))
+            && !parser.in_wikidot_bibliography_body()
+            && !trailing_wikidot_bibliography(&elements)
         {
             elements.push(Element::LineBreak);
         }
@@ -837,6 +856,7 @@ fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
 fn assemble_wikidot_li_segments<'t>(
     mut segments: Vec<Vec<Element<'t>>>,
     source: &str,
+    in_bibliography_body: bool,
 ) -> Vec<Element<'t>> {
     let mut had_trailing_empty = false;
     while segments
@@ -929,6 +949,8 @@ fn assemble_wikidot_li_segments<'t>(
             && !matches!(elements.last(), Some(Element::LineBreak))
             && !trailing_nested_list
             && !trailing_table
+            && !in_bibliography_body
+            && !trailing_wikidot_bibliography(&elements)
         {
             elements.push(Element::LineBreak);
         }
@@ -1001,7 +1023,11 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
         let (segments, segment_errors, _) = body.into();
         errors.extend(segment_errors);
         let source = &parser.full_text().inner()[body_start..source_end];
-        let mut elements = assemble_wikidot_li_segments(segments, source);
+        let mut elements = assemble_wikidot_li_segments(
+            segments,
+            source,
+            parser.in_wikidot_bibliography_body(),
+        );
         if fused_close {
             elements.push(text!("]"));
         }

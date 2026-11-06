@@ -384,6 +384,9 @@ fn render_wikidot_bibliography_shell(
             }
 
             for (position, (label, elements)) in bibliography.slice().iter().enumerate() {
+                if Bibliography::is_nested(label) {
+                    continue;
+                }
                 if Bibliography::is_residual(label) {
                     ctx.push_raw('\n');
                     render_elements(ctx, elements);

@@ -4424,7 +4424,7 @@ fn visit_children<'t>(element: &Element<'t>, visit: &mut dyn FnMut(&[Element<'t>
     }
 }
 
-fn visit_children_mut<'t>(
+pub(crate) fn visit_children_mut<'t>(
     element: &mut Element<'t>,
     visit: &mut dyn FnMut(&mut Vec<Element<'t>>),
 ) {

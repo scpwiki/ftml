@@ -26,6 +26,13 @@ use std::collections::HashMap;
 
 const RESIDUAL_LABEL: &str = "\0";
 
+/// Prefix for an entry whose item is rendered from a nested tree position
+/// (live converts every `: label : text` line in the joined body to a bibitem
+/// before the later line rules run, so an item can sit inside a table cell,
+/// list item or collapsible body). The rest of the label is the authored label
+/// so duplicates keep live's numbering.
+const NESTED_LABEL_PREFIX: &str = "\u{1}nested\u{1}";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BibliographyScopeWrapper<'t> {
     Container {
@@ -135,7 +142,7 @@ impl<'t> Bibliography<'t> {
             let citation = self.label_index.len() + 1;
             self.citations.push(citation);
             self.label_index.insert(
-                label.as_ref().to_owned(),
+                Self::real_label(label).to_owned(),
                 IndexedReference { citation, position },
             );
         }
@@ -179,6 +186,30 @@ impl<'t> Bibliography<'t> {
         label == RESIDUAL_LABEL
     }
 
+    /// Adds an item that is rendered from inside a nested element of the
+    /// joined body. The returned number is live's citation number for it.
+    pub(crate) fn add_nested(&mut self, label: Cow<'t, str>) -> usize {
+        let citation = self.label_index.len() + 1;
+        let position = self.entries.len();
+        let real = label.as_ref().to_owned();
+        self.label_index
+            .insert(real, IndexedReference { citation, position });
+        self.citations.push(citation);
+        self.entries.push((
+            Cow::Owned(format!("{NESTED_LABEL_PREFIX}{label}")),
+            Vec::new(),
+        ));
+        citation
+    }
+
+    pub fn is_nested(label: &str) -> bool {
+        label.starts_with(NESTED_LABEL_PREFIX)
+    }
+
+    fn real_label(label: &str) -> &str {
+        label.strip_prefix(NESTED_LABEL_PREFIX).unwrap_or(label)
+    }
+
     pub fn get(&self, label: &str) -> Option<(usize, &[Element<'t>])> {
         if let Some(indexed) = self.label_index.get(label)
             && let Some((ref_label, elements)) = self.entries.get(indexed.position)
@@ -196,7 +227,7 @@ impl<'t> Bibliography<'t> {
             if Self::is_residual(ref_label) {
                 continue;
             }
-            if label == ref_label {
+            if label == Self::real_label(ref_label) {
                 found = Some((self.citation_at(position), elements));
             }
         }

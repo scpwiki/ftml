@@ -1,0 +1,67 @@
+{
+    "elements": [
+        {
+            "element": "code",
+            "data": {
+                "contents": "[[bibliography]]\nu0",
+                "language": null,
+                "name": null
+            }
+        },
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "a",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "a"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "A"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "bibliography"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "after"
+                    }
+                ]
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "[[bibliography]]\nu0",
+            "language": null,
+            "name": null
+        }
+    ]
+}
