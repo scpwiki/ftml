@@ -1,0 +1,47 @@
+[
+  {
+    "token": "identifier",
+    "rule": "block-footnote",
+    "span": [
+      36,
+      41
+    ],
+    "kind": "footnotes-nested"
+  },
+  {
+    "token": "left-block",
+    "rule": "fallback",
+    "span": [
+      24,
+      26
+    ],
+    "kind": "no-rules-match"
+  },
+  {
+    "token": "right-block",
+    "rule": "fallback",
+    "span": [
+      34,
+      36
+    ],
+    "kind": "no-rules-match"
+  },
+  {
+    "token": "left-block-end",
+    "rule": "fallback",
+    "span": [
+      59,
+      62
+    ],
+    "kind": "no-rules-match"
+  },
+  {
+    "token": "right-block",
+    "rule": "fallback",
+    "span": [
+      70,
+      72
+    ],
+    "kind": "no-rules-match"
+  }
+]
