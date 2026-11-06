@@ -1,0 +1,11 @@
+> [[=]]
+> [[div class="a"]]
+> x
+> [[collapsible show="s" hide="h"]]
+> [[/=]]
+> [[div class="b"]]
+> y
+> [[/div]]
+> [[/collapsible]]
+> tail content
+> [[/div]]

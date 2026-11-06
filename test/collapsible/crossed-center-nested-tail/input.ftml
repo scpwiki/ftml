@@ -1,0 +1,12 @@
+[[=]]
+[[div class="card"]]
+title
+[[collapsible show="outer"]]
+[[/=]]
+[[div class="tail"]]
+[[collapsible show="inner"]]
+inner body
+[[/collapsible]]
+[[/div]]
+[[/collapsible]]
+[[/div]]

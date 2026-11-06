@@ -1,0 +1,109 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": {
+                                "align": "center"
+                            },
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "div",
+                                        "attributes": {
+                                            "class": "a"
+                                        },
+                                        "elements": [
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "paragraph",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "x"
+                                                        },
+                                                        {
+                                                            "element": "line-break"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "element": "collapsible",
+                                                "data": {
+                                                    "elements": [
+                                                        {
+                                                            "element": "container",
+                                                            "data": {
+                                                                "type": "div",
+                                                                "attributes": {
+                                                                    "class": "b"
+                                                                },
+                                                                "elements": [
+                                                                    {
+                                                                        "element": "container",
+                                                                        "data": {
+                                                                            "type": "paragraph",
+                                                                            "attributes": {},
+                                                                            "elements": [
+                                                                                {
+                                                                                    "element": "text",
+                                                                                    "data": "y"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            }
+                                                        }
+                                                    ],
+                                                    "attributes": {},
+                                                    "start-open": false,
+                                                    "show-text": "s",
+                                                    "hide-text": "h",
+                                                    "show-top": true,
+                                                    "show-bottom": false
+                                                }
+                                            },
+                                            {
+                                                "element": "container",
+                                                "data": {
+                                                    "type": "paragraph",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "tail"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": " "
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "content"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
