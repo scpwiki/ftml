@@ -2009,6 +2009,26 @@ where
         self.set_wikidot_math_closer_line_br_prefix(wants_br);
     }
 
+    pub(crate) fn wikidot_at_joined_bibliography_closer(&self) -> bool {
+        if self.discarding_hidden_body() || self.current().token != Token::LeftBlockEnd {
+            return false;
+        }
+        let in_bibliography_body = if self.settings().layout.legacy() {
+            self.in_wikidot_bibliography_body()
+        } else {
+            self.in_bibliography_parse_body()
+        };
+        if !in_bibliography_body {
+            return false;
+        }
+        const CLOSER: &str = "[[/bibliography]]";
+        let source = self.full_text().inner();
+        let start = self.current().span.start;
+        source
+            .get(start..start + CLOSER.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(CLOSER))
+    }
+
     fn verify_end_block(
         &mut self,
         first_iteration: bool,
@@ -2179,7 +2199,10 @@ where
 
             let score_close = name.ends_with('_');
             let name = name.strip_suffix('_').unwrap_or(&name);
-            if parser.settings().layout.legacy() && !parser.discarding_hidden_body() {
+            if parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && block_rule.name != "block-bibliography"
+            {
                 let flat_closer = parser
                     .wikidot_block_pair_at_closer_byte(end_start)
                     .is_some_and(|pair| pair.flat && pair.kind.emits_flat());
@@ -3142,6 +3165,17 @@ where
             if block_rule.name == "block-iftags"
                 && let Some(designated) = self.wikidot_iftags_body_end()
                 && self.current().span.start > designated
+            {
+                return Ok(crate::parsing::ParseSuccess::new(
+                    segments,
+                    all_errors,
+                    paragraph_safe,
+                ));
+            }
+
+            if block_rule.name != "block-bibliography"
+                && !self.discarding_hidden_body()
+                && self.wikidot_at_joined_bibliography_closer()
             {
                 return Ok(crate::parsing::ParseSuccess::new(
                     segments,
@@ -4498,6 +4532,14 @@ where
             }
 
             if result.is_none()
+                && block_rule.name != "block-bibliography"
+                && !parser.discarding_hidden_body()
+                && parser.wikidot_at_joined_bibliography_closer()
+            {
+                return Ok(true);
+            }
+
+            if result.is_none()
                 && !parser.discarding_hidden_body()
                 && parser.at_ancestor_body_end_boundary()
             {
@@ -4701,6 +4743,17 @@ where
 
             if self.discarding_hidden_body() && self.at_hidden_body_ancestor_boundary() {
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
+            }
+
+            if block_rule.name != "block-bibliography"
+                && !self.discarding_hidden_body()
+                && self.wikidot_at_joined_bibliography_closer()
+            {
+                return Ok(crate::parsing::ParseSuccess::new(
+                    segments,
+                    all_errors,
+                    paragraph_safe,
+                ));
             }
 
             if !self.discarding_hidden_body() && self.at_ancestor_body_end_boundary() {
@@ -5542,6 +5595,13 @@ where
             if block_rule.name == "block-iftags"
                 && let Some(designated) = self.wikidot_iftags_body_end()
                 && self.current().span.start > designated
+            {
+                return Ok(());
+            }
+
+            if block_rule.name != "block-bibliography"
+                && !self.discarding_hidden_body()
+                && self.wikidot_at_joined_bibliography_closer()
             {
                 return Ok(());
             }

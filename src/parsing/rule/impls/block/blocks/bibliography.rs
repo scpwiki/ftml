@@ -22,8 +22,8 @@ use super::prelude::*;
 use crate::parsing::consume::wikidot_flat_close_kind_at_byte;
 use crate::parsing::rule::impls::block::parser::parse_wikidot_attributes;
 use crate::tree::{
-    AttributeMap, Bibliography, Container, ContainerType, Element, LinkLabel,
-    LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind,
+    AcceptsPartial, AttributeMap, Bibliography, Container, ContainerType, Element,
+    LinkLabel, LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind,
 };
 use std::borrow::Cow;
 
@@ -101,11 +101,16 @@ fn parse_fn<'r, 't>(
     if wikidot_candidate {
         parser.enter_wikidot_bibliography_body();
     }
+    parser.enter_bibliography_parse_body();
     let body = parser.get_body_elements(&BLOCK_BIBLIOGRAPHY, false);
+    parser.leave_bibliography_parse_body();
     if wikidot_candidate {
         parser.leave_wikidot_bibliography_body();
     }
     let body = body?;
+    if !parser.discarding_hidden_body() {
+        wikidot_skip_orphan_closers_after_bibliography_body(parser);
+    }
     let (elements, errors, _) = body.into();
     let crossed_residual = wikidot_candidate
         .then(|| {
@@ -346,6 +351,48 @@ fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
         .position(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
+fn wikidot_skip_orphan_closers_after_bibliography_body<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) where
+    'r: 't,
+{
+    if parser.discarding_hidden_body() {
+        return;
+    }
+    if matches!(
+        parser.accepts_partial(),
+        AcceptsPartial::TableRow | AcceptsPartial::TableCell | AcceptsPartial::ListItem,
+    ) {
+        return;
+    }
+    loop {
+        while matches!(
+            parser.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::Whitespace
+        ) && parser.step().is_ok()
+        {}
+        if parser.current().token != Token::LeftBlockEnd {
+            return;
+        }
+        let mut probe = parser.clone();
+        let Ok(name) = probe.get_end_block() else {
+            return;
+        };
+        let name = name.strip_suffix('_').unwrap_or(&name);
+        if !name.eq_ignore_ascii_case("cell")
+            && !name.eq_ignore_ascii_case("hcell")
+            && !name.eq_ignore_ascii_case("row")
+            && !name.eq_ignore_ascii_case("table")
+            && !name.eq_ignore_ascii_case("li")
+            && !name.eq_ignore_ascii_case("ul")
+            && !name.eq_ignore_ascii_case("ol")
+        {
+            return;
+        }
+        parser.update(&probe);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,6 +417,55 @@ mod tests {
             assert_eq!(html.matches("bibitems").count(), 1, "{blanks:?}: {html}");
             assert!(!html.contains("[[bibliography"), "{blanks:?}: {html}");
         }
+    }
+
+    #[test]
+    fn wikidot_bibliography_closes_after_nested_flat_block_markers() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = concat!(
+            "[[bibliography]]\n",
+            ": alpha : Alpha reference\n",
+            "[[table]]\n",
+            "[[row]]\n",
+            "[[cell]]x[[/cell]]\n",
+            "[[/row]]\n",
+            "[[/table]]\n",
+            "[[/bibliography]]",
+        );
+        let tokenization = crate::tokenize(source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        assert!(errors.is_empty(), "{errors:?}");
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert_eq!(html.matches("bibitems").count(), 1, "{html}");
+        assert!(!html.contains("[[/bibliography"), "{html}");
+    }
+
+    #[test]
+    fn wikidot_bibliography_closes_before_table_cell_closer() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = concat!(
+            "[[bibliography]]\n",
+            ": a : A\n",
+            "[[table]]\n",
+            "[[row]]\n",
+            "[[cell]]\n",
+            ": b : B\n",
+            "[[/bibliography]]\n",
+            "[[/cell]]\n",
+            "[[/row]]\n",
+            "[[/table]]\n",
+            "after",
+        );
+        let mut prepped = source.to_owned();
+        crate::preprocess_for_layout(&mut prepped, Layout::Wikidot);
+        let tokenization = crate::tokenize(&prepped);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        assert!(errors.is_empty(), "{errors:?}");
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(!html.contains("[[/bibliography]]"), "{html}");
+        assert!(html.contains("after"), "{html}");
     }
 
     #[test]

@@ -18,6 +18,12 @@ corpus-test/table/row-quoted-close-bracket/input.ftml	Row@10..57 scan-only
 corpus-test/table/row-quoted-close-bracket/input.ftml	Table@0..68 scan-only
 corpus-test/table/row-quoted-close-bracket/input.ftml	structural Cell scan=1 tree=0 contained=true
 corpus-test/tabview/tab-opener-single-bracket/input.ftml	Tab@12..34 scan-only
+corpus-test/bibliography/f3-m1-e-table-open-in-body/input.ftml	Table@25..107 scan-only
+corpus-test/bibliography/f3-m1-e-table-open-in-body/input.ftml	Table@25..60 descent-only
+corpus-test/bibliography/f3-m1-e-table-open-in-body/input.ftml	Row@35..96 scan-only
+corpus-test/bibliography/f3-m1-e-table-open-in-body/input.ftml	Row@35..60 descent-only
+corpus-test/bibliography/f3-m1-e-table-open-in-body/input.ftml	Cell@43..87 scan-only
+corpus-test/bibliography/f3-m1-e-table-open-in-body/input.ftml	Cell@43..60 descent-only
 crossed-bb-div-collapsible@wikidot	Div@0..89 descent-only
 crossed-t3-div-span-collapsible-d-c-s@wikidot	Div@0..112 descent-only
 crossed-t3-div-span-collapsible-d-s-c@wikidot	Div@0..112 descent-only

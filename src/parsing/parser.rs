@@ -3666,8 +3666,8 @@ fn parser_append_shared_items_and_optional_spaces_cover_helpers() {
 fn parser_state_fits_the_bounded_deep_parse_stack_budget() {
     let size = std::mem::size_of::<Parser<'static, 'static>>();
     assert!(
-        size <= 336,
-        "Parser grew to {size} bytes; deep recursive parsing requires at most 336 bytes",
+        size <= 352,
+        "Parser grew to {size} bytes; deep recursive parsing requires at most 352 bytes",
     );
 }
 

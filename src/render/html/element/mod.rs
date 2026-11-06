@@ -60,7 +60,11 @@ mod prelude {
 }
 
 use self::audio::render_audio;
-use self::bibliography::{render_bibcite, render_bibliography};
+use self::bibliography::{
+    WikidotBibliographyResidualCrossing, WikidotBibliographyTrailing, render_bibcite,
+    render_bibliography, render_wikidot_bibliography,
+    wikidot_bibliography_residual_crossing,
+};
 use self::block_frame::{BlockFrame, render_block_frame};
 use self::button::render_standalone_button;
 use self::clear_float::render_clear_float;
@@ -94,15 +98,17 @@ use self::user::render_user;
 use self::video::render_video;
 use super::HtmlContext;
 use super::attributes::AddedAttributes;
-use crate::tree::{CodeBlock, Element, ListItem, PartialElement, WikidotBlockCloseKind};
+use crate::tree::{
+    CodeBlock, ContainerType, Element, ListItem, PartialElement, WikidotBlockCloseKind,
+};
 use ref_map::*;
 
 pub fn render_elements(ctx: &mut HtmlContext, elements: &[Element]) {
     debug!("Rendering elements (length {})", elements.len());
 
     let mut index = 0;
-    while let Some(element) = elements.get(index) {
-        match element {
+    while index < elements.len() {
+        match &elements[index] {
             Element::Text(text) => {
                 ctx.push_escaped(text);
                 index += 1;
@@ -111,6 +117,61 @@ pub fn render_elements(ctx: &mut HtmlContext, elements: &[Element]) {
                     ctx.push_escaped(text);
                     index += 1;
                 }
+            }
+            Element::BibliographyBlock {
+                index: bib_index,
+                title,
+                ..
+            } if ctx.layout().legacy() => {
+                if let Some(bibliography) = ctx.get_bibliography(*bib_index) {
+                    let title = title.ref_map(|s| s.as_ref());
+                    let title_default = ctx
+                        .handle()
+                        .get_message(ctx.language(), "bibliography-block-title");
+                    let title_ref: &str = title.unwrap_or(&title_default);
+
+                    let trailing =
+                        match wikidot_bibliography_residual_crossing(bibliography) {
+                            Some(WikidotBibliographyResidualCrossing::OuterTable) => {
+                                elements.get(index + 1).and_then(|next| match next {
+                                    Element::Container(container)
+                                        if container.ctype()
+                                            == ContainerType::Paragraph =>
+                                    {
+                                        Some(WikidotBibliographyTrailing::InsideBibitems(
+                                            next,
+                                        ))
+                                    }
+                                    _ => None,
+                                })
+                            }
+                            Some(WikidotBibliographyResidualCrossing::OuterList) => {
+                                elements.get(index + 1).and_then(|next| match next {
+                                    Element::Container(container)
+                                        if container.ctype()
+                                            == ContainerType::Paragraph =>
+                                    {
+                                        Some(WikidotBibliographyTrailing::AfterBibitems(
+                                            next,
+                                        ))
+                                    }
+                                    _ => None,
+                                })
+                            }
+                            None => None,
+                        };
+
+                    render_wikidot_bibliography(ctx, title_ref, bibliography, trailing);
+                    index += 1;
+                    if trailing.is_some() {
+                        index += 1;
+                    }
+                } else {
+                    let element = &elements[index];
+                    render_element(ctx, element);
+                    index += 1;
+                }
+                continue;
             }
             element => {
                 render_element(ctx, element);

@@ -1,19 +1,10 @@
 [
     {
-        "token": "input-end",
-        "rule": "block-bibliography",
-        "span": [
-            94,
-            94
-        ],
-        "kind": "end-of-input"
-    },
-    {
-        "token": "left-block",
+        "token": "left-block-end",
         "rule": "fallback",
         "span": [
-            18,
-            20
+            80,
+            83
         ],
         "kind": "no-rules-match"
     },
@@ -21,8 +12,8 @@
         "token": "right-block",
         "rule": "fallback",
         "span": [
-            32,
-            34
+            87,
+            89
         ],
         "kind": "no-rules-match"
     }

@@ -19,8 +19,127 @@
  */
 
 use super::prelude::*;
-use crate::tree::{Bibliography, BibliographyScopeWrapper, Container};
+use crate::tree::{
+    Bibliography, BibliographyScopeWrapper, Container, Element, ListItem, PartialElement,
+};
 use std::borrow::Cow;
+
+fn element_contains_outer_table(element: &Element<'_>) -> bool {
+    match element {
+        Element::Table(_) => true,
+        Element::List { .. } => false,
+        Element::Container(container) => {
+            elements_contain_outer_table(container.elements())
+        }
+        Element::Collapsible { elements, .. } => elements_contain_outer_table(elements),
+        Element::Anchor { elements, .. } => elements_contain_outer_table(elements),
+        Element::Color { elements, .. } => elements_contain_outer_table(elements),
+        Element::DefinitionList(items) => items.iter().any(|item| {
+            elements_contain_outer_table(&item.key_elements)
+                || elements_contain_outer_table(&item.value_elements)
+        }),
+        Element::Partial(PartialElement::TableRow(row)) => row
+            .cells
+            .iter()
+            .any(|cell| elements_contain_outer_table(&cell.elements)),
+        Element::Partial(PartialElement::TableCell(cell)) => {
+            elements_contain_outer_table(&cell.elements)
+        }
+        Element::Partial(PartialElement::ListItem(ListItem::Elements {
+            elements,
+            ..
+        })) => elements_contain_outer_table(elements),
+        Element::Partial(PartialElement::ListItem(ListItem::SubList { element })) => {
+            element_contains_outer_table(element)
+        }
+        Element::Partial(PartialElement::WikidotFoster(elements)) => {
+            elements_contain_outer_table(elements)
+        }
+        Element::Partial(PartialElement::Tab(tab)) => {
+            elements_contain_outer_table(&tab.elements)
+        }
+        _ => false,
+    }
+}
+
+fn element_contains_outer_list(element: &Element<'_>) -> bool {
+    match element {
+        Element::List { .. } => true,
+        Element::Table(_) => false,
+        Element::Container(container) => {
+            elements_contain_outer_list(container.elements())
+        }
+        Element::Collapsible { elements, .. } => elements_contain_outer_list(elements),
+        Element::Anchor { elements, .. } => elements_contain_outer_list(elements),
+        Element::Color { elements, .. } => elements_contain_outer_list(elements),
+        Element::DefinitionList(items) => items.iter().any(|item| {
+            elements_contain_outer_list(&item.key_elements)
+                || elements_contain_outer_list(&item.value_elements)
+        }),
+        Element::Partial(PartialElement::TableRow(row)) => row
+            .cells
+            .iter()
+            .any(|cell| elements_contain_outer_list(&cell.elements)),
+        Element::Partial(PartialElement::TableCell(cell)) => {
+            elements_contain_outer_list(&cell.elements)
+        }
+        Element::Partial(PartialElement::ListItem(ListItem::Elements {
+            elements,
+            ..
+        })) => elements_contain_outer_list(elements),
+        Element::Partial(PartialElement::ListItem(ListItem::SubList { element })) => {
+            element_contains_outer_list(element)
+        }
+        Element::Partial(PartialElement::WikidotFoster(elements)) => {
+            elements_contain_outer_list(elements)
+        }
+        Element::Partial(PartialElement::Tab(tab)) => {
+            elements_contain_outer_list(&tab.elements)
+        }
+        _ => false,
+    }
+}
+
+fn elements_contain_outer_table(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(element_contains_outer_table)
+}
+
+fn elements_contain_outer_list(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(element_contains_outer_list)
+}
+
+/// Which outer structure the bibliography residual spans (table vs list). Used to
+/// place the following paragraph like live: inside `bibitems` after the table, or
+/// after `</div>` when the crossing is a list.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WikidotBibliographyResidualCrossing {
+    OuterTable,
+    OuterList,
+}
+
+/// Trailing paragraph after the bibliography block that must be merged with the
+/// bibliography render so it is not emitted twice from the root element list.
+#[derive(Copy, Clone)]
+pub(crate) enum WikidotBibliographyTrailing<'a> {
+    InsideBibitems(&'a Element<'a>),
+    AfterBibitems(&'a Element<'a>),
+}
+
+pub(crate) fn wikidot_bibliography_residual_crossing(
+    bibliography: &Bibliography,
+) -> Option<WikidotBibliographyResidualCrossing> {
+    let (label, elements) = bibliography.slice().last()?;
+    if !Bibliography::is_residual(label) {
+        return None;
+    }
+    if elements_contain_outer_table(elements) {
+        return Some(WikidotBibliographyResidualCrossing::OuterTable);
+    }
+    if elements_contain_outer_list(elements) {
+        return Some(WikidotBibliographyResidualCrossing::OuterList);
+    }
+    None
+}
 
 pub fn render_bibcite(ctx: &mut HtmlContext, label: &str, brackets: bool, inline: bool) {
     debug!("Rendering bibliography citation (label {label}, brackets {brackets})");
@@ -346,14 +465,15 @@ fn bibliography_merge_into<'t>(
     }
 }
 
-fn render_wikidot_bibliography(
+pub(crate) fn render_wikidot_bibliography(
     ctx: &mut HtmlContext,
     title: &str,
     bibliography: &Bibliography,
+    trailing_paragraph: Option<WikidotBibliographyTrailing<'_>>,
 ) {
     let previous = ctx.rendering_wikidot_bibliography();
     ctx.set_rendering_wikidot_bibliography(true);
-    render_wikidot_bibliography_shell(ctx, title, bibliography);
+    render_wikidot_bibliography_shell(ctx, title, bibliography, trailing_paragraph);
     ctx.set_rendering_wikidot_bibliography(previous);
 }
 
@@ -361,11 +481,24 @@ fn render_wikidot_bibliography_shell(
     ctx: &mut HtmlContext,
     title: &str,
     bibliography: &Bibliography,
+    trailing_paragraph: Option<WikidotBibliographyTrailing<'_>>,
 ) {
-    ctx.html()
-        .div()
-        .attr(attr!("class" => "bibitems"))
-        .inner(|ctx| {
+    let trailing_inside = match trailing_paragraph {
+        Some(WikidotBibliographyTrailing::InsideBibitems(el)) => Some(el),
+        _ => None,
+    };
+    let trailing_after = match trailing_paragraph {
+        Some(WikidotBibliographyTrailing::AfterBibitems(el)) => Some(el),
+        _ => None,
+    };
+
+    {
+        let mut bibitems = ctx.html().div();
+        bibitems.attr(attr!("class" => "bibitems"));
+        if trailing_inside.is_some() {
+            bibitems.omit_close();
+        }
+        bibitems.inner(|ctx| {
             let title_wrappers = bibliography.title_wrappers();
             if title_wrappers.is_empty() {
                 ctx.html()
@@ -431,6 +564,15 @@ fn render_wikidot_bibliography_shell(
                     });
             }
         });
+    }
+
+    if let Some(trailing) = trailing_inside {
+        render_element(ctx, trailing);
+    }
+
+    if let Some(trailing) = trailing_after {
+        render_element(ctx, trailing);
+    }
 }
 
 pub fn render_bibliography(
@@ -458,7 +600,7 @@ pub fn render_bibliography(
     };
 
     if ctx.layout().legacy() {
-        render_wikidot_bibliography(ctx, title, bibliography);
+        render_wikidot_bibliography(ctx, title, bibliography, None);
         return;
     }
 
