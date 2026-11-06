@@ -3670,7 +3670,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn block_pairs_differential() {
         std::thread::Builder::new()
             .name("block-pairs-differential".to_owned())

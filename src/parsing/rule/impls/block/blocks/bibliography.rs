@@ -361,7 +361,7 @@ fn wikidot_skip_orphan_closers_after_bibliography_body<'r, 't>(
     }
     if matches!(
         parser.accepts_partial(),
-        AcceptsPartial::TableRow | AcceptsPartial::TableCell,
+        AcceptsPartial::TableRow | AcceptsPartial::TableCell | AcceptsPartial::ListItem,
     ) {
         return;
     }
@@ -383,6 +383,9 @@ fn wikidot_skip_orphan_closers_after_bibliography_body<'r, 't>(
             && !name.eq_ignore_ascii_case("hcell")
             && !name.eq_ignore_ascii_case("row")
             && !name.eq_ignore_ascii_case("table")
+            && !name.eq_ignore_ascii_case("li")
+            && !name.eq_ignore_ascii_case("ul")
+            && !name.eq_ignore_ascii_case("ol")
         {
             return;
         }
