@@ -150,6 +150,39 @@ impl<'t> ParagraphStack<'t> {
             })
     }
 
+    /// Live's `Deflist` rule (position 46) matches `\n((: ).*\n)` and re-emits the
+    /// leading newline before its tokens. When the previous element is a closed
+    /// block whose closer leaves a single newline, that re-emitted newline becomes
+    /// a `<br>` before the definition list. `Blockquote` is excluded: its closer
+    /// emits `"\n\n"` instead, so live has no `<br>` there.
+    #[inline]
+    pub(crate) fn wikidot_definition_list_break_follows_block(&self) -> bool {
+        self.wikidot
+            && self.current_empty()
+            && self.finished.last().is_some_and(|element| {
+                matches!(
+                    element,
+                    Element::Container(container)
+                        if matches!(
+                            container.ctype(),
+                            ContainerType::Div | ContainerType::Note | ContainerType::Align(_)
+                        )
+                ) || matches!(
+                    element,
+                    Element::Code(_) | Element::Collapsible { .. } | Element::TabView(_)
+                ) || matches!(
+                    element,
+                    Element::Partial(PartialElement::WikidotBlockClose(
+                        WikidotBlockCloseKind::Div { .. }
+                            | WikidotBlockCloseKind::Collapsible { .. }
+                            | WikidotBlockCloseKind::CollapsibleCrossedBottom { .. }
+                            | WikidotBlockCloseKind::Note { .. }
+                            | WikidotBlockCloseKind::Align { .. }
+                    ))
+                )
+            })
+    }
+
     #[inline]
     pub(crate) fn wikidot_list_break_follows_list(&self) -> bool {
         self.wikidot
@@ -956,13 +989,17 @@ impl<'t> ParagraphStack<'t> {
             self.current_unwrapped = true;
         }
 
-        if self.wikidot
-            && matches!(element, Element::DefinitionList(_))
-            && !self.current.is_empty()
-        {
-            self.trim_trailing_ascii_space();
-            self.current.push(Element::LineBreak);
-            self.current_unwrapped = true;
+        if self.wikidot && matches!(element, Element::DefinitionList(_)) {
+            if !self.current.is_empty() {
+                self.trim_trailing_ascii_space();
+                self.current.push(Element::LineBreak);
+                self.current_unwrapped = true;
+            } else if !paragraph_break_separated
+                && self.wikidot_definition_list_break_follows_block()
+            {
+                self.current.push(Element::LineBreak);
+                self.current_unwrapped = true;
+            }
         }
 
         if wikidot_simple_table && !self.current.is_empty() {
