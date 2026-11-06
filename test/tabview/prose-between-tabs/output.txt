@@ -1,0 +1,5 @@
+[[tabview]]
+[[tab A]] a [[/tab]]
+prose
+[[tab B]] b [[/tab]]
+[[/tabview]]

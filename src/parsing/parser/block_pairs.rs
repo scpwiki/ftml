@@ -3141,6 +3141,16 @@ impl<'t> Scanner<'t> {
         let head_depth = self.line_quote_depth(head_index);
         let mut tabs = 0_usize;
         let mut degraded_content = false;
+        // Live starts a tabview body with a tab head: a body whose first
+        // significant construct is prose or a stray closer fails the view even
+        // when a later attached closer would pair. Probe-frozen in
+        // co-parse/work/b19-predictions2.json (q2/q6).
+        let mut first_construct = false;
+        // Live pairs a view closer only when only structure space separates it
+        // from the body's last tab closer; a closer after prose stays literal
+        // and the view keeps scanning for a later attached closer
+        // (tabview/tab-stray-fails).
+        let mut last_tab_close = false;
         let mut pos = head.head_end;
         loop {
             pos = if head_depth > 0 {
@@ -3149,10 +3159,16 @@ impl<'t> Scanner<'t> {
                 self.skip_structure_space(pos, limit)?
             };
             if let Some(close) = self.read_kind_closer(pos, WikidotBlockKind::TabView) {
-                if tabs == 0 && !degraded_content {
+                if self.quote_depth_outside(pos, head_depth) {
                     return None;
                 }
-                if self.quote_depth_outside(pos, head_depth) {
+                if !last_tab_close {
+                    // Not attached: the closer stays literal body content and
+                    // the scan continues toward a later attached closer.
+                    pos = close.head_end;
+                    continue;
+                }
+                if !first_construct || (tabs == 0 && !degraded_content) {
                     return None;
                 }
                 let head_byte = self.head_byte(head_index);
@@ -3175,15 +3191,11 @@ impl<'t> Scanner<'t> {
             }
             // T1: stray tab closers are failed content, not heads. The
             // consumer skips them without failing the view; mirror that
-            // instead of bailing the whole view prediction.
+            // instead of bailing the whole view prediction. A stray closer
+            // anchors a following view closer, but cannot open the body.
             let tab_head = match self.read_kind_head(pos, WikidotBlockKind::Tab) {
                 Some(tab_head) => tab_head,
                 None => {
-                    if let Some(stray) = self.read_kind_closer(pos, WikidotBlockKind::Tab)
-                    {
-                        pos = stray.head_end;
-                        continue;
-                    }
                     if self.tab_leading_space_head(pos) {
                         let (body_end, tab_closer, tab_closer_end) = self
                             .scan_failed_tab_body(pos + 1, limit, depth, &mut measure)?;
@@ -3191,19 +3203,33 @@ impl<'t> Scanner<'t> {
                             return None;
                         }
                         measure.children.push((pos + 1, body_end));
+                        first_construct = true;
                         pos = tab_closer_end;
+                        last_tab_close = true;
                         continue;
                     }
-                    if degraded_content {
-                        pos += 1;
+                    if let Some(stray) = self.read_kind_closer(pos, WikidotBlockKind::Tab)
+                    {
+                        if !first_construct {
+                            return None;
+                        }
+                        pos = stray.head_end;
+                        last_tab_close = true;
                         continue;
                     }
-                    return None;
+                    if !first_construct {
+                        return None;
+                    }
+                    pos = self.skip_tabview_content(pos, limit)?;
+                    last_tab_close = false;
+                    continue;
                 }
             };
+            first_construct = true;
             if self.tab_head_footnoteblock_first(pos, &tab_head) {
                 degraded_content = true;
                 pos = tab_head.head_end;
+                last_tab_close = false;
                 continue;
             }
             tabs += 1;
@@ -3235,6 +3261,35 @@ impl<'t> Scanner<'t> {
                 });
             }
             pos = tab_closer_end;
+            last_tab_close = true;
+        }
+    }
+
+    /// Skip one significant view-body content construct while searching for
+    /// the attached closer of a recovering tabview. Regular block heads stay
+    /// literal (the consumer's tab view body only forms tabs as structure), so
+    /// only their head tokens are skipped; opaque constructs are skipped whole.
+    fn skip_tabview_content(&self, pos: usize, limit: usize) -> Option<usize> {
+        if let Some(zone_end) = self.zone_end(pos) {
+            return Some(zone_end.min(limit));
+        }
+        match self.tokens[pos].token {
+            Token::LeftComment => self.skip_comment(pos),
+            Token::LeftBlock | Token::LeftBlockStar => {
+                if let Some(candidate) = self.code_candidates.get(&self.tokens[pos].span.start)
+                    && self.raw_name_is(pos, "code")
+                {
+                    return Some(self.token_at_or_after(candidate.owner_end));
+                }
+                if let Some(segment) = self.segment_at(pos) {
+                    return Some(segment.end);
+                }
+                let Some(head) = self.read_head(pos, false) else {
+                    return Some(pos + 1);
+                };
+                Some(head.head_end)
+            }
+            _ => Some(pos + 1),
         }
     }
 }

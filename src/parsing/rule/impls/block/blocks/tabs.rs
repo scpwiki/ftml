@@ -27,6 +27,7 @@ use crate::parsing::collect::{
 };
 use crate::parsing::consume::consume;
 use crate::parsing::paragraph::{ParagraphStack, gather_paragraphs};
+use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::parser::{QuoteBodyLineStatus, QuoteEscapedUnit};
 use crate::parsing::rule::impls::block::parser::WikidotHeadSpaceRegion;
 use crate::tree::{
@@ -309,6 +310,52 @@ fn wikidot_tabview_failed_content_gate(items: &[TabViewItem]) -> bool {
     }
 }
 
+/// The first significant construct of a Wikidot tabview body must be a tab
+/// head: live literalizes the whole view when prose or a stray closer comes
+/// first, even though an attached `[[/tabview]]` closer follows later. The
+/// probe predictions this rule was frozen against live in
+/// `co-parse/work/b19-predictions2.json` (q2, q6).
+fn wikidot_tabview_body_starts_with_tab_head<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> bool
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    loop {
+        match probe.current().token {
+            Token::Whitespace
+            | Token::LineBreak
+            | Token::ParagraphBreak
+            | Token::InputStart
+            | Token::DiscardedControl => {
+                if probe.step().is_err() {
+                    return false;
+                }
+            }
+            Token::LeftComment => {
+                let mut comment = probe.clone();
+                if consume_valid_comment(&mut comment).is_err() {
+                    return false;
+                }
+                probe.update(&comment);
+            }
+            Token::LeftBlock | Token::LeftBlockStar => {
+                let source = probe.full_text().inner();
+                let start = probe.current().span.start;
+                let rest = source[start + 2..].trim_start_matches([' ', '\t']);
+                let name_len = rest
+                    .find(|character: char| {
+                        !character.is_ascii_alphanumeric() && character != '_'
+                    })
+                    .unwrap_or(rest.len());
+                return rest[..name_len].eq_ignore_ascii_case("tab");
+            }
+            _ => return false,
+        }
+    }
+}
+
 fn parse_tabview<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -365,6 +412,12 @@ fn parse_tabview<'r, 't>(
     )?;
 
     let records_at_entry = parser.degraded_title_record_count();
+
+    // Live starts a tabview body with a tab head: prose or a stray closer
+    // first fails the whole view even when an attached closer follows later.
+    let body_starts_with_tab = quote_ejection
+        || !parser.settings().layout.legacy()
+        || wikidot_tabview_body_starts_with_tab_head(&**parser);
 
     let previous_ejection = parser.wikidot_tab_quote_ejection();
     let previous_split = quote_ejection.then(|| {
@@ -439,13 +492,27 @@ fn parse_tabview<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));
     }
 
+    // The block-pair scan applies live's first-construct and attached-closer
+    // rules; a view it paired keeps its stray runs as recovered content
+    // (tabview/tab-stray-fails).
+    let scan_paired = !native
+        && !quote_ejection
+        && parser
+            .wikidot_block_pair_at_head_byte(opener_start)
+            .is_some_and(|pair| pair.kind == WikidotBlockKind::TabView);
+
     // A failed tab head (one whose title is an elided footnoteblock) leaves its
     // source literal inside the view; live keeps the view and renders that
     // content instead of failing the whole tabview.
+    let collection_hit_eof = errors
+        .iter()
+        .any(|error| error.kind() == ParseErrorKind::EndOfInput);
     if runs > 0
         && !native
         && runs > records_added
-        && !wikidot_tabview_failed_content_gate(&items)
+        && (!body_starts_with_tab
+            || (!scan_paired && !wikidot_tabview_failed_content_gate(&items))
+            || (body_starts_with_tab && scan_paired && collection_hit_eof))
     {
         restore_wikidot_tabview_split_state(parser, previous_split);
         return Err(parser.make_err(ParseErrorKind::TabViewContainsNonTab));

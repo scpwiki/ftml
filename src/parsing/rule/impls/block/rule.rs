@@ -499,6 +499,16 @@ where
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    // A view head inside a tabview body stays literal: the body only forms tab
+    // structure, and a nested view would overlap the outer one
+    // (tabview/tab-stray-fails keeps the inner opener as content).
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && block.name == "block-tabview"
+        && parser.accepts_partial_here(crate::tree::AcceptsPartial::Tab)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if parser.settings().layout.legacy()
         && !parser.discarding_hidden_body()
         && !wikidot_block_has_physical_line_ownership(
