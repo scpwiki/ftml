@@ -735,26 +735,36 @@ fn substitute_wikidot_impl(text: &mut String, defer_conditionals: bool) {
     let mut buffer = String::new();
     debug!("Performing typography substitutions");
 
-    replace_within_paragraphs(&DOUBLE_QUOTES, text, &mut buffer);
-    replace_low_quotes_within_paragraphs(text, &mut buffer);
-    replace_within_paragraphs(&SINGLE_QUOTES, text, &mut buffer);
+    if text.contains("``") {
+        replace_within_paragraphs(&DOUBLE_QUOTES, text, &mut buffer);
+    }
+    if text.contains(",,") {
+        replace_low_quotes_within_paragraphs(text, &mut buffer);
+    }
+    if text.contains('`') {
+        replace_within_paragraphs(&SINGLE_QUOTES, text, &mut buffer);
+    }
     if defer_conditionals {
         replace_wikidot_angle_quotes_deferring(text, &mut buffer);
     } else {
         replace_wikidot_angle_quotes_outside_owners(text, &mut buffer);
     }
 
-    let digit_spaces = digit_space_positions(text);
-    let mut protected_ranges = typography_protected_ranges(text, true);
-    if replace_number_spaces(text, &protected_ranges, &digit_spaces) {
-        protected_ranges = typography_protected_ranges(text, true);
+    if text.bytes().any(|byte| byte.is_ascii_digit()) {
+        let digit_spaces = digit_space_positions(text);
+        let mut protected_ranges = typography_protected_ranges(text, true);
+        if replace_number_spaces(text, &protected_ranges, &digit_spaces) {
+            protected_ranges = typography_protected_ranges(text, true);
+        }
+        replace_unit_spaces(text, &protected_ranges);
     }
-    replace_unit_spaces(text, &protected_ranges);
 
-    if defer_conditionals {
-        replace_wikidot_ellipsis_deferring(text, &mut buffer);
-    } else {
-        replace_wikidot_ellipsis_outside_literals(text, &mut buffer);
+    if text.contains('.') {
+        if defer_conditionals {
+            replace_wikidot_ellipsis_deferring(text, &mut buffer);
+        } else {
+            replace_wikidot_ellipsis_outside_literals(text, &mut buffer);
+        }
     }
 }
 
@@ -1890,5 +1900,32 @@ fn typography_preserves_literal_regions_and_module_bodies_in_both_layouts() {
             text, "[[module Rate]]\nWait… [[module CSS]]\n...\n[[/module]]\nend…",
             "{layout:?}"
         );
+    }
+}
+
+#[test]
+fn typography_triggerless_text_is_unchanged() {
+    let mut text = "[!-- a ".repeat(64);
+    let original = text.clone();
+    substitute_wikidot(&mut text);
+    assert_eq!(text, original);
+
+    let mut deferring = original.clone();
+    substitute_wikidot_deferring_conditionals(&mut deferring);
+    assert_eq!(deferring, original);
+}
+
+#[test]
+fn typography_trigger_guards_keep_their_substitutions() {
+    for (input, expected) in [
+        ("\x60\x60double''", "\u{201c}double\u{201d}"),
+        (",,low''", "\u{201e}low\u{201d}"),
+        ("\x60single'", "\u{2018}single\u{2019}"),
+        ("wait...", "wait\u{2026}"),
+        ("5 g", "5\u{a0}g"),
+    ] {
+        let mut text = input.to_owned();
+        substitute_wikidot(&mut text);
+        assert_eq!(text, expected, "{input:?}");
     }
 }
