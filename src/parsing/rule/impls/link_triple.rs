@@ -244,6 +244,17 @@ fn build_same<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     };
 
+    let label =
+        if parser.settings().layout.legacy() && matches!(link, LinkLocation::Page(_)) {
+            Cow::Owned(
+                collapse_whitespace_runs(&label)
+                    .trim_matches(' ')
+                    .to_owned(),
+            )
+        } else {
+            label
+        };
+
     let element = Element::Link {
         ltype,
         target: wikidot_target(parser, target, &link),
@@ -359,6 +370,12 @@ fn build_separate<'r, 't>(
         }
     } else if label.is_empty() {
         LinkLabel::Page
+    } else if legacy && matches!(link, LinkLocation::Page(_)) {
+        LinkLabel::Text(Cow::Owned(
+            collapse_whitespace_runs(&label)
+                .trim_matches(' ')
+                .to_owned(),
+        ))
     } else {
         LinkLabel::Text(label)
     };
@@ -716,10 +733,6 @@ fn transliterate_triple_target(url: &str) -> String {
             transliterated.push(character);
         } else if let Some(latin) = transliterate_character(character) {
             transliterated.push_str(latin);
-        } else if is_format_character(character) {
-            transliterated.push(' ');
-        } else if is_transliteration_combining_mark(character) {
-            continue;
         } else {
             transliterated.push(' ');
         }
@@ -728,15 +741,15 @@ fn transliterate_triple_target(url: &str) -> String {
     transliterated
 }
 
-/// Stands in for `:` while `wikidot_normalize::normalize` runs, so every
-/// colon survives instead of merging into dashes. Modifier Letter Prime is
-/// NFKC- and casefold-stable and matches the slug character class.
-const COLON_PLACEHOLDER: &str = "\u{2b9}";
-
-/// Normalizes a transliterated triple-link slug the way live does: the full
-/// `wikidot_normalize::normalize` pipeline except multi-category merging, so
-/// `a:b:c` keeps its colons and `_default:` still strips.
+/// Normalizes a transliterated triple-link slug the way live does. With at
+/// most one category separator the full `wikidot_normalize::normalize`
+/// pipeline already matches live; multi-category targets follow their own
+/// derived rule (`normalize_triple_slug_multi`).
 fn normalize_triple_slug(text: &str) -> String {
+    if text.matches(':').count() > 1 {
+        return normalize_triple_slug_multi(text);
+    }
+
     // Live keeps a trailing `:_` (an underscore directly after a category
     // colon, as in `fragment:_template`) and drops every other trailing run
     // of `:`/`_` in a colon-bearing target.
@@ -759,20 +772,154 @@ fn normalize_triple_slug(text: &str) -> String {
     };
     text = collapse_colon_runs(&text);
     strip_default_category(&mut text);
+    normalize(&mut text);
+    text
+}
 
-    if text.matches(':').count() <= 1 {
-        // With at most one category separator the stock pipeline already
-        // matches live, including an underscore directly after the colon.
-        normalize(&mut text);
-        return text;
+fn normalize_triple_slug_multi(text: &str) -> String {
+    let mut folded = slug_fold(slug_trailing_trim(text));
+    if folded.len() >= 9 && folded[..9].eq_ignore_ascii_case("_default:") {
+        folded = folded[9..].to_owned();
     }
+    let mut folded = slug_collapse_start(&folded);
+    if let Some((category, name)) = folded.split_once(':') {
+        folded = format!("{category}:{}", slug_collapse_start(name));
+    }
+    if !folded.bytes().any(|byte| byte.is_ascii_alphanumeric()) {
+        return String::new();
+    }
+    folded
+}
 
-    let mut protected = text.replace(':', COLON_PLACEHOLDER);
-    normalize(&mut protected);
-    let mut restored = protected.replace(COLON_PLACEHOLDER, ":");
-    // Mirror the colon-adjacent normalize steps the placeholder blocked.
-    restored = restored.replace("-:", ":").replace(":-", ":");
-    restored.trim_matches(':').to_owned()
+fn slug_trailing_trim(raw: &str) -> &str {
+    let mut end = raw.len();
+    for (index, character) in raw.char_indices().rev() {
+        if matches!(character, ':' | '_' | '-') {
+            end = index;
+        } else {
+            break;
+        }
+    }
+    let run = &raw[end..];
+    if run.is_empty() || raw == "_" {
+        return raw;
+    }
+    if run == ":_" {
+        if let Some(first) = raw.find(":_") {
+            if first == end {
+                return raw;
+            }
+            let after = raw[first + 2..].chars().next();
+            if after.is_some_and(|character| character.is_alphanumeric()) {
+                return raw;
+            }
+        }
+        return &raw[..end];
+    }
+    &raw[..end]
+}
+
+fn slug_fold(text: &str) -> String {
+    let lowered = text.trim().to_lowercase();
+    let mut folded: String = lowered
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | ':' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    folded = collapse_char_runs(&folded, ':');
+    folded = collapse_char_runs(&folded, '-');
+    folded = replace_slug_pairs(&folded, [(':', '-'), ('-', ':')], ':');
+    folded = replace_slug_pairs(&folded, [('_', '-'), ('-', '_')], '_');
+    if let Some(rest) = folded.strip_prefix('_') {
+        folded = format!(":_{rest}");
+    }
+    let mut underscored = String::with_capacity(folded.len());
+    let mut previous = None;
+    for character in folded.chars() {
+        if character == '_' && previous != Some(':') {
+            underscored.push('-');
+        } else {
+            underscored.push(character);
+        }
+        previous = Some(character);
+    }
+    folded = underscored.trim_matches('-').to_owned();
+    folded = collapse_char_runs(&folded, '-');
+    folded = collapse_char_runs(&folded, ':');
+    folded = replace_slug_pairs(&folded, [(':', '-'), ('-', ':')], ':');
+    folded = replace_slug_pairs(&folded, [('_', '-'), ('-', '_')], '_');
+    folded.trim_matches(':').to_owned()
+}
+
+fn slug_collapse_start(text: &str) -> String {
+    let run_len: usize = text
+        .chars()
+        .take_while(|character| matches!(character, ':' | '_' | '-'))
+        .map(char::len_utf8)
+        .sum();
+    if run_len == 0 {
+        return text.to_owned();
+    }
+    let (run, rest) = text.split_at(run_len);
+    if run.contains('_') {
+        format!("_{rest}")
+    } else {
+        text.to_owned()
+    }
+}
+
+fn collapse_char_runs(text: &str, needle: char) -> String {
+    let mut collapsed = String::with_capacity(text.len());
+    let mut previous = None;
+    for character in text.chars() {
+        if character == needle && previous == Some(needle) {
+            continue;
+        }
+        previous = Some(character);
+        collapsed.push(character);
+    }
+    collapsed
+}
+
+fn replace_slug_pairs(text: &str, pairs: [(char, char); 2], replacement: char) -> String {
+    let mut text = text.to_owned();
+    loop {
+        let chars: Vec<char> = text.chars().collect();
+        let hit = chars
+            .windows(2)
+            .position(|window| pairs.contains(&(window[0], window[1])));
+        match hit {
+            Some(index) => {
+                let mut next: String = chars[..index].iter().collect();
+                next.push(replacement);
+                next.extend(chars[index + 2..].iter());
+                text = next;
+            }
+            None => return text,
+        }
+    }
+}
+
+fn collapse_whitespace_runs(text: &str) -> String {
+    let mut collapsed = String::with_capacity(text.len());
+    let mut in_whitespace = false;
+    for character in text.chars() {
+        if matches!(character, ' ' | '\t') {
+            if !in_whitespace {
+                collapsed.push(' ');
+                in_whitespace = true;
+            }
+        } else {
+            collapsed.push(character);
+            in_whitespace = false;
+        }
+    }
+    collapsed
 }
 
 /// Builds the local page reference for a transliterated triple-link target.
@@ -782,7 +929,13 @@ fn normalize_triple_slug(text: &str) -> String {
 fn triple_page_ref(target: &str) -> PageRef {
     let target = target.trim_start_matches(':');
     let (page, extra) = match target.split_once('#') {
-        Some((page, anchor)) => (page, Some(format!("#{}", anchor.replace(' ', "%20")))),
+        Some((page, anchor)) => (
+            page,
+            Some(format!(
+                "#{}",
+                collapse_whitespace_runs(anchor).replace(' ', "%20")
+            )),
+        ),
         None => (target, None),
     };
     PageRef {
@@ -834,44 +987,6 @@ fn strip_default_category(text: &mut String) {
     }
 }
 
-fn is_format_character(character: char) -> bool {
-    matches!(
-        character,
-        '\u{ad}'
-            | '\u{600}'..='\u{605}'
-            | '\u{61c}'
-            | '\u{6dd}'
-            | '\u{70f}'
-            | '\u{8e2}'
-            | '\u{180e}'
-            | '\u{200b}'..='\u{200f}'
-            | '\u{202a}'..='\u{202e}'
-            | '\u{2060}'..='\u{2064}'
-            | '\u{2066}'..='\u{206f}'
-            | '\u{feff}'
-            | '\u{fff9}'..='\u{fffb}'
-            | '\u{110bd}'
-            | '\u{110cd}'
-            | '\u{13430}'..='\u{1343f}'
-            | '\u{1bca0}'..='\u{1bca3}'
-            | '\u{1d173}'..='\u{1d17a}'
-            | '\u{e0001}'
-            | '\u{e0020}'..='\u{e007f}'
-    )
-}
-
-fn is_transliteration_combining_mark(character: char) -> bool {
-    matches!(
-        character,
-        '\u{300}'..='\u{36f}'
-            | '\u{483}'..='\u{489}'
-            | '\u{1ab0}'..='\u{1aff}'
-            | '\u{1dc0}'..='\u{1dff}'
-            | '\u{20d0}'..='\u{20ff}'
-            | '\u{fe20}'..='\u{fe2f}'
-    )
-}
-
 fn parse_link_location<'r, 't>(
     parser: &Parser<'r, 't>,
     mut url: Cow<'t, str>,
@@ -899,12 +1014,18 @@ fn parse_link_location<'r, 't>(
     }
 
     if let Some(interwiki) = url.strip_prefix('!') {
-        // Live has no interwiki form inside triple-bracket links: the "!" is
-        // dropped and the remainder is an ordinary page target, even for a
-        // prefix its single-bracket interwiki table defines.
         let local = interwiki.strip_prefix(':').unwrap_or(interwiki);
+        let (page_part, anchor_part) = match local.split_once('#') {
+            Some((page, anchor)) => (page, Some(anchor)),
+            None => (local, None),
+        };
+        let mut target = transliterate_triple_target(page_part);
+        if let Some(anchor) = anchor_part {
+            target.push('#');
+            target.push_str(anchor);
+        }
         return Some((
-            LinkLocation::Page(PageRef::page_only(local)),
+            LinkLocation::Page(triple_page_ref(&replace_page_slashes(&target))),
             LinkType::Page,
         ));
     }
