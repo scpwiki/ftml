@@ -242,6 +242,7 @@ impl Token {
             Rule::italics => Token::Italics,
             Rule::underline => Token::Underline,
             Rule::superscript => Token::Superscript,
+            Rule::comma_run => Token::Other,
             Rule::subscript => Token::Subscript,
             Rule::left_monospace => Token::LeftMonospace,
             Rule::right_monospace => Token::RightMonospace,
