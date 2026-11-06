@@ -221,11 +221,13 @@ where
         return success_elements(elements);
     }
 
-    let (url, authored_prefix_has_link_authority) = collect_wikidot_target(parser)?;
+    let (url, authored_prefix_has_link_authority, target_end) =
+        collect_wikidot_target(parser)?;
     wikidot_link_from_target(
         parser,
         target,
         url,
+        target_end,
         authored_prefix_has_link_authority,
         false,
     )
@@ -452,6 +454,7 @@ fn link_end_block<'r, 't>(
         parser,
         None,
         url,
+        target_end,
         authored_prefix_has_link_authority,
         true,
     )?;
@@ -477,6 +480,7 @@ fn wikidot_link_from_target<'r, 't>(
     parser: &mut Parser<'r, 't>,
     target: Option<AnchorTarget>,
     url: Cow<'t, str>,
+    target_end: usize,
     authored_prefix_has_link_authority: bool,
     link_memo: bool,
 ) -> ParseResult<'r, 't, Elements<'t>>
@@ -528,6 +532,17 @@ where
         WikidotLinkDisposition::Link | WikidotLinkDisposition::Literal => None,
     };
 
+    let empty_label_run_forms = match parser.full_text().inner().get(target_end..) {
+        Some(rest) => {
+            let run_len = rest
+                .bytes()
+                .take_while(|byte| matches!(byte, b' ' | b'\t'))
+                .count();
+            run_len > 1 || rest[..run_len].contains('\t')
+        }
+        None => false,
+    };
+
     let WikidotLabel {
         text: label,
         residual_closer,
@@ -536,7 +551,7 @@ where
 
     let element = match (disposition, interwiki_url) {
         (WikidotLinkDisposition::LabelOnly, Some(expanded)) => {
-            if label.is_empty() {
+            if label.is_empty() && !empty_label_run_forms {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
             Element::Link {
@@ -547,13 +562,13 @@ where
             }
         }
         (WikidotLinkDisposition::LabelOnly, None) => {
-            if label.is_empty() {
+            if label.is_empty() && !empty_label_run_forms {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
             Element::Text(label)
         }
         (WikidotLinkDisposition::Link, _) => {
-            if label.is_empty() {
+            if label.is_empty() && !empty_label_run_forms {
                 return Err(parser.make_err(ParseErrorKind::RuleFailed));
             }
             Element::Link {
@@ -592,13 +607,11 @@ fn wikidot_interwiki_path_label<'t>(url: &Cow<'t, str>) -> Cow<'t, str> {
 
 fn collect_wikidot_target<'r, 't>(
     parser: &mut Parser<'r, 't>,
-) -> Result<(Cow<'t, str>, bool), ParseError>
+) -> Result<(Cow<'t, str>, bool, usize), ParseError>
 where
     'r: 't,
 {
-    let (target, authored_prefix_has_link_authority, _) =
-        collect_wikidot_target_inner(parser, None, false, false)?;
-    Ok((target, authored_prefix_has_link_authority))
+    collect_wikidot_target_inner(parser, None, false, false)
 }
 
 fn collect_wikidot_target_from<'r, 't>(
