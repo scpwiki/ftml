@@ -224,10 +224,14 @@ pub(super) fn substitute_wikidot(text: &mut String) {
 
 /// Live Wikidot's footnoteblock rule (position 21) replaces the first
 /// `[[footnoteblock]]` with `"\n" + footer + "\n"` before the line rules run,
-/// so a marker authored on a definition-list or table line splits that line.
-/// The tree hoist models the list, quote and header cases; definition lists and
-/// tables depend on which line fragments the line rules then claim, so the
-/// split happens at the source level here.
+/// so a marker authored inside a line splits that line.
+///
+/// The tree hoist models the one-level list, quote and header cases. The
+/// remaining shapes depend on which line fragments the later line rules claim,
+/// so the split happens at the source level here: definition-list and quote
+/// lines split only before the marker (the authored tail stays on the marker
+/// line as an inline suffix), table and `[[li]]` lines split on both sides,
+/// and indented list lines split before the marker.
 pub(super) fn inject_wikidot_footnote_block_lines(text: &mut String) {
     let Some((start, end)) = first_footnoteblock_range(text) else {
         return;
@@ -246,21 +250,44 @@ pub(super) fn inject_wikidot_footnote_block_lines(text: &mut String) {
         .map_or(text.len(), |index| end + index);
     let line = &text[line_start..line_end];
     let trimmed = line.trim_start_matches([' ', '\t']);
+    let suffix = &text[end..line_end];
     let definition_line = trimmed.starts_with(": ");
     let table_line = trimmed.starts_with("||");
-    if !definition_line && !table_line {
+    let quote_line = trimmed.starts_with('>');
+    let list_item_line = is_wikidot_list_item_line(trimmed);
+    let nested_list_line = line.len() > trimmed.len()
+        && (trimmed.starts_with('*') || trimmed.starts_with('#'));
+    let mut split_after = table_line;
+    if !definition_line
+        && !table_line
+        && !quote_line
+        && !list_item_line
+        && !nested_list_line
+    {
         return;
+    }
+    if list_item_line && !suffix.trim().is_empty() {
+        split_after = true;
     }
 
     let mut output = String::with_capacity(text.len() + 2);
     output.push_str(&text[..start]);
     output.push('\n');
     output.push_str(&text[start..end]);
-    if table_line {
+    if split_after {
         output.push('\n');
     }
     output.push_str(&text[end..]);
     *text = output;
+}
+
+/// Whether the line starts with a `[[li]]` or `[[li args]]` opener.
+fn is_wikidot_list_item_line(trimmed: &str) -> bool {
+    let lowercase = trimmed.to_ascii_lowercase();
+    let Some(rest) = lowercase.strip_prefix("[[li") else {
+        return false;
+    };
+    matches!(rest.as_bytes().first(), Some(b']' | b' ' | b'\t'))
 }
 
 /// Byte range of the first `[[footnoteblock]]` or `[[footnoteblock args]]`.
