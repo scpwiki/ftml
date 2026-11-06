@@ -185,6 +185,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_tabview_remote_ordinals: Vec<usize>,
     colon_line_vanished: Cell<bool>,
     line_follows_block: Cell<bool>,
+    wikidot_math_closer_line_br_prefix: Cell<bool>,
     bare_div_literal: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,

@@ -213,6 +213,7 @@ fn formula_body_preserves_literal_bytes_in_the_math_element() {
             environment,
             wikidot_block_open_elements,
             wikidot_label_spans,
+            ..
         },
     ] = tree.elements.as_slice()
     else {

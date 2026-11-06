@@ -8,3 +8,4 @@ cc 994a7b65d89cf5f6797878a94a1fc83a2f7e3360f117ccbb997db6f841ee8f67 # shrinks to
 cc 062ce674637afca0813e6474bb7b937b1e729ecd483b70de7286a0e0f928beca # shrinks to mut s = "\r\r¡"
 cc 745249acbcb35b4b2185ecf7ff016acaae3b6e53d0abfa1eb46fc7a14ec7ea8e # shrinks to mut s = "\\\ra"
 cc 8d02b72819a0af452cd4de160f63720bb1f5c6948ae5cefda7964872d1986d13 # shrinks to mut s = "\\\\\r\ra"
+cc ef1405cf8ca24dfea6d555c011d2f5215c1ba71184048c8bfa224a603c1572f4 # shrinks to source = "[[collapsible show=\"report\"]]\n> [[é\n> End log.[[/collapsible]]\t\nafter"

@@ -68,6 +68,7 @@ fn parse_fn<'r, 't>(
         Cow::Borrowed(source) => Cow::Borrowed(source.trim()),
         Cow::Owned(source) => Cow::Owned(source.trim().to_owned()),
     };
+    let closer_line_br_prefix = parser.take_wikidot_math_closer_line_br_prefix();
     if parser.settings().layout.legacy()
         && wikidot_math_crosses_bold_owner(parser, latex_source.as_ref())
     {
@@ -81,6 +82,7 @@ fn parse_fn<'r, 't>(
         name: head.name,
         latex_source,
         environment: head.environment,
+        wikidot_closer_line_br_prefix: closer_line_br_prefix,
         wikidot_block_open_elements: Vec::new(),
         wikidot_label_spans: Vec::new(),
     };
@@ -535,6 +537,22 @@ mod tests {
         let tokenization = crate::tokenize(&source);
         let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
         (HtmlRender.render(&tree, &page_info, &settings).body, errors)
+    }
+
+    #[test]
+    fn wikidot_math_tab_after_closer_yields_leading_br_in_next_paragraph() {
+        let (html, errors) = render_wikidot(concat!(
+            "[[math]]\n",
+            "x\n",
+            "[[/math]]\t\n",
+            "\n",
+            "tail\n",
+        ));
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            html.contains("<p><br>\ntail</p>"),
+            "expected live-style br before tail in next paragraph: {html}"
+        );
     }
 
     #[test]

@@ -90,6 +90,9 @@ pub struct ParagraphStack<'t> {
     wikidot_explicit_pre_candidate: bool,
     wikidot_suppress_explicit_pre_dissolve: bool,
     wikidot_post_empty_list_break: bool,
+    /// After `[[/math]]`, some closer-line whitespace tails make live's next
+    /// wrapped paragraph start with `<br />` before the following text.
+    wikidot_math_next_paragraph_leads_with_br: bool,
 
     finished: Vec<Element<'t>>,
 
@@ -1172,6 +1175,19 @@ impl<'t> ParagraphStack<'t> {
             }
             self.current.push(element);
         } else {
+            if self.wikidot {
+                if matches!(
+                    &element,
+                    Element::Math {
+                        wikidot_closer_line_br_prefix: true,
+                        ..
+                    }
+                ) {
+                    self.wikidot_math_next_paragraph_leads_with_br = true;
+                } else if !matches!(&element, Element::Math { .. }) {
+                    self.wikidot_math_next_paragraph_leads_with_br = false;
+                }
+            }
             let invisible_block_line = self.wikidot && element == Element::LineBreak;
             let escaped_note_prefix = self.wikidot_note_follows_escaped_prefix(&element);
             let nested_literal_collapsible =
@@ -1470,6 +1486,13 @@ impl<'t> ParagraphStack<'t> {
         self.trim_trailing_ascii_space();
         if self.current.is_empty() {
             return None;
+        }
+
+        if self.wikidot && self.wikidot_math_next_paragraph_leads_with_br {
+            self.wikidot_math_next_paragraph_leads_with_br = false;
+            if !matches!(self.current.first(), Some(Element::LineBreak)) {
+                self.current.insert(0, Element::LineBreak);
+            }
         }
 
         let elements = mem::take(&mut self.current);

@@ -426,6 +426,20 @@ impl Parser<'_, '_> {
         self.block_end_scan_cache.borrow().line_follows_block.get()
     }
 
+    pub(crate) fn set_wikidot_math_closer_line_br_prefix(&mut self, value: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_math_closer_line_br_prefix
+            .set(value);
+    }
+
+    pub(crate) fn take_wikidot_math_closer_line_br_prefix(&mut self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_math_closer_line_br_prefix
+            .replace(false)
+    }
+
     pub(crate) fn mark_wikidot_bare_div_literal(&mut self) {
         self.block_end_scan_cache
             .borrow()

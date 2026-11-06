@@ -1973,6 +1973,27 @@ where
         line.bytes().all(|byte| matches!(byte, b' ' | b'\t'))
     }
 
+    /// After a line-anchored `[[/math]]`, live sometimes keeps the **next**
+    /// wrapped paragraph's first visible line with a leading `<br />` when
+    /// the closer line's suffix (bytes after `]]` before the newline) is
+    /// whitespace but not exactly one ASCII space. Measured on
+    /// sandbox-for-codex PagePreview 2026-11-06.
+    fn wikidot_note_math_closer_line_suffix_for_br(&mut self) {
+        if !self.settings().layout.legacy()
+            || self.discarding_hidden_body()
+            || self.in_footnote()
+        {
+            return;
+        }
+        let text = self.full_text().inner();
+        let tail = text.get(self.current().span.start..).unwrap_or("");
+        let rest_line = tail.split(|c| c == '\n' || c == '\r').next().unwrap_or("");
+        let wants_br = !rest_line.is_empty()
+            && rest_line.bytes().all(|b| matches!(b, b' ' | b'\t' | b'\r'))
+            && rest_line != " ";
+        self.set_wikidot_math_closer_line_br_prefix(wants_br);
+    }
+
     fn verify_end_block(
         &mut self,
         first_iteration: bool,
@@ -3194,6 +3215,7 @@ where
             if let Some(end) = at_end_block {
                 if let Some(designated) = designated_math_end {
                     if end.span.start == designated {
+                        self.wikidot_note_math_closer_line_suffix_for_br();
                         return Ok((start, end));
                     }
                     last_nested_close = Some((end, self.clone()));
@@ -3203,6 +3225,7 @@ where
                         self.full_text().inner(),
                         end.span.start,
                     ) {
+                        self.wikidot_note_math_closer_line_suffix_for_br();
                         return Ok((start, end));
                     }
                     nested_wikidot_math -= 1;
@@ -3227,6 +3250,9 @@ where
                     last_nested_close = Some((end, self.clone()));
                     self.update(&before_end);
                 } else {
+                    if wikidot_math {
+                        self.wikidot_note_math_closer_line_suffix_for_br();
+                    }
                     return Ok((start, end));
                 }
             } else if crossed_math_close {
@@ -3898,8 +3924,10 @@ where
         &mut self,
         block_rule: &BlockRule,
     ) -> Result<Cow<'t, str>, ParseError> {
+        let _ = self.take_wikidot_math_closer_line_br_prefix();
         let walk_start = self.clone();
         let (start, end) = self.get_body_generic(block_rule, |_| Ok(()))?;
+        let closer_line_br_prefix = self.take_wikidot_math_closer_line_br_prefix();
         let body_start = start.span.start;
         let body_end = end.span.start;
         let mut removals: Vec<(usize, usize)> = Vec::new();
@@ -3987,6 +4015,7 @@ where
                 break;
             }
         }
+        self.set_wikidot_math_closer_line_br_prefix(closer_line_br_prefix);
         if removals.is_empty() {
             let slice = self.full_text().slice_partial(start, end);
             return Ok(Cow::Borrowed(slice));
