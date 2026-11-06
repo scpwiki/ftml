@@ -1,0 +1,75 @@
+{
+    "elements": [
+        {
+            "element": "math",
+            "data": {
+                "name": null,
+                "latex-source": "a"
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": null,
+                "latex-source": "c"
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "equation-reference",
+                        "data": "nm"
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "container",
+                "data": {
+                    "type": "paragraph",
+                    "attributes": {},
+                    "elements": [
+                        {
+                            "element": "text",
+                            "data": "f"
+                        }
+                    ]
+                }
+            },
+            {
+                "element": "math",
+                "data": {
+                    "name": "nm",
+                    "latex-source": "b"
+                }
+            }
+        ]
+    ]
+}

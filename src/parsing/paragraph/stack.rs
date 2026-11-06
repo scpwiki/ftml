@@ -71,6 +71,7 @@ pub struct ParagraphStack<'t> {
 
     pending_aligned_image_separator: Option<usize>,
     unwrapped_after_block_line: bool,
+    wikidot_footnote_joined_math_break: bool,
     wikidot_literal_iftags_line: bool,
     wikidot_literal_div_line: bool,
     wikidot_div_literal_run_wrap: bool,
@@ -181,6 +182,31 @@ impl<'t> ParagraphStack<'t> {
                     ))
                 )
             })
+    }
+
+    /// Whether the current chunk starts with a line break immediately after a
+    /// math block. Live's `Math` rule pads its token with blank lines, but the
+    /// `Footnote` rule then deletes all whitespace before a reference, joining
+    /// the reference to the math token's own chunk (C1: not wrapped).
+    #[inline]
+    pub(crate) fn wikidot_line_break_follows_math(&self) -> bool {
+        self.wikidot
+            && self.current_empty()
+            && matches!(self.finished.last(), Some(Element::Math { .. }))
+    }
+
+    /// Live's `Math` rule pads its token with blank lines and the `Footnote`
+    /// rule then deletes the whitespace before a reference, so the reference
+    /// joins the math token's chunk instead of starting a wrapped paragraph.
+    /// Its trailing blank line is part of the math chunk's join, so no
+    /// paragraph-break separator follows it.
+    #[inline]
+    pub(crate) fn mark_wikidot_footnote_joined_math_break(&mut self) {
+        if self.wikidot {
+            self.current_unwrapped = true;
+            self.unwrapped_after_block_line = true;
+            self.wikidot_footnote_joined_math_break = true;
+        }
     }
 
     #[inline]
@@ -1555,6 +1581,7 @@ impl<'t> ParagraphStack<'t> {
         self.wikidot_demoted_comment_break = false;
         self.pending_unwrapped_separator = false;
         self.unwrapped_after_block_line = false;
+        self.wikidot_footnote_joined_math_break = false;
         self.wikidot_literal_iftags_line = false;
         self.wikidot_literal_div_line = false;
         self.wikidot_embed_error_residual = false;
@@ -1578,6 +1605,7 @@ impl<'t> ParagraphStack<'t> {
         let unwrapped = self.current_unwrapped && !self.current.is_empty();
         let literal_div_line = self.wikidot_literal_div_line;
         let unwrapped_after_block_line = self.unwrapped_after_block_line;
+        let footnote_joined_math_break = self.wikidot_footnote_joined_math_break;
         let complete_raw_run_after_block = self.wikidot_complete_raw_run_after_block;
         let last_is_aligned_image = match self.finished.last() {
             Some(Element::Image {
@@ -1599,7 +1627,7 @@ impl<'t> ParagraphStack<'t> {
                 Some(Element::Container(container))
                     if container.ctype() == ContainerType::Paragraph
             );
-        if unwrapped && !complete_raw_run_after_block {
+        if unwrapped && !complete_raw_run_after_block && !footnote_joined_math_break {
             self.finished
                 .push(if literal_div_line || unwrapped_after_block_line {
                     text!("\n")

@@ -1,0 +1,11 @@
+[[math]]
+a
+[[/math]]
+[[footnote]]f[[math nm]]
+b
+[[/math]][[/footnote]]
+[[math]]
+c
+[[/math]]
+[[footnoteblock]]
+[[eref nm]]

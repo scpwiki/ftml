@@ -276,6 +276,17 @@ where
                         stack.wikidot_line_break_follows_block(),
                     );
                     parser.take_wikidot_bare_div_literal();
+                    if parser.settings().layout.legacy()
+                        && parser.current().token == Token::LineBreak
+                        && stack.wikidot_line_break_follows_math()
+                        && wikidot_footnote_opener_at(TokenWindow::at(parser), 1)
+                    {
+                        // The Footnote rule deletes the whitespace before a
+                        // reference, so a reference written after a math block
+                        // joins the math token's chunk; live keeps the bare
+                        // reference instead of opening a paragraph.
+                        stack.mark_wikidot_footnote_joined_math_break();
+                    }
                     match consume(parser) {
                         Ok(consumed) => Some(consumed),
                         Err(error)
