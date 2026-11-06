@@ -21,7 +21,6 @@
 use super::generic::collect_before;
 use super::prelude::*;
 use crate::parsing::{ParagraphSplitEntry, ParagraphSplitKind};
-use crate::tree::PartialElement;
 
 fn delimiter_inert_block_head<'r, 't>(
     parser: &mut Parser<'r, 't>,
@@ -145,9 +144,14 @@ pub fn collect_consume_keep_split<'r, 't>(
     let mut escape: Option<Vec<(Vec<Element<'t>>, bool, ParagraphSplitKind)>> = None;
 
     let mut comment_line_break_pending = false;
-    let mut inline_scope_depth = 0_usize;
     let collection = collect(parser, rule, closes, invalids, kind, |parser| {
-        parser.set_gate_items_allowed(inline_scope_depth == 0);
+        // A list marker that begins its source line is a block boundary: live
+        // closes an open inline span/size scope there and reopens it for the
+        // next item (docs/WikidotInlineNesting.md stage 2; saved pages
+        // muse-probe-cop-b22-*). A gate consumed by this list-item or
+        // definition-list value collect therefore joins its body item lines
+        // into the surrounding run even while an inline scope is open.
+        parser.set_gate_items_allowed(true);
         let drop_line_break = comment_line_break_pending;
         comment_line_break_pending = false;
         let comment_line = parser.settings().layout.legacy()
@@ -174,19 +178,6 @@ pub fn collect_consume_keep_split<'r, 't>(
             paragraph_split,
             ..
         } = success;
-        for element in elements.as_ref() {
-            match element {
-                Element::Partial(PartialElement::InlineSpanOpen(..))
-                | Element::Partial(PartialElement::InlineSizeOpen(..)) => {
-                    inline_scope_depth += 1;
-                }
-                Element::Partial(PartialElement::InlineSpanClose(_))
-                | Element::Partial(PartialElement::InlineSizeClose(_)) => {
-                    inline_scope_depth = inline_scope_depth.saturating_sub(1);
-                }
-                _ => {}
-            }
-        }
         let single_line_break = matches!(elements, Elements::Single(Element::LineBreak));
         match &mut escape {
             Some(segments) => {

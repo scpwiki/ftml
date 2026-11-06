@@ -1,0 +1,2 @@
+* x [[span]][[iftags +fruit]] A
+* B [[/iftags]][[/span]]
