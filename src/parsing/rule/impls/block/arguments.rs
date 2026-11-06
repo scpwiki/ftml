@@ -372,12 +372,14 @@ impl<'t> Arguments<'t> {
             if !explicit && !whitespace_only {
                 continue;
             }
-            if let Some((stored, _)) = attributes
+            if let Some((stored, stored_value)) = attributes
                 .get()
                 .iter()
                 .find(|(stored, _)| stored.as_ref() == key.as_str())
             {
-                push_name(stored.clone());
+                if stored_value.is_empty() {
+                    push_name(stored.clone());
+                }
             } else if explicit && key.as_str() == "id" {
                 push_name(Cow::Borrowed("id"));
             }
@@ -490,7 +492,9 @@ impl<'t> Arguments<'t> {
                 continue;
             };
             let authored_value = value.clone();
-            let explicit_empty = self.explicit_empty.contains(&argument_key);
+            let legacy_id = settings.layout.legacy() && name.eq_ignore_ascii_case("id");
+            let explicit_empty = self.explicit_empty.contains(&argument_key)
+                || (self.whitespace_empty.contains(&argument_key) && !legacy_id);
             if name.eq_ignore_ascii_case("href") {
                 continue;
             }
@@ -576,8 +580,10 @@ impl<'t> Arguments<'t> {
                 continue;
             }
 
-            let explicit_empty =
-                self.explicit_empty.contains(key) || self.whitespace_empty.contains(key);
+            let legacy_id =
+                settings.layout.legacy() && key.as_str().eq_ignore_ascii_case("id");
+            let explicit_empty = self.explicit_empty.contains(key)
+                || (self.whitespace_empty.contains(key) && !legacy_id);
             let key = key.as_str();
             if settings.layout.legacy() && key.eq_ignore_ascii_case("hidden") {
                 continue;
