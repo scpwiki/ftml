@@ -13,6 +13,7 @@
 //! Wikidot tokenizes before any inline construct runs.
 
 use super::block_pairs::WikidotBlockPairs;
+use crate::parsing::rule::impls::block::get_block_rule_with_name;
 use crate::parsing::rule::impls::normalize_wikidot_color;
 use crate::parsing::{ExtractedToken, Token};
 use crate::tree::InlineFormatKind;
@@ -71,12 +72,45 @@ fn block_name<'t>(tokens: &[ExtractedToken<'t>], index: usize) -> Option<&'t str
     (name.token == Token::Identifier).then_some(name.slice)
 }
 
+/// Live Text_Wiki runs inline pairing (rules 57-69) only in segments between earlier
+/// block-rule tokens. Paired heads that participate in shipped markup for the F13
+/// family and for the legacy `[[div]]` / `[[collapsible]]` cases split the scan here.
+fn inline_pairing_splits_at_paired_block(name: &str) -> bool {
+    name.eq_ignore_ascii_case("ul")
+        || name.eq_ignore_ascii_case("ol")
+        || name.eq_ignore_ascii_case("li")
+        || name.eq_ignore_ascii_case("table")
+        || name.eq_ignore_ascii_case("row")
+        || name.eq_ignore_ascii_case("cell")
+        || name.eq_ignore_ascii_case("hcell")
+        || name.eq_ignore_ascii_case("tabview")
+        || name.eq_ignore_ascii_case("tabs")
+        || name.eq_ignore_ascii_case("tab")
+        || name.eq_ignore_ascii_case("hidden")
+        || name.eq_ignore_ascii_case("footnote")
+        || name.eq_ignore_ascii_case("footnoteblock")
+        || name.eq_ignore_ascii_case("note")
+        || name.eq_ignore_ascii_case("collapsible")
+        || name.eq_ignore_ascii_case("blockquote")
+        || name.eq_ignore_ascii_case("quote")
+        || name.eq_ignore_ascii_case("div")
+        || name.eq_ignore_ascii_case("code")
+        || name.eq_ignore_ascii_case("math")
+        || name == "="
+        || name == "<"
+        || name == ">"
+        || name == "=="
+}
+
 fn head_end(tokens: &[ExtractedToken<'_>], index: usize) -> Option<usize> {
+    let abort_on_marker = tokens
+        .get(index)
+        .is_some_and(|t| t.token == Token::LeftBlock);
     for (offset, token) in tokens[index..].iter().enumerate() {
         match token.token {
             Token::RightBlock => return Some(index + offset + 1),
             Token::ParagraphBreak | Token::InputEnd => return None,
-            token if is_marker(token) => return None,
+            token if abort_on_marker && is_marker(token) => return None,
             _ => {}
         }
     }
@@ -121,18 +155,36 @@ fn classify_block(
         return TokenClass::InlineScope(end);
     }
     let byte = tokens[index].span.start;
-    let paired = if tokens[index].token == Token::LeftBlock {
-        pairs.pair_at_head_byte(byte).is_some()
-    } else {
-        pairs.pair_at_closer_byte(byte).is_some()
-    };
-    if paired
-        && (name.eq_ignore_ascii_case("div") || name.eq_ignore_ascii_case("collapsible"))
-    {
-        TokenClass::Barrier(end)
-    } else {
-        TokenClass::Opaque
+    if !inline_pairing_splits_at_paired_block(name) {
+        return TokenClass::Opaque;
     }
+    if tokens[index].token == Token::LeftBlock {
+        let paired = pairs.pair_at_head_byte(byte).is_some();
+        let div_or_collapsible =
+            name.eq_ignore_ascii_case("div") || name.eq_ignore_ascii_case("collapsible");
+        if div_or_collapsible {
+            if paired {
+                return TokenClass::Barrier(end);
+            }
+        } else if get_block_rule_with_name(name).is_some() || paired {
+            return TokenClass::Barrier(end);
+        }
+        return TokenClass::Opaque;
+    }
+    let paired = pairs.pair_at_closer_byte(byte).is_some();
+    if tokens[index].token == Token::LeftBlockEnd {
+        let div_or_collapsible =
+            name.eq_ignore_ascii_case("div") || name.eq_ignore_ascii_case("collapsible");
+        if div_or_collapsible {
+            if paired {
+                return TokenClass::Barrier(end);
+            }
+        } else if get_block_rule_with_name(name).is_some() || paired {
+            return TokenClass::Barrier(end);
+        }
+        return TokenClass::Opaque;
+    }
+    TokenClass::Opaque
 }
 
 fn classify(
@@ -187,8 +239,19 @@ pub(crate) fn compute_wikidot_inline_markers(
                     classify(tokens, index, line_start, pairs),
                     TokenClass::ImageBarrier(_)
                 );
+                let block_structure_barrier = image
+                    || matches!(
+                        tokens[index].token,
+                        Token::LeftBlock | Token::LeftBlockEnd | Token::InputEnd
+                    );
                 if !opaque {
-                    scan_chunk(tokens, start..index, after_image || image, &mut markers);
+                    scan_chunk(
+                        tokens,
+                        start..index,
+                        after_image || image,
+                        block_structure_barrier,
+                        &mut markers,
+                    );
                 }
                 start = end;
                 opaque = false;
@@ -198,7 +261,13 @@ pub(crate) fn compute_wikidot_inline_markers(
         }
     }
     if !opaque {
-        scan_chunk(tokens, start..tokens.len(), after_image, &mut markers);
+        let mut end = tokens.len();
+        if end > 0 && tokens[end - 1].token == Token::InputEnd {
+            end -= 1;
+        }
+        if start < end {
+            scan_chunk(tokens, start..end, after_image, true, &mut markers);
+        }
     }
     markers
 }
@@ -256,8 +325,43 @@ fn scan_chunk(
     tokens: &[ExtractedToken<'_>],
     range: Range<usize>,
     image_bounded: bool,
+    block_structure_barrier: bool,
     markers: &mut WikidotInlineMarkers,
 ) {
+    if block_structure_barrier {
+        let mut marker_positions: Vec<usize> = Vec::new();
+        for i in range.clone() {
+            if is_marker(tokens[i].token) {
+                marker_positions.push(i);
+            } else if !matches!(
+                tokens[i].token,
+                Token::Whitespace | Token::LineBreak | Token::InputStart
+            ) {
+                marker_positions.clear();
+                break;
+            }
+        }
+        if marker_positions.len() == 1 && tokens[marker_positions[0]].token == Token::Bold
+        {
+            markers.roles.insert(
+                tokens[marker_positions[0]].span.start,
+                InlineMarkerRole::Literal,
+            );
+            return;
+        }
+        if marker_positions.len() == 2
+            && marker_positions[1] == marker_positions[0] + 1
+            && tokens[marker_positions[0]].token == Token::Bold
+            && tokens[marker_positions[1]].token == Token::Bold
+        {
+            for i in marker_positions {
+                markers
+                    .roles
+                    .insert(tokens[i].span.start, InlineMarkerRole::Literal);
+            }
+            return;
+        }
+    }
     let mut scan = ChunkScan {
         tokens,
         removed: vec![false; range.len()],
@@ -489,4 +593,74 @@ fn pairs_interleave(pairs: &[Pair]) -> bool {
         open_closes.push(close);
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::PageInfo;
+    use crate::parsing::parser::block_pairs;
+
+    #[test]
+    fn bold_does_not_pair_across_ul_head() {
+        let source = "**[[ul]]\n[[li]]\nx\n[[/li]]\n[[/ul]]**";
+        let tokenization = crate::tokenize(source);
+        let pairs = block_pairs::compute_wikidot_block_pairs(
+            tokenization.tokens(),
+            source,
+            &PageInfo::dummy(),
+        );
+        let markers = compute_wikidot_inline_markers(tokenization.tokens(), &pairs);
+        let mut roles: Vec<(usize, InlineMarkerRole)> = markers
+            .roles
+            .iter()
+            .map(|(&byte, role)| (byte, role.clone()))
+            .collect();
+        roles.sort_unstable_by_key(|(byte, _)| *byte);
+        assert!(
+            roles
+                .iter()
+                .filter(|(_, role)| matches!(
+                    role,
+                    InlineMarkerRole::Open(InlineFormatKind::Bold)
+                ))
+                .count()
+                <= 1,
+            "unexpected bold open roles: {roles:?}"
+        );
+        for (byte, role) in roles {
+            if source[byte..].starts_with("**") {
+                assert!(
+                    matches!(role, InlineMarkerRole::Literal),
+                    "expected literal ** at {byte}, got {role:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn literal_bold_markers_on_both_sides_of_ul_block() {
+        let source = "**[[ul]]\n[[li]]\nx\n[[/li]]\n[[/ul]]**";
+        let tokenization = crate::tokenize(source);
+        let pairs = block_pairs::compute_wikidot_block_pairs(
+            tokenization.tokens(),
+            source,
+            &PageInfo::dummy(),
+        );
+        let markers = compute_wikidot_inline_markers(tokenization.tokens(), &pairs);
+        let bold_bytes: Vec<usize> = tokenization
+            .tokens()
+            .iter()
+            .filter(|t| t.token == Token::Bold)
+            .map(|t| t.span.start)
+            .collect();
+        assert_eq!(bold_bytes.len(), 2, "expected two ** tokens");
+        for byte in bold_bytes {
+            assert!(
+                matches!(markers.role_at_byte(byte), Some(InlineMarkerRole::Literal)),
+                "expected literal at byte {byte}, got {:?}",
+                markers.role_at_byte(byte)
+            );
+        }
+    }
 }

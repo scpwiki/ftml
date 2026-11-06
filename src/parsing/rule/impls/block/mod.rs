@@ -33,7 +33,9 @@ mod rule;
 pub mod blocks;
 
 pub use self::arguments::Arguments;
-pub(crate) use self::mapping::get_block_rule_with_name_for_layout;
+pub(crate) use self::mapping::{
+    get_block_rule_with_name, get_block_rule_with_name_for_layout,
+};
 pub(crate) use self::parser::BlockBodyStart;
 pub(crate) use self::parser::{head_seam_forms_block, head_word_never_resolves};
 pub(crate) use self::rule::head_word_names_known_block;
