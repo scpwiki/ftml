@@ -31,7 +31,8 @@ use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::settings::WikitextMode;
 use crate::tree::{
-    AcceptsPartial, AttributeMap, ListItem, ListType, PartialElement, WikidotBlockShell,
+    AcceptsPartial, AttributeMap, ContainerType, ListItem, ListType, PartialElement,
+    WikidotBlockShell,
 };
 use std::borrow::Cow;
 
@@ -581,6 +582,104 @@ where
     Ok(None)
 }
 
+fn wikidot_concat_text_literals<'t>(elements: &[Element<'t>]) -> Option<String> {
+    let mut out = String::new();
+    for element in elements {
+        match element {
+            Element::Text(text) => out.push_str(text.as_ref()),
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
+fn wikidot_literal_list_item_close_name(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    let inner = trimmed.strip_prefix("[[/")?.strip_suffix("]]")?.trim();
+    if inner.is_empty() {
+        return None;
+    }
+    if !inner
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    {
+        return None;
+    }
+    Some(inner.to_ascii_lowercase())
+}
+
+fn wikidot_collect_text_for_literal_scan<'t>(elements: &[Element<'t>], out: &mut String) {
+    for element in elements {
+        match element {
+            Element::Text(text) => out.push_str(text.as_ref()),
+            Element::Container(container) => {
+                wikidot_collect_text_for_literal_scan(container.elements(), out);
+            }
+            Element::List { items, .. } => {
+                for item in items {
+                    let ListItem::Elements { elements, .. } = item else {
+                        continue;
+                    };
+                    wikidot_collect_text_for_literal_scan(elements, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn wikidot_prefix_has_literal_block_opener<'t>(
+    prefix: &[Element<'t>],
+    name: &str,
+) -> bool {
+    let mut hay = String::new();
+    wikidot_collect_text_for_literal_scan(prefix, &mut hay);
+    let hay = hay.to_ascii_lowercase();
+    let needle = format!("[[{name}]]");
+    hay.contains(&needle)
+}
+
+fn wikidot_div_try_hoist_trailing_literal_close_lists<'t>(
+    elements: &mut Vec<Element<'t>>,
+    attributes: &AttributeMap<'t>,
+    flag_score: bool,
+) -> Option<Vec<Element<'t>>> {
+    if flag_score || !attributes.get().is_empty() {
+        return None;
+    }
+    let mut hoisted = Vec::new();
+    while let Some(Element::List {
+        items,
+        wikidot_explicit_block: false,
+        ..
+    }) = elements.last()
+    {
+        if items.len() != 1 {
+            break;
+        }
+        let ListItem::Elements {
+            elements: item_elements,
+            ..
+        } = &items[0]
+        else {
+            break;
+        };
+        let Some(concat) = wikidot_concat_text_literals(item_elements) else {
+            break;
+        };
+        let Some(close_name) = wikidot_literal_list_item_close_name(&concat) else {
+            break;
+        };
+        let prefix = &elements[..elements.len() - 1];
+        if !wikidot_prefix_has_literal_block_opener(prefix, &close_name) {
+            break;
+        }
+        let list = elements.pop().expect("last is list");
+        hoisted.insert(0, list);
+    }
+    (!hoisted.is_empty()).then_some(hoisted)
+}
+
 #[inline(never)]
 fn normalize_wikidot_div_elements(elements: &mut Vec<Element<'_>>, flag_score: bool) {
     if flag_score {
@@ -1061,12 +1160,24 @@ fn parse_fn<'r, 't>(
 
     let mut attributes = wikidot_div_head_attributes(parser, &mut arguments);
     arguments.insert_explicit_empty_marker(&mut attributes);
+    let hoisted = if parser.settings().layout.legacy() {
+        wikidot_div_try_hoist_trailing_literal_close_lists(
+            &mut elements,
+            &attributes,
+            flag_score,
+        )
+    } else {
+        None
+    };
     let element =
         Element::Container(Container::new(ContainerType::Div, elements, attributes));
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_DIV);
 
     if parser.take_wikidot_crossed_ol_tail_sentinel()? {
         let mut output = vec![element];
+        if let Some(rest) = hoisted {
+            output.extend(rest);
+        }
         if fused_close {
             output.push(text!("]"));
         }
@@ -1075,13 +1186,25 @@ fn parse_fn<'r, 't>(
     }
     if parser.take_wikidot_crossed_list_break_sentinel()? {
         let mut output = vec![element];
+        if let Some(rest) = hoisted {
+            output.extend(rest);
+        }
         if fused_close {
             output.push(text!("]"));
         }
         output.push(Element::LineBreak);
         ok!(false; output, errors)
     } else if fused_close {
-        ok!(false; vec![element, text!("]")], errors)
+        let mut output = vec![element];
+        if let Some(rest) = hoisted {
+            output.extend(rest);
+        }
+        output.push(text!("]"));
+        ok!(false; output, errors)
+    } else if let Some(rest) = hoisted {
+        let mut output = vec![element];
+        output.extend(rest);
+        ok!(false; output, errors)
     } else {
         ok!(element, errors)
     }
