@@ -22,6 +22,7 @@ use super::Replacer;
 use super::parser_functions::LiteralRegionIndex;
 use regex::{Regex, RegexBuilder};
 use std::collections::BTreeSet;
+use std::mem;
 use std::ops::Range;
 use std::sync::LazyLock;
 
@@ -359,6 +360,10 @@ fn substitute_for_layout(text: &mut String, wikidot_compatibility: bool) {
         preserve_wikidot_bibliography_tab_gap(text);
         preserve_wikidot_bibliography_tab_prefix(text);
         preserve_wikidot_definition_list_colon_tab(text);
+    }
+
+    if wikidot_compatibility {
+        double_tabs_after_wikidot_math_closer_lines(text);
     }
 
     replace_tabs(text, &mut buffer, wikidot_compatibility);
@@ -799,6 +804,85 @@ fn wikidot_user_block_head(head: &str) -> bool {
     field[..name_end].eq_ignore_ascii_case("user")
 }
 
+fn wikidot_math_closer_line_suffix_after_marker(content: &str) -> Option<&str> {
+    let trimmed =
+        content.trim_start_matches(|character: char| matches!(character, ' ' | '\t'));
+    const PAT: &[u8] = b"[[/math]]";
+    let bytes = trimmed.as_bytes();
+    if bytes.len() < PAT.len() {
+        return None;
+    }
+    if !bytes[..PAT.len()]
+        .iter()
+        .zip(PAT.iter())
+        .all(|(left, right)| left.eq_ignore_ascii_case(right))
+    {
+        return None;
+    }
+    trimmed.get(PAT.len()..)
+}
+
+fn wikidot_math_closer_whitespace_only_tail_needs_br_double_tab(suffix: &str) -> bool {
+    if suffix.is_empty() {
+        return false;
+    }
+    if !suffix
+        .bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r'))
+    {
+        return false;
+    }
+    suffix != " "
+}
+
+fn double_tabs_after_wikidot_math_closer_lines(text: &mut String) {
+    if !text.contains('\t') {
+        return;
+    }
+
+    let literal_regions = LiteralRegionIndex::new(text);
+    let source = mem::take(text);
+    let mut output = String::with_capacity(source.len() + source.len() / 64);
+    let mut offset = 0usize;
+
+    for line in source.split_inclusive('\n') {
+        let trailing_nl = line.ends_with('\n');
+        let content_len = line.len() - usize::from(trailing_nl);
+        let content = &line[..content_len];
+
+        let suffix = wikidot_math_closer_line_suffix_after_marker(content);
+        let apply = !literal_regions.contains(offset)
+            && suffix.is_some_and(|suffix| {
+                wikidot_math_closer_whitespace_only_tail_needs_br_double_tab(suffix)
+                    && suffix.contains('\t')
+            });
+
+        if apply {
+            if let Some(suffix) = suffix {
+                let prefix_end = content.len() - suffix.len();
+                output.push_str(&content[..prefix_end]);
+                for ch in suffix.chars() {
+                    if ch == '\t' {
+                        output.push('\t');
+                        output.push('\t');
+                    } else {
+                        output.push(ch);
+                    }
+                }
+            }
+        } else {
+            output.push_str(content);
+        }
+
+        if trailing_nl {
+            output.push('\n');
+        }
+        offset += line.len();
+    }
+
+    *text = output;
+}
+
 fn replace_tabs(text: &mut String, buffer: &mut String, wikidot_compatibility: bool) {
     if !text.contains('\t') {
         return;
@@ -817,7 +901,7 @@ fn replace_tabs(text: &mut String, buffer: &mut String, wikidot_compatibility: b
         let open = cursor + open_offset;
         append_replaced_tabs(buffer, &text[cursor..open], 1);
 
-        let end = if text.len() >= open + 3 && &text[open..open + 3] == "[[[" {
+        let end = if text[open..].starts_with("[[[") {
             text[open + 3..]
                 .find("]]]")
                 .map(|close_offset| open + 3 + close_offset + 3)
@@ -1789,4 +1873,25 @@ fn wikidot_math_bodies_are_exempt_from_line_continuation() {
     let mut native = "[[math]]\nx \\\ny\n[[/math]]".to_owned();
     super::preprocess_for_layout(&mut native, Layout::Wikijump);
     assert!(native.contains("x y"), "{native}");
+}
+
+#[test]
+fn wikidot_doubles_lone_tab_after_line_math_closer_before_tab_replacement() {
+    use crate::layout::Layout;
+
+    let mut text = "[[math]]\nx\n[[/math]]\t\n\ntail\n".to_owned();
+    super::preprocess_for_layout(&mut text, Layout::Wikidot);
+    let closer_line = text
+        .lines()
+        .find(|line| line.to_ascii_lowercase().contains("[[/math]]"))
+        .expect("math closer line");
+    let suffix = closer_line
+        .split_once("[[/math]]")
+        .or_else(|| closer_line.split_once("[[/MATH]]"))
+        .map(|(_, rest)| rest)
+        .expect("split closer");
+    assert_eq!(
+        suffix, "  ",
+        "tab doubled then expanded to two spaces: {text:?}"
+    );
 }

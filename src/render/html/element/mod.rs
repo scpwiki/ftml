@@ -361,6 +361,7 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             environment,
             wikidot_block_open_elements,
             wikidot_label_spans,
+            ..
         } => render_math_block(
             ctx,
             ctx.wikidot_equation_number(std::ptr::from_ref(element) as usize),
