@@ -3165,6 +3165,11 @@ where
         let mut suppress_nested_wikidot_math = false;
         let mut last_nested_close = None;
         let start = self.current();
+        let designated_math_end = if wikidot_math {
+            Self::wikidot_math_designated_end(self.full_text().inner(), start.span.start)
+        } else {
+            None
+        };
 
         loop {
             let before_end = self.clone();
@@ -3173,7 +3178,13 @@ where
             let at_end_block = self.verify_end_block(first, block_rule, false, false);
 
             if let Some(end) = at_end_block {
-                if nested_wikidot_math > 0 {
+                if let Some(designated) = designated_math_end {
+                    if end.span.start == designated {
+                        return Ok((start, end));
+                    }
+                    last_nested_close = Some((end, self.clone()));
+                    self.update(&before_end);
+                } else if nested_wikidot_math > 0 {
                     if Self::wikidot_math_closer_closes_nested_body(
                         self.full_text().inner(),
                         end.span.start,
@@ -3331,6 +3342,301 @@ where
     /// an unclosed nested opener pending at the first closer of the last
     /// contiguous run of clean closer lines; a closer with trailing blanks
     /// stays body text.
+    fn wikidot_math_is_ws(byte: u8) -> bool {
+        matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+    }
+
+    fn wikidot_math_fossil_args_end(bytes: &[u8], start: usize) -> bool {
+        let mut j = start;
+        while j < bytes.len() && Self::wikidot_math_is_ws(bytes[j]) {
+            j += 1;
+        }
+        if j == bytes.len() {
+            return true;
+        }
+        let mut k = start;
+        if k >= bytes.len() || !Self::wikidot_math_is_ws(bytes[k]) {
+            return false;
+        }
+        while k < bytes.len() && Self::wikidot_math_is_ws(bytes[k]) {
+            k += 1;
+        }
+        let key_start = k;
+        while k < bytes.len() && (bytes[k].is_ascii_alphanumeric()) {
+            k += 1;
+        }
+        let mut key_end = k;
+        while key_end > key_start {
+            if bytes.get(key_end) == Some(&b'=') && bytes.get(key_end + 1) == Some(&b'"')
+            {
+                let mut v = key_end + 2;
+                while v < bytes.len() && bytes[v] != b'"' {
+                    v += 1;
+                }
+                if v < bytes.len() && Self::wikidot_math_fossil_args_end(bytes, v + 1) {
+                    return true;
+                }
+            }
+            key_end -= 1;
+        }
+        false
+    }
+
+    fn wikidot_math_fossil_head_parses(head: &str) -> bool {
+        let bytes = head.as_bytes();
+        if !bytes.is_empty() && Self::wikidot_math_is_ws(bytes[0]) {
+            let mut j = 0;
+            while j < bytes.len() && Self::wikidot_math_is_ws(bytes[j]) {
+                j += 1;
+            }
+            let mut k = j;
+            loop {
+                if Self::wikidot_math_fossil_args_end(bytes, k) {
+                    return true;
+                }
+                if k < bytes.len()
+                    && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_')
+                {
+                    k += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+        Self::wikidot_math_fossil_args_end(bytes, 0)
+    }
+
+    fn wikidot_math_fossil_close_at(text: &str, p: usize) -> Option<usize> {
+        let bytes = text.as_bytes();
+        if p >= bytes.len() || bytes[p] != b'\n' {
+            return None;
+        }
+        if !text[p + 1..]
+            .get(..9)
+            .is_some_and(|part| part.eq_ignore_ascii_case("[[/math]]"))
+        {
+            return None;
+        }
+        let after = p + 10;
+        if after >= bytes.len() {
+            return Some(after);
+        }
+        if Self::wikidot_math_is_ws(bytes[after]) {
+            return Some(after + 1);
+        }
+        None
+    }
+
+    fn wikidot_math_fossil_match_at(
+        text: &str,
+        pos: usize,
+        memo: &mut std::collections::HashMap<usize, Option<(usize, usize, usize)>>,
+        budget: &mut usize,
+    ) -> Option<(usize, usize, usize)> {
+        if let Some(cached) = memo.get(&pos) {
+            return *cached;
+        }
+        let mut result = None;
+        if text[pos..]
+            .get(..6)
+            .is_some_and(|part| part.eq_ignore_ascii_case("[[math"))
+        {
+            let line_end = text[pos..].find('\n').map_or(text.len(), |idx| pos + idx);
+            let mut search = pos + 6;
+            while let Some(rel) = text[search..line_end].find("]]") {
+                let head_end = search + rel;
+                if Self::wikidot_math_fossil_head_parses(&text[pos + 6..head_end])
+                    && let Some(found) = Self::wikidot_math_fossil_search_body(
+                        text,
+                        head_end + 2,
+                        memo,
+                        budget,
+                    )
+                {
+                    result = Some((found.0, found.1, head_end + 2));
+                    break;
+                }
+                search = head_end + 1;
+            }
+        }
+        memo.insert(pos, result);
+        result
+    }
+
+    fn wikidot_math_fossil_search_body(
+        text: &str,
+        start: usize,
+        memo: &mut std::collections::HashMap<usize, Option<(usize, usize, usize)>>,
+        budget: &mut usize,
+    ) -> Option<(usize, usize)> {
+        struct Frame {
+            q: usize,
+            stage: u8,
+        }
+        let bytes = text.as_bytes();
+        let mut dead = std::collections::HashSet::new();
+        let mut stack: Vec<Frame> = vec![Frame { q: start, stage: 0 }];
+        let mut outcome: Option<(usize, usize)> = None;
+        let mut have_outcome = false;
+        while let Some(frame) = stack.last_mut() {
+            if have_outcome {
+                let value = outcome;
+                have_outcome = false;
+                outcome = None;
+                match frame.stage {
+                    1 => {
+                        if value.is_some() {
+                            let done = stack.pop().unwrap();
+                            if stack.is_empty() {
+                                return value;
+                            }
+                            let _ = done;
+                            outcome = value;
+                            have_outcome = true;
+                        } else {
+                            frame.stage = 2;
+                        }
+                        continue;
+                    }
+                    _ => {
+                        let done = stack.pop().unwrap();
+                        if value.is_none() {
+                            dead.insert(done.q);
+                        }
+                        if stack.is_empty() {
+                            return value;
+                        }
+                        outcome = value;
+                        have_outcome = true;
+                        continue;
+                    }
+                }
+            }
+            let q = frame.q;
+            if dead.contains(&q) {
+                let done = stack.pop().unwrap();
+                let _ = done;
+                if stack.is_empty() {
+                    return None;
+                }
+                outcome = None;
+                have_outcome = true;
+                continue;
+            }
+            match frame.stage {
+                0 => {
+                    if let Some(end) = Self::wikidot_math_fossil_close_at(text, q) {
+                        let value = Some((q + 1, end));
+                        let done = stack.pop().unwrap();
+                        let _ = done;
+                        if stack.is_empty() {
+                            return value;
+                        }
+                        outcome = value;
+                        have_outcome = true;
+                        continue;
+                    }
+                    frame.stage = 1;
+                }
+                1 => {
+                    let line_start = q == 0 || bytes.get(q - 1) == Some(&b'\n');
+                    let sub = if line_start {
+                        Self::wikidot_math_fossil_match_at(text, q, memo, budget)
+                    } else {
+                        None
+                    };
+                    match sub {
+                        Some((_, sub_end, _)) => {
+                            if *budget == 0 {
+                                return None;
+                            }
+                            *budget -= 1;
+                            stack.push(Frame {
+                                q: sub_end,
+                                stage: 0,
+                            });
+                        }
+                        None => {
+                            frame.stage = 2;
+                        }
+                    }
+                }
+                _ => {
+                    if q < bytes.len() {
+                        if *budget == 0 {
+                            return None;
+                        }
+                        *budget -= 1;
+                        frame.stage = 3;
+                        stack.push(Frame { q: q + 1, stage: 0 });
+                    } else {
+                        let done = stack.pop().unwrap();
+                        dead.insert(done.q);
+                        if stack.is_empty() {
+                            return None;
+                        }
+                        outcome = None;
+                        have_outcome = true;
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn wikidot_math_prev_valid_closer(text: &str, before: usize) -> Option<usize> {
+        let mut found = None;
+        let mut offset = 0;
+        for line in text[..before].split('\n') {
+            if line
+                .get(..9)
+                .is_some_and(|part| part.eq_ignore_ascii_case("[[/math]]"))
+            {
+                let rest = &line[9.min(line.len())..];
+                if rest.is_empty() || rest.starts_with([' ', '\t', '\r']) {
+                    found = Some(offset);
+                }
+            }
+            offset += line.len() + 1;
+        }
+        found
+    }
+
+    fn wikidot_math_designated_end(text: &str, body_start: usize) -> Option<usize> {
+        let mut j = body_start;
+        if j > 0 && text.as_bytes().get(j - 1) == Some(&b'\n') {
+            j -= 1;
+        }
+        if j > 0 && text.as_bytes().get(j - 1) == Some(&b'\r') {
+            j -= 1;
+        }
+        let opener = text[..j].rfind('\n').map_or(0, |idx| idx + 1);
+        if !text[opener..]
+            .get(..6)
+            .is_some_and(|part| part.eq_ignore_ascii_case("[[math"))
+        {
+            return None;
+        }
+        let mut memo = std::collections::HashMap::new();
+        let mut budget: usize = 4_000_000;
+        let (close_start, _match_end, fossil_body_start) =
+            Self::wikidot_math_fossil_match_at(text, opener, &mut memo, &mut budget)?;
+        let body = &text[fossil_body_start..close_start - 1];
+        let mut trailing_clean = 0usize;
+        for line in body.split('\n').rev() {
+            let trimmed = line.strip_suffix('\r').unwrap_or(line);
+            if trimmed.eq_ignore_ascii_case("[[/math]]") {
+                trailing_clean += 1;
+            } else {
+                break;
+            }
+        }
+        if trailing_clean % 2 == 1 {
+            return Self::wikidot_math_prev_valid_closer(text, close_start);
+        }
+        Some(close_start)
+    }
+
     fn wikidot_math_clean_closer_line(rest: &str) -> bool {
         let line = rest.split('\n').next().unwrap_or(rest);
         let line = line.strip_suffix('\r').unwrap_or(line);
