@@ -625,6 +625,18 @@ where
     ) {
         return Ok(None);
     }
+    // 7031 pool loss: `* … [[/span]]||**` on a list/bold line — `||` closes bold (`**`),
+    // it is not table-column syntax. This case is not inside advanced `[[cell]]`
+    // (which never sets `in_wikidot_simple_table_cell`); d3-54 fuses `[[/span]]||`
+    // with nothing but whitespace/newline after `||`.
+    let column_end = probe.current().span.end;
+    if !parser.in_wikidot_advanced_table_cell_body()
+        && source
+            .get(column_end..)
+            .is_some_and(|tail| tail.starts_with("**"))
+    {
+        return Ok(None);
+    }
     let closes_scored_span = parser.wikidot_span_alias_close_is_scored(start);
     parser.update(&probe);
     let literal = parser.current().slice;
