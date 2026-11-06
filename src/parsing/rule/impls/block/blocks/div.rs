@@ -1118,6 +1118,7 @@ fn parse_fn<'r, 't>(
         &BLOCK_DIV,
         parse_as_paragraphs,
         body_start,
+        None,
     );
     if parser.settings().layout.legacy() {
         if flag_score {

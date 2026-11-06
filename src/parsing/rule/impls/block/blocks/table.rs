@@ -154,8 +154,12 @@ where
 
     let as_paragraphs = parser.settings().layout.legacy()
         && attribute_owner == AdvancedTableElement::Cell;
-    let body =
-        parser.get_body_elements_with_context(block_rule, as_paragraphs, body_start)?;
+    let body = parser.get_body_elements_with_context(
+        block_rule,
+        as_paragraphs,
+        body_start,
+        None,
+    )?;
     let (elements, errors, _) = body.into();
 
     let parsed = ParsedBlock {

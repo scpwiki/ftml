@@ -1,0 +1,9 @@
+[[collapsible show="episode" hide="close"]]
+[[div class="content-panel"]]
+[[div class="nested"]]
+nested body
+[[/div]]
+[[div class="inline"]]inline body[[/div]]
+[[/collapsible]]
+[[/div]]
+outside

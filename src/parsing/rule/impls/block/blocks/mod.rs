@@ -254,6 +254,22 @@ pub(crate) fn append_wikidot_footnote_trailing_list_break(
     }
 }
 
+pub(crate) fn wikidot_block_pair_for_block_head_byte(
+    parser: &Parser<'_, '_>,
+    block_opener_start: usize,
+) -> Option<WikidotBlockPair> {
+    for head_try in [
+        block_opener_start,
+        block_opener_start.saturating_sub(2),
+        block_opener_start.saturating_add(2),
+    ] {
+        if let Some(pair) = parser.wikidot_block_pair_at_head_byte(head_try) {
+            return Some(pair);
+        }
+    }
+    None
+}
+
 pub(crate) fn wikidot_flat_pair_for_head(
     parser: &Parser<'_, '_>,
     opener_start: usize,
@@ -264,9 +280,8 @@ pub(crate) fn wikidot_flat_pair_for_head(
     if std::env::var("L83NOFLAT").is_ok() {
         return None;
     }
-    parser
-        .wikidot_block_pair_at_head_byte(opener_start)
-        .filter(|pair| parser.wikidot_pair_goes_flat(pair))
+    let pair = wikidot_block_pair_for_block_head_byte(parser, opener_start)?;
+    parser.wikidot_pair_goes_flat(&pair).then_some(pair)
 }
 
 pub(crate) fn wikidot_scored_div_close_compatible<'r, 't>(
@@ -285,9 +300,7 @@ pub(crate) fn wikidot_scan_pairs_head(
 ) -> bool {
     parser.settings().layout.legacy()
         && !parser.discarding_hidden_body()
-        && parser
-            .wikidot_block_pair_at_head_byte(opener_start)
-            .is_some()
+        && wikidot_block_pair_for_block_head_byte(parser, opener_start).is_some()
 }
 
 pub(crate) fn consume_wikidot_flat_head_break<'r, 't>(

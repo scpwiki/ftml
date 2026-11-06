@@ -769,6 +769,21 @@ fn wikidot_requires_next_physical_line(block_rule: &BlockRule) -> bool {
     )
 }
 
+pub(crate) fn wikidot_physical_line_has_textual_div_closer(
+    source: &str,
+    marker_byte: usize,
+) -> bool {
+    let line_start = source[..marker_byte.min(source.len())]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    let rest = source.get(line_start..).unwrap_or("");
+    let line_end_rel = rest.find('\n').map_or(rest.len(), |i| i);
+    let line = &rest[..line_end_rel];
+    line.as_bytes()
+        .windows(9)
+        .any(|w| w.eq_ignore_ascii_case(b"[[/div]]"))
+}
+
 fn wikidot_trim_argument_fragment(value: &str) -> &str {
     value.trim_matches([' ', '\t', '\n', '\r', '\0', '\u{000B}'])
 }
@@ -4236,12 +4251,14 @@ where
         block_rule: &BlockRule,
         as_paragraphs: bool,
         body_start: BlockBodyStart,
+        wikidot_body_opener_byte: Option<usize>,
     ) -> ParseResult<'r, 't, Vec<Element<'t>>> {
         self.get_body_elements_with_context_policy(
             block_rule,
             as_paragraphs,
             body_start,
             false,
+            wikidot_body_opener_byte,
         )
     }
 
@@ -4250,12 +4267,14 @@ where
         block_rule: &BlockRule,
         as_paragraphs: bool,
         body_start: BlockBodyStart,
+        wikidot_body_opener_byte: Option<usize>,
     ) -> ParseResult<'r, 't, Vec<Element<'t>>> {
         self.get_body_elements_with_context_policy(
             block_rule,
             as_paragraphs,
             body_start,
             true,
+            wikidot_body_opener_byte,
         )
     }
 
@@ -4265,11 +4284,19 @@ where
         as_paragraphs: bool,
         body_start: BlockBodyStart,
         literal_residual_quotes: bool,
+        wikidot_body_opener_byte: Option<usize>,
     ) -> ParseResult<'r, 't, Vec<Element<'t>>> {
+        let opener_for_line =
+            wikidot_body_opener_byte.unwrap_or_else(|| self.current().span.start);
         if self.settings().layout.legacy()
             && !self.discarding_hidden_body()
             && body_start == BlockBodyStart::Inline
             && wikidot_requires_next_physical_line(block_rule)
+            && !(block_rule.name == "block-div"
+                && wikidot_physical_line_has_textual_div_closer(
+                    self.full_text().inner(),
+                    opener_for_line,
+                ))
         {
             return Err(self.make_err(ParseErrorKind::RuleFailed));
         }
