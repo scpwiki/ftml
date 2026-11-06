@@ -23,11 +23,15 @@ use crate::tree::{
     Container, ContainerType, HtmlTag, WIKIDOT_EMPTY_QUOTE_MARKER,
     WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER, WIKIDOT_GENERATED_EMPTY_CLASS_MARKER,
     WIKIDOT_HEADING_BARRIER_MARKER, WIKIDOT_HEADING_REOPEN_MARKER,
-    WIKIDOT_QUOTE_LIST_REPAIR_MARKER,
+    WIKIDOT_QUOTE_LIST_REPAIR_MARKER, WIKIDOT_TAB_PANEL_MARKER,
 };
 
 pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
     debug!("Rendering container '{}'", container.ctype().name());
+
+    if render_wikidot_split_tab_panel(ctx, container) {
+        return;
+    }
 
     if render_plain_div_chain(ctx, container) {
         return;
@@ -54,6 +58,31 @@ pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
     {
         ctx.push_raw_str("<ul>");
     }
+}
+
+/// A tab panel that live renders as a bare div in a later quote segment of a
+/// split tabview: `<div id="wiki-tab-0-N" style="display:none">…</div>`. The
+/// parser marks the container; the marker never reaches output.
+fn render_wikidot_split_tab_panel(ctx: &mut HtmlContext, container: &Container) -> bool {
+    if container.ctype() != ContainerType::Div {
+        return false;
+    }
+    let Some(index) = container.attributes().get().get(WIKIDOT_TAB_PANEL_MARKER) else {
+        return false;
+    };
+    if !ctx.layout().legacy() {
+        // The native layout never produces this marker; keep it invisible
+        // rather than leaking it into attributes.
+        ctx.html().div().contents(container.elements());
+        return true;
+    }
+    let index = index.parse::<usize>().unwrap_or(0);
+    let id = format!("wiki-tab-0-{index}");
+    ctx.html()
+        .div()
+        .attr(attr!("id" => &id, "style" => "display:none"))
+        .contents(container.elements());
+    true
 }
 
 fn render_plain_div_chain(ctx: &mut HtmlContext, container: &Container) -> bool {

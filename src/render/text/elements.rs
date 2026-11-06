@@ -150,7 +150,7 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
         Element::TabView(items) => {
             for item in items {
                 match item {
-                    TabViewItem::Tab(tab) => {
+                    TabViewItem::Tab(tab) | TabViewItem::Remote(tab) => {
                         ctx.push_str(&tab.label);
                         ctx.add_newline();
 
