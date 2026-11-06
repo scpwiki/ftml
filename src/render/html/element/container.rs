@@ -23,6 +23,7 @@ use crate::tree::{
     Container, ContainerType, HtmlTag, WIKIDOT_EMPTY_QUOTE_MARKER,
     WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER, WIKIDOT_GENERATED_EMPTY_CLASS_MARKER,
     WIKIDOT_HEADING_BARRIER_MARKER, WIKIDOT_HEADING_REOPEN_MARKER,
+    WIKIDOT_QUOTE_LIST_REPAIR_MARKER,
 };
 
 pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
@@ -40,6 +41,18 @@ pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
         }
 
         _ => render_container_internal(ctx, container),
+    }
+
+    // Live's libtidy repair of a numbered list crossing the quote boundary
+    // leaves a lone unclosed `<ul>` opener after the blockquote.
+    if ctx.layout().legacy()
+        && container.ctype() == ContainerType::Blockquote
+        && container
+            .attributes()
+            .get()
+            .contains_key(WIKIDOT_QUOTE_LIST_REPAIR_MARKER)
+    {
+        ctx.push_raw_str("<ul>");
     }
 }
 
@@ -98,6 +111,12 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         .attributes()
         .get()
         .contains_key(WIKIDOT_EMPTY_QUOTE_MARKER);
+    // The quote/list repair marker only drives the raw suffix in
+    // `render_container`; it never reaches the emitted attributes.
+    let strip_quote_list_repair_marker = container
+        .attributes()
+        .get()
+        .contains_key(WIKIDOT_QUOTE_LIST_REPAIR_MARKER);
     // Attributes whose Wikidot head value evaluated to empty are emitted as
     // `key=""` by live, unlike attributes live omits entirely.
     let explicit_empty_value_names = layout.legacy().then(|| {
@@ -144,6 +163,10 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
     } else if strip_empty_quote_marker {
         let mut attributes = container.attributes().clone();
         attributes.remove(WIKIDOT_EMPTY_QUOTE_MARKER);
+        empty_quote_attributes.insert(attributes)
+    } else if strip_quote_list_repair_marker {
+        let mut attributes = container.attributes().clone();
+        attributes.remove(WIKIDOT_QUOTE_LIST_REPAIR_MARKER);
         empty_quote_attributes.insert(attributes)
     } else if preserve_explicit_empty_values {
         let mut attributes = container.attributes().clone();

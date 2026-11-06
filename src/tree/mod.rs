@@ -93,6 +93,10 @@ pub(crate) const WIKIDOT_GENERATED_EMPTY_CLASS_MARKER: &str =
 /// Marks the empty blockquote runs live leaves behind after a tab eject so the
 /// tree cleanup keeps them; stripped when rendered.
 pub(crate) const WIKIDOT_EMPTY_QUOTE_MARKER: &str = "data-ftml-empty-quote";
+/// Marks a blockquote whose closed numbered list crosses the quote boundary:
+/// live's libtidy repair leaves a stray unclosed `<ul>` opener after the
+/// quote. On the last body element only; stripped when rendered.
+pub(crate) const WIKIDOT_QUOTE_LIST_REPAIR_MARKER: &str = "data-ftml-quote-list-repair";
 /// Lists the attributes whose Wikidot head value evaluated to empty, so the
 /// renderer emits `key=""` for them the way live does; stripped when rendered.
 pub(crate) const WIKIDOT_EMPTY_VALUE_ATTRIBUTE_MARKER: &str = "data-ftml-empty-value";

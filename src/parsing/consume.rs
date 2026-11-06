@@ -1177,7 +1177,10 @@ fn can_consume_as_text_token<'r, 't>(parser: &Parser<'r, 't>) -> bool {
 
 fn try_consume_text_token<'r, 't>(
     parser: &mut Parser<'r, 't>,
-) -> Result<Option<Elements<'t>>, ParseError> {
+) -> Result<Option<Elements<'t>>, ParseError>
+where
+    'r: 't,
+{
     if let Some(elements) = try_consume_wikidot_inline_marker(parser)? {
         return Ok(Some(elements));
     }
@@ -1220,10 +1223,13 @@ fn try_consume_text_token<'r, 't>(
         );
     // Live Wikidot counts a trailing space after a scored span/anchor close
     // as content: the run keeps its paragraph wrapper. Keep the space for the
-    // root lowering to see and then drop from the output.
+    // root lowering to see and then drop from the output. The same holds when
+    // a scored opener follows the break: only the newline run is eaten, the
+    // space before that newline stays.
     let keep_trailing_space = trailing_whitespace
-        && !parser.in_wikidot_single_line_content()
-        && wikidot_trailing_space_after_scored_alias_close(parser);
+        && (super::paragraph::wikidot_scored_alias_open_after_break(parser)
+            || (!parser.in_wikidot_single_line_content()
+                && wikidot_trailing_space_after_scored_alias_close(parser)));
     parser.step()?;
     if trailing_whitespace && !keep_trailing_space {
         Ok(Some(Elements::None))
