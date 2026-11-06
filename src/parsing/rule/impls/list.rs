@@ -247,7 +247,11 @@ fn wikidot_list_ends_with_scored_alias(
         return false;
     }
     // Live rejects only at end of input; a following block (such as a
-    // div closer) or line lets the list form.
+    // div closer or the end of an enclosing quote) or line lets the list
+    // form.
+    if parser.wikidot_byte_in_quote_run(entry_start) {
+        return false;
+    }
     source[after..]
         .bytes()
         .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))

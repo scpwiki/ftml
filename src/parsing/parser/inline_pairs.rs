@@ -63,6 +63,7 @@ enum TokenClass {
     Opaque,
     InlineScope(usize),
     Barrier(usize),
+    ImageBarrier(usize),
 }
 
 fn block_name<'t>(tokens: &[ExtractedToken<'t>], index: usize) -> Option<&'t str> {
@@ -82,11 +83,34 @@ fn head_end(tokens: &[ExtractedToken<'_>], index: usize) -> Option<usize> {
     None
 }
 
+/// Wikidot's image rule writes an aligned image as a token between two blank
+/// lines, so the inline rules that run later see two separate chunks.
+fn aligned_image_head(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
+    if tokens[index].token != Token::LeftBlock {
+        return false;
+    }
+    let mut head = String::new();
+    for token in tokens.iter().skip(index + 1).take(4) {
+        if matches!(token.token, Token::Whitespace | Token::RightBlock) {
+            break;
+        }
+        head.push_str(token.slice);
+    }
+    ["f<image", "f>image", "<image", ">image", "=image"]
+        .iter()
+        .any(|aligned| head.eq_ignore_ascii_case(aligned))
+}
+
 fn classify_block(
     tokens: &[ExtractedToken<'_>],
     index: usize,
     pairs: &WikidotBlockPairs,
 ) -> TokenClass {
+    if aligned_image_head(tokens, index)
+        && let Some(end) = head_end(tokens, index)
+    {
+        return TokenClass::ImageBarrier(end);
+    }
     let Some(name) = block_name(tokens, index) else {
         return TokenClass::Opaque;
     };
@@ -147,6 +171,7 @@ pub(crate) fn compute_wikidot_inline_markers(
     let mut markers = WikidotInlineMarkers::default();
     let mut start = 0;
     let mut opaque = false;
+    let mut after_image = false;
     let mut index = 0;
     while index < tokens.len() {
         let line_start = index == start || tokens[index - 1].token == Token::LineBreak;
@@ -157,18 +182,23 @@ pub(crate) fn compute_wikidot_inline_markers(
                 index += 1;
             }
             TokenClass::InlineScope(end) => index = end,
-            TokenClass::Barrier(end) => {
+            TokenClass::Barrier(end) | TokenClass::ImageBarrier(end) => {
+                let image = matches!(
+                    classify(tokens, index, line_start, pairs),
+                    TokenClass::ImageBarrier(_)
+                );
                 if !opaque {
-                    scan_chunk(tokens, start..index, &mut markers);
+                    scan_chunk(tokens, start..index, after_image || image, &mut markers);
                 }
                 start = end;
                 opaque = false;
+                after_image = image;
                 index = end;
             }
         }
     }
     if !opaque {
-        scan_chunk(tokens, start..tokens.len(), &mut markers);
+        scan_chunk(tokens, start..tokens.len(), after_image, &mut markers);
     }
     markers
 }
@@ -220,9 +250,12 @@ impl ChunkScan<'_, '_> {
     }
 }
 
+/// `image_bounded`: the chunk ends or starts at an aligned image, where the
+/// legacy inline parser would otherwise pair markers across the image.
 fn scan_chunk(
     tokens: &[ExtractedToken<'_>],
     range: Range<usize>,
+    image_bounded: bool,
     markers: &mut WikidotInlineMarkers,
 ) {
     let mut scan = ChunkScan {
@@ -267,7 +300,7 @@ fn scan_chunk(
     }
     let paired = scan.pairs.len() * 2 + removed_count;
     let unpaired_marker = paired > 0 && marker_count > paired && kinds.len() > 1;
-    if !unpaired_marker && !pairs_interleave(&scan.pairs) {
+    if !image_bounded && !unpaired_marker && !pairs_interleave(&scan.pairs) {
         return;
     }
 

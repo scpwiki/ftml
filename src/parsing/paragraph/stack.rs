@@ -351,6 +351,10 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
+    pub(crate) fn wikidot_current_ends_with_scored_alias(&self) -> bool {
+        self.wikidot && Self::wikidot_run_ends_with_scored_alias(&self.current)
+    }
+
     pub(crate) fn wikidot_run_ends_with_scored_alias(elements: &[Element<'_>]) -> bool {
         let mut rest = elements;
         while let Some((last, head)) = rest.split_last() {

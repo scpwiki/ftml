@@ -435,6 +435,19 @@ where
     if parser.settings().layout.legacy()
         && matches!(
             block.name,
+            "block-tabview"
+                | "block-align-left"
+                | "block-align-right"
+                | "block-align-center"
+                | "block-align-justify"
+        )
+        && parser.wikidot_scored_join_head(block_opener_start)
+    {
+        return Err(parser.make_err(ParseErrorKind::NotStartOfLine));
+    }
+    if parser.settings().layout.legacy()
+        && matches!(
+            block.name,
             "block-math"
                 | "block-div"
                 | "block-table"

@@ -153,6 +153,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
     lost_owner_outcomes: BTreeMap<LostOwnerScanKey, bool>,
     span_alias_close_scores: BTreeMap<usize, bool>,
+    wikidot_scored_join_heads: std::collections::BTreeSet<usize>,
     literal_ranges: Option<Vec<Range<usize>>>,
     wikidot_iftags_body_end: Cell<Option<usize>>,
     pending_iftags_end_swallows: Vec<usize>,
@@ -2133,6 +2134,23 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow_mut()
             .span_alias_close_scores
             .insert(close_start, scored);
+    }
+
+    /// Records that the line starting at `head` was joined onto a scored
+    /// alias close (live's span rule ate the newline before it), so a
+    /// line-anchored block opener there is literal.
+    pub(crate) fn mark_wikidot_scored_join_head(&self, head: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_scored_join_heads
+            .insert(head);
+    }
+
+    pub(crate) fn wikidot_scored_join_head(&self, head: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_scored_join_heads
+            .contains(&head)
     }
 
     pub(crate) fn wikidot_span_alias_close_is_scored(&self, close_start: usize) -> bool {

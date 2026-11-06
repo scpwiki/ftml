@@ -1,0 +1,46 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "x"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "d",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "d"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "e"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
