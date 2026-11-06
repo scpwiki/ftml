@@ -119,6 +119,15 @@ pub(crate) const WIKIDOT_HEADING_BARRIER_MARKER: &str = "data-ftml-heading-barri
 /// renderer then emits the bare heading element instead of an implicit label
 /// span. Stripped when rendered.
 pub(crate) const WIKIDOT_HEADING_REOPEN_MARKER: &str = "data-ftml-heading-reopen";
+/// Marks the first body paragraph after a collapsible head that ended a
+/// heading line: the heading line ends there, so the body is an ordinary
+/// paragraph chunk in live's output and must not be flattened into the
+/// heading's trailing run. Consumed by inline-scope lowering, stripped when
+/// rendered.
+pub(crate) const WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER: &str =
+    "data-ftml-heading-collapsible-body";
+pub(crate) const WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER: &str =
+    "data-ftml-heading-collapsible-tail";
 use std::borrow::Cow;
 use std::collections::HashSet;
 

@@ -31,6 +31,7 @@ use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::parsing::{ParseError, ParseErrorKind};
 use crate::tree::{
     AttributeMap, Container, ContainerType, ListItem, ListType, PartialElement,
+    WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER, WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER,
     WikidotBlockShell,
 };
 use std::borrow::Cow;
@@ -131,6 +132,70 @@ fn wikidot_reopen_body_paragraphs<'t>(body: Vec<Element<'t>>) -> Vec<Element<'t>
         body,
         AttributeMap::new(),
     ))]
+}
+
+/// The rest of the heading line after a same-line collapsible closer. Live
+/// keeps it in the heading's trailing run and the terminating break starts the
+/// next line as a fresh chunk, so the break is consumed rather than rendered.
+fn collect_wikidot_heading_line_tail_after_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Vec<Element<'t>>> {
+    let mut elements = Vec::new();
+    while parser.current().token == Token::Whitespace {
+        parser.step()?;
+    }
+    if matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    ) {
+        if parser.current().token == Token::LineBreak {
+            parser.step()?;
+        }
+        return Ok(crate::parsing::ParseSuccess::new(
+            elements,
+            Vec::new(),
+            false,
+        ));
+    }
+    let line_end = parser
+        .wikidot_heading_line_range(parser.current().span.start)
+        .map(|(_, end)| end)
+        .unwrap_or_else(|| parser.full_text().inner().len());
+    let conditions = [
+        ParseCondition::current(Token::LineBreak),
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::current(Token::InputEnd),
+        ParseCondition::AtSourceByte(line_end),
+    ];
+    let collected = crate::parsing::collect::collect_consume_before(
+        parser,
+        RULE_BLOCK,
+        &conditions,
+        &[],
+        None,
+    )?;
+    let ((mut tail, _last), errors, _) = collected.into();
+    elements.append(&mut tail);
+    if parser.current().token == Token::LineBreak {
+        parser.step()?;
+    }
+    Ok(crate::parsing::ParseSuccess::new(elements, errors, false))
+}
+
+/// The body collected after a heading-line collapsible head is an ordinary
+/// paragraph chunk in live: the heading line ends at the head, so its paragraph
+/// must not merge into the heading's trailing run. The first paragraph carries
+/// a lowering-only marker (stripped when rendered).
+fn wikidot_heading_collapsible_body<'t>(body: Vec<Element<'t>>) -> Vec<Element<'t>> {
+    let mut body = wikidot_reopen_body_paragraphs(body);
+    if let Some(Element::Container(container)) = body.first_mut()
+        && container.ctype() == ContainerType::Paragraph
+    {
+        container
+            .attributes_mut()
+            .insert(WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER, cow!(""));
+    }
+    body
 }
 
 /// Elements left on the heading line after a collapsible head that ends the
@@ -264,9 +329,13 @@ fn parse_fn<'r, 't>(
             vec![Element::Partial(PartialElement::WikidotBlockOpen(shell))];
         let current = parser.current().span.start;
         let same_line_closer = parser
-            .wikidot_heading_flat_closers(current)
-            .first()
-            .map(|(byte, _, _)| *byte);
+            .wikidot_heading_pair_same_line_closer(opener_start)
+            .or_else(|| {
+                parser
+                    .wikidot_heading_flat_closers(current)
+                    .first()
+                    .map(|(byte, _, _)| *byte)
+            });
         let mut errors = Vec::new();
         let close = Element::Partial(PartialElement::WikidotBlockClose(
             crate::tree::WikidotBlockCloseKind::Collapsible { head: opener_start },
@@ -291,13 +360,35 @@ fn parse_fn<'r, 't>(
             if closer.get_end_block().is_ok() {
                 parser.update(&closer);
             }
+            // The rest of the heading line is the tail of the ended heading
+            // line: live renders it in the heading wrapper span and the next
+            // source line starts a fresh paragraph chunk, so consume the
+            // line break here.
+            let (line_tail, mut line_tail_errors, _) =
+                collect_wikidot_heading_line_tail_after_close(parser)?.into();
+            errors.append(&mut line_tail_errors);
             elements.push(Element::Partial(
                 PartialElement::WikidotCollapsibleHeadingEnd,
             ));
             elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
-                wikidot_reopen_body_paragraphs(body),
+                wikidot_heading_collapsible_body(body),
             )));
             elements.push(close);
+            if line_tail.is_empty() {
+                elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
+                    line_tail,
+                )));
+            } else {
+                let mut tail_attributes = AttributeMap::new();
+                tail_attributes.insert(WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER, cow!(""));
+                elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
+                    vec![Element::Container(Container::new(
+                        ContainerType::Paragraph,
+                        line_tail,
+                        tail_attributes,
+                    ))],
+                )));
+            }
             return ok!(false; Elements::Multiple(elements), errors);
         }
 
@@ -319,7 +410,7 @@ fn parse_fn<'r, 't>(
         let (body_elements, mut body_errors, _) = body?.into();
         errors.append(&mut body_errors);
         elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
-            wikidot_reopen_body_paragraphs(body_elements),
+            wikidot_heading_collapsible_body(body_elements),
         )));
         elements.push(close);
         return ok!(false; Elements::Multiple(elements), errors);

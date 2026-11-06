@@ -559,6 +559,21 @@ impl<'r, 't> Parser<'r, 't> {
         closers
     }
 
+    /// The closer byte of the pair whose head is at the byte, when that pair's
+    /// closer sits on the same heading line as its head (a collapsible opener
+    /// and closer both inside a heading line).
+    pub(crate) fn wikidot_heading_pair_same_line_closer(
+        &self,
+        head_byte: usize,
+    ) -> Option<usize> {
+        let cache = self.block_end_scan_cache.borrow();
+        let pairs = &cache.wikidot_block_pairs;
+        let pair = pairs.pair_at_head_byte(head_byte)?;
+        let (line_start, line_end) = pairs.heading_line_range(head_byte)?;
+        (line_start <= pair.closer_byte && pair.closer_byte < line_end)
+            .then_some(pair.closer_byte)
+    }
+
     /// The leftmost collapsible head on the heading line at or after the byte.
     pub(crate) fn wikidot_heading_collapsible_head(
         &self,

@@ -169,6 +169,15 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
     let preserve_explicit_empty_values = explicit_empty_value_names
         .as_ref()
         .is_some_and(|names| !names.is_empty());
+    // The collapsible-heading body marker only drives paragraph chunking in
+    // inline-scope lowering; it never reaches the emitted attributes.
+    let bytes = container.attributes().get();
+    let strip_heading_collapsible_body = bytes
+        .get(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER)
+        .is_some()
+        || bytes
+            .get(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER)
+            .is_some();
     let heading_barrier = layout.legacy()
         && matches!(container.ctype(), ContainerType::Header(_))
         && (container
@@ -196,6 +205,11 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
     } else if strip_quote_list_repair_marker {
         let mut attributes = container.attributes().clone();
         attributes.remove(WIKIDOT_QUOTE_LIST_REPAIR_MARKER);
+        empty_quote_attributes.insert(attributes)
+    } else if strip_heading_collapsible_body {
+        let mut attributes = container.attributes().clone();
+        attributes.remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER);
+        attributes.remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER);
         empty_quote_attributes.insert(attributes)
     } else if preserve_explicit_empty_values {
         let mut attributes = container.attributes().clone();
