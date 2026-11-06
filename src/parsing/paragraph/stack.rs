@@ -1059,6 +1059,25 @@ impl<'t> ParagraphStack<'t> {
             self.finished.push(Element::LineBreak);
         }
 
+        if self.wikidot
+            && matches!(
+                element,
+                Element::Partial(PartialElement::WikidotBlockOpen(
+                    WikidotBlockShell::Align { .. }
+                ))
+            )
+            && self.current.is_empty()
+            && !paragraph_break_separated
+            && matches!(
+                self.finished.last(),
+                Some(Element::Partial(PartialElement::WikidotBlockClose(
+                    WikidotBlockCloseKind::Align { .. }
+                )))
+            )
+        {
+            self.finished.push(Element::LineBreak);
+        }
+
         if matches!(element, Element::TabView(_)) {
             self.mark_wikidot_tabview_boundary();
         }
