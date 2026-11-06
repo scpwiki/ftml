@@ -384,6 +384,9 @@ fn normalize_sequence_passes<'t>(
     elements: &mut Vec<Element<'t>>,
     inside_monospace: bool,
 ) -> bool {
+    if !sequence_has_inline_repair_material(elements) {
+        return false;
+    }
     let mut any_changed = false;
     for _ in 0..MAX_NORMALIZATION_PASSES {
         let mut changed = repair_literal_marker_pairs_pass(elements, inside_monospace)
@@ -412,6 +415,49 @@ fn normalize_sequence_passes<'t>(
         }
     }
     any_changed
+}
+
+fn sequence_has_inline_repair_material(elements: &[Element<'_>]) -> bool {
+    if elements
+        .iter()
+        .any(|element| !matches!(element, Element::Text(_)))
+    {
+        return true;
+    }
+
+    let mut previous = None::<char>;
+    let mut before_previous = None::<char>;
+    for (index, element) in elements.iter().enumerate() {
+        let Element::Text(value) = element else {
+            unreachable!("the sequence was checked to be all text");
+        };
+        let value = value.as_ref();
+        if matches!(value, "**" | "//" | "__" | "{{" | "}}" | "##") {
+            return true;
+        }
+        if matches!(value, "--" | ",," | "^^") {
+            let next_starts_with_space = elements
+                .get(index + 1)
+                .is_some_and(element_starts_with_ascii_space);
+            if !next_starts_with_space {
+                return true;
+            }
+        }
+        if value.contains('}') {
+            return true;
+        }
+        for character in value.chars() {
+            if before_previous == Some('-')
+                && previous == Some('-')
+                && !character.is_whitespace()
+            {
+                return true;
+            }
+            before_previous = previous;
+            previous = Some(character);
+        }
+    }
+    false
 }
 
 fn substitute_number_unit_spaces<'t>(elements: &mut [Element<'t>]) {
@@ -4257,5 +4303,69 @@ fn visit_children_mut<'t>(element: &mut Element<'t>, visit: fn(&mut Vec<Element<
             | PartialElement::InlineAnchorClose(_) => {}
         },
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tree::{Element, InlineFormatKind, PartialElement};
+    use std::borrow::Cow;
+
+    fn text(value: &'static str) -> Element<'static> {
+        Element::Text(Cow::Borrowed(value))
+    }
+
+    #[test]
+    fn inline_repair_screen_flags_each_pass_material() {
+        for marker in ["**", "//", "__", "{{", "}}", "##", "--", "^^", ",,"] {
+            assert!(
+                sequence_has_inline_repair_material(&[text(marker)]),
+                "unpadded {marker:?} opens a repair pass",
+            );
+        }
+        assert!(sequence_has_inline_repair_material(&[
+            text("plain"),
+            text("}}"),
+            text("tail"),
+        ]));
+        assert!(sequence_has_inline_repair_material(&[text("a--b")]));
+        assert!(sequence_has_inline_repair_material(&[
+            text("a-"),
+            text("-b")
+        ]));
+        assert!(sequence_has_inline_repair_material(&[text("---")]));
+        assert!(sequence_has_inline_repair_material(&[Element::LineBreak]));
+        assert!(sequence_has_inline_repair_material(&[Element::Partial(
+            PartialElement::InlineFormatOpen(InlineFormatKind::Bold),
+        )]));
+    }
+
+    #[test]
+    fn inline_repair_screen_ignores_padded_markers() {
+        for marker in ["--", "^^", ",,"] {
+            assert!(
+                !sequence_has_inline_repair_material(&[
+                    text(marker),
+                    text(" "),
+                    text("x")
+                ]),
+                "padded {marker:?} is not repair material",
+            );
+        }
+    }
+
+    #[test]
+    fn flat_comment_probe_text_skips_repair_passes_without_changes() {
+        let mut elements: Vec<Element<'_>> = ["[", "!", "--", " ", "a", " "]
+            .into_iter()
+            .cycle()
+            .take(60)
+            .map(text)
+            .collect();
+        assert!(!sequence_has_inline_repair_material(&elements));
+        let original = elements.clone();
+        assert!(!normalize_sequence_passes(&mut elements, false));
+        assert_eq!(elements, original);
     }
 }
