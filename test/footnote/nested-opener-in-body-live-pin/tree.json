@@ -1,0 +1,72 @@
+{
+  "elements": [
+    {
+      "element": "container",
+      "data": {
+        "type": "paragraph",
+        "attributes": {},
+        "elements": [
+          {
+            "element": "text",
+            "data": "before"
+          },
+          {
+            "element": "footnote",
+            "data": 1
+          },
+          {
+            "element": "text",
+            "data": "after"
+          },
+          {
+            "element": "text",
+            "data": "[[/"
+          },
+          {
+            "element": "text",
+            "data": "footnote"
+          },
+          {
+            "element": "text",
+            "data": "]]"
+          }
+        ]
+      }
+    },
+    {
+      "element": "footnote-block",
+      "data": {
+        "title": null,
+        "hide": false
+      }
+    }
+  ],
+  "footnotes": [
+    [
+      {
+        "element": "text",
+        "data": "outer"
+      },
+      {
+        "element": "text",
+        "data": " "
+      },
+      {
+        "element": "text",
+        "data": "[["
+      },
+      {
+        "element": "text",
+        "data": "footnote"
+      },
+      {
+        "element": "text",
+        "data": "]]"
+      },
+      {
+        "element": "text",
+        "data": "inner"
+      }
+    ]
+  ]
+}

@@ -418,40 +418,6 @@ mod tests {
     }
 
     #[test]
-    fn wikidot_nested_footnote_opener_in_footnote_body_stays_literal() {
-        let page_info = PageInfo::dummy();
-        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
-        let tokenization = crate::tokenize(
-            "[[footnote]]outer [[footnote]]inner[[/footnote]][[/footnote]]",
-        );
-        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
-
-        assert!(
-            errors
-                .iter()
-                .any(|error| error.kind() == ParseErrorKind::RuleFailed),
-            "{errors:#?}",
-        );
-        let body_concat: String = tree
-            .footnotes
-            .get(0)
-            .map(|body| {
-                body.iter()
-                    .filter_map(|el| match el {
-                        Element::Text(t) => Some(t.as_ref()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("")
-            })
-            .unwrap_or_default();
-        assert!(
-            body_concat.contains("[[footnote]]inner"),
-            "expected inner opener literal in footnote body: {body_concat:?}",
-        );
-    }
-
-    #[test]
     fn footnote_rejects_nested_footnote_blocks() {
         let page_info = PageInfo::dummy();
         let wikidot = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);

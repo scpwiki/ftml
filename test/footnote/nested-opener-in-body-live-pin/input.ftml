@@ -1,0 +1,1 @@
+before[[footnote]]outer [[footnote]]inner[[/footnote]]after[[/footnote]][[footnoteblock]]
