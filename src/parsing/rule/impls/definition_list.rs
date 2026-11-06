@@ -82,7 +82,9 @@ fn parse_definition_list<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    if let Some(body) = try_consume_definition_list_block(parser)? {
+    if !in_wikidot_bibliography_body(parser)
+        && let Some(body) = try_consume_definition_list_block(parser)?
+    {
         return ok!(false; Elements::Multiple(body));
     }
 
