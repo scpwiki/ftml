@@ -531,13 +531,7 @@ pub(crate) fn wikidot_simple_table_markers_literal_on_line_after_explicit_li(
         return true;
     }
     let lower = prev_line.to_ascii_lowercase();
-    if lower.starts_with("[[li ") || lower.starts_with("[[li\t") {
-        return true;
-    }
-    if lower.starts_with("[[cell]]") {
-        return prev_line.len() == "[[cell]]".len();
-    }
-    lower.starts_with("[[cell ") || lower.starts_with("[[cell\t")
+    lower.starts_with("[[li ") || lower.starts_with("[[li\t")
 }
 
 fn try_consume_fn<'r, 't>(
