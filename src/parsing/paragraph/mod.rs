@@ -32,7 +32,7 @@ use super::parser::{BodyWalkKey, Parser};
 use super::prelude::*;
 use super::rule::Rule;
 use super::token::Token;
-use crate::tree::ContainerType;
+use crate::tree::{ContainerType, ListItem, ListType, WIKIDOT_QUOTE_LIST_REPAIR_MARKER};
 use std::borrow::Cow;
 
 type CloseConditionFn = fn(&mut Parser) -> Result<bool, ParseError>;
@@ -102,6 +102,21 @@ where
                 parser.step()?;
             }
             parser.mark_wikidot_scored_join_head(parser.current().span.start);
+            parser.clear_start_of_line();
+            line_prefix_whitespace_only = false;
+            continue;
+        }
+
+        if parser.settings().layout.legacy()
+            && matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            )
+            && let Some(steps) = wikidot_scored_alias_open_joins_previous_line(parser)
+        {
+            for _ in 0..steps {
+                parser.step()?;
+            }
             parser.clear_start_of_line();
             line_prefix_whitespace_only = false;
             continue;
@@ -523,6 +538,182 @@ where
     }
 
     stack.into_result()
+}
+
+/// Live's blockquote rule reassembles quoted lines for the later rules, so a
+/// closed numbered list on the last quoted line can absorb the blockquote's
+/// own close token when a scored alias close ate the newline in front of it.
+/// libtidy then repairs the crossing and leaves a stray unclosed `<ul>`
+/// opener after the quote. Marks that last blockquote so the Wikidot renderer
+/// emits those bytes (nothing when footnotes append a footer after the body).
+pub(crate) fn mark_wikidot_quote_list_repairs(
+    elements: &mut [Element<'_>],
+    has_trailing_footer: bool,
+) {
+    if has_trailing_footer {
+        return;
+    }
+    let Some(last) = elements.last_mut() else {
+        return;
+    };
+    if !wikidot_crossed_numbered_quote(last) {
+        return;
+    }
+    let Element::Container(container) = last else {
+        return;
+    };
+    container
+        .attributes_mut()
+        .insert(WIKIDOT_QUOTE_LIST_REPAIR_MARKER, cow!(""));
+}
+
+fn wikidot_crossed_numbered_quote(element: &Element<'_>) -> bool {
+    let Element::Container(container) = element else {
+        return false;
+    };
+    if container.ctype() != ContainerType::Blockquote {
+        return false;
+    }
+    match container.elements().last() {
+        Some(Element::List {
+            ltype: ListType::Numbered,
+            items,
+            ..
+        }) => items.last().is_some_and(|item| match item {
+            ListItem::Elements { elements, .. } => {
+                ParagraphStack::wikidot_run_ends_with_scored_alias(elements)
+            }
+            ListItem::SubList { .. } => false,
+        }),
+        Some(inner @ Element::Container(inner_container))
+            if inner_container.ctype() == ContainerType::Blockquote =>
+        {
+            wikidot_crossed_numbered_quote(inner)
+        }
+        _ => false,
+    }
+}
+
+/// Live Wikidot's span and anchor rules delete the whitespace run in front of
+/// a scored `[[span_]]` or `[[a_]]` opener from that run's first newline on,
+/// so the newline does not separate the previous line from the opener's
+/// chunk. Spaces before that first newline stay. Returns the number of run
+/// tokens to skip when a paired scored alias opener follows; an unpaired
+/// opener is literal text and keeps its break.
+fn wikidot_scored_alias_open_joins_previous_line<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> Option<usize>
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() {
+        return None;
+    }
+    debug_assert!(matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak
+    ));
+    wikidot_scored_alias_open_in_run(parser, true)
+}
+
+/// Whether a line opening with a paired scored `[[span_]]`/`[[a_]]` opener
+/// follows the pending break run (the current token is the whitespace before
+/// that break).
+pub(crate) fn wikidot_scored_alias_open_after_break<'r, 't>(
+    parser: &Parser<'r, 't>,
+) -> bool
+where
+    'r: 't,
+{
+    parser.settings().layout.legacy()
+        && matches!(
+            parser.look_ahead(0).map(|token| token.token),
+            Some(Token::LineBreak | Token::ParagraphBreak)
+        )
+        && wikidot_scored_alias_open_in_run(parser, false).is_some()
+}
+
+/// Whether the parser is positioned at a scored `[[span_]]`/`[[a_]]` opener
+/// whose rule really pairs (an unpaired opener stays literal text).
+pub(crate) fn wikidot_scored_alias_open_here<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() || parser.current().token != Token::LeftBlock {
+        return false;
+    }
+    let source = parser.full_text().inner();
+    let head = &source[parser.current().span.end.min(source.len())..];
+    let name_end = head
+        .find(|character: char| character.is_whitespace() || character == ']')
+        .unwrap_or(head.len());
+    let Some(base) = head[..name_end].strip_suffix('_') else {
+        return false;
+    };
+    if !(base.eq_ignore_ascii_case("span") || base.eq_ignore_ascii_case("a")) {
+        return false;
+    }
+    let mut probe = parser.clone();
+    crate::parsing::rule::impls::RULE_BLOCK
+        .try_consume(&mut probe)
+        .is_ok()
+}
+
+/// Scans one whitespace/break run for a scored alias opener. The run starts
+/// at the parser's current token (`start_at_current`, used when that token is
+/// the first newline) or at the next token (used when the current token is
+/// the whitespace before the break). The opener only eats the run when its
+/// rule really pairs, so the block rule is replayed on a probe parser
+/// positioned at the opener.
+fn wikidot_scored_alias_open_in_run<'r, 't>(
+    parser: &Parser<'r, 't>,
+    start_at_current: bool,
+) -> Option<usize>
+where
+    'r: 't,
+{
+    let source = parser.full_text().inner();
+    let mut steps = 0usize;
+    let mut saw_break = false;
+    let mut index = 0usize;
+    loop {
+        let (token, remaining_index) = if start_at_current && index == 0 {
+            (parser.current(), 0)
+        } else {
+            let remaining_index = if start_at_current { index - 1 } else { index };
+            (parser.remaining().get(remaining_index)?, remaining_index)
+        };
+        match token.token {
+            Token::LineBreak | Token::ParagraphBreak => {
+                saw_break = true;
+                steps += 1;
+            }
+            Token::Whitespace => steps += 1,
+            Token::LeftBlock => {
+                if !saw_break {
+                    return None;
+                }
+                let head = source.get(token.span.end..)?;
+                let name_end = head
+                    .find(|character: char| character.is_whitespace() || character == ']')
+                    .unwrap_or(head.len());
+                let base = head[..name_end].strip_suffix('_')?;
+                if !(base.eq_ignore_ascii_case("span") || base.eq_ignore_ascii_case("a"))
+                {
+                    return None;
+                }
+                if start_at_current && index == 0 {
+                    return None;
+                }
+                let mut probe = parser.clone();
+                probe.step_to_remaining(remaining_index);
+                let rule = crate::parsing::rule::impls::RULE_BLOCK;
+                return rule.try_consume(&mut probe).ok().map(|_| steps);
+            }
+            _ => return None,
+        }
+        index += 1;
+    }
 }
 
 /// Live Wikidot's span rule deletes the whitespace run after a scored

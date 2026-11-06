@@ -585,19 +585,26 @@ where
     if parser.settings().layout.legacy()
         && !parser.discarding_hidden_body()
         && ends_at_break
-        && ParagraphStack::wikidot_run_ends_with_scored_alias(&elements)
     {
         // Live Wikidot eats the break after a paired scored close, so the
         // following line continues the item as inline text (a list marker on
-        // that line stops being a marker).
-        let (absorbed_run, absorbed_break) = absorb_wikidot_scored_alias_line(
-            &mut sub_parser,
-            &mut elements,
-            &mut item_errors,
-            &mut item_paragraph_safe,
-        )?;
-        ends_run |= absorbed_run;
-        let _ = absorbed_break;
+        // that line stops being a marker). A line that opens with a paired
+        // scored `[[span_]]`/`[[a_]]` opener joins the item the same way: the
+        // opener eats the whitespace run in front of it from its first
+        // newline on.
+        let absorb_lead = !ParagraphStack::wikidot_run_ends_with_scored_alias(&elements)
+            && crate::parsing::paragraph::wikidot_scored_alias_open_here(&sub_parser);
+        if absorb_lead || ParagraphStack::wikidot_run_ends_with_scored_alias(&elements) {
+            let (absorbed_run, absorbed_break) = absorb_wikidot_scored_alias_line(
+                &mut sub_parser,
+                &mut elements,
+                &mut item_errors,
+                &mut item_paragraph_safe,
+                absorb_lead,
+            )?;
+            ends_run |= absorbed_run;
+            let _ = absorbed_break;
+        }
     }
 
     if parser.settings().layout.legacy()
@@ -835,19 +842,28 @@ fn collect_list_item_elements<'r, 't>(
 /// Live Wikidot removes the line break that follows a paired scored inline
 /// close, so the next source line joins the current list item as inline text.
 /// The line-start rules do not fire on the joined line: a * or # there is
-/// literal, not a new list item.
+/// literal, not a new list item. `absorb_lead` additionally joins a line that
+/// opens with a paired scored alias opener (its own rule eats the break in
+/// front of it); afterwards the closer-side loop takes over.
 fn absorb_wikidot_scored_alias_line<'r, 't>(
     parser: &mut Parser<'r, 't>,
     elements: &mut Vec<Element<'t>>,
     errors: &mut Vec<ParseError>,
     paragraph_safe: &mut bool,
+    absorb_lead: bool,
 ) -> Result<(bool, bool), ParseError>
 where
     'r: 't,
 {
     let mut ends_run = false;
     let mut ends_at_break = false;
-    while ParagraphStack::wikidot_run_ends_with_scored_alias(elements) {
+    let mut first = true;
+    loop {
+        let lead = absorb_lead && first;
+        first = false;
+        if !lead && !ParagraphStack::wikidot_run_ends_with_scored_alias(elements) {
+            break;
+        }
         if parser.current().token == Token::InputEnd {
             break;
         }
@@ -856,6 +872,9 @@ where
             parser.step()?;
         }
         if parser.current().token == Token::InputEnd {
+            break;
+        }
+        if lead && !crate::parsing::paragraph::wikidot_scored_alias_open_here(parser) {
             break;
         }
         let close_conditions = [

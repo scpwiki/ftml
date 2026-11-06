@@ -1,7 +1,7 @@
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, Heading, HeadingLevel, HeadingReopen,
-    InlineFormatKind, ListItem, PartialElement, WIKIDOT_HEADING_REOPEN_MARKER,
+    InlineFormatKind, ListItem, PartialElement, TableType, WIKIDOT_HEADING_REOPEN_MARKER,
     WIKIDOT_WS_MONO_VANISH_MARKER, WikidotBlockCloseKind, WikidotBlockShell,
     WikidotFrameLink,
 };
@@ -1362,6 +1362,10 @@ struct ParagraphGroup<'t> {
     attributes: AttributeMap<'t>,
     elements: Vec<Element<'t>>,
     ends_with_scored_span: bool,
+    /// The group is terminated by an advanced table, whose rule inserts a
+    /// blank line in front of itself, so the run is wrapped the way live's
+    /// Paragraph rule wraps a chunk that has a blank line after it.
+    ends_at_advanced_table: bool,
 }
 
 fn lower_root_sequence<'t>(
@@ -1489,13 +1493,21 @@ fn lower_root_sequence<'t>(
                 attributes: paragraph_attributes,
                 elements: Vec::new(),
                 ends_with_scored_span: false,
+                ends_at_advanced_table: false,
             });
             group.elements.append(container.elements_mut());
             group.ends_with_scored_span = effects.scored_span_at_end;
-            previous_scored_close = effects.scored_span_closed;
+            previous_scored_close = effects.scored_span_at_end;
             continue;
         }
 
+        if matches!(
+            &element,
+            Element::Table(table) if table.table_type == TableType::Advanced
+        ) && let Some(group) = paragraph_group.as_mut()
+        {
+            group.ends_at_advanced_table = true;
+        }
         flush_paragraph_group(&mut output, &mut paragraph_group);
         if align_head_joins_previous_chunk(&output, &element, active)
             && let Some(position) = active.anchor_position()
@@ -1767,6 +1779,7 @@ fn flush_paragraph_group<'t>(
         attributes,
         mut elements,
         ends_with_scored_span,
+        ends_at_advanced_table,
     }) = paragraph_group.take()
     else {
         return;
@@ -1774,8 +1787,10 @@ fn flush_paragraph_group<'t>(
     // Live Wikidot does not wrap a run whose last content is a scored span:
     // `[[span_]]x[[/span]]` renders as a bare `<span>x</span>`, while a run
     // that continues after the span (even a trailing space) is wrapped.
-    // Captured 2026-11-05 against PagePreview.
-    let wrapped = wrapped && !ends_with_scored_span;
+    // Captured 2026-11-05 against PagePreview. An advanced table is the one
+    // block rule that inserts a blank line in front of itself, so the span
+    // chunk before it does get its paragraph wrapper.
+    let wrapped = wrapped && !(ends_with_scored_span && !ends_at_advanced_table);
     if elements.is_empty() {
         return;
     }

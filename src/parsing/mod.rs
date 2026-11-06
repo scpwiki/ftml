@@ -60,7 +60,9 @@ mod prelude {
 
 use self::depth::{DepthItem, DepthList, process_depths};
 use self::element_condition::{ElementCondition, ElementConditionType};
-use self::paragraph::{gather_paragraphs, no_close_condition};
+use self::paragraph::{
+    gather_paragraphs, mark_wikidot_quote_list_repairs, no_close_condition,
+};
 use self::parser::{DEFAULT_MAX_RECURSION_DEPTH, Parser};
 use self::parser_wrap::ParserWrap;
 use self::rule::impls::RULE_PAGE;
@@ -309,6 +311,10 @@ where
                 for bibliography in bibliographies.slice_mut() {
                     inline_format::normalize_wikidot_bibliography(bibliography);
                 }
+                mark_wikidot_quote_list_repairs(
+                    &mut elements,
+                    !has_footnote_block && !footnotes.is_empty(),
+                );
                 let lowered_bibliographies =
                     inline_scope::lower_wikidot_inline_size_scopes_with_bibliographies(
                         &mut elements,
