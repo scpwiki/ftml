@@ -52,6 +52,13 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy() && !parser.has_body_end_block(&BLOCK_ANCHOR) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    // A greedy iframe URL tail can absorb the anchor's only closer; live then
+    // leaves the opener literal instead of dropping the open tag.
+    if parser.settings().layout.legacy()
+        && parser.wikidot_greedy_tail_eats_closers(opener_start, &["a", "anchor"])
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let attributes = if parser.settings().layout.legacy() {
         arguments.to_wikidot_anchor_attribute_map(parser.settings())
     } else {

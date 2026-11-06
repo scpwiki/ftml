@@ -159,6 +159,16 @@ fn parse_list_block_impl<'r, 't>(
     if parser.settings().layout.legacy() && !parser.has_body_end_block(block_rule) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    // Live leaves the opener literal when a bare-scheme [[iframe]] head on the
+    // line before the closer absorbed every closer for the block.
+    if wikidot
+        && parser.wikidot_greedy_tail_eats_closers(
+            _opener_start,
+            &[block_rule.accepts_names[0]],
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
 
     let body = parser.get_body_elements(block_rule, false)?;
     let fused_close = parser.wikidot_body_closed_with_fused_close(block_rule);
@@ -756,6 +766,9 @@ fn parse_list_item<'r, 't>(
     let attributes = arguments.to_attribute_map(parser.settings());
     let body_start = parser.current().span.start;
     if wikidot && parser.wikidot_li_inside_item_body() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if wikidot && parser.wikidot_greedy_tail_eats_closers(opener_start, &["li"]) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if wikidot && parser.wikidot_li_pairing_depth() > 0 {

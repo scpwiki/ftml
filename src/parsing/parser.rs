@@ -482,6 +482,47 @@ impl<'r, 't> Parser<'r, 't> {
             .has_greedy_tail_within(from, to)
     }
 
+    pub(crate) fn wikidot_greedy_tail_covers(&self, byte: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .greedy_range_covering(byte)
+            .is_some()
+    }
+
+    /// Whether every legacy closer marker of one of the given names after the
+    /// opener lies inside a greedy iframe URL tail, so no pair can survive.
+    pub(crate) fn wikidot_greedy_tail_eats_closers(
+        &self,
+        opener_start: usize,
+        names: &[&str],
+    ) -> bool {
+        let source = self.full_text().inner();
+        let lower = source.to_ascii_lowercase();
+        for name in names {
+            let needle = format!("[[/{}", name);
+            let mut search_from = opener_start;
+            while let Some(rel) = lower[search_from..].find(&needle) {
+                let byte = search_from + rel;
+                let after = source.get(byte + needle.len()..);
+                let closes = after.is_some_and(|rest| {
+                    rest.starts_with("]]")
+                        || rest.starts_with(' ')
+                        || rest.starts_with('\t')
+                });
+                if closes {
+                    if !self.wikidot_greedy_tail_covers(byte) {
+                        return false;
+                    }
+                    search_from = byte + needle.len();
+                } else {
+                    search_from = byte + needle.len();
+                }
+            }
+        }
+        true
+    }
+
     // INLINE-L86-HEADING-METHODS-START
     /// The reopen state a heading line leaves for a collapsible head that ends
     /// it: the head byte and the heading to reopen inside the shell frames.

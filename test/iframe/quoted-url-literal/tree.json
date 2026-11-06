@@ -1,0 +1,11 @@
+{
+    "elements": [
+        {
+            "element": "iframe",
+            "data": {
+                "url": "http://example.org/x\"y",
+                "attributes": {}
+            }
+        }
+    ]
+}
