@@ -484,6 +484,62 @@ fn wikidot_simple_table_preserves_break(parser: &Parser<'_, '_>) -> bool {
     line.eq_ignore_ascii_case("[[/div]]") || line.eq_ignore_ascii_case("[[/code]]")
 }
 
+pub(crate) fn wikidot_simple_table_markers_literal_on_line_after_explicit_li(
+    parser: &Parser<'_, '_>,
+    table_token_start: usize,
+) -> bool {
+    if !parser.settings().layout.legacy() {
+        return false;
+    }
+    let text = parser.full_text().inner();
+    if table_token_start > text.len() {
+        return false;
+    }
+    let line_start = text[..table_token_start]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    if line_start == 0 {
+        return false;
+    }
+    let line_end = text[table_token_start..]
+        .find(['\r', '\n'])
+        .map(|offset| table_token_start + offset)
+        .unwrap_or(text.len());
+    let line = text[line_start..line_end].trim_start();
+    if !line.starts_with("||") {
+        return false;
+    }
+    let prev_nl = line_start - 1;
+    if text.as_bytes()[prev_nl] != b'\n' {
+        return false;
+    }
+    let prev_line_start = text[..prev_nl]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let prev_raw = &text[prev_line_start..prev_nl];
+    let prev_line = prev_raw
+        .trim_start()
+        .strip_suffix('\r')
+        .unwrap_or(prev_raw)
+        .trim_end();
+    if prev_line.is_empty() {
+        return false;
+    }
+    if prev_line.eq_ignore_ascii_case("[[li]]") {
+        return true;
+    }
+    let lower = prev_line.to_ascii_lowercase();
+    if lower.starts_with("[[li ") || lower.starts_with("[[li\t") {
+        return true;
+    }
+    if lower.starts_with("[[cell]]") {
+        return prev_line.len() == "[[cell]]".len();
+    }
+    lower.starts_with("[[cell ") || lower.starts_with("[[cell\t")
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -1395,6 +1451,42 @@ mod tests {
         assert_eq!(table.rows.len(), 2);
         assert_eq!(table.rows[0].cells.len(), 2);
         assert_eq!(table.rows[1].cells.len(), 2);
+    }
+
+    #[test]
+    fn wikidot_explicit_li_body_keeps_simple_table_syntax_literal() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = concat!(
+            "[[div]]\n",
+            "[[note]]\n",
+            "[[table]]\n",
+            "[[row]]\n",
+            "[[cell]]\n",
+            "[[ul]]\n",
+            "[[li]]\n",
+            "||c||\n",
+            "[[/li]]\n",
+            "[[/ul]]\n",
+            "[[/cell]]\n",
+            "[[/row]]\n",
+            "[[/table]]\n",
+            "[[/note]]\n",
+            "[[/div]]",
+        );
+        let tokenization = crate::tokenize(source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(
+            html.contains("||c||"),
+            "expected literal cell markers, got {html:?}",
+        );
+        assert!(
+            !html.contains("wiki-content-table"),
+            "simple table must not form inside explicit [[li]] line-owned body: {html}",
+        );
     }
 
     #[test]
