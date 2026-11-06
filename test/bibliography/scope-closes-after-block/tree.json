@@ -18,6 +18,14 @@
             }
         },
         {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        },
+        {
             "element": "container",
             "data": {
                 "type": "paragraph",
@@ -25,85 +33,63 @@
                 "elements": [
                     {
                         "element": "text",
-                        "data": "[["
+                        "data": "post"
                     },
                     {
                         "element": "text",
-                        "data": "bibliography"
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "span"
                     },
                     {
                         "element": "text",
                         "data": "]]"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "tail"
                     }
                 ]
             }
-        },
-        {
-            "element": "definition-list",
-            "data": [
-                {
-                    "key_string": "key1",
-                    "key": [
-                        {
-                            "element": "text",
-                            "data": "key1"
-                        }
-                    ],
-                    "value": [
-                        {
-                            "element": "text",
-                            "data": "aa"
-                        },
-                        {
-                            "element": "text",
-                            "data": " "
-                        },
-                        {
-                            "element": "container",
-                            "data": {
-                                "type": "span",
-                                "attributes": {},
-                                "elements": [
-                                    {
-                                        "element": "text",
-                                        "data": "bb"
-                                    },
-                                    {
-                                        "element": "line-break"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "[[/"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "bibliography"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "]]"
-                                    },
-                                    {
-                                        "element": "line-break"
-                                    },
-                                    {
-                                        "element": "text",
-                                        "data": "post"
-                                    }
-                                ]
-                            }
-                        },
-                        {
-                            "element": "text",
-                            "data": " "
-                        },
-                        {
-                            "element": "text",
-                            "data": "tail"
-                        }
-                    ]
-                }
-            ]
         }
+    ],
+    "bibliographies": [
+        [
+            [
+                "key1",
+                [
+                    {
+                        "element": "text",
+                        "data": "aa"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "bb"
+                                },
+                                {
+                                    "element": "line-break"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            ]
+        ]
     ]
 }

@@ -329,6 +329,19 @@ fn explicit_closer_name<'r: 't, 't>(
     }
 }
 
+fn find_ignore_ascii_case(haystack: &str, needle: &str) -> Option<usize> {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() {
+        return Some(0);
+    }
+    h.windows(n.len()).position(|w| {
+        w.iter()
+            .zip(n.iter())
+            .all(|(a, b)| a.to_ascii_lowercase() == b.to_ascii_lowercase())
+    })
+}
+
 fn has_explicit_closer<'r: 't, 't>(
     probe: &Parser<'r, 't>,
     end: usize,
@@ -339,13 +352,29 @@ fn has_explicit_closer<'r: 't, 't>(
             .iter()
             .any(|accepted| name.eq_ignore_ascii_case(accepted));
     }
-    let source = &probe.full_text().inner()[..end];
-    accepted.iter().any(|name| {
+    let full = probe.full_text().inner();
+    let source = &full[..end];
+    if accepted.iter().any(|name| {
         let close = format!("[[/{name}]]]");
         source
             .get(source.len().saturating_sub(close.len())..)
             .is_some_and(|tail| tail.eq_ignore_ascii_case(&close))
-    })
+    }) {
+        return true;
+    }
+    if probe.settings().layout.legacy() && !probe.discarding_hidden_body() {
+        const BIB: &str = "[[/bibliography]]";
+        if end + BIB.len() <= full.len()
+            && full[end..end + BIB.len()].eq_ignore_ascii_case(BIB)
+            && let Some(tail) = full.get(end + BIB.len()..)
+        {
+            return accepted.iter().any(|name| {
+                let needle = format!("[[/{name}]]");
+                find_ignore_ascii_case(tail, &needle).is_some()
+            });
+        }
+    }
+    false
 }
 
 fn table_opener_start(parser: &Parser<'_, '_>, opener_start: usize) -> Option<usize> {

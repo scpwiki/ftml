@@ -30,6 +30,7 @@ pub(super) struct WikidotState {
     size_body_depth: u8,
     anchor_body_depth: u16,
     bibliography_body_depth: u16,
+    bibliography_parse_body_depth: u16,
     literal_triple_link_depth: u8,
     simple_table_crossed_closers: u16,
     center_body_depth: u16,
@@ -47,6 +48,7 @@ impl Default for WikidotState {
             size_body_depth: 0,
             anchor_body_depth: 0,
             bibliography_body_depth: 0,
+            bibliography_parse_body_depth: 0,
             literal_triple_link_depth: 0,
             simple_table_crossed_closers: 0,
             center_body_depth: 0,
@@ -80,6 +82,23 @@ impl Parser<'_, '_> {
     pub(crate) fn leave_wikidot_bibliography_body(&mut self) {
         self.wikidot.bibliography_body_depth =
             self.wikidot.bibliography_body_depth.saturating_sub(1);
+    }
+
+    #[inline]
+    pub(crate) fn in_bibliography_parse_body(&self) -> bool {
+        self.wikidot.bibliography_parse_body_depth > 0
+    }
+
+    #[inline]
+    pub(crate) fn enter_bibliography_parse_body(&mut self) {
+        self.wikidot.bibliography_parse_body_depth =
+            self.wikidot.bibliography_parse_body_depth.saturating_add(1);
+    }
+
+    #[inline]
+    pub(crate) fn leave_bibliography_parse_body(&mut self) {
+        self.wikidot.bibliography_parse_body_depth =
+            self.wikidot.bibliography_parse_body_depth.saturating_sub(1);
     }
 
     #[inline]
