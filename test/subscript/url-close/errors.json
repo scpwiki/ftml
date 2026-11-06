@@ -54,24 +54,6 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "subscript",
-        "rule": "subscript",
-        "span": [
-            113,
-            115
-        ],
-        "kind": "rule-failed"
-    },
-    {
-        "token": "subscript",
-        "rule": "fallback",
-        "span": [
-            113,
-            115
-        ],
-        "kind": "no-rules-match"
-    },
-    {
         "token": "whitespace",
         "rule": "subscript",
         "span": [

@@ -73,12 +73,8 @@
                         "data": " "
                     },
                     {
-                        "element": "container",
-                        "data": {
-                            "type": "subscript",
-                            "attributes": {},
-                            "elements": []
-                        }
+                        "element": "text",
+                        "data": ",,,,"
                     }
                 ]
             }

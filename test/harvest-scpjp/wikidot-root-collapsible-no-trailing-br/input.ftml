@@ -1,0 +1,3 @@
+[[collapsible show="+ x" hide="- y"]]
+body
+[[/collapsible]]

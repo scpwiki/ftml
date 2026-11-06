@@ -130,11 +130,7 @@
                     },
                     {
                         "element": "text",
-                        "data": ",,"
-                    },
-                    {
-                        "element": "text",
-                        "data": ","
+                        "data": ",,,"
                     },
                     {
                         "element": "link",

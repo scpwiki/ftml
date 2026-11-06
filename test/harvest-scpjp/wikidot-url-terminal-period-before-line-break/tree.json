@@ -1,0 +1,22 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "link",
+                        "data": {
+                            "type": "direct",
+                            "link": "https://snippets.wikidot.com/code:collapsible-block-unleashed.",
+                            "label": "url",
+                            "target": null
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
