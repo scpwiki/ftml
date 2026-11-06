@@ -119,6 +119,7 @@ fn parse_fn<'r, 't>(
         if !parser.has_body_end_block(&BLOCK_SIZE) {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
+        parser.enter_wikidot_size_body();
         return ok!(Element::Partial(PartialElement::InlineSizeOpen(
             Cow::Owned(size),
             head_source,

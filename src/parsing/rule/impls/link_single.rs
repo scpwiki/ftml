@@ -407,6 +407,7 @@ fn end_block_scope_blocked(parser: &Parser<'_, '_>, name: &str) -> bool {
                 || parser.in_wikidot_literal_alias_body()))
         || (name == "div"
             && (parser.in_wikidot_div_body() || parser.in_wikidot_literal_alias_body()))
+        || (name == "size" && parser.in_wikidot_size_body())
         || (name == "center" && parser.in_wikidot_center_body())
         || (name == "bibliography" && parser.in_wikidot_bibliography_body())
 }
