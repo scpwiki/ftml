@@ -1,0 +1,20 @@
+{
+    "elements": [
+        {
+            "element": "text",
+            "data": "a"
+        },
+        {
+            "element": "footnote",
+            "data": 1
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "b"
+            }
+        ]
+    ]
+}

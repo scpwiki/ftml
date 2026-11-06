@@ -78,11 +78,38 @@ fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
     debug!("Consuming newline token as line break");
 
     if line_break_skipped_for_own_line_block(parser) {
+        if wikidot_injected_footnote_block_break(parser) {
+            return ok!(Element::LineBreak);
+        }
         debug!("Skipping line break element because of upcoming token");
         return ok!(Elements::None);
     }
 
     ok!(Element::LineBreak)
+}
+
+/// The preprocessor splits a footnoteblock authored on a definition-list or
+/// table line onto its own line. Live's injection leaves one newline between
+/// the footer and the fragment after the marker, and that newline stays a
+/// break in front of the following line, unlike an ordinary block-starting
+/// line.
+fn wikidot_injected_footnote_block_break(parser: &Parser<'_, '_>) -> bool {
+    if !parser.settings().layout.legacy() {
+        return false;
+    }
+    let current = parser.current();
+    if current.token != Token::LineBreak {
+        return false;
+    }
+    let source = parser.full_text().inner();
+    let newline_start = current.span.start;
+    let previous_start = source[..newline_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    let previous_line =
+        source[previous_start..newline_start].trim_end_matches([' ', '\t', '\r']);
+    let lowercase = previous_line.to_ascii_lowercase();
+    lowercase.starts_with("[[footnoteblock") && lowercase.ends_with("]]")
 }
 
 pub(crate) fn line_break_skipped_for_own_line_block<'r, 't>(

@@ -1,0 +1,52 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        },
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "k",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "k"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "footnote-block",
+                            "data": {
+                                "title": null,
+                                "hide": false
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "b"
+            }
+        ]
+    ]
+}

@@ -341,6 +341,14 @@ fn normalize_block_sequence(elements: &mut Vec<Element<'_>>) {
                 .is_some_and(|next| !matches!(next, Element::LineBreak))
         {
             output.push(Element::LineBreak);
+        } else if iter
+            .peek()
+            .is_some_and(|next| matches!(next, Element::Table(_)))
+        {
+            // Live's injection leaves a single newline between the footer and
+            // the fragment after a marker authored on a table line; that
+            // newline stays a break in front of the table the fragment forms.
+            output.push(Element::LineBreak);
         }
     }
     *elements = output;

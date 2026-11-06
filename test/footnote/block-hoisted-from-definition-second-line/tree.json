@@ -1,0 +1,94 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "a"
+                    },
+                    {
+                        "element": "footnote",
+                        "data": 1
+                    }
+                ]
+            }
+        },
+        {
+            "element": "definition-list",
+            "data": [
+                {
+                    "key_string": "k",
+                    "key": [
+                        {
+                            "element": "text",
+                            "data": "k"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "v"
+                        }
+                    ]
+                },
+                {
+                    "key_string": "[[footnoteblock]] : e\n: m",
+                    "key": [
+                        {
+                            "element": "footnote-block",
+                            "data": {
+                                "title": null,
+                                "hide": false
+                            }
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": "e"
+                        },
+                        {
+                            "element": "line-break"
+                        },
+                        {
+                            "element": "text",
+                            "data": ":"
+                        },
+                        {
+                            "element": "text",
+                            "data": " "
+                        },
+                        {
+                            "element": "text",
+                            "data": "m"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "element": "text",
+                            "data": "n"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "b"
+            }
+        ]
+    ]
+}

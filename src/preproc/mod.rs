@@ -207,6 +207,7 @@ fn preprocess_internal(text: &mut String, wikidot_compatibility: bool) {
     compatibility::substitute_for_layout(text, wikidot_compatibility);
     if wikidot_compatibility {
         compatibility::substitute_wikidot(text);
+        compatibility::inject_wikidot_footnote_block_lines(text);
         typography::substitute_wikidot_deferring_conditionals(text);
         whitespace::filter_characters(text, true);
     } else {
