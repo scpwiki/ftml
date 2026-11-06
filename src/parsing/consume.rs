@@ -1353,6 +1353,15 @@ where
                 following,
                 Some(Token::LineBreak | Token::ParagraphBreak | Token::InputEnd)
             ),
+            Token::ClearFloatLeft | Token::ClearFloatRight | Token::ClearFloatBoth => {
+                !parser.settings().layout.legacy() || {
+                    let source = parser.full_text().inner();
+                    let line_end = source[token.span.end..]
+                        .find(['\r', '\n'])
+                        .map_or(source.len(), |offset| token.span.end + offset);
+                    token.span.end == line_end
+                }
+            }
             _ => true,
         };
         starts_own_line_rule(token.token)

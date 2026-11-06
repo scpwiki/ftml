@@ -223,13 +223,17 @@ fn find_forward_line_break(
 }
 
 /// The region an unmatched `[[/name]]` closer may claim as its single-link
-/// target runs to the end of the authored line: a complete block later on
-/// the same line owns the closer instead of the link, as live shows for
+/// target runs to the closing bracket of the prospective single link: live's
+/// Url rule matches `[target label]` in one regex over the text earlier rules
+/// left, so only a block head inside that match can have been claimed before
+/// the link and own the closer, as live shows for
 /// `x[[/math]] [[eref eq1]]` (literal closer, then the equation reference).
+/// A head after the link's closing bracket cannot affect the match.
 fn end_block_link_region_end(source: &str, start: usize) -> usize {
     let text = source;
     let bytes = text.as_bytes();
     let mut region_end = bytes.len();
+    let mut label_start = None;
     let mut i = start + 2;
     while i < bytes.len() {
         if bytes[i..].starts_with(b"[!--") {
@@ -240,6 +244,12 @@ fn end_block_link_region_end(source: &str, start: usize) -> usize {
                 }
             }
         } else if matches!(bytes[i], b'\n' | b'\r') {
+            region_end = i;
+            break;
+        } else if label_start.is_none() && matches!(bytes[i], b' ' | b'\t') {
+            label_start = Some(i + 1);
+            i += 1;
+        } else if label_start.is_some() && bytes[i] == b']' {
             region_end = i;
             break;
         } else {
@@ -367,6 +377,10 @@ impl<'r, 't> Parser<'r, 't> {
         if let Some((scan_from, region_end)) = scan.link_region
             && scan_from <= from
             && from <= region_end
+            && !source[scan_from..from]
+                .as_bytes()
+                .iter()
+                .any(|byte| matches!(byte, b' ' | b'\t'))
             && !source[scan_from..from].contains("[!--")
         {
             scan.link_region = Some((from, region_end));
