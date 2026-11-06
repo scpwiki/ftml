@@ -90,6 +90,23 @@ where
             continue;
         }
 
+        if parser.settings().layout.legacy()
+            && matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            )
+            && stack.wikidot_current_ends_with_scored_alias()
+            && let Some(steps) = wikidot_scored_close_joins_late_line(parser)
+        {
+            for _ in 0..steps {
+                parser.step()?;
+            }
+            parser.mark_wikidot_scored_join_head(parser.current().span.start);
+            parser.clear_start_of_line();
+            line_prefix_whitespace_only = false;
+            continue;
+        }
+
         match wikidot_empty_raw_line_kind(parser) {
             Some(WikidotEmptyRawLineKind::Complete) => {
                 stack.mark_wikidot_complete_raw_line_occupancy();
@@ -506,6 +523,55 @@ where
     }
 
     stack.into_result()
+}
+
+/// Live Wikidot's span rule deletes the whitespace run after a scored
+/// `[[/span]]` or `[[/a]]` when that run starts with a newline, before the
+/// list, definition, table, alignment, tabview and center rules look for a
+/// line start. Returns the tokens to skip when the next line begins one of
+/// those constructs; earlier line rules (quote, heading, rule lines) and
+/// plain text keep their existing handling.
+fn wikidot_scored_close_joins_late_line(parser: &Parser<'_, '_>) -> Option<usize> {
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start;
+    if !source[..start].ends_with("]]") {
+        return None;
+    }
+    let tokens = std::iter::once(parser.current()).chain(parser.remaining().iter());
+    let mut steps = 0;
+    let mut window = tokens.skip_while(|token| {
+        let skip = matches!(
+            token.token,
+            Token::LineBreak | Token::ParagraphBreak | Token::Whitespace
+        );
+        if skip {
+            steps += 1;
+        }
+        skip
+    });
+    let first = window.next()?;
+    let second = window.next().map(|token| token.token);
+    let late = match first.token {
+        Token::BulletItem | Token::NumberedItem | Token::Colon | Token::Equals => {
+            second == Some(Token::Whitespace)
+        }
+        Token::TableColumn
+        | Token::TableColumnRight
+        | Token::TableColumnCenter
+        | Token::TableColumnTitle => true,
+        Token::LeftBlock => {
+            let head = &source[first.span.end..];
+            let name_end = head
+                .find(|c: char| c.is_whitespace() || c == ']')
+                .unwrap_or(head.len());
+            let name = &head[..name_end];
+            ["=", "==", "<", ">", "tabview", "tabs"]
+                .iter()
+                .any(|late| name.eq_ignore_ascii_case(late))
+        }
+        _ => false,
+    };
+    late.then_some(steps)
 }
 
 fn wikidot_literal_gallery_close<'r, 't>(parser: &Parser<'r, 't>) -> bool

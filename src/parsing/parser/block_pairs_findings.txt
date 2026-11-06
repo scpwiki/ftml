@@ -168,3 +168,6 @@ replay-jp--black-queen-hub	Div@786..989 scan-only
 replay-jp--black-queen-hub	Tab@5473..5539 scan-only
 replay-jp--chuukunn-s-proposal	Div@16409..16438 descent-only
 replay-jp--chuukunn-s-proposal	Div@16409..16520 scan-only
+corpus-test/span/scored-close-literal-align-block/input.ftml	AlignLeft@20..34 scan-only
+corpus-test/span/scored-close-literal-tabview/input.ftml	TabView@20..65 scan-only
+corpus-test/span/scored-close-literal-tabview/input.ftml	Tab@32..52 scan-only
