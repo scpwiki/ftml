@@ -21,7 +21,7 @@
 use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, trim_wikidot_trailing_explicit_list_break,
-    wikidot_flat_pair_for_head,
+    wikidot_block_pair_for_block_head_byte, wikidot_flat_pair_for_head,
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -29,6 +29,9 @@ use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::rule::impls::RULE_BLOCK;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::parsing::{ParseError, ParseErrorKind};
+use crate::preproc::{
+    LiteralRegionIndex, wikidot_outer_div_still_open_at_collapsible_close,
+};
 use crate::tree::{
     AttributeMap, Container, ContainerType, ListItem, ListType, PartialElement,
     WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER, WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER,
@@ -291,6 +294,23 @@ fn parse_fn<'r, 't>(
     assert!(!flag_score, "Collapsible doesn't allow score flag");
     assert_block_name(&BLOCK_COLLAPSIBLE, name);
 
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && let Some(pair) = wikidot_block_pair_for_block_head_byte(parser, opener_start)
+        && pair.kind == WikidotBlockKind::Collapsible
+        && !pair.flat
+    {
+        let literal = LiteralRegionIndex::new(parser.full_text().inner());
+        if wikidot_outer_div_still_open_at_collapsible_close(
+            parser.full_text().inner(),
+            &literal,
+            pair.head_byte,
+            pair.closer_byte,
+        ) {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+    }
+
     // L85: the dispatcher consumes the head and any trailing spaces before
     // entry, so capture the head-end line break position now; live keeps a
     // break for trailing spaces after a collapsible head (z-head-trail-space-c).
@@ -405,6 +425,7 @@ fn parse_fn<'r, 't>(
             &BLOCK_COLLAPSIBLE,
             true,
             BlockBodyStart::NextPhysicalLine,
+            Some(opener_start),
         );
         parser.set_in_wikidot_collapsible(previous_context);
         let (body_elements, mut body_errors, _) = body?.into();
@@ -455,6 +476,7 @@ fn parse_fn<'r, 't>(
         &BLOCK_COLLAPSIBLE,
         true,
         body_start,
+        Some(opener_start),
     );
     let body = match body {
         Ok(body) => body,
@@ -481,6 +503,7 @@ fn parse_fn<'r, 't>(
             &BLOCK_COLLAPSIBLE,
             true,
             BlockBodyStart::NextPhysicalLine,
+            Some(opener_start),
         );
         let tail = match tail {
             Ok(tail) => tail,

@@ -3298,6 +3298,7 @@ impl<'t> Scanner<'t> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::PageInfo;
     use crate::layout::Layout;
     use crate::parsing::Parser;
     use crate::settings::{WikitextMode, WikitextSettings};
@@ -3669,7 +3670,6 @@ mod tests {
         counts
     }
 
-    #[test]
     #[test]
     fn block_pairs_differential() {
         std::thread::Builder::new()

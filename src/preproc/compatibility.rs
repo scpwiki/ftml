@@ -88,6 +88,160 @@ fn standalone_div_marker(line: &str, prefix: &str) -> Option<bool> {
     (line_prefix == prefix).then_some(open)
 }
 
+pub(crate) fn wikidot_outer_div_still_open_at_collapsible_close(
+    source: &str,
+    literal: &crate::preproc::LiteralRegionIndex,
+    collapsible_head_byte: usize,
+    collapsible_close_byte: usize,
+) -> bool {
+    let mut scan_from = 0usize;
+    let mut line_start = 0usize;
+    while line_start < source.len() {
+        let line_end = source[line_start..]
+            .find('\n')
+            .map_or(source.len(), |i| line_start + i + 1);
+        if collapsible_head_byte >= line_start && collapsible_head_byte < line_end {
+            scan_from = line_end;
+            break;
+        }
+        line_start = line_end;
+    }
+    if scan_from >= collapsible_close_byte {
+        return false;
+    }
+
+    fn skip_past_literal(
+        literal: &crate::preproc::LiteralRegionIndex,
+        pos: usize,
+        limit: usize,
+    ) -> usize {
+        let mut p = pos;
+        while p < limit && literal.contains(p) {
+            let idx = literal.ranges().partition_point(|r| r.start <= p);
+            if idx == 0 {
+                return limit;
+            }
+            let r = &literal.ranges()[idx - 1];
+            if p < r.end {
+                p = r.end;
+            } else {
+                p += 1;
+            }
+        }
+        p
+    }
+
+    fn marker_extent_ignore_case(haystack: &str, pos: usize, needle: &[u8]) -> bool {
+        haystack.len() >= pos + needle.len()
+            && haystack
+                .as_bytes()
+                .get(pos..pos + needle.len())
+                .is_some_and(|s| s.eq_ignore_ascii_case(needle))
+    }
+
+    fn collapsible_open_extent(lower: &str, pos: usize, limit: usize) -> Option<usize> {
+        const PREFIX: &[u8] = b"[[collapsible";
+        if !marker_extent_ignore_case(lower, pos, PREFIX) {
+            return None;
+        }
+        let after_prefix = pos + PREFIX.len();
+        let next = lower.as_bytes().get(after_prefix).copied()?;
+        if !matches!(next, b' ' | b'\t' | b']' | b'_' | b'*') {
+            return None;
+        }
+        let tail = lower.get(after_prefix..limit)?;
+        let close_rel = tail.find("]]")?;
+        Some(after_prefix + close_rel + 2)
+    }
+
+    fn div_open_extent(lower: &str, pos: usize, limit: usize) -> Option<usize> {
+        const PREFIX: &[u8] = b"[[div";
+        if !marker_extent_ignore_case(lower, pos, PREFIX) {
+            return None;
+        }
+        let after_prefix = pos + PREFIX.len();
+        let next = lower.as_bytes().get(after_prefix).copied()?;
+        if !matches!(next, b' ' | b'\t' | b']') {
+            return None;
+        }
+        let tail = lower.get(after_prefix..limit)?;
+        let close_rel = tail.find("]]")?;
+        Some(after_prefix + close_rel + 2)
+    }
+
+    let lower = source.to_ascii_lowercase();
+    let limit = collapsible_close_byte.min(source.len());
+    let mut pos = scan_from;
+    let mut collapsible_depth = 1usize;
+    let mut div_depth = 0usize;
+
+    while pos < limit {
+        pos = skip_past_literal(literal, pos, limit);
+        if pos >= limit {
+            break;
+        }
+        let Some(rel) = lower[pos..limit].find("[[") else {
+            break;
+        };
+        pos += rel;
+
+        if marker_extent_ignore_case(&lower, pos, b"[[/collapsible]]") {
+            collapsible_depth = collapsible_depth.saturating_sub(1);
+            pos += "[[/collapsible]]".len();
+            continue;
+        }
+        if marker_extent_ignore_case(&lower, pos, b"[[/div]]") {
+            if collapsible_depth == 1 {
+                div_depth = div_depth.saturating_sub(1);
+            }
+            pos += "[[/div]]".len();
+            continue;
+        }
+        if let Some(end) = collapsible_open_extent(&lower, pos, limit) {
+            collapsible_depth += 1;
+            pos = end;
+            continue;
+        }
+        if let Some(end) = div_open_extent(&lower, pos, limit) {
+            if collapsible_depth == 1 {
+                div_depth += 1;
+            }
+            pos = end;
+            continue;
+        }
+
+        pos += 2;
+    }
+
+    collapsible_depth == 1 && div_depth >= 1
+}
+
+fn split_merged_div_close_opener_lines(lines: &mut Vec<String>, literal_lines: &[bool]) {
+    let mut out: Vec<String> = Vec::with_capacity(lines.len() + 4);
+    for (line, &literal) in lines.iter().zip(literal_lines.iter()) {
+        if literal {
+            out.push(line.clone());
+            continue;
+        }
+        let (body, ending) = split_line(line);
+        let lower = body.to_ascii_lowercase();
+        const MERGED: &[u8] = b"[[/div]][[div";
+        if lower
+            .as_bytes()
+            .windows(MERGED.len())
+            .any(|w| w.eq_ignore_ascii_case(MERGED))
+            && let Some(pos) = lower.find("[[/div]][[div")
+        {
+            let split_at = pos + "[[/div]]".len();
+            out.push(format!("{}{}", &body[..split_at], ending));
+            out.push(format!("{}{}", &body[split_at..], ending));
+        } else {
+            out.push(line.clone());
+        }
+    }
+    *lines = out;
+}
+
 fn centered_collapsible_opener(
     lines: &[String],
     literal_lines: &[bool],
@@ -189,7 +343,12 @@ pub(super) fn substitute_for_layout(text: &mut String, wikidot: bool) {
         canonicalize_unquoted_collapsible_closers(&mut lines, &literal_lines);
     }
     canonicalize_unmatched_quoted_tab_closers(&mut lines, &literal_lines);
-    canonicalize_crossed_collapsible_div_closers(&mut lines, &literal_lines);
+    if wikidot {
+        let literal_lines = resplit_lines(&mut lines);
+        split_merged_div_close_opener_lines(&mut lines, &literal_lines);
+    }
+    let literal_lines = literal_line_mask(&lines);
+    canonicalize_crossed_collapsible_div_closers(&mut lines, &literal_lines, wikidot);
     if wikidot {
         canonicalize_crossed_outer_owner_closers(&mut lines, &literal_lines);
     }
@@ -937,6 +1096,7 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
     let literal_lines = resplit_lines(lines);
     let mut div_depth = 0usize;
     let mut baselines: Vec<usize> = Vec::new();
+    let mut collapsible_open_line: Vec<usize> = Vec::new();
     let mut output = Vec::with_capacity(lines.len());
     for (index, (line, literal)) in lines.iter().zip(literal_lines.iter()).enumerate() {
         if !*literal {
@@ -945,22 +1105,39 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
             match marker_line(trimmed) {
                 Some((_, Marker::CollapsibleOpen)) => {
                     baselines.push(div_depth);
+                    collapsible_open_line.push(index);
                 }
                 Some((_, Marker::CollapsibleClose)) => {
                     if let Some(baseline) = baselines.pop() {
+                        let open_line = collapsible_open_line.pop();
                         // Rescue only tight nesting tails (a div re-close on
                         // the very next line). Crossings (content between, or
                         // no re-close at all) go to the flat path, which
                         // pairs the div across the collapsible; synthesizing
                         // a closer would defeat that pairing (live evidence:
                         // q2-cd-own, q2-d-unclosed-in-c keep/cross the div).
-                        let tight_tail = !literal_lines
+                        let mut tight_tail = !literal_lines
                             .get(index + 1)
                             .is_some_and(|literal| *literal)
                             && lines.get(index + 1).is_some_and(|next| {
                                 let (body, _) = split_line(next);
                                 standalone_div_marker(body.trim_end(), "") == Some(false)
                             });
+                        if tight_tail && let Some(open) = open_line {
+                            for mid in open + 1..index {
+                                if literal_lines.get(mid).is_some_and(|literal| *literal)
+                                {
+                                    continue;
+                                }
+                                let (body, _) = split_line(&lines[mid]);
+                                if standalone_div_marker(body.trim_end(), "")
+                                    == Some(false)
+                                {
+                                    tight_tail = false;
+                                    break;
+                                }
+                            }
+                        }
                         if tight_tail {
                             while div_depth > baseline {
                                 output.push("[[/div]]\n".to_owned());
@@ -976,6 +1153,7 @@ fn close_unclosed_divs_before_collapsible_close(lines: &mut Vec<String>) {
                         div_depth = div_depth.saturating_sub(1);
                     } else if line_opens_collapsible(line) {
                         baselines.push(div_depth);
+                        collapsible_open_line.push(index);
                     }
                 }
             }
@@ -1177,6 +1355,32 @@ struct CrossedClose {
     nested_collapsible_depth: usize,
 }
 
+fn first_substantive_line_after_open_div(
+    lines: &[String],
+    literal_lines: &[bool],
+    div_open: usize,
+    required_quote_depth: usize,
+) -> Option<usize> {
+    let mut line_index = div_open + 1;
+    while line_index < lines.len() {
+        if literal_lines.get(line_index).copied().unwrap_or(false) {
+            line_index += 1;
+            continue;
+        }
+        let (body, _) = split_line(&lines[line_index]);
+        let (line_quote_depth, body) = quote_depth_and_body(body);
+        if line_quote_depth < required_quote_depth {
+            return None;
+        }
+        if body.trim().is_empty() {
+            line_index += 1;
+            continue;
+        }
+        return Some(line_index);
+    }
+    None
+}
+
 /// Repair a collapsible whose wrapper div is closed one line too late.
 ///
 /// Wikidot accepts `collapsible -> div -> /collapsible -> /div` as if the
@@ -1185,6 +1389,7 @@ struct CrossedClose {
 fn canonicalize_crossed_collapsible_div_closers(
     lines: &mut [String],
     literal_lines: &[bool],
+    wikidot: bool,
 ) {
     let mut index = 0;
     while index + 1 < lines.len() {
@@ -1229,6 +1434,21 @@ fn canonicalize_crossed_collapsible_div_closers(
             div_open += 1;
         };
         if !div_found {
+            index += 1;
+            continue;
+        }
+
+        if wikidot
+            && first_substantive_line_after_open_div(
+                lines,
+                literal_lines,
+                div_open,
+                required_quote_depth,
+            )
+            .is_some_and(|line_index| {
+                standalone_div_marker(&lines[line_index], &prefix) == Some(true)
+            })
+        {
             index += 1;
             continue;
         }

@@ -432,18 +432,22 @@ fn parse_tabview<'r, 't>(
         parser.set_wikidot_tabview_tab_ordinal(0);
     }
 
-    let (elements, mut errors, _) =
-        match parser.get_body_elements_with_context(&BLOCK_TABVIEW, false, body_start) {
-            Ok(success) => success.into(),
-            Err(error) => {
-                restore_wikidot_tabview_split_state(parser, previous_split.clone());
-                if quote_ejection {
-                    parser.set_wikidot_tab_quote_ejection(previous_ejection);
-                }
-                parser.truncate_degraded_title_records(records_at_entry);
-                return Err(error);
+    let (elements, mut errors, _) = match parser.get_body_elements_with_context(
+        &BLOCK_TABVIEW,
+        false,
+        body_start,
+        None,
+    ) {
+        Ok(success) => success.into(),
+        Err(error) => {
+            restore_wikidot_tabview_split_state(parser, previous_split.clone());
+            if quote_ejection {
+                parser.set_wikidot_tab_quote_ejection(previous_ejection);
             }
-        };
+            parser.truncate_degraded_title_records(records_at_entry);
+            return Err(error);
+        }
+    };
 
     let mut remote_ordinals = Vec::new();
     if quote_ejection {

@@ -166,7 +166,7 @@ pub fn parse_alignment_block<'r, 't>(
     if wikidot_center {
         parser.enter_wikidot_center_body();
     }
-    let body = parser.get_body_elements_with_context(block_rule, true, body_start);
+    let body = parser.get_body_elements_with_context(block_rule, true, body_start, None);
     if wikidot_center {
         parser.leave_wikidot_center_body();
     }

@@ -913,6 +913,7 @@ fn parse_fn<'r, 't>(
             &BLOCK_IFTAGS,
             false,
             body_start,
+            None,
         ) {
             Ok(body) => {
                 let (mut elements, errors, paragraph_safe) = body.into();
