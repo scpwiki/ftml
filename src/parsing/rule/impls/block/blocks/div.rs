@@ -1031,7 +1031,6 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy()
         && parser.settings().mode != WikitextMode::List
         && !parser.in_wikidot_div_body()
-        && !parser.in_native_blockquote_line()
         && !flag_score
         && body_start == BlockBodyStart::Inline
         && (!arguments.is_empty() || arguments.has_empty_key())
@@ -1048,7 +1047,7 @@ fn parse_fn<'r, 't>(
                 parser.step()?;
             }
             body_start = BlockBodyStart::NextPhysicalLine;
-        } else {
+        } else if !parser.in_native_blockquote_line() {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
     }
