@@ -711,6 +711,25 @@ where
     'r: 't,
 {
     if parser.settings().layout.legacy()
+        && parser.pending_note_list_closer()
+        && parser.current().token == Token::LeftBlockEnd
+    {
+        let mut close = parser.clone();
+        if close
+            .get_end_block()
+            .is_ok_and(|name| name.eq_ignore_ascii_case("note"))
+        {
+            parser.update(&close);
+            parser.set_pending_note_list_closer(false);
+            parser.set_suppress_footnote_list_break(true);
+            if parser.current().token == Token::LineBreak {
+                let _ = parser.step();
+            }
+            return Ok(Some(Elements::None));
+        }
+    }
+
+    if parser.settings().layout.legacy()
         && parser.pending_wikidot_collapsible_closer()
         && parser.current().token == Token::LeftBlockEnd
     {

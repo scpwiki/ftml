@@ -62,6 +62,9 @@ pub(super) struct WikidotState {
     /// `[[/collapsible]]`.
     crossed_closes: u16,
     crossed_collapsible_tail: bool,
+    pending_note_list_closer: bool,
+    suppress_footnote_list_break: bool,
+    list_depth_at_footnote: Option<usize>,
 }
 
 impl Default for WikidotState {
@@ -82,6 +85,9 @@ impl Default for WikidotState {
             flags: 0,
             crossed_closes: 0,
             crossed_collapsible_tail: false,
+            pending_note_list_closer: false,
+            suppress_footnote_list_break: false,
+            list_depth_at_footnote: None,
         }
     }
 }
@@ -431,6 +437,32 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_crossed_collapsible_tail(&mut self, value: bool) {
         self.wikidot.crossed_collapsible_tail = value;
+    }
+
+    pub(crate) fn pending_note_list_closer(&self) -> bool {
+        self.wikidot.pending_note_list_closer
+    }
+
+    pub(crate) fn set_pending_note_list_closer(&mut self, value: bool) {
+        self.wikidot.pending_note_list_closer = value;
+    }
+
+    pub(crate) fn set_suppress_footnote_list_break(&mut self, value: bool) {
+        self.wikidot.suppress_footnote_list_break = value;
+    }
+
+    pub(crate) fn take_suppress_footnote_list_break(&mut self) -> bool {
+        let marked = self.wikidot.suppress_footnote_list_break;
+        self.wikidot.suppress_footnote_list_break = false;
+        marked
+    }
+
+    pub(crate) fn list_depth_at_footnote(&self) -> Option<usize> {
+        self.wikidot.list_depth_at_footnote
+    }
+
+    pub(crate) fn set_list_depth_at_footnote(&mut self, value: Option<usize>) {
+        self.wikidot.list_depth_at_footnote = value;
     }
 
     pub(crate) fn take_crossed_collapsible_tail(&mut self) -> bool {
