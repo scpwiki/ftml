@@ -798,7 +798,20 @@ fn try_consume_fn<'r, 't>(
             if lost.append_unquoted_close_break
                 || lost.hoisted_list && next_line_starts_block(parser)
             {
-                escaped_elements.push(Element::LineBreak);
+                // A following quote line keeps this break in live even when
+                // the element after it would absorb a plain post-list break
+                // (a second hoisted list); the counted form is not absorbed.
+                if lost.hoisted_list
+                    && parser.current().token == Token::LineBreak
+                    && parser
+                        .look_ahead(0)
+                        .is_some_and(|token| token.token == Token::Quote)
+                {
+                    escaped_elements
+                        .push(Element::LineBreaks(std::num::NonZeroU32::new(1).unwrap()));
+                } else {
+                    escaped_elements.push(Element::LineBreak);
+                }
             }
             break;
         }
@@ -876,7 +889,17 @@ fn try_consume_fn<'r, 't>(
             if lost.append_unquoted_close_break
                 || lost.hoisted_list && next_line_starts_block(parser)
             {
-                escaped_elements.push(Element::LineBreak);
+                if lost.hoisted_list
+                    && parser.current().token == Token::LineBreak
+                    && parser
+                        .look_ahead(0)
+                        .is_some_and(|token| token.token == Token::Quote)
+                {
+                    escaped_elements
+                        .push(Element::LineBreaks(std::num::NonZeroU32::new(1).unwrap()));
+                } else {
+                    escaped_elements.push(Element::LineBreak);
+                }
             }
             break;
         }
