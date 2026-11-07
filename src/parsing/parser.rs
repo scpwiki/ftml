@@ -1763,6 +1763,16 @@ impl<'r, 't> Parser<'r, 't> {
         self.quote_body_cursor = Some(QuoteBodyCursor { required_depth, line_state: QuoteBodyLineState::NeedPrefix, literal_residual_quotes: false });
     }
 
+    /// The parent is sitting on a line break it still has to emit. `NeedPrefix`
+    /// on that break is a body boundary and kills the enclosing block.
+    pub(crate) fn hold_quote_body_through_parent_break(&mut self) {
+        if let Some(cursor) = self.quote_body_cursor.as_mut() {
+            cursor.line_state = QuoteBodyLineState::PreparedContent {
+                content_start: usize::MAX,
+            };
+        }
+    }
+
     #[rustfmt::skip]
     pub(crate) fn install_quote_body_cursor_with_literal_residuals(&mut self, required_depth: usize) {
         self.quote_body_cursor = Some(QuoteBodyCursor { required_depth, line_state: QuoteBodyLineState::NeedPrefix, literal_residual_quotes: true });
@@ -2976,6 +2986,14 @@ impl<'r, 't> Parser<'r, 't> {
                 }
             }
             ParseCondition::AtSourceByte(byte) => self.current.span.start >= byte,
+            ParseCondition::QuotePreparedListMarker => {
+                self.in_note()
+                    && matches!(
+                        self.current.token,
+                        Token::BulletItem | Token::NumberedItem
+                    )
+                    && self.quote_body_close_allowed_here()
+            }
             ParseCondition::SplitClose(delimiter) => split_delimiter_end(
                 TokenWindow::at(self),
                 SegmentCtx::from_parser(self),

@@ -281,6 +281,36 @@ fn wikidot_collapsible_label<'t>(
     }
 }
 
+fn quoted_list_item_holds_only_this_collapsible(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> bool {
+    // Outside a note the same shell would keep the following rows inside the
+    // list item. Live only drops them when the note owns the quote lines.
+    if !parser.settings().layout.legacy()
+        || !parser.in_note()
+        || parser.native_blockquote_depth().is_none()
+    {
+        return false;
+    }
+    let source = parser.full_text().inner();
+    let line_start = source[..opener_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    let after_quotes = source[line_start..opener_start]
+        .trim()
+        .trim_start_matches('>')
+        .trim();
+    if after_quotes != "*" && after_quotes != "#" {
+        return false;
+    }
+    source[opener_start..].lines().skip(1).any(|line| {
+        let body = line.trim().trim_start_matches('>').trim();
+        body.eq_ignore_ascii_case("* [[/collapsible]]")
+            || body.eq_ignore_ascii_case("# [[/collapsible]]")
+    })
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -481,6 +511,17 @@ fn parse_fn<'r, 't>(
     let previous_collapsible_context = parser.in_wikidot_collapsible();
     if parser.settings().layout.legacy() {
         parser.set_in_wikidot_collapsible(true);
+    }
+    // A collapsible that is the whole quoted list item does not take the
+    // following items as its body. Live leaves the shell empty and consumes
+    // the later `* [[/collapsible]]` line. The quote-depth scan never sees
+    // that closer, because a bullet sits in front of it.
+    if body_start == BlockBodyStart::NextPhysicalLine
+        && quoted_list_item_holds_only_this_collapsible(parser, opener_start)
+    {
+        parser.set_pending_wikidot_collapsible_closer(true);
+        parser.set_in_wikidot_collapsible(previous_collapsible_context);
+        return ok!(false; head.into_element(Vec::new()));
     }
     let body = parser.get_body_elements_with_literal_quote_context(
         &BLOCK_COLLAPSIBLE,

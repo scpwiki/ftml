@@ -58,7 +58,8 @@ fn parse_note_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let arguments = parser.get_head_map(&BLOCK_NOTE, in_head)?;
+    let (arguments, body_start) =
+        parser.get_head_map_with_body_start(&BLOCK_NOTE, in_head)?;
 
     if parser.settings().layout.legacy() && !arguments.is_empty() {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -97,7 +98,11 @@ fn parse_note_block<'r, 't>(
 
     let legacy = parser.settings().layout.legacy();
     parser.set_note_flag(legacy);
-    let body = parser.get_body_elements(&BLOCK_NOTE, legacy);
+    let body = if legacy {
+        parser.get_body_elements_with_context(&BLOCK_NOTE, legacy, body_start, None)
+    } else {
+        parser.get_body_elements(&BLOCK_NOTE, legacy)
+    };
     parser.set_note_flag(false);
     let (mut elements, errors, paragraph_safe) = body?.into();
     if legacy {

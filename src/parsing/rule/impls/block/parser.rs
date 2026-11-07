@@ -4372,7 +4372,7 @@ where
             return Err(self.make_err(ParseErrorKind::RuleFailed));
         }
 
-        let Some(required_depth) = self.native_blockquote_depth() else {
+        let Some(mut required_depth) = self.native_blockquote_depth() else {
             return self.get_body_elements(block_rule, as_paragraphs);
         };
         let inline_quoted_collapsible = body_start == BlockBodyStart::Inline
@@ -4388,7 +4388,7 @@ where
         let tabview_quote_ejection = self.settings().layout.legacy()
             && !self.discarding_hidden_body()
             && block_rule.name == "block-tabview";
-        let has_close = if tabview_quote_ejection {
+        let mut has_close = if tabview_quote_ejection {
             self.has_native_blockquote_body_end_tolerant(block_rule)
         } else {
             self.has_native_blockquote_body_end_with_mode(
@@ -4397,9 +4397,23 @@ where
                 allow_inline_quote_close,
             )
         };
+        // A note inside a footnote or tab still sits on one physical `>`.
+        // The stacked depth counts that marker twice, so the strict scan
+        // misses `> [[/note]]`. The line's own marker depth is the cursor.
+        if !has_close
+            && block_rule.name == "block-note"
+            && required_depth > 1
+            && self.has_native_blockquote_body_end_with_mode(block_rule, 1, false)
+        {
+            required_depth = 1;
+            has_close = true;
+        }
         let has_later_close =
             allow_inline_quote_close && !has_close && self.has_body_end_block(block_rule);
         if !has_close && !has_later_close {
+            if block_rule.name == "block-note" {
+                return self.get_body_elements(block_rule, as_paragraphs);
+            }
             return Err(self.make_err(ParseErrorKind::RuleFailed));
         }
 
@@ -4431,7 +4445,16 @@ where
 
         match result {
             Ok(success) => {
-                if self.current().token == Token::LineBreak {
+                // Stepping this break deletes the parent's `<br>` and is what
+                // lets the parent strip the next `>`. Holding the line as
+                // already prepared keeps the break and still arms that strip
+                // when the parent steps it. Restoring `NeedPrefix` here makes
+                // the break a boundary and the enclosing center stays literal.
+                if block_rule.name == "block-note"
+                    && self.current().token == Token::LineBreak
+                {
+                    self.hold_quote_body_through_parent_break();
+                } else if self.current().token == Token::LineBreak {
                     self.step()?;
                 }
                 Ok(success)
