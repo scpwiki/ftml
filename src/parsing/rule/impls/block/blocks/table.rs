@@ -311,10 +311,13 @@ fn lift_ready_foster<'t>(
     let mut lifted = false;
     let mut index = 0;
     while index < cell.len() {
-        if matches!(
+        let is_foster = matches!(
             cell[index],
             Element::Partial(PartialElement::WikidotFoster(_))
-        ) {
+        );
+        // A foster already parked in front of a nested table belongs to that
+        // table. Lifting it again would pull the text out of this cell.
+        if is_foster && !followed_by_table(cell, index) {
             foster.push(cell.remove(index));
             lifted = true;
         } else {
@@ -322,6 +325,13 @@ fn lift_ready_foster<'t>(
         }
     }
     lifted
+}
+
+fn followed_by_table(cell: &[Element<'_>], index: usize) -> bool {
+    cell[index + 1..]
+        .iter()
+        .find(|element| !element.is_whitespace())
+        .is_some_and(|element| matches!(element, Element::Table(_)))
 }
 
 fn partition_wikidot_foster<'t>(tail: Vec<Element<'t>>) -> Vec<Element<'t>> {
