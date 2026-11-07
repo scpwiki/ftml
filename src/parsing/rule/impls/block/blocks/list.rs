@@ -299,6 +299,27 @@ fn parse_list_block_impl<'r, 't>(
                     flag_score,
                     content_follows,
                 );
+                if wikidot
+                    && !flag_score
+                    && matches!(items.last(), Some(ListItem::SubList { .. }))
+                {
+                    // Live puts sibling native lists under one outer item:
+                    // each interior list joins the open inline-styled item
+                    // instead of opening one of its own.
+                    if let Some(ListItem::SubList { element: sub }) = items.pop() {
+                        let mut attributes = AttributeMap::new();
+                        assert!(
+                            attributes.insert(
+                                "style",
+                                cow!("list-style: none; display: inline")
+                            )
+                        );
+                        items.push(ListItem::Elements {
+                            elements: vec![*sub],
+                            attributes,
+                        });
+                    }
+                }
                 if parser.settings().layout.legacy()
                     && let Some(ListItem::Elements { elements, .. }) = items.last_mut()
                 {
@@ -566,6 +587,16 @@ fn push_literal_list_item<'t>(
             ..
         }) = items.last_mut()
     {
+        // Live joins an un-item'd line after a list with a break: the
+        // newline after the list's last line shows as `<br>` before the
+        // text, while a following list stays glued to it.
+        if matches!(item_elements.last(), Some(Element::List { .. }))
+            && elements
+                .first()
+                .is_some_and(|element| !element.is_whitespace())
+        {
+            item_elements.push(Element::LineBreak);
+        }
         item_elements.append(elements);
     } else {
         if append_to_last && !outer_list_is_scored {

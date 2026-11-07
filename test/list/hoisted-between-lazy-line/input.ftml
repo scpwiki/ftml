@@ -1,0 +1,9 @@
+[[div]]
+* [[ul]]
+* [[collapsible]]
+* x
+* [[/collapsible]]
+between
+* y
+* [[/ul]]
+[[/div]]

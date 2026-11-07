@@ -299,13 +299,125 @@ pub(crate) fn wikidot_eject_after_lost_owner_collapsible<'t>(
         })
         .min()?;
     let source_ptr = source.as_ptr() as usize;
-    let index = elements.iter().position(|element| {
-        element_source_offset(source_ptr, element).is_some_and(|offset| offset > closer_byte)
-    })?;
-    if index == 0 {
-        return None;
+    // Content past the boundary nested in an explicit list block's items
+    // ejects like its siblings: the block's own body ends at the same line,
+    // so its missed followers belong outside the enclosing block too.
+    let mut item_ejected: Vec<Element<'t>> = Vec::new();
+    for element in elements.iter_mut() {
+        if matches!(
+            element,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        ) {
+            let Element::List { items, .. } = element else {
+                unreachable!("checked explicit list above")
+            };
+            wikidot_eject_list_items_after_closer(
+                source_ptr,
+                closer_byte,
+                items,
+                &mut item_ejected,
+            );
+        }
     }
-    Some(elements.split_off(index))
+    let index = elements.iter().position(|element| {
+        element_source_offset(source_ptr, element)
+            .is_some_and(|offset| offset > closer_byte)
+    });
+    let mut ejected = item_ejected;
+    match index {
+        None => {}
+        Some(0) => {
+            if ejected.is_empty() {
+                return None;
+            }
+        }
+        Some(index) => {
+            // A lazy line out of the closed item's run ejects with the
+            // break that glued it to the previous block: live puts the
+            // `<br>` before the text, outside the enclosing block.
+            let mut split_at = index;
+            if !body_eject_starts_paragraph_or_block(&elements[index]) {
+                while split_at > 0 && elements[split_at - 1] == Element::LineBreak {
+                    split_at -= 1;
+                }
+            }
+            ejected.extend(elements.split_off(split_at));
+        }
+    }
+    (!ejected.is_empty()).then_some(ejected)
+}
+
+fn body_eject_starts_paragraph_or_block(element: &Element<'_>) -> bool {
+    match element {
+        Element::List { .. }
+        | Element::Table(_)
+        | Element::Collapsible { .. }
+        | Element::Code { .. } => true,
+        Element::Container(container) => matches!(
+            container.ctype(),
+            crate::tree::ContainerType::Paragraph
+                | crate::tree::ContainerType::Div
+                | crate::tree::ContainerType::Note
+                | crate::tree::ContainerType::Blockquote
+                | crate::tree::ContainerType::Align(_)
+        ),
+        _ => false,
+    }
+}
+
+/// Splits one explicit list block's items at the ejection boundary: items
+/// whose first carried position is past the boundary move out as sibling
+/// elements (in order); an item straddling the boundary keeps its prefix.
+#[allow(clippy::disallowed_methods)]
+fn wikidot_eject_list_items_after_closer<'t>(
+    source_ptr: usize,
+    closer_byte: usize,
+    items: &mut Vec<ListItem<'t>>,
+    ejected: &mut Vec<Element<'t>>,
+) {
+    let mut kept: Vec<ListItem<'t>> = Vec::with_capacity(items.len());
+    for item in items.drain(..) {
+        let mut item_offset = None;
+        scan_list_item_source_offset(source_ptr, &item, &mut item_offset);
+        match item {
+            ListItem::SubList { element } => {
+                if item_offset.is_some_and(|offset| offset > closer_byte) {
+                    ejected.push(*element);
+                } else {
+                    kept.push(ListItem::SubList { element });
+                }
+            }
+            ListItem::Elements {
+                attributes,
+                mut elements,
+            } => {
+                let split_at = elements.iter().position(|element| {
+                    element_source_offset(source_ptr, element)
+                        .is_some_and(|offset| offset > closer_byte)
+                });
+                match split_at {
+                    None => kept.push(ListItem::Elements {
+                        elements,
+                        attributes,
+                    }),
+                    Some(at) => {
+                        let past = elements.split_off(at);
+                        if elements.iter().any(|element| !element.is_whitespace()) {
+                            kept.push(ListItem::Elements {
+                                elements,
+                                attributes,
+                            });
+                        }
+                        ejected.extend(past);
+                    }
+                }
+            }
+        }
+    }
+    *items = kept;
 }
 
 fn byte_head_on_list_item_line(source: &str, byte: usize) -> bool {
