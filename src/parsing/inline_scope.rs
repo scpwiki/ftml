@@ -2871,6 +2871,13 @@ fn lower_sequence<'t>(
                 output.push(element);
                 last_run_outer_scope.reset();
             }
+        } else if matches!(element, Element::Iframe { .. }) && active.has_active_scope() {
+            // Element::paragraph_safe() is false, so the leaf arm would emit
+            // the iframe beside the open scope. The legacy parse flag already
+            // kept it in the paragraph. The closer would then see an empty
+            // scope and drop the span, or emit the anchor after the iframe.
+            run.push(element);
+            run_has_content = true;
         } else {
             flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
             if !is_vanished_empty_div(&element) {
