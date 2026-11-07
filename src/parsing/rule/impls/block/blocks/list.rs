@@ -876,6 +876,16 @@ fn wikidot_li_segment_is_blank(segment: &[Element]) -> bool {
     segment.iter().all(Element::is_whitespace)
 }
 
+fn segment_is_inline_content(segment: &[Element]) -> bool {
+    !segment.is_empty() && segment.iter().all(Element::paragraph_safe)
+}
+
+fn segment_has_block_marker(segment: &[Element]) -> bool {
+    segment
+        .iter()
+        .any(|element| matches!(element, Element::Text(text) if text.contains("[[")))
+}
+
 /// L85 scope-5: live keeps a single break after these formed blocks in
 /// item bodies (li-div/align/code/coll/note-contained); every other
 /// paragraph-unsafe element (tables, rules, lists) still drops it.
@@ -945,13 +955,32 @@ fn assemble_wikidot_li_segments<'t>(
             && pair[1].first().is_some_and(Element::paragraph_safe);
         joins.push(boundary);
     }
+    // The slice includes the closer. A newline before that closer means
+    // the closer sits on the next line.
+    let lowered = source.to_ascii_lowercase();
+    let body_before_close = lowered
+        .rfind("[[/li")
+        .map(|index| &source[..index])
+        .unwrap_or(source);
+    let last_plain_run_is_paragraph = kept.len() >= 2
+        && body_before_close.ends_with('\n')
+        && segment_is_inline_content(kept.last().expect("kept has two segments"))
+        && !segment_has_block_marker(kept.last().expect("kept has two segments"))
+        && segment_is_inline_content(&kept[kept.len() - 2])
+        && !segment_has_block_marker(&kept[kept.len() - 2]);
     let mut elements: Vec<Element<'t>> = Vec::new();
     let kept_last = kept.len().saturating_sub(1);
     for (index, segment) in kept.into_iter().enumerate() {
         if index > 0 && joins[index - 1] {
             elements.push(Element::LineBreak);
         }
-        if index > 0 && index < kept_last && segment.iter().all(Element::paragraph_safe) {
+        // A blank line between two plain inline runs, with the closer on the
+        // next line, is a paragraph. A run on the closer's own line stays put,
+        // and so does a run beside a literal block marker.
+        let middle_inline =
+            index > 0 && index < kept_last && segment_is_inline_content(&segment);
+        let closing_paragraph = last_plain_run_is_paragraph && index == kept_last;
+        if middle_inline || closing_paragraph {
             elements.push(Element::Container(Container::new(
                 ContainerType::Paragraph,
                 segment,
@@ -991,7 +1020,13 @@ fn assemble_wikidot_li_segments<'t>(
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)
         {
-            elements.push(Element::LineBreak);
+            if let Some(Element::Container(container)) = elements.last_mut()
+                && container.ctype() == ContainerType::Paragraph
+            {
+                container.elements_mut().push(Element::LineBreak);
+            } else {
+                elements.push(Element::LineBreak);
+            }
         }
     }
     while matches!(elements.last(), Some(Element::Text(text)) if text == " ") {
