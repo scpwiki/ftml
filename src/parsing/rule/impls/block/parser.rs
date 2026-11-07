@@ -3352,6 +3352,7 @@ where
         let mut all_errors = Vec::new();
         let mut paragraph_safe = true;
         let mut first = true;
+        let span_depth_at_start = self.wikidot_span_body_depth();
 
         loop {
             if self.quotes_then_block_end(block_rule) {
@@ -3390,10 +3391,49 @@ where
 
             if self.current().token == Token::ParagraphBreak
                 && !self.discarding_hidden_body()
-                && !self.in_wikidot_span_body()
                 && !self.in_wikidot_literal_alias_body()
                 && !self.in_wikidot_anchor_body()
             {
+                if self.in_wikidot_span_body() {
+                    let start = self.current().span.start;
+                    let end = self.current().span.end;
+                    let text = self.full_text().inner();
+                    let run = text.get(start..end).unwrap_or("");
+                    let bytes = run.as_bytes();
+                    let mut index = 0;
+                    let mut breaks = 0;
+                    while index < bytes.len() {
+                        match bytes[index] {
+                            b'\r' => {
+                                breaks += 1;
+                                index += 1;
+                                if bytes.get(index) == Some(&b'\n') {
+                                    index += 1;
+                                }
+                            }
+                            b'\n' => {
+                                breaks += 1;
+                                index += 1;
+                            }
+                            _ => index += 1,
+                        }
+                    }
+                    let ancestor_span =
+                        self.wikidot_span_body_depth() == span_depth_at_start;
+                    let trailing_blank = self.wikidot_li_blank_is_trailing(block_rule);
+                    let segment = segments
+                        .last_mut()
+                        .expect("segments always has a current segment");
+                    for _ in 0..breaks {
+                        segment.push(Element::LineBreak);
+                    }
+                    self.step()?;
+                    first = false;
+                    if ancestor_span && !trailing_blank {
+                        segments.push(Vec::new());
+                    }
+                    continue;
+                }
                 self.step()?;
                 first = false;
                 segments.push(Vec::new());
@@ -3576,6 +3616,27 @@ where
                     if self.discarding_hidden_body()
                         && self.at_hidden_body_boundary() => {}
                 Err(error) => return Err(error),
+            }
+        }
+    }
+
+    fn wikidot_li_blank_is_trailing(&self, block_rule: &BlockRule) -> bool {
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        loop {
+            match probe.current().token {
+                Token::LineBreak | Token::Whitespace => {
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                }
+                _ => {
+                    return probe
+                        .verify_end_block(false, block_rule, false, false)
+                        .is_some();
+                }
             }
         }
     }
