@@ -10,9 +10,165 @@
  * (at your option) any later version.
  */
 
-use crate::tree::{AttributeMap, Container, ContainerType, Element, ListItem, ListType};
+use crate::tree::{
+    AttributeMap, Container, ContainerType, Element, ListItem, ListType, PartialElement,
+};
 use std::borrow::Cow;
 use std::vec::IntoIter;
+
+/// Live's libtidy flattens the tag soup an explicit list leaves when its
+/// item markers sit on later bullet lines, and it joins a trailing one-item
+/// list onto the list before it. Returns whether the body changed. A changed
+/// body already has the break tidy keeps, so the caller must not append one.
+pub(crate) fn repair_wikidot_footnote_list_chrome<'t>(
+    elements: &mut Vec<Element<'t>>,
+) -> bool {
+    let mut changed = false;
+    for element in elements.iter_mut() {
+        changed |= repair_footnote_list_element(element);
+    }
+    changed |= merge_trailing_one_item_list(elements);
+    changed
+}
+
+fn repair_footnote_list_element<'t>(element: &mut Element<'t>) -> bool {
+    let Element::List { items, .. } = element else {
+        if let Element::Container(container) = element {
+            return repair_wikidot_footnote_list_chrome(container.elements_mut());
+        }
+        return false;
+    };
+
+    let mut changed = lift_footnote_list_items(items);
+    for item in items.iter_mut() {
+        match item {
+            ListItem::Elements { elements, .. } => {
+                changed |= repair_wikidot_footnote_list_chrome(elements);
+            }
+            ListItem::SubList { element } => {
+                changed |= repair_footnote_list_element(element);
+            }
+        }
+    }
+    changed
+}
+
+fn lift_footnote_list_items<'t>(items: &mut Vec<ListItem<'t>>) -> bool {
+    let original = std::mem::take(items);
+    let mut changed = false;
+    for item in original {
+        let ListItem::Elements {
+            mut elements,
+            attributes,
+        } = item
+        else {
+            items.push(item);
+            continue;
+        };
+        let Some(inner) = take_wrapped_list(&mut elements) else {
+            items.push(ListItem::Elements {
+                elements,
+                attributes,
+            });
+            continue;
+        };
+        changed = true;
+        if !elements.is_empty() {
+            items.push(ListItem::Elements {
+                elements,
+                attributes,
+            });
+        }
+        items.extend(inner);
+    }
+    changed
+}
+
+/// A bullet item whose tail is only an explicit item wrapping one list.
+/// Live's tidy promotes that list's items.
+fn take_wrapped_list<'t>(elements: &mut Vec<Element<'t>>) -> Option<Vec<ListItem<'t>>> {
+    let rest_start = elements
+        .iter()
+        .position(|element| !matches!(element, Element::Text(_)))?;
+    if !elements[..rest_start].iter().all(|element| match element {
+        Element::Text(text) => quote_marker_residue(text) || text.trim().is_empty(),
+        _ => false,
+    }) {
+        return None;
+    }
+    if elements.len() != rest_start + 1 {
+        return None;
+    }
+    let wrapped = elements.pop()?;
+    let inner = match wrapped {
+        Element::List { items, .. } => items,
+        Element::Partial(PartialElement::ListItem(ListItem::Elements {
+            elements: mut body,
+            ..
+        })) if body.len() == 1 => match body.pop()? {
+            Element::List { items, .. } => items,
+            other => {
+                body.push(other);
+                elements.push(Element::Partial(PartialElement::ListItem(
+                    ListItem::Elements {
+                        elements: body,
+                        attributes: AttributeMap::new(),
+                    },
+                )));
+                return None;
+            }
+        },
+        other => {
+            elements.push(other);
+            return None;
+        }
+    };
+    if elements
+        .iter()
+        .all(|element| matches!(element, Element::Text(text) if text.trim().is_empty()))
+    {
+        elements.clear();
+    }
+    Some(inner)
+}
+
+fn quote_marker_residue(text: &str) -> bool {
+    let trimmed = text.trim();
+    !trimmed.is_empty() && trimmed.bytes().all(|byte| byte == b'>')
+}
+
+fn merge_trailing_one_item_list<'t>(elements: &mut Vec<Element<'t>>) -> bool {
+    let original = std::mem::take(elements);
+    let mut changed = false;
+    for element in original {
+        let can_merge = matches!(
+            (&element, elements.last()),
+            (
+                Element::List { items, ltype, .. },
+                Some(Element::List {
+                    ltype: previous,
+                    ..
+                })
+            ) if items.len() == 1 && ltype == previous
+        );
+        if can_merge {
+            let Element::List { items, .. } = element else {
+                unreachable!("element was a one-item list");
+            };
+            let Some(Element::List {
+                items: previous, ..
+            }) = elements.last_mut()
+            else {
+                unreachable!("previous element was a list");
+            };
+            previous.extend(items);
+            changed = true;
+            continue;
+        }
+        elements.push(element);
+    }
+    changed
+}
 
 pub(crate) fn normalize_wikidot_blocks(
     elements: &mut Vec<Element<'_>>,

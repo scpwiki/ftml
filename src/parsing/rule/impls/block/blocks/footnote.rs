@@ -128,7 +128,11 @@ fn parse_footnote_ref<'r, 't>(
         elements.pop();
     }
     if parser.settings().layout.legacy() {
-        append_wikidot_footnote_trailing_list_break(&mut elements);
+        let repaired =
+            crate::parsing::footnote::repair_wikidot_footnote_list_chrome(&mut elements);
+        if !repaired {
+            append_wikidot_footnote_trailing_list_break(&mut elements);
+        }
     }
 
     let index = parser.push_footnote(elements);
