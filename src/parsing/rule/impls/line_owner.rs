@@ -1,4 +1,3 @@
-use super::RULE_PAGE;
 use super::block::blocks::{
     BLOCK_ALIGN_CENTER, BLOCK_ALIGN_JUSTIFY, BLOCK_ALIGN_LEFT, BLOCK_ALIGN_RIGHT,
     BLOCK_COLLAPSIBLE, BLOCK_DIV, BLOCK_NOTE, CollapsibleHead, parse_collapsible_head,
@@ -6,7 +5,8 @@ use super::block::blocks::{
 };
 use super::block::{BlockBodyStart, BlockRule};
 use super::prelude::*;
-use crate::parsing::collect::consume_valid_comment;
+use super::{RULE_LIST, RULE_PAGE};
+use crate::parsing::collect::{collect_consume_keep_split, consume_valid_comment};
 use crate::parsing::paragraph::gather_paragraphs;
 use crate::tree::{
     Alignment, AttributeMap, Container, ContainerType, ListItem, ListType, PartialElement,
@@ -342,7 +342,12 @@ where
     }
     parser.set_native_blockquote_depth(previous_depth);
     parser.set_quote_body_cursor(previous_cursor);
-    let (mut body, errors, _) = body?.into();
+    let (mut body, mut errors, _) = body?.into();
+    if matches!(owner, LineOwner::List { .. })
+        && matches!(head, BlockHead::Collapsible(_))
+    {
+        absorb_post_close_lazy_lines(parser, &mut body, &mut errors);
+    }
     trim_trailing_physical_break(&mut body);
     if let Some(tail) = close_tail {
         body.push(Element::Text(tail));
@@ -388,6 +393,62 @@ where
         hoisted_list: false,
         sibling_hoisted: false,
     }))
+}
+
+/// Live keeps the lines after a list-line collapsible close in the item's
+/// own run: they render as bare continuations (joined by breaks), never as
+/// paragraphs, until a freshening block or a blank line ends the run. This
+/// absorbs each following lazy line's inline elements into the body; the
+/// caller gathers them with the saved close, so the run stays unwrapped.
+fn absorb_post_close_lazy_lines<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    body: &mut Vec<Element<'t>>,
+    errors: &mut Vec<ParseError>,
+) where
+    'r: 't,
+{
+    let lazy_line_closes = [
+        ParseCondition::current(Token::LineBreak),
+        ParseCondition::current(Token::ParagraphBreak),
+        ParseCondition::current(Token::InputEnd),
+    ];
+    loop {
+        if !parser.start_of_line()
+            || matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            )
+        {
+            return;
+        }
+        let mut candidate = parser.clone();
+        let success = match collect_consume_keep_split(
+            &mut candidate,
+            RULE_LIST,
+            &lazy_line_closes,
+            &[],
+            None,
+        ) {
+            Ok(success) => success,
+            Err(_) => return,
+        };
+        let ((elements, _, _), line_errors, _) = success.into();
+        // A freshening block, a blank line, or whitespace-only content
+        // ends the lazy run; leave it for the later gather.
+        if elements.is_empty()
+            || elements.iter().all(Element::is_whitespace)
+            || !elements.iter().all(Element::paragraph_safe)
+        {
+            return;
+        }
+        parser.update(&candidate);
+        errors.extend(line_errors);
+        body.push(Element::LineBreak);
+        body.extend(elements);
+        if parser.current().token == Token::LineBreak && parser.step().is_err() {
+            return;
+        }
+    }
 }
 
 /// Whether the explicit list head on a line-owner line has an unowned body.

@@ -277,14 +277,21 @@ fn parse_list_block_impl<'r, 't>(
                     flag_score,
                     content_follows,
                 );
-                if wikidot && !flag_score && matches!(items.last(), Some(ListItem::SubList { .. }))
+                if wikidot
+                    && !flag_score
+                    && matches!(items.last(), Some(ListItem::SubList { .. }))
                 {
                     // Live puts sibling native lists under one outer item:
                     // each interior list joins the open inline-styled item
                     // instead of opening one of its own.
                     if let Some(ListItem::SubList { element: sub }) = items.pop() {
                         let mut attributes = AttributeMap::new();
-                        assert!(attributes.insert("style", cow!("list-style: none; display: inline")));
+                        assert!(
+                            attributes.insert(
+                                "style",
+                                cow!("list-style: none; display: inline")
+                            )
+                        );
                         items.push(ListItem::Elements {
                             elements: vec![*sub],
                             attributes,

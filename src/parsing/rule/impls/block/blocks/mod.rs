@@ -314,11 +314,17 @@ pub(crate) fn wikidot_eject_after_lost_owner_collapsible<'t>(
             let Element::List { items, .. } = element else {
                 unreachable!("checked explicit list above")
             };
-            wikidot_eject_list_items_after_closer(source_ptr, closer_byte, items, &mut item_ejected);
+            wikidot_eject_list_items_after_closer(
+                source_ptr,
+                closer_byte,
+                items,
+                &mut item_ejected,
+            );
         }
     }
     let index = elements.iter().position(|element| {
-        element_source_offset(source_ptr, element).is_some_and(|offset| offset > closer_byte)
+        element_source_offset(source_ptr, element)
+            .is_some_and(|offset| offset > closer_byte)
     });
     let mut ejected = item_ejected;
     match index {
@@ -329,10 +335,37 @@ pub(crate) fn wikidot_eject_after_lost_owner_collapsible<'t>(
             }
         }
         Some(index) => {
-            ejected.extend(elements.split_off(index));
+            // A lazy line out of the closed item's run ejects with the
+            // break that glued it to the previous block: live puts the
+            // `<br>` before the text, outside the enclosing block.
+            let mut split_at = index;
+            if !body_eject_starts_paragraph_or_block(&elements[index]) {
+                while split_at > 0 && elements[split_at - 1] == Element::LineBreak {
+                    split_at -= 1;
+                }
+            }
+            ejected.extend(elements.split_off(split_at));
         }
     }
     (!ejected.is_empty()).then_some(ejected)
+}
+
+fn body_eject_starts_paragraph_or_block(element: &Element<'_>) -> bool {
+    match element {
+        Element::List { .. }
+        | Element::Table(_)
+        | Element::Collapsible { .. }
+        | Element::Code { .. } => true,
+        Element::Container(container) => matches!(
+            container.ctype(),
+            crate::tree::ContainerType::Paragraph
+                | crate::tree::ContainerType::Div
+                | crate::tree::ContainerType::Note
+                | crate::tree::ContainerType::Blockquote
+                | crate::tree::ContainerType::Align(_)
+        ),
+        _ => false,
+    }
 }
 
 /// Splits one explicit list block's items at the ejection boundary: items
@@ -372,10 +405,7 @@ fn wikidot_eject_list_items_after_closer<'t>(
                     }),
                     Some(at) => {
                         let past = elements.split_off(at);
-                        if elements
-                            .iter()
-                            .any(|element| !element.is_whitespace())
-                        {
+                        if elements.iter().any(|element| !element.is_whitespace()) {
                             kept.push(ListItem::Elements {
                                 elements,
                                 attributes,
