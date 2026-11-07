@@ -297,7 +297,9 @@ pub(crate) fn wikidot_outer_div_still_open_at_collapsible_close(
                 let line_limit = lower[end..limit]
                     .find('\n')
                     .map_or(limit, |newline| end + newline);
-                if lower[end..line_limit].contains("[[/div]]") {
+                let line_start = source[..pos].rfind('\n').map_or(0, |i| i + 1);
+                let quoted_line = source[line_start..pos].trim_start().starts_with('>');
+                if !quoted_line && lower[end..line_limit].contains("[[/div]]") {
                     saw_same_line_div = true;
                 }
             }
