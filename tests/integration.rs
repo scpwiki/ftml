@@ -219,3 +219,6 @@ mod wikidot_date_format_directives;
 
 #[path = "super_linear_families.rs"]
 mod super_linear_families;
+
+#[path = "hang_tail_budgets.rs"]
+mod hang_tail_budgets;

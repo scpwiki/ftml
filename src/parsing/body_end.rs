@@ -19,7 +19,6 @@
  */
 
 use super::{Parser, Token};
-use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[derive(Debug, Copy, Clone)]
 pub(super) struct BodyEndBoundary {
@@ -65,31 +64,31 @@ impl<'r, 't> Parser<'r, 't> {
     /// any boundary check, so walks at different nesting depths share it.
     pub(crate) fn body_end_boundary_fingerprint(&self) -> u64 {
         let cache = self.block_end_scan_cache.borrow();
-        let identity = |boundary: &BodyEndBoundary| {
-            (
-                boundary.accepts_names.as_ptr() as usize,
-                boundary.accepts_names.len(),
-                boundary.hard,
-                boundary.confined,
-            )
+        let mix = |boundary: &BodyEndBoundary| -> u64 {
+            let mut value = (boundary.accepts_names.as_ptr() as usize as u64)
+                .wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            value ^= (boundary.accepts_names.len() as u64).rotate_left(23);
+            value ^= u64::from(boundary.hard) << 41;
+            value ^= u64::from(boundary.confined) << 42;
+            value ^= value >> 29;
+            value
         };
         let Some((innermost, ancestors)) = cache.body_end_boundaries.split_last() else {
             return 0;
         };
-        let mut ancestors: Vec<_> = ancestors.iter().map(identity).collect();
-        ancestors.sort_unstable();
-        ancestors.dedup();
-        let mut hasher = DefaultHasher::new();
-        identity(innermost).hash(&mut hasher);
-        ancestors.hash(&mut hasher);
-        hasher.finish()
-    }
-
-    fn body_end_boundaries(&self) -> Vec<BodyEndBoundary> {
-        self.block_end_scan_cache
-            .borrow()
-            .body_end_boundaries
-            .clone()
+        let mut sum = 0u64;
+        let mut xor = 0u64;
+        for boundary in ancestors {
+            let mixed = mix(boundary);
+            sum = sum.wrapping_add(mixed);
+            xor ^= mixed;
+        }
+        let mut combined = mix(innermost)
+            .wrapping_add(sum.rotate_left(7))
+            ^ xor.rotate_left(31)
+            ^ (ancestors.len() as u64).wrapping_mul(0xD1B5_4A32_D192_ED03);
+        combined ^= combined >> 32;
+        combined
     }
 
     pub(crate) fn body_end_boundary_depth(&self) -> usize {
@@ -104,7 +103,8 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub(crate) fn wikidot_li_inside_item_body(&self) -> bool {
-        for boundary in self.body_end_boundaries().iter().rev() {
+        let cache = self.block_end_scan_cache.borrow();
+        for boundary in cache.body_end_boundaries.iter().rev() {
             if boundary.confined {
                 continue;
             }
@@ -125,31 +125,39 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub(crate) fn body_end_boundary_accepts(&self, name: &str) -> bool {
-        self.body_end_boundaries().iter().any(|boundary| {
-            boundary
-                .accepts_names
-                .iter()
-                .any(|accepted| accepted.eq_ignore_ascii_case(name))
-        })
+        self.block_end_scan_cache
+            .borrow()
+            .body_end_boundaries
+            .iter()
+            .any(|boundary| {
+                boundary
+                    .accepts_names
+                    .iter()
+                    .any(|accepted| accepted.eq_ignore_ascii_case(name))
+            })
     }
 
     /// L85: whether the innermost body boundary accepts div/collapsible.
     /// Confines implicit-list parsing to genuine div/collapsible bodies.
     pub(crate) fn wikidot_top_boundary_is_div_or_collapsible(&self) -> bool {
-        self.body_end_boundaries().last().is_some_and(|boundary| {
-            !boundary.confined
-                && boundary.accepts_names.iter().any(|accepted| {
-                    accepted.eq_ignore_ascii_case("div")
-                        || accepted.eq_ignore_ascii_case("collapsible")
-                })
-        })
+        self.block_end_scan_cache
+            .borrow()
+            .body_end_boundaries
+            .last()
+            .is_some_and(|boundary| {
+                !boundary.confined
+                    && boundary.accepts_names.iter().any(|accepted| {
+                        accepted.eq_ignore_ascii_case("div")
+                            || accepted.eq_ignore_ascii_case("collapsible")
+                    })
+            })
     }
 
     /// L85: whether a non-top (ancestor) body boundary accepts `name`.
     /// Used to confine explicit-list cross stops to genuinely outer opens.
     pub(crate) fn wikidot_ancestor_boundary_accepts(&self, name: &str) -> bool {
-        let boundaries = self.body_end_boundaries();
-        let Some((_, ancestors)) = boundaries.split_last() else {
+        let cache = self.block_end_scan_cache.borrow();
+        let Some((_, ancestors)) = cache.body_end_boundaries.split_last() else {
             return false;
         };
         ancestors.iter().any(|boundary| {
@@ -179,8 +187,8 @@ impl<'r, 't> Parser<'r, 't> {
         if !bare.eq_ignore_ascii_case("cell") && !bare.eq_ignore_ascii_case("hcell") {
             return false;
         }
-        let boundaries = self.body_end_boundaries();
-        let Some((_, ancestors)) = boundaries.split_last() else {
+        let cache = self.block_end_scan_cache.borrow();
+        let Some((_, ancestors)) = cache.body_end_boundaries.split_last() else {
             return false;
         };
         ancestors.iter().any(|boundary| {
@@ -225,14 +233,6 @@ impl<'r, 't> Parser<'r, 't> {
         }
 
         let start = self.current().span.start;
-        let considered: Vec<BodyEndBoundary> = {
-            let cache = self.block_end_scan_cache.borrow();
-            considered_boundaries(&cache.body_end_boundaries, ancestors_only)
-                .iter()
-                .copied()
-                .filter(|boundary| boundary_qualifies(boundary, hard_only))
-                .collect()
-        };
         {
             let source = self.full_text().inner();
             let Some(close_found) = self.cached_close_marker(source, start) else {
@@ -249,11 +249,18 @@ impl<'r, 't> Parser<'r, 't> {
 
         let mut probe = self.clone();
         let parsed_name = probe.get_end_block().ok();
-        if considered.iter().any(|boundary| {
-            parsed_name
-                .as_deref()
-                .is_some_and(|name| boundary.accepts(name))
-        }) {
+        let accepted = {
+            let cache = self.block_end_scan_cache.borrow();
+            considered_boundaries(&cache.body_end_boundaries, ancestors_only)
+                .iter()
+                .filter(|boundary| boundary_qualifies(boundary, hard_only))
+                .any(|boundary| {
+                    parsed_name
+                        .as_deref()
+                        .is_some_and(|name| boundary.accepts(name))
+                })
+        };
+        if accepted {
             if let Some(name) = parsed_name.as_deref() {
                 let bare = name.strip_suffix('_').unwrap_or(name);
                 if (bare.eq_ignore_ascii_case("row") || bare.eq_ignore_ascii_case("table"))
@@ -269,14 +276,18 @@ impl<'r, 't> Parser<'r, 't> {
         }
 
         let ahead = self.full_text().inner().get(start..).unwrap_or("");
-        considered.iter().any(|boundary| {
-            boundary.accepts_names.iter().any(|name| {
-                let fused = format!("[[/{name}]]]");
-                ahead
-                    .get(..fused.len())
-                    .is_some_and(|head| head.eq_ignore_ascii_case(&fused))
+        let cache = self.block_end_scan_cache.borrow();
+        considered_boundaries(&cache.body_end_boundaries, ancestors_only)
+            .iter()
+            .filter(|boundary| boundary_qualifies(boundary, hard_only))
+            .any(|boundary| {
+                boundary.accepts_names.iter().any(|name| {
+                    let fused = format!("[[/{name}]]]");
+                    ahead
+                        .get(..fused.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(&fused))
+                })
             })
-        })
     }
 
     fn qualifying_body_end_boundary_exists(
