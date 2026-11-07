@@ -123,7 +123,7 @@ fn bold_body_crosses_flow_block(elements: &Elements<'_>) -> bool {
         Element::Container(inner) => {
             matches!(inner.ctype(), ContainerType::Div | ContainerType::Note)
         }
-        Element::Table(_) => true,
+        Element::Table(_) | Element::Math { .. } | Element::Code(_) => true,
         Element::Partial(
             PartialElement::WikidotBlockOpen(WikidotBlockShell::Div { .. })
             | PartialElement::WikidotBlockClose(WikidotBlockCloseKind::Div { .. }),

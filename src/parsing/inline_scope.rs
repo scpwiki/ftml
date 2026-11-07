@@ -760,6 +760,20 @@ impl<'t> ActiveScopes<'t> {
         }
     }
 
+    fn retire_span_scopes(&mut self) {
+        let mut retired = Vec::new();
+        let mut current = self.active_tail;
+        while let Some(position) = current {
+            current = self.scopes[position].previous_active;
+            if self.scopes[position].kind == ScopeKind::Span {
+                retired.push(position);
+            }
+        }
+        for position in retired {
+            self.kill_scope(position);
+        }
+    }
+
     fn nested_empty_copies(&self) -> Vec<Element<'t>> {
         let mut copies: Vec<Element<'t>> = Vec::new();
         for position in self.active_positions() {
@@ -2931,6 +2945,12 @@ fn lower_sequence<'t>(
                     let completed = active.end_watch();
                     active.drop_block_boundary_scopes(watermark, &completed);
                 }
+                if matches!(element, Element::Math { .. })
+                    || (matches!(element, Element::TabView(_))
+                        && subtree_contains_block_math_or_heading(&element))
+                {
+                    active.retire_span_scopes();
+                }
             }
             if let Some(scopes) = list_scope_wrappers {
                 let active_after = active.label_scope_count();
@@ -3602,6 +3622,27 @@ fn is_block_boundary(element: &Element<'_>) -> bool {
         )
 }
 
+fn subtree_contains_block_math_or_heading(element: &Element<'_>) -> bool {
+    if matches!(element, Element::Math { .. })
+        || matches!(
+            element,
+            Element::Container(container)
+                if matches!(container.ctype(), ContainerType::Header(_))
+        )
+    {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        for child in children {
+            if !found && subtree_contains_block_math_or_heading(child) {
+                found = true;
+            }
+        }
+    });
+    found
+}
+
 fn has_lowerable_children(element: &Element<'_>) -> bool {
     let mut found = false;
     visit_children(element, &mut |_| found = true);
@@ -3881,8 +3922,8 @@ fn attach_wikidot_block_label_spans<'t>(
             wikidot_label_spans,
             ..
         } => {
-            if !label_spans.is_empty() {
-                *wikidot_label_spans = label_spans;
+            if let Some(outermost) = label_spans.first() {
+                *wikidot_label_spans = vec![outermost.clone()];
             }
             if has_size {
                 active.retire_size_scopes();
@@ -5180,6 +5221,9 @@ impl<'t> WikidotFrameAssembly<'t> {
             frame.children.pop();
         }
         let suffix = self.take_row_suffix(&mut frame);
+        if frame.link.is_none() {
+            form_wikidot_frame_paragraphs(&mut frame.children);
+        }
         self.top().push(Element::WikidotBlockFrame {
             attributes: frame.attributes,
             children: frame.children,
@@ -5221,6 +5265,9 @@ impl<'t> WikidotFrameAssembly<'t> {
                 frame.children.pop();
             }
             let suffix = self.take_row_suffix(&mut frame);
+            if frame.link.is_none() {
+                form_wikidot_frame_paragraphs(&mut frame.children);
+            }
             self.top().push(Element::WikidotBlockFrame {
                 attributes: frame.attributes,
                 children: frame.children,
@@ -5260,6 +5307,9 @@ impl<'t> WikidotFrameAssembly<'t> {
             }
             let omit_close = self.at_root;
             let suffix = self.take_row_suffix(&mut frame);
+            if frame.link.is_none() {
+                form_wikidot_frame_paragraphs(&mut frame.children);
+            }
             self.top().push(Element::WikidotBlockFrame {
                 attributes: frame.attributes,
                 children: frame.children,
@@ -5270,6 +5320,89 @@ impl<'t> WikidotFrameAssembly<'t> {
         }
         self.output
     }
+}
+
+fn form_wikidot_frame_paragraphs<'t>(children: &mut Vec<Element<'t>>) {
+    if children.iter().any(|element| {
+        matches!(element, Element::Container(container) if container.ctype() == ContainerType::Paragraph)
+    }) {
+        return;
+    }
+    fn is_break(element: &Element<'_>) -> bool {
+        matches!(element, Element::LineBreak | Element::LineBreaks(_))
+    }
+    let stretch_end = children
+        .iter()
+        .position(|element| !element.paragraph_safe())
+        .unwrap_or(children.len());
+    fn is_void(element: &Element<'_>) -> bool {
+        match element {
+            Element::WikidotBlockFrame {
+                children,
+                collapsible_link: None,
+                ..
+            } => children.iter().all(is_void),
+            Element::Container(container) => container.elements().iter().all(is_void),
+            Element::Text(text) => text.is_empty(),
+            _ => false,
+        }
+    }
+    let qualifies = stretch_end == children.len()
+        || matches!(
+            children.get(stretch_end),
+            Some(Element::Container(container)) if matches!(container.ctype(), ContainerType::Header(_))
+        )
+        || children[stretch_end..].iter().all(is_void);
+    if !qualifies {
+        return;
+    }
+    fn flush<'t>(run: &mut Vec<Element<'t>>, out: &mut Vec<Element<'t>>) {
+        if run.iter().all(is_break) {
+            out.append(run);
+            return;
+        }
+        while run.first().is_some_and(is_break) {
+            run.remove(0);
+        }
+        while run.last().is_some_and(is_break) {
+            run.pop();
+        }
+        if !run.is_empty() {
+            out.push(Element::Container(Container::new(
+                ContainerType::Paragraph,
+                mem::take(run),
+                AttributeMap::new(),
+            )));
+        }
+        run.clear();
+    }
+    let rest: Vec<Element<'t>> = children.split_off(stretch_end);
+    let stretch: Vec<Element<'t>> = mem::take(children);
+    let mut out: Vec<Element<'t>> = Vec::with_capacity(stretch.len() + rest.len());
+    let mut run: Vec<Element<'t>> = Vec::new();
+    let mut break_run = 0_u32;
+    for element in stretch {
+        let breaks = match &element {
+            Element::LineBreak => Some(1),
+            Element::LineBreaks(count) => Some(count.get()),
+            _ => None,
+        };
+        if let Some(units) = breaks {
+            break_run += units;
+            if break_run >= 2 && run.iter().any(|element| !is_break(element)) {
+                flush(&mut run, &mut out);
+                break_run = 0;
+                continue;
+            }
+            run.push(element);
+            continue;
+        }
+        break_run = 0;
+        run.push(element);
+    }
+    flush(&mut run, &mut out);
+    out.extend(rest);
+    *children = out;
 }
 
 fn frame_ejects_row_suffix(attributes: &AttributeMap<'_>) -> bool {
