@@ -1270,6 +1270,12 @@ impl<'t> ParagraphStack<'t> {
                     self.current.pop();
                 }
             }
+            if self.wikidot
+                && !self.current.is_empty()
+                && Self::wikidot_explicit_list_holds_block(&element)
+            {
+                self.current_unwrapped = true;
+            }
             self.end_paragraph();
             if !invisible_block_line {
                 if element.paragraph_safe() {
@@ -1323,6 +1329,49 @@ impl<'t> ParagraphStack<'t> {
                 self.current_unwrapped = true;
                 self.suppress_next_line_break = true;
             }
+        }
+    }
+
+    fn wikidot_explicit_list_holds_block(element: &Element<'_>) -> bool {
+        let Element::List {
+            wikidot_explicit_block: true,
+            items,
+            ..
+        } = element
+        else {
+            return false;
+        };
+        items.iter().any(Self::wikidot_list_item_holds_block)
+    }
+
+    fn wikidot_list_item_holds_block(item: &ListItem<'_>) -> bool {
+        match item {
+            ListItem::Elements { elements, .. } => {
+                elements.iter().any(Self::wikidot_element_holds_item_block)
+            }
+            ListItem::SubList { element } => {
+                Self::wikidot_element_holds_item_block(element)
+            }
+        }
+    }
+
+    fn wikidot_element_holds_item_block(element: &Element<'_>) -> bool {
+        match element {
+            Element::Table(_) | Element::TabView(_) => true,
+            Element::Container(container) => {
+                matches!(container.ctype(), ContainerType::Div)
+                    || container
+                        .elements()
+                        .iter()
+                        .any(Self::wikidot_element_holds_item_block)
+            }
+            Element::List { items, .. } => {
+                items.iter().any(Self::wikidot_list_item_holds_block)
+            }
+            Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+                elements.iter().any(Self::wikidot_element_holds_item_block)
+            }
+            _ => false,
         }
     }
 
