@@ -760,6 +760,20 @@ impl<'t> ActiveScopes<'t> {
         }
     }
 
+    fn retire_span_scopes(&mut self) {
+        let mut retired = Vec::new();
+        let mut current = self.active_tail;
+        while let Some(position) = current {
+            current = self.scopes[position].previous_active;
+            if self.scopes[position].kind == ScopeKind::Span {
+                retired.push(position);
+            }
+        }
+        for position in retired {
+            self.kill_scope(position);
+        }
+    }
+
     fn nested_empty_copies(&self) -> Vec<Element<'t>> {
         let mut copies: Vec<Element<'t>> = Vec::new();
         for position in self.active_positions() {
@@ -2931,6 +2945,11 @@ fn lower_sequence<'t>(
                     let completed = active.end_watch();
                     active.drop_block_boundary_scopes(watermark, &completed);
                 }
+                if matches!(element, Element::TabView(_))
+                    && subtree_contains_block_math_or_heading(&element)
+                {
+                    active.retire_span_scopes();
+                }
             }
             if let Some(scopes) = list_scope_wrappers {
                 let active_after = active.label_scope_count();
@@ -3600,6 +3619,27 @@ fn is_block_boundary(element: &Element<'_>) -> bool {
             Element::Container(container)
                 if container.ctype() == ContainerType::Paragraph
         )
+}
+
+fn subtree_contains_block_math_or_heading(element: &Element<'_>) -> bool {
+    if matches!(element, Element::Math { .. })
+        || matches!(
+            element,
+            Element::Container(container)
+                if matches!(container.ctype(), ContainerType::Header(_))
+        )
+    {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        for child in children {
+            if !found && subtree_contains_block_math_or_heading(child) {
+                found = true;
+            }
+        }
+    });
+    found
 }
 
 fn has_lowerable_children(element: &Element<'_>) -> bool {
