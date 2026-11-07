@@ -236,6 +236,7 @@ fn parse_list_block_impl<'r, 't>(
                         items: Vec::new(),
                         attributes: attributes.clone(),
                         wikidot_explicit_block: true,
+                        wikidot_unclosed: false,
                     }, errors)
                 } else {
                     ok!(false; Element::LineBreak, errors)
@@ -363,6 +364,7 @@ fn parse_list_block_impl<'r, 't>(
                         items: Vec::new(),
                         attributes: attributes.clone(),
                         wikidot_explicit_block: true,
+                        wikidot_unclosed: false,
                     }, errors)
                 } else {
                     ok!(false; Element::LineBreak, errors)
