@@ -767,7 +767,19 @@ fn try_consume_fn<'r, 't>(
             continue;
         }
 
-        let row_is_empty = elements.is_empty() && errors.len() == errors_before;
+        // A quote line whose only content is @@@@ is a complete empty raw
+        // line. Live keeps its break in the paragraph. The element list is
+        // empty, and that must not make the line the empty spaced row that
+        // ends the paragraph.
+        let complete_empty_raw_line = parser.settings().layout.legacy()
+            && parser
+                .full_text()
+                .inner()
+                .get(content_start..line_text_end)
+                .is_some_and(|line| line.trim_end_matches([' ', '\t']) == "@@@@");
+        let row_is_empty = elements.is_empty()
+            && errors.len() == errors_before
+            && !complete_empty_raw_line;
         let mut absorbed_unquoted_footnote = false;
         if parser.settings().layout.legacy() && starts_footnote(parser) {
             let mut candidate = parser.clone_with_rule(RULE_BLOCKQUOTE);
