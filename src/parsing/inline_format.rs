@@ -217,7 +217,9 @@ fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
     let mut normalized = Vec::with_capacity(elements.len());
     for mut element in mem::take(elements) {
         if is_segment_container(&element) {
-            if !normalize_segment_container_with_run(&mut normalized, &mut element) {
+            if !normalize_segment_container_with_foster(&mut normalized, &mut element)
+                && !normalize_segment_container_with_run(&mut normalized, &mut element)
+            {
                 normalize_segment_container(&mut element);
             }
         } else if matches!(
@@ -1681,9 +1683,87 @@ fn normalize_segment_container<'t>(element: &mut Element<'t>) {
     normalize_segments(&mut segments);
 }
 
+/// When an advanced table's fostered tail (the text a cell splice ejects in
+/// front of the table) contains the closer of a marker opened inside one of
+/// the table's cells, live still pairs them: the opener's scope flows across
+/// the cell's list items and the closer is consumed. The tail reaches this
+/// point wrapped in contiguous trailing `WikidotFoster` partials, so join
+/// those tails behind the cell segments (their source order) and let the
+/// marker pairing see the whole span. Only the fosters immediately before
+/// the table join; anything else (a block frame, genuine preceding text)
+/// keeps the historical cells-only grouping.
+fn normalize_segment_container_with_foster<'t>(
+    preceding: &mut Vec<Element<'t>>,
+    container: &mut Element<'t>,
+) -> bool {
+    let Element::Table(table) = &container else {
+        return false;
+    };
+    if table.table_type != TableType::Advanced {
+        return false;
+    }
+    let mut run_start = preceding.len();
+    while run_start > 0
+        && matches!(
+            preceding[run_start - 1],
+            Element::Partial(PartialElement::WikidotFoster(_)) | Element::LineBreak
+        )
+    {
+        run_start -= 1;
+    }
+    let fosters = preceding
+        .iter()
+        .skip(run_start)
+        .filter(|element| {
+            matches!(element, Element::Partial(PartialElement::WikidotFoster(_)))
+        })
+        .count();
+    if fosters == 0 {
+        return false;
+    }
+    let mut fosters_split: Vec<Element<'t>> = preceding.split_off(run_start);
+    let mut segments = segment_vecs_mut(container);
+    let cell_count = segments.len();
+    for foster in fosters_split.iter_mut() {
+        if let Element::Partial(PartialElement::WikidotFoster(tail)) = foster {
+            segments.push(tail);
+        }
+    }
+    if !segments
+        .iter()
+        .any(|segment| stream_has_pairing_material(segment))
+    {
+        preceding.append(&mut fosters_split);
+        normalize_segment_container(container);
+        return true;
+    }
+    normalize_segments_foster_join(&mut segments, cell_count);
+    preceding.append(&mut fosters_split);
+    true
+}
+
 fn normalize_segments<'t>(segments: &mut [&mut Vec<Element<'t>>]) {
+    normalize_segments_inner(segments, None);
+}
+
+fn normalize_segments_foster_join<'t>(
+    segments: &mut [&mut Vec<Element<'t>>],
+    cell_count: usize,
+) {
+    normalize_segments_inner(segments, Some(cell_count));
+}
+
+fn normalize_segments_inner<'t>(
+    segments: &mut [&mut Vec<Element<'t>>],
+    foster_first_segment: Option<usize>,
+) {
     for _ in 0..MAX_NORMALIZATION_PASSES {
-        let mut changed = repair_literal_marker_pairs_segments(segments, false);
+        let mut changed = match foster_first_segment {
+            Some(first) => {
+                repair_literal_marker_pairs_segments_with_foster(segments, false, first)
+            }
+            None => repair_literal_marker_pairs_segments(segments, false),
+        };
         changed |= repair_dash_runs_segments(segments);
         for segment in segments.iter_mut() {
             changed |= normalize_sequence_passes(segment, false);
@@ -1759,28 +1839,76 @@ fn table_cell_segment<'a, 't>(
     }
 }
 
+#[derive(Clone, Copy, Default)]
+struct ProjFlagCtx {
+    in_native_list: bool,
+    /// Whether the current position sits inside an explicit-list item, and
+    /// whether that (nearest) item contains a native list.
+    explicit_item_has_native: Option<bool>,
+}
+
+#[derive(Clone, Copy)]
+struct ProjFlags {
+    in_native_list: bool,
+    explicit_item_has_native: Option<bool>,
+}
+
+struct ProjSink<'b, 'el> {
+    projection: &'b mut Vec<ProjItem<'el>>,
+    flags: Option<&'b mut Vec<ProjFlags>>,
+}
+
+impl<'b, 'el> ProjSink<'b, 'el> {
+    fn push(&mut self, item: ProjItem<'el>, ctx: &ProjFlagCtx) {
+        if let Some(flags) = &mut self.flags {
+            flags.push(ProjFlags {
+                in_native_list: ctx.in_native_list,
+                explicit_item_has_native: ctx.explicit_item_has_native,
+            });
+        }
+        self.projection.push(item);
+    }
+}
+
 fn project_marker_stream<'a, 't>(
     elements: &'a [Element<'t>],
-    projection: &mut Vec<ProjItem<'a>>,
+    sink: &mut ProjSink<'_, 'a>,
+    ctx: &mut ProjFlagCtx,
 ) {
     for element in elements {
         match element {
-            Element::List { items, .. } => {
+            Element::List {
+                wikidot_explicit_block,
+                items,
+                ..
+            } => {
                 for item in items {
                     match item {
                         ListItem::Elements { elements, .. } => {
-                            project_marker_stream(elements, projection);
+                            let saved_native = ctx.in_native_list;
+                            let saved_explicit = ctx.explicit_item_has_native;
+                            if *wikidot_explicit_block {
+                                ctx.explicit_item_has_native = Some(
+                                    elements.iter().any(crate::parsing::inline_scope::subtree_contains_native_list),
+                                );
+                            } else {
+                                ctx.in_native_list = true;
+                            }
+                            project_marker_stream(elements, sink, ctx);
+                            ctx.in_native_list = saved_native;
+                            ctx.explicit_item_has_native = saved_explicit;
                         }
                         ListItem::SubList { element } => {
                             project_marker_stream(
                                 std::slice::from_ref(element.as_ref()),
-                                projection,
+                                sink,
+                                ctx,
                             );
                         }
                     }
                 }
             }
-            _ => project_marker_sequence(std::slice::from_ref(element), projection),
+            _ => project_marker_sequence(std::slice::from_ref(element), sink, ctx),
         }
     }
 }
@@ -2112,7 +2240,12 @@ fn repair_literal_marker_pairs_segments<'t>(
     }
     let mut projection = Vec::new();
     for original in &originals {
-        project_marker_stream(original, &mut projection);
+        let mut sink = ProjSink {
+            projection: &mut projection,
+            flags: None,
+        };
+        let mut ctx = ProjFlagCtx::default();
+        project_marker_stream(original, &mut sink, &mut ctx);
     }
     let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
     roles.resize_with(projection.len(), || None);
@@ -2123,10 +2256,11 @@ fn repair_literal_marker_pairs_segments<'t>(
             &mut roles,
             kind,
             kind == InlineFormatKind::Strikethrough,
+            None,
         );
     }
     if !inside_monospace {
-        found |= pair_monospace_markers(&projection, &mut roles);
+        found |= pair_monospace_markers(&projection, &mut roles, None);
     }
     found |= pair_color_markers(&projection, &mut roles);
     if !found {
@@ -2143,6 +2277,153 @@ fn repair_literal_marker_pairs_segments<'t>(
     true
 }
 
+fn repair_literal_marker_pairs_segments_with_foster<'t>(
+    segments: &mut [&mut Vec<Element<'t>>],
+    inside_monospace: bool,
+    foster_first_segment: usize,
+) -> bool {
+    if !segments
+        .iter()
+        .any(|segment| stream_has_pairing_material(segment))
+    {
+        return false;
+    }
+    let mut originals: Vec<Vec<Element<'t>>> = Vec::with_capacity(segments.len());
+    for segment in segments.iter_mut() {
+        originals.push(
+            take_elements(segment)
+                .into_iter()
+                .map(Option::unwrap)
+                .collect(),
+        );
+    }
+    let mut projection = Vec::new();
+    let mut flags = Vec::new();
+    let mut ranges = Vec::with_capacity(originals.len());
+    for original in &originals {
+        let start = projection.len();
+        {
+            let mut sink = ProjSink {
+                projection: &mut projection,
+                flags: Some(&mut flags),
+            };
+            let mut ctx = ProjFlagCtx::default();
+            project_marker_stream(original, &mut sink, &mut ctx);
+        }
+        ranges.push((start, projection.len()));
+    }
+    let foster_start = ranges
+        .get(foster_first_segment)
+        .map_or(projection.len(), |(start, _)| *start);
+    let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
+    roles.resize_with(projection.len(), || None);
+    let mut found = false;
+    let mut pairs: Vec<(usize, usize, InlineFormatKind)> = Vec::new();
+    for kind in EDGE_MARKERS {
+        found |= pair_symmetric_markers(
+            &projection,
+            &mut roles,
+            kind,
+            kind == InlineFormatKind::Strikethrough,
+            Some(&mut pairs),
+        );
+    }
+    if !inside_monospace {
+        found |= pair_monospace_markers(&projection, &mut roles, Some(&mut pairs));
+    }
+    found |= pair_color_markers(&projection, &mut roles);
+    if !found {
+        for (segment, original) in segments.iter_mut().zip(originals) {
+            **segment = original;
+        }
+        return false;
+    }
+    // On the foster path a marker pair whose closer lives in the fostered
+    // tail (source-after the cells) cannot be kept as open/close partials:
+    // lowering walks the tail before the table, so it would never see the
+    // opener first. Live still consumes the closer and keeps the scope
+    // flowing across the cell's list items, so instead the closer marker is
+    // dropped and a close partial is appended at the end of the cell
+    // segment the opener lives in. Pairs whose opener does not satisfy the
+    // cell-list context (live's rule: the opener must be inside a native
+    // list, or inside an explicit-list item with no native list) revert to
+    // literal, exactly as if the tail had never joined the segment group.
+    let mut spliced_closes: Vec<(InlineFormatKind, usize)> = Vec::new();
+    for (open, close, kind) in &pairs {
+        if *close < foster_start || *open >= foster_start {
+            continue;
+        }
+        if !matches!(projection[*open], ProjItem::Text(_)) {
+            roles[*open] = None;
+            roles[*close] = None;
+            continue;
+        }
+        let flag = flags[*open];
+        // Live's cell-list context: the opener must live inside an
+        // explicit-list item in the cell (the li body is the pairing
+        // chunk), either inside a native list there or in an item with no
+        // native list at all. A native list directly in the cell is
+        // truncated by the cell splice before the tail starts, so its
+        // opener has no explicit context and stays literal.
+        let opener_in_cell_list_context = flag.explicit_item_has_native.is_some()
+            && (flag.in_native_list || flag.explicit_item_has_native == Some(false));
+        if opener_in_cell_list_context {
+            roles[*close] = Some(PairRole::Drop);
+            spliced_closes.push((*kind, *open));
+        } else {
+            roles[*open] = None;
+            roles[*close] = None;
+        }
+    }
+    let mut cursor = 0;
+    for (segment, original) in segments.iter_mut().zip(originals) {
+        **segment = apply_marker_stream(original, &roles, &mut cursor);
+    }
+    debug_assert_eq!(cursor, roles.len());
+    for (kind, open) in spliced_closes {
+        let segment_index = ranges
+            .iter()
+            .position(|(start, end)| open >= *start && open < *end)
+            .expect("pair open index is inside a segment range");
+        trim_list_end_space(segments[segment_index]);
+        segments[segment_index]
+            .push(Element::Partial(PartialElement::InlineFormatClose(kind)));
+    }
+    true
+}
+
+/// The spliced closer's scope ends at the cell end, which is the end of the
+/// list the splice cut. Live eats the whitespace text at the end of the cut
+/// item (the space before the splice token), so the scope it wraps does not
+/// carry that trailing space.
+fn trim_list_end_space(elements: &mut Vec<Element<'_>>) {
+    match elements.last_mut() {
+        Some(Element::Text(text)) => {
+            let trimmed_len = text.trim_end_matches([' ', '\t']).len();
+            if trimmed_len == 0 {
+                elements.pop();
+                trim_list_end_space(elements);
+            } else if trimmed_len < text.len() {
+                *text = Cow::Owned(text[..trimmed_len].to_owned());
+            }
+        }
+        Some(Element::List { items, .. }) => trim_list_end_space_items(items),
+        _ => {}
+    }
+}
+
+fn trim_list_end_space_items(items: &mut [ListItem<'_>]) {
+    match items.last_mut() {
+        Some(ListItem::Elements { elements, .. }) => trim_list_end_space(elements),
+        Some(ListItem::SubList { element }) => {
+            if let Element::List { items, .. } = &mut **element {
+                trim_list_end_space_items(items);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn repair_literal_marker_pairs_pass<'t>(
     elements: &mut Vec<Element<'t>>,
     inside_monospace: bool,
@@ -2155,7 +2436,12 @@ fn repair_literal_marker_pairs_pass<'t>(
         .map(Option::unwrap)
         .collect();
     let mut projection = Vec::new();
-    project_marker_sequence(&original, &mut projection);
+    let mut sink = ProjSink {
+        projection: &mut projection,
+        flags: None,
+    };
+    let ctx = ProjFlagCtx::default();
+    project_marker_sequence(&original, &mut sink, &ctx);
     let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
     roles.resize_with(projection.len(), || None);
     let mut found = false;
@@ -2165,10 +2451,11 @@ fn repair_literal_marker_pairs_pass<'t>(
             &mut roles,
             kind,
             kind == InlineFormatKind::Strikethrough,
+            None,
         );
     }
     if !inside_monospace {
-        found |= pair_monospace_markers(&projection, &mut roles);
+        found |= pair_monospace_markers(&projection, &mut roles, None);
     }
     found |= pair_color_markers(&projection, &mut roles);
     if !found {
@@ -2191,7 +2478,8 @@ fn sequence_has_pairing_material(elements: &[Element<'_>]) -> bool {
 
 fn project_marker_sequence<'a, 't>(
     elements: &'a [Element<'t>],
-    projection: &mut Vec<ProjItem<'a>>,
+    sink: &mut ProjSink<'_, 'a>,
+    ctx: &ProjFlagCtx,
 ) {
     for element in elements {
         if let Some(expansion) = expansion_of(element) {
@@ -2199,43 +2487,46 @@ fn project_marker_sequence<'a, 't>(
                 .expect("expansion requires formatter children");
             match expansion {
                 Expansion::Format(kind) if EDGE_MARKERS.contains(&kind) => {
-                    projection.push(ProjItem::EdgeOpen(kind));
-                    project_marker_sequence(children, projection);
-                    projection.push(ProjItem::EdgeClose(kind));
+                    sink.push(ProjItem::EdgeOpen(kind), ctx);
+                    project_marker_sequence(children, sink, ctx);
+                    sink.push(ProjItem::EdgeClose(kind), ctx);
                 }
                 Expansion::Color => {
-                    projection.push(ProjItem::ColorEdgeOpen);
-                    project_marker_sequence(children, projection);
-                    projection.push(ProjItem::ColorEdgeClose);
+                    sink.push(ProjItem::ColorEdgeOpen, ctx);
+                    project_marker_sequence(children, sink, ctx);
+                    sink.push(ProjItem::ColorEdgeClose, ctx);
                 }
                 _ => {
-                    projection.push(ProjItem::PartialLike);
-                    project_marker_sequence(children, projection);
-                    projection.push(ProjItem::PartialLike);
+                    sink.push(ProjItem::PartialLike, ctx);
+                    project_marker_sequence(children, sink, ctx);
+                    sink.push(ProjItem::PartialLike, ctx);
                 }
             }
         } else if pairing_barrier(element) {
-            projection.push(ProjItem::Barrier);
+            sink.push(ProjItem::Barrier, ctx);
         } else {
             match element {
-                Element::Text(value) => projection.push(ProjItem::Text(value)),
-                Element::Partial(partial) => projection.push(match partial {
-                    PartialElement::InlineFormatOpen(kind) => {
-                        ProjItem::FormatEventOpen(*kind)
-                    }
-                    PartialElement::InlineFormatClose(kind) => {
-                        ProjItem::FormatEventClose(*kind)
-                    }
-                    PartialElement::InlineColorOpen(..) => ProjItem::ColorEventOpen,
-                    PartialElement::InlineColorClose => ProjItem::ColorEventClose,
-                    PartialElement::InlineSpanClose(_)
-                    | PartialElement::InlineSizeClose(_) => ProjItem::ScopeClose,
-                    _ => ProjItem::PartialLike,
-                }),
+                Element::Text(value) => sink.push(ProjItem::Text(value), ctx),
+                Element::Partial(partial) => sink.push(
+                    match partial {
+                        PartialElement::InlineFormatOpen(kind) => {
+                            ProjItem::FormatEventOpen(*kind)
+                        }
+                        PartialElement::InlineFormatClose(kind) => {
+                            ProjItem::FormatEventClose(*kind)
+                        }
+                        PartialElement::InlineColorOpen(..) => ProjItem::ColorEventOpen,
+                        PartialElement::InlineColorClose => ProjItem::ColorEventClose,
+                        PartialElement::InlineSpanClose(_)
+                        | PartialElement::InlineSizeClose(_) => ProjItem::ScopeClose,
+                        _ => ProjItem::PartialLike,
+                    },
+                    ctx,
+                ),
                 _ if element_contains_link(element) => {
-                    projection.push(ProjItem::LinkContent)
+                    sink.push(ProjItem::LinkContent, ctx)
                 }
-                _ => projection.push(ProjItem::Content),
+                _ => sink.push(ProjItem::Content, ctx),
             }
         }
     }
@@ -2501,6 +2792,7 @@ fn pair_symmetric_markers<'t>(
     roles: &mut [Option<PairRole<'t>>],
     kind: InlineFormatKind,
     edges_required: bool,
+    mut pairs: Option<&mut Vec<(usize, usize, InlineFormatKind)>>,
 ) -> bool {
     let marker = kind.open_marker();
     let mut siblings: Vec<Option<usize>> = vec![None; projection.len()];
@@ -2594,6 +2886,9 @@ fn pair_symmetric_markers<'t>(
                     {
                         roles[open_index] = Some(PairRole::FormatOpen(kind));
                         roles[index] = Some(PairRole::FormatClose(kind));
+                        if let Some(pairs) = &mut pairs {
+                            pairs.push((open_index, index, kind));
+                        }
                         for endpoint in [open_index, index] {
                             if let Some(sibling) = siblings[endpoint]
                                 && roles[sibling].is_none()
@@ -2630,6 +2925,7 @@ fn pair_symmetric_markers<'t>(
 fn pair_monospace_markers<'t>(
     projection: &[ProjItem<'_>],
     roles: &mut [Option<PairRole<'t>>],
+    mut pairs: Option<&mut Vec<(usize, usize, InlineFormatKind)>>,
 ) -> bool {
     let mut found = false;
     let mut open: Option<usize> = None;
@@ -2675,6 +2971,9 @@ fn pair_monospace_markers<'t>(
                             Some(PairRole::FormatOpen(InlineFormatKind::Monospace));
                         roles[index] =
                             Some(PairRole::FormatClose(InlineFormatKind::Monospace));
+                        if let Some(pairs) = &mut pairs {
+                            pairs.push((open_index, index, InlineFormatKind::Monospace));
+                        }
                         found = true;
                     }
                     open = None;
