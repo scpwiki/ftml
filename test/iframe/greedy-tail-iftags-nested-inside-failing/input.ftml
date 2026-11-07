@@ -1,0 +1,8 @@
+[[iframe http://e.com]]
+[[iftags a]]
+[[iftags -a]]
+y
+[[/iftags]]
+z
+[[/iftags]]
+[[/div]]

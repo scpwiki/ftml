@@ -22,6 +22,7 @@ use super::prelude::*;
 use crate::parsing::discard_wikidot_controls;
 use crate::tree::AttributeMap;
 use std::borrow::Cow;
+use std::ops::Range;
 
 pub const BLOCK_IFRAME: BlockRule = BlockRule {
     name: "block-iframe",
@@ -123,7 +124,8 @@ fn greedy_url_extension(parser: &Parser<'_, '_>, url: &str) -> Option<(String, u
     let source = parser.full_text().inner();
     let after_head = parser.current().span.start;
     let head_end = after_head.checked_sub("]]".len())?;
-    wikidot_greedy_tail(source, url, head_end)
+    let elisions = parser.wikidot_iftags_elisions();
+    wikidot_greedy_tail(source, url, head_end, &elisions)
 }
 
 /// The URL tail absorbed by a bare iframe head that closes at head_close_start
@@ -131,10 +133,12 @@ fn greedy_url_extension(parser: &Parser<'_, '_>, url: &str) -> Option<(String, u
 ///
 /// Returns the absorbed tail (newlines dropped) and the absolute byte after
 /// the absorbed span.
+///
 pub(crate) fn wikidot_greedy_tail(
     source: &str,
     url: &str,
     head_close_start: usize,
+    elisions: &[Range<usize>],
 ) -> Option<(String, usize)> {
     if !wikidot_iframe_url(&discard_wikidot_controls(Cow::Borrowed(url))) {
         return None;
@@ -143,8 +147,47 @@ pub(crate) fn wikidot_greedy_tail(
         return None;
     }
     let rest = source.get(head_close_start..)?;
-    let (tail, match_end) = greedy_tail(rest)?;
-    Some((tail, head_close_start + match_end))
+    let mut ranges: Vec<Range<usize>> = elisions
+        .iter()
+        .filter(|range| range.end > head_close_start && range.start < source.len())
+        .map(|range| {
+            let start = range.start.saturating_sub(head_close_start).max(2);
+            let end = (range.end - head_close_start).min(rest.len());
+            start..end
+        })
+        .filter(|range| range.start < range.end)
+        .collect();
+    if ranges.is_empty() {
+        let (tail, match_end) = greedy_tail(rest)?;
+        return Some((tail, head_close_start + match_end));
+    }
+    ranges.sort_unstable_by_key(|range| range.start);
+    let mut merged: Vec<Range<usize>> = Vec::with_capacity(ranges.len());
+    for range in ranges {
+        match merged.last_mut() {
+            Some(last) if range.start <= last.end => {
+                last.end = last.end.max(range.end);
+            }
+            _ => merged.push(range),
+        }
+    }
+    let mut view = String::with_capacity(rest.len());
+    let mut orig: Vec<usize> = Vec::with_capacity(rest.len());
+    let mut pos = 0usize;
+    for range in &merged {
+        if range.start > pos {
+            view.push_str(&rest[pos..range.start]);
+            orig.extend(pos..range.start);
+        }
+        pos = range.end;
+    }
+    if pos < rest.len() {
+        view.push_str(&rest[pos..]);
+        orig.extend(pos..rest.len());
+    }
+    let (tail, match_end) = greedy_tail(&view)?;
+    let last = orig.get(match_end - 1).copied()?;
+    Some((tail, head_close_start + last + 1))
 }
 
 /// Extend a bare iframe URL the way live Wikidot does.

@@ -1,0 +1,8 @@
+[[iframe http://e.com]]
+[[iftags fruit]]
+[[iftags zzz]]
+y
+[[/iftags]]
+z
+[[/iftags]]
+[[/div]]

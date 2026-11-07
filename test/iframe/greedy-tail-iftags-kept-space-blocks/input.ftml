@@ -1,0 +1,5 @@
+[[iframe http://e.com]]
+[[iftags fruit]]
+x y
+[[/iftags]]
+[[/div]]
