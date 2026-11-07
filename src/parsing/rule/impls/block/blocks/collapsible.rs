@@ -21,7 +21,7 @@
 use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
-    trim_wikidot_trailing_explicit_list_break,
+    merge_adjacent_native_lists, trim_wikidot_trailing_explicit_list_break,
     unwrap_wikidot_paragraph_after_explicit_list, wikidot_block_pair_for_block_head_byte,
     wikidot_flat_pair_for_head,
 };
@@ -534,6 +534,7 @@ fn parse_fn<'r, 't>(
         parser.set_in_wikidot_collapsible(previous_collapsible_context);
         return ok!(false; head.into_element(Vec::new()));
     }
+    let in_quote_rows = parser.in_native_blockquote_line();
     let borrowed_quote_rows = parser.settings().layout.legacy()
         && parser.native_blockquote_depth().is_some()
         && parser.quote_body_cursor().is_none()
@@ -571,6 +572,9 @@ fn parse_fn<'r, 't>(
         if let Some(Element::Container(mut container)) = elements.pop() {
             elements.append(container.elements_mut());
         }
+    }
+    if parser.settings().layout.legacy() && in_quote_rows {
+        merge_adjacent_native_lists(&mut elements);
     }
     if wikidot_trailing_space_break && !elements.is_empty() {
         // L85: live keeps the trailing-space break inside the opening

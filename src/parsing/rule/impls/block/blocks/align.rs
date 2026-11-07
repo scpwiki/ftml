@@ -21,7 +21,7 @@
 use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
-    trim_wikidot_trailing_explicit_list_break,
+    merge_adjacent_native_lists, trim_wikidot_trailing_explicit_list_break,
     unwrap_wikidot_paragraph_after_explicit_list, wikidot_flat_pair_for_head,
 };
 use crate::delayed::DelayedElement;
@@ -264,43 +264,6 @@ pub fn parse_alignment_block<'r, 't>(
         let mut output = vec![element];
         output.extend(row_suffix);
         ok!(false; output, errors)
-    }
-}
-
-fn merge_adjacent_native_lists(elements: &mut Vec<Element<'_>>) {
-    let mut index = 0;
-    while index + 1 < elements.len() {
-        let mergeable = match (&elements[index], &elements[index + 1]) {
-            (
-                Element::List {
-                    ltype: first_type,
-                    attributes: first_attributes,
-                    wikidot_explicit_block: false,
-                    ..
-                },
-                Element::List {
-                    ltype: second_type,
-                    attributes: second_attributes,
-                    wikidot_explicit_block: false,
-                    ..
-                },
-            ) => first_type == second_type && first_attributes == second_attributes,
-            _ => false,
-        };
-        if mergeable {
-            let Element::List {
-                items: mut tail, ..
-            } = elements.remove(index + 1)
-            else {
-                unreachable!()
-            };
-            let Element::List { items, .. } = &mut elements[index] else {
-                unreachable!()
-            };
-            items.append(&mut tail);
-        } else {
-            index += 1;
-        }
     }
 }
 

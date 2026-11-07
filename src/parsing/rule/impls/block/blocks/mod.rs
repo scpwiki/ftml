@@ -215,6 +215,52 @@ use crate::parsing::parser::block_pairs::{WikidotBlockKind, WikidotBlockPair};
 use crate::parsing::{ParseError, Token};
 use crate::tree::{Element, ListItem, PartialElement};
 
+/// Live Wikidot renders one native list for a quote-row block body whose
+/// rows were collected in per-row fragments: the native list rule ends after
+/// each item inside a blockquote, and the quote-row machinery assembles the
+/// rows into one element vector, so a body parsed over quote rows otherwise
+/// gets one-item lists. Merges adjacent native (non-explicit) lists of the
+/// same type and attributes into a single list. Callers gate on the walker
+/// having been on a native blockquote line when the head was parsed: outside
+/// quote rows a top-level block whose lists are split by an intervening
+/// element keeps them split in live.
+pub(crate) fn merge_adjacent_native_lists(elements: &mut Vec<Element<'_>>) {
+    let mut index = 0;
+    while index + 1 < elements.len() {
+        let mergeable = match (&elements[index], &elements[index + 1]) {
+            (
+                Element::List {
+                    ltype: first_type,
+                    attributes: first_attributes,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                Element::List {
+                    ltype: second_type,
+                    attributes: second_attributes,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+            ) => first_type == second_type && first_attributes == second_attributes,
+            _ => false,
+        };
+        if mergeable {
+            let Element::List {
+                items: mut tail, ..
+            } = elements.remove(index + 1)
+            else {
+                unreachable!()
+            };
+            let Element::List { items, .. } = &mut elements[index] else {
+                unreachable!()
+            };
+            items.append(&mut tail);
+        } else {
+            index += 1;
+        }
+    }
+}
+
 /// Live Wikidot keeps no trailing `<br>` after an explicit `[[ul]]`/`[[ol]]`
 /// block that ends a note, alignment, collapsible or tab body: the block's
 /// line break is dropped there, while it survives at the page root, in a plain
