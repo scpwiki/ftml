@@ -163,7 +163,11 @@ impl Token {
 
     #[cfg(test)]
     fn extract_all_pest(text: &str) -> Vec<ExtractedToken<'_>> {
-        Self::extract_tokens_from_pairs(text, TokenLexer::parse(Rule::document, text))
+        let tokens = Self::extract_tokens_from_pairs(
+            text,
+            TokenLexer::parse(Rule::document, text),
+        );
+        scanner::rewrite_pest_math_closers(text, tokens)
     }
 
     #[cfg(test)]
