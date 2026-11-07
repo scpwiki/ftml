@@ -209,3 +209,11 @@ corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	Tab@20..174 d
 corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	Tab@20..198 scan-only
 corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	TabView@8..187 descent-only
 corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	TabView@8..211 scan-only
+corpus-test/note/collbody-bullet-div-lines-vanish/input.ftml	Div@27..45 scan-only
+corpus-test/blockquote/align-closes-at-item-closer-only/input.ftml	AlignCenter@2..34 descent-only
+corpus-test/blockquote/align-over-list-items/input.ftml	AlignCenter@2..43 scan-only
+corpus-test/blockquote/align-over-list-items/input.ftml	AlignCenter@2..35 descent-only
+corpus-test/blockquote/align-over-span-list-items/input.ftml	AlignCenter@2..105 scan-only
+corpus-test/blockquote/align-over-span-list-items/input.ftml	AlignCenter@2..67 descent-only
+corpus-test/collapsible/collbody-item-div-lines-vanish/input.ftml	Div@20..38 scan-only
+corpus-test/footnote/quote-align-bare-row-forms/input.ftml	AlignCenter@28..88 descent-only
