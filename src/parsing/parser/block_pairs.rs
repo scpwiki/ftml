@@ -504,6 +504,7 @@ struct Scanner<'t> {
     measure_guard: std::cell::Cell<usize>,
     measure_guard_trips: std::cell::Cell<usize>,
     tabview_banned_lines: Vec<bool>,
+    footnote_body_depth: usize,
     footnote_zones: Vec<(usize, usize)>,
     bib_ranges: Vec<(usize, usize)>,
     pairs: Vec<WikidotBlockPair>,
@@ -690,6 +691,7 @@ impl<'t> Scanner<'t> {
             measure_guard: std::cell::Cell::new(0),
             measure_guard_trips: std::cell::Cell::new(0),
             tabview_banned_lines: vec![false; line_count],
+            footnote_body_depth: 0,
             footnote_zones: Vec::new(),
             bib_ranges: Vec::new(),
             pairs: Vec::new(),
@@ -1891,6 +1893,7 @@ impl<'t> Scanner<'t> {
                     return next;
                 }
                 if rule_name == "block-footnote"
+                    && self.footnote_body_depth == 0
                     && let Some((body_start, body_end, after)) =
                         self.measure_footnote(&head, end, depth)
                 {
@@ -1906,7 +1909,9 @@ impl<'t> Scanner<'t> {
                     let line = self.line_of[first];
                     let previous = self.tabview_banned_lines[line];
                     self.tabview_banned_lines[line] = true;
+                    self.footnote_body_depth += 1;
                     self.scan_segment(body_start, body_end, depth + 1);
+                    self.footnote_body_depth -= 1;
                     self.tabview_banned_lines[line] = previous;
                     return after;
                 }
@@ -2608,7 +2613,6 @@ impl<'t> Scanner<'t> {
         limit: usize,
         depth: usize,
     ) -> Option<(usize, usize, usize)> {
-        let mut count = 1_usize;
         let mut j = head.head_end;
         while j < limit {
             if let Some(zone_end) = self.zone_end(j) {
@@ -2624,7 +2628,6 @@ impl<'t> Scanner<'t> {
                     if inner.as_ref().and_then(|inner| self.classify(inner))
                         == Some("block-footnote")
                     {
-                        count += 1;
                         j = inner?.head_end;
                     } else {
                         j = self.skip_construct_in_body(j, limit, depth)?;
@@ -2633,10 +2636,7 @@ impl<'t> Scanner<'t> {
                 Token::LeftBlockEnd => {
                     if let Some(close) = self.read_head(j, true) {
                         if self.classify(&close) == Some("block-footnote") {
-                            count -= 1;
-                            if count == 0 {
-                                return Some((head.head_end, j, close.head_end));
-                            }
+                            return Some((head.head_end, j, close.head_end));
                         }
                         j = close.head_end;
                     } else {
