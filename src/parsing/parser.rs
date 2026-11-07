@@ -312,6 +312,7 @@ pub struct Parser<'r, 't> {
     code_blocks: Rc<RefCell<Vec<CodeBlock<'t>>>>,
 
     footnotes: Rc<RefCell<Vec<Vec<Element<'t>>>>>,
+    footnote_row_tails: Rc<RefCell<Vec<Vec<Element<'t>>>>>,
 
     bibliographies: Rc<RefCell<BibliographyList<'t>>>,
 
@@ -550,6 +551,7 @@ impl<'r, 't> Parser<'r, 't> {
             html_blocks: make_shared_vec(),
             code_blocks: make_shared_vec(),
             footnotes: make_shared_vec(),
+            footnote_row_tails: make_shared_vec(),
             bibliographies: Rc::new(RefCell::new(BibliographyList::new())),
             quote_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
             block_end_scan_cache: Rc::new(RefCell::new({
@@ -2949,6 +2951,9 @@ impl<'r, 't> Parser<'r, 't> {
         }: ParserMutableState,
     ) {
         self.footnotes.borrow_mut().truncate(footnote_index);
+        self.footnote_row_tails
+            .borrow_mut()
+            .truncate(footnote_index);
         self.html_blocks.borrow_mut().truncate(html_block_index);
         self.code_blocks.borrow_mut().truncate(code_block_index);
         let mut table_of_contents = self.table_of_contents.borrow_mut();
@@ -3007,7 +3012,23 @@ impl<'r, 't> Parser<'r, 't> {
     pub fn push_footnote(&mut self, contents: Vec<Element<'t>>) -> usize {
         let mut footnotes = self.footnotes.borrow_mut();
         footnotes.push(contents);
+        self.footnote_row_tails.borrow_mut().push(Vec::new());
         footnotes.len()
+    }
+
+    pub fn set_footnote_row_tail(&mut self, index: usize, tail: Vec<Element<'t>>) {
+        let slot = index
+            .checked_sub(1)
+            .expect("footnote indexes are 1-based");
+        self.footnote_row_tails.borrow_mut()[slot] = tail;
+    }
+
+    pub fn footnote_row_tails_flat(&self) -> Vec<Element<'t>> {
+        self.footnote_row_tails
+            .borrow()
+            .iter()
+            .flat_map(|tail| tail.iter().cloned())
+            .collect()
     }
 
     pub fn footnote_count(&self) -> usize {
@@ -3016,6 +3037,7 @@ impl<'r, 't> Parser<'r, 't> {
 
     pub fn truncate_footnotes(&mut self, count: usize) {
         self.footnotes.borrow_mut().truncate(count);
+        self.footnote_row_tails.borrow_mut().truncate(count);
     }
 
     #[cold]
@@ -3075,7 +3097,11 @@ impl<'r, 't> Parser<'r, 't> {
         let mut table_of_contents_guard = self.table_of_contents.borrow_mut();
         table_of_contents_guard.append(table_of_contents);
 
+        let added = footnotes.len();
         self.footnotes.borrow_mut().append(footnotes);
+        self.footnote_row_tails
+            .borrow_mut()
+            .extend((0..added).map(|_| Vec::new()));
 
         self.bibliographies.borrow_mut().append(bibliographies);
     }

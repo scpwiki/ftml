@@ -22,6 +22,7 @@ use super::append_wikidot_footnote_trailing_list_break;
 use super::prelude::*;
 use crate::parsing::parse_boolean;
 use crate::tree::AttributeMap;
+use crate::tree::{InlineFormatKind, PartialElement};
 use crate::parsing::rule::impls::comment_closer_token_count;
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
@@ -152,7 +153,15 @@ pub(in crate::parsing::rule::impls::block) fn parse_footnote_ref<'r, 't>(
         }
     }
 
+    let row_tail = if parser.settings().layout.legacy() {
+        footnote_row_tail(parser, &mut elements)
+    } else {
+        Vec::new()
+    };
     let index = parser.push_footnote(elements);
+    if !row_tail.is_empty() {
+        parser.set_footnote_row_tail(index, row_tail);
+    }
 
     if fused_close {
         ok!(true; vec![Element::Footnote(index.into()), text!("]")], errors)
@@ -180,6 +189,93 @@ fn wikidot_footnote_closer_line_list_marker(
         "#" => Some("#"),
         _ => None,
     }
+}
+
+fn footnote_row_tail<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    elements: &mut Vec<Element<'t>>,
+) -> Vec<Element<'t>> {
+    if parser.wikidot_row_suffix_at().is_some()
+        && let Some(index) = elements
+            .iter()
+            .rposition(|element| matches!(element, Element::Text(text) if text.as_ref() == "||"))
+        && wikidot_scope_open_at(&elements[..index])
+    {
+        return Vec::new();
+    }
+    crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, elements)
+}
+
+fn wikidot_scope_open_at(elements: &[Element<'_>]) -> bool {
+    let mut span = 0;
+    let mut size = 0;
+    let mut color = 0;
+    let mut anchor = 0;
+    let mut block = 0;
+    let mut formats: Vec<(InlineFormatKind, i32)> = Vec::new();
+    fn scan(
+        elements: &[Element<'_>],
+        span: &mut i32,
+        size: &mut i32,
+        color: &mut i32,
+        anchor: &mut i32,
+        block: &mut i32,
+        formats: &mut Vec<(InlineFormatKind, i32)>,
+    ) {
+        for element in elements {
+            match element {
+                Element::Partial(PartialElement::InlineSpanOpen(..)) => *span += 1,
+                Element::Partial(PartialElement::InlineSpanClose(..)) => *span -= 1,
+                Element::Partial(PartialElement::InlineSizeOpen(..)) => *size += 1,
+                Element::Partial(PartialElement::InlineSizeClose(..)) => *size -= 1,
+                Element::Partial(PartialElement::InlineColorOpen(..)) => *color += 1,
+                Element::Partial(PartialElement::InlineColorClose) => *color -= 1,
+                Element::Partial(PartialElement::InlineAnchorOpen(..)) => *anchor += 1,
+                Element::Partial(PartialElement::InlineAnchorClose(..)) => *anchor -= 1,
+                Element::Partial(PartialElement::InlineFormatOpen(kind)) => {
+                    match formats.iter_mut().find(|(k, _)| k == kind) {
+                        Some((_, count)) => *count += 1,
+                        None => formats.push((*kind, 1)),
+                    }
+                }
+                Element::Partial(PartialElement::InlineFormatClose(kind)) => {
+                    if let Some((_, count)) =
+                        formats.iter_mut().find(|(k, _)| k == kind)
+                    {
+                        *count -= 1;
+                    }
+                }
+                Element::Partial(PartialElement::WikidotBlockOpen(_)) => *block += 1,
+                Element::Partial(PartialElement::WikidotBlockClose(_)) => *block -= 1,
+                Element::Container(container) => {
+                    scan(container.elements(), span, size, color, anchor, block, formats)
+                }
+                Element::WikidotBlockFrame { children, .. } => {
+                    scan(children, span, size, color, anchor, block, formats)
+                }
+                Element::Partial(PartialElement::WikidotFoster(children))
+                | Element::Partial(PartialElement::WikidotCollapsibleTail(children)) => {
+                    scan(children, span, size, color, anchor, block, formats)
+                }
+                _ => {}
+            }
+        }
+    }
+    scan(
+        elements,
+        &mut span,
+        &mut size,
+        &mut color,
+        &mut anchor,
+        &mut block,
+        &mut formats,
+    );
+    span > 0
+        || size > 0
+        || color > 0
+        || anchor > 0
+        || block > 0
+        || formats.iter().any(|(_, count)| *count > 0)
 }
 
 fn parse_footnote_block<'r, 't>(
@@ -241,13 +337,21 @@ fn parse_footnote_block<'r, 't>(
 
     parser.set_footnote_block();
 
-    ok!(inline_prose; Element::FootnoteBlock {
+    let element = Element::FootnoteBlock {
         title,
         hide,
         wikidot_wrappers: Vec::new(),
         wikidot_inline_suffix: inline_suffix,
         wikidot_inline_prefix: inline_prefix,
-    })
+    };
+    let row_tails = parser.footnote_row_tails_flat();
+    if row_tails.is_empty() {
+        ok!(inline_prose; element)
+    } else {
+        let mut output = vec![element];
+        output.extend(row_tails);
+        ok!(false; output)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

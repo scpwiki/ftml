@@ -755,6 +755,21 @@ where
 
     debug!("Running parser on {} tokens", tokenization.tokens().len());
     let result = gather_paragraphs(&mut parser, RULE_PAGE, no_close_condition());
+    let result = if parser.has_footnote_block() {
+        result
+    } else {
+        match result {
+            Ok(mut success) => {
+                let tails = parser.footnote_row_tails_flat();
+                if !tails.is_empty() {
+                    success.item.extend(tails);
+                    success.paragraph_safe = false;
+                }
+                Ok(success)
+            }
+            error => error,
+        }
+    };
 
     let html_blocks = parser.remove_html_blocks();
     let code_blocks = parser.remove_code_blocks();
