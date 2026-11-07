@@ -279,3 +279,41 @@ fn delayed_provenance_keeps_authored_owners_active_and_runtime_data_inert() {
         "{generated_html}"
     );
 }
+
+#[test]
+fn bibcite_anchor_id_is_stable_across_renders() {
+    let source = "((bibcite b1))\n\n[[bibliography]]\n: b1 : Title\n[[/bibliography]]\n";
+    let first = render(source);
+    let second = render(source);
+    assert_eq!(first, second, "bibcite id changed between renders");
+    assert!(first.contains("id=\"bibcite-1-"), "{first}");
+}
+
+#[test]
+fn wikidot_anchor_closes_before_bibcite() {
+    let source = "[[a href=\"/A\"]]x((bibcite b1))y[[/a]]\n\n[[bibliography]]\n: b1 : Title\n[[/bibliography]]\n";
+    let html = render(source);
+    assert!(
+        html.contains("</a><a href=\"javascript:;\" class=\"bibcite\"")
+            || html.contains("</a><a class=\"bibcite\" href=\"javascript:;\""),
+        "outer anchor still wraps the cite: {html}"
+    );
+    assert!(
+        html.contains(">1</a>y</p>"),
+        "text after the cite should sit outside the outer anchor: {html}"
+    );
+
+    let literal_source =
+        "[[a href=\"/A\"]]x[[bibcite b1]]y[[/a]]\n\n[[bibliography]]\n: b1 : Title\n[[/bibliography]]\n";
+    let page_info = page_info();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let mut literal_text = literal_source.to_owned();
+    ftml::preprocess_for_layout(&mut literal_text, settings.layout);
+    let tokens = ftml::tokenize(&literal_text);
+    let (tree, _) = ftml::parse(&tokens, &page_info, &settings).into();
+    let literal = HtmlRender.render(&tree, &page_info, &settings).body;
+    assert!(
+        literal.contains(">x[[bibcite b1]]y</a>"),
+        "block bibcite is not an anchor producer: {literal}"
+    );
+}

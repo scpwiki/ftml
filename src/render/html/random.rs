@@ -18,8 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use cfg_if::cfg_if;
 use rand::RngExt;
+use rand::SeedableRng;
 use rand::distr::{Alphanumeric, SampleString};
 use rand::rngs::SmallRng;
 
@@ -31,15 +31,10 @@ pub struct Random {
 impl Default for Random {
     #[inline]
     fn default() -> Self {
-        cfg_if! {
-            if #[cfg(test)] {
-                use rand::SeedableRng;
-                let rng = SmallRng::seed_from_u64(1);
-            } else {
-                let rng = rand::make_rng();
-            }
-        }
-
+        // PagePreview draws a new bibcite suffix on every request, and the
+        // frozen captures do not share a seed FTML can recompute. Seed 1
+        // keeps a render stable. It is not Wikidot's suffix.
+        let rng = SmallRng::seed_from_u64(1);
         Random { rng }
     }
 }
