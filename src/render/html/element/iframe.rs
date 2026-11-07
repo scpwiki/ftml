@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::AttributeMap;
+use crate::tree::{AttributeMap, Element};
 use crate::url::normalize_href;
 use std::borrow::Cow;
 
@@ -65,6 +65,39 @@ pub(super) fn render_legacy_iframe(
 }
 
 pub fn render_html(ctx: &mut HtmlContext, contents: &str, attributes: &AttributeMap) {
+    render_html_with_tail(ctx, contents, attributes, &[]);
+}
+
+pub fn render_wikidot_inline_html_run(ctx: &mut HtmlContext, elements: &[Element]) {
+    let mut index = 0usize;
+    while index < elements.len() {
+        match &elements[index] {
+            Element::Html {
+                contents,
+                attributes,
+            } => {
+                let rest = &elements[index + 1..];
+                let next_html = rest
+                    .iter()
+                    .position(|element| matches!(element, Element::Html { .. }))
+                    .unwrap_or(rest.len());
+                render_html_with_tail(ctx, contents, attributes, &rest[..next_html]);
+                index += 1 + next_html;
+            }
+            _ => {
+                render_element(ctx, &elements[index]);
+                index += 1;
+            }
+        }
+    }
+}
+
+fn render_html_with_tail(
+    ctx: &mut HtmlContext,
+    contents: &str,
+    attributes: &AttributeMap,
+    tail: &[Element],
+) {
     debug!("Rendering html block (submitting to remote for iframe)");
 
     let iframe_url = ctx.handle().post_html(ctx.info(), contents);
@@ -82,8 +115,9 @@ pub fn render_html(ctx: &mut HtmlContext, contents: &str, attributes: &Attribute
         // Wikidot emits the class attribute before the style attribute when a
         // user class is supplied, but after it when only the fixed class is
         // present. Both orders are pinned by the saved-page captures.
+        let mut iframe = ctx.html().iframe();
         if user_class.is_empty() {
-            ctx.html().iframe().attr(attr!(
+            iframe.attr(attr!(
                 "src" => &src,
                 "allowtransparency" => "true",
                 "frameborder" => "0",
@@ -91,7 +125,7 @@ pub fn render_html(ctx: &mut HtmlContext, contents: &str, attributes: &Attribute
                 "class" => &class,
             ));
         } else {
-            ctx.html().iframe().attr(attr!(
+            iframe.attr(attr!(
                 "src" => &src,
                 "allowtransparency" => "true",
                 "frameborder" => "0",
@@ -99,11 +133,24 @@ pub fn render_html(ctx: &mut HtmlContext, contents: &str, attributes: &Attribute
                 "style" => &user_style; if !user_style.is_empty(),
             ));
         }
+        if !tail.is_empty() {
+            iframe.inner(|ctx| render_wikidot_iframe_tail(ctx, tail));
+        }
     } else {
         ctx.html().iframe().attr(attr!(
             "src" => &src,
             "crossorigin";;
             attributes
         ));
+    }
+}
+
+fn render_wikidot_iframe_tail(ctx: &mut HtmlContext, tail: &[Element]) {
+    match tail.split_last() {
+        Some((Element::LineBreak, rest)) => {
+            render_elements(ctx, rest);
+            ctx.html().br();
+        }
+        _ => render_elements(ctx, tail),
     }
 }

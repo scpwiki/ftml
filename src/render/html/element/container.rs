@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use super::iframe::render_wikidot_inline_html_run;
 use super::prelude::*;
 use crate::tree::{
     Container, ContainerType, HtmlTag, WIKIDOT_EMPTY_QUOTE_MARKER,
@@ -255,7 +256,9 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         }
     }
 
-    if layout.legacy() && matches!(container.ctype(), ContainerType::Header(_)) {
+    if layout.legacy() && wikidot_inline_container_folds_html(container) {
+        tag.inner(|ctx| render_wikidot_inline_html_run(ctx, container.elements()));
+    } else if layout.legacy() && matches!(container.ctype(), ContainerType::Header(_)) {
         if container.elements().is_empty()
             || heading_barrier
             || has_wikidot_heading_label_span(container.elements())
@@ -307,6 +310,14 @@ fn wikidot_break_only_paragraph<'a, 't>(
             matches!(element, Element::LineBreak | Element::LineBreaks(_))
         }))
     .then_some(elements)
+}
+
+fn wikidot_inline_container_folds_html(container: &Container) -> bool {
+    matches!(container.ctype(), ContainerType::Span | ContainerType::Size)
+        && container
+            .elements()
+            .iter()
+            .any(|element| matches!(element, Element::Html { .. }))
 }
 
 fn container_trailing_break_drops_newline(ctype: ContainerType) -> bool {
