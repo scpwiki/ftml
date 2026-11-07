@@ -77,6 +77,7 @@ pub(in crate::parsing::rule::impls::block) fn parse_footnote_ref<'r, 't>(
 
     if parser.settings().layout.legacy() {
         parser.arm_footnote_zone();
+        parser.detach_quote_context();
     }
 
     let body = parser.get_body_elements(&BLOCK_FOOTNOTE, true)?;
@@ -153,6 +154,10 @@ pub(in crate::parsing::rule::impls::block) fn parse_footnote_ref<'r, 't>(
         }
     }
 
+    if parser.settings().layout.legacy() {
+        bare_wikidot_footnote_spent_quote_tail(&mut elements);
+    }
+
     let row_tail = if parser.settings().layout.legacy() {
         footnote_row_tail(parser, &mut elements)
     } else {
@@ -189,6 +194,64 @@ fn wikidot_footnote_closer_line_list_marker(
         "#" => Some("#"),
         _ => None,
     }
+}
+
+fn bare_wikidot_footnote_spent_quote_tail(elements: &mut Vec<Element>) {
+    let mut index = 0;
+    let mut leaked = false;
+    while let Some(Element::Text(text)) = elements.get(index) {
+        if !text.chars().all(|ch| ch == '>' || ch == ' ') {
+            return;
+        }
+        leaked |= text.contains('>');
+        index += 1;
+    }
+    if !leaked {
+        return;
+    }
+    let Some(block) = elements.get(index) else {
+        return;
+    };
+    if block.paragraph_safe()
+        || matches!(
+            block,
+            Element::Container(container)
+                if container.ctype() == ContainerType::Blockquote
+        )
+    {
+        return;
+    }
+    let tail_index = index + 1;
+    let Some(Element::Container(container)) = elements.get(tail_index) else {
+        return;
+    };
+    if container.ctype() != ContainerType::Blockquote
+        || !container.elements().iter().all(|child| {
+            matches!(
+                child,
+                Element::Container(paragraph)
+                    if paragraph.ctype() == ContainerType::Paragraph
+            )
+        })
+    {
+        return;
+    }
+    let Element::Container(container) = elements.remove(tail_index) else {
+        unreachable!("tail element was checked above");
+    };
+    let children: Vec<Element> = container.into();
+    let mut replacement = vec![Element::LineBreak];
+    for (position, child) in children.into_iter().enumerate() {
+        if position > 0 {
+            replacement.push(Element::LineBreak);
+        }
+        let Element::Container(paragraph) = child else {
+            unreachable!("tail paragraphs were checked above");
+        };
+        let mut inner: Vec<Element> = paragraph.into();
+        replacement.append(&mut inner);
+    }
+    elements.splice(tail_index..tail_index, replacement);
 }
 
 fn footnote_row_tail<'r, 't>(
@@ -432,6 +495,9 @@ struct ParserWrap<'p, 'r, 't> {
     parser: &'p mut Parser<'r, 't>,
     zone_restore: Option<Option<usize>>,
     list_depth_restore: Option<Option<usize>>,
+    depth_restore: Option<Option<usize>>,
+    cursor_restore: Option<Option<crate::parsing::parser::QuoteBodyCursor>>,
+    note_restore: Option<bool>,
 }
 
 impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
@@ -443,7 +509,19 @@ impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
             parser,
             zone_restore: None,
             list_depth_restore: None,
+            depth_restore: None,
+            cursor_restore: None,
+            note_restore: None,
         }
+    }
+
+    fn detach_quote_context(&mut self) {
+        self.depth_restore = Some(self.parser.native_blockquote_depth());
+        self.parser.set_native_blockquote_depth(None);
+        self.cursor_restore = Some(self.parser.quote_body_cursor());
+        self.parser.set_quote_body_cursor(None);
+        self.note_restore = Some(self.parser.in_note());
+        self.parser.set_note_flag(false);
     }
 
     fn arm_footnote_zone(&mut self) {
@@ -480,6 +558,15 @@ impl Drop for ParserWrap<'_, '_, '_> {
         }
         if let Some(previous) = self.list_depth_restore {
             self.parser.set_list_depth_at_footnote(previous);
+        }
+        if let Some(previous) = self.depth_restore {
+            self.parser.set_native_blockquote_depth(previous);
+        }
+        if let Some(previous) = self.cursor_restore {
+            self.parser.set_quote_body_cursor(previous);
+        }
+        if let Some(previous) = self.note_restore {
+            self.parser.set_note_flag(previous);
         }
     }
 }

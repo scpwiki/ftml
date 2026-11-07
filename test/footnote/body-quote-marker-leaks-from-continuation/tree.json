@@ -1,0 +1,135 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "div",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "div",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "tab-view",
+                                                "data": [
+                                                    {
+                                                        "label": "A",
+                                                        "elements": [
+                                                            {
+                                                                "element": "container",
+                                                                "data": {
+                                                                    "type": "paragraph",
+                                                                    "attributes": {},
+                                                                    "elements": [
+                                                                        {
+                                                                            "element": "text",
+                                                                            "data": "n"
+                                                                        },
+                                                                        {
+                                                                            "element": "footnote",
+                                                                            "data": 1
+                                                                        },
+                                                                        {
+                                                                            "element": "line-break"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "table-of-contents": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc0",
+                                    "label": {
+                                        "text": "h"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc1",
+                                    "label": {
+                                        "text": "h"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "container",
+                "data": {
+                    "type": {
+                        "header": {
+                            "level": 1,
+                            "has-toc": true
+                        }
+                    },
+                    "attributes": {},
+                    "elements": [
+                        {
+                            "element": "text",
+                            "data": "h"
+                        }
+                    ]
+                }
+            }
+        ]
+    ]
+}
