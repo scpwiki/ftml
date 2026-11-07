@@ -168,6 +168,22 @@ where
                     Token::LineBreak | Token::ParagraphBreak
                 ),
         );
+        // The line-break rule drops this newline because a closer follows it.
+        // Live still emits the break, outside the paragraph that the closer ends.
+        if parser.settings().layout.legacy()
+            && parser.current().token == Token::LineBreak
+            && parser.look_ahead(0).is_some_and(|token| {
+                token.token == Token::LeftBlockEnd
+                    && parser.wikidot_discarded_row_closer(token.span.start)
+            })
+        {
+            stack.end_paragraph();
+            stack.mark_next_unwrapped();
+            stack.push_element(Element::LineBreak, true);
+            parser.step()?;
+            line_prefix_whitespace_only = true;
+            continue;
+        }
         if close_condition_fn.is_some()
             && walk_started
             && parser.current().token == Token::LeftBlock
