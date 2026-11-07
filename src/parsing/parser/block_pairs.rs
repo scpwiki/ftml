@@ -2647,6 +2647,15 @@ impl<'t> Scanner<'t> {
                 }
             }
             Some(WikidotBlockKind::TabView) => {
+                // Mirror the top-level scan's dispatch inside bodies too: a
+                // tabview head that does not start its line (modulo quote
+                // markers) is body text to the descent, not a formed view, so
+                // only its head is skipped. An unformed inner view's first
+                // tab closer then ends the enclosing tab, as live does
+                // (muse-probe-tvp-o5; BRIEF-TVP (16)).
+                if self.tabview_banned(j) || !self.line_prefix_clean(j) {
+                    return Some(head.head_end);
+                }
                 match self.measure_tabview(j, &head, limit, depth + 1) {
                     Some(measure) => Some(measure.end),
                     None => Some(head.head_end),
