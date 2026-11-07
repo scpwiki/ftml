@@ -161,6 +161,37 @@ impl<'r, 't> Parser<'r, 't> {
         })
     }
 
+    /// Whether the end block at the current position names a table cell
+    /// whose boundary sits on an ancestor body, so a collected inner body
+    /// (an explicit list item inside the cell) must yield to the cell.
+    pub(crate) fn wikidot_ancestor_boundary_accepts_table_cell_end(&self) -> bool
+    where
+        'r: 't,
+    {
+        if self.current().token != Token::LeftBlockEnd {
+            return false;
+        }
+        let mut probe = self.clone();
+        let Ok(name) = probe.get_end_block() else {
+            return false;
+        };
+        let bare = name.strip_suffix('_').unwrap_or(&name);
+        if !bare.eq_ignore_ascii_case("cell") && !bare.eq_ignore_ascii_case("hcell") {
+            return false;
+        }
+        let boundaries = self.body_end_boundaries();
+        let Some((_, ancestors)) = boundaries.split_last() else {
+            return false;
+        };
+        ancestors.iter().any(|boundary| {
+            !boundary.confined
+                && boundary
+                    .accepts_names
+                    .iter()
+                    .any(|accepted| accepted.eq_ignore_ascii_case(bare))
+        })
+    }
+
     pub(crate) fn at_body_end_boundary(&self) -> bool
     where
         'r: 't,
