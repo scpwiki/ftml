@@ -25,6 +25,7 @@ use crate::tree::{
     AcceptsPartial, AttributeMap, Container, ContainerType, ListItem, ListType,
     PartialElement, WikidotBlockCloseKind,
 };
+use std::borrow::Cow;
 
 pub const BLOCK_UL: BlockRule = BlockRule {
     name: "block-list-unordered",
@@ -924,6 +925,35 @@ fn join_lines<'t>(lines: Vec<Vec<Element<'t>>>) -> Vec<Element<'t>> {
 /// Live's Bibliography rule ends its replacement with a newline of its own, so a
 /// source line break after the bibliography block is a blank line: no `<br>`
 /// is produced for it. The list item raw-body heuristic must not add one.
+/// Whether an explicit `[[li]]` body's last non-blank line is a block closer
+/// for a NON-list block (e.g. `* [[/div]]` whose formation dissolved into a
+/// native run). In that case the dissolved formation's trailing break is
+/// kept after the resulting list, unlike after a `* [[/ul]]`/`[[li]]` close.
+fn wikidot_li_body_ends_with_flat_block_close(source: &str) -> bool {
+    let lowered = source.to_ascii_lowercase();
+    let body = lowered
+        .rfind("[[/li")
+        .map(|index| &source[..index])
+        .unwrap_or(source);
+    let Some(line) = body.lines().rev().find(|line| !line.trim().is_empty()) else {
+        return false;
+    };
+    let line = line.trim_end_matches([' ', '\t']);
+    if !line.ends_with("]]") {
+        return false;
+    }
+    let Some(head) = line.rfind("[[") else {
+        return false;
+    };
+    let Some(close) = line[head..].strip_prefix("[[") else {
+        return false;
+    };
+    let name = close.strip_prefix('/').unwrap_or(close);
+    let name = name.strip_suffix("]]").unwrap_or(name);
+    let name = name.split_whitespace().next().unwrap_or(name);
+    !matches!(name, "ul" | "ol" | "li")
+}
+
 fn trailing_wikidot_bibliography(elements: &[Element<'_>]) -> bool {
     matches!(
         elements.last(),
@@ -1121,6 +1151,121 @@ fn parse_list_item<'r, 't>(
         if fused_close {
             elements.push(text!("]"));
         }
+        // Live ends a run formation inside an explicit [[li]] body at the
+        // completing pair's closer: run items after the closer escape to
+        // the enclosing list as its items instead of re-forming a second
+        // list inside this item (lihoist p12/p15/d6-24.3). When the
+        // assembled body is exactly [formation list, native tail list],
+        // split the tail list's items out as sibling items.
+        let core_end = elements
+            .iter()
+            .rposition(|element| !element.is_whitespace())
+            .map_or(0, |index| index + 1);
+        let plain_native = |items: &Vec<ListItem<'t>>| {
+            !items.is_empty()
+                && items.iter().all(|item| {
+                    matches!(
+                        item,
+                        ListItem::Elements { elements, .. }
+                            if elements
+                                .iter()
+                                .all(|element| matches!(element, Element::Text(_)))
+                    )
+                })
+        };
+        let escaped_items: Option<Vec<ListItem<'t>>> = match &elements[..core_end] {
+            [
+                Element::List {
+                    items: head_items,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                Element::List {
+                    items: tail_items,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+            ] if plain_native(head_items) && plain_native(tail_items) => {
+                Some(tail_items.clone())
+            }
+            _ => None,
+        };
+        if let Some(tail_items) = escaped_items {
+            elements.truncate(core_end - 1);
+            // The removed tail list's leading line break joins the escaped
+            // items, matching the break the enclosing list puts between items.
+            let element =
+                Element::Partial(PartialElement::ListItem(ListItem::Elements {
+                    elements,
+                    attributes,
+                }));
+            let mut output = vec![element];
+            output.extend(
+                tail_items
+                    .into_iter()
+                    .map(|item| Element::Partial(PartialElement::ListItem(item))),
+            );
+            return success_elements_with_paragraph_safety(
+                false,
+                Elements::Multiple(output),
+                errors,
+            );
+        }
+        // A run formation that never fused (no complete explicit list pair)
+        // leaves its lone list-closer line as an escaped paragraph; live
+        // keeps the closer as an item of the run list instead (lihoist
+        // p19). Reattach it when the escaped element right after a plain
+        // native list is a paragraph holding one literal list closer.
+        if elements.len() == 2
+            && let [
+                Element::List {
+                    items,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                Element::Container(closer),
+            ] = &elements[..]
+            && closer.ctype() == ContainerType::Paragraph
+            && items.iter().all(|item| {
+                matches!(
+                    item,
+                    ListItem::Elements { elements, .. }
+                        if !elements.is_empty()
+                            && elements
+                                .iter()
+                                .all(|element| matches!(element, Element::Text(_)))
+                )
+            })
+        {
+            let text: String = closer
+                .elements()
+                .iter()
+                .filter_map(|element| match element {
+                    Element::Text(text) => Some(text.as_ref()),
+                    _ => None,
+                })
+                .collect();
+            if matches!(text.as_str(), "[[/li]]" | "[[/ul]]" | "[[/ol]]") {
+                let paragraph = elements.pop().expect("paragraph just matched");
+                let Element::Container(paragraph) = paragraph else {
+                    unreachable!()
+                };
+                let closer_text: String = paragraph
+                    .elements()
+                    .iter()
+                    .filter_map(|element| match element {
+                        Element::Text(text) => Some(text.as_ref()),
+                        _ => None,
+                    })
+                    .collect();
+                if let Some(Element::List { items: target, .. }) = elements.last_mut() {
+                    target.push(ListItem::Elements {
+                        attributes: AttributeMap::new(),
+                        elements: vec![Element::Text(Cow::Owned(closer_text))],
+                    });
+                }
+            }
+        }
         let element = Element::Partial(PartialElement::ListItem(ListItem::Elements {
             elements,
             attributes,
@@ -1231,13 +1376,18 @@ fn wrap_inline_line_after_list(segment: &mut Vec<Element>) {
             end += 1;
         }
         let run: Vec<Element> = segment.drain(start..end).collect();
-        if !run.iter().any(
-            |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
-        ) {
+        if !segment_has_block_marker(&run)
+            || !run.iter().any(
+                |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
+            )
+        {
             segment.splice(start..start, run);
             index = start + 1;
             continue;
         }
+        // Only an inline run carrying a literal block marker (e.g. a lone
+        // `[[/hidden]]` line after a list) is paragraph-wrapped; a plain
+        // continuation line stays bare beside the list.
         segment.insert(
             start,
             Element::Container(Container::new(
@@ -1406,7 +1556,11 @@ fn assemble_wikidot_li_segments<'t>(
     // (no break element). A trailing blockquote does too. Other trailing
     // content keeps the break.
     // L85 scope-5: same for a trailing simple table (T5-item-table-end).
-    let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }));
+    // Exception: when the li body's last line closes a NON-list block (for
+    // example a `* [[/div]]` line whose formation dissolved into the list),
+    // live keeps the break after the list (lihoist p5).
+    let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }))
+        && !wikidot_li_body_ends_with_flat_block_close(source);
     let trailing_table = matches!(elements.last(), Some(Element::Table(_)));
     let trailing_blockquote = matches!(
         elements.last(),
