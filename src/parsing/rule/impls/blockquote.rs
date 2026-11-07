@@ -424,6 +424,103 @@ fn next_line_starts_block(parser: &Parser<'_, '_>) -> bool {
     })
 }
 
+fn following_quote_line_is_prose<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    while probe.current().token == Token::Quote {
+        if probe.step().is_err() {
+            return false;
+        }
+        if probe.get_optional_space().is_err() {
+            return false;
+        }
+    }
+    let start = probe.current().span.start;
+    let end = std::iter::once(probe.current())
+        .chain(probe.remaining())
+        .find(|token| {
+            matches!(
+                token.token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            )
+        })
+        .map(|token| token.span.start)
+        .unwrap_or(start);
+    if end <= start {
+        return false;
+    }
+    let text = &probe.full_text().inner()[start..end];
+    !text.contains('[') && !text.contains(']')
+}
+
+fn append_prose_to_tab_segment<'t>(
+    segments: &mut [(Vec<Element<'t>>, bool)],
+    line: Vec<Element<'t>>,
+) {
+    let mut inline = Vec::new();
+    for element in line {
+        match element {
+            Element::Container(container)
+                if container.ctype() == ContainerType::Paragraph =>
+            {
+                inline.extend(Vec::<Element<'t>>::from(container));
+            }
+            other => inline.push(other),
+        }
+    }
+    while matches!(
+        inline.last(),
+        Some(Element::LineBreak | Element::LineBreaks(_))
+    ) {
+        inline.pop();
+    }
+    if inline.is_empty() {
+        return;
+    }
+    let Some(index) =
+        segments
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, (elements, _))| {
+                segment_ends_in_blockquote(elements).then_some(index)
+            })
+    else {
+        return;
+    };
+    let Some(target) = innermost_blockquote_elements(&mut segments[index].0) else {
+        return;
+    };
+    target.push(Element::LineBreak);
+    target.extend(inline);
+}
+
+fn segment_ends_in_blockquote(elements: &[Element<'_>]) -> bool {
+    matches!(
+        elements.last(),
+        Some(Element::Container(container))
+            if container.ctype() == ContainerType::Blockquote
+    )
+}
+
+fn innermost_blockquote_elements<'a, 't>(
+    elements: &'a mut Vec<Element<'t>>,
+) -> Option<&'a mut Vec<Element<'t>>> {
+    if !segment_ends_in_blockquote(elements) {
+        return None;
+    }
+    let Element::Container(container) = elements.last_mut()? else {
+        return None;
+    };
+    let nested = container.elements_mut();
+    if segment_ends_in_blockquote(nested) {
+        return innermost_blockquote_elements(nested);
+    }
+    Some(nested)
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -444,6 +541,7 @@ fn try_consume_fn<'r, 't>(
     let mut errors = Vec::new();
     let mut consumed_pruned_row = false;
     let mut quote_run_active = true;
+    let mut fold_following_into_tab_segment = false;
     let mut flatten_following_rows = false;
     let mut append_unquoted_close_break = false;
     let mut flat_split: Option<QuoteFlatSplit<'t>> = None;
@@ -475,6 +573,9 @@ fn try_consume_fn<'r, 't>(
         && parser.current().token == Token::Quote
     {
         if consume_deeper_collapsible_close(parser)? {
+            break;
+        }
+        if fold_following_into_tab_segment && !following_quote_line_is_prose(parser) {
             break;
         }
         let current = parser.current();
@@ -646,10 +747,22 @@ fn try_consume_fn<'r, 't>(
             continue;
         }
 
+        let opened_tab_tail = parser.settings().layout.legacy()
+            && !gate_escaped_segments.is_empty()
+            && elements
+                .iter()
+                .any(|element| matches!(element, Element::TabView(_)));
+        if opened_tab_tail {
+            fold_following_into_tab_segment = true;
+        }
         quote_run_active = !ends_quote_run
             && !stopped_at_footnote_close
             && !stopped_at_div_close
-            && gate_escaped_segments.is_empty();
+            && (gate_escaped_segments.is_empty() || fold_following_into_tab_segment);
+        if fold_following_into_tab_segment && !opened_tab_tail {
+            append_prose_to_tab_segment(&mut gate_escaped_segments, elements);
+            continue;
+        }
 
         let row_is_empty = elements.is_empty() && errors.len() == errors_before;
         let mut absorbed_unquoted_footnote = false;

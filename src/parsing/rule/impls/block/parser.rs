@@ -4518,6 +4518,26 @@ where
             }
 
             if result.is_none()
+                && block_rule.name == "block-div"
+                && parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && parser.current().token == Token::LeftBlockEnd
+            {
+                let mut probe = parser.clone();
+                if let Ok(name) = probe.get_end_block() {
+                    let bare = name.strip_suffix('_').unwrap_or(name.as_ref());
+                    if matches!(
+                        bare.to_ascii_lowercase().as_str(),
+                        "tab" | "tabview" | "tabs"
+                    ) && parser.wikidot_ancestor_boundary_accepts(bare)
+                    {
+                        parser.set_wikidot_div_yielded_to_tab();
+                        return Ok(true);
+                    }
+                }
+            }
+
+            if result.is_none()
                 && !parser.discarding_hidden_body()
                 && parser.at_ancestor_body_end_boundary()
             {
@@ -5522,6 +5542,55 @@ where
         Ok(success)
     }
 
+    fn tab_structure_follows_blank(&self) -> bool {
+        if self.current().token != Token::ParagraphBreak {
+            return false;
+        }
+        let required = self.native_blockquote_depth().unwrap_or(0);
+        if required == 0 {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        while matches!(probe.current().token, Token::LineBreak) {
+            if probe.step().is_err() {
+                return false;
+            }
+        }
+        let mut depth = 0usize;
+        while probe.current().token == Token::Quote {
+            depth += probe.current().slice.len();
+            if probe.step().is_err() {
+                return false;
+            }
+            if probe.get_optional_space().is_err() {
+                return false;
+            }
+        }
+        if depth != required {
+            return false;
+        }
+        if matches!(
+            probe.current().token,
+            Token::LeftBlock | Token::LeftBlockStar
+        ) {
+            return probe
+                .get_block_name(false)
+                .is_ok_and(|(name, _, _)| name.eq_ignore_ascii_case("tab"));
+        }
+        if probe.current().token == Token::LeftBlockEnd {
+            return probe.get_end_block().is_ok_and(|name| {
+                let name = name.as_ref();
+                name.eq_ignore_ascii_case("tab")
+                    || name.eq_ignore_ascii_case("tabview")
+                    || name.eq_ignore_ascii_case("tabs")
+            });
+        }
+        false
+    }
+
     fn consume_body_no_paragraphs<F>(
         &mut self,
         block_rule: &BlockRule,
@@ -5537,6 +5606,13 @@ where
         loop {
             if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
                 if self.wikidot_tab_quote_ejection() && !self.discarding_hidden_body() {
+                    if block_rule.name == "block-tabview"
+                        && self.wikidot_tabview_ejected()
+                        && self.tab_structure_follows_blank()
+                    {
+                        self.step()?;
+                        continue;
+                    }
                     self.set_wikidot_body_soft_ended(true);
                     return Ok(());
                 }

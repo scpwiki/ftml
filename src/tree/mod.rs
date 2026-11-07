@@ -98,6 +98,7 @@ pub(crate) const WIKIDOT_EMPTY_QUOTE_MARKER: &str = "data-ftml-empty-quote";
 /// tabview panel index. Never emitted to output; the Wikidot HTML renderer
 /// consumes it and writes the live-shaped bare panel div.
 pub(crate) const WIKIDOT_TAB_PANEL_MARKER: &str = "data-ftml-tab-panel";
+pub(crate) const WIKIDOT_TABVIEW_TAIL_MARKER: &str = "data-ftml-tabview-tail";
 /// Marks a blockquote whose closed numbered list crosses the quote boundary:
 /// live's libtidy repair leaves a stray unclosed `<ul>` opener after the
 /// quote. On the last body element only; stripped when rendered.

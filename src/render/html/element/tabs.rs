@@ -142,7 +142,27 @@ fn render_wikidot_tab_anchor(
     render_wrapped(ctx, label, label_spans);
 }
 
+fn tabview_wrapper_tail<'t>(items: &'t [TabViewItem<'t>]) -> Option<&'t [Element<'t>]> {
+    let TabViewItem::Content(elements) = items.last()? else {
+        return None;
+    };
+    let [Element::Container(container)] = elements.as_slice() else {
+        return None;
+    };
+    container
+        .attributes()
+        .get()
+        .contains_key(crate::tree::WIKIDOT_TABVIEW_TAIL_MARKER)
+        .then_some(container.elements())
+}
+
 fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
+    let tail = tabview_wrapper_tail(items);
+    let items = if tail.is_some() {
+        &items[..items.len() - 1]
+    } else {
+        items
+    };
     let id = ctx.random().generate_wikidot_tabview_id();
     ctx.require_wikidot_tab_view(id.clone());
 
@@ -228,6 +248,9 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                         }
                     }
                 });
+            if let Some(tail) = tail {
+                render_elements(ctx, tail);
+            }
         });
 }
 

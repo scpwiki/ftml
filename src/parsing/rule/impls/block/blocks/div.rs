@@ -682,6 +682,19 @@ fn wikidot_div_try_hoist_trailing_literal_close_lists<'t>(
     (!hoisted.is_empty()).then_some(hoisted)
 }
 
+fn strip_yielded_div_break(elements: &mut [Element<'_>]) {
+    let Some(Element::Container(container)) = elements.last_mut() else {
+        return;
+    };
+    if container.ctype() != ContainerType::Paragraph {
+        return;
+    }
+    let inner = container.elements_mut();
+    if matches!(inner.last(), Some(Element::LineBreak)) {
+        inner.pop();
+    }
+}
+
 #[inline(never)]
 fn normalize_wikidot_div_elements(elements: &mut Vec<Element<'_>>, flag_score: bool) {
     if flag_score {
@@ -1159,6 +1172,9 @@ fn parse_fn<'r, 't>(
     };
     if parser.settings().layout.legacy() {
         normalize_wikidot_div_elements(&mut elements, flag_score);
+        if parser.wikidot_div_yielded_to_tab() {
+            strip_yielded_div_break(&mut elements);
+        }
     }
 
     let mut attributes = wikidot_div_head_attributes(parser, &mut arguments);

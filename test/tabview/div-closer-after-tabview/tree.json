@@ -1,0 +1,127 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "tabview"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "tab"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "text",
+                        "data": "T"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "A"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "div",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "B"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "tab"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "tabview"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "C"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "D"
+                    }
+                ]
+            }
+        }
+    ]
+}
