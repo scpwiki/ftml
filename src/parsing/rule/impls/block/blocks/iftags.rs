@@ -986,6 +986,16 @@ fn parse_fn<'r, 't>(
             parser.record_virtual_gate_end(parser.current().span.start);
         }
     }
+    // A paragraph-unsafe gate does not own the newline after its closer.
+    // That newline is the block separator. Left in place, the paragraph
+    // walker renders it as a leading break.
+    if let Ok(success) = result.as_ref()
+        && !success.paragraph_safe
+        && parser.current().token == Token::LineBreak
+        && !parser.current().slice.starts_with('\\')
+    {
+        parser.step()?;
+    }
     result
 }
 
