@@ -1594,9 +1594,9 @@ fn collect_native_blockquote_line<'r, 't>(
 fn quote_row_line_ends_with_marker(source: &str, start: usize, end: usize) -> bool {
     let line = &source[start.min(source.len())..end.min(source.len())];
     let trimmed = line.trim_end_matches([' ', '\t', '\r']);
-    trimmed.len() >= 2
-        && trimmed.ends_with('_')
-        && matches!(trimmed.as_bytes()[trimmed.len() - 2], b' ' | b'\t')
+    trimmed
+        .strip_suffix('_')
+        .is_some_and(|before| before.ends_with([' ', '\t']))
 }
 
 fn build_blockquote_element(
