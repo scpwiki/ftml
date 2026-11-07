@@ -177,3 +177,8 @@ replay-jp--chuukunn-s-proposal	Div@16409..16520 scan-only
 corpus-test/span/scored-close-literal-align-block/input.ftml	AlignLeft@20..34 scan-only
 corpus-test/span/scored-close-literal-tabview/input.ftml	TabView@20..65 scan-only
 corpus-test/span/scored-close-literal-tabview/input.ftml	Tab@32..52 scan-only
+corpus-test/div/crossed-collapsible-outer-owner-div/input.ftml	Div@44..159 scan-only
+corpus-test/div/crossed-collapsible-outer-owner-div/input.ftml	Div@44..194 descent-only
+corpus-test/div/crossed-collapsible-outer-owner-div/input.ftml	Div@118..185 descent-only
+corpus-test/div/crossed-collapsible-outer-owner-div/input.ftml	Collapsible@0..176 scan-only
+l8-preview-q2-d-unclosed-in-c	Collapsible@0..44 scan-only
