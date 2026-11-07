@@ -2243,6 +2243,17 @@ where
                     return Ok(false);
                 }
             }
+            // List wraps a bullet line before Tableadv runs. The list-end
+            // tokens sit between that line's `[[/row]]` or `[[/table]]` and
+            // a closer on a later line, so the bullet line stays item text.
+            // A cell closer earlier on the same line still reaches it.
+            if parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && matches!(block_rule.name, "block-table" | "block-table-row")
+                && parser.wikidot_list_line_table_closer_is_item_text(end_start)
+            {
+                return Ok(false);
+            }
             if parser.settings().layout.legacy()
                 && score_close
                 && block_rule.name == "block-iftags"

@@ -223,6 +223,14 @@ impl<'r, 't> Parser<'r, 't> {
                 .as_deref()
                 .is_some_and(|name| boundary.accepts(name))
         }) {
+            if let Some(name) = parsed_name.as_deref() {
+                let bare = name.strip_suffix('_').unwrap_or(name);
+                if (bare.eq_ignore_ascii_case("row") || bare.eq_ignore_ascii_case("table"))
+                    && self.wikidot_list_line_table_closer_is_item_text(start)
+                {
+                    return false;
+                }
+            }
             return true;
         }
         if !self.settings().layout.legacy() {
