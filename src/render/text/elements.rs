@@ -236,7 +236,7 @@ pub fn render_element(ctx: &mut TextContext, element: &Element) {
                         ctx.buffer().trim_end_matches([' ', '\t', '\n', '\r']).len();
                     ctx.buffer().truncate(trimmed);
                 }
-                ctx.push_str(&index.to_string());
+                ctx.push_str(&index.index.to_string());
             }
         }
         Element::FootnoteBlock { .. }
@@ -458,7 +458,7 @@ fn text_render_skips_non_textual_elements_and_expands_include_variables() {
                 align: Some(Alignment::Left),
                 attributes: AttributeMap::new(),
             },
-            Element::Footnote(1),
+            Element::Footnote(1.into()),
             Element::FootnoteBlock {
                 title: Some(cow!("Notes")),
                 hide: false,

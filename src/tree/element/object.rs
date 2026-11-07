@@ -40,6 +40,40 @@ fn is_false(b: &bool) -> bool {
     !*b
 }
 
+/// One footnote reference in the syntax tree.
+///
+/// `broke_anchor` is set when this reference's own anchor is what closes an
+/// open `[[a]]`. Live's tidy step pops the `<sup class="footnoteref">` along
+/// with that outer anchor, so the reference that remains is a bare
+/// `<a class="footnoteref">`. A later reference in the same run keeps the sup.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(from = "usize", into = "usize")]
+pub struct FootnoteRef {
+    pub index: usize,
+    pub broke_anchor: bool,
+}
+
+impl FootnoteRef {
+    pub fn new(index: usize) -> Self {
+        Self {
+            index,
+            broke_anchor: false,
+        }
+    }
+}
+
+impl From<usize> for FootnoteRef {
+    fn from(index: usize) -> Self {
+        Self::new(index)
+    }
+}
+
+impl From<FootnoteRef> for usize {
+    fn from(reference: FootnoteRef) -> Self {
+        reference.index
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "element", content = "data")]
 pub enum Element<'t> {
@@ -224,7 +258,11 @@ pub enum Element<'t> {
     /// The one-based index of the corresponding entry in the syntax tree's
     /// `footnotes` list. Keeping the index on the reference preserves global
     /// numbering when Wikidot suppresses an earlier body reference.
-    Footnote(usize),
+    ///
+    /// Serialized as that index alone. `broke_anchor` is Wikidot placement
+    /// state, not authored syntax, so a round trip of `tree.json` leaves it
+    /// false. The Wikidot HTML render reads the in-memory flag.
+    Footnote(FootnoteRef),
 
     /// A footnote block, containing all the footnotes from throughout the page.
     ///
@@ -493,7 +531,7 @@ impl Element<'_> {
                     offset_elements(&mut item.value_elements);
                 }
             }
-            Element::Footnote(index) => *index += offset,
+            Element::Footnote(reference) => reference.index += offset,
             Element::Partial(partial) => match partial {
                 PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
                     offset_elements(elements);
@@ -765,7 +803,7 @@ impl Element<'_> {
                 align: *align,
                 attributes: attributes.to_owned(),
             },
-            Element::Footnote(index) => Element::Footnote(*index),
+            Element::Footnote(reference) => Element::Footnote(*reference),
             Element::FootnoteBlock {
                 title,
                 hide,

@@ -2104,10 +2104,10 @@ mod tests {
             crate::delayed::DelayedElement::typography_boundary(),
         ));
         stack.end_paragraph();
-        stack.push_element(Element::Footnote(0), true);
+        stack.push_element(Element::Footnote(0.into()), true);
 
         let elements = stack.into_elements();
         assert!(elements.contains(&paragraph(vec![text!("alpha")])));
-        assert!(elements.contains(&paragraph(vec![Element::Footnote(0)])));
+        assert!(elements.contains(&paragraph(vec![Element::Footnote(0.into())])));
     }
 }

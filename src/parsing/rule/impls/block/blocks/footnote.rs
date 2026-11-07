@@ -138,9 +138,9 @@ fn parse_footnote_ref<'r, 't>(
     let index = parser.push_footnote(elements);
 
     if fused_close {
-        ok!(true; vec![Element::Footnote(index), text!("]")], errors)
+        ok!(true; vec![Element::Footnote(index.into()), text!("]")], errors)
     } else {
-        ok!(Element::Footnote(index), errors)
+        ok!(Element::Footnote(index.into()), errors)
     }
 }
 

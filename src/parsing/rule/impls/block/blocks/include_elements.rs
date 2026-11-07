@@ -169,23 +169,29 @@ mod tests {
     #[test]
     fn included_footnote_references_are_offset_after_outer_footnotes() {
         let mut elements = vec![
-            Element::Footnote(1),
+            Element::Footnote(1.into()),
             Element::Include {
                 paragraph_safe: true,
                 variables: Default::default(),
                 location: PageRef::new(None::<String>, "nested"),
-                elements: vec![Element::Footnote(2)],
+                elements: vec![Element::Footnote(2.into())],
             },
         ];
-        let mut footnotes = vec![vec![Element::Footnote(1)]];
+        let mut footnotes = vec![vec![Element::Footnote(1.into())]];
 
         offset_footnote_references(&mut elements, &mut footnotes, 3);
 
-        assert!(matches!(elements[0], Element::Footnote(4)));
+        assert!(
+            matches!(elements[0], Element::Footnote(reference) if reference.index == 4)
+        );
         let Element::Include { elements, .. } = &elements[1] else {
             panic!("expected nested include: {elements:#?}");
         };
-        assert!(matches!(elements[0], Element::Footnote(5)));
-        assert!(matches!(footnotes[0][0], Element::Footnote(4)));
+        assert!(
+            matches!(elements[0], Element::Footnote(reference) if reference.index == 5)
+        );
+        assert!(
+            matches!(footnotes[0][0], Element::Footnote(reference) if reference.index == 4)
+        );
     }
 }

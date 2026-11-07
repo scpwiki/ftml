@@ -352,7 +352,9 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
         Element::TableOfContents { align, attributes } => {
             render_table_of_contents(ctx, *align, attributes)
         }
-        Element::Footnote(index) => render_footnote(ctx, *index),
+        Element::Footnote(reference) => {
+            render_footnote(ctx, reference.index, reference.broke_anchor)
+        }
         Element::FootnoteBlock {
             title,
             hide,
