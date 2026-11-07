@@ -708,7 +708,7 @@ where
         return false;
     };
 
-    ["span", "size", "image", "footnote", "iframe"]
+    ["span", "size", "image", "footnote", "iframe", "a", "anchor"]
         .iter()
         .any(|owner| name.eq_ignore_ascii_case(owner))
         && block.head_word_is_actionable(&name, matches!(name, Cow::Borrowed(_)), segment)
