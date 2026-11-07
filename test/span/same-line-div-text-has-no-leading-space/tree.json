@@ -1,0 +1,96 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "span",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "table",
+                                                        "data": {
+                                                            "type": "simple",
+                                                            "attributes": {},
+                                                            "rows": [
+                                                                {
+                                                                    "attributes": {},
+                                                                    "cells": [
+                                                                        {
+                                                                            "header": false,
+                                                                            "column-span": 1,
+                                                                            "align": null,
+                                                                            "attributes": {},
+                                                                            "elements": [
+                                                                                {
+                                                                                    "element": "container",
+                                                                                    "data": {
+                                                                                        "type": "note",
+                                                                                        "attributes": {},
+                                                                                        "elements": [
+                                                                                            {
+                                                                                                "element": "container",
+                                                                                                "data": {
+                                                                                                    "type": "bold",
+                                                                                                    "attributes": {},
+                                                                                                    "elements": [
+                                                                                                        {
+                                                                                                            "element": "text",
+                                                                                                            "data": "[[div]]"
+                                                                                                        },
+                                                                                                        {
+                                                                                                            "element": "line-break"
+                                                                                                        },
+                                                                                                        {
+                                                                                                            "element": "text",
+                                                                                                            "data": "[[/"
+                                                                                                        },
+                                                                                                        {
+                                                                                                            "element": "text",
+                                                                                                            "data": "div"
+                                                                                                        },
+                                                                                                        {
+                                                                                                            "element": "text",
+                                                                                                            "data": "]]"
+                                                                                                        }
+                                                                                                    ]
+                                                                                                }
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

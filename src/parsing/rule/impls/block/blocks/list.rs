@@ -1051,6 +1051,21 @@ fn wrap_inline_line_after_list(segment: &mut Vec<Element>) {
 /// L85 scope-5: live keeps a single break after these formed blocks in
 /// item bodies (li-div/align/code/coll/note-contained); every other
 /// paragraph-unsafe element (tables, rules, lists) still drops it.
+fn tabview_break_stays_in_open_span(segment: &[Element<'_>], index: usize) -> bool {
+    if !matches!(segment.get(index.wrapping_sub(1)), Some(Element::TabView(_))) {
+        return false;
+    }
+    let mut depth = 0i32;
+    for element in &segment[..index] {
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(..)) => depth += 1,
+            Element::Partial(PartialElement::InlineSpanClose(_)) => depth -= 1,
+            _ => {}
+        }
+    }
+    depth > 0
+}
+
 fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
     match element {
         Element::Container(container) => matches!(
@@ -1090,6 +1105,7 @@ fn assemble_wikidot_li_segments<'t>(
             if segment[index] == Element::LineBreak
                 && !segment[index - 1].paragraph_safe()
                 && !wikidot_li_break_kept_after_block(&segment[index - 1])
+                && !tabview_break_stays_in_open_span(segment, index)
             {
                 segment.remove(index);
             } else {

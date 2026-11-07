@@ -202,24 +202,40 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
         if success.paragraph_safe && wikidot_literal_css_module(&success.item) {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
-        // Collapsible doubles a newline in front of its opener. An open span
-        // keeps both breaks in a list item. Outside an item that newline is absorbed.
-        if span_doubles_leading_break
-            && parser.wikidot_li_inside_item_body()
-            && elements_open_collapsible(&success.item)
-        {
-            let mut elements = match success.item {
-                Elements::Multiple(elements) => elements,
-                Elements::Single(element) => vec![element],
-                Elements::None => Vec::new(),
+        // An open span in a list item keeps the newline this skip swallowed.
+        // A collapsible doubles it. A tabview keeps one.
+        if span_doubles_leading_break && parser.wikidot_li_inside_item_body() {
+            let leading_breaks = if elements_open_collapsible(&success.item) {
+                2
+            } else if elements_open_tabview(&success.item) {
+                1
+            } else {
+                0
             };
-            elements.insert(0, Element::LineBreak);
-            elements.insert(0, Element::LineBreak);
-            success.item = Elements::Multiple(elements);
+            if leading_breaks > 0 {
+                let mut elements = match success.item {
+                    Elements::Multiple(elements) => elements,
+                    Elements::Single(element) => vec![element],
+                    Elements::None => Vec::new(),
+                };
+                for _ in 0..leading_breaks {
+                    elements.insert(0, Element::LineBreak);
+                }
+                success.item = Elements::Multiple(elements);
+            }
         }
         Ok(success)
     } else {
         Err(parser.make_err(ParseErrorKind::RuleFailed))
+    }
+}
+
+fn elements_open_tabview(elements: &Elements<'_>) -> bool {
+    let is_tabview = |element: &Element<'_>| matches!(element, Element::TabView(_));
+    match elements {
+        Elements::Single(element) => is_tabview(element),
+        Elements::Multiple(elements) => elements.iter().any(is_tabview),
+        Elements::None => false,
     }
 }
 

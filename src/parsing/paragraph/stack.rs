@@ -1080,7 +1080,12 @@ impl<'t> ParagraphStack<'t> {
 
         if wikidot_simple_table && !self.current.is_empty() {
             self.trim_trailing_ascii_space();
-            self.current.push(Element::LineBreak);
+            if !matches!(
+                self.current.last(),
+                Some(Element::LineBreak | Element::LineBreaks(_))
+            ) {
+                self.current.push(Element::LineBreak);
+            }
             self.current_unwrapped = true;
         }
 
