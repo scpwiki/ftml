@@ -962,12 +962,18 @@ fn assemble_wikidot_li_segments<'t>(
         .rfind("[[/li")
         .map(|index| &source[..index])
         .unwrap_or(source);
-    let last_plain_run_is_paragraph = kept.len() >= 2
-        && body_before_close.ends_with('\n')
-        && segment_is_inline_content(kept.last().expect("kept has two segments"))
-        && !segment_has_block_marker(kept.last().expect("kept has two segments"))
-        && segment_is_inline_content(&kept[kept.len() - 2])
-        && !segment_has_block_marker(&kept[kept.len() - 2]);
+    let last_plain_run_is_paragraph = match kept.as_slice() {
+        [.., penultimate, last]
+            if body_before_close.ends_with('\n')
+                && segment_is_inline_content(last)
+                && !segment_has_block_marker(last)
+                && segment_is_inline_content(penultimate)
+                && !segment_has_block_marker(penultimate) =>
+        {
+            true
+        }
+        _ => false,
+    };
     let mut elements: Vec<Element<'t>> = Vec::new();
     let kept_last = kept.len().saturating_sub(1);
     for (index, segment) in kept.into_iter().enumerate() {

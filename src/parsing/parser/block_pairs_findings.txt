@@ -182,3 +182,10 @@ corpus-test/div/crossed-collapsible-outer-owner-div/input.ftml	Div@44..194 desce
 corpus-test/div/crossed-collapsible-outer-owner-div/input.ftml	Div@118..185 descent-only
 corpus-test/div/crossed-collapsible-outer-owner-div/input.ftml	Collapsible@0..176 scan-only
 l8-preview-q2-d-unclosed-in-c	Collapsible@0..44 scan-only
+corpus-test/bibliography/close-across-enclosing-tabview/input.ftml	TabView@0..90 descent-only
+corpus-test/tabview/div-closer-after-tabview/input.ftml	TabView@0..55 scan-only
+corpus-test/tabview/div-closer-after-tabview/input.ftml	TabView@0..66 descent-only
+corpus-test/tabview/eject-blank-before-late-panel/input.ftml	TabView@2..112 descent-only
+corpus-test/tabview/eject-blank-before-late-panel/input.ftml	Tab@16..59 descent-only
+corpus-test/tabview/eject-blank-before-late-panel/input.ftml	Tab@63..96 descent-only
+l8-preview-q2-tab-d	TabView@0..66 descent-only

@@ -160,7 +160,7 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
     let (items, trailing) = split_bibliography_split_tail(items);
     let tail = tabview_wrapper_tail(items);
     let items = if tail.is_some() {
-        &items[..items.len() - 1]
+        items.split_last().map(|(_, head)| head).unwrap_or(items)
     } else {
         items
     };
@@ -261,7 +261,10 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
 fn split_bibliography_split_tail<'a, 't>(
     items: &'a [TabViewItem<'t>],
 ) -> (&'a [TabViewItem<'t>], &'a [Element<'t>]) {
-    let Some(TabViewItem::Content(elements)) = items.last() else {
+    let Some((last, head)) = items.split_last() else {
+        return (items, &[]);
+    };
+    let TabViewItem::Content(elements) = last else {
         return (items, &[]);
     };
     if elements.is_empty()
@@ -281,7 +284,7 @@ fn split_bibliography_split_tail<'a, 't>(
     {
         return (items, &[]);
     }
-    (&items[..items.len() - 1], elements)
+    (head, elements)
 }
 
 fn wikidot_tabview_content_has_literal_tabview_closer(elements: &[&Element]) -> bool {
