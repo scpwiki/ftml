@@ -2387,8 +2387,19 @@ fn parse_tab<'r, 't>(
         None
     };
 
-    let (mut elements, mut errors, _) =
-        parser.get_body_elements(&BLOCK_TAB, true)?.into();
+    // A marker past the tabview's quote depth stays text. Live does not nest
+    // a blockquote there.
+    let restore_literal_residuals = legacy
+        && parser.wikidot_tab_quote_ejection()
+        && parser.quote_body_literal_residuals() == Some(false);
+    if restore_literal_residuals {
+        parser.set_quote_body_literal_residuals(true);
+    }
+    let body = parser.get_body_elements(&BLOCK_TAB, true);
+    if restore_literal_residuals {
+        parser.set_quote_body_literal_residuals(false);
+    }
+    let (mut elements, mut errors, _) = body?.into();
     if parser.settings().layout.legacy()
         && parser.wikidot_tab_quote_ejection()
         && parser.quote_body_cursor().is_some()

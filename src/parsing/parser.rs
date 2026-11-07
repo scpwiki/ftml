@@ -2148,6 +2148,17 @@ impl<'r, 't> Parser<'r, 't> {
         self.quote_body_cursor = cursor;
     }
 
+    pub(crate) fn quote_body_literal_residuals(&self) -> Option<bool> {
+        self.quote_body_cursor
+            .map(|cursor| cursor.literal_residual_quotes)
+    }
+
+    pub(crate) fn set_quote_body_literal_residuals(&mut self, literal: bool) {
+        if let Some(cursor) = self.quote_body_cursor.as_mut() {
+            cursor.literal_residual_quotes = literal;
+        }
+    }
+
     pub(crate) fn quote_scan_outcome(
         &self,
         key: QuoteScanKey,
