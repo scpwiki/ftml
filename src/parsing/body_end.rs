@@ -321,14 +321,17 @@ impl<'r, 't> Parser<'r, 't> {
         let parsed_name = probe.get_end_block().ok();
         let accepted = {
             let cache = self.block_end_scan_cache.borrow();
-            considered_boundaries(&cache.body_end_boundaries, ancestors_only)
-                .iter()
-                .filter(|boundary| boundary_qualifies(boundary, hard_only))
-                .any(|boundary| {
-                    parsed_name
-                        .as_deref()
-                        .is_some_and(|name| boundary.accepts(name))
-                })
+            footnote_shadowed_boundaries(considered_boundaries(
+                &cache.body_end_boundaries,
+                ancestors_only,
+            ))
+            .iter()
+            .filter(|boundary| boundary_qualifies(boundary, hard_only))
+            .any(|boundary| {
+                parsed_name
+                    .as_deref()
+                    .is_some_and(|name| boundary.accepts(name))
+            })
         };
         if accepted {
             if let Some(name) = parsed_name.as_deref() {
@@ -347,17 +350,20 @@ impl<'r, 't> Parser<'r, 't> {
 
         let ahead = self.full_text().inner().get(start..).unwrap_or("");
         let cache = self.block_end_scan_cache.borrow();
-        considered_boundaries(&cache.body_end_boundaries, ancestors_only)
-            .iter()
-            .filter(|boundary| boundary_qualifies(boundary, hard_only))
-            .any(|boundary| {
-                boundary.accepts_names.iter().any(|name| {
-                    let fused = format!("[[/{name}]]]");
-                    ahead
-                        .get(..fused.len())
-                        .is_some_and(|head| head.eq_ignore_ascii_case(&fused))
-                })
+        footnote_shadowed_boundaries(considered_boundaries(
+            &cache.body_end_boundaries,
+            ancestors_only,
+        ))
+        .iter()
+        .filter(|boundary| boundary_qualifies(boundary, hard_only))
+        .any(|boundary| {
+            boundary.accepts_names.iter().any(|name| {
+                let fused = format!("[[/{name}]]]");
+                ahead
+                    .get(..fused.len())
+                    .is_some_and(|head| head.eq_ignore_ascii_case(&fused))
             })
+        })
     }
 
     fn qualifying_body_end_boundary_exists(
@@ -383,6 +389,15 @@ fn considered_boundaries(
         .split_last()
         .map(|(_, ancestors)| ancestors)
         .unwrap_or(&[])
+}
+
+fn footnote_shadowed_boundaries(boundaries: &[BodyEndBoundary]) -> &[BodyEndBoundary] {
+    for index in (0..boundaries.len()).rev() {
+        if boundaries[index].accepts("footnote") {
+            return &boundaries[index..];
+        }
+    }
+    boundaries
 }
 
 fn boundary_qualifies(boundary: &BodyEndBoundary, hard_only: bool) -> bool {

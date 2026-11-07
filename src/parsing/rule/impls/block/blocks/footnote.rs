@@ -139,13 +139,7 @@ pub(in crate::parsing::rule::impls::block) fn parse_footnote_ref<'r, 't>(
         let note_took_the_list_break = parser.take_suppress_footnote_list_break();
         let closer_marker = wikidot_footnote_closer_line_list_marker(&parser);
         if let Some(marker) = closer_marker
-            && matches!(
-                elements.last(),
-                Some(Element::List {
-                    wikidot_explicit_block: true,
-                    ..
-                })
-            )
+            && matches!(elements.last(), Some(Element::List { .. }))
         {
             elements.push(Element::Container(Container::new(
                 ContainerType::Paragraph,

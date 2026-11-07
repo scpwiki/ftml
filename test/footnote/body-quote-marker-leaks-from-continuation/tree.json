@@ -88,23 +88,6 @@
                                 }
                             }
                         ]
-                    },
-                    {
-                        "item-type": "elements",
-                        "attributes": {},
-                        "elements": [
-                            {
-                                "element": "link",
-                                "data": {
-                                    "type": "table-of-contents",
-                                    "link": "#toc1",
-                                    "label": {
-                                        "text": "h"
-                                    },
-                                    "target": null
-                                }
-                            }
-                        ]
                     }
                 ]
             }

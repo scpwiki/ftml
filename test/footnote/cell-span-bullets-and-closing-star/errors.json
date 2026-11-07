@@ -1,0 +1,128 @@
+[
+    {
+        "token": "table-column",
+        "rule": "list",
+        "span": [
+            52,
+            54
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            52,
+            54
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "line-break",
+        "rule": "block-table",
+        "span": [
+            142,
+            143
+        ],
+        "kind": "table-contains-non-row"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            70,
+            72
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            77,
+            79
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "line-break",
+        "rule": "block-table-row",
+        "span": [
+            129,
+            130
+        ],
+        "kind": "table-row-contains-non-cell"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            82,
+            84
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            87,
+            89
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            121,
+            124
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            127,
+            129
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            132,
+            135
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            140,
+            142
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "table-column",
+        "rule": "list",
+        "span": [
+            158,
+            160
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            158,
+            160
+        ],
+        "kind": "no-rules-match"
+    }
+]
