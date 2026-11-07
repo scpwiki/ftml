@@ -908,15 +908,15 @@ fn parse_table<'r, 't>(
     } else {
         let mut elements = Vec::with_capacity(foster.len() + residuals.len() * 2 + 1);
         elements.extend(foster);
-        let has_residuals = !residuals.is_empty();
-        for (index, residual) in residuals.into_iter().enumerate() {
-            if index > 0 {
-                elements.push(Element::LineBreak);
+        if !residuals.is_empty() {
+            let mut fostered = Vec::with_capacity(residuals.len() * 2 - 1);
+            for (index, residual) in residuals.into_iter().enumerate() {
+                if index > 0 {
+                    fostered.push(Element::LineBreak);
+                }
+                fostered.push(Element::Text(residual));
             }
-            elements.push(Element::Text(residual));
-        }
-        if has_residuals {
-            elements.push(Element::LineBreak);
+            elements.push(Element::Partial(PartialElement::WikidotFoster(fostered)));
         }
         elements.push(element);
         if fused_close {
