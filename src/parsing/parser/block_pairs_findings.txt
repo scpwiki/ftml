@@ -192,6 +192,9 @@ l8-preview-q2-tab-d	TabView@0..66 descent-only
 corpus-test/table/bullet-cell-closer-without-later-closer/input.ftml	Table@0..58 scan-only
 corpus-test/table/bullet-cell-closer-without-later-closer/input.ftml	Row@10..47 scan-only
 corpus-test/table/bullet-cell-closer-without-later-closer/input.ftml	Cell@18..38 scan-only
+corpus-test/table/bullet-cell-closer-inside-explicit-li/input.ftml	Table@0..106 descent-only
+corpus-test/table/bullet-cell-closer-inside-explicit-li/input.ftml	Row@10..95 descent-only
+corpus-test/table/bullet-cell-closer-inside-explicit-li/input.ftml	Cell@18..60 descent-only
 corpus-test/table/discarded-row-footnote-break-outside-paragraph/input.ftml	Div@16..60 scan-only
 corpus-test/table/glued-source-list-unclosed-row/input.ftml	Div@32..50 scan-only
 corpus-test/bibliography/collapsible-open-in-body/input.ftml	Collapsible@25..83 scan-only
