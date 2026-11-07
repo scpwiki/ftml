@@ -83,6 +83,8 @@ pub(in crate::parsing::rule::impls::block) fn parse_footnote_ref<'r, 't>(
     let body = parser.get_body_elements(&BLOCK_FOOTNOTE, true)?;
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_FOOTNOTE);
     let (mut elements, errors, _) = body.into();
+    let sole_dissolved_list_break = parser.settings().layout.legacy()
+        && matches!(elements.as_slice(), [Element::LineBreak]);
 
     if elements.len() == 1 {
         match elements.pop().unwrap() {
@@ -126,6 +128,7 @@ pub(in crate::parsing::rule::impls::block) fn parse_footnote_ref<'r, 't>(
         elements.pop();
     }
     if parser.settings().layout.legacy()
+        && !sole_dissolved_list_break
         && matches!(elements.last(), Some(Element::LineBreak))
     {
         elements.pop();
