@@ -219,4 +219,5 @@ corpus-test/blockquote/align-over-list-items/input.ftml	AlignCenter@2..35 descen
 corpus-test/blockquote/align-over-span-list-items/input.ftml	AlignCenter@2..105 scan-only
 corpus-test/blockquote/align-over-span-list-items/input.ftml	AlignCenter@2..67 descent-only
 corpus-test/collapsible/collbody-item-div-lines-vanish/input.ftml	Div@20..38 scan-only
+||||||| parent of 8e630f830 (fix(wikidot): fuse explicit lists into native runs inside block bodies)
 corpus-test/footnote/quote-align-bare-row-forms/input.ftml	AlignCenter@28..88 descent-only
