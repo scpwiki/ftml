@@ -156,3 +156,30 @@ fn parentless_partial_blocks_reuse_exact_rejection_failures() {
         assert!(!errors.is_empty());
     }
 }
+
+#[test]
+fn unclosed_strong_openers_finish_in_pagenav_and_draft() {
+    let page_info = page_info();
+    let source = format!("{}x", "[[strong]]".repeat(22));
+
+    for mode in [WikitextMode::PageNav, WikitextMode::Draft] {
+        let settings = WikitextSettings::from_mode(mode, Layout::Wikijump);
+        let tokenization = ftml::tokenize(&source);
+        let started = Instant::now();
+        let (tree, errors) = ftml::parse(&tokenization, &page_info, &settings).into();
+
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{mode:?} took {:?}",
+            started.elapsed(),
+        );
+        assert!(
+            !errors.is_empty(),
+            "{mode:?}: unclosed strong openers must report errors"
+        );
+        assert!(
+            !tree.elements.is_empty(),
+            "{mode:?}: fallback must preserve observable source"
+        );
+    }
+}
