@@ -782,6 +782,26 @@ where
     }
 
     if parser.settings().layout.legacy()
+        && parser.pending_wikidot_div_closer()
+        && parser.current().token == Token::LeftBlockEnd
+    {
+        let unquoted_close = parser.native_blockquote_depth().is_none();
+        let mut close = parser.clone();
+        if close
+            .get_end_block()
+            .is_ok_and(|name| name.eq_ignore_ascii_case("div"))
+        {
+            parser.update(&close);
+            parser.set_pending_wikidot_div_closer(false);
+            return Ok(Some(if unquoted_close {
+                Element::LineBreak.into()
+            } else {
+                Elements::None
+            }));
+        }
+    }
+
+    if parser.settings().layout.legacy()
         && !parser.discarding_hidden_body()
         && parser.has_wikidot_crossed_close()
         && parser.current().token == Token::LeftBlockEnd

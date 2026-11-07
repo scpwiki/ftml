@@ -37,6 +37,7 @@ const PENDING_NOTE_LIST_CLOSER: u16 = 1 << 6;
 const SUPPRESS_FOOTNOTE_LIST_BREAK: u16 = 1 << 7;
 const ADVANCED_CELL_PARAGRAPH: u16 = 1 << 8;
 const ROW_ABSORB_DIV_CLOSE: u16 = 1 << 9;
+const PENDING_DIV_CLOSER: u16 = 1 << 10;
 
 /// Div keeps a 2-bit count (max 3). The other three kinds are one bit each.
 /// Slots stay inside `crossed_closes` and do not overlap.
@@ -525,6 +526,14 @@ impl Parser<'_, '_> {
             PENDING_NOTE_LIST_CLOSER,
             value,
         );
+    }
+
+    pub(crate) fn pending_wikidot_div_closer(&self) -> bool {
+        self.wikidot.crossed_closes & PENDING_DIV_CLOSER != 0
+    }
+
+    pub(crate) fn set_pending_wikidot_div_closer(&mut self, value: bool) {
+        set_flag(&mut self.wikidot.crossed_closes, PENDING_DIV_CLOSER, value);
     }
 
     pub(crate) fn set_suppress_footnote_list_break(&mut self, value: bool) {

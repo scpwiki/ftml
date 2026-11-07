@@ -286,29 +286,27 @@ fn quoted_list_item_holds_only_this_collapsible(
     parser: &Parser<'_, '_>,
     opener_start: usize,
 ) -> bool {
-    // Outside a note the same shell would keep the following rows inside the
-    // list item. Live only drops them when the note owns the quote lines.
-    if !parser.settings().layout.legacy()
-        || !parser.in_note()
-        || parser.native_blockquote_depth().is_none()
-    {
+    if !parser.settings().layout.legacy() || parser.native_blockquote_depth().is_none() {
         return false;
     }
     let source = parser.full_text().inner();
     let line_start = source[..opener_start]
         .rfind('\n')
         .map_or(0, |index| index + 1);
-    let after_quotes = source[line_start..opener_start]
-        .trim()
-        .trim_start_matches('>')
-        .trim();
-    if after_quotes != "*" && after_quotes != "#" {
+    let (_, rest) =
+        crate::preproc::quote_depth_and_body(&source[line_start..opener_start]);
+    if rest.trim() != "*" && rest.trim() != "#" {
         return false;
     }
     source[opener_start..].lines().skip(1).any(|line| {
-        let body = line.trim().trim_start_matches('>').trim();
-        body.eq_ignore_ascii_case("* [[/collapsible]]")
-            || body.eq_ignore_ascii_case("# [[/collapsible]]")
+        let (_, body) = crate::preproc::quote_depth_and_body(line);
+        let body = body.trim();
+        let body = if body.starts_with('*') || body.starts_with('#') {
+            body[1..].trim_start_matches([' ', '\t'])
+        } else {
+            body
+        };
+        body.to_ascii_lowercase().starts_with("[[/collapsible]]")
     })
 }
 
@@ -348,6 +346,7 @@ fn parse_fn<'r, 't>(
     // break for trailing spaces after a collapsible head (z-head-trail-space-c).
     let wikidot_head_break_at =
         (parser.current().token == Token::LineBreak).then(|| parser.current().span.start);
+    let before_head_break = parser.clone();
     let (head, body_start) = parse_collapsible_head(parser, name, in_head)?;
     // L85: detect trailing spaces after the head from source: the head-end
     // line break directly preceded by spaces means live emits a break inside
@@ -520,6 +519,16 @@ fn parse_fn<'r, 't>(
     if body_start == BlockBodyStart::NextPhysicalLine
         && quoted_list_item_holds_only_this_collapsible(parser, opener_start)
     {
+        let mut probe = before_head_break;
+        while !matches!(
+            probe.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            if probe.step().is_err() {
+                break;
+            }
+        }
+        parser.update(&probe);
         parser.set_pending_wikidot_collapsible_closer(true);
         parser.set_in_wikidot_collapsible(previous_collapsible_context);
         return ok!(false; head.into_element(Vec::new()));

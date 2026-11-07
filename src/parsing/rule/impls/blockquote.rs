@@ -1146,6 +1146,7 @@ fn try_consume_fn<'r, 't>(
             && keep_line_break
             && !absorbed_unquoted_footnote
             && !parser.pending_wikidot_collapsible_closer()
+            && !parser.pending_wikidot_div_closer()
         {
             elements.push(Element::LineBreak);
             if let Some(counts) = &mut paragraph_split {
@@ -1962,6 +1963,27 @@ fn merge_native_list_rows<'t>(
         return false;
     };
     let previous_type = *previous_type;
+    let previous_ends_with_empty_block = matches!(
+        previous_list,
+        Element::List { items, .. } if items.last().is_some_and(|item| match item {
+            ListItem::Elements { elements, .. } => elements.iter().any(|element| {
+                matches!(element, Element::Collapsible { .. })
+                    || matches!(
+                        element,
+                        Element::Container(container)
+                            if container.ctype() == ContainerType::Div
+                    )
+                    || matches!(
+                        element,
+                        Element::Partial(PartialElement::WikidotBlockOpen(_))
+                    )
+            }),
+            _ => false,
+        })
+    );
+    if previous_ends_with_empty_block {
+        return false;
+    }
     let Some(current_list) = native_list_element(current) else {
         return false;
     };

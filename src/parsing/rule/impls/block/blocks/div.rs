@@ -954,6 +954,34 @@ fn wikidot_div_head_line_quote_depth(parser: &Parser<'_, '_>, opener_start: usiz
     crate::preproc::quote_depth_and_body(&source[line_start..opener_start]).0
 }
 
+fn quoted_list_item_holds_only_this_div(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> bool {
+    if !parser.settings().layout.legacy() || parser.native_blockquote_depth().is_none() {
+        return false;
+    }
+    let source = parser.full_text().inner();
+    let line_start = source[..opener_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    let (_, rest) =
+        crate::preproc::quote_depth_and_body(&source[line_start..opener_start]);
+    if rest.trim() != "*" && rest.trim() != "#" {
+        return false;
+    }
+    source[opener_start..].lines().skip(1).any(|line| {
+        let (_, body) = crate::preproc::quote_depth_and_body(line);
+        let body = body.trim();
+        let body = if body.starts_with('*') || body.starts_with('#') {
+            body[1..].trim_start_matches([' ', '\t'])
+        } else {
+            body
+        };
+        body.to_ascii_lowercase().starts_with("[[/div]]")
+    })
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -970,6 +998,7 @@ fn parse_fn<'r, 't>(
     }
     let source = parser.full_text().inner();
 
+    let before_head_break = parser.clone();
     let head = parser.get_head_map_with_body_start_wikidot(&BLOCK_DIV, in_head)?;
     let (mut arguments, mut body_start) = head;
     let source_bytes = parser.full_text().inner().as_bytes();
@@ -1003,6 +1032,31 @@ fn parse_fn<'r, 't>(
         )?
     {
         return ok!(head_literal);
+    }
+    if parser.settings().layout.legacy()
+        && !flag_score
+        && body_start == BlockBodyStart::NextPhysicalLine
+        && quoted_list_item_holds_only_this_div(parser, opener_start)
+    {
+        let mut probe = before_head_break;
+        while !matches!(
+            probe.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            if probe.step().is_err() {
+                break;
+            }
+        }
+        parser.update(&probe);
+        let mut attributes = wikidot_div_head_attributes(parser, &mut arguments);
+        arguments.insert_explicit_empty_marker(&mut attributes);
+        parser.set_pending_wikidot_div_closer(true);
+        let element = Element::Container(Container::new(
+            ContainerType::Div,
+            Vec::new(),
+            attributes,
+        ));
+        return ok!(false; element, Vec::new());
     }
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
         && pair.kind == WikidotBlockKind::Div
