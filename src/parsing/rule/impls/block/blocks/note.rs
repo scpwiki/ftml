@@ -20,8 +20,8 @@
 
 use super::prelude::*;
 use super::{
-    consume_wikidot_flat_head_break, trim_wikidot_trailing_explicit_list_break,
-    wikidot_flat_pair_for_head,
+    consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
+    trim_wikidot_trailing_explicit_list_break, wikidot_flat_pair_for_head,
 };
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{PartialElement, WikidotBlockShell};
@@ -107,6 +107,7 @@ fn parse_note_block<'r, 't>(
     let (mut elements, errors, paragraph_safe) = body?.into();
     if legacy {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
+        drop_wikidot_trailing_vanish_breaks(&mut elements);
         unwrap_wikidot_paragraph_after_explicit_list(&mut elements);
     }
     let row_suffix = if legacy {

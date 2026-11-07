@@ -233,6 +233,23 @@ pub(crate) fn trim_wikidot_trailing_explicit_list_break(elements: &mut Vec<Eleme
     }
 }
 
+pub(crate) fn drop_wikidot_trailing_vanish_breaks(elements: &mut Vec<Element<'_>>) {
+    let mut popped = false;
+    while matches!(elements.last(), Some(Element::LineBreak)) {
+        if popped {
+            let before = elements.get(elements.len().saturating_sub(2));
+            let stops = matches!(before, Some(element) if !element.paragraph_safe()
+                && !matches!(element, Element::Container(container)
+                    if container.ctype() == crate::tree::ContainerType::Paragraph));
+            if stops {
+                break;
+            }
+        }
+        elements.pop();
+        popped = true;
+    }
+}
+
 /// Live Wikidot keeps the line break an explicit list leaves at the end of a
 /// footnote body, unlike the other paragraph bodies.
 pub(crate) fn append_wikidot_footnote_trailing_list_break(
