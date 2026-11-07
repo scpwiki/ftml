@@ -908,7 +908,7 @@ where
     'r: 't,
 {
     let mut ends_run = false;
-    let mut ends_at_break = false;
+    let mut ends_at_break;
     let mut first = true;
     loop {
         let lead = absorb_lead && first;
