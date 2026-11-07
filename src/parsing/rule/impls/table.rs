@@ -233,6 +233,116 @@ fn close_wikidot_inline_scopes<'t>(
     (spans, sizes, anchors)
 }
 
+fn count_inline_span_opens(elements: &Elements<'_>) -> usize {
+    let count = |element: &Element| {
+        matches!(
+            element,
+            Element::Partial(PartialElement::InlineSpanOpen(..))
+        ) as usize
+    };
+    match elements {
+        Elements::None => 0,
+        Elements::Single(element) => count(element),
+        Elements::Multiple(items) => items.iter().map(count).sum(),
+    }
+}
+
+fn wikidot_span_tag_at(source: &str, index: usize) -> Option<bool> {
+    let bytes = source.as_bytes();
+    let rest = bytes.get(index..)?;
+    let has = |pat: &[u8]| {
+        rest.len() >= pat.len() && rest[..pat.len()].eq_ignore_ascii_case(pat)
+    };
+    if has(b"[[/span]]") || has(b"[[/span_]]") {
+        return Some(false);
+    }
+    let name_end = if has(b"[[*span") {
+        index + 8
+    } else if has(b"[[span") {
+        index + 7
+    } else {
+        return None;
+    };
+    match bytes.get(name_end) {
+        Some(b']' | b' ' | b'\t' | b'\n' | b'_') => Some(true),
+        _ => None,
+    }
+}
+
+fn wikidot_span_closer_byte(source: &str, head_byte: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut index = head_byte;
+    while index < source.len() {
+        if source.as_bytes()[index] == b'[' {
+            match wikidot_span_tag_at(source, index) {
+                Some(true) => depth += 1,
+                Some(false) => {
+                    depth = depth.checked_sub(1)?;
+                    if depth == 0 {
+                        return Some(index);
+                    }
+                }
+                None => {}
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+fn rollback_discarded_cell_scopes(
+    parser: &mut Parser,
+    elements: &[Element],
+    span_heads: &mut Vec<usize>,
+) {
+    if parser.settings().layout.legacy() {
+        let mut span_stack: Vec<bool> = Vec::new();
+        let mut sizes = 0usize;
+        let mut anchors = 0usize;
+        for element in elements {
+            match element {
+                Element::Partial(PartialElement::InlineSpanOpen(attributes, ..)) => {
+                    span_stack.push(attributes.get().contains_key("data-ftml-score-span"));
+                }
+                Element::Partial(PartialElement::InlineSpanClose(_)) => {
+                    span_stack.pop();
+                }
+                Element::Partial(PartialElement::InlineSizeOpen(..)) => sizes += 1,
+                Element::Partial(PartialElement::InlineSizeClose(_)) => {
+                    sizes = sizes.saturating_sub(1);
+                }
+                Element::Partial(PartialElement::InlineAnchorOpen(..)) => anchors += 1,
+                Element::Partial(PartialElement::InlineAnchorClose(_)) => {
+                    anchors = anchors.saturating_sub(1);
+                }
+                _ => {}
+            }
+        }
+        for scored in span_stack {
+            parser.leave_wikidot_span_body(scored);
+        }
+        for _ in 0..sizes {
+            parser.leave_wikidot_size_body();
+        }
+        for _ in 0..anchors {
+            parser.leave_wikidot_anchor_body();
+        }
+        for head in span_heads.drain(..) {
+            let closer_byte = parser
+                .wikidot_block_pair_at_head_byte(head)
+                .map(|pair| pair.closer_byte)
+                .or_else(|| wikidot_span_closer_byte(parser.full_text().inner(), head));
+            if let Some(closer_byte) = closer_byte
+                && closer_byte >= parser.current().span.start
+            {
+                parser.push_wikidot_cut_scope_closer(closer_byte);
+            }
+        }
+    } else {
+        span_heads.clear();
+    }
+}
+
 fn swallow_early_closed_scopes<'t>(
     elements: &mut Vec<Element<'t>>,
     start: usize,
@@ -1412,6 +1522,7 @@ fn try_consume_inner<'r, 't>(
 
         'row: loop {
             let mut elements = Vec::new();
+            let mut span_open_heads: Vec<usize> = Vec::new();
             let mut early_closed_spans = 0usize;
             let mut early_closed_sizes = 0usize;
             let mut early_closed_anchors = 0usize;
@@ -1477,6 +1588,7 @@ fn try_consume_inner<'r, 't>(
                 }
 
                 if !parser.discarding_hidden_body() && parser.at_body_end_boundary() {
+                    rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                     if cells.is_empty() {
                         elements.clear();
                         push_cell(
@@ -1589,6 +1701,7 @@ fn try_consume_inner<'r, 't>(
                         {
                             if saw_open {
                                 parser.set_wikidot_table_cut_boundary();
+                                rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                                 elements.clear();
                                 let empty_cell_start = TableCellStart {
                                     align: None,
@@ -1605,6 +1718,7 @@ fn try_consume_inner<'r, 't>(
                                 push_row(&mut rows, &mut cells);
                                 return finish_simple_table(rows, errors);
                             }
+                            rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                             elements.clear();
                             let empty_cell_start = TableCellStart {
                                 align: None,
@@ -1624,6 +1738,7 @@ fn try_consume_inner<'r, 't>(
                         if saw_open {
                             parser.set_wikidot_table_cut_boundary();
                         }
+                        rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                         elements.clear();
                         let empty_cell_start = TableCellStart {
                             align: None,
@@ -1659,6 +1774,7 @@ fn try_consume_inner<'r, 't>(
                             if saw_open {
                                 parser.set_wikidot_table_cut_boundary();
                             }
+                            rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                             push_row(&mut rows, &mut cells);
                             return finish_simple_table(rows, errors);
                         }
@@ -1671,6 +1787,7 @@ fn try_consume_inner<'r, 't>(
                             && parser.current().token == Token::LeftBlockEnd
                             && wikidot_table_closer_cuts(parser)
                         {
+                            rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                             if cells.is_empty() {
                                 elements.clear();
                                 let empty_cell_start = TableCellStart {
@@ -1694,10 +1811,28 @@ fn try_consume_inner<'r, 't>(
                             && parser.current().token == Token::LeftBlock
                             && wikidot_table_head_abandons(parser)
                         {
+                            let head_byte = parser.current().span.start;
                             parser.set_in_wikidot_simple_table_cell(true);
                             let consumed = consume(parser);
                             parser.set_in_wikidot_simple_table_cell(false);
-                            let _ = consumed?.chain(&mut errors, &mut paragraph_break);
+                            let abandoned = consumed?.chain(&mut errors, &mut paragraph_break);
+                            let mut abandoned_heads =
+                                if count_inline_span_opens(&abandoned) > 0 {
+                                    vec![head_byte]
+                                } else {
+                                    Vec::new()
+                                };
+                            let abandoned_items: Vec<Element> = match abandoned {
+                                Elements::None => Vec::new(),
+                                Elements::Single(element) => vec![element],
+                                Elements::Multiple(items) => items,
+                            };
+                            rollback_discarded_cell_scopes(
+                                parser,
+                                &abandoned_items,
+                                &mut abandoned_heads,
+                            );
+                            rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                             elements.clear();
                             saw_open = true;
                             if cells.is_empty() {
@@ -1770,6 +1905,7 @@ fn try_consume_inner<'r, 't>(
                                             }
                                         }
                                     }
+                                    rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                                     elements.clear();
                                     push_cell(
                                         &mut cells,
@@ -1804,6 +1940,7 @@ fn try_consume_inner<'r, 't>(
                                     .contains('\n')
                             {
                                 if cells.is_empty() {
+                                    rollback_discarded_cell_scopes(parser, &elements, &mut span_open_heads);
                                     elements.clear();
                                     let empty_cell_start = TableCellStart {
                                         align: None,
@@ -1857,6 +1994,11 @@ fn try_consume_inner<'r, 't>(
                             );
                         }
 
+                        if wikidot {
+                            for _ in 0..count_inline_span_opens(&new_items) {
+                                span_open_heads.push(row_block_byte);
+                            }
+                        }
                         let elements_before = elements.len();
                         append_cell_elements(&mut elements, new_items);
                         swallow_early_closed_scopes(
