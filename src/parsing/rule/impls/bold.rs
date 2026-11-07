@@ -120,7 +120,9 @@ fn bold_body_crosses_flow_block(elements: &Elements<'_>) -> bool {
         return false;
     };
     container.elements().iter().any(|element| match element {
-        Element::Container(inner) => inner.ctype() == ContainerType::Div,
+        Element::Container(inner) => {
+            matches!(inner.ctype(), ContainerType::Div | ContainerType::Note)
+        }
         Element::Table(_) => true,
         Element::Partial(
             PartialElement::WikidotBlockOpen(WikidotBlockShell::Div { .. })
@@ -266,5 +268,26 @@ mod tests {
                 "<p><strong>a<br>\nb</strong></p>",
             ),
         );
+    }
+
+    #[test]
+    fn bold_across_a_note_stays_a_paragraph_of_literals() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize(concat!(
+            "**||[[=]]\n",
+            "[[note]]\n",
+            "----\n",
+            "[[/note]]\n",
+            "[[/=]]||**",
+        ));
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(
+            html.starts_with("<p>**||[[=]]</p><div class=\"wiki-note\">"),
+            "{html}",
+        );
+        assert!(html.contains("</div><br>\n[[/=]]||**"), "{html}");
+        assert!(!html.contains("<strong>"), "{html}");
     }
 }
