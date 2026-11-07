@@ -86,6 +86,7 @@ pub struct ParagraphStack<'t> {
     wikidot_embed_error_residual: bool,
     next_element_started_line: bool,
     wikidot_simple_table_boundary: bool,
+    wikidot_advanced_table_cell: bool,
     wikidot_reopen_for_footnote: bool,
     wikidot_bare_after_explicit_list: bool,
     wikidot_explicit_pre_candidate: bool,
@@ -820,6 +821,12 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
+    pub(crate) fn mark_wikidot_advanced_table_cell(&mut self) {
+        if self.wikidot {
+            self.wikidot_advanced_table_cell = true;
+        }
+    }
+
     pub(crate) fn merge_wikidot_adjacent_simple_tables(&mut self) {
         if !self.wikidot || self.wikidot_simple_table_boundary {
             self.wikidot_simple_table_boundary = false;
@@ -1301,9 +1308,23 @@ impl<'t> ParagraphStack<'t> {
                     self.current.pop();
                 }
             }
+            if is_explicit_list
+                && self.wikidot_advanced_table_cell
+                && !paragraph_break_separated
+                && !self.current.is_empty()
+            {
+                if self.next_element_started_line
+                    && !matches!(self.current.last(), Some(Element::LineBreak))
+                {
+                    self.current.push(Element::LineBreak);
+                }
+                self.current_unwrapped = true;
+            }
             if self.wikidot
                 && !self.current.is_empty()
-                && Self::wikidot_explicit_list_holds_block(&element)
+                && (Self::wikidot_explicit_list_holds_block(&element)
+                    || (matches!(self.current.last(), Some(Element::LineBreak))
+                        && Self::wikidot_explicit_list_holds_blockquote(&element)))
             {
                 self.current_unwrapped = true;
             }
@@ -1401,6 +1422,48 @@ impl<'t> ParagraphStack<'t> {
             }
             Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
                 elements.iter().any(Self::wikidot_element_holds_item_block)
+            }
+            _ => false,
+        }
+    }
+
+    fn wikidot_explicit_list_holds_blockquote(element: &Element<'_>) -> bool {
+        let Element::List {
+            wikidot_explicit_block: true,
+            items,
+            ..
+        } = element
+        else {
+            return false;
+        };
+        items.iter().any(Self::wikidot_list_item_holds_blockquote)
+    }
+
+    fn wikidot_list_item_holds_blockquote(item: &ListItem<'_>) -> bool {
+        match item {
+            ListItem::Elements { elements, .. } => {
+                elements.iter().any(Self::wikidot_element_holds_blockquote)
+            }
+            ListItem::SubList { element } => {
+                Self::wikidot_element_holds_blockquote(element)
+            }
+        }
+    }
+
+    fn wikidot_element_holds_blockquote(element: &Element<'_>) -> bool {
+        match element {
+            Element::Container(container) => {
+                container.ctype() == ContainerType::Blockquote
+                    || container
+                        .elements()
+                        .iter()
+                        .any(Self::wikidot_element_holds_blockquote)
+            }
+            Element::List { items, .. } => {
+                items.iter().any(Self::wikidot_list_item_holds_blockquote)
+            }
+            Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+                elements.iter().any(Self::wikidot_element_holds_blockquote)
             }
             _ => false,
         }

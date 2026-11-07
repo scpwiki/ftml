@@ -66,6 +66,7 @@ pub(super) struct WikidotState {
     suppress_footnote_list_break: bool,
     list_depth_at_footnote: Option<usize>,
     row_suffix_at: Option<usize>,
+    advanced_cell_paragraph: bool,
 }
 
 impl Default for WikidotState {
@@ -90,6 +91,7 @@ impl Default for WikidotState {
             suppress_footnote_list_break: false,
             list_depth_at_footnote: None,
             row_suffix_at: None,
+            advanced_cell_paragraph: false,
         }
     }
 }
@@ -440,6 +442,20 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_in_wikidot_advanced_table_cell_body(&mut self, value: bool) {
         set_flag(&mut self.wikidot.flags, ADVANCED_TABLE_CELL_BODY, value);
+    }
+
+    pub(crate) fn arm_wikidot_advanced_cell_paragraph(&mut self) {
+        self.wikidot.advanced_cell_paragraph = true;
+    }
+
+    pub(crate) fn take_wikidot_advanced_cell_paragraph(&mut self) -> bool {
+        let armed = self.wikidot.advanced_cell_paragraph;
+        self.wikidot.advanced_cell_paragraph = false;
+        armed
+    }
+
+    pub(crate) fn clear_wikidot_advanced_cell_paragraph(&mut self) {
+        self.wikidot.advanced_cell_paragraph = false;
     }
 
     pub(crate) fn bibliography_split_tail(&self) -> bool {

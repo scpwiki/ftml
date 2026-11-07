@@ -42,7 +42,7 @@ History: the check found one latent panic, now fixed. Order: `text, end_paragrap
 
 | Checked code | Operations the check calls |
 | --- | --- |
-| `src/parsing/paragraph/stack.rs`: `ParagraphStack::{new, new_wikidot, push_element, defer_suppression_seam, end_paragraph, end_paragraph_at_break, pop_line_break, merge_wikidot_adjacent_simple_tables, mark_current_unwrapped, mark_next_unwrapped, mark_wikidot_terminal_backslash, ensure_wikidot_trailing_line_break, mark_discarded_control, into_elements}` | list `OPS` / `apply()` in `stack_orders.rs` |
+| `src/parsing/paragraph/stack.rs`: `ParagraphStack::{new, new_wikidot, push_element, defer_suppression_seam, end_paragraph, end_paragraph_at_break, pop_line_break, merge_wikidot_adjacent_simple_tables, mark_current_unwrapped, mark_next_unwrapped, mark_wikidot_terminal_backslash, ensure_wikidot_trailing_line_break, mark_discarded_control, mark_wikidot_advanced_table_cell, into_elements}` | list `OPS` / `apply()` in `stack_orders.rs` |
 
 Not called by the check, but able to change the same flags: `mark_next_unwrapped_after_block`, `mark_wikidot_same_line_div_residual`, `mark_wikidot_literal_div_line`, `mark_wikidot_literal_iftags_line`, `mark_wikidot_simple_table_boundary`, `mark_wikidot_tabview_boundary`, `mark_wikidot_continued_block_boundary`, `mark_wikidot_invisible_line_occupancy`, `mark_wikidot_complete_raw_line_occupancy`, `mark_wikidot_empty_list_break`, `record_next_element_line_start`, `push_paragraph_safe_elements`, `push_errors`, `into_result`.
 
