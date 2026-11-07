@@ -1642,6 +1642,41 @@ fn try_consume_pending_iftags_end_swallow<'r, 't>(
     Some(consume_past_iftags_end(parser, fused))
 }
 
+fn try_consume_discarded_row_closer<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return None;
+    }
+    if parser.current().token != Token::LeftBlockEnd {
+        return None;
+    }
+    let position = parser.current().span.start;
+    if !parser.wikidot_discarded_row_closer(position) {
+        return None;
+    }
+    let closer = parser.full_text().inner().get(position..).unwrap_or("");
+    let eats_following_break =
+        closer.len() >= 6 && closer.as_bytes()[..6].eq_ignore_ascii_case(b"[[/li]");
+    step_over_wikidot_designated_end(parser)?;
+    if parser.current().token == Token::LineBreak
+        && parser.look_ahead(0).is_some_and(|token| {
+            token.token == Token::LeftBlockEnd
+                && parser.wikidot_discarded_row_closer(token.span.start)
+        })
+    {
+        parser.step().ok()?;
+    }
+    if eats_following_break && parser.current().token == Token::LineBreak {
+        parser.step().ok()?;
+    }
+    Some(Ok(crate::parsing::ParseSuccess::new(
+        Elements::None,
+        Vec::new(),
+        true,
+    )))
+}
+
 fn try_consume_wikidot_li_listbody_silent_close<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Option<ParseResult<'r, 't, Elements<'t>>> {
@@ -1779,6 +1814,10 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     if let Some(result) = try_consume_pending_iftags_end_swallow(parser) {
+        return result;
+    }
+
+    if let Some(result) = try_consume_discarded_row_closer(parser) {
         return result;
     }
 

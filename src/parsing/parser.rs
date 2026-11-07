@@ -38,7 +38,7 @@ use crate::tree::{
 use std::borrow::Cow;
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Range;
 use std::rc::Rc;
 use std::{mem, ptr};
@@ -157,6 +157,7 @@ pub(super) struct BlockScanCache<'t> {
     literal_ranges: Option<Vec<Range<usize>>>,
     wikidot_iftags_body_end: Cell<Option<usize>>,
     pending_iftags_end_swallows: Vec<usize>,
+    wikidot_discarded_row_closers: BTreeSet<usize>,
     wikidot_li_paired_heads: std::collections::BTreeSet<usize>,
     wikidot_li_pairing_depth: Cell<usize>,
     wikidot_li_heads: Vec<WikidotLiHead>,
@@ -830,6 +831,20 @@ impl<'r, 't> Parser<'r, 't> {
             .pending_iftags_end_swallows
             .iter()
             .any(|pending| *pending > here)
+    }
+
+    pub(crate) fn push_wikidot_discarded_row_closer(&self, position: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_discarded_row_closers
+            .insert(position);
+    }
+
+    pub(crate) fn wikidot_discarded_row_closer(&self, position: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_discarded_row_closers
+            .contains(&position)
     }
 
     pub(crate) fn take_pending_iftags_end_swallow(&self, position: usize) -> bool {
