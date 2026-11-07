@@ -910,6 +910,7 @@ fn try_consume_fn<'r, 't>(
             break;
         }
 
+        parser.clear_wikidot_quote_boundary_list_close();
         parser.set_native_blockquote_depth(Some(absolute_depth));
         let result = collect_native_blockquote_line(parser, close);
         parser.set_native_blockquote_depth(original_depth);
@@ -1123,7 +1124,7 @@ fn try_consume_fn<'r, 't>(
         {
             keep_line_break = false;
         }
-        let quote_end_list_break = parser.settings().layout.legacy()
+        let quote_end_list_row = parser.settings().layout.legacy()
             && parser.current().token != Token::Quote
             && matches!(
                 elements.iter().rev().find(|element| {
@@ -1131,6 +1132,11 @@ fn try_consume_fn<'r, 't>(
                 }),
                 Some(Element::List { wikidot_explicit_block: true, .. })
             );
+        let boundary_list_close = parser.take_wikidot_quote_boundary_list_close();
+        let quote_end_list_break = quote_end_list_row && !boundary_list_close;
+        if quote_end_list_row && boundary_list_close {
+            append_unquoted_close_break = true;
+        }
         if quote_end_list_break
             && !matches!(elements.last(), Some(Element::LineBreak))
         {

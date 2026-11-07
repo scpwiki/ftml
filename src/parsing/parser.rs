@@ -188,6 +188,7 @@ pub(super) struct BlockScanCache<'t> {
     pub(super) wikidot_li_cross_scan: Option<block_pairs::WikidotLiCrossScan>,
     wikidot_li_body_boundaries: Vec<usize>,
     wikidot_table_cut_boundary: Cell<bool>,
+    wikidot_quote_boundary_list_close: Cell<bool>,
     wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
     wikidot_heading_barrier: Option<usize>,
     wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
@@ -1173,6 +1174,27 @@ impl<'r, 't> Parser<'r, 't> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_table_cut_boundary
+            .take()
+    }
+
+    pub(crate) fn clear_wikidot_quote_boundary_list_close(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_list_close
+            .set(false);
+    }
+
+    pub(crate) fn set_wikidot_quote_boundary_list_close(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_list_close
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_list_close(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_list_close
             .take()
     }
 
@@ -2301,6 +2323,10 @@ impl<'r, 't> Parser<'r, 't> {
     pub(crate) fn quote_body_literal_residuals(&self) -> Option<bool> {
         self.quote_body_cursor
             .map(|cursor| cursor.literal_residual_quotes)
+    }
+
+    pub(crate) fn quote_body_required_depth(&self) -> Option<usize> {
+        self.quote_body_cursor.map(|cursor| cursor.required_depth)
     }
 
     pub(crate) fn set_quote_body_literal_residuals(&mut self, literal: bool) {
