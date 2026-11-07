@@ -10,8 +10,8 @@ from scripts.check_comparison_normalization_browser import (
 class ComparisonNormalizationBrowserTest(unittest.TestCase):
     def test_contracts_resolve_to_current_cases_and_references(self):
         rows = current_normalization_inputs()
-        self.assertEqual(len(rows), 8)
-        self.assertEqual(len({row["case_id"] for row in rows}), 8)
+        self.assertEqual(len(rows), 43)
+        self.assertEqual(len({row["case_id"] for row in rows}), 43)
         self.assertTrue(all(row["source"] for row in rows))
         self.assertTrue(all("wikidot_html" in row for row in rows))
         self.assertTrue(all("difference_class" in row for row in rows))
