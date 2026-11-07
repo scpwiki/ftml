@@ -693,9 +693,7 @@ impl BlockFailureMemoization {
             && parser.native_blockquote_depth().is_none()
             && !parser.in_wikidot_center_body();
         BlockFailureMemoization {
-            wikijump_deterministic: !parser.settings().layout.legacy()
-                && page_mode
-                && visible_body,
+            wikijump_deterministic: !parser.settings().layout.legacy() && visible_body,
             wikidot_tabview: wikidot_cache_context && block.name == BLOCK_TABVIEW.name,
             wikidot_collapsible: wikidot_cache_context
                 && block.name == BLOCK_COLLAPSIBLE.name
