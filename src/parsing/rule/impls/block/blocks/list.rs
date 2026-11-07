@@ -848,6 +848,30 @@ fn parse_list_item<'r, 't>(
     success_elements_with_paragraph_safety(false, element, errors)
 }
 
+fn wikidot_li_closer_line_is_quote_prefix(body: &str) -> bool {
+    let tail = body.trim_end_matches([' ', '\t']);
+    if tail.ends_with('\n') {
+        return false;
+    }
+    let Some(newline) = tail.rfind('\n') else {
+        return false;
+    };
+    let after = &tail[newline + 1..];
+    !after.is_empty() && after.bytes().all(|byte| byte == b'>')
+}
+
+fn wikidot_li_break_saves_vanishing_item(elements: &[Element<'_>]) -> bool {
+    !elements.is_empty()
+        && elements.iter().all(|element| match element {
+            Element::Container(container) => {
+                container.ctype() == ContainerType::Div
+                    && container.attributes().get().is_empty()
+                    && container.elements().is_empty()
+            }
+            other => other.is_whitespace(),
+        })
+}
+
 fn wikidot_li_segment_is_blank(segment: &[Element]) -> bool {
     segment.iter().all(Element::is_whitespace)
 }
@@ -958,7 +982,9 @@ fn assemble_wikidot_li_segments<'t>(
             .rfind("[[/li")
             .map(|index| &source[..index])
             .unwrap_or(source);
-        if body.ends_with('\n')
+        let quote_prefix_saves_item = wikidot_li_closer_line_is_quote_prefix(body)
+            && wikidot_li_break_saves_vanishing_item(&elements);
+        if (body.ends_with('\n') || quote_prefix_saves_item)
             && !matches!(elements.last(), Some(Element::LineBreak))
             && !trailing_nested_list
             && !trailing_table
