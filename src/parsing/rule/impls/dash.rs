@@ -33,12 +33,34 @@ pub const RULE_DASH_RUN: Rule = Rule {
     try_consume_fn: consume_run,
 };
 
+pub(super) fn double_dash_occupies_its_line(parser: &Parser) -> bool {
+    if parser.current().token != Token::DoubleDash
+        || !parser.current_at_source_line_start()
+    {
+        return false;
+    }
+    for token in parser.remaining() {
+        match token.token {
+            Token::Whitespace => continue,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return true,
+            _ => return false,
+        }
+    }
+    true
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming token to create an em dash");
 
     if parser.settings().layout.legacy() {
+        if double_dash_occupies_its_line(parser) {
+            parser.step()?;
+            while parser.current().token == Token::Whitespace {
+                parser.step()?;
+            }
+        }
         return success_elements(text!("--"));
     }
 
