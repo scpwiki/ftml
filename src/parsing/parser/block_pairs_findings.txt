@@ -201,3 +201,11 @@ corpus-test/footnote/note-yields-enclosing-list-closers/input.ftml	Note@42..86 d
 corpus-test/definition-list/table-opener-line-drops/input.ftml	Table@2..60 scan-only
 corpus-test/definition-list/table-opener-line-drops/input.ftml	structural Row scan=1 tree=0 contained=true
 corpus-test/definition-list/table-opener-line-drops/input.ftml	structural Cell scan=1 tree=0 contained=true
+corpus-test/tabview/inner-view-text-first-close/input.ftml	Tab@20..64 descent-only
+corpus-test/tabview/inner-view-text-first-close/input.ftml	Tab@20..88 scan-only
+corpus-test/tabview/inner-view-text-first-close/input.ftml	TabView@8..101 scan-only
+corpus-test/tabview/inner-view-text-first-close/input.ftml	TabView@8..77 descent-only
+corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	Tab@20..174 descent-only
+corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	Tab@20..198 scan-only
+corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	TabView@8..187 descent-only
+corpus-test/tabview/quoted-table-inner-view-first-close/input.ftml	TabView@8..211 scan-only

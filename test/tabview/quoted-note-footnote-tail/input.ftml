@@ -1,0 +1,12 @@
+> [[tabview]]
+> [[tab A]]
+> [[note]]
+> n[[footnote]]
+> [[hidden]]
+> + h
+> [[/hidden]]
+> [[/footnote]]
+> [[/note]]
+> [[/tab]]
+> [[/tabview]]
+[[footnoteblock]]

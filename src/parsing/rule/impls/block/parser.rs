@@ -4694,15 +4694,20 @@ where
             && block_rule.name == "block-tab";
         let mut nested_wikidot_tabs = 0_usize;
         let mut last_nested_wikidot_tab = None;
+        let mut inner_tabview_text_seen = false;
         let rule = self.rule();
 
         let is_end = move |parser: &mut Parser<'r, 't>| {
             if wikidot_tab
+                && !inner_tabview_text_seen
                 && let Some(opener) = parser.wikidot_nested_tab_opener()
                 && last_nested_wikidot_tab != Some(opener)
             {
                 last_nested_wikidot_tab = Some(opener);
                 nested_wikidot_tabs += 1;
+            }
+            if wikidot_tab && !inner_tabview_text_seen {
+                inner_tabview_text_seen = parser.wikidot_tabview_opener_in_line_text();
             }
             let before_end = parser.clone();
             let first_iteration = first;
@@ -4824,6 +4829,30 @@ where
             .next()
             .is_some_and(|name| name.eq_ignore_ascii_case("tab"))
             .then_some(opener)
+    }
+
+    fn wikidot_tabview_opener_in_line_text(&self) -> bool {
+        let full_text = self.full_text().inner();
+        let pos = self.current().span.start.min(full_text.len());
+        let line_start = full_text[..pos].rfind('\n').map_or(0, |index| index + 1);
+        let line_end = full_text[pos..]
+            .find('\n')
+            .map_or(full_text.len(), |index| pos + index);
+        let line = &full_text[line_start..line_end];
+        let head_offset = line.len() - line.trim_start_matches([' ', '\t']).len();
+        let mut search = 0_usize;
+        while let Some(found) = line[search..].find("[[") {
+            let open = search + found;
+            let rest = &line[open + 2..];
+            let name_len = rest
+                .find(|c: char| c.is_whitespace() || c == ']')
+                .unwrap_or(rest.len());
+            if rest[..name_len].eq_ignore_ascii_case("tabview") {
+                return open != head_offset;
+            }
+            search = open + 2;
+        }
+        false
     }
 
     fn get_body_elements_no_paragraphs(
