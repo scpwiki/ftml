@@ -41,6 +41,10 @@ fn try_consume_fn<'r, 't>(
     if parser.current().token == Token::BulletItem {
         return try_consume_split_delimiter(parser);
     }
+    if let Some(after) = empty_ul_bold_after(parser) {
+        parser.step_to_remaining(after);
+        return ok!(Elements::None);
+    }
     validate_reachable_close(
         parser,
         Token::Bold,
@@ -61,6 +65,93 @@ fn try_consume_fn<'r, 't>(
     let ctype = ContainerType::Bold;
     let collected = collect_container(parser, RULE_BOLD, ctype, &close, &invalid, None)?;
     finish_collected(parser, collected)
+}
+
+fn is_break_token(token: Token) -> bool {
+    matches!(
+        token,
+        Token::LineBreak | Token::ParagraphBreak | Token::Whitespace
+    )
+}
+
+fn block_head_is(
+    tokens: &[ExtractedToken<'_>],
+    index: usize,
+    name: &str,
+    closing: bool,
+) -> bool {
+    let open = if closing {
+        Token::LeftBlockEnd
+    } else {
+        Token::LeftBlock
+    };
+    tokens.get(index).is_some_and(|token| token.token == open)
+        && tokens.get(index + 1).is_some_and(|token| {
+            token.token == Token::Identifier && token.slice.eq_ignore_ascii_case(name)
+        })
+        && tokens
+            .get(index + 2)
+            .is_some_and(|token| token.token == Token::RightBlock)
+}
+
+fn skip_breaks(tokens: &[ExtractedToken<'_>], mut index: usize) -> usize {
+    while tokens
+        .get(index)
+        .is_some_and(|token| is_break_token(token.token))
+    {
+        index += 1;
+    }
+    index
+}
+
+fn empty_ul_bold_after(parser: &Parser<'_, '_>) -> Option<usize> {
+    if !parser.settings().layout.legacy() {
+        return None;
+    }
+    if parser.current().token != Token::Bold {
+        return None;
+    }
+    let tokens = parser.remaining();
+    if !block_head_is(tokens, 0, "ul", false) {
+        return None;
+    }
+    if parser.current().span.end != tokens[0].span.start {
+        return None;
+    }
+    let mut index = skip_breaks(tokens, 3);
+    let mut items = 0;
+    loop {
+        if !block_head_is(tokens, index, "li", false) {
+            break;
+        }
+        items += 1;
+        index += 3;
+        while !block_head_is(tokens, index, "li", true) {
+            let token = tokens.get(index)?;
+            if !is_break_token(token.token) {
+                return None;
+            }
+            index += 1;
+        }
+        index += 3;
+        index = skip_breaks(tokens, index);
+    }
+    if items == 0 {
+        return None;
+    }
+    if !block_head_is(tokens, index, "ul", true) {
+        return None;
+    }
+    let close_right = index + 2;
+    index += 3;
+    tokens.get(index)?;
+    if tokens[index].token != Token::Bold {
+        return None;
+    }
+    if tokens[close_right].span.end != tokens[index].span.start {
+        return None;
+    }
+    Some(index + 1)
 }
 
 fn try_consume_split_delimiter<'r, 't>(
