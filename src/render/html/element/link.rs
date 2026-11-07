@@ -20,7 +20,8 @@
 
 use super::prelude::*;
 use crate::tree::{
-    AnchorTarget, AttributeMap, Element, LinkLabel, LinkLocation, LinkType,
+    AnchorTarget, AttributeMap, Container, ContainerType, Element, LinkLabel,
+    LinkLocation, LinkType,
 };
 use crate::url::{HrefKind, classify_href, normalize_link};
 use std::borrow::Cow;
@@ -56,14 +57,66 @@ pub fn render_anchor(
         .contents(elements);
 }
 
+pub(super) fn render_wikidot_paragraph_anchor_iframe(
+    ctx: &mut HtmlContext,
+    container: &Container,
+) -> bool {
+    if !ctx.layout().legacy() || container.ctype() != ContainerType::Paragraph {
+        return false;
+    }
+    let [
+        Element::Anchor {
+            target,
+            attributes,
+            elements,
+        },
+    ] = container.elements()
+    else {
+        return false;
+    };
+    let [
+        Element::Iframe {
+            url,
+            attributes: iframe_attributes,
+        },
+    ] = elements.as_slice()
+    else {
+        return false;
+    };
+    // PagePreview fosters an empty copy of the anchor inside the iframe and
+    // then stops. The iframe, the outer anchor, and the paragraph stay open.
+    let target = *target;
+    let mut paragraph = ctx.html().tag("p");
+    paragraph.omit_close();
+    paragraph.inner(|ctx| {
+        let mut anchor = ctx.html().a();
+        write_wikidot_anchor_attributes(&mut anchor, attributes, target);
+        anchor.omit_close();
+        anchor.inner(|ctx| {
+            super::iframe::render_legacy_iframe(ctx, url, iframe_attributes, true);
+            render_wikidot_anchor(ctx, &[], attributes, target);
+        });
+    });
+    true
+}
+
 fn render_wikidot_anchor(
     ctx: &mut HtmlContext,
     elements: &[Element],
     attributes: &AttributeMap,
     target: Option<AnchorTarget>,
 ) {
-    let map = attributes.get();
     let mut tag = ctx.html().a();
+    write_wikidot_anchor_attributes(&mut tag, attributes, target);
+    tag.contents(elements);
+}
+
+fn write_wikidot_anchor_attributes(
+    tag: &mut super::super::builder::HtmlBuilderTag<'_, '_, '_, '_, '_>,
+    attributes: &AttributeMap<'_>,
+    target: Option<AnchorTarget>,
+) {
+    let map = attributes.get();
 
     let internal_marker = |key: &str| key.starts_with("data-ftml-");
 
@@ -107,8 +160,6 @@ fn render_wikidot_anchor(
     if let Some(value) = target {
         tag.attr_quoted("target", value);
     }
-
-    tag.contents(elements);
 }
 
 pub fn render_anchor_target(ctx: &mut HtmlContext, target: &str) {

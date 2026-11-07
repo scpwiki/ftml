@@ -302,6 +302,7 @@ where
                     ParseCondition::TokenPair(..) => None,
                     ParseCondition::CurrentTokenAtSourceLineStart(_)
                     | ParseCondition::AtSourceByte(_)
+                    | ParseCondition::QuotePreparedListMarker
                     | ParseCondition::SplitClose(_)
                     | ParseCondition::PaddedSplitClose(_) => None,
                 });

@@ -27,10 +27,12 @@ use super::{
     BlockRule,
     blocks::{
         BLOCK_COLLAPSIBLE, BLOCK_EMBED, BLOCK_EMBED_AUDIO, BLOCK_EMBED_VIDEO, BLOCK_HTML,
-        BLOCK_IFTAGS, BLOCK_SPAN, BLOCK_TABVIEW, iftags_head_keeps_inline_body,
+        BLOCK_IFTAGS, BLOCK_NOTE, BLOCK_SPAN, BLOCK_TABVIEW,
+        iftags_head_keeps_inline_body,
     },
 };
 use crate::parsing::inline_scope::WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE;
+use crate::parsing::parser::QuoteBodyLineStatus;
 use crate::parsing::rule::bibliography_order;
 use crate::settings::WikitextMode;
 use crate::tree::PartialElement;
@@ -129,11 +131,23 @@ where
 }
 
 fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
-    let current = parser.step()?;
-    let flag_star = current.token == Token::LeftBlockStar;
+    let span_doubles_leading_break = parser.settings().layout.legacy()
+        && parser.in_wikidot_span_body()
+        && parser.current().token == Token::LineBreak;
+    parser.step()?;
+    let quote_body = parser.quote_body_cursor().is_some();
 
     let result = parser.evaluate_fn(|parser| {
-        if ![Token::LeftBlock, Token::LeftBlockStar].contains(&current.token) {
+        if quote_body {
+            match parser.prepare_quote_body_line()? {
+                QuoteBodyLineStatus::Prepared => {}
+                QuoteBodyLineStatus::Inactive | QuoteBodyLineStatus::Boundary => {
+                    return Ok(false);
+                }
+            }
+        }
+
+        if ![Token::LeftBlock, Token::LeftBlockStar].contains(&parser.current().token) {
             return Ok(false);
         }
 
@@ -168,20 +182,59 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
                     ))
                 // Live keeps the break before a kept [[iftags]] body that
                 // starts on the opener's line.
-                && !preserves_preceding_line_break(parser, block_rule)),
+                && !preserves_preceding_line_break(parser, block_rule)
+                && !(quote_body && block_rule.name != BLOCK_NOTE.name)),
             None => Ok(false),
         }
     });
 
     if result {
-        let success = parse_block(parser, flag_star)?;
-        if success.paragraph_safe && wikidot_literal_css_module(&success.item) {
-            Err(parser.make_err(ParseErrorKind::RuleFailed))
-        } else {
-            Ok(success)
+        if quote_body {
+            match parser.prepare_quote_body_line()? {
+                QuoteBodyLineStatus::Prepared => {}
+                QuoteBodyLineStatus::Inactive | QuoteBodyLineStatus::Boundary => {
+                    return Err(parser.make_err(ParseErrorKind::RuleFailed));
+                }
+            }
         }
+        let flag_star = parser.current().token == Token::LeftBlockStar;
+        let mut success = parse_block(parser, flag_star)?;
+        if success.paragraph_safe && wikidot_literal_css_module(&success.item) {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
+        // Collapsible doubles a newline in front of its opener. An open span
+        // keeps both breaks in a list item. Outside an item that newline is absorbed.
+        if span_doubles_leading_break
+            && parser.wikidot_li_inside_item_body()
+            && elements_open_collapsible(&success.item)
+        {
+            let mut elements = match success.item {
+                Elements::Multiple(elements) => elements,
+                Elements::Single(element) => vec![element],
+                Elements::None => Vec::new(),
+            };
+            elements.insert(0, Element::LineBreak);
+            elements.insert(0, Element::LineBreak);
+            success.item = Elements::Multiple(elements);
+        }
+        Ok(success)
     } else {
         Err(parser.make_err(ParseErrorKind::RuleFailed))
+    }
+}
+
+fn elements_open_collapsible(elements: &Elements<'_>) -> bool {
+    let is_collapsible = |element: &Element<'_>| match element {
+        Element::Collapsible { .. } => true,
+        Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+            matches!(shell, crate::tree::WikidotBlockShell::Collapsible { .. })
+        }
+        _ => false,
+    };
+    match elements {
+        Elements::Single(element) => is_collapsible(element),
+        Elements::Multiple(elements) => elements.iter().any(is_collapsible),
+        Elements::None => false,
     }
 }
 
@@ -693,9 +746,7 @@ impl BlockFailureMemoization {
             && parser.native_blockquote_depth().is_none()
             && !parser.in_wikidot_center_body();
         BlockFailureMemoization {
-            wikijump_deterministic: !parser.settings().layout.legacy()
-                && page_mode
-                && visible_body,
+            wikijump_deterministic: !parser.settings().layout.legacy() && visible_body,
             wikidot_tabview: wikidot_cache_context && block.name == BLOCK_TABVIEW.name,
             wikidot_collapsible: wikidot_cache_context
                 && block.name == BLOCK_COLLAPSIBLE.name

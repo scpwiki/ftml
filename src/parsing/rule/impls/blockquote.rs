@@ -829,6 +829,7 @@ fn try_consume_fn<'r, 't>(
                     if matches!(container.ctype(), ContainerType::Align(_))
             )
         });
+        let note_row = row_has_note(&elements);
         let collapsible_row =
             matches!(elements.first(), Some(Element::Collapsible { .. }));
 
@@ -852,6 +853,7 @@ fn try_consume_fn<'r, 't>(
         let keep_line_break = if parser.settings().layout.legacy() {
             paragraph_safe
                 || alignment_block
+                || note_row
                 || collapsible_row
                 || wikidot_block_close_line
                 || wikidot_tabview_line
@@ -1547,6 +1549,15 @@ fn build_flattened_quote_rows(
     stack.into_elements()
 }
 
+fn row_has_note(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| {
+        matches!(
+            element,
+            Element::Container(container) if container.ctype() == ContainerType::Note
+        )
+    })
+}
+
 fn push_native_quote_row<'t>(
     stack: &mut ParagraphStack<'t>,
     row: NativeQuoteRow<'t>,
@@ -1566,6 +1577,7 @@ fn push_native_quote_row<'t>(
                 if matches!(container.ctype(), ContainerType::Align(_))
         )
     });
+    let note_block = row_has_note(&row.elements);
     if wikidot && alignment_block {
         stack.ensure_wikidot_trailing_line_break();
     }
@@ -1615,6 +1627,7 @@ fn push_native_quote_row<'t>(
             .iter()
             .any(collapsible_has_direct_literal_nested_opener)
             || (wikidot && alignment_block)
+            || (wikidot && note_block)
             || wikidot_block_close_row
             || wikidot_tabview_row_end;
         let has_simple_table = row.elements.iter().any(|element| {
@@ -1647,7 +1660,9 @@ fn push_native_quote_row<'t>(
                 }))
                 || wikidot_block_close_row;
             for element in slice {
-                let element_safe = if per_element {
+                let element_safe = if note_block && element == Element::LineBreak {
+                    true
+                } else if per_element {
                     element.paragraph_safe()
                 } else {
                     *safe
@@ -1687,6 +1702,7 @@ fn push_native_quote_row<'t>(
         .iter()
         .any(collapsible_has_direct_literal_nested_opener)
         || (wikidot && alignment_block)
+        || (wikidot && note_block)
         || wikidot_block_close_row
         || wikidot_tabview_row_end;
     let has_simple_table = row.elements.iter().any(|element| {
@@ -1700,7 +1716,9 @@ fn push_native_quote_row<'t>(
         && row.elements.iter().any(|element| !element.paragraph_safe()))
         || wikidot_block_close_row;
     for element in row.elements {
-        let paragraph_safe = if per_element {
+        let paragraph_safe = if note_block && element == Element::LineBreak {
+            true
+        } else if per_element {
             element.paragraph_safe()
         } else {
             row.paragraph_safe

@@ -2710,6 +2710,20 @@ fn lower_sequence<'t>(
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+                if matches!(
+                    element,
+                    Element::List {
+                        wikidot_explicit_block: true,
+                        ..
+                    }
+                ) {
+                    end_anchor_at_explicit_list(
+                        &mut output,
+                        &mut run,
+                        active,
+                        &mut last_run_outer_scope,
+                    );
+                }
                 lower_children(
                     &mut element,
                     valid,
@@ -2854,6 +2868,13 @@ fn lower_sequence<'t>(
                 output.push(element);
                 last_run_outer_scope.reset();
             }
+        } else if matches!(element, Element::Iframe { .. }) && active.has_active_scope() {
+            // Element::paragraph_safe() is false, so the leaf arm would emit
+            // the iframe beside the open scope. The legacy parse flag already
+            // kept it in the paragraph. The closer would then see an empty
+            // scope and drop the span, or emit the anchor after the iframe.
+            run.push(element);
+            run_has_content = true;
         } else {
             flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
             if !is_vanished_empty_div(&element) {
@@ -3697,6 +3718,25 @@ fn wikidot_close_anchor_scope<'t>(
     }
 }
 
+fn end_anchor_at_explicit_list<'t>(
+    output: &mut Vec<Element<'t>>,
+    run: &mut Vec<Element<'t>>,
+    active: &mut ActiveScopes<'t>,
+    last_run_outer_scope: &mut RunMergeState,
+) {
+    let Some(position) = active.anchor_position() else {
+        return;
+    };
+    if !active.scope_is_pending(position) {
+        close_live_anchor(output, run, active, last_run_outer_scope);
+    }
+    let Some(position) = active.anchor_position() else {
+        return;
+    };
+    active.kill_from(position);
+    active.pop_istack_through_anchor();
+}
+
 fn close_live_anchor<'t>(
     output: &mut Vec<Element<'t>>,
     run: &mut Vec<Element<'t>>,
@@ -4366,6 +4406,18 @@ fn lower_children<'t>(
         );
         if segment {
             active.pend_all();
+        }
+        // A heading that ends a frame already consumed its own newline.
+        // Leaving the trim set eats the newline after the frame close.
+        if eject
+            && *trim_next_break
+            && matches!(
+                children.last(),
+                Some(Element::Container(container))
+                    if matches!(container.ctype(), ContainerType::Header(_))
+            )
+        {
+            *trim_next_break = false;
         }
         if eject {
             eject_segment_trailing_space(children);

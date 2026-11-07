@@ -66,6 +66,10 @@ pub enum ParseCondition {
     /// line construct at a block closer that must not be consumed as content.
     AtSourceByte(usize),
 
+    /// A list marker that is the first content token of a quote-prefixed line.
+    /// The physical line starts at `>`, so a source-line-start check misses it.
+    QuotePreparedListMarker,
+
     SplitClose(SplitDelimiter),
 
     PaddedSplitClose(SplitDelimiter),

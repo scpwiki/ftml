@@ -34,10 +34,18 @@ impl<'r, 't> Parser<'r, 't> {
         accepts_names: &'static [&'static str],
         hard: bool,
     ) {
+        let crosses_later_list_line = self.settings().layout.legacy()
+            && !self.in_wikidot_anchor_body()
+            && accepts_names.iter().any(|name| {
+                name.eq_ignore_ascii_case("footnote")
+                    || name.eq_ignore_ascii_case("li")
+                    || name.eq_ignore_ascii_case("ul")
+                    || name.eq_ignore_ascii_case("ol")
+            });
         let boundary = BodyEndBoundary {
             accepts_names,
             hard,
-            confined: self.in_wikidot_single_line_content(),
+            confined: self.in_wikidot_single_line_content() && !crosses_later_list_line,
         };
         self.block_end_scan_cache
             .borrow_mut()

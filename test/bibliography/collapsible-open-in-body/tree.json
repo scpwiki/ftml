@@ -1,0 +1,91 @@
+{
+    "elements": [
+        {
+            "element": "bibliography-block",
+            "data": {
+                "index": 0,
+                "title": null,
+                "hide": false
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "collapsible"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "after"
+                    }
+                ]
+            }
+        }
+    ],
+    "bibliographies": [
+        [
+            [
+                "a",
+                [
+                    {
+                        "element": "text",
+                        "data": "A"
+                    }
+                ]
+            ],
+            [
+                "\u0000",
+                [
+                    {
+                        "element": "collapsible",
+                        "data": {
+                            "elements": [
+                                {
+                                    "element": "definition-list",
+                                    "data": [
+                                        {
+                                            "key_string": "b",
+                                            "key": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "b"
+                                                }
+                                            ],
+                                            "value": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "B"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ],
+                            "attributes": {},
+                            "start-open": false,
+                            "show-text": null,
+                            "hide-text": null,
+                            "show-top": true,
+                            "show-bottom": false
+                        }
+                    }
+                ]
+            ]
+        ]
+    ]
+}
