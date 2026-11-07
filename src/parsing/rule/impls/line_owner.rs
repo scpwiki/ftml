@@ -207,6 +207,7 @@ where
     'r: 't,
 {
     let entry_parser = parser.clone();
+    let head_byte = entry_parser.current().span.start;
     let (name, in_head, segment) = parser.get_block_name(false)?;
     if !parser.head_word_is_actionable(&name, matches!(name, Cow::Borrowed(_)), segment) {
         return Ok(None);
@@ -270,6 +271,19 @@ where
     }
     if let LineOwner::Quote { depth } = owner
         && current_line_has_quote_owner(parser, depth)
+    {
+        return Ok(None);
+    }
+    if matches!(head, BlockHead::Collapsible(_))
+        && parser.settings().layout.legacy()
+        && parser
+            .wikidot_block_pair_at_head_byte(head_byte)
+            .is_none()
+        && (parser.discarding_hidden_body()
+            || parser.wikidot_scan_shows_stolen_head(
+                crate::parsing::parser::block_pairs::WikidotBlockKind::Collapsible,
+                head_byte,
+            ))
     {
         return Ok(None);
     }
