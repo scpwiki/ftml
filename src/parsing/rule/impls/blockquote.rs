@@ -1628,7 +1628,7 @@ fn build_blockquote_element(
             DepthItem::Item(row) => {
                 keep_trailing_break = row.keep_trailing_break;
                 marker_final = row.marker_final;
-                residual_chunk |= row.residual_block;
+                residual_chunk |= row.residual_block || row_has_residual_div(&row);
                 push_native_quote_row(&mut stack, row, wikidot);
             }
             DepthItem::List(_, list) => {
@@ -1652,7 +1652,7 @@ fn build_blockquote_element(
             elements = unwrap_all_quote_paragraphs(elements);
         }
         if residual_chunk {
-            elements = unwrap_residue_quote_paragraphs(elements);
+            elements = unwrap_residual_run_paragraphs(elements);
         }
     }
     if elements.is_empty() {
@@ -1699,6 +1699,100 @@ fn unwrap_all_quote_paragraphs(elements: Vec<Element<'_>>) -> Vec<Element<'_>> {
                 output.append(container.elements_mut());
             }
             other => output.push(other),
+        }
+    }
+    output
+}
+
+fn row_has_residual_div(row: &NativeQuoteRow<'_>) -> bool {
+    match row.elements.iter().position(|element| {
+        matches!(
+            element,
+            Element::Container(container)
+                if container.ctype() == ContainerType::Div
+        )
+    }) {
+        Some(position) if position > 0 => {
+            row.elements[..position]
+                .iter()
+                .all(|element| matches!(element, Element::Text(_)))
+                && row.elements[..position]
+                    .iter()
+                    .any(|element| quote_residue_text(element, false))
+        }
+        _ => false,
+    }
+}
+
+fn unwrap_residual_run_paragraphs(elements: Vec<Element<'_>>) -> Vec<Element<'_>> {
+    fn is_break(element: &Element) -> bool {
+        matches!(element, Element::LineBreak | Element::LineBreaks(_))
+    }
+    fn is_div(element: &Element) -> bool {
+        matches!(
+            element,
+            Element::Container(container)
+                if container.ctype() == ContainerType::Div
+        )
+    }
+    let mut output: Vec<Element> = Vec::with_capacity(elements.len());
+    let mut seam_pending = false;
+    let mut after_residue_prefix = false;
+    let mut iter = elements.into_iter().peekable();
+    while let Some(element) = iter.next() {
+        match element {
+            Element::Container(mut container)
+                if container.ctype() == ContainerType::Paragraph =>
+            {
+                let residue_only = !container.elements().is_empty()
+                    && container
+                        .elements()
+                        .iter()
+                        .all(|element| quote_residue_text(element, true));
+                if residue_only {
+                    if seam_pending && output.last().is_some_and(|last| !is_break(last)) {
+                        output.push(Element::LineBreak);
+                        seam_pending = false;
+                    }
+                    output.append(container.elements_mut());
+                    after_residue_prefix = true;
+                } else {
+                    if output.last().is_some_and(|last| !is_break(last)) {
+                        output.push(Element::LineBreak);
+                    }
+                    let elems = container.elements();
+                    let tail_start = elems
+                        .iter()
+                        .rposition(|element| is_break(element))
+                        .map(|index| index + 1)
+                        .unwrap_or(0);
+                    let tail_residue = tail_start < elems.len()
+                        && elems[tail_start..]
+                            .iter()
+                            .all(|element| quote_residue_text(element, true));
+                    seam_pending = !elems.is_empty() && !tail_residue;
+                    after_residue_prefix = false;
+                    output.append(container.elements_mut());
+                }
+            }
+            other => {
+                if is_break(&other) {
+                    if after_residue_prefix && iter.peek().is_some_and(is_div) {
+                        continue;
+                    }
+                    seam_pending = false;
+                    after_residue_prefix = false;
+                } else if seam_pending
+                    && output.last().is_some_and(|last| !is_break(last))
+                {
+                    output.push(Element::LineBreak);
+                    seam_pending = false;
+                    after_residue_prefix = false;
+                } else {
+                    after_residue_prefix = false;
+                }
+                output.push(other);
+            }
         }
     }
     output
