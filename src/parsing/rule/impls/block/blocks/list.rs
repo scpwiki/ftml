@@ -886,6 +886,41 @@ fn segment_has_block_marker(segment: &[Element]) -> bool {
         .any(|element| matches!(element, Element::Text(text) if text.contains("[[")))
 }
 
+fn wrap_inline_line_after_list(segment: &mut Vec<Element>) {
+    let mut index = 0;
+    while index < segment.len() {
+        if !matches!(
+            segment[index],
+            Element::List {
+                wikidot_explicit_block: false,
+                ..
+            }
+        ) {
+            index += 1;
+            continue;
+        }
+        let start = index + 1;
+        if start >= segment.len() || !segment[start].paragraph_safe() {
+            index += 1;
+            continue;
+        }
+        let mut end = start;
+        while end < segment.len() && segment[end].paragraph_safe() {
+            end += 1;
+        }
+        let run: Vec<Element> = segment.drain(start..end).collect();
+        segment.insert(
+            start,
+            Element::Container(Container::new(
+                ContainerType::Paragraph,
+                run,
+                AttributeMap::new(),
+            )),
+        );
+        index = start + 1;
+    }
+}
+
 /// L85 scope-5: live keeps a single break after these formed blocks in
 /// item bodies (li-div/align/code/coll/note-contained); every other
 /// paragraph-unsafe element (tables, rules, lists) still drops it.
@@ -933,6 +968,7 @@ fn assemble_wikidot_li_segments<'t>(
                 index += 1;
             }
         }
+        wrap_inline_line_after_list(segment);
     }
     if let Some(first) = segments.first_mut() {
         while matches!(first.first(), Some(Element::LineBreak)) {
@@ -1036,7 +1072,9 @@ fn assemble_wikidot_li_segments<'t>(
             if let Some(Element::Container(container)) = elements.last_mut()
                 && container.ctype() == ContainerType::Paragraph
             {
-                container.elements_mut().push(Element::LineBreak);
+                if !matches!(container.elements().last(), Some(Element::LineBreak)) {
+                    container.elements_mut().push(Element::LineBreak);
+                }
             } else {
                 elements.push(Element::LineBreak);
             }
