@@ -1074,6 +1074,9 @@ fn collect_list_item_elements<'r, 't>(
         && parser.wikidot_stack_accepts_table_cell_end()
     {
         parser.set_wikidot_list_cut_by_cell_end();
+        if let Some(previous) = restore_line {
+            parser.set_in_wikidot_single_line_content(previous);
+        }
         return Ok(crate::parsing::ParseSuccess::new(
             (Vec::new(), false, false, None),
             Vec::new(),
