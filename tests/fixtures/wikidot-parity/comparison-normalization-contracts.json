@@ -48,6 +48,216 @@
       "difference_class": "browser-rendering-whitespace",
       "wikijump_feature_id": "syntax-paragraphs-and-newline",
       "review": "Chrome confirms identical div element/attribute topology and rendered text. The remaining difference is formatting whitespace immediately inside the block container."
+    },
+    {
+      "case_id": "test--code--closer-first-suffixed-wins",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-code-blocks",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--code--closer-whitespace-then-text",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-code-blocks",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--code--nested-suffixed-outer-closer",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-code-blocks",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--code--two-codes-suffixed-first-closer",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-code-blocks",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--div--list-item-end",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-block-formatting-elements",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--footnote--block-scope-wrapped",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-footnotes",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br)."
+    },
+    {
+      "case_id": "test--footnote--code-in-footnote-suffixed-closer",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-footnotes",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--footnote--heading-end",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-footnotes",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--footnote--list-item-end",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-footnotes",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--list--explicit-crossed-pre-trailing-dissolves",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br)."
+    },
+    {
+      "case_id": "test--list--explicit-post-table-literal",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--list--explicit-pre-kept-before-prose",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--list--explicit-scope-break-inside-paragraph",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br)."
+    },
+    {
+      "case_id": "test--list--explicit-scope-break-paragraph",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br)."
+    },
+    {
+      "case_id": "test--list--nested-multi-item-partial-close",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br) and line-start whitespace."
+    },
+    {
+      "case_id": "test--list--nested-partial-close-in-item",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br) and line-start whitespace."
+    },
+    {
+      "case_id": "test--list--zombie-pair-fired-scope-not-reopened",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-lists",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br) and line-start whitespace."
+    },
+    {
+      "case_id": "test--misc--dash-line-fusion",
+      "difference_class": "page-preview-root-whitespace",
+      "wikijump_feature_id": "syntax-typography",
+      "review": "Chrome confirms the same parsed DOM after trimming only ASCII whitespace at the fragment boundaries."
+    },
+    {
+      "case_id": "test--span--basic",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-block-formatting-elements",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br)."
+    },
+    {
+      "case_id": "test--strikethrough--end-block-closes-scope",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-inline-formatting",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--table--eof-stray-root",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--table--paragraph-after-table-scope",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br)."
+    },
+    {
+      "case_id": "test--table--simple-cell-carry-in",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-edge (after br)."
+    },
+    {
+      "case_id": "test--table--simple-unterminated-row-advanced-body",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--table--simple-unterminated-row-table-opener",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--table--t-d-before-closein",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--t-d-before-closein2",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--t-d-cell",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace."
+    },
+    {
+      "case_id": "test--table--tf-block-after",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--tf-coll-open-in-outer-cell",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--tf-first-in-cell",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--tf-inline-before-cell",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--tf-nested-table",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--tf-next-row",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
+    },
+    {
+      "case_id": "test--table--tf-second-close",
+      "difference_class": "browser-rendering-whitespace",
+      "wikijump_feature_id": "syntax-tables",
+      "review": "Chrome confirms identical element and attribute topology, collapsed direct text, rendered text, and preformatted text. The remaining difference is formatting whitespace, line-start whitespace and trailing block-edge whitespace."
     }
   ]
 }
