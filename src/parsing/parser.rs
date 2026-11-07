@@ -199,6 +199,7 @@ pub(super) struct BlockScanCache<'t> {
     pending_iftags_end_swallows: Vec<usize>,
     wikidot_discarded_row_closers: BTreeSet<usize>,
     pub(super) wikidot_yield_orphan_closes: BTreeSet<usize>,
+    wikidot_cut_scope_closers: BTreeSet<usize>,
     wikidot_li_paired_heads: std::collections::BTreeSet<usize>,
     wikidot_li_pairing_depth: Cell<usize>,
     wikidot_li_heads: Vec<WikidotLiHead>,
@@ -991,6 +992,20 @@ impl<'r, 't> Parser<'r, 't> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_discarded_row_closers
+            .contains(&position)
+    }
+
+    pub(crate) fn push_wikidot_cut_scope_closer(&self, position: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_cut_scope_closers
+            .insert(position);
+    }
+
+    pub(crate) fn wikidot_cut_scope_closer(&self, position: usize) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_cut_scope_closers
             .contains(&position)
     }
 

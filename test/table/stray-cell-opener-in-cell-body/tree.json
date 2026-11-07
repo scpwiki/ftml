@@ -1,0 +1,135 @@
+{
+    "elements": [
+        {
+            "element": "table",
+            "data": {
+                "type": "advanced",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "table",
+                                        "data": {
+                                            "type": "simple",
+                                            "attributes": {},
+                                            "rows": [
+                                                {
+                                                    "attributes": {},
+                                                    "cells": [
+                                                        {
+                                                            "header": false,
+                                                            "column-span": 1,
+                                                            "align": null,
+                                                            "attributes": {},
+                                                            "elements": []
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "element": "line-break"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[["
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "row"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    },
+                                    {
+                                        "element": "partial",
+                                        "data": {
+                                            "TableCell": {
+                                                "header": false,
+                                                "column-span": 1,
+                                                "align": null,
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "container",
+                                                        "data": {
+                                                            "type": "bold",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "text",
+                                                                    "data": "a"
+                                                                },
+                                                                {
+                                                                    "element": "footnote",
+                                                                    "data": 1
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "element": "line-break"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "row"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    },
+                                    {
+                                        "element": "line-break"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "table"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "||"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "f"
+            }
+        ]
+    ],
+    "needs-footnote-block": true
+}

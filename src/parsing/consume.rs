@@ -1752,7 +1752,9 @@ fn try_consume_discarded_row_closer<'r, 't>(
         return None;
     }
     let position = parser.current().span.start;
-    if !parser.wikidot_discarded_row_closer(position) {
+    if !parser.wikidot_discarded_row_closer(position)
+        && !parser.wikidot_cut_scope_closer(position)
+    {
         return None;
     }
     let closer = parser.full_text().inner().get(position..).unwrap_or("");
