@@ -16,10 +16,6 @@ use crate::tree::{
 use std::borrow::Cow;
 use std::vec::IntoIter;
 
-/// Live's libtidy flattens the tag soup an explicit list leaves when its
-/// item markers sit on later bullet lines, and it joins a trailing one-item
-/// list onto the list before it. Returns whether the body changed. A changed
-/// body already has the break tidy keeps, so the caller must not append one.
 pub(crate) fn repair_wikidot_footnote_list_chrome<'t>(
     elements: &mut Vec<Element<'t>>,
 ) -> bool {
@@ -84,8 +80,6 @@ fn lift_footnote_list_items<'t>(items: &mut Vec<ListItem<'t>>) -> bool {
     changed
 }
 
-/// A bullet item whose tail is only an explicit item wrapping one list.
-/// Live's tidy promotes that list's items.
 fn take_wrapped_list<'t>(elements: &mut Vec<Element<'t>>) -> Option<Vec<ListItem<'t>>> {
     let rest_start = elements
         .iter()

@@ -34,10 +34,6 @@ impl<'r, 't> Parser<'r, 't> {
         accepts_names: &'static [&'static str],
         hard: bool,
     ) {
-        // A closer on a later list line is still the end of the block that
-        // opened inside that item. Confining the boundary hides it. An anchor
-        // body keeps its list confined, because live closes that anchor
-        // before the list.
         let crosses_later_list_line = self.settings().layout.legacy()
             && !self.in_wikidot_anchor_body()
             && accepts_names.iter().any(|name| {
