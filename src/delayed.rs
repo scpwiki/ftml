@@ -1296,10 +1296,3 @@ fn legacy_tag_source(tag: &ResolvedTagRef<'_>) -> String {
     let tag = tag.tag.replace(['[', ']'], "");
     format!("[/system:page-tags/tag/{tag} {tag}]")
 }
-
-#[allow(dead_code)]
-fn _assert_delayed_types_remain_paragraph_safe(
-    _attributes: AttributeMap<'_>,
-    _container: Container<'_>,
-) {
-}

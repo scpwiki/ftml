@@ -1109,7 +1109,6 @@ where
             view.to_ascii_lowercase().as_str(),
             "footnote" | "span" | "size" | "a"
         ) && scan.head_word_view_is_actionable(
-            &name,
             matches!(name, Cow::Borrowed(_)),
             segment,
             view,
@@ -1523,7 +1522,6 @@ fn wikidot_upcoming_explicit_list<'r: 't, 't>(parser: &Parser<'r, 't>) -> bool {
         let view = name.strip_suffix('_').unwrap_or(&name);
         (view.eq_ignore_ascii_case("ol") || view.eq_ignore_ascii_case("ul"))
             && probe.head_word_view_is_actionable(
-                &name,
                 matches!(name, Cow::Borrowed(_)),
                 segment,
                 view,

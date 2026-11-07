@@ -42,7 +42,7 @@ pub(super) fn substitute_wikidot(text: &mut String) {
             scan = close;
             continue;
         }
-        if leading_comment_remains_an_owner_barrier(text, open, close) {
+        if leading_comment_remains_an_owner_barrier(text, open) {
             if line_remainder_splices(text, close, &literal_regions, &block_name_comments)
                 && let Some(drop) = line_start_break_drop(text, open)
             {
@@ -277,14 +277,6 @@ fn comment_contains_iftags_head(comment: &str) -> bool {
     lower.contains("[[iftags") || lower.contains("[[/iftags")
 }
 
-/// Live Wikidot (anonymous PagePreview, 2026-11-05) elides a column-0 comment
-/// and one preceding line break whatever follows it: list markers, headings,
-/// rules, separators and gallery heads all stay literal text joined to the
-/// previous line. No construct is exempt.
-fn exposed_line_start_construct(_tail: &str) -> bool {
-    false
-}
-
 fn line_remainder_splices(
     source: &str,
     mut pos: usize,
@@ -324,10 +316,11 @@ fn line_remainder_splices(
                 None => return false,
             }
         }
-        let line_end = source[pos..]
-            .find('\n')
-            .map_or(source.len(), |newline| pos + newline);
-        return !exposed_line_start_construct(&source[pos..line_end]);
+        // Live Wikidot (anonymous PagePreview, 2026-11-05) elides a column-0
+        // comment and one preceding line break whatever follows it: list
+        // markers, headings, rules, separators and gallery heads all stay
+        // literal text joined to the previous line. No construct is exempt.
+        return true;
     }
 }
 
@@ -420,21 +413,13 @@ fn comment_elision_needs_raw_barrier(source: &str, open: usize, close: usize) ->
     )
 }
 
-fn leading_comment_remains_an_owner_barrier(
-    source: &str,
-    open: usize,
-    close: usize,
-) -> bool {
+fn leading_comment_remains_an_owner_barrier(source: &str, open: usize) -> bool {
     let line_start = source[..open].rfind('\n').map_or(0, |newline| newline + 1);
-    if !source[line_start..open]
+    // The text after the comment is not consulted: no line-start construct is
+    // exempt, same as `line_remainder_splices`.
+    source[line_start..open]
         .bytes()
         .all(|byte| matches!(byte, b' ' | b'\t'))
-    {
-        return false;
-    }
-
-    let tail = source[close..].trim_start_matches([' ', '\t']);
-    !exposed_line_start_construct(tail)
 }
 
 fn code_closer_comment_starts(source: &str) -> BTreeSet<usize> {

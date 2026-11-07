@@ -1134,7 +1134,7 @@ fn parse_cell<'r, 't>(
 }
 
 fn column_span_one() -> NonZeroU32 {
-    NonZeroU32::new(1).expect("one is non-zero")
+    NonZeroU32::MIN
 }
 
 struct BoundedU32DecimalLexeme<'a> {

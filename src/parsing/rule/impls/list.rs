@@ -615,15 +615,13 @@ where
         let absorb_lead = !ParagraphStack::wikidot_run_ends_with_scored_alias(&elements)
             && crate::parsing::paragraph::wikidot_scored_alias_open_here(&sub_parser);
         if absorb_lead || ParagraphStack::wikidot_run_ends_with_scored_alias(&elements) {
-            let (absorbed_run, absorbed_break) = absorb_wikidot_scored_alias_line(
+            ends_run |= absorb_wikidot_scored_alias_line(
                 &mut sub_parser,
                 &mut elements,
                 &mut item_errors,
                 &mut item_paragraph_safe,
                 absorb_lead,
             )?;
-            ends_run |= absorbed_run;
-            let _ = absorbed_break;
         }
     }
 
@@ -905,7 +903,7 @@ fn absorb_wikidot_scored_alias_line<'r, 't>(
     errors: &mut Vec<ParseError>,
     paragraph_safe: &mut bool,
     absorb_lead: bool,
-) -> Result<(bool, bool), ParseError>
+) -> Result<bool, ParseError>
 where
     'r: 't,
 {
@@ -970,7 +968,7 @@ where
             break;
         }
     }
-    Ok((ends_run, ends_at_break))
+    Ok(ends_run)
 }
 
 pub(crate) fn build_list_element(

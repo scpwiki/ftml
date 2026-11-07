@@ -1602,12 +1602,11 @@ where
         borrowed: bool,
         segment: bool,
     ) -> bool {
-        self.head_word_view_is_actionable(name, borrowed, segment, name)
+        self.head_word_view_is_actionable(borrowed, segment, name)
     }
 
     pub(crate) fn head_word_view_is_actionable(
         &self,
-        _name: &str,
         borrowed: bool,
         segment: bool,
         view: &str,
@@ -6262,7 +6261,6 @@ where
                         .iter()
                         .any(|accepted| base_name.eq_ignore_ascii_case(accepted))
                         && opener.head_word_view_is_actionable(
-                            &name,
                             matches!(name, Cow::Borrowed(_)),
                             segment,
                             base_name,
