@@ -197,9 +197,12 @@ pub(super) fn preserve_wikidot_document_indentation_barrier(text: &mut String) {
 /// Live Wikidot drops the ASCII whitespace that directly precedes a
 /// `[[footnote]]` reference before line-oriented block parsing, so a block
 /// head written on the previous line no longer owns its line and falls back to
-/// literal text. Literal regions keep their authored whitespace.
+/// literal text. A second `[[footnote]]` inside an open footnote stays literal
+/// and keeps the whitespace in front of it. Literal regions keep their
+/// authored whitespace.
 pub(super) fn remove_wikidot_space_before_footnote(text: &mut String) {
     const FOOTNOTE: &str = "[[footnote]]";
+    const FOOTNOTE_CLOSE: &str = "[[/footnote]]";
 
     if !text.contains(FOOTNOTE) {
         return;
@@ -208,13 +211,32 @@ pub(super) fn remove_wikidot_space_before_footnote(text: &mut String) {
     let literal = LiteralRegionIndex::new(text);
     let mut removals: Vec<Range<usize>> = Vec::new();
     let mut cursor = 0usize;
-    while let Some(relative) = text[cursor..].find(FOOTNOTE) {
-        let start = cursor + relative;
-        cursor = start + FOOTNOTE.len();
-        if literal.contains(start) {
+    let mut open_footnotes = 0usize;
+    while cursor < text.len() {
+        let rest = &text[cursor..];
+        let next_open = rest.find(FOOTNOTE).map(|index| cursor + index);
+        let next_close = rest.find(FOOTNOTE_CLOSE).map(|index| cursor + index);
+        let (at, is_open) = match (next_open, next_close) {
+            (Some(open_at), Some(close_at)) if close_at < open_at => (close_at, false),
+            (Some(open_at), _) => (open_at, true),
+            (None, Some(close_at)) => (close_at, false),
+            (None, None) => break,
+        };
+        if !is_open {
+            cursor = at + FOOTNOTE_CLOSE.len();
+            if !literal.contains(at) && open_footnotes > 0 {
+                open_footnotes -= 1;
+            }
             continue;
         }
 
+        cursor = at + FOOTNOTE.len();
+        if literal.contains(at) || open_footnotes > 0 {
+            continue;
+        }
+        open_footnotes += 1;
+
+        let start = at;
         let mut space_start = start;
         while space_start > 0
             && matches!(
