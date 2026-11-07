@@ -71,6 +71,7 @@ pub struct ParagraphStack<'t> {
 
     pending_aligned_image_separator: Option<usize>,
     unwrapped_after_block_line: bool,
+    crossed_collapsible_tail: bool,
     wikidot_footnote_joined_math_break: bool,
     wikidot_literal_iftags_line: bool,
     wikidot_literal_div_line: bool,
@@ -123,7 +124,8 @@ impl<'t> ParagraphStack<'t> {
     pub(crate) fn wikidot_line_break_follows_block(&self) -> bool {
         self.wikidot
             && self.current_empty()
-            && self.finished.last().is_some_and(|element| {
+            && (self.crossed_collapsible_tail
+                || self.finished.last().is_some_and(|element| {
                 matches!(
                     element,
                     Element::Container(container)
@@ -152,7 +154,7 @@ impl<'t> ParagraphStack<'t> {
                         })
                     )
                 )
-            })
+            }))
     }
 
     /// Live's `Deflist` rule (position 46) matches `\n((: ).*\n)` and re-emits the
@@ -625,6 +627,16 @@ impl<'t> ParagraphStack<'t> {
     pub(crate) fn mark_next_unwrapped_after_block(&mut self) {
         self.current_unwrapped = true;
         self.unwrapped_after_block_line = true;
+    }
+
+    pub(crate) fn mark_crossed_collapsible_tail(&mut self) {
+        if self.wikidot {
+            self.crossed_collapsible_tail = true;
+        }
+    }
+
+    pub(crate) fn clear_crossed_collapsible_tail(&mut self) {
+        self.crossed_collapsible_tail = false;
     }
 
     #[inline]
