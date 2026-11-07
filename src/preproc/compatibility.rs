@@ -308,7 +308,49 @@ pub(crate) fn wikidot_outer_div_still_open_at_collapsible_close(
         pos += 2;
     }
 
-    let crossed_inside = collapsible_depth == 1 && div_depth >= 1;
+    // Live treats a dangling `[[div]]` inside the collapsible (one no closer
+    // ever closes) as literal text, not as a crossing: only when a div
+    // closer after the collapsible's close settles one of the span's net
+    // openers does the div pair across the collapsible close (the q2-cd-own
+    // shapes vs. q2-d-unclosed-in-c/u-plain). The tail walk below models
+    // exactly that; tail openers settle LIFO first (balancing each other)
+    // and only a surplus closer pops a span opener. The outer-owner fixture
+    // keeps crossing because its trailing closer settles the span opener.
+    let crossed_inside = collapsible_depth == 1 && div_depth >= 1 && {
+        let mut depth = div_depth;
+        let mut pos = limit;
+        let mut crossing = false;
+        let tail_limit = source.len();
+        while pos < tail_limit {
+            pos = skip_past_literal(literal, pos, tail_limit);
+            if pos >= tail_limit {
+                break;
+            }
+            let Some(rel) = lower[pos..tail_limit].find("[[") else {
+                break;
+            };
+            pos += rel;
+
+            if marker_extent_ignore_case(&lower, pos, b"[[/div]]") {
+                if depth == div_depth {
+                    // Settles one of the span's own openers.
+                    crossing = true;
+                    break;
+                }
+                // Settles a tail opener; div_depth itself never does this.
+                depth -= 1;
+                pos += "[[/div]]".len();
+                continue;
+            }
+            if let Some(end) = div_open_extent(&lower, pos, tail_limit) {
+                depth += 1;
+                pos = end;
+                continue;
+            }
+            pos += 2;
+        }
+        crossing
+    };
     let wrapped_same_line = collapsible_depth == 1
         && open_divs > div_depth
         && saw_center_close
