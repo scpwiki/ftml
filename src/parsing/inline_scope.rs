@@ -1232,6 +1232,10 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
             output.push(element);
             continue;
         }
+        if let Some(replacement) = bold_explicit_list_segments(&mut element) {
+            output.extend(replacement);
+            continue;
+        }
         if let Some(kind) = format_kind_literalised_around_flow_block(&element)
             && let Element::Container(container) = &mut element
         {
@@ -1412,6 +1416,149 @@ fn wrap_explicit_list_items(list: &mut Element<'_>, ctype: ContainerType) {
             }
             ListItem::SubList { element } => wrap_explicit_list_items(element, ctype),
         }
+    }
+}
+
+fn subtree_contains_native_list(element: &Element<'_>) -> bool {
+    if matches!(
+        element,
+        Element::List {
+            wikidot_explicit_block: false,
+            ..
+        }
+    ) {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        for child in children {
+            if !found && subtree_contains_native_list(child) {
+                found = true;
+            }
+        }
+    });
+    found
+}
+
+fn format_segment_has_content(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| match element {
+        Element::LineBreak | Element::LineBreaks(_) => false,
+        Element::Text(text) => !text.trim().is_empty(),
+        _ => true,
+    })
+}
+
+fn segment_format_run<'t>(
+    elements: Vec<Element<'t>>,
+    ctype: ContainerType,
+    formed: &mut bool,
+) -> Vec<Element<'t>> {
+    let mut output = Vec::with_capacity(elements.len());
+    let mut run: Vec<Element<'t>> = Vec::new();
+    for element in elements {
+        if matches!(
+            element,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        ) {
+            while matches!(run.first(), Some(Element::LineBreak | Element::LineBreaks(_))) {
+                run.remove(0);
+            }
+            if format_segment_has_content(&run) {
+                *formed = true;
+                output.push(Element::Container(Container::new(
+                    ctype,
+                    mem::take(&mut run),
+                    AttributeMap::new(),
+                )));
+            } else {
+                run.clear();
+            }
+            let mut list = element;
+            segment_format_list_items(&mut list, ctype, formed);
+            output.push(list);
+        } else {
+            run.push(element);
+        }
+    }
+    while matches!(run.first(), Some(Element::LineBreak | Element::LineBreaks(_))) {
+        run.remove(0);
+    }
+    if format_segment_has_content(&run) {
+        *formed = true;
+        output.push(Element::Container(Container::new(
+            ctype,
+            run,
+            AttributeMap::new(),
+        )));
+    }
+    output
+}
+
+fn segment_format_list_items<'t>(
+    list: &mut Element<'t>,
+    ctype: ContainerType,
+    formed: &mut bool,
+) {
+    let Element::List { items, .. } = list else {
+        return;
+    };
+    for item in items.iter_mut() {
+        match item {
+            ListItem::Elements { elements, .. } => {
+                let inner = mem::take(elements);
+                *elements = segment_format_run(inner, ctype, formed);
+            }
+            ListItem::SubList { element } => {
+                segment_format_list_items(element, ctype, formed);
+            }
+        }
+    }
+}
+
+fn bold_explicit_list_segments<'t>(element: &mut Element<'t>) -> Option<Vec<Element<'t>>> {
+    let Element::Container(container) = &element else {
+        return None;
+    };
+    if container.ctype() != ContainerType::Bold {
+        return None;
+    }
+    let crosses_list = container.elements().iter().any(|child| {
+        matches!(
+            child,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        )
+    });
+    if !crosses_list || container.elements().iter().any(is_wikidot_flow_block) {
+        return None;
+    }
+    let poisoned = subtree_contains_native_list(element);
+    let Element::Container(container) = element else {
+        unreachable!()
+    };
+    let children = mem::take(container.elements_mut());
+    let kind = InlineFormatKind::Bold;
+    let literalised = |children: Vec<Element<'t>>| {
+        let mut output = Vec::with_capacity(children.len() + 2);
+        output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
+        output.extend(children);
+        output.push(Element::Text(Cow::Borrowed(kind.close_marker())));
+        output
+    };
+    if poisoned {
+        return Some(literalised(children));
+    }
+    let mut formed = false;
+    let segmented = segment_format_run(children, ContainerType::Bold, &mut formed);
+    if formed {
+        Some(segmented)
+    } else {
+        Some(literalised(segmented))
     }
 }
 
