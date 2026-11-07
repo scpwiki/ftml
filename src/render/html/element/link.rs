@@ -106,6 +106,24 @@ fn render_wikidot_anchor(
     attributes: &AttributeMap,
     target: Option<AnchorTarget>,
 ) {
+    if let Some(index) = elements
+        .iter()
+        .position(|element| super::user::wikidot_user_ends_open_anchor(ctx, element))
+    {
+        let (before, rest) = elements.split_at(index);
+        let (user, after) = rest
+            .split_first()
+            .expect("anchor split index points at a user");
+        {
+            let mut tag = ctx.html().a();
+            write_wikidot_anchor_attributes(&mut tag, attributes, target);
+            tag.contents(before);
+        }
+        super::user::render_wikidot_user_bare(ctx, user);
+        super::render_elements(ctx, after);
+        return;
+    }
+
     let mut tag = ctx.html().a();
     write_wikidot_anchor_attributes(&mut tag, attributes, target);
     tag.contents(elements);

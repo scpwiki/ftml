@@ -156,7 +156,7 @@ Accepts score (`_`): Strips leading and trailing newlines.
 
 In `Layout::Wikidot`, only `a` opens and closes this block; the `anchor` name and cross-name closers remain literal. `Layout::Wikijump` retains both names.
 
-In `Layout::Wikidot`, an anchor inside an anchor's body, or any other anchor-producing element such as a link, a footnote reference, an equation reference, a file link or a standalone button, closes the enclosing anchor at that element. Inline markup open inside the anchor is dropped at the same point, and content after the inner element renders outside the closed anchor.
+In `Layout::Wikidot`, an anchor inside an anchor's body, or any other anchor-producing element such as a link, a footnote reference, an equation reference, a file link or a standalone button, closes the enclosing anchor at that element. Inline markup open inside the anchor is dropped at the same point, and content after the inner element renders outside the closed anchor. A resolved `[[user]]` is one of those producers. The enclosing anchor closes before it, and the user renders as its own anchor without `span.printuser`. An unresolved user stays in the enclosing anchor as `span.error-inline`.
 
 Arguments:
 * `Layout::Wikijump`: all accepted attributes.
