@@ -839,12 +839,12 @@ fn try_consume_fn<'r, 't>(
         // A line carrying a flat block closer keeps its break (the closer
         // consumed no break itself); flat heads already ate theirs.
         let wikidot_block_close_line = parser.settings().layout.legacy()
-            && elements.iter().any(|element| {
+            && (elements.iter().any(|element| {
                 matches!(
                     element,
                     Element::Partial(PartialElement::WikidotBlockClose(_))
                 )
-            });
+            }) || row_ends_with_formed_div(&elements));
         // A tabview ending the row keeps the row break: live renders the
         // line after the tabview in the same inline flow ("</div><br>\noutro").
         let wikidot_tabview_line = parser.settings().layout.legacy()
@@ -1573,6 +1573,20 @@ fn row_has_note(elements: &[Element<'_>]) -> bool {
     })
 }
 
+fn row_ends_with_formed_div(elements: &[Element<'_>]) -> bool {
+    elements
+        .iter()
+        .rev()
+        .find(|element| **element != Element::LineBreak)
+        .is_some_and(|element| {
+            matches!(
+                element,
+                Element::Container(container)
+                    if container.ctype() == ContainerType::Div
+            )
+        })
+}
+
 fn push_native_quote_row<'t>(
     stack: &mut ParagraphStack<'t>,
     row: NativeQuoteRow<'t>,
@@ -1610,12 +1624,12 @@ fn push_native_quote_row<'t>(
     // A row carrying a flat block closer leaves following content unwrapped
     // and keeps its own trailing break (mirrors top-level closer lines).
     let wikidot_block_close_row = wikidot
-        && row.elements.iter().any(|element| {
+        && (row.elements.iter().any(|element| {
             matches!(
                 element,
                 Element::Partial(PartialElement::WikidotBlockClose(_))
             )
-        });
+        }) || row_ends_with_formed_div(&row.elements));
     if wikidot_block_close_row {
         stack.record_next_element_line_start(false);
     }

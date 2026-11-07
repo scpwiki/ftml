@@ -348,7 +348,7 @@ pub(crate) fn wikidot_own_line_prefix(source: &str, byte: usize) -> bool {
 
 /// Own line inside a quote run: only quote markers and spacing precede the
 /// byte (`> [[/div]]` counts, `> text [[/div]]` does not).
-fn wikidot_quoted_own_line_prefix(source: &str, byte: usize) -> bool {
+pub(crate) fn wikidot_quoted_own_line_prefix(source: &str, byte: usize) -> bool {
     let end = byte.min(source.len());
     let start = source[..end].rfind('\n').map_or(0, |offset| offset + 1);
     source[start..end]

@@ -22,7 +22,7 @@ use super::Parser;
 use super::parser::QuoteBodyLineStatus;
 use super::parser::block_pairs::WikidotBlockKind;
 use super::parser::inline_pairs::InlineMarkerRole;
-use super::parser::wikidot_own_line_prefix;
+use super::parser::{wikidot_own_line_prefix, wikidot_quoted_own_line_prefix};
 use super::prelude::*;
 use super::rule::{
     get_rules_for_token,
@@ -30,6 +30,9 @@ use super::rule::{
         RULE_FALLBACK, glued_scheme_url_start, starts_own_line_rule,
         starts_wikidot_only_scheme_url, try_consume_wikidot_end_block_link, url_elements,
     },
+};
+use crate::preproc::{
+    LiteralRegionIndex, wikidot_outer_div_still_open_at_collapsible_close,
 };
 use crate::tree::{
     LinkLabel, LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind,
@@ -886,6 +889,32 @@ where
         && normalized.eq_ignore_ascii_case("span")
         && parser.wikidot_span_alias_close_is_scored(start);
     parser.update(&close);
+    if !scored_close
+        && normalized.eq_ignore_ascii_case("collapsible")
+        && !parser.in_wikidot_collapsible()
+        && (wikidot_own_line_prefix(parser.full_text().inner(), start)
+            || wikidot_quoted_own_line_prefix(parser.full_text().inner(), start))
+        && parser
+            .wikidot_block_pair_at_closer_byte(start)
+            .is_some_and(|pair| {
+                pair.kind == WikidotBlockKind::Collapsible && {
+                    let source = parser.full_text().inner();
+                    let literal = LiteralRegionIndex::new(source);
+                    wikidot_outer_div_still_open_at_collapsible_close(
+                        source,
+                        &literal,
+                        pair.head_byte,
+                        pair.closer_byte,
+                    )
+                    .1
+                }
+            })
+    {
+        if parser.current().token == Token::LineBreak {
+            let _ = parser.step();
+        }
+        return Ok(Some(Elements::None));
+    }
     if !scored_close && normalized.eq_ignore_ascii_case("span") {
         parser.leave_wikidot_span_body(closes_scored_span);
     }
