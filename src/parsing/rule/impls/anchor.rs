@@ -125,7 +125,9 @@ where
     if parser.settings().layout.legacy() && !valid_wikidot_name {
         let without_trailing = name.trim_end_matches([' ', '\t', '\r', '\n']);
         let label = without_trailing.trim_start_matches([' ', '\t', '\r', '\n']);
-        let leading = &without_trailing[..without_trailing.len() - label.len()];
+        let leading = without_trailing
+            .strip_suffix(label)
+            .expect("a start-trimmed label is a suffix of its source");
         let trailing = &name[without_trailing.len()..];
         let mut elements = vec![text!("[")];
         if !leading.is_empty() {
