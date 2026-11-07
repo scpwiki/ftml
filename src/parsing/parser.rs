@@ -33,7 +33,7 @@ use crate::preproc::LiteralRegionIndex;
 use crate::render::text::TextRender;
 use crate::tokenizer::{DelayedMarker, Tokenization};
 use crate::tree::{
-    AcceptsPartial, Bibliography, BibliographyList, CodeBlock, HeadingLevel,
+    AcceptsPartial, Bibliography, BibliographyList, CodeBlock, Elements, HeadingLevel,
 };
 use std::borrow::Cow;
 use std::cell::Cell;
@@ -115,6 +115,28 @@ pub(crate) struct RuleAttemptKey {
     wikidot: WikidotState,
 }
 
+pub(crate) const RULE_ATTEMPT_SUCCESS_TOKEN_BUDGET: usize = 4_000_000;
+
+#[derive(Debug, Clone)]
+pub(crate) struct RuleAttemptSuccess<'t> {
+    item: Elements<'t>,
+    errors: Vec<ParseError>,
+    paragraph_safe: bool,
+    paragraph_split: Option<Vec<super::result::ParagraphSplitEntry>>,
+    split_close_leftover: Option<String>,
+    consumed: usize,
+    accepts_partial: AcceptsPartial,
+    accepts_partial_offset: Option<isize>,
+    in_footnote: bool,
+    in_note: bool,
+    in_color: bool,
+    has_footnote_block: bool,
+    start_of_line: bool,
+    native_blockquote_depth: u32,
+    quote_body_cursor: Option<QuoteBodyCursor>,
+    wikidot: WikidotState,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct RecursionDepthFailureKey {
     rule: &'static str,
@@ -140,6 +162,13 @@ pub(super) struct BlockScanCache<'t> {
     peak_depth: Cell<usize>,
     rule_attempt_failures: HashMap<RuleAttemptKey, (ParseError, usize)>,
     rule_attempt_failure_positions: Vec<bool>,
+    rule_attempt_successes: HashMap<
+        (RuleAttemptKey, u64),
+        (RuleAttemptSuccess<'t>, usize, u64),
+    >,
+    rule_attempt_success_positions: Vec<bool>,
+    rule_attempt_success_tokens: usize,
+    rule_attempt_success_clock: u64,
     body_walk_failures: HashMap<BodyWalkKey, usize>,
     body_walk_failure_positions: Vec<bool>,
     body_end_outcomes: BTreeMap<ContextualBlockEndScanKey, bool>,
@@ -2591,6 +2620,189 @@ impl<'r, 't> Parser<'r, 't> {
             .insert(key, (error.clone(), height));
     }
 
+    fn success_boundary_key(&self, rule: &'static str) -> u64 {
+        if rule == "list" {
+            self.body_end_boundary_fingerprint()
+        } else {
+            0
+        }
+    }
+
+    pub(crate) fn rule_attempt_success(
+        &self,
+        rule: &'static str,
+    ) -> Option<(
+        RuleAttemptSuccess<'t>,
+        super::result::ParseSuccess<'r, 't, Elements<'t>>,
+    )> {
+        let recorded = self
+            .block_end_scan_cache
+            .borrow()
+            .rule_attempt_success_positions
+            .get(self.remaining.len())
+            .is_some_and(|&recorded| recorded);
+        if !recorded {
+            return None;
+        }
+
+        let key = (self.rule_attempt_key(rule)?, self.success_boundary_key(rule));
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let plain = cache
+            .rule_attempt_successes
+            .get(&key)
+            .filter(|(_, height, _)| {
+                self.depth + height <= self.max_recursion_depth
+            })
+            .map(|_| key);
+        let found_key = plain.or_else(|| {
+            let at_depth = (
+                RuleAttemptKey {
+                    depth: Some(self.depth),
+                    ..key.0
+                },
+                key.1,
+            );
+            cache
+                .rule_attempt_successes
+                .contains_key(&at_depth)
+                .then_some(at_depth)
+        })?;
+        cache.rule_attempt_success_clock += 1;
+        let tick = cache.rule_attempt_success_clock;
+        let entry = cache
+            .rule_attempt_successes
+            .get_mut(&found_key)
+            .expect("success entry found above");
+        entry.2 = tick;
+        let (success, height) = (entry.0.clone(), entry.1);
+        cache
+            .peak_depth
+            .set(cache.peak_depth.get().max(self.depth + height));
+        let output = super::result::ParseSuccess::from_parts(
+            success.item.clone(),
+            success.errors.clone(),
+            success.paragraph_safe,
+            success.paragraph_split.clone(),
+            success.split_close_leftover.clone(),
+        );
+        Some((success, output))
+    }
+
+    pub(crate) fn cache_rule_attempt_success(
+        &self,
+        rule: &'static str,
+        before: &ParserMutableState,
+        sub_parser: &Parser<'r, 't>,
+        output: &super::result::ParseSuccess<'r, 't, Elements<'t>>,
+        height: usize,
+    ) {
+        if rule == "block" {
+            return;
+        }
+        let after = sub_parser.get_mutable_state();
+        if after.footnote_index != before.footnote_index
+            || after.html_block_index != before.html_block_index
+            || after.code_block_index != before.code_block_index
+            || after.table_of_contents_index != before.table_of_contents_index
+            || after.bibliography_index != before.bibliography_index
+        {
+            return;
+        }
+
+        let consumed = self.remaining.len() - sub_parser.remaining.len();
+
+        let Some(mut attempt_key) = self.rule_attempt_key(rule) else {
+            return;
+        };
+        if self.depth + height > self.max_recursion_depth {
+            attempt_key.depth = Some(self.depth);
+        }
+        let key = (attempt_key, self.success_boundary_key(rule));
+
+        let success = RuleAttemptSuccess {
+            item: output.item.clone(),
+            errors: output.errors.clone(),
+            paragraph_safe: output.paragraph_safe,
+            paragraph_split: output.paragraph_split.clone(),
+            split_close_leftover: output.split_close_leftover.clone(),
+            consumed,
+            accepts_partial: sub_parser.accepts_partial,
+            accepts_partial_offset: (sub_parser.accepts_partial_depth != 0).then(
+                || {
+                    sub_parser.accepts_partial_depth as isize
+                        - self.depth as isize
+                },
+            ),
+            in_footnote: sub_parser.in_footnote,
+            in_note: sub_parser.in_note,
+            in_color: sub_parser.in_color,
+            has_footnote_block: sub_parser.has_footnote_block,
+            start_of_line: sub_parser.start_of_line,
+            native_blockquote_depth: sub_parser.native_blockquote_depth,
+            quote_body_cursor: sub_parser.quote_body_cursor,
+            wikidot: sub_parser.wikidot,
+        };
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        cache.rule_attempt_success_clock += 1;
+        let tick = cache.rule_attempt_success_clock;
+        if let Some(old) = cache
+            .rule_attempt_successes
+            .insert(key, (success, height, tick))
+        {
+            cache.rule_attempt_success_tokens -= old.0.consumed;
+        }
+        cache.rule_attempt_success_tokens += consumed;
+        if cache.rule_attempt_success_tokens > RULE_ATTEMPT_SUCCESS_TOKEN_BUDGET {
+            let target = RULE_ATTEMPT_SUCCESS_TOKEN_BUDGET * 3 / 4;
+            let mut coldest: Vec<
+                (u64, usize, (RuleAttemptKey, u64)),
+            > = cache
+                .rule_attempt_successes
+                .iter()
+                .map(|(key, (success, _, tick))| (*tick, success.consumed, *key))
+                .collect();
+            coldest.sort_unstable_by_key(|(tick, _, _)| *tick);
+            for (_, size, key) in coldest {
+                if cache.rule_attempt_success_tokens <= target {
+                    break;
+                }
+                if cache.rule_attempt_successes.remove(&key).is_some() {
+                    cache.rule_attempt_success_tokens -= size;
+                }
+            }
+        }
+        let position = self.remaining.len();
+        let positions = &mut cache.rule_attempt_success_positions;
+        if positions.len() <= position {
+            positions.resize(position + 1, false);
+        }
+        positions[position] = true;
+    }
+
+    pub(crate) fn apply_rule_attempt_success(
+        &mut self,
+        success: &RuleAttemptSuccess<'t>,
+    ) {
+        if success.consumed > 0 {
+            self.step_to_remaining(success.consumed - 1);
+        }
+        self.accepts_partial = success.accepts_partial;
+        self.accepts_partial_depth = success
+            .accepts_partial_offset
+            .map_or(0, |offset| {
+                u16::try_from((self.depth as isize + offset).max(0))
+                    .unwrap_or(u16::MAX)
+            });
+        self.in_footnote = success.in_footnote;
+        self.in_note = success.in_note;
+        self.in_color = success.in_color;
+        self.has_footnote_block = success.has_footnote_block;
+        self.start_of_line = success.start_of_line;
+        self.native_blockquote_depth = success.native_blockquote_depth;
+        self.quote_body_cursor = success.quote_body_cursor;
+        self.wikidot = success.wikidot;
+    }
+
     pub(crate) fn deterministic_block_failure(
         &self,
         rule: &'static str,
@@ -4275,6 +4487,35 @@ fn remembered_rule_failures_leave_every_parse_unchanged() {
     for input in &cases {
         for max_recursion_depth in [6, 8, 10, 12, 16, 24, 40, DEFAULT_MAX_RECURSION_DEPTH]
         {
+            assert_eq!(
+                render_at_recursion_limit(input, max_recursion_depth, true),
+                render_at_recursion_limit(input, max_recursion_depth, false),
+                "{input:?} at recursion limit {max_recursion_depth}",
+            );
+        }
+    }
+}
+
+#[test]
+fn remembered_rule_successes_leave_every_parse_unchanged() {
+    let soup = "##red|**a --b-- ^^c^^** @@x@@ ##blue|,,d,, __e__##";
+    let cases = [
+        format!("{soup}\n").repeat(12),
+        format!("{soup} {soup}\n").repeat(8),
+        format!("* {soup}\n# {soup}\n").repeat(6),
+        format!("[[div]]\n{soup}\n{soup}\n[[/div]]\n").repeat(5),
+        format!("||{soup}||{soup}||\n").repeat(5),
+        format!("[[footnote]]{soup}[[/footnote]] {soup}\n").repeat(5),
+        format!(
+            "[[footnote]]first **b**[[/footnote]] {soup} [[footnote]]second[[/footnote]]\n"
+        )
+        .repeat(4),
+        format!("[[span]]{soup}[[/span]] ~~{soup}~~\n").repeat(6),
+        format!("{soup}\n").repeat(3),
+    ];
+
+    for input in &cases {
+        for max_recursion_depth in [8, 16, DEFAULT_MAX_RECURSION_DEPTH] {
             assert_eq!(
                 render_at_recursion_limit(input, max_recursion_depth, true),
                 render_at_recursion_limit(input, max_recursion_depth, false),

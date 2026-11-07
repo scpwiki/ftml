@@ -43,6 +43,9 @@ mod include_grammar;
 #[path = "inline_delimiter_performance.rs"]
 mod inline_delimiter_performance;
 
+#[path = "hang_25_performance.rs"]
+mod hang_25_performance;
+
 #[path = "wikidot_heading_content.rs"]
 mod wikidot_heading_content;
 
