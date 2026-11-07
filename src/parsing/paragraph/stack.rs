@@ -93,6 +93,7 @@ pub struct ParagraphStack<'t> {
     /// After `[[/math]]`, some closer-line whitespace tails make live's next
     /// wrapped paragraph start with `<br />` before the following text.
     wikidot_math_next_paragraph_leads_with_br: bool,
+    wikidot_toc_next_paragraph_leads_with_br: bool,
 
     finished: Vec<Element<'t>>,
 
@@ -570,6 +571,11 @@ impl<'t> ParagraphStack<'t> {
             && self.current_empty()
             && self.unwrapped_after_block_line
             && matches!(self.finished.last(), Some(Element::Collapsible { .. }))
+    }
+
+    #[inline]
+    pub(crate) fn set_wikidot_toc_next_paragraph_leads_with_br(&mut self, value: bool) {
+        self.wikidot_toc_next_paragraph_leads_with_br = value;
     }
 
     #[inline]
@@ -1175,6 +1181,9 @@ impl<'t> ParagraphStack<'t> {
             }
             self.current.push(element);
         } else {
+            if self.current.is_empty() {
+                self.wikidot_toc_next_paragraph_leads_with_br = false;
+            }
             if self.wikidot {
                 if matches!(
                     &element,
@@ -1494,6 +1503,12 @@ impl<'t> ParagraphStack<'t> {
                 self.current.insert(0, Element::LineBreak);
             }
         }
+        if self.wikidot && self.wikidot_toc_next_paragraph_leads_with_br {
+            self.wikidot_toc_next_paragraph_leads_with_br = false;
+            if !matches!(self.current.first(), Some(Element::LineBreak)) {
+                self.current.insert(0, Element::LineBreak);
+            }
+        }
 
         let elements = mem::take(&mut self.current);
         let attributes = AttributeMap::new();
@@ -1644,6 +1659,9 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn end_paragraph_at_break(&mut self) {
+        if self.current.is_empty() {
+            self.wikidot_toc_next_paragraph_leads_with_br = false;
+        }
         let unwrapped = self.current_unwrapped && !self.current.is_empty();
         let literal_div_line = self.wikidot_literal_div_line;
         let unwrapped_after_block_line = self.unwrapped_after_block_line;

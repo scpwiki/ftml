@@ -1029,16 +1029,11 @@ where
         scan.step()?;
         let url = format!("{}{}", &source[first_start + 2..first_end], url_extra);
         parser.update(&scan);
-        return Ok(Some(Elements::Multiple(vec![
-            text!("["),
-            Element::Link {
-                ltype: LinkType::Direct,
-                link: LinkLocation::Url(Cow::Owned(url)),
-                label: LinkLabel::Text(cow!(label)),
-                target: None,
-            },
-            text!("]"),
-        ])));
+        return Ok(Some(wikidot_adjacent_close_link(
+            Cow::Owned(url),
+            cow!(label),
+            wikidot_wide_separator_between(source, first_end, label_from),
+        )));
     }
     scan.step()?;
     while !matches!(
@@ -1123,16 +1118,38 @@ where
     };
     let label = source[label_from..second_end - 2].trim();
     parser.update(&scan);
-    Ok(Some(Elements::Multiple(vec![
+    Ok(Some(wikidot_adjacent_close_link(
+        url,
+        cow!(label),
+        wikidot_wide_separator_between(source, first_end, second_start),
+    )))
+}
+
+fn wikidot_wide_separator_between(source: &str, start: usize, end: usize) -> bool {
+    source
+        .get(start..end)
+        .is_some_and(|separator| separator.starts_with("  "))
+}
+
+fn wikidot_adjacent_close_link<'t>(
+    url: Cow<'t, str>,
+    label: Cow<'t, str>,
+    wide_separator: bool,
+) -> Elements<'t> {
+    let mut elements = vec![
         text!("["),
         Element::Link {
             ltype: LinkType::Direct,
             link: LinkLocation::Url(url),
-            label: LinkLabel::Text(cow!(label)),
+            label: LinkLabel::Text(label),
             target: None,
         },
         text!("]"),
-    ])))
+    ];
+    if wide_separator {
+        elements.insert(1, text!(" "));
+    }
+    Elements::Multiple(elements)
 }
 
 fn wikidot_leading_space_close_label(source: &str) -> Option<&str> {
