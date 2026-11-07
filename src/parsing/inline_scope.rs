@@ -942,7 +942,13 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
 ) {
     flatten_crossing_inline_containers(elements);
     flatten_anchor_crossing_inline_containers(elements);
-    build_wikidot_block_frames(elements, false, row_suffix);
+    // A collapsible shell still open at the end of a footnote body never
+    // received its close (the close was spent crossing a table splice),
+    // and live leaves it unclosed, exactly like at the page root
+    // (stalesweep moved source, muse-probe-smv-p1/p6). The footnote body
+    // top level is therefore a scope root; nested assemblies keep
+    // synthesizing closes (a cell's note close lands that way).
+    build_wikidot_block_frames(elements, true, row_suffix);
     let (valid, close_pairs) = collect_valid_scope_pairs(elements);
 
     let mut ordinal = 0;

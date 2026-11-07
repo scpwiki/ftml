@@ -1,0 +1,142 @@
+{
+    "elements": [
+        {
+            "element": "table",
+            "data": {
+                "type": "simple",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "n"
+                                    },
+                                    {
+                                        "element": "footnote",
+                                        "data": 1
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "collapsible",
+                "data": {
+                    "elements": [
+                        {
+                            "element": "table",
+                            "data": {
+                                "type": "advanced",
+                                "attributes": {},
+                                "rows": [
+                                    {
+                                        "attributes": {},
+                                        "cells": [
+                                            {
+                                                "header": false,
+                                                "column-span": 1,
+                                                "align": null,
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "container",
+                                                        "data": {
+                                                            "type": "note",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "collapsible",
+                                                                    "data": {
+                                                                        "elements": [
+                                                                            {
+                                                                                "element": "container",
+                                                                                "data": {
+                                                                                    "type": "blockquote",
+                                                                                    "attributes": {},
+                                                                                    "elements": [
+                                                                                        {
+                                                                                            "element": "container",
+                                                                                            "data": {
+                                                                                                "type": "blockquote",
+                                                                                                "attributes": {},
+                                                                                                "elements": [
+                                                                                                    {
+                                                                                                        "element": "list",
+                                                                                                        "data": {
+                                                                                                            "type": "bullet",
+                                                                                                            "attributes": {},
+                                                                                                            "items": [
+                                                                                                                {
+                                                                                                                    "item-type": "elements",
+                                                                                                                    "attributes": {},
+                                                                                                                    "elements": [
+                                                                                                                        {
+                                                                                                                            "element": "text",
+                                                                                                                            "data": "i"
+                                                                                                                        }
+                                                                                                                    ]
+                                                                                                                }
+                                                                                                            ]
+                                                                                                        }
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "element": "line-break"
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        ],
+                                                                        "attributes": {},
+                                                                        "start-open": false,
+                                                                        "show-text": null,
+                                                                        "hide-text": null,
+                                                                        "show-top": true,
+                                                                        "show-bottom": false
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "attributes": {},
+                    "start-open": false,
+                    "show-text": null,
+                    "hide-text": null,
+                    "show-top": true,
+                    "show-bottom": false
+                }
+            }
+        ]
+    ]
+}
