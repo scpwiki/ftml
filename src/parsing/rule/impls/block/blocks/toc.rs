@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::FloatAlignment;
+use crate::tree::{ClearFloat, FloatAlignment};
 
 pub const BLOCK_TABLE_OF_CONTENTS: BlockRule = BlockRule {
     name: "block-toc",
@@ -54,7 +54,31 @@ fn parse_fn<'r, 't>(
     let attributes = arguments.to_attribute_map(parser.settings());
     let align = FloatAlignment::parse(name).map(|float| float.align);
     let element = Element::TableOfContents { align, attributes };
+    if parser.settings().layout.legacy()
+        && let Some(clear_float) = legacy_toc_suffix_clear_float(parser)
+    {
+        return ok!(vec![element, clear_float]);
+    }
     success_elements_with_paragraph_safety(false, element, Vec::new())
+}
+
+fn legacy_toc_suffix_clear_float<'t>(parser: &mut Parser<'_, 't>) -> Option<Element<'t>> {
+    let token = parser.current();
+    let clear_float = match token.token {
+        Token::ClearFloatBoth => ClearFloat::Both,
+        Token::ClearFloatLeft => ClearFloat::Left,
+        Token::ClearFloatRight => ClearFloat::Right,
+        _ => return None,
+    };
+    let source = parser.full_text().inner();
+    let line_end = source[token.span.end..]
+        .find(['\r', '\n'])
+        .map_or(source.len(), |offset| token.span.end + offset);
+    if token.span.end != line_end {
+        return None;
+    }
+    parser.step().ok()?;
+    Some(Element::ClearFloat(clear_float))
 }
 
 #[cfg(test)]

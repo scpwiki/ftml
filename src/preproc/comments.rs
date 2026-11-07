@@ -202,8 +202,26 @@ fn collapse_comment_seams(output: &mut String, seams: &[usize]) {
         }
     }
     for range in ranges.into_iter().rev() {
-        output.replace_range(range, " ");
+        let replacement = if end_block_link_comment_separator(output, range.start) {
+            "  "
+        } else {
+            " "
+        };
+        output.replace_range(range, replacement);
     }
+}
+
+fn end_block_link_comment_separator(output: &str, run_start: usize) -> bool {
+    let bytes = output.as_bytes();
+    if run_start < 2 || bytes[run_start - 2] != b']' || bytes[run_start - 1] != b']' {
+        return false;
+    }
+    let before = &output[..run_start - 2];
+    let Some(open) = before.rfind("[[") else {
+        return false;
+    };
+    let inside = &before[open + 2..];
+    inside.starts_with('/') && !inside.contains('\n') && !inside.contains("]]")
 }
 
 fn block_head_ranges(text: &str) -> Vec<std::ops::Range<usize>> {

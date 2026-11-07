@@ -453,7 +453,13 @@ where
                         push_element(&mut stack, element, true);
                     }
                 } else {
+                    let toc_spaced_tail = parser.settings().layout.legacy()
+                        && elements_contain_toc(&elements)
+                        && wikidot_toc_spaced_tail(parser);
                     push_elements(&mut stack, elements, paragraph_safe);
+                    if toc_spaced_tail {
+                        stack.set_wikidot_toc_next_paragraph_leads_with_br(true);
+                    }
                 }
             }
             if parser.take_wikidot_bare_div_literal() {
@@ -904,6 +910,61 @@ where
 
 fn wikidot_div_closes_on_current_line(parser: &Parser<'_, '_>) -> bool {
     parser.wikidot_div_closes_on_physical_line(parser.current().span.start)
+}
+
+fn elements_contain_toc(elements: &Elements<'_>) -> bool {
+    let is_toc =
+        |element: &Element<'_>| matches!(element, Element::TableOfContents { .. });
+    match elements {
+        Elements::None => false,
+        Elements::Single(element) => is_toc(element),
+        Elements::Multiple(elements) => elements.iter().any(is_toc),
+    }
+}
+
+fn wikidot_toc_spaced_tail(parser: &Parser<'_, '_>) -> bool {
+    let source = parser.full_text().inner();
+    let here = parser.current().span.start.min(source.len());
+    let line_start = source[..here]
+        .rfind(['\n', '\r'])
+        .map_or(0, |index| index + 1);
+    if here == line_start && line_start > 0 {
+        let mut previous_end = line_start - 1;
+        let bytes = source.as_bytes();
+        if previous_end > 0
+            && bytes[previous_end] == b'\n'
+            && bytes[previous_end - 1] == b'\r'
+        {
+            previous_end -= 1;
+        }
+        let previous_start = source[..previous_end]
+            .rfind(['\n', '\r'])
+            .map_or(0, |index| index + 1);
+        return line_is_spaced_toc(&source[previous_start..previous_end]);
+    }
+    let line_end = source[here..]
+        .find(['\n', '\r'])
+        .map_or(source.len(), |offset| here + offset);
+    line_is_spaced_toc(&source[line_start..line_end])
+}
+
+fn line_is_spaced_toc(line: &str) -> bool {
+    let Some(open) = line.rfind("[[") else {
+        return false;
+    };
+    let after = &line[open + 2..];
+    let Some(close) = after.find("]]") else {
+        return false;
+    };
+    let name = &after[..close];
+    if !matches!(
+        name.to_ascii_lowercase().as_str(),
+        "toc" | "f<toc" | "f>toc"
+    ) {
+        return false;
+    }
+    let tail = &after[close + 2..];
+    !tail.is_empty() && tail.bytes().all(|byte| matches!(byte, b' ' | b'\t'))
 }
 
 fn elements_contain_note(elements: &Elements<'_>) -> bool {

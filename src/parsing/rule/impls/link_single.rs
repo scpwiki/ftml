@@ -337,21 +337,37 @@ where
             .take_while(|token| token.span.start < region_end)
             .enumerate()
         {
-            if token.token != Token::LeftBlock || token.span.start <= start {
+            if token.span.start <= start {
+                continue;
+            }
+            let anchor = token.token == Token::LeftBlockAnchor;
+            if token.token != Token::LeftBlock && !anchor {
                 continue;
             }
             saw_left_block = true;
             let mut probe = parser.clone();
             probe.step_to_remaining(index);
-            if let Ok(success) = super::RULE_BLOCK.try_consume(&mut probe) {
+            let claimed = if anchor {
+                super::RULE_ANCHOR
+                    .try_consume(&mut probe)
+                    .ok()
+                    .is_some_and(|success| {
+                        let (elements, _, _) = success.into();
+                        elements.into_iter().any(|element| {
+                            matches!(element, crate::tree::Element::AnchorName(_))
+                        })
+                    })
+            } else if let Ok(success) = super::RULE_BLOCK.try_consume(&mut probe) {
                 let (elements, _, _) = success.into();
-                if elements
+                elements
                     .into_iter()
                     .any(|element| !matches!(element, crate::tree::Element::Text(_)))
-                {
-                    claimed_index = Some(index);
-                    break;
-                }
+            } else {
+                false
+            };
+            if claimed {
+                claimed_index = Some(index);
+                break;
             }
         }
         #[cfg(test)]
