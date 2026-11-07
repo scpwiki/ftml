@@ -487,6 +487,14 @@ fn lost_owner_list_body_is_sibling_items(parser: &Parser<'_, '_>, ltype: ListTyp
     })
 }
 
+/// One part of a decomposed hoist: either a run of list items (rendered
+/// as a native list) or bare elements (un-item'd lines, which live keeps
+/// between the split lists instead of gluing into an item).
+enum HoistPart<'t> {
+    Items(Vec<ListItem<'t>>),
+    Bare(Vec<Element<'t>>),
+}
+
 /// A hoisted sibling explicit list decomposes into one native list per
 /// run that the explicit list packed: a sibling run that holds a
 /// collapsible (or follows one) is its own list, so the followers of an
@@ -499,38 +507,91 @@ fn hoisted_split_lists<'t>(element: Element<'t>, ltype: ListType) -> Vec<Element
     else {
         return Vec::new();
     };
-    let mut chunks: Vec<Vec<ListItem<'t>>> = Vec::new();
+    let mut parts: Vec<HoistPart<'t>> = Vec::new();
     let mut current: Vec<ListItem<'t>> = Vec::new();
     let mut armed = false;
     for item in items {
-        collect_hoisted_chunk_item(item, &mut chunks, &mut current, &mut armed);
+        collect_hoisted_chunk_item(item, &mut parts, &mut current, &mut armed);
     }
     if !current.is_empty() {
-        chunks.push(current);
+        parts.push(HoistPart::Items(current));
     }
-    for chunk in &mut chunks {
-        chunk.retain(|item| !hoisted_item_is_empty(item));
+    for part in &mut parts {
+        if let HoistPart::Items(items) = part {
+            items.retain(|item| !hoisted_item_is_empty(item));
+        }
     }
-    chunks
+    parts
         .into_iter()
-        .filter(|chunk| !chunk.is_empty())
-        .map(|items| Element::List {
-            ltype,
-            attributes: attributes.clone(),
-            items,
-            wikidot_explicit_block: false,
-            wikidot_unclosed: false,
+        .filter_map(|part| match part {
+            HoistPart::Items(items) if !items.is_empty() => Some(vec![Element::List {
+                ltype,
+                attributes: attributes.clone(),
+                items,
+                wikidot_explicit_block: false,
+                wikidot_unclosed: false,
+            }]),
+            HoistPart::Bare(elements) => Some(elements),
+            HoistPart::Items(_) => None,
         })
+        .flatten()
         .collect()
 }
 
 /// Seals the current chunk so the following sibling run starts a new list.
 fn start_new_hoisted_chunk<'t>(
-    chunks: &mut Vec<Vec<ListItem<'t>>>,
+    parts: &mut Vec<HoistPart<'t>>,
     current: &mut Vec<ListItem<'t>>,
 ) {
     if !current.is_empty() {
-        chunks.push(std::mem::take(current));
+        parts.push(HoistPart::Items(std::mem::take(current)));
+    }
+}
+
+/// Seals a pending run of non-list elements as bare elements between the
+/// split lists (a run of only line breaks carries no content).
+fn seal_hoisted_bare<'t>(
+    parts: &mut Vec<HoistPart<'t>>,
+    current: &mut Vec<ListItem<'t>>,
+    rest_run: &mut Vec<Element<'t>>,
+) {
+    if !rest_run.is_empty()
+        && !rest_run
+            .iter()
+            .all(|element| matches!(element, Element::LineBreak))
+    {
+        start_new_hoisted_chunk(parts, current);
+        parts.push(HoistPart::Bare(std::mem::take(rest_run)));
+    }
+}
+
+/// One positioned piece of a hoisted chunk item's content: a native list
+/// or a run of non-list elements, in source order.
+enum HoistedSeq<'t> {
+    List(Element<'t>),
+    Rest(Vec<Element<'t>>),
+}
+
+fn push_hoisted_seq<'t>(out: &mut Vec<HoistedSeq<'t>>, element: Element<'t>) {
+    match element {
+        Element::List { .. } => out.push(HoistedSeq::List(element)),
+        Element::Partial(PartialElement::ListItem(ListItem::Elements {
+            elements,
+            ..
+        })) => {
+            for element in elements {
+                push_hoisted_seq(out, element);
+            }
+        }
+        Element::Partial(PartialElement::ListItem(ListItem::SubList { element })) => {
+            if matches!(*element, Element::List { .. }) {
+                out.push(HoistedSeq::List(*element));
+            }
+        }
+        other => match out.last_mut() {
+            Some(HoistedSeq::Rest(run)) => run.push(other),
+            _ => out.push(HoistedSeq::Rest(vec![other])),
+        },
     }
 }
 
@@ -538,7 +599,7 @@ fn start_new_hoisted_chunk<'t>(
 /// cutting a new chunk at each sibling run past a collapsible.
 fn collect_hoisted_chunk_item<'t>(
     item: ListItem<'t>,
-    chunks: &mut Vec<Vec<ListItem<'t>>>,
+    parts: &mut Vec<HoistPart<'t>>,
     current: &mut Vec<ListItem<'t>>,
     armed: &mut bool,
 ) {
@@ -550,11 +611,11 @@ fn collect_hoisted_chunk_item<'t>(
                 ..
             } => {
                 if *armed || items.iter().any(hoisted_item_contains_collapsible) {
-                    start_new_hoisted_chunk(chunks, current);
+                    start_new_hoisted_chunk(parts, current);
                     *armed = true;
                 }
                 for sub in items {
-                    collect_hoisted_chunk_item(sub, chunks, current, armed);
+                    collect_hoisted_chunk_item(sub, parts, current, armed);
                 }
             }
             // An explicit nested list (or any non-list content) keeps
@@ -572,55 +633,69 @@ fn collect_hoisted_chunk_item<'t>(
             attributes,
             elements,
         } => {
-            let mut lists = Vec::new();
-            let mut rest = Vec::new();
-            partition_hoisted_elements(elements, &mut lists, &mut rest);
-            if lists.is_empty() {
+            let mut sequence = Vec::new();
+            for element in elements {
+                push_hoisted_seq(&mut sequence, element);
+            }
+            if !sequence
+                .iter()
+                .any(|part| matches!(part, HoistedSeq::List(_)))
+            {
+                let elements: Vec<Element<'t>> = sequence
+                    .into_iter()
+                    .flat_map(|part| match part {
+                        HoistedSeq::Rest(run) => run,
+                        HoistedSeq::List(_) => unreachable!("checked lists above"),
+                    })
+                    .collect();
                 current.push(ListItem::Elements {
                     attributes,
-                    elements: rest,
+                    elements,
                 });
                 return;
             }
-            if !rest
-                .iter()
-                .all(|element| matches!(element, Element::LineBreak))
-            {
-                current.push(ListItem::Elements {
-                    attributes,
-                    elements: rest,
-                });
-            }
-            for list in lists {
-                match list {
-                    Element::List {
-                        items,
-                        wikidot_explicit_block: false,
-                        ..
-                    } => {
-                        if *armed || items.iter().any(hoisted_item_contains_collapsible) {
-                            start_new_hoisted_chunk(chunks, current);
-                            *armed = true;
-                        }
-                        for sub in items {
-                            collect_hoisted_chunk_item(sub, chunks, current, armed);
+            let mut rest_run: Vec<Element<'t>> = Vec::new();
+            for part in sequence {
+                match part {
+                    HoistedSeq::List(list) => {
+                        seal_hoisted_bare(parts, current, &mut rest_run);
+                        match list {
+                            Element::List {
+                                items,
+                                wikidot_explicit_block: false,
+                                ..
+                            } => {
+                                if *armed
+                                    || items.iter().any(hoisted_item_contains_collapsible)
+                                {
+                                    start_new_hoisted_chunk(parts, current);
+                                    *armed = true;
+                                }
+                                for sub in items {
+                                    collect_hoisted_chunk_item(
+                                        sub, parts, current, armed,
+                                    );
+                                }
+                            }
+                            Element::List { items, .. } => {
+                                for sub in items {
+                                    collect_hoisted_leaf_items(sub, current);
+                                }
+                            }
+                            other => {
+                                collect_hoisted_leaf_items(
+                                    ListItem::SubList {
+                                        element: Box::new(other),
+                                    },
+                                    current,
+                                );
+                            }
                         }
                     }
-                    Element::List { items, .. } => {
-                        for sub in items {
-                            collect_hoisted_leaf_items(sub, current);
-                        }
-                    }
-                    other => {
-                        collect_hoisted_leaf_items(
-                            ListItem::SubList {
-                                element: Box::new(other),
-                            },
-                            current,
-                        );
-                    }
+                    HoistedSeq::Rest(run) => rest_run.extend(run),
                 }
             }
+            seal_hoisted_bare(parts, current, &mut rest_run);
         }
     }
 }
