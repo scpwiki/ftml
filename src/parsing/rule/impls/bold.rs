@@ -41,7 +41,7 @@ fn try_consume_fn<'r, 't>(
     if parser.current().token == Token::BulletItem {
         return try_consume_split_delimiter(parser);
     }
-    if let Some(after) = empty_ul_bold_after(parser) {
+    if let Some(after) = empty_list_bold_after(parser) {
         parser.step_to_remaining(after);
         return ok!(Elements::None);
     }
@@ -104,7 +104,7 @@ fn skip_breaks(tokens: &[ExtractedToken<'_>], mut index: usize) -> usize {
     index
 }
 
-fn empty_ul_bold_after(parser: &Parser<'_, '_>) -> Option<usize> {
+fn empty_list_bold_after(parser: &Parser<'_, '_>) -> Option<usize> {
     if !parser.settings().layout.legacy() {
         return None;
     }
@@ -112,9 +112,13 @@ fn empty_ul_bold_after(parser: &Parser<'_, '_>) -> Option<usize> {
         return None;
     }
     let tokens = parser.remaining();
-    if !block_head_is(tokens, 0, "ul", false) {
+    let list_name = if block_head_is(tokens, 0, "ul", false) {
+        "ul"
+    } else if block_head_is(tokens, 0, "ol", false) {
+        "ol"
+    } else {
         return None;
-    }
+    };
     if parser.current().span.end != tokens[0].span.start {
         return None;
     }
@@ -139,7 +143,7 @@ fn empty_ul_bold_after(parser: &Parser<'_, '_>) -> Option<usize> {
     if items == 0 {
         return None;
     }
-    if !block_head_is(tokens, index, "ul", true) {
+    if !block_head_is(tokens, index, list_name, true) {
         return None;
     }
     let close_right = index + 2;

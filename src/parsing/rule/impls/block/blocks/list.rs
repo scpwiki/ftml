@@ -228,7 +228,18 @@ fn parse_list_block_impl<'r, 't>(
                 ok!(false; Elements::None, errors)
             } else {
                 record_wikidot_explicit_list_end(parser);
-                ok!(false; Element::LineBreak, errors)
+                if parser.wikidot_preserve_empty_lists()
+                    && parser.body_end_boundaries_is_empty()
+                {
+                    ok!(false; Element::List {
+                        ltype: list_type,
+                        items: Vec::new(),
+                        attributes: attributes.clone(),
+                        wikidot_explicit_block: true,
+                    }, errors)
+                } else {
+                    ok!(false; Element::LineBreak, errors)
+                }
             };
         }
         return Err(parser.make_err(ParseErrorKind::ListEmpty));
@@ -344,7 +355,18 @@ fn parse_list_block_impl<'r, 't>(
                 ok!(false; Elements::None, errors)
             } else {
                 record_wikidot_explicit_list_end(parser);
-                ok!(false; Element::LineBreak, errors)
+                if parser.wikidot_preserve_empty_lists()
+                    && parser.body_end_boundaries_is_empty()
+                {
+                    ok!(false; Element::List {
+                        ltype: list_type,
+                        items: Vec::new(),
+                        attributes: attributes.clone(),
+                        wikidot_explicit_block: true,
+                    }, errors)
+                } else {
+                    ok!(false; Element::LineBreak, errors)
+                }
             };
         }
         return Err(parser.make_err(ParseErrorKind::ListEmpty));

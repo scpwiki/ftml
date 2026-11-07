@@ -148,7 +148,10 @@ pub(super) fn validate_reachable_close(
     }
 
     let mut paragraph_error = None;
+    let suppress_breaks = parser.settings().layout.legacy();
     let mut open_blocks: Vec<String> = Vec::new();
+    let mut pb_stack: Vec<String> = Vec::new();
+    let mut saw_break = false;
     // Both are only needed to decide whether this walk may be memoized.
     let mut saw_block_pairing = false;
     let mut last_paragraph_break = None;
@@ -177,6 +180,23 @@ pub(super) fn validate_reachable_close(
             return Ok(());
         }
         match tokens[index].token {
+            Token::LeftBlock | Token::LeftBlockStar => {
+                let name = block_name_at(tokens, index);
+                if is_block_name(&name) {
+                    pb_stack.push(name);
+                }
+            }
+            Token::LeftBlockEnd => {
+                let name = block_name_at(tokens, index);
+                if is_block_name(&name)
+                    && let Some(pos) = pb_stack.iter().rposition(|n| *n == name)
+                {
+                    pb_stack.truncate(pos);
+                }
+            }
+            _ => {}
+        }
+        match tokens[index].token {
             Token::InputEnd => {
                 if split.is_none() && !saw_block_pairing {
                     if blocks_can_reject {
@@ -194,12 +214,18 @@ pub(super) fn validate_reachable_close(
                     }
                 }
                 return Err(paragraph_error
+                    .or_else(|| {
+                        saw_break.then(|| parser.make_err(ParseErrorKind::RuleFailed))
+                    })
                     .unwrap_or_else(|| parser.make_err(ParseErrorKind::EndOfInput)));
             }
             Token::ParagraphBreak => {
                 last_paragraph_break = Some(scan_start + index);
-                paragraph_error
-                    .get_or_insert_with(|| parser.make_err(ParseErrorKind::RuleFailed));
+                saw_break = true;
+                if !suppress_breaks || pb_stack.is_empty() {
+                    paragraph_error
+                        .get_or_insert_with(|| parser.make_err(ParseErrorKind::RuleFailed));
+                }
             }
             Token::LeftBlock | Token::LeftBlockStar if blocks_can_reject => {
                 saw_block_pairing = true;

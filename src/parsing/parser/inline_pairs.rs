@@ -216,6 +216,75 @@ fn classify(
     }
 }
 
+fn list_name_at(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
+    block_name(tokens, index).is_some_and(|name| {
+        name.eq_ignore_ascii_case("ul")
+            || name.eq_ignore_ascii_case("ol")
+            || name.eq_ignore_ascii_case("li")
+    })
+}
+
+fn clean_list_barrier(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
+    if !list_name_at(tokens, index) {
+        return false;
+    }
+    match tokens[index].token {
+        Token::LeftBlock | Token::LeftBlockStar => {
+            let mut depth = 0usize;
+            for (j, token) in tokens.iter().enumerate().skip(index) {
+                match token.token {
+                    Token::LeftBlock | Token::LeftBlockStar => {
+                        if list_name_at(tokens, j) {
+                            depth += 1;
+                        } else if depth > 0 {
+                            return false;
+                        }
+                    }
+                    Token::LeftBlockEnd => {
+                        if list_name_at(tokens, j) {
+                            depth -= 1;
+                            if depth == 0 {
+                                return true;
+                            }
+                        } else if depth > 0 {
+                            return false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        Token::LeftBlockEnd => {
+            let mut depth = 0usize;
+            for j in (0..=index).rev() {
+                match tokens[j].token {
+                    Token::LeftBlockEnd => {
+                        if list_name_at(tokens, j) {
+                            depth += 1;
+                        } else if depth > 0 {
+                            return false;
+                        }
+                    }
+                    Token::LeftBlock | Token::LeftBlockStar => {
+                        if list_name_at(tokens, j) {
+                            depth -= 1;
+                            if depth == 0 {
+                                return true;
+                            }
+                        } else if depth > 0 {
+                            return false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn compute_wikidot_inline_markers(
     tokens: &[ExtractedToken<'_>],
     pairs: &WikidotBlockPairs,
@@ -224,6 +293,7 @@ pub(crate) fn compute_wikidot_inline_markers(
     let mut start = 0;
     let mut opaque = false;
     let mut after_image = false;
+    let mut prev_list_clean = false;
     let mut index = 0;
     while index < tokens.len() {
         let line_start = index == start || tokens[index - 1].token == Token::LineBreak;
@@ -244,15 +314,18 @@ pub(crate) fn compute_wikidot_inline_markers(
                         tokens[index].token,
                         Token::LeftBlock | Token::LeftBlockEnd | Token::InputEnd
                     );
+                let list_clean = clean_list_barrier(tokens, index);
                 if !opaque {
                     scan_chunk(
                         tokens,
                         start..index,
                         after_image || image,
                         block_structure_barrier,
+                        prev_list_clean || list_clean,
                         &mut markers,
                     );
                 }
+                prev_list_clean = list_clean;
                 start = end;
                 opaque = false;
                 after_image = image;
@@ -266,7 +339,14 @@ pub(crate) fn compute_wikidot_inline_markers(
             end -= 1;
         }
         if start < end {
-            scan_chunk(tokens, start..end, after_image, true, &mut markers);
+            scan_chunk(
+                tokens,
+                start..end,
+                after_image,
+                true,
+                prev_list_clean,
+                &mut markers,
+            );
         }
     }
     markers
@@ -326,6 +406,7 @@ fn scan_chunk(
     range: Range<usize>,
     image_bounded: bool,
     block_structure_barrier: bool,
+    list_clean: bool,
     markers: &mut WikidotInlineMarkers,
 ) {
     if block_structure_barrier {
@@ -343,11 +424,19 @@ fn scan_chunk(
         }
         if marker_positions.len() == 1 && tokens[marker_positions[0]].token == Token::Bold
         {
-            markers.roles.insert(
-                tokens[marker_positions[0]].span.start,
-                InlineMarkerRole::Literal,
-            );
-            return;
+            let lone = marker_positions[0];
+            let partner_elsewhere = list_clean
+                && tokens
+                    .iter()
+                    .enumerate()
+                    .any(|(i, token)| token.token == Token::Bold && i != lone);
+            if !partner_elsewhere {
+                markers.roles.insert(
+                    tokens[lone].span.start,
+                    InlineMarkerRole::Literal,
+                );
+                return;
+            }
         }
         // `****` is an empty strong pair. Wikidot deletes it on either side of
         // a block. A single `**` has no partner, so it stays literal text.
@@ -662,28 +751,25 @@ mod tests {
             .collect();
         roles.sort_unstable_by_key(|(byte, _)| *byte);
         assert!(
-            roles
-                .iter()
-                .filter(|(_, role)| matches!(
-                    role,
-                    InlineMarkerRole::Open(InlineFormatKind::Bold)
-                ))
-                .count()
-                <= 1,
-            "unexpected bold open roles: {roles:?}"
+            roles.iter().all(|(_, role)| !matches!(
+                role,
+                InlineMarkerRole::Open(InlineFormatKind::Bold)
+                    | InlineMarkerRole::Close(InlineFormatKind::Bold)
+            )),
+            "scan must not pair bold across the ul head: {roles:?}"
         );
         for (byte, role) in roles {
             if source[byte..].starts_with("**") {
                 assert!(
-                    matches!(role, InlineMarkerRole::Literal),
-                    "expected literal ** at {byte}, got {role:?}"
+                    !matches!(role, InlineMarkerRole::Literal),
+                    "bold at {byte} has a partner across the block, got {role:?}"
                 );
             }
         }
     }
 
     #[test]
-    fn literal_bold_markers_on_both_sides_of_ul_block() {
+    fn bold_markers_on_both_sides_of_ul_block_get_no_scan_role() {
         let source = "**[[ul]]\n[[li]]\nx\n[[/li]]\n[[/ul]]**";
         let tokenization = crate::tokenize(source);
         let pairs = block_pairs::compute_wikidot_block_pairs(
@@ -701,10 +787,38 @@ mod tests {
         assert_eq!(bold_bytes.len(), 2, "expected two ** tokens");
         for byte in bold_bytes {
             assert!(
-                matches!(markers.role_at_byte(byte), Some(InlineMarkerRole::Literal)),
-                "expected literal at byte {byte}, got {:?}",
+                markers.role_at_byte(byte).is_none(),
+                "expected no scan role at byte {byte}, got {:?}",
                 markers.role_at_byte(byte)
             );
         }
+    }
+
+    #[test]
+    fn lone_bold_before_ul_block_without_partner_stays_literal() {
+        let source = "**[[ul]]\n[[li]]\nx\n[[/li]]\n[[/ul]]";
+        let tokenization = crate::tokenize(source);
+        let pairs = block_pairs::compute_wikidot_block_pairs(
+            tokenization.tokens(),
+            source,
+            &PageInfo::dummy(),
+        );
+        let markers = compute_wikidot_inline_markers(tokenization.tokens(), &pairs);
+        let bold_bytes: Vec<usize> = tokenization
+            .tokens()
+            .iter()
+            .filter(|t| t.token == Token::Bold)
+            .map(|t| t.span.start)
+            .collect();
+        assert_eq!(bold_bytes.len(), 1, "expected one ** token");
+        assert!(
+            matches!(
+                markers.role_at_byte(bold_bytes[0]),
+                Some(InlineMarkerRole::Literal)
+            ),
+            "expected literal at byte {}, got {:?}",
+            bold_bytes[0],
+            markers.role_at_byte(bold_bytes[0])
+        );
     }
 }
