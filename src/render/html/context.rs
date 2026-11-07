@@ -31,8 +31,8 @@ use crate::next_index::{Incrementer, NextIndex, TableOfContentsIndex};
 use crate::render::{Handle, PageExistenceResolver, UserInfoResolver};
 use crate::settings::WikitextSettings;
 use crate::tree::{
-    Bibliography, BibliographyList, Element, EmbedVideo, Gallery, LinkLocation,
-    SocialButtons, StandaloneButtonAction, VariableScopes,
+    AttributeMap, Bibliography, BibliographyList, Element, EmbedVideo, Gallery,
+    LinkLocation, SocialButtons, StandaloneButtonAction, VariableScopes,
 };
 use crate::url::{HrefKind, classify_href, normalize_href};
 use std::collections::HashMap;
@@ -74,6 +74,10 @@ where
     rendering_wikidot_bibliography: bool,
     named_equations: HashMap<String, NonZeroUsize>,
     wikidot_equation_numbers: HashMap<usize, NonZeroUsize>,
+    /// Wikidot nested-tabview nav lists keyed by the TabView items-slice
+    /// address: the flat Text_Wiki tab lists `(label, spans)` in nav order.
+    wikidot_tabview_nav_overrides:
+        HashMap<usize, Vec<(String, Vec<AttributeMap<'static>>)>>,
     bibliography_render_stack: Vec<String>,
     footnote_render_stack: Vec<usize>,
 }
@@ -171,6 +175,7 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             rendering_wikidot_bibliography: false,
             named_equations: HashMap::new(),
             wikidot_equation_numbers: HashMap::new(),
+            wikidot_tabview_nav_overrides: HashMap::new(),
             bibliography_render_stack: Vec::new(),
             footnote_render_stack: Vec::new(),
         }
@@ -350,6 +355,23 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
 
     pub fn wikidot_equation_number(&self, element: usize) -> Option<NonZeroUsize> {
         self.wikidot_equation_numbers.get(&element).copied()
+    }
+
+    /// Nested-tabview nav list for a TabView items slice, if the
+    /// Text_Wiki flat-list simulation permuted it.
+    pub(crate) fn assign_wikidot_tabview_nav(
+        &mut self,
+        items: usize,
+        nav: Vec<(String, Vec<AttributeMap<'static>>)>,
+    ) {
+        self.wikidot_tabview_nav_overrides.insert(items, nav);
+    }
+
+    pub(crate) fn wikidot_tabview_nav(
+        &self,
+        items: usize,
+    ) -> Option<&Vec<(String, Vec<AttributeMap<'static>>)>> {
+        self.wikidot_tabview_nav_overrides.get(&items)
     }
 
     pub fn continue_equation_index_at(&mut self, index: NonZeroUsize) {

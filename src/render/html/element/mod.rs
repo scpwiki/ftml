@@ -91,6 +91,7 @@ use self::module::render_module;
 use self::social::render_social_buttons;
 use self::style::render_style;
 use self::table::render_table;
+pub(crate) use self::tabs::preregister_wikidot_tabview_navs;
 use self::tabs::render_tabview;
 use self::text::{render_code, render_email, render_wikitext_raw};
 use self::toc::render_table_of_contents;
