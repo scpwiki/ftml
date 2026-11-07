@@ -3227,6 +3227,14 @@ where
                     ));
                 }
             } else if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                if self.quote_boundary_starts_body_end(block_rule) {
+                    self.consume_quote_boundary_body_end(block_rule)?;
+                    return Ok(crate::parsing::ParseSuccess::new(
+                        segments,
+                        all_errors,
+                        paragraph_safe,
+                    ));
+                }
                 if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
                 {
@@ -4559,7 +4567,12 @@ where
             && !has_later_close
             && literal_residual_quotes
             && self.has_surplus_quote_list_close(block_rule, required_depth);
-        if !has_close && !has_later_close && !has_surplus_list_close {
+        let has_shallower_close = !has_close
+            && !has_later_close
+            && literal_residual_quotes
+            && block_rule.name.starts_with("block-list-")
+            && self.has_shallower_quote_list_close(block_rule, required_depth);
+        if !has_close && !has_later_close && !has_surplus_list_close && !has_shallower_close {
             if block_rule.name == "block-note" {
                 return self.get_body_elements(block_rule, as_paragraphs);
             }
@@ -5878,6 +5891,9 @@ where
                 }
             }
             if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                if self.quote_boundary_starts_body_end(block_rule) {
+                    return self.consume_quote_boundary_body_end(block_rule);
+                }
                 if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
                     && block_rule.name.starts_with("block-list-")
@@ -6701,6 +6717,94 @@ where
                 return false;
             }
         }
+    }
+
+    pub(crate) fn has_shallower_quote_list_close(
+        &self,
+        block_rule: &BlockRule,
+        required_depth: usize,
+    ) -> bool {
+        let mut parser = self.clone();
+        loop {
+            let mut depth = 0usize;
+            let mut probe = parser.clone();
+            while probe.current().token == Token::Quote {
+                depth += probe.current().slice.len();
+                if probe.step().is_err() || probe.get_optional_space().is_err() {
+                    return false;
+                }
+            }
+            if depth < required_depth {
+                let mut end = probe.clone();
+                let matching_close = end.get_end_block().is_ok_and(|name| {
+                    block_rule_accepts_end_name(
+                        block_rule,
+                        name.strip_suffix('_').unwrap_or(&name),
+                        self.settings().layout.legacy(),
+                    )
+                });
+                if matching_close {
+                    let _ = end.get_optional_space();
+                    if token_is_body_boundary(end.current().token) {
+                        return true;
+                    }
+                }
+            }
+            while !token_is_body_boundary(parser.current().token) {
+                if parser.step().is_err() {
+                    return false;
+                }
+            }
+            if parser.current().token != Token::LineBreak {
+                return false;
+            }
+            if parser.step().is_err() {
+                return false;
+            }
+        }
+    }
+
+    pub(crate) fn consume_quote_boundary_body_end(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<(), ParseError> {
+        if self.current().token == Token::LineBreak {
+            self.step()?;
+        }
+        debug_assert!(self.current().token == Token::LeftBlockEnd);
+        let _ = block_rule;
+        self.get_end_block()?;
+        self.get_optional_space()?;
+        Ok(())
+    }
+
+    pub(crate) fn quote_boundary_starts_body_end(
+        &self,
+        block_rule: &BlockRule,
+    ) -> bool {
+        if self.quote_body_literal_residuals() != Some(true)
+            || !block_rule.name.starts_with("block-list-")
+        {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.current().token == Token::LineBreak {
+            if probe.step().is_err() {
+                return false;
+            }
+        }
+        let matching_close = probe.get_end_block().is_ok_and(|name| {
+            block_rule_accepts_end_name(
+                block_rule,
+                name.strip_suffix('_').unwrap_or(&name),
+                self.settings().layout.legacy(),
+            )
+        });
+        if !matching_close {
+            return false;
+        }
+        let _ = probe.get_optional_space();
+        token_is_body_boundary(probe.current().token)
     }
 
     #[rustfmt::skip]

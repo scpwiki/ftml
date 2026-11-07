@@ -183,7 +183,8 @@ fn parse_list_block_impl<'r, 't>(
     let body = if wikidot
         && let Some(depth) = parser.native_blockquote_depth()
         && (parser.has_native_blockquote_body_end(block_rule, depth)
-            || parser.has_surplus_quote_list_close(block_rule, depth))
+            || parser.has_surplus_quote_list_close(block_rule, depth)
+            || parser.has_shallower_quote_list_close(block_rule, depth))
     {
         parser.get_body_elements_with_literal_quote_context(
             block_rule,
