@@ -1,0 +1,38 @@
+[
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            32,
+            35
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            40,
+            42
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "table-column",
+        "rule": "block-table-cell-regular",
+        "span": [
+            42,
+            44
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            42,
+            44
+        ],
+        "kind": "no-rules-match"
+    }
+]
