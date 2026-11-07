@@ -846,10 +846,10 @@ fn wikidot_block_has_physical_line_ownership(
     block: &BlockRule,
     opener_start: usize,
 ) -> bool {
+    let in_footnote = parser.in_footnote() || parent_rule.name() == "block-footnote";
     if parser.settings().mode == WikitextMode::List
         || parser.in_native_blockquote_line()
-        || parser.in_footnote()
-        || parent_rule.name() == "block-footnote"
+        || (in_footnote && block.name != "block-tabview")
     {
         return true;
     }

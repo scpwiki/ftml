@@ -1,0 +1,103 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "align": "center"
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "n"
+                                        },
+                                        {
+                                            "element": "footnote",
+                                            "data": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "container",
+                "data": {
+                    "type": "div",
+                    "attributes": {},
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "hidden",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "container",
+                                        "data": {
+                                            "type": "hidden",
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "container",
+                                                    "data": {
+                                                        "type": "bold",
+                                                        "attributes": {},
+                                                        "elements": [
+                                                            {
+                                                                "element": "tab-view",
+                                                                "data": [
+                                                                    {
+                                                                        "label": "A",
+                                                                        "elements": [
+                                                                            {
+                                                                                "element": "container",
+                                                                                "data": {
+                                                                                    "type": "div",
+                                                                                    "attributes": {},
+                                                                                    "elements": []
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    ]
+}

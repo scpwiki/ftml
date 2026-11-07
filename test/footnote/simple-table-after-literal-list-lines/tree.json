@@ -1,0 +1,274 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "**"
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "note",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "text",
+                                    "data": "n"
+                                },
+                                {
+                                    "element": "footnote",
+                                    "data": 1
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "||"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "li"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "ul"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "span"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "li"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "ul"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                },
+                                {
+                                    "element": "line-break"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "[[/"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "footnote"
+                                },
+                                {
+                                    "element": "text",
+                                    "data": "]]"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "text",
+                        "data": "**"
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "container",
+                "data": {
+                    "type": "paragraph",
+                    "attributes": {},
+                    "elements": [
+                        {
+                            "element": "text",
+                            "data": "[["
+                        },
+                        {
+                            "element": "text",
+                            "data": "ul"
+                        },
+                        {
+                            "element": "text",
+                            "data": "]]"
+                        },
+                        {
+                            "element": "line-break"
+                        },
+                        {
+                            "element": "text",
+                            "data": "[["
+                        },
+                        {
+                            "element": "text",
+                            "data": "li"
+                        },
+                        {
+                            "element": "text",
+                            "data": "]]"
+                        },
+                        {
+                            "element": "line-break"
+                        },
+                        {
+                            "element": "text",
+                            "data": "[["
+                        },
+                        {
+                            "element": "text",
+                            "data": "span"
+                        },
+                        {
+                            "element": "text",
+                            "data": "]]"
+                        },
+                        {
+                            "element": "line-break"
+                        },
+                        {
+                            "element": "text",
+                            "data": "[["
+                        },
+                        {
+                            "element": "text",
+                            "data": "ul"
+                        },
+                        {
+                            "element": "text",
+                            "data": "]]"
+                        },
+                        {
+                            "element": "line-break"
+                        },
+                        {
+                            "element": "text",
+                            "data": "[["
+                        },
+                        {
+                            "element": "text",
+                            "data": "li"
+                        },
+                        {
+                            "element": "text",
+                            "data": "]]"
+                        }
+                    ]
+                }
+            },
+            {
+                "element": "table",
+                "data": {
+                    "type": "simple",
+                    "attributes": {},
+                    "rows": [
+                        {
+                            "attributes": {},
+                            "cells": [
+                                {
+                                    "header": false,
+                                    "column-span": 1,
+                                    "align": null,
+                                    "attributes": {},
+                                    "elements": []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            {
+                "element": "container",
+                "data": {
+                    "type": "paragraph",
+                    "attributes": {},
+                    "elements": [
+                        {
+                            "element": "text",
+                            "data": "x"
+                        }
+                    ]
+                }
+            },
+            {
+                "element": "container",
+                "data": {
+                    "type": "paragraph",
+                    "attributes": {},
+                    "elements": [
+                        {
+                            "element": "text",
+                            "data": "y"
+                        },
+                        {
+                            "element": "line-break"
+                        }
+                    ]
+                }
+            }
+        ]
+    ]
+}
