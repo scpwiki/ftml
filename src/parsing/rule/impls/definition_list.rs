@@ -245,8 +245,9 @@ enum WikidotDefinitionBlock<'t> {
     DroppedLine,
 }
 
-/// A definition line whose term starts with a block. An explicit list becomes
-/// a description, and ` : text` on its closer is another description. A table
+/// A definition line whose term starts with a block. An explicit list is a
+/// description only when its closer line has ` : text`; that text is a second
+/// description. Without the tail, the line stays on the ordinary path. A table
 /// opener is not a term: the line is dropped and the table does not open.
 fn try_wikidot_definition_block<'r, 't>(
     parser: &mut Parser<'r, 't>,
@@ -312,7 +313,6 @@ where
         }
     };
     let (elements, block_errors, _) = parsed.into();
-    errors.extend(block_errors);
     let mut value_elements: Vec<Element<'t>> = elements.into_iter().collect();
     while matches!(value_elements.last(), Some(Element::LineBreak)) {
         value_elements.pop();
@@ -325,18 +325,26 @@ where
         return Ok(None);
     }
 
-    parser.update(&block_parser);
+    let mut trial = block_parser.clone();
+    let tail = match take_same_line_definition(&mut trial, errors)? {
+        Some(tail) => tail,
+        None => {
+            parser.reset_mutable_state(state);
+            return Ok(None);
+        }
+    };
+    errors.extend(block_errors);
+    parser.update(&trial);
     parser.set_in_wikidot_definition_list_line(false);
 
-    let mut items = vec![DefinitionListItem {
-        key_string: std::borrow::Cow::Borrowed(""),
-        key_elements: Vec::new(),
-        value_elements,
-    }];
-    if let Some(tail) = take_same_line_definition(parser, errors)? {
-        items.push(tail);
-    }
-    Ok(Some(WikidotDefinitionBlock::Items(items)))
+    Ok(Some(WikidotDefinitionBlock::Items(vec![
+        DefinitionListItem {
+            key_string: std::borrow::Cow::Borrowed(""),
+            key_elements: Vec::new(),
+            value_elements,
+        },
+        tail,
+    ])))
 }
 
 fn take_same_line_definition<'r, 't>(
