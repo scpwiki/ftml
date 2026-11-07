@@ -4701,7 +4701,7 @@ where
         }
         let allow_inline_quote_close = self.settings().layout.legacy()
             && !self.discarding_hidden_body()
-            && block_rule.name == "block-collapsible";
+            && matches!(block_rule.name, "block-collapsible" | "block-div");
         let tabview_quote_ejection = self.settings().layout.legacy()
             && !self.discarding_hidden_body()
             && block_rule.name == "block-tabview";

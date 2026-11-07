@@ -1248,7 +1248,7 @@ fn parse_fn<'r, 't>(
         .wikidot_block_pair_at_head_byte(opener_start)
         .is_some_and(|pair| pair.kind == WikidotBlockKind::Div);
     let greedy_ate_the_close = greedy && !owns_pair;
-    let (mut elements, errors, _) = match body {
+    let (mut elements, mut errors, _) = match body {
         Ok(_) if greedy_ate_the_close => {
             parser.set_wikidot_row_absorb_div_close(absorb_before_body);
             return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
@@ -1287,8 +1287,28 @@ fn parse_fn<'r, 't>(
     } else {
         None
     };
-    let row_suffix =
+    let mut row_suffix =
         crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements);
+    if parser.settings().layout.legacy()
+        && parser.native_blockquote_depth().is_some()
+        && !parser.start_of_line()
+        && !matches!(
+            parser.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        )
+    {
+        let mut suffix_safe = true;
+        while !matches!(
+            parser.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            let suffix = consume(parser)?.chain(&mut errors, &mut suffix_safe);
+            row_suffix.extend(suffix);
+        }
+        if parser.current().token == Token::LineBreak {
+            parser.step()?;
+        }
+    }
     let element =
         Element::Container(Container::new(ContainerType::Div, elements, attributes));
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_DIV);
