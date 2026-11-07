@@ -1823,10 +1823,12 @@ fn apply_marker_stream_list<'t>(
             attributes,
             items,
             wikidot_explicit_block,
+            wikidot_unclosed: false,
         } => Element::List {
             ltype,
             attributes,
             wikidot_explicit_block,
+            wikidot_unclosed: false,
             items: items
                 .into_iter()
                 .map(|item| match item {

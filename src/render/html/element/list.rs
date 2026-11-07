@@ -26,6 +26,7 @@ pub fn render_list(
     ltype: ListType,
     list_items: &[ListItem],
     attributes: &AttributeMap,
+    unclosed: bool,
 ) {
     debug!(
         "Rendering list '{}' (items {})",
@@ -34,6 +35,9 @@ pub fn render_list(
     );
     let list_tag = ltype.html_tag();
     let mut tag = ctx.html().tag(list_tag);
+    if unclosed {
+        tag.omit_close();
+    }
 
     tag.attr(attr!(;; attributes)).inner(|ctx| {
         if ctx.layout().legacy() {
@@ -45,7 +49,19 @@ pub fn render_list(
                     elements,
                     attributes,
                 } => {
-                    ctx.html().li().attr(attr!(;; attributes)).inner(|ctx| {
+                  {
+                    let mut li = ctx.html().li();
+                    li.attr(attr!(;; attributes));
+                    if unclosed
+                        && list_items
+                            .iter()
+                            .filter(|item| matches!(item, ListItem::Elements { .. }))
+                            .last()
+                            .is_some_and(|last| std::ptr::eq(last, list_item))
+                    {
+                        li.omit_close();
+                    }
+                    li.inner(|ctx| {
                         for element in elements {
                             let nested_list = matches!(element, Element::List { .. });
                             let paragraph = matches!(
@@ -62,6 +78,7 @@ pub fn render_list(
                             }
                         }
                     });
+                  }
                     if ctx.layout().legacy() {
                         ctx.push_raw('\n');
                     }

@@ -1725,6 +1725,7 @@ fn insert_native_list_item<'t>(
             items: Vec::new(),
             attributes: AttributeMap::new(),
             wikidot_explicit_block: false,
+            wikidot_unclosed: false,
         });
     }
     let Some(sublist) = last_elements.last_mut() else {

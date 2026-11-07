@@ -87,6 +87,7 @@ fn explicit_list() -> Element<'static> {
         attributes: AttributeMap::new(),
         items: Vec::new(),
         wikidot_explicit_block: true,
+        wikidot_unclosed: false,
     }
 }
 

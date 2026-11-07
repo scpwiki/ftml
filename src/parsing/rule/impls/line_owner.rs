@@ -440,6 +440,7 @@ fn hoisted_leaf_list<'t>(element: Element<'t>) -> Option<Element<'t>> {
         attributes,
         items: leaves,
         wikidot_explicit_block: false,
+        wikidot_unclosed: false,
     })
 }
 
@@ -564,6 +565,34 @@ where
         .all(|element| matches!(element, Element::LineBreak));
     if !explicit_list_at_start {
         return Ok(None);
+    }
+    let mut elements = elements;
+    if matches!(
+        elements.first(),
+        Some(Element::List {
+            ltype: ListType::Numbered,
+            ..
+        })
+    ) {
+        while matches!(elements.last(), Some(Element::LineBreak)) {
+            elements.pop();
+        }
+        if let Some(Element::List {
+            ltype,
+            items,
+            wikidot_unclosed,
+            ..
+        }) = elements.first_mut()
+        {
+            *ltype = ListType::Bullet;
+            *wikidot_unclosed = true;
+            let mut item_attributes = AttributeMap::new();
+            item_attributes.insert("style", cow!("list-style: none"));
+            items.push(ListItem::Elements {
+                elements: vec![Element::LineBreak],
+                attributes: item_attributes,
+            });
+        }
     }
     parser.update(&candidate);
     let body = if decompose_siblings {

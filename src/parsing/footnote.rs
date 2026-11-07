@@ -699,6 +699,7 @@ fn hoist_block_sequence<'t>(elements: Vec<Element<'t>>) -> Vec<Element<'t>> {
                 attributes,
                 items,
                 wikidot_explicit_block,
+                wikidot_unclosed: false,
             } => {
                 let (list, hoisted) = hoist_list_footnote_block(
                     ltype,
@@ -759,6 +760,7 @@ fn hoist_list_footnote_block<'t>(
             attributes,
             items,
             wikidot_explicit_block,
+            wikidot_unclosed: false,
         };
 
     if wikidot_explicit_block {

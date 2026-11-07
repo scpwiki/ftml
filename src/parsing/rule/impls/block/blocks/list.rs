@@ -355,6 +355,7 @@ fn parse_list_block_impl<'r, 't>(
         items,
         attributes,
         wikidot_explicit_block: parser.settings().layout.legacy(),
+        wikidot_unclosed: false,
     };
     if let Some(escaped) = b5_escaped {
         let mut output = vec![element];
@@ -589,6 +590,7 @@ fn wikidot_li_apply_b5<'t>(
                 items: inner_list_items,
                 attributes: crate::tree::AttributeMap::new(),
                 wikidot_explicit_block: true,
+                wikidot_unclosed: false,
             });
         }
         if let Some(close) = close_element {
@@ -1329,6 +1331,7 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
         items,
         attributes: AttributeMap::new(),
         wikidot_explicit_block: true,
+        wikidot_unclosed: false,
     };
     success_elements_with_paragraph_safety(false, element, errors)
 }

@@ -1170,6 +1170,7 @@ pub(crate) fn build_list_element(
         items,
         attributes,
         wikidot_explicit_block: false,
+        wikidot_unclosed: false,
     })
 }
 
