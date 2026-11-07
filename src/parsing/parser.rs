@@ -3072,6 +3072,41 @@ impl<'r, 't> Parser<'r, 't> {
         self.has_footnote_block = has_footnote_block;
     }
 
+    pub(crate) fn snapshot_shared_registries(&self) -> SharedRegistries<'t> {
+        SharedRegistries {
+            footnotes: self.footnotes.borrow().clone(),
+            footnote_row_tails: self.footnote_row_tails.borrow().clone(),
+            html_blocks: self.html_blocks.borrow().clone(),
+            code_blocks: self.code_blocks.borrow().clone(),
+            table_of_contents: self.table_of_contents.borrow().clone(),
+            bibliographies: self.bibliographies.borrow().clone(),
+        }
+    }
+
+    pub(crate) fn restore_shared_registries(
+        &mut self,
+        snapshot: SharedRegistries<'t>,
+    ) {
+        *self.footnotes.borrow_mut() = snapshot.footnotes;
+        *self.footnote_row_tails.borrow_mut() = snapshot.footnote_row_tails;
+        *self.html_blocks.borrow_mut() = snapshot.html_blocks;
+        *self.code_blocks.borrow_mut() = snapshot.code_blocks;
+        *self.table_of_contents.borrow_mut() = snapshot.table_of_contents;
+        *self.bibliographies.borrow_mut() = snapshot.bibliographies;
+    }
+
+    pub(crate) fn shared_registries_differ(
+        &self,
+        snapshot: &SharedRegistries<'t>,
+    ) -> bool {
+        *self.footnotes.borrow() != snapshot.footnotes
+            || *self.footnote_row_tails.borrow() != snapshot.footnote_row_tails
+            || *self.html_blocks.borrow() != snapshot.html_blocks
+            || *self.code_blocks.borrow() != snapshot.code_blocks
+            || *self.table_of_contents.borrow() != snapshot.table_of_contents
+            || *self.bibliographies.borrow() != snapshot.bibliographies
+    }
+
     pub fn check_page_syntax(&self) -> Result<(), ParseError> {
         if self.settings.enable_page_syntax {
             Ok(())
@@ -3721,6 +3756,16 @@ fn find_stop_byte_forward(
     let found = (start..bytes.len()).find(|&offset| stop.contains(&bytes[offset]));
     *slot = Some((start, found));
     found
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SharedRegistries<'t> {
+    footnotes: Vec<Vec<Element<'t>>>,
+    footnote_row_tails: Vec<Vec<Element<'t>>>,
+    html_blocks: Vec<Cow<'t, str>>,
+    code_blocks: Vec<CodeBlock<'t>>,
+    table_of_contents: Vec<(usize, String)>,
+    bibliographies: BibliographyList<'t>,
 }
 
 #[derive(Debug, Copy, Clone)]

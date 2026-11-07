@@ -1417,7 +1417,7 @@ fn wikidot_trailing_space_after_scored_alias_close(parser: &Parser<'_, '_>) -> b
 
 fn try_consume_line_break<'r, 't>(
     parser: &mut Parser<'r, 't>,
-) -> Result<Option<Elements<'t>>, ParseError>
+) -> Result<Option<ParseSuccess<'r, 't, Elements<'t>>>, ParseError>
 where
     'r: 't,
 {
@@ -1431,7 +1431,11 @@ where
             .is_some_and(|token| token.token == Token::InputEnd)
     {
         parser.step()?;
-        return Ok(Some(Elements::None));
+        return Ok(Some(ParseSuccess::new(
+            Elements::None,
+            Vec::new(),
+            true,
+        )));
     }
 
     if parser.quote_body_cursor().is_some() {
@@ -1478,7 +1482,11 @@ where
             )
         {
             parser.step()?;
-            return Ok(Some(Elements::None));
+            return Ok(Some(ParseSuccess::new(
+            Elements::None,
+            Vec::new(),
+            true,
+        )));
         }
     }
 
@@ -1548,6 +1556,11 @@ where
             parser.look_ahead(next_offset).map(|token| token.token),
             Some(Token::BulletItem | Token::NumberedItem)
         ) {
+        if let Some(result) =
+            crate::parsing::rule::impls::try_fuse_own_line_consume(parser)
+        {
+            return result.map(Some);
+        }
         crate::parsing::rule::impls::line_break_skipped_for_own_line_block(parser)
     } else {
         looks_skippable
@@ -1555,9 +1568,13 @@ where
 
     parser.step()?;
     if skip {
-        Ok(Some(Elements::None))
+        Ok(Some(ParseSuccess::new(Elements::None, Vec::new(), true)))
     } else {
-        Ok(Some(Element::LineBreak.into()))
+        Ok(Some(ParseSuccess::new(
+            Element::LineBreak.into(),
+            Vec::new(),
+            true,
+        )))
     }
 }
 
@@ -2162,9 +2179,9 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
         return ok!(elements);
     }
 
-    if let Some(elements) = try_consume_line_break(parser)? {
+    if let Some(result) = try_consume_line_break(parser)? {
         parser.depth_decrement();
-        return ok!(elements);
+        return Ok(result);
     }
 
     if parser.settings().layout.legacy()
@@ -2405,7 +2422,8 @@ mod tests {
         let mut parser = parser_at(&tokens, &page_info, &settings, 2);
         let elements = try_consume_line_break(&mut parser)
             .expect("line break fast path should not fail")
-            .expect("plain line break should use fast path");
+            .expect("plain line break should use fast path")
+            .item;
         assert_eq!(elements, Element::LineBreak.into());
         assert_eq!(parser.current().token, Token::Identifier);
 
@@ -2413,7 +2431,8 @@ mod tests {
         let mut parser = parser_at(&tokens, &page_info, &settings, 2);
         let elements = try_consume_line_break(&mut parser)
             .expect("line break before heading should not fail")
-            .expect("line break before heading should use fast path");
+            .expect("line break before heading should use fast path")
+            .item;
         assert_eq!(elements, Elements::None);
         assert_eq!(parser.current().token, Token::Heading);
 
@@ -2440,7 +2459,8 @@ mod tests {
         let mut parser = parser_at(&tokens, &page_info, &settings, 2);
         let elements = try_consume_line_break(&mut parser)
             .expect("line break before malformed block should not fail")
-            .expect("single-bracket block fallback must keep its line break");
+            .expect("single-bracket block fallback must keep its line break")
+            .item;
         assert_eq!(elements, Element::LineBreak.into());
         assert_eq!(parser.current().token, Token::LeftBlock);
 

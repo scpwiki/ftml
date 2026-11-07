@@ -533,3 +533,353 @@ fn triple_links_still_render_as_links() {
         "triple link label lost, got {html:?}",
     );
 }
+
+
+#[test]
+fn crossed_list_collapsible_prefix_stays_bounded() {
+    let source = r####"[[collapsible show="+ŉ" #FF0000𐐀𐐀
+> [[collapsible show="+ŉ" #FF0000𐐀𐐀
+> [[collapsible show="+ŉ" #FF0000𐐀𐐀
+> [[collapsible show="+ŉ" #FF0000𐐀]
+> [[collapsiblKe show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show> > > > > ="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]�]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible show="+ŉ" #FF0000]]
+> [[collapsible sh# [[ol]][[/ul]]* [[/ul]][[/li]]# # [[ol]] * 
+
+
+
+[[ul]][[/ul]][[ol]][[li]]* [[/li]][[/ul]][[/ol]]
+
+[[ol]][[/ul]][[/ol]]# * [[/ol]][[/ul]][[ul]][[ol]][[/li]]
+
+  # [[/ul]]  # [[li]]* [[ul]][[li]][[/ul]]# [[/ul]]  # [[ol]][[ol]]  # [[/li]][[/li]][[/ul]][[/ul]][[ul]] * 
+
+[[li]][[/li]][[ol]][[/li]][[/ul]][[ol]][[ul]][[/li]][[ul]][[/ul]][[/ul]][[/ul]]
+
+[[ul]][[/ul]][[ul]][[ul]]* [[ol]]# [[/ol]][[/ul]]  #   # [[/li]] * [[/ol]]  #   # *   #   #  * [[ol]][[ol]][[/ol]]
+
+* *  * [[ul]]
+
+
+
+* [[ul]][[/ul]] * [[ol]]# 
+
+[[/li]]  # 
+
+[[li]]#   # [[ol]]# * [[/ul]] *  *   # [[/ul]]# * [[/ul]][[/li]]
+
+
+
+# * 
+
+
+
+# [[li]][[ul]]# * # [[li]][[li]]  # * [[ol]][[ol]][[ol]]  # [[ol]][[ul]]*   # #  * [[/li]][[ol]][[ol]][[/ol]]
+
+*   # [[/li]]#   # [[li]][[ul]]#   # [[ol]] * [[ol]][[/ol]]  # [[/ol]]* 
+
+
+
+# # [[li]][[li]][[ul]][[/li]]* [[ul]] *   #   # [[ul]]  # [[li]] * [[li]]*   # [[/ul]][[/ul]]
+
+[[/ul]] * [[ul]][[/ul
+[[/ol]] * [[ul]]  # [[ul]]  # * [[li]]# * # [[/ul]]# [[/ul]][[/ul]]
+
+[[ul]][[/ul]] *   # [[li]]  # 
+
+[[ol]][[/ul]][[ol]][[ul]]  # [[ul]]
+
+l]][[ul]]  # [[/li]]* [[/ol]]* [[/ul]][[ul]]# [[/ul]] * 
+
+[[ul]][[/li]][[/ol]]# [[ul]][[/ol]][[/li]][[/ul]]
+
+#   #   # 
+
+[[li]][[ol]][[/ol]]* [[/li]] * [[/ol]][[/li]][[/li]] * [[ol]][[/ol]]# [[ol]][[/ul]]*   # 
+
+[[ol]]* [[ol]][[ul]][[/li]][[/ol]][[/ul]][[ul]][[/ol]]  # [[/ol]][[/ul]][[ul]][[/ul]][[li]][[/ol]][[li]]* [[ul]][[/ol]][[ol]]* [[/ol]][[/ol]][[ul]][[li]][[/ul]][[li]][[li]][[/ol]]* [[/ul]][[li]][[li]][[/li]][[/ol]][[/ol]][[/li]][[ol]]  # [[/ol]][[ul]]#  * [[/ol]][[ol]][[/ol]]#  * 
+
+  # [[li]]  # [[/ol]]  # [[/li]]
+
+
+
+[[ul]] * [[/li]][[ul]][[/ol]]# [[/ol]][[ul]][[/ol]][[/ol]][[li]][[ul]]# #  * [[ol]]
+
+[[ol]][[ul]]  # [[ol]] * [[ol]][[/ol]]# [[ol]][[/li]][[ul]]  # [[li]][[/ul]]  # [[/ul]][[/li]][[ul]]  # #  * [[li]][[/ul]]
+
+# [[/ol]]# [[/ul]]  #   # [[ol]][[li]][[ul]][[ol]][[ol]]  # [[ul]][[/ol]][[/ol]]
+
+[[li]][[/ol]][[ul]]
+
+[[ul]]
+
+[[/ol]]*  *  * # 
+
+ * [[ul]]*   # #   # [[ul]][[li]][[ol]]
+
+[[li]][[/ul]]  #  *   # [[/ol]][[ul]]
+
+[[/li]]# 
+
+
+
+[[/ol]]# [[/ul]][[/ul]]# *  * * * [[/ol]]
+
+*  * [[/ul]]*  *  * [[ul]]
+
+[[/li]][[/ul]][[ul]]#  * [[/ul]]  # # [[/ol]][[li]]#   #   # [[/ol]][[ol]][[li]][[/ol]][[ul]][[li]][[/li]][[/li]]# [[/ol]]
+
+ * [[/li]][[li]][[/ul]][[/li]][[ol]]#  * [[/ul]]#   # [[/li]]* # 
+
+* [[/ul]][[ul]][[/ol]]# * 
+
+[[/ol]][[/li]][[ul]][[/ol]]#  * 
+
+ * [[ol]][[/ul]]
+
+[[ul]][[/ol]][[/ul]] * [[ol]]# # [[ul]][[/li]][[li]]  # *  * [[ul]][[/li]] * [[ol]][[li]] *  *   #  * [[li]][[ul]]# [[/ul]][[ul]][[li]]  # * 
+
+
+
+[[ol]]# [[/ol]][[/ul]][[/ul]] * [[/li]]  # * [[ol]]  # * * [[li]][[/li]][[/li]][[/ul]][[ol]] * 
+
+[[ul]] * # [[ul]][[/li]] * [[li]]* [[/li]][[li]]* * # [[/ul]][[/li]][[/li]]  # [[ol]]
+
+[[li]]
+
+ * * [[ol]][[/ol]][[/ul]]
+
+[[/ol]][[/ol]][[ol]]# [[ol]]* 
+
+
+
+[[ul]]* [[li]]# [[li]][[/ul]][[/ol]] * [[ul]][[ol]][[ol]][[/li]][[li]][[/ul]]
+
+[[/li]] * # # [[/ul]]* #  * 
+
+[[ol]][[ol]]  # # 
+
+[[ol]]  # [[/ul]] * [[/ul]]
+
+[[ul]][[/ul]][[/li]]  # 
+
+[[ol]]  #   # 
+
+[[ol]][[li]]* [[/ul]]  # [[li]][[li]][[ul]]
+
+[[ol]][[/ul]][[/ol]]  # [[/li]]  # *   #   # [[li]][[ul]][[ul]]#   #  * * [[/ol]]# [[/ol]][[ul]] * [[/ol]]
+
+# [[li]][[/ul]][[li]][[/ul]][[/li]][[li]][[ul]]
+
+  # [[ul]]#  *   # [[/ol]]  # # [[ul]][[/ol]] *   # [[/ol]][[/li]]* [[ul]][[li]][[/ul]][[li]]
+
+[[/ul]] * [[/ul]][[/li]]* [[/ul]]  # [[ul]][[li]] * [[/ul]]
+
+[[ol]] * [[li]][[li]][[li]][[ol]][[ol]][[li]][[/ol]]
+
+[[ol]][[ol]][[/ol]]# #   # [[/ul]][[/ol]][[/li]]  # 
+
+[[/ol]]# [[li]]# [[ul]][[/ul]]*  *  *   # # [[/ol]][[ul]][[/ol]][[li]]* [[/ul]] *  *   # # [[/li]][[/ol]]
+
+#   # [[/ol]]
+
+[[ul]] * [[/ul]][[li]]# [[ol]][[ul]]* [[ol]][[ul]][[/ul]] *  *  * # [[ul]][[/ol]]*   # [[/ul]][[ol]]  # [[ol]]  # 
+
+[[/li]][[li]] * # #   # [[ol]] * [[/li]]# [[/ul]][[/ul]]# # [[ol]][[ul]][[/li]]*  * [[/ul]][[ol]][[/ol]]  # * # [[li]]  # [[/ul]] *  * [[/ol]]  # [[/li]][[ol]]* [[/li]][[/ul]]*  * * [[/ul]][[ol]][[/ol]][[ol]] * [[ul]] * [[li]]# [[ul]][[/li]][[ol]][[/ul]][[ul]]* [[/li]]
+
+  # [[/li]][[li]][[li]][[ul]]
+
+[[/ol]][[/ul]][[/ol]][[/ol]] * # * # [[/li]][[/ol]] * [[li]]# * [[ul]][[ol]]* [[/ol]]  # [[ol]][[/ul]][[/ol]][[/li]][[ol]]#  * # [[/li]]
+
+[[/li]][[/ul]]* [[ul]]
+
+[[/li]][[ol]][[li]]* 
+
+# [[/ul]][[/ul]][[ul]][[/ol]][[li]]  # [[li]][[li]][[/ul]][[ol]][[/ol]]# [[/li]]
+
+[[li]][[ol]][[/ul]]* [[ul]][[li]][[li]][[li]][[li]][[/li]][[ol]][[ol]]# [[ol]][[ul]][[ol]]  # * *   # [[ol]]  # [[li]][[/ul]]# [[/ul]][[/li]]* 
+
+[[ol]]# [[ul]][[/li]][[ul]][[li]][[ul]]  # [[li]][[ol]] *  * * [[/li]]*  *   # # * [[li]]
+
+[[/ol]][[/ul]][[li]][[/li]]# * [[/ul]]  # 
+
+[[/ul]]* [[ol]]# *  * [[/ol]][[/ul]][[/ul]]  # [[ul]]# [[ul]]  # # [[ol]]
+
+[[/ul]]* [[li]][[ul]][[li]][[/ol]][[ol]] * [[/ul]][[li]][[ul]][[/li]]  # *  * [[li]][[/ol]][[ul]][[/ol]][[/ol]][[/ul]][[/li]] * [[li]] * [[ul]]
+
+[[li]]# # [[ol]]  # [[/li]][[/ol]]* [[ol]][[li]] * 
+
+[[/ul]][[/ul]][[li]] * [[/ol]]# 
+
+[[/ol]][[li]][[/li]][[/ol]][[/li]]# [[ol]]# [[/ul]][[ol]]#   # [[li]]# * [[ol]][[/ul]] * [[li]][[ul]]* [[/ol]]
+
+[[/li]][[/li]] *  * 
+
+[[/ol]]
+
+[[ol]][[ul]][[li]][[/li]]# * [[/li]] * [[li]][[/ol]][[li]][[/ul]]  # * [[/ul]]
+
+[[li]]# *   # [[ol]][[/ul]] * * [[/li]]
+
+[[/ol]]  # # 
+
+  # [[ul]][[/ol]]*  * * # [[/ul]]# * * [[/ol]][[li]][[li]][[/li]][[ol]][[/li]][[/li]][[ol]][[li]][[ul]][[/ul]]#  * [[li]][[/li]]* [[/li]][[li]]  # [[/ul]] * 
+
+[[/ol]][[ol]]  # [[/ol]]  # [[li]][[ol]][[/ol]] * 
+
+  # * [[OL]][[UL]] * [[/LI]]
+
+[[LI]]  # [[/OL]][[/UL]]
+
+[[/OL]]* [[/UL]]# [[LI]][[OL]]* [[LI]] * [[OL]][[/LI]][[LI]][[UL]]# 
+
+[[/OL]]
+
+  #  *  * [[OL]]#  * #  *  * # [[LI]][[UL]]
+
+* [[/LI]][[/LI]][[/LI]]  # *  * [[/OL]]
+
+[[UL]][[UL]]# * [[/UL]][[UL]][[/LI]][[/UL]][[/LI]]#  * [[UL]]  # [[OL]]# [[OL]][[UL]]
+
+  # [[LI]] * 
+
+# [[OL]][[/UL]]  # [[LI]][[/UL]][[/UL]][[/LI]]* 
+
+[[/OL]][[/LI]]  # [[LI]][[OL]][[OL]] * [[/OL]][[/UL]][[/OL]][[/LI]] * [[UL]]* * [[/UL]]# * 
+
+* [[UL]]
+
+[[OL]][[/UL]][[/OL]] * [[UL]]*  *   # * # [[/LI]][[UL]][[/LI]]* [[/UL]]* 
+
+[[/OL]][[/LI]][[UL]][[OL]][[OL]][[OL]][[LI]]
+
+ * 
+
+[[LI]] * # [[UL]][[LI]][[/UL]]# [[/UL]]* [[UL]][[OL]]  #   # #   # [[LI]]* 
+
+[[/LI]]  # [[UL]]* [[LI]]* [[/OL]] * [[LI]]  # [[/LI]][[LI]][[UL]][[/UL]]
+
+[[OL]]* [[LI]][[OL]]* [[/OL]][[/UL]] * * # [[/OL]][[/UL]]* 
+
+#   #   # [[/OL]][[/UL]][[/OL]]
+
+[[/OL]][[/UL]] *  *   #  * [[/UL]]
+
+[[OL]]* 
+
+
+
+[[UL]] *  *   # [[/LI]]  # # # 
+
+[[/OL]]# * * [[OL]]  #  *   #   # 
+
+[[LI]] * [[OL]][[LI]][[LI]][[OL]]
+
+[[/UL]]# [[/LI]][[LI]][[/LI]][[UL]][[UL]]* [[LI]] * [[/UL]] * [[OL]][[UL]][[UL]][[LI]][[LI]][[OL]][[OL]][[UL]][[/LI]]# [[/LI]][[/OL]]# [[/OL]][[/UL]]  # [[LI]]  # [[OL]]  #   #   # [[LI]][[LI]][[UL]]# [[OL]]* [[/UL]][[/LI]]
+
+[[/UL]]
+
+[[/OL]]* # 
+
+  # [[LI]][[LI]]* [[LI]][[/UL]][[/UL]]* * [[/OL]]# [[/LI]][[/UL]][[/OL]][[/OL]]*  * [[/OL]][[/OL]]# [[LI]][[UL]][[/UL]][[OL]]# [[UL]][[/LI]][[OL]]  # [[/UL]][[OL]] * [[/OL]][[UL]]* [[OL]][[OL]][[OL]]
+
+[[UL]]#   # [[/OL]][[LI]]  # [[/LI]][[UL]]
+
+  # [[OL]][[UL]][[/UL]]* 
+
+[[/LI]][[UL]][[/UL]][[/OL]][[/LI]]# [[/LI]]* [[UL]]  # [[OL]][[OL]]# [[OL]]  # [[/UL]]
+
+[[/LI]] * * #  * # [[/UL]][[/OL]][[UL]]#  * # [[/UL]][[/LI]]*  * * 
+
+[[/LI]][[/UL]][[/UL]][[LI]]
+
+[[LI]] * # [[OL]]  # 
+
+[[/LI]][[LI]][[LI]][[UL]][[/LI]]*  * [[OL]][[LI]][[LI]]  # [[LI]][[/UL]][[UL]][[OL]]  # * [[OL]] * [[/OL]]# [[LI]]
+
+[[OL]]  # [[UL]][[/OL]]  # 
+
+[[/UL]]# [[LI]][[UL]]*  *   #   # [[/OL]][[OL]][[/LI]]  #   # [[LI]][[/OL]][[LI]][[/OL]]# [[OL]][[LI]][[/LI]][[LI]]
+
+[[OL]]# # # [[/LI]]* [[/OL]][[OL]][[/LI]][[/UL]]*   # [[/OL]][[/UL]]
+
+ * 
+
+[[/UL]] * [[/LI]][[OL]]*  * [[LI]][[OL]][[LI]] * # [[/UL]][[UL]]
+
+# [[UL]][[/LI]][[UL]][[/OL]] * # [[UL]][[OL]]
+
+* [[UL]][[/OL]]  # [[UL]]
+
+[[/LI]]* [[OL]][[/LI]][[UL]][[LI]]#   # # # [[OL]] * [[/OL]][[/OL]][[/OL]]  #   # [[/OL]][[UL]]* [[OL]][[/LI]]# [[/LI]]* * [[/UL]][[/OL]][[/OL]][[UL]] * * # [[/OL]]  # * [[LI]][[/UL]]
+
+[[OL]]#  * [[/LI]]
+
+[[/UL]]  # [[/LI]][[UL]]
+
+[[LI]][[UL]]# [[LI]]*  *  * * [[/OL]]
+
+[[LI]]  # [[/UL]][[UL]]# [[OL]][[OL]][[UL]]# # [[UL]]
+
+  # 
+
+[[/OL]][[/LI]]
+
+
+
+[[OL]][[LI]][[/OL]][[OL]][[OL]][[/UL]][[OL]]  # [[OL]] * [[OL]][[/OL]][[OL]][[OL]][[/LI]] *  * [[LI]][[/LI]]# * 
+
+[[/LI]][[LI]][[/UL]][[UL]]*  * [[/OL]][[UL]][[/LI]]# [[LI]]
+
+  # # 
+
+[[/LI]]* [[UL]][[/UL]][[LI]]
+
+* [[OL]]
+
+
+
+[[UL]][[/OL]][[/LI]][[OL]] *  * [[OL]][[LI]][[OL]]  # *  * * [[/OL]]  # [[/LI]]  # [[/LI]][[OL]][[/UL]]  # [[LI]] * # [[/OL]][[UL]][[OL]] * *   # [[LI]]
+
+#   # [[UL]][[UL]]# [[UL]] *  *   # [[UL]][[/OL]]* [[/LI]][[/OL]] * [[/LI]]"####;
+    let (_html, elapsed) = render_timed(source);
+    assert!(
+        elapsed < Duration::from_secs(10),
+        "crossed list/collapsible prefix took {elapsed:?}",
+    );
+}

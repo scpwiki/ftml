@@ -74,8 +74,91 @@ fn own_line_rules(token: Token) -> &'static [Rule] {
     }
 }
 
+
+fn fuse_own_line_kind(token: Token) -> bool {
+    matches!(token, Token::BulletItem | Token::NumberedItem)
+}
+
+pub(crate) fn try_fuse_own_line_consume<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>>
+where
+    'r: 't,
+{
+    if parser.quote_body_cursor().is_some()
+        || parser.in_wikidot_bibliography_body()
+        || parser.discarding_hidden_body()
+    {
+        return None;
+    }
+    if parser.current().token == Token::LineBreak
+        && wikidot_injected_footnote_block_break(parser)
+    {
+        return None;
+    }
+    let snapshot = parser.clone();
+    let registries = parser.snapshot_shared_registries();
+    let result = try_fuse_own_line_attempt(parser);
+    if result.is_none() || parser.shared_registries_differ(&registries) {
+        parser.restore_shared_registries(registries);
+        *parser = snapshot;
+        return None;
+    }
+    result
+}
+
+fn try_fuse_own_line_attempt<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>>
+where
+    'r: 't,
+{
+    if parser.step().is_err() {
+        return None;
+    }
+    let token = parser.current().token;
+    if token == Token::Whitespace || !fuse_own_line_kind(token) {
+        return None;
+    }
+    if let Some(barrier) = parser.wikidot_heading_barrier()
+        && parser.current().span.start >= barrier
+    {
+        return None;
+    }
+    if parser.wikidot_iftags_body_end().is_some() {
+        return None;
+    }
+    if parser.at_body_end_boundary() || parser.at_hard_body_end_boundary() {
+        return None;
+    }
+    let rules = own_line_rules(token);
+    if rules.is_empty() {
+        return None;
+    }
+    for rule in rules {
+        let footnote_count = parser.footnote_count();
+        let attempt_start = parser.remaining();
+        match rule.try_consume(parser) {
+            Ok(success) => {
+                if parser.same_pointer(attempt_start) && parser.step().is_err() {
+                    return None;
+                }
+                return Some(Ok(success));
+            }
+            Err(_) => {
+                parser.truncate_footnotes(footnote_count);
+            }
+        }
+    }
+    None
+}
+
 fn line_break<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming newline token as line break");
+
+    if let Some(result) = try_fuse_own_line_consume(parser) {
+        return result;
+    }
 
     if line_break_skipped_for_own_line_block(parser) {
         if wikidot_injected_footnote_block_break(parser) {

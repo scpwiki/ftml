@@ -112,7 +112,7 @@ pub use self::horizontal_rule::RULE_HORIZONTAL_RULE;
 pub use self::italics::RULE_ITALICS;
 pub use self::line_break::{RULE_LINE_BREAK, RULE_LINE_BREAK_PARAGRAPH};
 pub(crate) use self::line_break::{
-    line_break_skipped_for_own_line_block, starts_own_line_rule,
+    line_break_skipped_for_own_line_block, starts_own_line_rule, try_fuse_own_line_consume,
 };
 pub use self::link_anchor::RULE_LINK_ANCHOR;
 pub use self::link_single::{
