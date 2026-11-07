@@ -1191,6 +1191,15 @@ impl<'t> ParagraphStack<'t> {
             if self.wikidot && Self::wikidot_element_contains_unaligned_image(&element) {
                 self.current_unwrapped = true;
             }
+            // A CSS module leaves only a style element. Live keeps a footnote
+            // glued to that module bare, and wraps a following word.
+            if self.wikidot
+                && self.current.is_empty()
+                && matches!(element, Element::Footnote(_))
+                && matches!(self.finished.last(), Some(Element::Style(_)))
+            {
+                self.mark_next_unwrapped_after_block();
+            }
             self.current.push(element);
         } else {
             if self.current.is_empty() {

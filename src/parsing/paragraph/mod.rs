@@ -351,6 +351,16 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
+            // A quote or bullet that hoists an explicit list returns that list
+            // after the opener has already been consumed. The residual word is
+            // the same-line tail live leaves bare.
+            let hoisted_list_same_line_residual = parser.settings().layout.legacy()
+                && !paragraph_safe
+                && elements_end_with_explicit_list(&elements)
+                && !matches!(
+                    parser.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                );
             let ends_with_explicit_list = elements_end_with_explicit_list(&elements);
             let embed_error_has_same_line_residual = embed_opener
                 && !paragraph_safe
@@ -371,6 +381,16 @@ where
                     parser.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
+            // A rule can consume the newline after [[/tabview]] and leave the
+            // next source line as the current token. Live wraps that line.
+            // Only text that still shares the closer's line stays bare.
+            let tabview_has_same_line_residual = parser.settings().layout.legacy()
+                && elements_end_with_tabview(&elements)
+                && !matches!(
+                    parser.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                )
+                && wikidot_residual_shares_closer_line(parser);
             let div_has_same_line_residual = div_residual_opener
                 && active_div
                 && !matches!(
@@ -488,7 +508,7 @@ where
                 stack.mark_current_unwrapped();
                 stack.end_paragraph();
             }
-            if list_has_same_line_residual {
+            if list_has_same_line_residual || hoisted_list_same_line_residual {
                 stack.mark_next_unwrapped_after_block();
             }
             // L85: live leaves same-para text after an explicit list bare
@@ -516,6 +536,9 @@ where
             }
             if code_has_same_line_residual {
                 stack.mark_wikidot_same_line_code_residual();
+            }
+            if tabview_has_same_line_residual {
+                stack.mark_next_unwrapped_after_block();
             }
             if embed_error_has_same_line_residual {
                 stack.mark_wikidot_same_line_embed_residual();
@@ -941,6 +964,15 @@ fn elements_contain_toc(elements: &Elements<'_>) -> bool {
     }
 }
 
+fn wikidot_residual_shares_closer_line(parser: &Parser<'_, '_>) -> bool {
+    let source = parser.full_text().inner();
+    let here = parser.current().span.start.min(source.len());
+    let line_start = source[..here]
+        .rfind(['\n', '\r'])
+        .map_or(0, |index| index + 1);
+    source[line_start..here].contains("]]")
+}
+
 fn wikidot_toc_spaced_tail(parser: &Parser<'_, '_>) -> bool {
     let source = parser.full_text().inner();
     let here = parser.current().span.start.min(source.len());
@@ -1011,6 +1043,16 @@ fn elements_contain_div(elements: &Elements<'_>) -> bool {
         Elements::None => false,
         Elements::Single(element) => is_div(element),
         Elements::Multiple(elements) => elements.iter().any(is_div),
+    }
+}
+
+fn elements_end_with_tabview(elements: &Elements<'_>) -> bool {
+    match elements {
+        Elements::Single(element) => matches!(element, Element::TabView(_)),
+        Elements::Multiple(elements) => {
+            matches!(elements.last(), Some(Element::TabView(_)))
+        }
+        Elements::None => false,
     }
 }
 
