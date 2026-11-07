@@ -280,6 +280,11 @@ impl Parser<'_, '_> {
     }
 
     #[inline]
+    pub(crate) fn wikidot_span_body_depth(&self) -> u16 {
+        self.wikidot.span_body_depth
+    }
+
+    #[inline]
     pub(crate) fn enter_wikidot_size_body(&mut self) {
         self.wikidot.size_body_depth = self.wikidot.size_body_depth.saturating_add(1);
     }
