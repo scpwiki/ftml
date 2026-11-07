@@ -1425,7 +1425,7 @@ fn wrap_explicit_list_items(list: &mut Element<'_>, ctype: ContainerType) {
     }
 }
 
-fn subtree_contains_native_list(element: &Element<'_>) -> bool {
+pub(crate) fn subtree_contains_native_list(element: &Element<'_>) -> bool {
     if matches!(
         element,
         Element::List {
