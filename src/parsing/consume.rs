@@ -1897,6 +1897,123 @@ fn try_consume_bibliography_split_closer<'r, 't>(
     )))
 }
 
+fn comma_run_len(token: &ExtractedToken<'_>) -> Option<usize> {
+    let slice = token.slice;
+    if token.token == Token::Other
+        && slice.len() >= 3
+        && slice.bytes().all(|byte| byte == b',')
+    {
+        Some(slice.len())
+    } else {
+        None
+    }
+}
+
+fn has_later_comma_run(parser: &Parser<'_, '_>) -> bool {
+    for token in parser.remaining() {
+        if matches!(
+            token.token,
+            Token::ParagraphBreak
+                | Token::InputEnd
+                | Token::LeftBlock
+                | Token::LeftBlockStar
+        ) {
+            return false;
+        }
+        if comma_run_len(token).is_some() {
+            return true;
+        }
+    }
+    false
+}
+
+fn extend_consumed<'t>(body: &mut Vec<Element<'t>>, elements: Elements<'t>) {
+    match elements {
+        Elements::None => {}
+        Elements::Single(element) => body.push(element),
+        Elements::Multiple(elements) => body.extend(elements),
+    }
+}
+
+/// `,,,a,,,` is a subscript of `,a` plus a leftover comma.
+/// `a,,,b` has no second run, so it stays one literal token.
+fn try_consume_comma_run_subscript<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> ParseResult<'r, 't, Option<(Elements<'t>, bool)>> {
+    let miss = || Ok(ParseSuccess::new(None, Vec::new(), true));
+    if !parser.settings().layout.legacy() || comma_run_len(parser.current()).is_none() {
+        return miss();
+    }
+    if !has_later_comma_run(parser) {
+        return miss();
+    }
+
+    let checkpoint = parser.clone();
+    let lead = parser.current().slice;
+    let lead = &lead[2..];
+    if parser.step().is_err() {
+        parser.update(&checkpoint);
+        return miss();
+    }
+
+    let mut body = Vec::new();
+    let mut errors = Vec::new();
+    let mut paragraph_safe = true;
+    if !lead.is_empty() {
+        body.push(text!(lead));
+    }
+    let parsed = loop {
+        if comma_run_len(parser.current()).is_some()
+            || matches!(
+                parser.current().token,
+                Token::ParagraphBreak | Token::InputEnd
+            )
+        {
+            break true;
+        }
+        let mark = parser.current().span.clone();
+        match consume(parser) {
+            Ok(consumed) => {
+                paragraph_safe &= consumed.paragraph_safe;
+                errors.extend(consumed.errors);
+                extend_consumed(&mut body, consumed.item);
+                if parser.current().span == mark {
+                    break false;
+                }
+            }
+            Err(_) => break false,
+        }
+    };
+    if !parsed || comma_run_len(parser.current()).is_none() {
+        parser.update(&checkpoint);
+        return miss();
+    }
+
+    let tail = parser.current().slice;
+    let tail = &tail[2..];
+    if parser.step().is_err() {
+        parser.update(&checkpoint);
+        return miss();
+    }
+
+    let element = Element::Container(crate::tree::Container::new(
+        crate::tree::ContainerType::Subscript,
+        body,
+        crate::tree::AttributeMap::new(),
+    ));
+    let elements = if tail.is_empty() {
+        Elements::Single(element)
+    } else {
+        Elements::Multiple(vec![element, text!(tail)])
+    };
+    paragraph_safe &= elements.paragraph_safe();
+    Ok(ParseSuccess::new(
+        Some((elements, paragraph_safe)),
+        errors,
+        true,
+    ))
+}
+
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     if parser.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
         return Err(parser.make_err(ParseErrorKind::EndOfInput));
@@ -1940,6 +2057,16 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     parser.depth_increment()?;
+
+    let comma_run = try_consume_comma_run_subscript(parser)?;
+    if let Some((elements, paragraph_safe)) = comma_run.item {
+        parser.depth_decrement();
+        return Ok(ParseSuccess::new(
+            elements,
+            comma_run.errors,
+            paragraph_safe,
+        ));
+    }
 
     if let Some(result) = try_consume_wikidot_render_interior_close(parser)? {
         parser.depth_decrement();
