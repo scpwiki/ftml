@@ -3607,7 +3607,8 @@ fn wikidot_inline_closes_anchor(element: &Element<'_>) -> bool {
         | Element::Footnote(_)
         | Element::EquationReference(_)
         | Element::StandaloneButton(_)
-        | Element::FileLink { .. } => true,
+        | Element::FileLink { .. }
+        | Element::BibliographyCite { .. } => true,
         Element::Image { link, .. } => link.is_some(),
         _ => false,
     }

@@ -303,9 +303,15 @@ fn wikidot_anchor_closes_before_bibcite() {
         "text after the cite should sit outside the outer anchor: {html}"
     );
 
-    let literal = render(
-        "[[a href=\"/A\"]]x[[bibcite b1]]y[[/a]]\n\n[[bibliography]]\n: b1 : Title\n[[/bibliography]]\n",
-    );
+    let literal_source =
+        "[[a href=\"/A\"]]x[[bibcite b1]]y[[/a]]\n\n[[bibliography]]\n: b1 : Title\n[[/bibliography]]\n";
+    let page_info = page_info();
+    let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+    let mut literal_text = literal_source.to_owned();
+    ftml::preprocess_for_layout(&mut literal_text, settings.layout);
+    let tokens = ftml::tokenize(&literal_text);
+    let (tree, _) = ftml::parse(&tokens, &page_info, &settings).into();
+    let literal = HtmlRender.render(&tree, &page_info, &settings).body;
     assert!(
         literal.contains(">x[[bibcite b1]]y</a>"),
         "block bibcite is not an anchor producer: {literal}"
