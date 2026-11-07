@@ -32,7 +32,16 @@ pub fn collect_container<'r, 't>(
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let quote_cursor = QuoteBodyCursorInstallation::install(parser);
     let preserve_empty_lists = parser.settings().layout.legacy()
-        && container_type == ContainerType::Bold;
+        && matches!(
+            container_type,
+            ContainerType::Bold
+                | ContainerType::Italics
+                | ContainerType::Underline
+                | ContainerType::Strikethrough
+                | ContainerType::Superscript
+                | ContainerType::Subscript
+                | ContainerType::Monospace
+        );
     let previous_preserve = if preserve_empty_lists {
         parser.set_wikidot_preserve_empty_lists(true)
     } else {

@@ -1232,7 +1232,7 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
             output.push(element);
             continue;
         }
-        if let Some(replacement) = bold_explicit_list_segments(&mut element) {
+        if let Some(replacement) = format_explicit_list_segments(&mut element) {
             output.extend(replacement);
             continue;
         }
@@ -1518,13 +1518,16 @@ fn segment_format_list_items<'t>(
     }
 }
 
-fn bold_explicit_list_segments<'t>(element: &mut Element<'t>) -> Option<Vec<Element<'t>>> {
+fn format_explicit_list_segments<'t>(
+    element: &mut Element<'t>,
+) -> Option<Vec<Element<'t>>> {
     let Element::Container(container) = &element else {
         return None;
     };
-    if container.ctype() != ContainerType::Bold {
+    let Some(kind) = format_kind_of(container.ctype()) else {
         return None;
-    }
+    };
+    let ctype = container.ctype();
     let crosses_list = container.elements().iter().any(|child| {
         matches!(
             child,
@@ -1542,7 +1545,6 @@ fn bold_explicit_list_segments<'t>(element: &mut Element<'t>) -> Option<Vec<Elem
         unreachable!()
     };
     let children = mem::take(container.elements_mut());
-    let kind = InlineFormatKind::Bold;
     let literalised = |children: Vec<Element<'t>>| {
         let mut output = Vec::with_capacity(children.len() + 2);
         output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
@@ -1554,7 +1556,7 @@ fn bold_explicit_list_segments<'t>(element: &mut Element<'t>) -> Option<Vec<Elem
         return Some(literalised(children));
     }
     let mut formed = false;
-    let segmented = segment_format_run(children, ContainerType::Bold, &mut formed);
+    let segmented = segment_format_run(children, ctype, &mut formed);
     if formed {
         Some(segmented)
     } else {

@@ -75,7 +75,17 @@ fn try_consume_fn<'r, 't>(
 
     let close = [ParseCondition::current(Token::RightMonospace)];
     let invalid = [ParseCondition::current(Token::ParagraphBreak)];
-    let collected = collect_consume_keep(parser, RULE_MONOSPACE, &close, &invalid, None)?;
+    let preserve_empty_lists = parser.settings().layout.legacy();
+    let previous_preserve = if preserve_empty_lists {
+        parser.set_wikidot_preserve_empty_lists(true)
+    } else {
+        false
+    };
+    let collected = collect_consume_keep(parser, RULE_MONOSPACE, &close, &invalid, None);
+    if preserve_empty_lists {
+        parser.set_wikidot_preserve_empty_lists(previous_preserve);
+    }
+    let collected = collected?;
     let ((mut elements, terminator), errors, paragraph_safe) = collected.into();
 
     if parser.settings().layout.legacy() && terminator.token == Token::RightMonospace {
