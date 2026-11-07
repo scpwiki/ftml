@@ -120,15 +120,26 @@ pub(super) fn validate_reachable_close(
 ) -> Result<(), ParseError> {
     let tokens = parser.remaining();
     let scan_start = parser.ahead_token_index();
-    // A split-free scan that reached `InputEnd` from an earlier opener proved
-    // that no `token` exists at or after it, and that it never touched block
-    // bookkeeping (which is the only parser-context-dependent outcome here).
-    // Every later start sees a suffix of those tokens, so it reaches
-    // `InputEnd` too and returns the identical error; see
+    // Block ends change the result only when `end_block_fails` can return
+    // true in this context. Otherwise they are ordinary tokens, and a proved
+    // absence may be replayed. A context that can reject must not read that
+    // record: it would hide a `RuleFailed` block end. See
     // `parsing/parser/closer_scan.rs`.
-    if split.is_none()
-        && let Some(paragraph_break) = parser.delimiter_close_absent(token, scan_start)
-    {
+    let blocks_can_reject = block_end_can_reject(parser, mode);
+    let absent = if split.is_some() {
+        None
+    } else {
+        parser
+            .delimiter_close_absent(token, scan_start)
+            .or_else(|| {
+                if blocks_can_reject {
+                    None
+                } else {
+                    parser.delimiter_close_absent_context_free(token, scan_start)
+                }
+            })
+    };
+    if let Some(paragraph_break) = absent {
         return Err(if paragraph_break {
             parser.make_err(ParseErrorKind::RuleFailed)
         } else {
@@ -168,11 +179,19 @@ pub(super) fn validate_reachable_close(
         match tokens[index].token {
             Token::InputEnd => {
                 if split.is_none() && !saw_block_pairing {
-                    parser.record_delimiter_close_absent(
-                        token,
-                        scan_start,
-                        last_paragraph_break,
-                    );
+                    if blocks_can_reject {
+                        parser.record_delimiter_close_absent(
+                            token,
+                            scan_start,
+                            last_paragraph_break,
+                        );
+                    } else {
+                        parser.record_delimiter_close_absent_context_free(
+                            token,
+                            scan_start,
+                            last_paragraph_break,
+                        );
+                    }
                 }
                 return Err(paragraph_error
                     .unwrap_or_else(|| parser.make_err(ParseErrorKind::EndOfInput)));
@@ -182,20 +201,20 @@ pub(super) fn validate_reachable_close(
                 paragraph_error
                     .get_or_insert_with(|| parser.make_err(ParseErrorKind::RuleFailed));
             }
-            Token::LeftBlock | Token::LeftBlockStar => {
+            Token::LeftBlock | Token::LeftBlockStar if blocks_can_reject => {
                 saw_block_pairing = true;
                 let name = block_name_at(tokens, index);
                 if is_block_name(&name) {
                     open_blocks.push(name);
                 }
             }
-            Token::LeftLink => {
+            Token::LeftLink if blocks_can_reject => {
                 saw_block_pairing = true;
                 if let Some(name) = link_name_at(tokens, index) {
                     open_blocks.push(name);
                 }
             }
-            Token::LeftBlockEnd => {
+            Token::LeftBlockEnd if blocks_can_reject => {
                 saw_block_pairing = true;
                 let name = block_name_at(tokens, index);
                 if !is_block_name(&name) {
@@ -222,6 +241,32 @@ pub(super) fn validate_reachable_close(
         index += 1;
     }
     Err(parser.make_err(ParseErrorKind::EndOfInput))
+}
+
+/// Whether some block name can make `end_block_fails` return true here.
+///
+/// When this is false, block tokens cannot change the closer scan's error, so
+/// the scan may skip them and reuse a context-free absence.
+fn block_end_can_reject(parser: &Parser<'_, '_>, mode: ReachableCloseMode) -> bool {
+    if parser.discarding_hidden_body() {
+        return true;
+    }
+    match mode {
+        ReachableCloseMode::BlockBarrier => {
+            ["div", "collapsible", "footnote", "center", "bibliography"]
+                .into_iter()
+                .any(|name| end_block_fails(parser, name, mode))
+        }
+        ReachableCloseMode::Standard => {
+            !parser.body_end_boundaries_is_empty()
+                || parser.in_wikidot_span_body()
+                || parser.in_wikidot_literal_alias_body()
+                || parser.in_wikidot_anchor_body()
+                || parser.in_wikidot_div_body()
+                || parser.in_wikidot_center_body()
+                || parser.in_wikidot_bibliography_body()
+        }
+    }
 }
 
 fn end_block_fails(
