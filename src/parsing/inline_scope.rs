@@ -4407,6 +4407,18 @@ fn lower_children<'t>(
         if segment {
             active.pend_all();
         }
+        // A heading that ends a frame already consumed its own newline.
+        // Leaving the trim set eats the newline after the frame close.
+        if eject
+            && *trim_next_break
+            && matches!(
+                children.last(),
+                Some(Element::Container(container))
+                    if matches!(container.ctype(), ContainerType::Header(_))
+            )
+        {
+            *trim_next_break = false;
+        }
         if eject {
             eject_segment_trailing_space(children);
             strip_trailing_space_from_vec(children);
