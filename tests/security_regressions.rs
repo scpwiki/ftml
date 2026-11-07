@@ -472,7 +472,7 @@ fn mismatched_link_labels_render_fallback_text() {
 #[test]
 fn malformed_ast_footnote_reference_renders_error() {
     let tree = SyntaxTree {
-        elements: vec![Element::Footnote(1)],
+        elements: vec![Element::Footnote(1.into())],
         footnotes: vec![],
         ..SyntaxTree::default()
     };
@@ -485,8 +485,8 @@ fn malformed_ast_footnote_reference_renders_error() {
 #[test]
 fn recursive_ast_footnote_reference_fails_closed() {
     let tree = SyntaxTree {
-        elements: vec![Element::Footnote(1)],
-        footnotes: vec![vec![Element::Footnote(1)]],
+        elements: vec![Element::Footnote(1.into())],
+        footnotes: vec![vec![Element::Footnote(1.into())]],
         ..SyntaxTree::default()
     };
     let output = render_html(&tree, Layout::Wikijump);

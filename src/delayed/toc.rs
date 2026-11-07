@@ -131,9 +131,11 @@ fn visit_headings<'a, 't>(
                 | PartialElement::InlineAnchorOpen(..)
                 | PartialElement::InlineAnchorClose(_) => {}
             },
-            Element::Footnote(index) => {
-                if let Some(contents) =
-                    index.checked_sub(1).and_then(|index| footnotes.get(index))
+            Element::Footnote(reference) => {
+                if let Some(contents) = reference
+                    .index
+                    .checked_sub(1)
+                    .and_then(|index| footnotes.get(index))
                 {
                     visit_headings(contents, footnotes, visitor);
                 }
@@ -235,7 +237,7 @@ mod tests {
             AttributeMap::new(),
         ));
         let tree = SyntaxTree {
-            elements: vec![Element::Footnote(2)],
+            elements: vec![Element::Footnote(2.into())],
             footnotes: vec![vec![text!("first")], vec![delayed_heading]],
             ..SyntaxTree::default()
         };

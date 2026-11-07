@@ -23,7 +23,7 @@ use crate::render::text::TextRender;
 use crate::tree::{BibliographyScopeWrapper, ContainerType, HtmlTag};
 use std::num::NonZeroUsize;
 
-pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
+pub fn render_footnote(ctx: &mut HtmlContext, index: usize, broke_anchor: bool) {
     debug!("Rendering footnote reference");
 
     let Some(index) = NonZeroUsize::new(index) else {
@@ -44,20 +44,25 @@ pub fn render_footnote(ctx: &mut HtmlContext, index: usize) {
         let reference_id = format!("footnoteref-{index}");
         let footnote_id = format!("footnote-{index}");
         let onclick = format!("WIKIDOT.page.utils.scrollToReference('{footnote_id}')");
-        ctx.html()
-            .sup()
-            .attr(attr!("class" => "footnoteref"))
-            .inner(|ctx| {
-                ctx.html()
-                    .a()
-                    .attr(attr!(
-                        "id" => &reference_id,
-                        "href" => "javascript:;",
-                        "class" => "footnoteref",
-                        "onclick" => &onclick,
-                    ))
-                    .contents(&id);
-            });
+        let emit_anchor = |ctx: &mut HtmlContext| {
+            ctx.html()
+                .a()
+                .attr(attr!(
+                    "id" => &reference_id,
+                    "href" => "javascript:;",
+                    "class" => "footnoteref",
+                    "onclick" => &onclick,
+                ))
+                .contents(&id);
+        };
+        if broke_anchor {
+            emit_anchor(ctx);
+        } else {
+            ctx.html()
+                .sup()
+                .attr(attr!("class" => "footnoteref"))
+                .inner(emit_anchor);
+        }
         return;
     }
 

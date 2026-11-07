@@ -247,7 +247,7 @@ mod tests {
     fn text_render_footnote_reference_is_its_number_in_titles_only() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikijump);
-        let elements = vec![text!("Head"), Element::Footnote(1), text!(" tail")];
+        let elements = vec![text!("Head"), Element::Footnote(1.into()), text!(" tail")];
 
         assert_eq!(
             TextRender.render_partial_title(&elements, &page_info, &settings, 9),

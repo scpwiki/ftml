@@ -94,7 +94,7 @@ fn apply(stack: &mut ParagraphStack<'static>, op: usize) {
         0 => stack.push_element(text!("t"), true),
         1 => stack.push_element(Element::LineBreak, true),
         2 => stack.push_element(Element::HorizontalRule, false),
-        3 => stack.push_element(Element::Footnote(0), true),
+        3 => stack.push_element(Element::Footnote(0.into()), true),
         4 => stack.push_element(simple_table(), false),
         5 => stack.push_element(
             image(Some(FloatAlignment {

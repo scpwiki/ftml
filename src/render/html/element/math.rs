@@ -744,7 +744,8 @@ fn preregister_wikidot_equation_slices(
             }
             Element::Color { elements, .. } => stack.push((elements.as_slice(), 0)),
             Element::Include { elements, .. } => stack.push((elements.as_slice(), 0)),
-            Element::Footnote(number) => {
+            Element::Footnote(reference) => {
+                let number = reference.index;
                 if let Some(walked) = number
                     .checked_sub(1)
                     .and_then(|slot| footnote_walked.get_mut(slot))

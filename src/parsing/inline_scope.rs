@@ -2692,12 +2692,15 @@ fn lower_sequence<'t>(
                 active.apply_subtree_istack(&element);
             }
             if active.has_anchor_scope() && wikidot_inline_closes_anchor(&element) {
-                wikidot_close_anchor_scope(
+                let closed = wikidot_close_anchor_scope(
                     &mut output,
                     &mut run,
                     active,
                     &mut last_run_outer_scope,
                 );
+                if closed && let Element::Footnote(reference) = &mut element {
+                    reference.broke_anchor = true;
+                }
             }
             run.push(element);
             run_has_content = true;
@@ -3667,9 +3670,9 @@ fn wikidot_close_anchor_scope<'t>(
     run: &mut Vec<Element<'t>>,
     active: &mut ActiveScopes<'t>,
     last_run_outer_scope: &mut RunMergeState,
-) {
+) -> bool {
     let Some(position) = active.anchor_position() else {
-        return;
+        return false;
     };
     let trailing_break = matches!(run.last(), Some(Element::LineBreak));
     let trailing_space = trim_run_trailing_space(run) || trailing_break;
@@ -3683,7 +3686,7 @@ fn wikidot_close_anchor_scope<'t>(
             PartialElement::WikidotEmptyInlineOwner,
         )]));
         last_run_outer_scope.reset();
-        return;
+        return true;
     }
     if run.iter().all(element_is_whitespace_only)
         && let ScopeWrapper::Anchor { attributes, target } =
@@ -3701,7 +3704,7 @@ fn wikidot_close_anchor_scope<'t>(
         active.kill_from(position);
         active.pop_istack_through_anchor();
         last_run_outer_scope.reset();
-        return;
+        return true;
     }
     flush_run(output, run, active, last_run_outer_scope);
     active.kill_from(position);
@@ -3709,6 +3712,7 @@ fn wikidot_close_anchor_scope<'t>(
     if trailing_space {
         output.push(text!(" "));
     }
+    true
 }
 
 fn end_anchor_at_explicit_list<'t>(
