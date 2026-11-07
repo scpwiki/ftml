@@ -25,6 +25,7 @@ use crate::tree::{
     AcceptsPartial, AttributeMap, Container, ContainerType, ListItem, ListType,
     PartialElement, WikidotBlockCloseKind,
 };
+use std::borrow::Cow;
 
 pub const BLOCK_UL: BlockRule = BlockRule {
     name: "block-list-unordered",
@@ -1053,6 +1054,61 @@ fn parse_list_item<'r, 't>(
                 Elements::Multiple(output),
                 errors,
             );
+        }
+        // A run formation that never fused (no complete explicit list pair)
+        // leaves its lone list-closer line as an escaped paragraph; live
+        // keeps the closer as an item of the run list instead (lihoist
+        // p19). Reattach it when the escaped element right after a plain
+        // native list is a paragraph holding one literal list closer.
+        if elements.len() == 2
+            && let [
+                Element::List {
+                    items,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                Element::Container(closer),
+            ] = &elements[..]
+            && closer.ctype() == ContainerType::Paragraph
+            && items.iter().all(|item| {
+                matches!(
+                    item,
+                    ListItem::Elements { elements, .. }
+                        if !elements.is_empty()
+                            && elements
+                                .iter()
+                                .all(|element| matches!(element, Element::Text(_)))
+                )
+            })
+        {
+            let text: String = closer
+                .elements()
+                .iter()
+                .filter_map(|element| match element {
+                    Element::Text(text) => Some(text.as_ref()),
+                    _ => None,
+                })
+                .collect();
+            if matches!(text.as_str(), "[[/li]]" | "[[/ul]]" | "[[/ol]]") {
+                let paragraph = elements.pop().expect("paragraph just matched");
+                let Element::Container(paragraph) = paragraph else {
+                    unreachable!()
+                };
+                let closer_text: String = paragraph
+                    .elements()
+                    .iter()
+                    .filter_map(|element| match element {
+                        Element::Text(text) => Some(text.as_ref()),
+                        _ => None,
+                    })
+                    .collect();
+                if let Some(Element::List { items: target, .. }) = elements.last_mut() {
+                    target.push(ListItem::Elements {
+                        attributes: AttributeMap::new(),
+                        elements: vec![Element::Text(Cow::Owned(closer_text))],
+                    });
+                }
+            }
         }
         let element = Element::Partial(PartialElement::ListItem(ListItem::Elements {
             elements,
