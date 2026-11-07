@@ -259,6 +259,16 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
+    /// Whether the trailing break of the collected body is the break an
+    /// all-empty explicit list dissolved to. Quote bodies must not pop
+    /// that break away: the live dissolve keeps it as body content.
+    #[inline]
+    pub(crate) fn wikidot_trailing_empty_list_break(&self) -> bool {
+        self.wikidot
+            && self.wikidot_post_empty_list_break
+            && matches!(self.finished.last(), Some(Element::LineBreak))
+    }
+
     fn wikidot_post_explicit_list_break(&self) -> bool {
         if !self.wikidot || self.finished.len() < 2 {
             return false;
@@ -2009,6 +2019,9 @@ impl<'t> ParagraphStack<'t> {
         self.unwrap_bare_bold_before_explicit_list();
         if self.wikidot_explicit_pre_candidate {
             self.wikidot_dissolve_explicit_pre_candidate();
+        }
+        if self.wikidot_dissolved_pre_candidate {
+            self.wikidot_dissolve_empty_list_pre_candidate();
         }
         self.end_paragraph();
         self.remove_pending_aligned_image_separator();
