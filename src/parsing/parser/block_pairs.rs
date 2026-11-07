@@ -7,7 +7,7 @@ use crate::layout::Layout;
 use crate::parsing::rule::impls::{
     get_block_rule_with_name_for_layout, head_seam_forms_block, head_word_never_resolves,
 };
-use crate::parsing::{ExtractedToken, Token};
+use crate::parsing::{ExtractedToken, Token, trim_wikidot_ascii};
 use crate::preproc::LiteralRegionIndex;
 use crate::wikidot_code::WikidotCodeCandidate;
 
@@ -859,15 +859,7 @@ impl<'t> Scanner<'t> {
             .split('\n')
             .next()
             .unwrap_or_default();
-        let mut rest = line;
-        loop {
-            let trimmed = rest.trim_start_matches([' ', '\t']);
-            let Some(after) = trimmed.strip_prefix('>') else {
-                rest = trimmed;
-                break;
-            };
-            rest = after;
-        }
+        let (_, rest) = crate::preproc::quote_depth_and_body(line);
         let mut bytes = rest.bytes();
         matches!(bytes.next(), Some(b'*' | b'#'))
             && matches!(bytes.next(), Some(b' ' | b'\t'))
@@ -1147,7 +1139,7 @@ impl<'t> Scanner<'t> {
                 return None;
             }
         };
-        let trimmed = text.trim_matches([' ', '\t', '\r', '\n']);
+        let trimmed = trim_wikidot_ascii(&text);
         if trimmed.is_empty() {
             return None;
         }

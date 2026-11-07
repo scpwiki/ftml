@@ -234,7 +234,7 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
 
         if attributes.entries.is_empty() {
             for (key, value) in attribute_map {
-                if omit_internal_attribute_marker(key, legacy)
+                if omit_internal_attribute_marker(key)
                     || omit_empty_user_class(key, value)
                     || explicit_empty.iter().any(|name| *name == key.as_ref())
                 {
@@ -291,7 +291,7 @@ impl<'c, 'i, 'h, 'e, 't> HtmlBuilderTag<'c, 'i, 'h, 'e, 't> {
 
         for (key, value) in attribute_map {
             if !merged.contains(key.as_ref())
-                && !omit_internal_attribute_marker(key, legacy)
+                && !omit_internal_attribute_marker(key)
                 && !explicit_empty.iter().any(|name| *name == key.as_ref())
                 && !omit_empty_user_class(key, value)
             {
@@ -347,7 +347,7 @@ impl Drop for HtmlBuilderTag<'_, '_, '_, '_, '_> {
             self.ctx.push_raw('>');
         }
 
-        if should_close_tag(self.tag) && !self.omit_close {
+        if !is_solo_html_tag(self.tag) && !self.omit_close {
             self.ctx.push_raw_str("</");
             self.ctx.push_raw_str(self.tag);
             self.ctx.push_raw('>');
@@ -394,13 +394,8 @@ fn explicit_empty_names<'a>(
 
 /// Internal `data-ftml-*` markers ride along in attribute maps to keep tree
 /// state; they are never authored output in any layout.
-fn omit_internal_attribute_marker(key: &str, _legacy: bool) -> bool {
+fn omit_internal_attribute_marker(key: &str) -> bool {
     key.starts_with("data-ftml-")
-}
-
-#[inline]
-fn should_close_tag(tag: &str) -> bool {
-    !is_solo_html_tag(tag)
 }
 
 fn is_solo_html_tag(tag: &str) -> bool {

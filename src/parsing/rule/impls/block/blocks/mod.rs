@@ -72,14 +72,7 @@ mod prelude {
         })
     }
 
-    pub fn trim_cow(value: std::borrow::Cow<'_, str>) -> std::borrow::Cow<'_, str> {
-        match value {
-            std::borrow::Cow::Borrowed(value) => std::borrow::Cow::Borrowed(value.trim()),
-            std::borrow::Cow::Owned(value) => {
-                std::borrow::Cow::Owned(value.trim().to_owned())
-            }
-        }
-    }
+    pub(crate) use crate::parsing::trim_cow;
 }
 
 #[macro_use]

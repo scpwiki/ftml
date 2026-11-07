@@ -18,7 +18,7 @@ use crate::render::{PageExistenceResolver, Render};
 use crate::settings::{WikitextMode, WikitextSettings};
 use crate::tokenizer::{Tokenization, tokenize_delayed_segments};
 use crate::tree::{
-    AnchorTarget, AttributeMap, Container, Element, FloatAlignment, ImageSource,
+    AnchorTarget, AttributeMap, Element, FloatAlignment, ImageSource,
     LinkLabel, LinkLocation, LinkType, ListItem, PartialElement, SyntaxTree,
     run_on_bounded_tree_stack, tree_requires_bounded_tree_stack,
 };
@@ -926,7 +926,7 @@ fn resolve_elements(
     Ok(())
 }
 
-fn trim_trailing_ascii_space(elements: &mut Vec<Element<'static>>) {
+pub(crate) fn trim_trailing_ascii_space(elements: &mut Vec<Element<'_>>) {
     let Some(Element::Text(text)) = elements.last_mut() else {
         return;
     };
@@ -1295,11 +1295,4 @@ fn legacy_page_target(page: &PageRef) -> String {
 fn legacy_tag_source(tag: &ResolvedTagRef<'_>) -> String {
     let tag = tag.tag.replace(['[', ']'], "");
     format!("[/system:page-tags/tag/{tag} {tag}]")
-}
-
-#[allow(dead_code)]
-fn _assert_delayed_types_remain_paragraph_safe(
-    _attributes: AttributeMap<'_>,
-    _container: Container<'_>,
-) {
 }

@@ -1550,7 +1550,7 @@ fn lower_root_sequence<'t>(
             let reopens_paragraph_after_separator = starts_in_inline_scope
                 && output.last().is_some_and(|element| {
                     matches!(element, Element::HorizontalRule)
-                        || is_wikidot_content_separator(element)
+                        || element.is_content_separator()
                 });
             let follows_table = matches!(
                 output.last(),
@@ -1858,10 +1858,6 @@ fn sequence_has_content(elements: &[Element<'_>]) -> bool {
         Element::Text(text) => !text.is_empty(),
         _ => true,
     })
-}
-
-fn is_wikidot_content_separator(element: &Element<'_>) -> bool {
-    element.is_content_separator()
 }
 
 fn append_root_sequence<'t>(
@@ -4096,7 +4092,7 @@ fn trim_trailing_space(elements: &mut Vec<Element<'_>>) {
     }
 }
 
-fn trim_one_trailing_text_space(elements: &mut Vec<Element<'_>>) {
+pub(crate) fn trim_one_trailing_text_space(elements: &mut Vec<Element<'_>>) {
     let Some(Element::Text(text)) = elements.last_mut() else {
         return;
     };

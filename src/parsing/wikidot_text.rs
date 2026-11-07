@@ -5,6 +5,13 @@ pub(crate) fn trim_wikidot_ascii(value: &str) -> &str {
     value.trim_matches([' ', '\t', '\r', '\n'])
 }
 
+pub(crate) fn trim_cow<'a>(value: Cow<'a, str>) -> Cow<'a, str> {
+    match value {
+        Cow::Borrowed(value) => Cow::Borrowed(value.trim()),
+        Cow::Owned(value) => Cow::Owned(value.trim().to_owned()),
+    }
+}
+
 pub(crate) fn trim_wikidot_ascii_cow<'a>(value: Cow<'a, str>) -> Cow<'a, str> {
     match value {
         Cow::Borrowed(value) => Cow::Borrowed(trim_wikidot_ascii(value)),

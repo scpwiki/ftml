@@ -64,10 +64,7 @@ fn parse_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let latex_source = match parser.get_body_text(&BLOCK_MATH)? {
-        Cow::Borrowed(source) => Cow::Borrowed(source.trim()),
-        Cow::Owned(source) => Cow::Owned(source.trim().to_owned()),
-    };
+    let latex_source = trim_cow(parser.get_body_text(&BLOCK_MATH)?);
     let closer_line_br_prefix = parser.take_wikidot_math_closer_line_br_prefix();
     if parser.settings().layout.legacy()
         && wikidot_math_crosses_bold_owner(parser, latex_source.as_ref())

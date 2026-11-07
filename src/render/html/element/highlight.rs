@@ -125,23 +125,6 @@ fn trim_end(text: &str) -> &str {
     &text[..end]
 }
 
-/// Escapes highlight text the way the upstream renderer does with
-/// `htmlspecialchars` under its historical flags: `&`, `<`, `>`, and `"`
-/// are escaped, while `'` is left as-is.
-fn escape_html(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
-        match ch {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            _ => out.push(ch),
-        }
-    }
-    out
-}
-
 const CLASS_MAP: &[(&str, &str)] = &[
     ("code", "hl-code"),
     ("identifier", "hl-identifier"),
@@ -1082,7 +1065,7 @@ pub fn highlight_code(language: &str, body: &str) -> Option<String> {
         html.push_str(&format!(
             "<span class=\"{}\">{}</span>",
             full_class_name(class),
-            escape_html(text)
+            super::text::escape_wikidot_code(text)
         ));
     }
     Some(html)

@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use crate::parsing::trim_wikidot_ascii;
 use crate::tree::AttributeMap;
 use crate::tree::PartialElement;
 use std::borrow::Cow;
@@ -52,7 +53,7 @@ fn parse_size_argument<'r, 't>(
 }
 
 fn wikidot_size_value(size: &str) -> Option<&str> {
-    let size = size.trim_matches([' ', '\t', '\r', '\n']);
+    let size = trim_wikidot_ascii(size);
     if matches!(
         size,
         "xx-small"
@@ -84,18 +85,11 @@ fn wikidot_size_value(size: &str) -> Option<&str> {
 
 fn safe_size_value(size: &str) -> &str {
     let size = size.trim();
-    if !size.is_empty() && is_safe_size_value(size) {
+    if !size.is_empty() && crate::parsing::rule::impls::color::is_safe_color(size) {
         size
     } else {
         "inherit"
     }
-}
-
-fn is_safe_size_value(size: &str) -> bool {
-    size.chars().all(|ch| {
-        !ch.is_control()
-            && !matches!(ch, ';' | '{' | '}' | '<' | '>' | '"' | '\'' | '\\' | '&')
-    })
 }
 
 fn parse_fn<'r, 't>(

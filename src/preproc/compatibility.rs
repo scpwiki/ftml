@@ -2170,7 +2170,7 @@ fn literal_line_mask(lines: &[String]) -> Vec<bool> {
     mask
 }
 
-fn quote_depth_and_body(mut body: &str) -> (usize, &str) {
+pub(crate) fn quote_depth_and_body(mut body: &str) -> (usize, &str) {
     let mut quote_depth = 0;
     body = body.trim_start_matches([' ', '\t']);
     while let Some(rest) = body.strip_prefix('>') {

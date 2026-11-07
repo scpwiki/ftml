@@ -25,7 +25,7 @@ use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{
     collect_text_resolved_fused, consume_iftags_segment, consume_iftags_segment_fused,
 };
-use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
+use crate::parsing::{discard_wikidot_controls, trim_cow, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use std::borrow::Cow;
 use wikidot_normalize::normalize;
@@ -326,13 +326,6 @@ where
                 parser.step()?;
             }
         }
-    }
-}
-
-fn trim_cow(value: Cow<'_, str>) -> Cow<'_, str> {
-    match value {
-        Cow::Borrowed(value) => Cow::Borrowed(value.trim()),
-        Cow::Owned(value) => Cow::Owned(value.trim().to_owned()),
     }
 }
 

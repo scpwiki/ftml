@@ -281,7 +281,7 @@ fn collect_split_wikidot_heading<'r, 't>(
     }
 
     if let Some(head) = collapsible_head {
-        trim_trailing_heading_space(&mut label);
+        crate::delayed::trim_trailing_ascii_space(&mut label);
         let id = heading
             .has_toc
             .then(|| Cow::Owned(format!("toc{}", parser.table_of_contents_len())));
@@ -309,21 +309,6 @@ fn collect_split_wikidot_heading<'r, 't>(
         ParseSuccess::new((Elements::Single(element), Some(toc)), errors, false);
     success.split_close_leftover = None;
     Ok(success)
-}
-
-fn trim_trailing_heading_space(elements: &mut Vec<Element<'_>>) {
-    let Some(Element::Text(text)) = elements.last_mut() else {
-        return;
-    };
-    let trimmed = text.trim_end_matches([' ', '\t']);
-    if trimmed.len() == text.len() {
-        return;
-    }
-    if trimmed.is_empty() {
-        elements.pop();
-    } else {
-        *text = Cow::Owned(trimmed.to_owned());
-    }
 }
 
 /// Live hoists an explicit list out of a heading line: the heading keeps only

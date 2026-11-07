@@ -90,7 +90,7 @@ pub(crate) use self::rule::impls::decode_semicolon_entities;
 pub(crate) use self::rule::impls::wikidot_math_name;
 pub use self::token::{ExtractedToken, Token};
 pub(crate) use self::wikidot_text::{
-    discard_wikidot_controls, trim_wikidot_ascii, trim_wikidot_ascii_cow,
+    discard_wikidot_controls, trim_cow, trim_wikidot_ascii, trim_wikidot_ascii_cow,
 };
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -1138,7 +1138,6 @@ where
             view.to_ascii_lowercase().as_str(),
             "footnote" | "span" | "size" | "a"
         ) && scan.head_word_view_is_actionable(
-            &name,
             matches!(name, Cow::Borrowed(_)),
             segment,
             view,
@@ -1552,7 +1551,6 @@ fn wikidot_upcoming_explicit_list<'r: 't, 't>(parser: &Parser<'r, 't>) -> bool {
         let view = name.strip_suffix('_').unwrap_or(&name);
         (view.eq_ignore_ascii_case("ol") || view.eq_ignore_ascii_case("ul"))
             && probe.head_word_view_is_actionable(
-                &name,
                 matches!(name, Cow::Borrowed(_)),
                 segment,
                 view,
@@ -2068,7 +2066,7 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
                         return Err(error);
                     }
 
-                    if hidden_failure_must_close_to_eof(error.kind()) {
+                    if error.kind().must_close_hidden_body_through_end_of_input() {
                         parser.skip_to_hidden_body_boundary()?;
                         parser.depth_decrement();
                         return Err(error);
@@ -2118,10 +2116,6 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     parser.depth_decrement();
 
     ok!(element, all_errors)
-}
-
-fn hidden_failure_must_close_to_eof(kind: ParseErrorKind) -> bool {
-    kind.must_close_hidden_body_through_end_of_input()
 }
 
 #[cfg(test)]

@@ -1228,7 +1228,6 @@ fn tab_label_finish<'t>(
     output: Option<String>,
     copied_until: usize,
     end: usize,
-    _saw_unit: bool,
 ) -> std::borrow::Cow<'t, str> {
     match output {
         Some(mut output) => {
@@ -1249,16 +1248,13 @@ fn tab_title_unit_end<'r, 't>(
     if probe.current().token == Token::InputEnd {
         return false;
     }
-    let start = parser.current().span.start;
     let end = probe.current().span.start;
-    let layout = parser.settings().layout;
     let mut terminator = false;
     let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
         std::iter::once(parser.current())
             .chain(parser.remaining())
             .take_while(|token| token.span.start < end)
             .collect();
-    let _ = start;
     for (index, token) in tokens.iter().enumerate() {
         match token.token {
             Token::LineBreak | Token::ParagraphBreak => return false,
@@ -1284,7 +1280,6 @@ fn tab_title_unit_end<'r, 't>(
             _ => {}
         }
     }
-    let _ = layout;
     terminator
 }
 
@@ -1328,8 +1323,10 @@ where
             if head_only {
                 return tab_title_head_only_fused_unit(parser);
             }
-            let closer = closer_name?;
-            return tab_title_scoped_block_unit(parser, rule.name, closer);
+            if closer_name.is_none() {
+                return None;
+            }
+            return tab_title_scoped_block_unit(parser, rule.name);
         }
     };
     if matches!(success.item, Elements::None) {
@@ -1345,8 +1342,10 @@ where
     if tab_title_unit_end(parser, &probe, closer_name) {
         return Some((probe, fused_end));
     }
-    let closer = closer_name?;
-    tab_title_scoped_block_unit(parser, rule.name, closer)
+    if closer_name.is_none() {
+        return None;
+    }
+    tab_title_scoped_block_unit(parser, rule.name)
 }
 
 fn tab_title_token_block_name(
@@ -1366,7 +1365,6 @@ fn tab_title_token_block_name(
 fn tab_title_scoped_block_unit<'r, 't>(
     parser: &Parser<'r, 't>,
     rule_name: &'static str,
-    _closer_name: &str,
 ) -> Option<(Parser<'r, 't>, bool)>
 where
     'r: 't,
@@ -1755,7 +1753,6 @@ where
                     output,
                     copied_until,
                     current.span.start,
-                    saw_unit,
                 );
                 if elided_footnoteblock && !saw_unit && text.is_empty() {
                     parser.record_degraded_title(current.span.start);
@@ -1771,7 +1768,6 @@ where
                     output,
                     copied_until,
                     current.span.start,
-                    saw_unit,
                 );
                 if elided_footnoteblock && !saw_unit && text.is_empty() {
                     parser.record_degraded_title(current.span.start);
@@ -1839,7 +1835,6 @@ where
                                 output,
                                 copied_until,
                                 parser.current().span.start,
-                                saw_unit,
                             );
                             if elided_footnoteblock && !saw_unit && text.is_empty() {
                                 parser.record_degraded_title(current.span.start);
@@ -1874,7 +1869,6 @@ where
                                 output,
                                 copied_until,
                                 segment.range.end,
-                                saw_unit,
                             );
                             parser.step()?;
                             return Ok((text, None, saw_unit));
@@ -1973,7 +1967,6 @@ fn finish_tab_label_at_construct<'r, 't>(
                     output,
                     copied_until,
                     token.span.start,
-                    saw_unit,
                 );
                 while parser.current().span.start < token.span.end {
                     parser.step()?;
@@ -1987,7 +1980,6 @@ fn finish_tab_label_at_construct<'r, 't>(
                     output,
                     copied_until,
                     token.span.start,
-                    saw_unit,
                 );
                 let leftover = &source[token.span.start + 2..token.span.end];
                 while parser.current().span.start < token.span.end {
