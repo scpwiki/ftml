@@ -410,7 +410,9 @@ where
     {
         return None;
     }
-    if parser.wikidot_byte_on_list_item_line(closer_byte) {
+    if parser.wikidot_byte_on_list_item_line(closer_byte)
+        && !render_interior_close_line_has_pipe_suffix(parser, closer_byte)
+    {
         return None;
     }
     let source = parser.full_text().inner();
@@ -426,6 +428,30 @@ fn render_interior_close_line_is_quoted(source: &str, closer_byte: usize) -> boo
     render_interior_line_prefix(source, closer_byte)
         .trim_start_matches([' ', '\t'])
         .starts_with('>')
+}
+
+fn render_interior_close_line_has_pipe_suffix(
+    parser: &Parser<'_, '_>,
+    closer_byte: usize,
+) -> bool {
+    let source = parser.full_text().inner();
+    let line_start = source[..closer_byte.min(source.len())]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    let line_end = source[closer_byte.min(source.len())..]
+        .find(['\n', '\r'])
+        .map_or(source.len(), |offset| closer_byte + offset);
+    let line = &source[line_start..line_end];
+    let Some(close_end) = line
+        .get(closer_byte - line_start..)
+        .and_then(|rest| rest.find("]]"))
+        .map(|offset| closer_byte - line_start + offset + 2)
+    else {
+        return false;
+    };
+    line[close_end..]
+        .trim_start_matches([' ', '\t'])
+        .starts_with("||")
 }
 
 fn render_interior_close_has_midrow_suffix(parser: &Parser<'_, '_>) -> bool {
