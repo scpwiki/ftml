@@ -3316,6 +3316,34 @@ where
         None
     }
 
+    pub(crate) fn wikidot_li_closed_at_shallower_quote_line(&self) -> bool {
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+        let required = match self.quote_body_required_depth() {
+            Some(depth) => Some(depth),
+            None => self.native_blockquote_depth(),
+        };
+        let Some(required) = required else {
+            return false;
+        };
+        if required == 0 {
+            return false;
+        }
+        let text = self.full_text().inner();
+        let mut pos = self.current().span.start.min(text.len());
+        if pos > 0 && text.as_bytes()[pos - 1] == b'\n' {
+            pos -= 1;
+        }
+        let line_start = text[..pos].rfind('\n').map_or(0, |index| index + 1);
+        let line_end = text[line_start..]
+            .find('\n')
+            .map_or(text.len(), |index| line_start + index);
+        let (depth, _) =
+            crate::preproc::quote_depth_and_body(&text[line_start..line_end]);
+        depth < required
+    }
+
     fn consume_wikidot_li_body_segments(
         &mut self,
         block_rule: &BlockRule,
@@ -4673,7 +4701,7 @@ where
         }
         let allow_inline_quote_close = self.settings().layout.legacy()
             && !self.discarding_hidden_body()
-            && block_rule.name == "block-collapsible";
+            && matches!(block_rule.name, "block-collapsible" | "block-div");
         let tabview_quote_ejection = self.settings().layout.legacy()
             && !self.discarding_hidden_body()
             && block_rule.name == "block-tabview";
@@ -6977,7 +7005,12 @@ where
             self.step()?;
         }
         debug_assert!(self.current().token == Token::LeftBlockEnd);
-        let _ = block_rule;
+        if matches!(
+            block_rule.name,
+            "block-list-unordered" | "block-list-ordered"
+        ) {
+            self.set_wikidot_quote_boundary_list_close();
+        }
         self.get_end_block()?;
         self.get_optional_space()?;
         Ok(())

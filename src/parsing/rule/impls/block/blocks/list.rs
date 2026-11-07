@@ -957,6 +957,11 @@ fn parse_list_item<'r, 't>(
             parser.in_wikidot_bibliography_body(),
             parser.pending_note_list_closer(),
         );
+        if parser.wikidot_li_closed_at_shallower_quote_line()
+            && matches!(elements.last(), Some(Element::LineBreak))
+        {
+            elements.pop();
+        }
         if fused_close {
             elements.push(text!("]"));
         }
@@ -1361,6 +1366,11 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             parser.in_wikidot_bibliography_body(),
             parser.pending_note_list_closer(),
         );
+        if parser.wikidot_li_closed_at_shallower_quote_line()
+            && matches!(elements.last(), Some(Element::LineBreak))
+        {
+            elements.pop();
+        }
         if fused_close {
             elements.push(text!("]"));
         }
