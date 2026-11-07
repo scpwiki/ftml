@@ -165,86 +165,108 @@ impl<'r, 't> Parser<'r, 't> {
     where
         'r: 't,
     {
-        self.at_body_end_boundary_in(&self.body_end_boundaries(), false)
+        self.at_body_end_boundary_in(false, false)
     }
 
     pub(crate) fn at_hard_body_end_boundary(&self) -> bool
     where
         'r: 't,
     {
-        self.at_body_end_boundary_in(&self.body_end_boundaries(), true)
+        self.at_body_end_boundary_in(false, true)
     }
 
     pub(crate) fn at_ancestor_body_end_boundary(&self) -> bool
     where
         'r: 't,
     {
-        let boundaries = self.body_end_boundaries();
-        let Some((_, ancestors)) = boundaries.split_last() else {
-            return false;
-        };
-
-        self.at_body_end_boundary_in(ancestors, true)
+        self.at_body_end_boundary_in(true, true)
     }
 
-    fn at_body_end_boundary_in(
-        &self,
-        boundaries: &[BodyEndBoundary],
-        hard_only: bool,
-    ) -> bool
+    fn at_body_end_boundary_in(&self, ancestors_only: bool, hard_only: bool) -> bool
     where
         'r: 't,
     {
-        let considered: Vec<&BodyEndBoundary> = boundaries
-            .iter()
-            .filter(|boundary| !boundary.confined && (!hard_only || boundary.hard))
-            .collect();
-        if considered.is_empty() {
-            return false;
-        }
-
         if self.current().token != Token::LeftBlockEnd {
             return false;
         }
+        if !self.qualifying_body_end_boundary_exists(ancestors_only, hard_only) {
+            return false;
+        }
 
-        let source = self.full_text().inner();
         let start = self.current().span.start;
-        let ahead = &source[start..];
-        let Some(close_found) = self.cached_close_marker(source, start) else {
-            return false;
+        let considered: Vec<BodyEndBoundary> = {
+            let cache = self.block_end_scan_cache.borrow();
+            considered_boundaries(&cache.body_end_boundaries, ancestors_only)
+                .iter()
+                .copied()
+                .filter(|boundary| boundary_qualifies(boundary, hard_only))
+                .collect()
         };
-        let close_offset = close_found - start;
-        if ahead[..close_offset]
-            .chars()
-            .last()
-            .is_some_and(char::is_whitespace)
         {
-            return false;
-        }
-
-        let mut probe = self.clone();
-        if let Ok(name) = probe.get_end_block()
-            && considered.iter().any(|boundary| boundary.accepts(&name))
-        {
-            return true;
-        }
-
-        if self.settings().layout.legacy() {
-            for boundary in considered {
-                for name in boundary.accepts_names {
-                    let fused = format!("[[/{name}]]]");
-                    if ahead
-                        .get(..fused.len())
-                        .is_some_and(|head| head.eq_ignore_ascii_case(&fused))
-                    {
-                        return true;
-                    }
-                }
+            let source = self.full_text().inner();
+            let Some(close_found) = self.cached_close_marker(source, start) else {
+                return false;
+            };
+            if source[start..close_found]
+                .chars()
+                .last()
+                .is_some_and(char::is_whitespace)
+            {
+                return false;
             }
         }
 
-        false
+        let mut probe = self.clone();
+        let parsed_name = probe.get_end_block().ok();
+        if considered.iter().any(|boundary| {
+            parsed_name
+                .as_deref()
+                .is_some_and(|name| boundary.accepts(name))
+        }) {
+            return true;
+        }
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+
+        let ahead = self.full_text().inner().get(start..).unwrap_or("");
+        considered.iter().any(|boundary| {
+            boundary.accepts_names.iter().any(|name| {
+                let fused = format!("[[/{name}]]]");
+                ahead
+                    .get(..fused.len())
+                    .is_some_and(|head| head.eq_ignore_ascii_case(&fused))
+            })
+        })
     }
+
+    fn qualifying_body_end_boundary_exists(
+        &self,
+        ancestors_only: bool,
+        hard_only: bool,
+    ) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        considered_boundaries(&cache.body_end_boundaries, ancestors_only)
+            .iter()
+            .any(|boundary| boundary_qualifies(boundary, hard_only))
+    }
+}
+
+fn considered_boundaries(
+    boundaries: &[BodyEndBoundary],
+    ancestors_only: bool,
+) -> &[BodyEndBoundary] {
+    if !ancestors_only {
+        return boundaries;
+    }
+    boundaries
+        .split_last()
+        .map(|(_, ancestors)| ancestors)
+        .unwrap_or(&[])
+}
+
+fn boundary_qualifies(boundary: &BodyEndBoundary, hard_only: bool) -> bool {
+    !boundary.confined && (!hard_only || boundary.hard)
 }
 
 impl BodyEndBoundary {
