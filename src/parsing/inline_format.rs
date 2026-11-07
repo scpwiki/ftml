@@ -1891,6 +1891,7 @@ fn repair_dash_runs_segments<'t>(segments: &mut [&mut Vec<Element<'t>>]) -> bool
     {
         return false;
     }
+    release_item_leading_strike_for_earlier_dash(segments);
     let mut joined: Vec<Element<'t>> = Vec::new();
     let mut placeholders: Vec<usize> = Vec::new();
     for (index, segment) in segments.iter_mut().enumerate() {
@@ -1901,14 +1902,79 @@ fn repair_dash_runs_segments<'t>(segments: &mut [&mut Vec<Element<'t>>]) -> bool
         joined.append(segment);
     }
     let mut changed = truncate_dash_run_containers(&mut joined);
-    changed |= pair_crossing_dash_runs(&mut joined, &placeholders);
+    let paired = pair_crossing_dash_runs(&mut joined, &placeholders);
+    changed |= paired;
     let mut split: Vec<Vec<Element<'t>>> =
         (0..segments.len()).map(|_| Vec::new()).collect();
     split_dash_joined(joined, &mut split);
+    if paired {
+        strip_crossed_dash_closer_space(&mut split);
+    }
     for (segment, elements) in segments.iter_mut().zip(split) {
         **segment = elements;
     }
     changed
+}
+
+fn strip_crossed_dash_closer_space<'t>(split: &mut [Vec<Element<'t>>]) {
+    for index in 0..split.len() {
+        let close_then_space = split[index].first().is_some_and(is_strike_close)
+            && split[index].get(1).is_some_and(is_ascii_space_text);
+        if close_then_space {
+            split[index].remove(1);
+            continue;
+        }
+        let space_after_previous_close = index > 0
+            && split[index - 1].last().is_some_and(is_strike_close)
+            && split[index].first().is_some_and(is_ascii_space_text);
+        if space_after_previous_close {
+            split[index].remove(0);
+        }
+    }
+}
+
+fn release_item_leading_strike_for_earlier_dash<'t>(
+    segments: &mut [&mut Vec<Element<'t>>],
+) {
+    let mut earlier_dash = false;
+    for segment in segments.iter_mut() {
+        if earlier_dash && segment.first().is_some_and(is_plain_strike) {
+            let strike = segment.remove(0);
+            let (_, children) =
+                FormatShell::into_parts(strike).expect("plain strike has a body");
+            let rest = std::mem::take(*segment);
+            segment.push(Element::Text(Cow::Borrowed("--")));
+            segment.extend(children);
+            segment.push(Element::Text(Cow::Borrowed("--")));
+            segment.extend(rest);
+        } else if segment.first().is_some_and(is_dash_text) {
+            earlier_dash = false;
+        }
+        if segment.last().is_some_and(is_dash_text) {
+            earlier_dash = true;
+        }
+    }
+}
+
+fn is_dash_text(element: &Element<'_>) -> bool {
+    matches!(element, Element::Text(text) if text.as_ref() == "--")
+}
+
+fn is_strike_close(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Partial(PartialElement::InlineFormatClose(
+            InlineFormatKind::Strikethrough,
+        ))
+    )
+}
+
+fn is_ascii_space_text(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Text(text)
+            if !text.is_empty() && text.bytes().all(|byte| byte == b' ' || byte == b'\t')
+    )
 }
 
 fn pair_crossing_dash_runs<'t>(
@@ -1929,7 +1995,9 @@ fn pair_crossing_dash_runs<'t>(
             },
             input.len(),
             index,
-            false,
+            // A link is one atom. A `--` after the link still pairs with a
+            // later list item, which is what live does.
+            true,
         );
         if scan.end == index {
             output.push(take_element(&mut input, index));

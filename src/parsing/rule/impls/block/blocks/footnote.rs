@@ -44,7 +44,7 @@ pub const BLOCK_FOOTNOTE_BLOCK: BlockRule = BlockRule {
     parse_fn: parse_footnote_block,
 };
 
-fn parse_footnote_ref<'r, 't>(
+pub(in crate::parsing::rule::impls::block) fn parse_footnote_ref<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
     _opener_start: usize,

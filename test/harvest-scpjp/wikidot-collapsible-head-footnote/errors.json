@@ -1,0 +1,83 @@
+[
+    {
+        "token": "line-break",
+        "rule": "block-collapsible",
+        "span": [
+            73,
+            74
+        ],
+        "kind": "block-malformed-arguments"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            58,
+            61
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-link",
+        "rule": "fallback",
+        "span": [
+            69,
+            72
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            82,
+            85
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            96,
+            98
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "identifier",
+        "rule": "block-footnote",
+        "span": [
+            113,
+            119
+        ],
+        "kind": "footnotes-nested"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            100,
+            102
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            110,
+            112
+        ],
+        "kind": "no-rules-match"
+    }
+]

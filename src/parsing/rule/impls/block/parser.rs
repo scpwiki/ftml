@@ -2391,6 +2391,81 @@ where
         true
     }
 
+    /// A later `[[/li]]` still inside the oldest open item pairs this close
+    /// with the innermost item. The last close pairs with the oldest item.
+    fn take_wikidot_li_pair(
+        queue: &mut std::collections::VecDeque<usize>,
+        heads: &[crate::parsing::parser::WikidotLiHead],
+        after_close: &Self,
+        depth: usize,
+    ) -> Option<usize> {
+        let floor = queue.front().and_then(|pos| {
+            heads
+                .iter()
+                .find(|head| head.pos == *pos)
+                .map(|head| head.depth)
+        });
+        let innermost = floor
+            .is_some_and(|floor| after_close.wikidot_li_close_before_floor(depth, floor));
+        if innermost {
+            queue.pop_back()
+        } else {
+            queue.pop_front()
+        }
+    }
+
+    fn wikidot_li_close_before_floor(&self, mut depth: usize, floor: usize) -> bool {
+        let mut scan = self.clone();
+        loop {
+            if scan.current().token == Token::InputEnd || scan.at_hard_body_end_boundary()
+            {
+                return false;
+            }
+            match scan.current().token {
+                Token::LeftBlock => {
+                    let mut probe = scan.clone();
+                    if let Ok((name, _, _)) = probe.get_block_name(false) {
+                        let name = name.strip_suffix('_').unwrap_or(&name);
+                        if name.eq_ignore_ascii_case("ul")
+                            || name.eq_ignore_ascii_case("ol")
+                        {
+                            depth += 1;
+                        }
+                    }
+                    if scan.step().is_err() {
+                        return false;
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    let mut probe = scan.clone();
+                    if let Ok(name) = probe.get_end_block() {
+                        let name = name.strip_suffix('_').unwrap_or(&name);
+                        if name.eq_ignore_ascii_case("ul")
+                            || name.eq_ignore_ascii_case("ol")
+                        {
+                            if depth == 0 || depth - 1 < floor {
+                                return false;
+                            }
+                            depth -= 1;
+                            scan.update(&probe);
+                        } else if name.eq_ignore_ascii_case("li") {
+                            return true;
+                        } else if scan.step().is_err() {
+                            return false;
+                        }
+                    } else if scan.step().is_err() {
+                        return false;
+                    }
+                }
+                _ => {
+                    if scan.step().is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn compute_wikidot_li_pairing(&self) {
         use std::collections::{BTreeSet, VecDeque};
 
@@ -2442,7 +2517,9 @@ where
                                 scan.update(&probe);
                             } else if name.eq_ignore_ascii_case("li") {
                                 let close_pos = scan.current().span.start;
-                                let paired_head = queue.pop_front();
+                                let paired_head = Self::take_wikidot_li_pair(
+                                    &mut queue, &heads, &probe, depth,
+                                );
                                 if let Some(head) = paired_head {
                                     paired.insert(head);
                                 }
@@ -2481,7 +2558,12 @@ where
                                         }
                                         depth -= 1;
                                     } else if name.eq_ignore_ascii_case("li") {
-                                        if let Some(head) = queue.pop_front() {
+                                        if let Some(head) = Self::take_wikidot_li_pair(
+                                            &mut queue,
+                                            &heads,
+                                            &name_probe,
+                                            depth,
+                                        ) {
                                             paired.insert(head);
                                         }
                                     }
@@ -6984,6 +7066,7 @@ where
                     scan
                 };
                 let mut in_quote = false;
+                let mut head_terminated = false;
                 loop {
                     let current = self.current();
                     if current.token == Token::InputEnd {
@@ -7047,6 +7130,18 @@ where
                                 _ => {}
                             },
                         }
+                        if block_rule.name == "block-collapsible"
+                            && current.token == Token::LeftBlock
+                            && let Some((range, head_closed)) =
+                                self.try_consume_collapsible_head_footnote()?
+                        {
+                            elisions.push(range);
+                            if head_closed {
+                                head_terminated = true;
+                                break;
+                            }
+                            continue;
+                        }
                         if !raw_head
                             && current.token == Token::LeftBlock
                             && let Some(segment) = consume_iftags_segment(self)?
@@ -7073,6 +7168,18 @@ where
                     }
                     if current.token == Token::DoubleQuote {
                         in_quote = !in_quote;
+                    }
+                    if block_rule.name == "block-collapsible"
+                        && current.token == Token::LeftBlock
+                        && let Some((range, head_closed)) =
+                            self.try_consume_collapsible_head_footnote()?
+                    {
+                        elisions.push(range);
+                        if head_closed {
+                            head_terminated = true;
+                            break;
+                        }
+                        continue;
                     }
                     if !raw_head
                         && current.token == Token::LeftBlock
@@ -7136,8 +7243,9 @@ where
                 let head =
                     CommentElidedText::new(self.full_text().inner(), span, comments)
                         .with_segments(elisions);
-                let fused_close = self.current().token == Token::RightLink;
-                if fused_close {
+                let fused_close =
+                    head_terminated || self.current().token == Token::RightLink;
+                if fused_close && !head_terminated {
                     self.note_fused_name_residual(self.current().span.end);
                     self.step()?;
                 }
@@ -7151,6 +7259,47 @@ where
             in_head && !right_block_consumed,
         )?;
         Ok((arguments, body_start))
+    }
+
+    fn try_consume_collapsible_head_footnote(
+        &mut self,
+    ) -> Result<Option<(std::ops::Range<usize>, bool)>, ParseError> {
+        if self.current().token != Token::LeftBlock {
+            return Ok(None);
+        }
+        let start = self.current().span.start;
+        let mut probe = self.clone();
+        probe.get_optional_space()?;
+        let Ok((name, in_head, _)) = probe.get_block_name(false) else {
+            return Ok(None);
+        };
+        if !name.eq_ignore_ascii_case("footnote") {
+            return Ok(None);
+        }
+        let before = self.footnote_count();
+        probe.set_block(&super::blocks::BLOCK_FOOTNOTE);
+        let parsed = super::blocks::parse_footnote_ref(
+            &mut probe, "footnote", start, false, false, in_head,
+        );
+        let Ok(parsed) = parsed else {
+            self.truncate_footnotes(before);
+            return Ok(None);
+        };
+        if self.footnote_count() == before {
+            self.truncate_footnotes(before);
+            return Ok(None);
+        }
+        let fused = matches!(
+            &parsed.item,
+            Elements::Multiple(elements)
+                if matches!(elements.last(), Some(Element::Text(text)) if text.as_ref() == "]")
+        );
+        self.update(&probe);
+        let head_closed = fused && self.current().token == Token::RightBracket;
+        if head_closed {
+            self.step()?;
+        }
+        Ok(Some((start..self.current().span.start, head_closed)))
     }
 
     pub fn get_head_name_map(
