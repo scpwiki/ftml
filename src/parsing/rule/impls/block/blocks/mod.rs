@@ -92,6 +92,7 @@ mod align_right;
 mod anchor;
 mod bibcite;
 mod bibliography;
+pub(crate) use bibliography::wikidot_split_tail_bibitems;
 mod blockquote;
 mod bold;
 mod button;

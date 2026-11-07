@@ -2007,6 +2007,61 @@ where
             .is_some_and(|prefix| prefix.eq_ignore_ascii_case(CLOSER))
     }
 
+    pub(crate) fn wikidot_bibliography_split_at_enclosing_closer(&mut self) -> bool {
+        if !self.settings().layout.legacy()
+            || self.discarding_hidden_body()
+            || self.current().token != Token::LeftBlockEnd
+        {
+            return false;
+        }
+        let mut probe = self.clone();
+        let Ok(raw_name) = probe.get_end_block() else {
+            return false;
+        };
+        let name = raw_name.strip_suffix('_').unwrap_or(&raw_name);
+        if ![
+            "cell", "hcell", "row", "table", "li", "ul", "ol", "tab", "tabview", "tabs",
+        ]
+        .iter()
+        .any(|candidate| name.eq_ignore_ascii_case(candidate))
+        {
+            return false;
+        }
+        if !self.wikidot_ancestor_boundary_accepts(name) {
+            return false;
+        }
+        self.wikidot_note_bibliography_split_closer()
+    }
+
+    fn wikidot_note_bibliography_split_closer(&mut self) -> bool {
+        if !self.later_line_bibliography_closer() {
+            return false;
+        }
+        self.set_bibliography_split_tail(true);
+        true
+    }
+
+    fn later_line_bibliography_closer(&self) -> bool {
+        const CLOSER: &str = "[[/bibliography]]";
+        let source = self.full_text().inner();
+        let mut rest = &source[self.current().span.start..];
+        loop {
+            let Some(index) = rest
+                .as_bytes()
+                .windows(CLOSER.len())
+                .position(|window| window.eq_ignore_ascii_case(CLOSER.as_bytes()))
+            else {
+                return false;
+            };
+            let after = &rest[index + CLOSER.len()..];
+            let line = after.split(['\n', '\r']).next().unwrap_or("");
+            if line.bytes().all(|byte| matches!(byte, b' ' | b'\t')) {
+                return true;
+            }
+            rest = &rest[index + CLOSER.len()..];
+        }
+    }
+
     fn verify_end_block(
         &mut self,
         first_iteration: bool,
@@ -2313,6 +2368,10 @@ where
         };
         if !terminates {
             return false;
+        }
+
+        if block_rule.name == "block-bibliography" {
+            self.wikidot_note_bibliography_split_closer();
         }
 
         if stepped_line_break && self.step().is_err() {
@@ -5635,6 +5694,12 @@ where
             }
 
             if self.terminate_at_wikidot_list_close(block_rule, first) {
+                return Ok(());
+            }
+
+            if block_rule.name == "block-bibliography"
+                && self.wikidot_bibliography_split_at_enclosing_closer()
+            {
                 return Ok(());
             }
 

@@ -1812,6 +1812,38 @@ fn try_consume_wikidot_inline_marker<'r, 't>(
     Ok(Some(element.into()))
 }
 
+fn try_consume_bibliography_split_closer<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if !parser.bibliography_split_tail() || parser.current().token != Token::LeftBlockEnd
+    {
+        return None;
+    }
+    const CLOSER: &str = "[[/bibliography]]";
+    let start = parser.current().span.start;
+    let source = parser.full_text().inner();
+    if !source
+        .get(start..start + CLOSER.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(CLOSER))
+    {
+        return None;
+    }
+    let mut probe = parser.clone();
+    if probe.get_end_block().is_err() {
+        return None;
+    }
+    parser.update(&probe);
+    if parser.current().token == Token::LineBreak {
+        let _ = parser.step();
+    }
+    parser.set_bibliography_split_tail(false);
+    Some(Ok(crate::parsing::ParseSuccess::new(
+        Elements::None,
+        Vec::new(),
+        true,
+    )))
+}
+
 pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     if parser.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
         return Err(parser.make_err(ParseErrorKind::EndOfInput));
@@ -1834,6 +1866,10 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     if let Some(result) = try_consume_wikidot_li_cross_redundant_close(parser) {
+        return result;
+    }
+
+    if let Some(result) = try_consume_bibliography_split_closer(parser) {
         return result;
     }
 

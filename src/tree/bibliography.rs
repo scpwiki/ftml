@@ -74,6 +74,7 @@ pub struct Bibliography<'t> {
     citations: Vec<usize>,
     reopened_wrappers: Vec<Vec<BibliographyScopeWrapper<'t>>>,
     title_wrappers: Vec<BibliographyScopeWrapper<'t>>,
+    split_tail_next: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,6 +125,7 @@ impl<'t> Bibliography<'t> {
             citations: Vec::new(),
             reopened_wrappers: Vec::new(),
             title_wrappers: Vec::new(),
+            split_tail_next: 0,
         };
         bibliography.rebuild_label_index();
         bibliography
@@ -186,8 +188,20 @@ impl<'t> Bibliography<'t> {
         label == RESIDUAL_LABEL
     }
 
-    /// Adds an item that is rendered from inside a nested element of the
-    /// joined body. The returned number is live's citation number for it.
+    pub(crate) fn allocate_split_tail_citation(&mut self) -> usize {
+        if self.split_tail_next == 0 {
+            let real = self
+                .entries
+                .iter()
+                .filter(|(label, _)| !Self::is_residual(label) && !Self::is_nested(label))
+                .count();
+            self.split_tail_next = real + 1;
+        }
+        let citation = self.split_tail_next;
+        self.split_tail_next += 1;
+        citation
+    }
+
     pub(crate) fn add_nested(&mut self, label: Cow<'t, str>) -> usize {
         let citation = self.label_index.len() + 1;
         let position = self.entries.len();
@@ -349,6 +363,10 @@ impl<'t> BibliographyList<'t> {
         }
 
         None
+    }
+
+    pub(crate) fn last_mut(&mut self) -> Option<&mut Bibliography<'t>> {
+        self.0.last_mut()
     }
 
     pub fn get_bibliography(&self, index: usize) -> &Bibliography<'t> {

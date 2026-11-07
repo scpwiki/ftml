@@ -714,6 +714,13 @@ fn parse_tabview<'r, 't>(
         items.push(TabViewItem::Content(vec![tabview_tail_element(tail)]));
     }
 
+    if parser.bibliography_split_tail() {
+        let tail = take_bibliography_split_tail(parser);
+        if !tail.is_empty() {
+            items.push(TabViewItem::Content(tail));
+        }
+    }
+
     let tabview = Element::TabView(items);
     restore_wikidot_tabview_split_state(parser, previous_split);
     if parser.settings().layout.legacy()
@@ -746,6 +753,40 @@ where
         return None;
     }
     Some((depth, probe))
+}
+
+fn take_bibliography_split_tail<'r, 't>(parser: &mut Parser<'r, 't>) -> Vec<Element<'t>>
+where
+    'r: 't,
+{
+    let mut elements = Vec::new();
+    let mut guard = 0_usize;
+    while parser.bibliography_split_tail() && guard < 64 {
+        guard += 1;
+        let before = parser.current().span.start;
+        let Ok(consumed) = consume(parser) else {
+            parser.set_bibliography_split_tail(false);
+            break;
+        };
+        let crate::parsing::ParseSuccess { item, .. } = consumed;
+        let added = match item {
+            Elements::Multiple(batch) => {
+                let count = batch.len();
+                elements.extend(batch);
+                count
+            }
+            Elements::Single(element) => {
+                elements.push(element);
+                1
+            }
+            Elements::None => 0,
+        };
+        if parser.current().span.start == before && added == 0 {
+            parser.set_bibliography_split_tail(false);
+            break;
+        }
+    }
+    elements
 }
 
 fn end_block_tag_at<'r, 't>(parser: &Parser<'r, 't>) -> Option<&'static str>

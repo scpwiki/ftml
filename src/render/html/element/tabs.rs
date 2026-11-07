@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::{AttributeMap, TabViewItem};
+use crate::tree::{AttributeMap, ContainerType, TabViewItem};
 use std::iter;
 
 pub fn render_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
@@ -157,6 +157,7 @@ fn tabview_wrapper_tail<'t>(items: &'t [TabViewItem<'t>]) -> Option<&'t [Element
 }
 
 fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
+    let (items, trailing) = split_bibliography_split_tail(items);
     let tail = tabview_wrapper_tail(items);
     let items = if tail.is_some() {
         &items[..items.len() - 1]
@@ -251,7 +252,36 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
             if let Some(tail) = tail {
                 render_elements(ctx, tail);
             }
+            for element in trailing {
+                render_element(ctx, element);
+            }
         });
+}
+
+fn split_bibliography_split_tail<'a, 't>(
+    items: &'a [TabViewItem<'t>],
+) -> (&'a [TabViewItem<'t>], &'a [Element<'t>]) {
+    let Some(TabViewItem::Content(elements)) = items.last() else {
+        return (items, &[]);
+    };
+    if elements.is_empty()
+        || !elements.iter().all(|element| {
+            let Element::Container(container) = element else {
+                return false;
+            };
+            container.ctype() == ContainerType::Div
+                && container
+                    .attributes()
+                    .get()
+                    .get("class")
+                    .is_some_and(|class| {
+                        class.split_whitespace().any(|part| part == "bibitem")
+                    })
+        })
+    {
+        return (items, &[]);
+    }
+    (&items[..items.len() - 1], elements)
 }
 
 fn wikidot_tabview_content_has_literal_tabview_closer(elements: &[&Element]) -> bool {
