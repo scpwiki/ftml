@@ -196,6 +196,7 @@ pub(super) struct BlockScanCache<'t> {
     /// segment (Wikidot's cross-segment panel split).
     wikidot_tabview_ejected: Cell<bool>,
     wikidot_div_yielded_to_tab: Cell<bool>,
+    wikidot_list_cut_by_cell_end: Cell<bool>,
     /// Ordinal of the next tab parsed inside the current quoted tabview.
     wikidot_tabview_tab_ordinal: Cell<usize>,
     /// Ordinals of tabs whose panels render outside the navset (bare panel in
@@ -694,6 +695,14 @@ impl<'r, 't> Parser<'r, 't> {
             .closers_between(from_byte, to_byte)
             .map(|(byte, pair)| (byte, *pair))
             .collect()
+    }
+
+    pub(crate) fn wikidot_flat_pair_open_at(&self, byte: usize) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        cache
+            .wikidot_block_pairs
+            .heads_between(0, byte)
+            .any(|pair| pair.kind.emits_flat() && pair.closer_byte > byte)
     }
 
     pub(crate) fn wikidot_flat_ancestor_wraps_table(&self, byte: usize) -> bool {
@@ -1990,6 +1999,27 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_div_yielded_to_tab
             .get()
+    }
+
+    pub(crate) fn set_wikidot_list_cut_by_cell_end(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_list_cut_by_cell_end
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_list_cut_by_cell_end(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let value = cache.wikidot_list_cut_by_cell_end.get();
+        cache.wikidot_list_cut_by_cell_end.set(false);
+        value
+    }
+
+    pub(crate) fn clear_wikidot_list_cut_by_cell_end(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_list_cut_by_cell_end
+            .set(false);
     }
 
     pub(crate) fn take_wikidot_div_yielded_to_tab(&self) -> bool {

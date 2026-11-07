@@ -184,6 +184,56 @@ where
     Ok(parsed)
 }
 
+fn straddle_tail_text(element: &Element<'_>) -> Option<String> {
+    match element {
+        Element::Text(piece) => Some(piece.to_string()),
+        Element::LineBreak => Some("\n".to_string()),
+        Element::Container(container) => {
+            let mut text = String::new();
+            for child in container.elements() {
+                text.push_str(&straddle_tail_text(child)?);
+            }
+            Some(text)
+        }
+        _ => None,
+    }
+}
+
+fn rescue_straddle_tail<'t>(tail: Vec<Element<'t>>) -> Option<Vec<Element<'t>>> {
+    let mut text = String::new();
+    for element in &tail {
+        text.push_str(&straddle_tail_text(element)?);
+    }
+    let lower = text.to_ascii_lowercase();
+    let mut best: Option<(usize, usize)> = None;
+    for name in ["div", "collapsible", "note", "=", "==", "<", ">"] {
+        let needle = format!("[[/{name}]]");
+        if let Some(at) = lower.rfind(&needle)
+            && best.is_none_or(|(best_at, _)| at > best_at)
+        {
+            best = Some((at, needle.len()));
+        }
+    }
+    let (at, len) = best?;
+    let start = if at > 0 && text.as_bytes()[at - 1] == b'\n' {
+        at - 1
+    } else {
+        at
+    };
+    let mut rest = text[..start].to_string();
+    rest.push_str(&text[at + len..]);
+    let mut elements = Vec::new();
+    for (index, segment) in rest.split('\n').enumerate() {
+        if index > 0 {
+            elements.push(Element::LineBreak);
+        }
+        if !segment.is_empty() {
+            elements.push(Element::Text(segment.to_string().into()));
+        }
+    }
+    Some(elements)
+}
+
 #[allow(clippy::type_complexity)]
 fn extract_table_rows<'r, 't>(
     parser: &Parser<'r, 't>,
@@ -192,10 +242,14 @@ fn extract_table_rows<'r, 't>(
     let mut rows = Vec::new();
     let mut residuals = Vec::new();
     let mut foster = Vec::new();
+    let mut straddle_tail: Vec<Element<'t>> = Vec::new();
 
     for element in elements {
         match element {
             Element::Partial(PartialElement::TableRow(row)) => {
+                if !straddle_tail.is_empty() {
+                    return Err(parser.make_err(ParseErrorKind::TableContainsNonRow));
+                }
                 rows.push(row);
             }
 
@@ -207,6 +261,7 @@ fn extract_table_rows<'r, 't>(
                 PartialElement::WikidotBlockOpen(_)
                 | PartialElement::WikidotBlockClose(_),
             ) => {
+                foster.append(&mut straddle_tail);
                 foster.push(element);
             }
 
@@ -214,11 +269,33 @@ fn extract_table_rows<'r, 't>(
                 residuals.push(text);
             }
 
+            Element::LineBreak if !foster.is_empty() => {
+                foster.push(element);
+            }
+
+            Element::Text(ref text) if !text.trim().is_empty() => {
+                straddle_tail.push(element);
+            }
+
+            Element::Container(ref container)
+                if container.ctype() == crate::tree::ContainerType::Paragraph =>
+            {
+                straddle_tail.push(element);
+            }
+
             Element::Delayed(delayed) if delayed.is_suppression_seam() => {}
 
             element if element.is_whitespace() => {}
 
-            _ => return Err(parser.make_err(ParseErrorKind::TableContainsNonRow)),
+            element => {
+                return Err(parser.make_err(ParseErrorKind::TableContainsNonRow));
+            }
+        }
+    }
+    if !straddle_tail.is_empty() {
+        match rescue_straddle_tail(straddle_tail) {
+            Some(fostered) => foster.extend(fostered),
+            None => return Err(parser.make_err(ParseErrorKind::TableContainsNonRow)),
         }
     }
 
@@ -229,10 +306,13 @@ fn extract_table_rows<'r, 't>(
 fn extract_table_cells<'r, 't>(
     parser: &Parser<'r, 't>,
     elements: Vec<Element<'t>>,
+    mut straddle_list_pending: bool,
 ) -> Result<(Vec<TableCell<'t>>, Vec<Cow<'t, str>>, Vec<Element<'t>>), ParseError> {
     let mut cells = Vec::new();
     let mut residuals = Vec::new();
     let mut foster = Vec::new();
+    let mut straddle_tail: Vec<Element<'t>> = Vec::new();
+    let mut pending_break = false;
 
     for element in elements {
         match element {
@@ -243,9 +323,28 @@ fn extract_table_cells<'r, 't>(
             // A bullet `[[/row]]` stays a list item. It is inside the row
             // span and tidy pulls that list out in front of the table.
             Element::List { .. } if !cells.is_empty() => {
-                foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
-                    element,
-                ])));
+                if straddle_list_pending {
+                    straddle_list_pending = false;
+                    let Element::List { items, .. } = element else {
+                        unreachable!()
+                    };
+                    let mut bare = Vec::new();
+                    for item in items {
+                        match item {
+                            crate::tree::ListItem::Elements { elements, .. } => {
+                                bare.extend(elements);
+                            }
+                            crate::tree::ListItem::SubList { element } => {
+                                bare.push(*element);
+                            }
+                        }
+                    }
+                    foster.push(Element::Partial(PartialElement::WikidotFoster(bare)));
+                } else {
+                    foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
+                        element,
+                    ])));
+                }
             }
 
             Element::Partial(PartialElement::WikidotFoster(_)) => {
@@ -256,18 +355,58 @@ fn extract_table_cells<'r, 't>(
                 PartialElement::WikidotBlockOpen(_)
                 | PartialElement::WikidotBlockClose(_),
             ) => {
+                if !straddle_tail.is_empty() {
+                    let tail = std::mem::take(&mut straddle_tail);
+                    foster.push(Element::Partial(PartialElement::WikidotFoster(tail)));
+                }
                 foster.push(element);
             }
 
             Element::Text(text) if !cells.is_empty() && is_cell_closer(&text) => {
+                if pending_break && !foster.is_empty() {
+                    foster.push(Element::LineBreak);
+                }
+                pending_break = false;
                 residuals.push(text);
+            }
+
+            Element::Text(ref text) if !cells.is_empty() && !text.trim().is_empty() => {
+                straddle_tail.push(element);
+            }
+
+            Element::LineBreak if !straddle_tail.is_empty() => {
+                straddle_tail.push(element);
+            }
+
+            Element::LineBreak if !cells.is_empty() && !foster.is_empty() => {
+                pending_break = true;
+            }
+
+            Element::Container(ref container)
+                if !cells.is_empty()
+                    && container.ctype() == crate::tree::ContainerType::Paragraph =>
+            {
+                straddle_tail.push(element);
             }
 
             Element::Delayed(delayed) if delayed.is_suppression_seam() => {}
 
             element if element.is_whitespace() => {}
 
-            _ => return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell)),
+            element => {
+                return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
+            }
+        }
+    }
+    if !straddle_tail.is_empty() {
+        match rescue_straddle_tail(straddle_tail) {
+            Some(fostered) => {
+                if !fostered.is_empty() {
+                    foster
+                        .push(Element::Partial(PartialElement::WikidotFoster(fostered)));
+                }
+            }
+            None => return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell)),
         }
     }
 
@@ -777,7 +916,7 @@ fn parse_table<'r, 't>(
             elements.push(Element::Text(residual));
         }
         if has_residuals {
-            elements.push(text!("\n"));
+            elements.push(Element::LineBreak);
         }
         elements.push(element);
         if fused_close {
@@ -829,6 +968,9 @@ fn parse_row<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    if legacy {
+        parser.clear_wikidot_list_cut_by_cell_end();
+    }
     let parsed = match parse_block(
         parser,
         name,
@@ -857,7 +999,9 @@ fn parse_row<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let (cells, residuals, foster) = extract_table_cells(parser, parsed.elements)?;
+    let straddle_list_pending = legacy && parser.take_wikidot_list_cut_by_cell_end();
+    let (cells, residuals, foster) =
+        extract_table_cells(parser, parsed.elements, straddle_list_pending)?;
     if cells.is_empty() && parser.settings().layout.legacy() {
         return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
     }

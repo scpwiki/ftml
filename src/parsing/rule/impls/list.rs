@@ -1069,6 +1069,17 @@ fn collect_list_item_elements<'r, 't>(
     } else {
         None
     };
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser.wikidot_stack_accepts_table_cell_end()
+    {
+        parser.set_wikidot_list_cut_by_cell_end();
+        return Ok(crate::parsing::ParseSuccess::new(
+            (Vec::new(), false, false, None),
+            Vec::new(),
+            false,
+        ));
+    }
     let result =
         collect_consume_keep_split(parser, RULE_LIST, &close_conditions, &[], None);
     if let Some(previous) = restore_line {
