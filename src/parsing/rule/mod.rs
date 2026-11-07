@@ -68,6 +68,32 @@ impl Rule {
             return Err(error);
         }
 
+        if let Some((success, output)) = parser.rule_attempt_success(self.name) {
+            if let Err(error) = output.check_partials(parser) {
+                if matches!(
+                    error.kind(),
+                    ParseErrorKind::ListItemOutsideList
+                        | ParseErrorKind::TableRowOutsideTable
+                        | ParseErrorKind::TableCellOutsideTable
+                        | ParseErrorKind::TabOutsideTabView
+                        | ParseErrorKind::RubyTextOutsideRuby
+                ) {
+                    parser.cache_partial_rejection(
+                        self.name,
+                        parent_rule,
+                        rule_start,
+                        &error,
+                    );
+                }
+                let parser_state = parser.get_mutable_state();
+                parser.reset_mutable_state(parser_state);
+                return Err(error);
+            }
+
+            parser.apply_rule_attempt_success(&success);
+            return Ok(output);
+        }
+
         let parser_state = parser.get_mutable_state();
         let mut sub_parser = parser.clone_with_rule(self);
         let enclosing_peak = parser.start_rule_attempt();
@@ -102,6 +128,13 @@ impl Rule {
                     return Err(error);
                 }
 
+                parser.cache_rule_attempt_success(
+                    self.name,
+                    &parser_state,
+                    &sub_parser,
+                    output,
+                    height,
+                );
                 parser.update(&sub_parser);
             }
 

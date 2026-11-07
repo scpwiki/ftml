@@ -103,6 +103,24 @@ impl<T> ParseSuccess<'_, '_, T> {
         }
     }
 
+    pub(crate) fn from_parts(
+        item: T,
+        errors: Vec<ParseError>,
+        paragraph_safe: bool,
+        paragraph_split: Option<Vec<ParagraphSplitEntry>>,
+        split_close_leftover: Option<String>,
+    ) -> Self {
+        ParseSuccess {
+            item,
+            errors,
+            paragraph_safe,
+            paragraph_split,
+            split_close_leftover,
+            _ref_marker: PhantomData,
+            _text_marker: PhantomData,
+        }
+    }
+
     pub fn chain(
         self,
         all_errors: &mut Vec<ParseError>,
