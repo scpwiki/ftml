@@ -787,6 +787,35 @@ fn join_lines<'t>(lines: Vec<Vec<Element<'t>>>) -> Vec<Element<'t>> {
 /// Live's Bibliography rule ends its replacement with a newline of its own, so a
 /// source line break after the bibliography block is a blank line: no `<br>`
 /// is produced for it. The list item raw-body heuristic must not add one.
+/// Whether an explicit `[[li]]` body's last non-blank line is a block closer
+/// for a NON-list block (e.g. `* [[/div]]` whose formation dissolved into a
+/// native run). In that case the dissolved formation's trailing break is
+/// kept after the resulting list, unlike after a `* [[/ul]]`/`[[li]]` close.
+fn wikidot_li_body_ends_with_flat_block_close(source: &str) -> bool {
+    let lowered = source.to_ascii_lowercase();
+    let body = lowered
+        .rfind("[[/li")
+        .map(|index| &source[..index])
+        .unwrap_or(source);
+    let Some(line) = body.lines().rev().find(|line| !line.trim().is_empty()) else {
+        return false;
+    };
+    let line = line.trim_end_matches([' ', '\t']);
+    if !line.ends_with("]]") {
+        return false;
+    }
+    let Some(head) = line.rfind("[[") else {
+        return false;
+    };
+    let Some(close) = line[head..].strip_prefix("[[") else {
+        return false;
+    };
+    let name = close.strip_prefix('/').unwrap_or(close);
+    let name = name.strip_suffix("]]").unwrap_or(name);
+    let name = name.split_whitespace().next().unwrap_or(name);
+    !matches!(name, "ul" | "ol" | "li")
+}
+
 fn trailing_wikidot_bibliography(elements: &[Element<'_>]) -> bool {
     matches!(
         elements.last(),
@@ -1255,7 +1284,11 @@ fn assemble_wikidot_li_segments<'t>(
     // (no break element). A trailing blockquote does too. Other trailing
     // content keeps the break.
     // L85 scope-5: same for a trailing simple table (T5-item-table-end).
-    let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }));
+    // Exception: when the li body's last line closes a NON-list block (for
+    // example a `* [[/div]]` line whose formation dissolved into the list),
+    // live keeps the break after the list (lihoist p5).
+    let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }))
+        && !wikidot_li_body_ends_with_flat_block_close(source);
     let trailing_table = matches!(elements.last(), Some(Element::Table(_)));
     let trailing_blockquote = matches!(
         elements.last(),
