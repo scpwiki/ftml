@@ -3476,6 +3476,20 @@ impl<'r, 't> Parser<'r, 't> {
             .delimiter_absence(closer, start)
     }
 
+    /// `Some(has_paragraph_break)` when a walk that skipped block ends proved
+    /// there is no closer at or after `start`. The caller must know a block
+    /// end cannot change the result in the current context.
+    pub(crate) fn delimiter_close_absent_context_free(
+        &self,
+        closer: Token,
+        start: usize,
+    ) -> Option<bool> {
+        self.block_end_scan_cache
+            .borrow()
+            .closer_scan
+            .delimiter_absence_context_free(closer, start)
+    }
+
     /// Record that a split-free scan for `closer` from `start` reached
     /// `InputEnd` without touching block bookkeeping.
     pub(crate) fn record_delimiter_close_absent(
@@ -3488,6 +3502,19 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow_mut()
             .closer_scan
             .record_delimiter_absence(closer, start, last_paragraph_break);
+    }
+
+    /// Record a walk that reached `InputEnd` while skipping block ends.
+    pub(crate) fn record_delimiter_close_absent_context_free(
+        &self,
+        closer: Token,
+        start: usize,
+        last_paragraph_break: Option<usize>,
+    ) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .closer_scan
+            .record_delimiter_absence_context_free(closer, start, last_paragraph_break);
     }
 
     /// Whether a Wikidot math scan starting at absolute token index `start`

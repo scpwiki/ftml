@@ -206,6 +206,46 @@ fn quoted_unclosed_ruby_lines_finish_in_list_mode() {
 }
 
 #[test]
+fn unmatched_monospace_beside_spans_stays_within_budget() {
+    let page_info = page_info();
+    let source = "{{[[span]]\n".repeat(384);
+    let closed = "{{x}}";
+
+    for mode in [
+        WikitextMode::Page,
+        WikitextMode::PageNav,
+        WikitextMode::Draft,
+        WikitextMode::ForumPost,
+    ] {
+        let settings = WikitextSettings::from_mode(mode, Layout::Wikijump);
+        let tokenization = ftml::tokenize(&source);
+        let started = Instant::now();
+        let (tree, errors) = ftml::parse(&tokenization, &page_info, &settings).into();
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "{mode:?}: unmatched monospace beside spans took {:?}",
+            started.elapsed(),
+        );
+        assert!(
+            !errors.is_empty(),
+            "{mode:?}: unmatched monospace must report errors"
+        );
+        assert!(
+            !tree.elements.is_empty(),
+            "{mode:?}: fallback must preserve observable source"
+        );
+
+        let tokenization = ftml::tokenize(closed);
+        let (tree, _errors) = ftml::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(
+            html.contains("wj-monospace"),
+            "{mode:?}: a closed monospace must still render, got {html:?}",
+        );
+    }
+}
+
+#[test]
 fn nested_unclosed_tab_pairs_stay_within_budget() {
     let page_info = page_info();
     let pairs: String = (0..64)

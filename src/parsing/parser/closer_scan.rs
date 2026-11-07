@@ -41,11 +41,13 @@
 //! - `validate_reachable_close` returns `RuleFailed` when it saw a
 //!   `ParagraphBreak` and `EndOfInput` otherwise; the memo keeps the last
 //!   `ParagraphBreak` index so a later start can still tell the two apart.
-//!   Block bookkeeping (`LeftBlock` / `LeftBlockEnd` / `LeftLink`) consults
-//!   parser context through `end_block_fails`, which is not a property of the
-//!   token stream, so a walk that touched any of those tokens is never
-//!   recorded (and a split-delimiter scan consults context too, so those are
-//!   never recorded either).
+//!   A walk that evaluated block ends and saw one is not recorded: `end_block_fails`
+//!   reads parser context, so that outcome is not a property of the token suffix.
+//!   A walk that skipped block ends, because the caller proved `end_block_fails`
+//!   cannot return true in this context, is recorded separately and is only
+//!   replayed for a later start in a context with that same proof. Replaying it
+//!   where a block end can reject would report `EndOfInput` for a `RuleFailed`.
+//!   A split-delimiter scan consults context too, so those are never recorded.
 //! - `collect_wikidot_math_source` returns `EndOfInput` only when it reaches
 //!   `InputEnd` by plain single-token steps; a walk that consumed a comment or
 //!   a raw region jumps over tokens, so it is never recorded.
@@ -56,17 +58,26 @@
 
 use crate::parsing::Token;
 
-/// The last scan for one inline delimiter closer that reached `InputEnd`
-/// without finding it.
+/// One proved "no closer at or after this index" walk.
 #[derive(Debug, Clone, Copy)]
-struct DelimiterAbsence {
-    closer: Token,
-    /// Smallest split-free scan start index proven to have no closer at or
-    /// after it.
+struct AbsenceProof {
+    /// Smallest scan start index covered by this proof.
     start: usize,
     /// Absolute index of the last `ParagraphBreak` at or after `start`, if
     /// any: such scans return `RuleFailed` instead of `EndOfInput`.
     last_paragraph_break: Option<usize>,
+}
+
+/// The last scans for one inline delimiter closer that reached `InputEnd`
+/// without finding it.
+#[derive(Debug, Clone, Copy)]
+struct DelimiterAbsence {
+    closer: Token,
+    /// Walk that evaluated block ends and saw none. Any later start may read it.
+    plain: Option<AbsenceProof>,
+    /// Walk that skipped block ends because they cannot change the result in
+    /// the context that recorded it. Only that kind of context may read it.
+    context_free: Option<AbsenceProof>,
 }
 
 /// Per-parse memo of "no closer of this class at or after this token index".
@@ -101,16 +112,47 @@ impl CloserScanCache {
     }
 
     /// `Some(has_paragraph_break)` when a split-free scan for `closer`
-    /// starting at `start` provably walks to `InputEnd`.
+    /// starting at `start` provably walks to `InputEnd`, and that walk
+    /// evaluated block ends.
     pub(crate) fn delimiter_absence(&self, closer: Token, start: usize) -> Option<bool> {
-        self.delimiter_absences
+        self.absence_answer(closer, start, false)
+    }
+
+    /// Same answer for a walk that skipped block ends. The caller must already
+    /// know block ends cannot change the result in its context.
+    pub(crate) fn delimiter_absence_context_free(
+        &self,
+        closer: Token,
+        start: usize,
+    ) -> Option<bool> {
+        self.absence_answer(closer, start, true)
+    }
+
+    fn absence_answer(
+        &self,
+        closer: Token,
+        start: usize,
+        context_free: bool,
+    ) -> Option<bool> {
+        let proof = self
+            .delimiter_absences
             .iter()
-            .find(|absence| absence.closer == closer && start >= absence.start)
-            .map(|absence| {
-                absence
-                    .last_paragraph_break
-                    .is_some_and(|paragraph_break| start <= paragraph_break)
-            })
+            .find(|absence| absence.closer == closer)
+            .and_then(|absence| {
+                if context_free {
+                    absence.context_free
+                } else {
+                    absence.plain
+                }
+            })?;
+        if start < proof.start {
+            return None;
+        }
+        Some(
+            proof
+                .last_paragraph_break
+                .is_some_and(|paragraph_break| start <= paragraph_break),
+        )
     }
 
     pub(crate) fn record_delimiter_absence(
@@ -119,20 +161,50 @@ impl CloserScanCache {
         start: usize,
         last_paragraph_break: Option<usize>,
     ) {
+        self.record_absence(closer, start, last_paragraph_break, false);
+    }
+
+    pub(crate) fn record_delimiter_absence_context_free(
+        &mut self,
+        closer: Token,
+        start: usize,
+        last_paragraph_break: Option<usize>,
+    ) {
+        self.record_absence(closer, start, last_paragraph_break, true);
+    }
+
+    fn record_absence(
+        &mut self,
+        closer: Token,
+        start: usize,
+        last_paragraph_break: Option<usize>,
+        context_free: bool,
+    ) {
+        let proof = AbsenceProof {
+            start,
+            last_paragraph_break,
+        };
         match self
             .delimiter_absences
             .iter_mut()
             .find(|absence| absence.closer == closer)
         {
-            Some(absence) if start < absence.start => {
-                absence.start = start;
-                absence.last_paragraph_break = last_paragraph_break;
+            Some(absence) => {
+                let slot = if context_free {
+                    &mut absence.context_free
+                } else {
+                    &mut absence.plain
+                };
+                match slot {
+                    Some(existing) if start < existing.start => *existing = proof,
+                    Some(_) => {}
+                    None => *slot = Some(proof),
+                }
             }
-            Some(_) => {}
             None => self.delimiter_absences.push(DelimiterAbsence {
                 closer,
-                start,
-                last_paragraph_break,
+                plain: (!context_free).then_some(proof),
+                context_free: context_free.then_some(proof),
             }),
         }
     }
@@ -226,6 +298,25 @@ mod tests {
     }
 
     #[test]
+    fn context_free_absence_does_not_answer_a_plain_query() {
+        let mut cache = CloserScanCache::new(100);
+        cache.record_delimiter_absence_context_free(Token::RightMonospace, 4, Some(9));
+        assert_eq!(cache.delimiter_absence(Token::RightMonospace, 4), None);
+        assert_eq!(
+            cache.delimiter_absence_context_free(Token::RightMonospace, 4),
+            Some(true)
+        );
+        assert_eq!(
+            cache.delimiter_absence_context_free(Token::RightMonospace, 10),
+            Some(false)
+        );
+        assert_eq!(
+            cache.delimiter_absence_context_free(Token::RightMonospace, 3),
+            None
+        );
+    }
+
+    #[test]
     fn delimiter_absence_keeps_the_smallest_start() {
         let mut cache = CloserScanCache::new(100);
         cache.record_delimiter_absence(Token::Bold, 30, Some(40));
@@ -277,6 +368,21 @@ mod tests {
                     "{name} x {count}: {visits} closer-scan token visits for {tokens} tokens",
                 );
             }
+        }
+    }
+
+    /// `[[` tokens used to disable the absence memo, so each unmatched `{{`
+    /// walked the rest of the document and named every block. Skipping block
+    /// ends that cannot change the result keeps the walk linear.
+    #[test]
+    fn unmatched_monospace_beside_blocks_scans_once() {
+        for count in [128usize, 256] {
+            let input = "{{[[span]]".repeat(count);
+            let (visits, tokens) = closer_scan_visits(&input);
+            assert!(
+                visits <= tokens * 2,
+                "monospace beside blocks x {count}: {visits} closer-scan token visits for {tokens} tokens",
+            );
         }
     }
 
