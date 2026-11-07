@@ -199,7 +199,7 @@ pub fn collect_consume_keep_split<'r, 't>(
                 });
                 match split {
                     Some(split) => {
-                        let flat: Vec<Element<'t>> = elements.as_ref().to_vec();
+                        let flat = elements_into_vec(elements);
                         let mut iter = flat.into_iter();
                         let mut segments = Vec::new();
                         for (index, (count, segment_safe, kind)) in
@@ -219,17 +219,19 @@ pub fn collect_consume_keep_split<'r, 't>(
                         escape = Some(segments);
                     }
                     None => {
-                        let flat: Vec<Element<'t>> = elements.as_ref().to_vec();
-                        let break_at = flat
-                            .iter()
-                            .position(|element| matches!(element, Element::LineBreak))
-                            .filter(|&index| {
-                                flat[index + 1..].iter().any(|element| {
-                                    !matches!(element, Element::Delayed(_))
+                        let break_at = {
+                            let flat: &[Element<'t>] = elements.as_ref();
+                            flat.iter()
+                                .position(|element| matches!(element, Element::LineBreak))
+                                .filter(|&index| {
+                                    flat[index + 1..].iter().any(|element| {
+                                        !matches!(element, Element::Delayed(_))
+                                    })
                                 })
-                            });
+                        };
                         match break_at {
                             Some(index) => {
+                                let flat = elements_into_vec(elements);
                                 let mut iter = flat.into_iter();
                                 item_elements.extend(iter.by_ref().take(index));
                                 let rest: Vec<Element<'t>> = iter.skip(1).collect();
@@ -247,7 +249,7 @@ pub fn collect_consume_keep_split<'r, 't>(
                                         Some(Element::LineBreak)
                                     ))
                                 {
-                                    item_elements.extend(flat);
+                                    item_elements.extend(elements);
                                 }
                             }
                         }
@@ -309,6 +311,14 @@ fn collapse_adjacent_ascii_spaces(elements: &mut Vec<Element<'_>>) {
         previous_was_space = is_space;
         keep
     });
+}
+
+fn elements_into_vec<'t>(elements: Elements<'t>) -> Vec<Element<'t>> {
+    match elements {
+        Elements::Multiple(elements) => elements,
+        Elements::Single(element) => vec![element],
+        Elements::None => Vec::new(),
+    }
 }
 
 fn append_elements<'t>(all_elements: &mut Vec<Element<'t>>, elements: Elements<'t>) {

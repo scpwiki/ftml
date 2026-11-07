@@ -31,7 +31,7 @@
 
 use super::parser::RuleAttemptKey;
 use super::{ExtractedToken, Parser};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[cfg(test)]
 use std::cell::Cell;
@@ -46,6 +46,25 @@ struct LinkHeadScan {
     claimed_head: Option<usize>,
 }
 
+fn head_scan_answer(
+    scan: Option<&LinkHeadScan>,
+    range_start: usize,
+    context: Option<RuleAttemptKey>,
+) -> Option<Option<bool>> {
+    let scan = scan?;
+    if scan.context.is_some_and(|scanned| context != Some(scanned)) {
+        return Some(None);
+    }
+    if range_start < scan.scanned_from {
+        return Some(None);
+    }
+    Some(match scan.claimed_head {
+        None => Some(false),
+        Some(head) if range_start <= head => Some(true),
+        Some(_) => None,
+    })
+}
+
 #[derive(Debug, Default)]
 pub(super) struct UnmatchedCloseScanCache {
     line_bounds: Option<(usize, usize)>,
@@ -53,7 +72,7 @@ pub(super) struct UnmatchedCloseScanCache {
     single_bracket: Option<(usize, Option<usize>)>,
     owner_scans: [Option<OwnerLineScan>; 3],
     link_region: Option<(usize, usize)>,
-    link_head_scan: Option<LinkHeadScan>,
+    link_head_scans: HashMap<(usize, usize, Option<RuleAttemptKey>), LinkHeadScan>,
     div_line_close: Option<(usize, Option<usize>)>,
     next_line_break: Option<(usize, Option<usize>)>,
     target_failures: BTreeMap<(usize, bool, bool), ()>,
@@ -409,20 +428,26 @@ impl<'r, 't> Parser<'r, 't> {
         context: Option<RuleAttemptKey>,
     ) -> Option<bool> {
         let cache = self.block_end_scan_cache.borrow();
-        let scan = cache.unmatched_close_scan.link_head_scan.as_ref()?;
         let range = remaining.as_ptr_range();
-        if range.end as usize != scan.tokens_end
-            || (range.start as usize) < scan.scanned_from
-            || scan.region_end != region_end
-            || scan.context.is_some_and(|scanned| context != Some(scanned))
-        {
-            return None;
+        let tokens_end = range.end as usize;
+        let range_start = range.start as usize;
+        let scans = &cache.unmatched_close_scan.link_head_scans;
+        if let Some(answer) = head_scan_answer(
+            scans.get(&(tokens_end, region_end, context)),
+            range_start,
+            context,
+        ) {
+            return answer;
         }
-        match scan.claimed_head {
-            None => Some(false),
-            Some(head) if range.start as usize <= head => Some(true),
-            Some(_) => None,
+        if context.is_some() {
+            return head_scan_answer(
+                scans.get(&(tokens_end, region_end, None)),
+                range_start,
+                context,
+            )
+            .flatten();
         }
+        None
     }
 
     pub(crate) fn cache_end_block_link_head_outcome(
@@ -438,14 +463,19 @@ impl<'r, 't> Parser<'r, 't> {
         }
         let mut cache = self.block_end_scan_cache.borrow_mut();
         let range = remaining.as_ptr_range();
-        cache.unmatched_close_scan.link_head_scan = Some(LinkHeadScan {
-            tokens_end: range.end as usize,
-            scanned_from: range.start as usize,
-            region_end,
-            context: if saw_left_block { context } else { None },
-            claimed_head: claimed_index
-                .map(|index| std::ptr::from_ref(&remaining[index]) as usize),
-        });
+        let stored_context = if saw_left_block { context } else { None };
+        let tokens_end = range.end as usize;
+        cache.unmatched_close_scan.link_head_scans.insert(
+            (tokens_end, region_end, stored_context),
+            LinkHeadScan {
+                tokens_end,
+                scanned_from: range.start as usize,
+                region_end,
+                context: stored_context,
+                claimed_head: claimed_index
+                    .map(|index| std::ptr::from_ref(&remaining[index]) as usize),
+            },
+        );
     }
 
     pub(crate) fn link_target_scan_failed(
