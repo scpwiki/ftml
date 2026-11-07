@@ -63,6 +63,9 @@ where
     if parser.settings().layout.legacy() && close_condition_fn.is_some() {
         stack.suppress_wikidot_explicit_pre_dissolve();
     }
+    if parser.take_wikidot_advanced_cell_paragraph() {
+        stack.mark_wikidot_advanced_table_cell();
+    }
 
     let mut finished = false;
     let mut walk_visited: Vec<(usize, BodyWalkKey)> = Vec::new();

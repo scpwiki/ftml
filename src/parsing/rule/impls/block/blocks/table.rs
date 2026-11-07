@@ -159,6 +159,7 @@ where
     let body = {
         if advanced_cell_body {
             parser.set_in_wikidot_advanced_table_cell_body(true);
+            parser.arm_wikidot_advanced_cell_paragraph();
         }
         let body = parser.get_body_elements_with_context(
             block_rule,
@@ -168,6 +169,7 @@ where
         );
         if advanced_cell_body {
             parser.set_in_wikidot_advanced_table_cell_body(false);
+            parser.clear_wikidot_advanced_cell_paragraph();
         }
         body
     }?;
