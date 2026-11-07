@@ -1934,6 +1934,41 @@ mod tests {
     }
 
     #[test]
+    fn discarded_row_footnote_break_stays_outside_the_paragraph() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = concat!(
+            "||[[ul]]\n",
+            "[[li]]\n",
+            "[[div]]\n",
+            "n[[footnote]]x[[/footnote]]\n",
+            "[[/div]]\n",
+            "[[/li]]\n",
+            "[[/ul]]||\n",
+            "[[footnoteblock]]",
+        );
+        let tokenization = crate::tokenize(source);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(
+            html.contains("</sup></p><br>\n||"),
+            "break and row marker stay outside the footnote paragraph: {html}",
+        );
+        assert!(
+            !html.contains("</sup><br>"),
+            "break must not stay inside the footnote paragraph: {html}",
+        );
+        let ordinary = "n[[footnote]]x[[/footnote]]\ny\n[[footnoteblock]]";
+        let tokenization = crate::tokenize(ordinary);
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(
+            html.contains("</sup><br>\ny</p>"),
+            "an ordinary footnote newline stays inside the paragraph: {html}",
+        );
+    }
+
+    #[test]
     fn wikidot_unclosed_simple_table_rows_render_one_empty_cell() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
