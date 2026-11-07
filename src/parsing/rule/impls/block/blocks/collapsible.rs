@@ -1224,4 +1224,19 @@ mod tests {
         assert!(html.contains("readable-code-0"), "{html}");
         assert!(html.contains("readable-code-511"), "{html}");
     }
+
+    #[test]
+    fn wikidot_span_keeps_doubled_break_before_collapsible() {
+        let (html, _, errors) = render(
+            "[[ul]]\n[[li]]\n[[span]]\n[[collapsible]]\n[[code]]\nk\n[[/code]]\n[[/collapsible]]\n[[/span]]\n[[/li]]\n[[/ul]]",
+        );
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(
+            html.starts_with(
+                "<ul>\n<li><span><br>\n<br></span><div class=\"collapsible-block\">"
+            ),
+            "{html}"
+        );
+        assert_eq!(html.matches("class=\"collapsible-block\"").count(), 1);
+    }
 }

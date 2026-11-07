@@ -26,6 +26,7 @@ use super::{
 use crate::delayed::DelayedElement;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{Alignment, AttributeMap, PartialElement, WikidotBlockShell};
+use std::num::NonZeroU32;
 
 macro_rules! make_align_block {
     ($block_const:ident, $block_name:expr, $symbol:expr, $align:ident) => {
@@ -123,6 +124,8 @@ pub fn parse_alignment_block<'r, 't>(
         }
     }
 
+    // Same two newlines as the flat path, on the nested body path.
+    let span_keeps_head_breaks = align_span_keeps_head_breaks(parser, opener_start);
     let body_start = parser.get_head_none_with_body_start(block_rule, in_head)?;
 
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
@@ -134,12 +137,26 @@ pub fn parse_alignment_block<'r, 't>(
                 | WikidotBlockKind::AlignJustify
         )
     {
+        // Wikidot's align rule replaces the newline after `[[=]]` with two
+        // newlines inside the block. An open span keeps them as breaks.
+        // `span_keeps_head_breaks` was captured before the head newline was
+        // consumed above.
         consume_wikidot_flat_head_break(parser, false)?;
         let shell = WikidotBlockShell::Align {
             head: opener_start,
             alignment,
         };
-        return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
+        let open = Element::Partial(PartialElement::WikidotBlockOpen(shell));
+        if span_keeps_head_breaks && align_body_keeps_span_head_breaks(parser) {
+            // Separate LineBreak elements collapse to one in the paragraph
+            // stack. Wikidot puts both newlines back as one run, and a span
+            // keeps that run only when a block follows. Prose absorbs it.
+            return ok!(Elements::Multiple(vec![
+                open,
+                Element::LineBreaks(NonZeroU32::new(2).unwrap()),
+            ]));
+        }
+        return ok!(open);
     }
 
     if !parser.has_body_end_block(block_rule) {
@@ -174,6 +191,9 @@ pub fn parse_alignment_block<'r, 't>(
     if parser.settings().layout.legacy() {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
     }
+    if span_keeps_head_breaks && align_parsed_body_keeps_span_head_breaks(&elements) {
+        elements.insert(0, Element::LineBreaks(NonZeroU32::new(2).unwrap()));
+    }
 
     let element = Element::Container(Container::new(
         ContainerType::Align(alignment),
@@ -182,6 +202,78 @@ pub fn parse_alignment_block<'r, 't>(
     ));
 
     ok!(element, errors)
+}
+
+fn align_body_keeps_span_head_breaks(parser: &Parser<'_, '_>) -> bool {
+    let mut look = parser.clone();
+    loop {
+        match look.current().token {
+            Token::Quote | Token::Whitespace => {
+                if look.step().is_err() {
+                    return false;
+                }
+            }
+            Token::Heading
+            | Token::LeftBlock
+            | Token::LeftBlockStar
+            | Token::LeftBlockAnchor
+            | Token::Pipe
+            | Token::TableColumn
+            | Token::TableColumnCenter
+            | Token::TableColumnRight
+            | Token::TableColumnTitle
+            | Token::BulletItem
+            | Token::NumberedItem
+            | Token::DoubleDash
+            | Token::TripleDash => return true,
+            _ => return false,
+        }
+    }
+}
+
+fn align_parsed_body_keeps_span_head_breaks(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| {
+        matches!(
+            element,
+            Element::HorizontalRule
+                | Element::Collapsible { .. }
+                | Element::Table(_)
+                | Element::List { .. }
+                | Element::TabView(_)
+                | Element::Code(_)
+                | Element::Partial(_)
+        ) || matches!(
+            element,
+            Element::Container(container) if !matches!(container.ctype(), ContainerType::Paragraph)
+        )
+    })
+}
+
+fn align_span_keeps_head_breaks(parser: &Parser<'_, '_>, opener_start: usize) -> bool {
+    if !parser.settings().layout.legacy() || !parser.in_wikidot_span_body() {
+        return false;
+    }
+    // A list item absorbs the align's restored newlines.
+    if parser.wikidot_byte_on_list_item_line(opener_start)
+        || parser.wikidot_li_inside_item_body()
+    {
+        return false;
+    }
+    if matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak
+    ) {
+        return true;
+    }
+    if parser.current().token != Token::Whitespace {
+        return false;
+    }
+    let mut lookahead = parser.clone();
+    lookahead.step().is_ok()
+        && matches!(
+            lookahead.current().token,
+            Token::LineBreak | Token::ParagraphBreak
+        )
 }
 
 fn literal_elements(source: &str) -> Elements<'_> {
@@ -364,6 +456,22 @@ mod tests {
         assert_eq!(
             html,
             "<div style=\"text-align: center;\"><p>A</p></div><br>\n<div style=\"text-align: center;\"><p>B</p></div>",
+        );
+    }
+
+    #[test]
+    fn wikidot_span_keeps_align_head_breaks_before_heading() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = "[[=]]\n[[=]]\n[[span]]\n[[=]]\n+ h\n[[/=]]\n[[/span]]\n[[/=]]\n[[/=]]";
+        let tokenization = crate::tokenize(source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            html,
+            "<div style=\"text-align: center;\"><div style=\"text-align: center;\"><p><span><br></span></p><div style=\"text-align: center;\"><span><br>\n<br>\n</span><h1 id=\"toc0\"><span><span>h</span></span></h1></div><br>\n</div></div>",
         );
     }
 }

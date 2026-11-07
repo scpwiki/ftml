@@ -131,6 +131,9 @@ where
 }
 
 fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
+    let span_doubles_leading_break = parser.settings().layout.legacy()
+        && parser.in_wikidot_span_body()
+        && parser.current().token == Token::LineBreak;
     parser.step()?;
     let quote_body = parser.quote_body_cursor().is_some();
 
@@ -195,14 +198,43 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
             }
         }
         let flag_star = parser.current().token == Token::LeftBlockStar;
-        let success = parse_block(parser, flag_star)?;
+        let mut success = parse_block(parser, flag_star)?;
         if success.paragraph_safe && wikidot_literal_css_module(&success.item) {
-            Err(parser.make_err(ParseErrorKind::RuleFailed))
-        } else {
-            Ok(success)
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
+        // Collapsible doubles a newline in front of its opener. An open span
+        // keeps both breaks in a list item. Outside an item that newline is absorbed.
+        if span_doubles_leading_break
+            && parser.wikidot_li_inside_item_body()
+            && elements_open_collapsible(&success.item)
+        {
+            let mut elements = match success.item {
+                Elements::Multiple(elements) => elements,
+                Elements::Single(element) => vec![element],
+                Elements::None => Vec::new(),
+            };
+            elements.insert(0, Element::LineBreak);
+            elements.insert(0, Element::LineBreak);
+            success.item = Elements::Multiple(elements);
+        }
+        Ok(success)
     } else {
         Err(parser.make_err(ParseErrorKind::RuleFailed))
+    }
+}
+
+fn elements_open_collapsible(elements: &Elements<'_>) -> bool {
+    let is_collapsible = |element: &Element<'_>| match element {
+        Element::Collapsible { .. } => true,
+        Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+            matches!(shell, crate::tree::WikidotBlockShell::Collapsible { .. })
+        }
+        _ => false,
+    };
+    match elements {
+        Elements::Single(element) => is_collapsible(element),
+        Elements::Multiple(elements) => elements.iter().any(is_collapsible),
+        Elements::None => false,
     }
 }
 
