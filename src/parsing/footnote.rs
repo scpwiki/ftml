@@ -36,6 +36,7 @@ fn repair_footnote_list_element<'t>(element: &mut Element<'t>) -> bool {
     };
 
     let mut changed = lift_footnote_list_items(items);
+    changed |= drop_empty_footnote_list_items(items);
     for item in items.iter_mut() {
         match item {
             ListItem::Elements { elements, .. } => {
@@ -78,6 +79,49 @@ fn lift_footnote_list_items<'t>(items: &mut Vec<ListItem<'t>>) -> bool {
         items.extend(inner);
     }
     changed
+}
+
+pub(crate) fn drop_empty_footnote_list_items_deep<'t>(elements: &mut Vec<Element<'t>>) {
+    for element in elements.iter_mut() {
+        drop_empty_footnote_list_items_in_element(element);
+    }
+}
+
+fn drop_empty_footnote_list_items_in_element<'t>(element: &mut Element<'t>) {
+    match element {
+        Element::List { items, .. } => {
+            drop_empty_footnote_list_items(items);
+            for item in items.iter_mut() {
+                match item {
+                    ListItem::Elements { elements, .. } => {
+                        drop_empty_footnote_list_items_deep(elements);
+                    }
+                    ListItem::SubList { element } => {
+                        drop_empty_footnote_list_items_in_element(element);
+                    }
+                }
+            }
+        }
+        Element::Container(container) => {
+            drop_empty_footnote_list_items_deep(container.elements_mut());
+        }
+        _ => {}
+    }
+}
+
+fn drop_empty_footnote_list_items<'t>(items: &mut Vec<ListItem<'t>>) -> bool {
+    let has_content = items.iter().any(|item| match item {
+        ListItem::Elements { elements, .. } => !elements.is_empty(),
+        ListItem::SubList { .. } => true,
+    });
+    if !has_content {
+        return false;
+    }
+    let before = items.len();
+    items.retain(|item| {
+        !matches!(item, ListItem::Elements { elements, .. } if elements.is_empty())
+    });
+    items.len() != before
 }
 
 fn take_wrapped_list<'t>(elements: &mut Vec<Element<'t>>) -> Option<Vec<ListItem<'t>>> {
