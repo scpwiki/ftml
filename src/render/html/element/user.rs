@@ -31,6 +31,26 @@ pub fn render_user(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
     }
 }
 
+pub(super) fn wikidot_user_ends_open_anchor(
+    ctx: &HtmlContext,
+    element: &Element,
+) -> bool {
+    let Element::User { name, .. } = element else {
+        return false;
+    };
+    !name.eq_ignore_ascii_case("anonymous") && ctx.user_info(name).is_some()
+}
+
+pub(super) fn render_wikidot_user_bare(ctx: &mut HtmlContext, element: &Element) {
+    let Element::User { name, show_avatar } = element else {
+        return;
+    };
+    let Some(user_info) = ctx.user_info(name) else {
+        return;
+    };
+    render_wikidot_user_anchors(ctx, &user_info, *show_avatar);
+}
+
 fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
     if name.eq_ignore_ascii_case("anonymous") {
         ctx.push_escaped("Anonymous");
@@ -41,53 +61,17 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
 
     match ctx.user_info(name) {
         Some(user_info) => {
-            let user_profile_url = normalize_href(&user_info.user_profile_url, None);
-            let user_avatar_src = normalize_user_avatar_src(&user_info.user_avatar_data);
             let printuser_class = if show_avatar {
                 "printuser avatarhover"
             } else {
                 "printuser"
             };
 
-            let wikidot_onclick = format!(
-                "WIKIDOT.page.listeners.userInfo({}); return false;",
-                user_info.user_id,
-            );
-            let wikidot_karma_style = format!(
-                "background-image:url({}/userkarma.php?u={})",
-                wikidot_avatar_base(&user_info.user_avatar_data)
-                    .unwrap_or(DEFAULT_WIKIDOT_AVATAR_BASE),
-                user_info.user_id,
-            );
-
             ctx.html()
                 .span()
                 .attr(attr!("class" => printuser_class))
                 .inner(|ctx| {
-                    if show_avatar {
-                        ctx.html()
-                            .a()
-                            .attr(attr!(
-                                "href" => &user_profile_url,
-                                "onclick" => &wikidot_onclick,
-                            ))
-                            .inner(|ctx| {
-                                ctx.html().img().attr(attr!(
-                                    "class" => "small",
-                                    "src" => &user_avatar_src,
-                                    "alt" => &user_info.user_name,
-                                    "style" => &wikidot_karma_style,
-                                ));
-                            });
-                    }
-
-                    ctx.html()
-                        .a()
-                        .attr(attr!(
-                            "href" => &user_profile_url,
-                            "onclick" => &wikidot_onclick,
-                        ))
-                        .contents(&user_info.user_name);
+                    render_wikidot_user_anchors(ctx, &user_info, show_avatar);
                 });
         }
         None => {
@@ -110,6 +94,50 @@ fn render_user_wikidot(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
                 });
         }
     }
+}
+
+fn render_wikidot_user_anchors(
+    ctx: &mut HtmlContext,
+    user_info: &crate::data::UserInfo<'_>,
+    show_avatar: bool,
+) {
+    let user_profile_url = normalize_href(&user_info.user_profile_url, None);
+    let user_avatar_src = normalize_user_avatar_src(&user_info.user_avatar_data);
+    let wikidot_onclick = format!(
+        "WIKIDOT.page.listeners.userInfo({}); return false;",
+        user_info.user_id,
+    );
+    let wikidot_karma_style = format!(
+        "background-image:url({}/userkarma.php?u={})",
+        wikidot_avatar_base(&user_info.user_avatar_data)
+            .unwrap_or(DEFAULT_WIKIDOT_AVATAR_BASE),
+        user_info.user_id,
+    );
+
+    if show_avatar {
+        ctx.html()
+            .a()
+            .attr(attr!(
+                "href" => &user_profile_url,
+                "onclick" => &wikidot_onclick,
+            ))
+            .inner(|ctx| {
+                ctx.html().img().attr(attr!(
+                    "class" => "small",
+                    "src" => &user_avatar_src,
+                    "alt" => &user_info.user_name,
+                    "style" => &wikidot_karma_style,
+                ));
+            });
+    }
+
+    ctx.html()
+        .a()
+        .attr(attr!(
+            "href" => &user_profile_url,
+            "onclick" => &wikidot_onclick,
+        ))
+        .contents(&user_info.user_name);
 }
 
 fn render_user_wikijump(ctx: &mut HtmlContext, name: &str, show_avatar: bool) {
