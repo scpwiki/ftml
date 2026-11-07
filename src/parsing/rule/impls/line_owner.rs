@@ -8,7 +8,9 @@ use super::block::{BlockBodyStart, BlockRule};
 use super::prelude::*;
 use crate::parsing::collect::consume_valid_comment;
 use crate::parsing::paragraph::gather_paragraphs;
-use crate::tree::{Alignment, AttributeMap, Container, ContainerType, ListType};
+use crate::tree::{
+    Alignment, AttributeMap, Container, ContainerType, ListItem, ListType, PartialElement,
+};
 use std::borrow::Cow;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -215,7 +217,13 @@ where
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
         && lost_owner_list_body_is_unowned(&entry_parser)
     {
-        return parse_lost_owner_list_block(entry_parser, parser);
+        return parse_lost_owner_list_block(entry_parser, parser, false);
+    }
+    if let LineOwner::List { ltype, .. } = owner
+        && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
+        && lost_owner_list_body_is_sibling_items(&entry_parser, ltype)
+    {
+        return parse_lost_owner_list_block(entry_parser, parser, true);
     }
 
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {
@@ -376,9 +384,143 @@ fn lost_owner_list_body_is_unowned(parser: &Parser<'_, '_>) -> bool {
         .is_some_and(|line| line.trim_start().starts_with("[["))
 }
 
+fn lost_owner_list_body_is_sibling_items(parser: &Parser<'_, '_>, ltype: ListType) -> bool {
+    let marker = match ltype {
+        ListType::Bullet => "*",
+        ListType::Numbered => "#",
+        ListType::Generic => return false,
+    };
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start.min(source.len());
+    let Some(offset) = source[start..].find('\n') else {
+        return false;
+    };
+    let body_start = start + offset + 1;
+    source[body_start..].lines().next().is_some_and(|line| {
+        let line = line.trim_start();
+        line.strip_prefix(marker)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+    })
+}
+
+fn hoisted_leaf_list<'t>(element: Element<'t>) -> Option<Element<'t>> {
+    let Element::List {
+        ltype,
+        attributes,
+        items,
+        ..
+    } = element
+    else {
+        return None;
+    };
+    let mut leaves = Vec::new();
+    for item in items {
+        collect_hoisted_leaf_items(item, &mut leaves);
+    }
+    leaves.retain(|item| !hoisted_item_is_empty(item));
+    if leaves.is_empty() {
+        return None;
+    }
+    Some(Element::List {
+        ltype,
+        attributes,
+        items: leaves,
+        wikidot_explicit_block: false,
+    })
+}
+
+fn collect_hoisted_leaf_items<'t>(item: ListItem<'t>, leaves: &mut Vec<ListItem<'t>>) {
+    match item {
+        ListItem::SubList { element } => {
+            if let Element::List { items, .. } = *element {
+                for sub in items {
+                    collect_hoisted_leaf_items(sub, leaves);
+                }
+            }
+        }
+        ListItem::Elements {
+            attributes,
+            elements,
+        } => {
+            let mut lists = Vec::new();
+            let mut rest = Vec::new();
+            partition_hoisted_elements(elements, &mut lists, &mut rest);
+            if lists.is_empty() {
+                leaves.push(ListItem::Elements {
+                    attributes,
+                    elements: rest,
+                });
+                return;
+            }
+            if !rest
+                .iter()
+                .all(|element| matches!(element, Element::LineBreak))
+            {
+                leaves.push(ListItem::Elements {
+                    attributes,
+                    elements: rest,
+                });
+            }
+            for list in lists {
+                if let Element::List { items, .. } = list {
+                    for sub in items {
+                        collect_hoisted_leaf_items(sub, leaves);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn partition_hoisted_elements<'t>(
+    elements: Vec<Element<'t>>,
+    lists: &mut Vec<Element<'t>>,
+    rest: &mut Vec<Element<'t>>,
+) {
+    for element in elements {
+        match element {
+            Element::List { .. } => lists.push(element),
+            Element::Partial(PartialElement::ListItem(ListItem::Elements {
+                elements,
+                ..
+            })) => partition_hoisted_elements(elements, lists, rest),
+            Element::Partial(PartialElement::ListItem(ListItem::SubList {
+                element,
+            })) => {
+                if let Element::List { .. } = *element {
+                    lists.push(*element);
+                }
+            }
+            _ => rest.push(element),
+        }
+    }
+}
+
+fn hoisted_item_is_empty(item: &ListItem<'_>) -> bool {
+    match item {
+        ListItem::Elements { elements, .. } => {
+            elements.iter().all(hoisted_element_is_empty)
+        }
+        ListItem::SubList { element } => match &**element {
+            Element::List { items, .. } => items.iter().all(hoisted_item_is_empty),
+            _ => false,
+        },
+    }
+}
+
+fn hoisted_element_is_empty(element: &Element<'_>) -> bool {
+    match element {
+        Element::LineBreak => true,
+        Element::Partial(PartialElement::ListItem(item)) => hoisted_item_is_empty(item),
+        Element::List { items, .. } => items.iter().all(hoisted_item_is_empty),
+        _ => false,
+    }
+}
+
 fn parse_lost_owner_list_block<'r, 't>(
     entry: Parser<'r, 't>,
     parser: &mut Parser<'r, 't>,
+    decompose_siblings: bool,
 ) -> Result<Option<LostOwnerBlock<'t>>, ParseError>
 where
     'r: 't,
@@ -410,9 +552,18 @@ where
         return Ok(None);
     }
     parser.update(&candidate);
+    let body = if decompose_siblings {
+        let mut elements = elements.into_iter();
+        match elements.next() {
+            Some(list) => hoisted_leaf_list(list).into_iter().collect(),
+            None => Vec::new(),
+        }
+    } else {
+        elements
+    };
     Ok(Some(LostOwnerBlock {
         control: None,
-        body: elements,
+        body,
         errors,
         append_unquoted_close_break: false,
         hoisted_list: true,
