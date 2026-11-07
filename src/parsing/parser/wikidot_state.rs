@@ -23,6 +23,19 @@ const BIBLIOGRAPHY_SPLIT_TAIL: u16 = 1 << 14;
 /// Sentinel for "no scored div direct body" in the packed field.
 const SCORED_DIV_DIRECT_INACTIVE: u32 = u32::MAX;
 
+/// Sentinel for "no list depth recorded at a footnote" in the packed field.
+const LIST_DEPTH_AT_FOOTNOTE_NONE: u32 = u32::MAX;
+
+/// Sentinel for "no row suffix recorded" in the packed field.
+const ROW_SUFFIX_INACTIVE: u32 = u32::MAX;
+
+/// Bits 0..=4 of `crossed_closes` are the per-kind closer slots.
+const CROSSED_CLOSE_SLOTS: u16 = 0b1_1111;
+const CROSSED_COLLAPSIBLE_TAIL: u16 = 1 << 5;
+const PENDING_NOTE_LIST_CLOSER: u16 = 1 << 6;
+const SUPPRESS_FOOTNOTE_LIST_BREAK: u16 = 1 << 7;
+const ADVANCED_CELL_PARAGRAPH: u16 = 1 << 8;
+
 /// Div keeps a 2-bit count (max 3). The other three kinds are one bit each.
 /// Slots stay inside `crossed_closes` and do not overlap.
 fn crossed_close_slot(name: &str) -> Option<(u16, u16)> {
@@ -59,14 +72,11 @@ pub(super) struct WikidotState {
     /// because the high bits of `flags` are MODULE_EMPTY_BODY, HEADING_LINE,
     /// ADVANCED_TABLE_CELL_BODY, and BIBLIOGRAPHY_SPLIT_TAIL. Packing the
     /// collapsible count into bit 13 made every advanced-cell parse swallow
-    /// `[[/collapsible]]`.
+    /// `[[/collapsible]]`. Bits 5..=8 hold four one-bit states (see the
+    /// CROSSED_COLLAPSIBLE_TAIL and sibling constants).
     crossed_closes: u16,
-    crossed_collapsible_tail: bool,
-    pending_note_list_closer: bool,
-    suppress_footnote_list_break: bool,
-    list_depth_at_footnote: Option<usize>,
-    row_suffix_at: Option<usize>,
-    advanced_cell_paragraph: bool,
+    list_depth_at_footnote: u32,
+    row_suffix_at: u32,
 }
 
 impl Default for WikidotState {
@@ -86,12 +96,8 @@ impl Default for WikidotState {
             center_body_depth: 0,
             flags: 0,
             crossed_closes: 0,
-            crossed_collapsible_tail: false,
-            pending_note_list_closer: false,
-            suppress_footnote_list_break: false,
-            list_depth_at_footnote: None,
-            row_suffix_at: None,
-            advanced_cell_paragraph: false,
+            list_depth_at_footnote: LIST_DEPTH_AT_FOOTNOTE_NONE,
+            row_suffix_at: ROW_SUFFIX_INACTIVE,
         }
     }
 }
@@ -100,7 +106,7 @@ impl WikidotState {
     pub(super) fn attempt_key(self) -> Self {
         Self {
             div_body_depth: self.div_body_depth.min(1),
-            row_suffix_at: None,
+            row_suffix_at: ROW_SUFFIX_INACTIVE,
             ..self
         }
     }
@@ -348,7 +354,7 @@ impl Parser<'_, '_> {
     }
 
     pub(crate) fn has_wikidot_crossed_close(&self) -> bool {
-        self.wikidot.crossed_closes != 0
+        self.wikidot.crossed_closes & CROSSED_CLOSE_SLOTS != 0
     }
 
     pub(crate) fn take_wikidot_crossed_close(&mut self, end_name: &str) -> bool {
@@ -385,15 +391,19 @@ impl Parser<'_, '_> {
     }
 
     pub(crate) fn set_wikidot_row_suffix_at(&mut self, byte: usize) {
-        self.wikidot.row_suffix_at = Some(byte);
+        self.wikidot.row_suffix_at =
+            u32::try_from(byte).unwrap_or(ROW_SUFFIX_INACTIVE - 1);
     }
 
     pub(crate) fn wikidot_row_suffix_at(&self) -> Option<usize> {
-        self.wikidot.row_suffix_at
+        match self.wikidot.row_suffix_at {
+            ROW_SUFFIX_INACTIVE => None,
+            at => Some(at as usize),
+        }
     }
 
     pub(crate) fn clear_wikidot_row_suffix_at(&mut self) {
-        self.wikidot.row_suffix_at = None;
+        self.wikidot.row_suffix_at = ROW_SUFFIX_INACTIVE;
     }
 
     pub(crate) fn set_wikidot_collapsible_closed_at_deeper_quote(&mut self, value: bool) {
@@ -445,17 +455,29 @@ impl Parser<'_, '_> {
     }
 
     pub(crate) fn arm_wikidot_advanced_cell_paragraph(&mut self) {
-        self.wikidot.advanced_cell_paragraph = true;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            ADVANCED_CELL_PARAGRAPH,
+            true,
+        );
     }
 
     pub(crate) fn take_wikidot_advanced_cell_paragraph(&mut self) -> bool {
-        let armed = self.wikidot.advanced_cell_paragraph;
-        self.wikidot.advanced_cell_paragraph = false;
+        let armed = self.wikidot.crossed_closes & ADVANCED_CELL_PARAGRAPH != 0;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            ADVANCED_CELL_PARAGRAPH,
+            false,
+        );
         armed
     }
 
     pub(crate) fn clear_wikidot_advanced_cell_paragraph(&mut self) {
-        self.wikidot.advanced_cell_paragraph = false;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            ADVANCED_CELL_PARAGRAPH,
+            false,
+        );
     }
 
     pub(crate) fn bibliography_split_tail(&self) -> bool {
@@ -467,38 +489,66 @@ impl Parser<'_, '_> {
     }
 
     pub(crate) fn set_crossed_collapsible_tail(&mut self, value: bool) {
-        self.wikidot.crossed_collapsible_tail = value;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            CROSSED_COLLAPSIBLE_TAIL,
+            value,
+        );
     }
 
     pub(crate) fn pending_note_list_closer(&self) -> bool {
-        self.wikidot.pending_note_list_closer
+        self.wikidot.crossed_closes & PENDING_NOTE_LIST_CLOSER != 0
     }
 
     pub(crate) fn set_pending_note_list_closer(&mut self, value: bool) {
-        self.wikidot.pending_note_list_closer = value;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            PENDING_NOTE_LIST_CLOSER,
+            value,
+        );
     }
 
     pub(crate) fn set_suppress_footnote_list_break(&mut self, value: bool) {
-        self.wikidot.suppress_footnote_list_break = value;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            SUPPRESS_FOOTNOTE_LIST_BREAK,
+            value,
+        );
     }
 
     pub(crate) fn take_suppress_footnote_list_break(&mut self) -> bool {
-        let marked = self.wikidot.suppress_footnote_list_break;
-        self.wikidot.suppress_footnote_list_break = false;
+        let marked = self.wikidot.crossed_closes & SUPPRESS_FOOTNOTE_LIST_BREAK != 0;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            SUPPRESS_FOOTNOTE_LIST_BREAK,
+            false,
+        );
         marked
     }
 
     pub(crate) fn list_depth_at_footnote(&self) -> Option<usize> {
-        self.wikidot.list_depth_at_footnote
+        match self.wikidot.list_depth_at_footnote {
+            LIST_DEPTH_AT_FOOTNOTE_NONE => None,
+            depth => Some(depth as usize),
+        }
     }
 
     pub(crate) fn set_list_depth_at_footnote(&mut self, value: Option<usize>) {
-        self.wikidot.list_depth_at_footnote = value;
+        self.wikidot.list_depth_at_footnote = match value {
+            None => LIST_DEPTH_AT_FOOTNOTE_NONE,
+            Some(depth) => {
+                u32::try_from(depth).unwrap_or(LIST_DEPTH_AT_FOOTNOTE_NONE - 1)
+            }
+        };
     }
 
     pub(crate) fn take_crossed_collapsible_tail(&mut self) -> bool {
-        let marked = self.wikidot.crossed_collapsible_tail;
-        self.wikidot.crossed_collapsible_tail = false;
+        let marked = self.wikidot.crossed_closes & CROSSED_COLLAPSIBLE_TAIL != 0;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            CROSSED_COLLAPSIBLE_TAIL,
+            false,
+        );
         marked
     }
 
