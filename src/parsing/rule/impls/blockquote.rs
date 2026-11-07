@@ -853,6 +853,17 @@ fn try_consume_fn<'r, 't>(
                 .rev()
                 .find(|element| **element != Element::LineBreak)
                 .is_some_and(|element| matches!(element, Element::TabView(_)));
+        // A div that closes while a span is still open leaves that newline
+        // inside the span. A table or rule on the same kind of row does not.
+        let span_owns_div_break = parser.settings().layout.legacy()
+            && parser.in_wikidot_span_body()
+            && elements.iter().any(|element| {
+                matches!(
+                    element,
+                    Element::Container(container)
+                        if container.ctype() == ContainerType::Div
+                )
+            });
         let keep_line_break = if parser.settings().layout.legacy() {
             paragraph_safe
                 || alignment_block
@@ -860,6 +871,7 @@ fn try_consume_fn<'r, 't>(
                 || collapsible_row
                 || wikidot_block_close_line
                 || wikidot_tabview_line
+                || span_owns_div_break
         } else {
             !consumed_past_line || paragraph_safe
         };
