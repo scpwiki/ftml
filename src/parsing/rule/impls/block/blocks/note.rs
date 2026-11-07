@@ -107,6 +107,7 @@ fn parse_note_block<'r, 't>(
     let (mut elements, errors, paragraph_safe) = body?.into();
     if legacy {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
+        unwrap_wikidot_paragraph_after_explicit_list(&mut elements);
     }
 
     let element = Element::Container(Container::new(
@@ -119,6 +120,45 @@ fn parse_note_block<'r, 't>(
     // the closer is a bare continuation with no fresh paragraph, exactly like
     // the generic div block.
     ok!(paragraph_safe && !legacy; element, errors)
+}
+
+/// The line after an explicit list inside a note is the list's continuation.
+/// Live glues that line to the list. A blank line is already a break plus
+/// bare text, so only a paragraph parked directly against the list is unwrapped.
+fn unwrap_wikidot_paragraph_after_explicit_list(elements: &mut Vec<Element<'_>>) {
+    let mut index = 0;
+    while index < elements.len() {
+        let explicit_list = matches!(
+            &elements[index],
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        );
+        let next = index + 1;
+        let one_line_paragraph = elements.get(next).is_some_and(|element| {
+            matches!(
+                element,
+                Element::Container(container)
+                    if container.ctype() == ContainerType::Paragraph
+                        && container
+                            .elements()
+                            .iter()
+                            .all(|child| !matches!(child, Element::LineBreak))
+            )
+        });
+        if explicit_list && one_line_paragraph {
+            let Element::Container(container) = elements.remove(next) else {
+                unreachable!("the following element was a paragraph");
+            };
+            let children: Vec<Element<'_>> = container.into();
+            let added = children.len();
+            elements.splice(next..next, children);
+            index += 1 + added;
+            continue;
+        }
+        index += 1;
+    }
 }
 
 #[cfg(test)]
