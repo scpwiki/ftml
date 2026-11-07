@@ -38,6 +38,7 @@ const SUPPRESS_FOOTNOTE_LIST_BREAK: u16 = 1 << 7;
 const ADVANCED_CELL_PARAGRAPH: u16 = 1 << 8;
 const ROW_ABSORB_DIV_CLOSE: u16 = 1 << 9;
 const PENDING_DIV_CLOSER: u16 = 1 << 10;
+const ROW_ABSORB_DIV_CLOSE_SEEN: u16 = 1 << 11;
 
 /// Div keeps a 2-bit count (max 3). The other three kinds are one bit each.
 /// Slots stay inside `crossed_closes` and do not overlap.
@@ -181,13 +182,41 @@ impl Parser<'_, '_> {
 
     #[inline]
     pub(crate) fn set_wikidot_row_absorb_div_close(&mut self, value: bool) {
-        set_flag(&mut self.wikidot.crossed_closes, ROW_ABSORB_DIV_CLOSE, value);
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            ROW_ABSORB_DIV_CLOSE,
+            value,
+        );
     }
 
     #[inline]
     pub(crate) fn take_wikidot_row_absorb_div_close(&mut self) -> bool {
         let value = self.wikidot.crossed_closes & ROW_ABSORB_DIV_CLOSE != 0;
         self.set_wikidot_row_absorb_div_close(false);
+        value
+    }
+
+    #[inline]
+    pub(crate) fn mark_wikidot_row_absorb_div_close_seen(&mut self) {
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            ROW_ABSORB_DIV_CLOSE_SEEN,
+            true,
+        );
+    }
+
+    #[inline]
+    pub(crate) fn wikidot_row_absorb_div_close_seen(&self) -> bool {
+        self.wikidot.crossed_closes & ROW_ABSORB_DIV_CLOSE_SEEN != 0
+    }
+
+    pub(crate) fn take_wikidot_row_absorb_div_close_seen(&mut self) -> bool {
+        let value = self.wikidot_row_absorb_div_close_seen();
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            ROW_ABSORB_DIV_CLOSE_SEEN,
+            false,
+        );
         value
     }
 
