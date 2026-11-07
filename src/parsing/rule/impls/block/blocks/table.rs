@@ -307,12 +307,15 @@ fn extract_table_cells<'r, 't>(
     parser: &Parser<'r, 't>,
     elements: Vec<Element<'t>>,
     mut straddle_list_pending: bool,
+    mut li_tail_transfer: Option<Element<'t>>,
+    li_yield_tail: bool,
 ) -> Result<(Vec<TableCell<'t>>, Vec<Cow<'t, str>>, Vec<Element<'t>>), ParseError> {
     let mut cells = Vec::new();
     let mut residuals = Vec::new();
     let mut foster = Vec::new();
     let mut straddle_tail: Vec<Element<'t>> = Vec::new();
     let mut pending_break = false;
+    let mut yield_foster_len = 0usize;
 
     for element in elements {
         match element {
@@ -323,7 +326,44 @@ fn extract_table_cells<'r, 't>(
             // A bullet `[[/row]]` stays a list item. It is inside the row
             // span and tidy pulls that list out in front of the table.
             Element::List { .. } if !cells.is_empty() => {
-                if straddle_list_pending {
+                if let Some(transfer) = li_tail_transfer.take() {
+                    match (transfer, element) {
+                        (
+                            Element::List {
+                                ltype: head_type,
+                                items: mut head_items,
+                                ..
+                            },
+                            Element::List {
+                                ltype,
+                                items,
+                                attributes,
+                                wikidot_explicit_block,
+                                wikidot_unclosed,
+                            },
+                        ) if head_type == ltype => {
+                            head_items.extend(items);
+                            foster.push(Element::Partial(PartialElement::WikidotFoster(
+                                vec![Element::List {
+                                    ltype,
+                                    attributes,
+                                    items: head_items,
+                                    wikidot_explicit_block,
+                                    wikidot_unclosed,
+                                }],
+                            )));
+                        }
+                        (transfer, element) => {
+                            foster.push(Element::Partial(PartialElement::WikidotFoster(
+                                vec![transfer],
+                            )));
+                            foster.push(Element::Partial(PartialElement::WikidotFoster(
+                                vec![element],
+                            )));
+                        }
+                    }
+                    yield_foster_len = foster.len();
+                } else if straddle_list_pending || li_yield_tail {
                     straddle_list_pending = false;
                     let Element::List { items, .. } = element else {
                         unreachable!()
@@ -340,6 +380,9 @@ fn extract_table_cells<'r, 't>(
                         }
                     }
                     foster.push(Element::Partial(PartialElement::WikidotFoster(bare)));
+                    if li_yield_tail {
+                        yield_foster_len = foster.len();
+                    }
                 } else {
                     foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
                         element,
@@ -363,7 +406,8 @@ fn extract_table_cells<'r, 't>(
             }
 
             Element::Text(text) if !cells.is_empty() && is_cell_closer(&text) => {
-                if pending_break && !foster.is_empty() {
+                if pending_break && !foster.is_empty() && foster.len() != yield_foster_len
+                {
                     foster.push(Element::LineBreak);
                 }
                 pending_break = false;
@@ -397,6 +441,11 @@ fn extract_table_cells<'r, 't>(
                 return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
             }
         }
+    }
+    if let Some(transfer) = li_tail_transfer.take() {
+        foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
+            transfer,
+        ])));
     }
     if !straddle_tail.is_empty() {
         match rescue_straddle_tail(straddle_tail) {
@@ -970,6 +1019,8 @@ fn parse_row<'r, 't>(
 
     if legacy {
         parser.clear_wikidot_list_cut_by_cell_end();
+        parser.clear_wikidot_li_tail_transfer();
+        parser.clear_wikidot_explicit_list_yield_tail();
     }
     let parsed = match parse_block(
         parser,
@@ -1000,8 +1051,19 @@ fn parse_row<'r, 't>(
     }
 
     let straddle_list_pending = legacy && parser.take_wikidot_list_cut_by_cell_end();
-    let (cells, residuals, foster) =
-        extract_table_cells(parser, parsed.elements, straddle_list_pending)?;
+    let li_tail_transfer = if legacy {
+        parser.take_wikidot_li_tail_transfer()
+    } else {
+        None
+    };
+    let li_yield_tail = legacy && parser.take_wikidot_explicit_list_yield_tail();
+    let (cells, residuals, foster) = extract_table_cells(
+        parser,
+        parsed.elements,
+        straddle_list_pending,
+        li_tail_transfer,
+        li_yield_tail,
+    )?;
     if cells.is_empty() && parser.settings().layout.legacy() {
         return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
     }

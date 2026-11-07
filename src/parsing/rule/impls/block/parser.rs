@@ -3296,6 +3296,26 @@ where
         result
     }
 
+    fn take_li_tail_transfer(segment: &mut Vec<Element<'t>>) -> Option<Element<'t>> {
+        let last = segment.len().checked_sub(1)?;
+        if !matches!(segment[last], Element::List { .. }) {
+            return None;
+        }
+        let mut index = last;
+        while index > 0 {
+            index -= 1;
+            match &segment[index] {
+                Element::LineBreak => {}
+                Element::Text(text) if text.trim().is_empty() => {}
+                Element::Partial(crate::tree::PartialElement::WikidotBlockClose(
+                    crate::tree::WikidotBlockCloseKind::Div { .. },
+                )) => return Some(segment.remove(last)),
+                _ => return None,
+            }
+        }
+        None
+    }
+
     fn consume_wikidot_li_body_segments(
         &mut self,
         block_rule: &BlockRule,
@@ -3475,6 +3495,13 @@ where
                 && self.at_body_end_boundary()
                 && self.wikidot_ancestor_boundary_accepts_table_cell_end()
             {
+                self.set_wikidot_explicit_list_yield_tail();
+                if self.wikidot_table_wrapped_by_flat_block()
+                    && let Some(segment) = segments.last_mut()
+                    && let Some(element) = Self::take_li_tail_transfer(segment)
+                {
+                    self.set_wikidot_li_tail_transfer(element);
+                }
                 self.record_wikidot_yield_orphan_closes(1, 1);
                 return Ok(crate::parsing::ParseSuccess::new(
                     segments,
@@ -6113,6 +6140,7 @@ where
                 && self.at_body_end_boundary()
                 && self.wikidot_ancestor_boundary_accepts_table_cell_end()
             {
+                self.set_wikidot_explicit_list_yield_tail();
                 if block_rule.name == "block-list-item" {
                     self.record_wikidot_yield_orphan_closes(1, 0);
                 } else {
