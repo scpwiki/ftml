@@ -2127,6 +2127,32 @@ where
                 }
             }
 
+            if restrict_quote_close
+                && parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && matches!(
+                    block_rule.name,
+                    "block-align-center"
+                        | "block-align-left"
+                        | "block-align-right"
+                        | "block-align-justify"
+                )
+                && parser.quote_body_close_allowed_here()
+                && matches!(
+                    parser.current().token,
+                    Token::BulletItem | Token::NumberedItem
+                )
+            {
+                let mut probe = parser.clone();
+                if probe.step().is_ok()
+                    && probe.get_optional_space().is_ok()
+                    && probe.current().token == Token::LeftBlockEnd
+                {
+                    parser.step()?;
+                    parser.get_optional_space()?;
+                }
+            }
+
             let end_start = parser.current().span.start;
             if parser.settings().layout.legacy()
                 && !parser.discarding_hidden_body()
@@ -6690,6 +6716,22 @@ where
             {
                 first_candidate = false;
                 let mut end = parser.clone();
+                if self.settings().layout.legacy()
+                    && matches!(
+                        block_rule.name,
+                        "block-align-center"
+                            | "block-align-left"
+                            | "block-align-right"
+                            | "block-align-justify"
+                    )
+                    && matches!(
+                        end.current().token,
+                        Token::BulletItem | Token::NumberedItem
+                    )
+                {
+                    let _ = end.step();
+                    let _ = end.get_optional_space();
+                }
                 let matching_close = end.get_end_block().is_ok_and(|name| block_rule_accepts_end_name(block_rule, name.strip_suffix('_').unwrap_or(&name), self.settings().layout.legacy()));
                 let valid_close = if matching_close
                     && absolute_depth == required_depth

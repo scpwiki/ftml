@@ -64,6 +64,22 @@ macro_rules! make_align_block {
     };
 }
 
+fn quote_row_opener_at_content_start(source: &str, opener_start: usize) -> bool {
+    let line_start = source[..opener_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    let prefix = &source[line_start..opener_start];
+    let mut rest = prefix;
+    loop {
+        let trimmed = rest.trim_start_matches('>').trim_start_matches(' ');
+        if trimmed.len() == rest.len() {
+            break;
+        }
+        rest = trimmed;
+    }
+    rest.trim().is_empty()
+}
+
 pub fn parse_alignment_block<'r, 't>(
     (block_rule, alignment): (&BlockRule, Alignment),
     parser: &mut Parser<'r, 't>,
@@ -83,6 +99,14 @@ pub fn parse_alignment_block<'r, 't>(
     assert_block_name(block_rule, name);
 
     if parser.wikidot_footnote_zone_blocks(opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    let in_quote_rows = parser.in_native_blockquote_line();
+    if parser.settings().layout.legacy()
+        && in_quote_rows
+        && !quote_row_opener_at_content_start(parser.full_text().inner(), opener_start)
+    {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
@@ -189,6 +213,9 @@ pub fn parse_alignment_block<'r, 't>(
     }
     let (mut elements, errors, _) = body?.into();
     if parser.settings().layout.legacy() {
+        if in_quote_rows {
+            merge_adjacent_native_lists(&mut elements);
+        }
         trim_wikidot_trailing_explicit_list_break(&mut elements);
     }
     if span_keeps_head_breaks && align_parsed_body_keeps_span_head_breaks(&elements) {
@@ -212,6 +239,43 @@ pub fn parse_alignment_block<'r, 't>(
         let mut output = vec![element];
         output.extend(row_suffix);
         ok!(false; output, errors)
+    }
+}
+
+fn merge_adjacent_native_lists(elements: &mut Vec<Element<'_>>) {
+    let mut index = 0;
+    while index + 1 < elements.len() {
+        let mergeable = match (&elements[index], &elements[index + 1]) {
+            (
+                Element::List {
+                    ltype: first_type,
+                    attributes: first_attributes,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                Element::List {
+                    ltype: second_type,
+                    attributes: second_attributes,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+            ) => first_type == second_type && first_attributes == second_attributes,
+            _ => false,
+        };
+        if mergeable {
+            let Element::List {
+                items: mut tail, ..
+            } = elements.remove(index + 1)
+            else {
+                unreachable!()
+            };
+            let Element::List { items, .. } = &mut elements[index] else {
+                unreachable!()
+            };
+            items.append(&mut tail);
+        } else {
+            index += 1;
+        }
     }
 }
 

@@ -1,0 +1,173 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-align-center",
+        "span": [
+            105,
+            105
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            2,
+            4
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            5,
+            7
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "block-span",
+        "span": [
+            105,
+            105
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            12,
+            14
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "block-hidden",
+        "span": [
+            105,
+            105
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            25,
+            27
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            33,
+            35
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "table-column",
+        "rule": "list",
+        "span": [
+            50,
+            52
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            50,
+            52
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "table-column",
+        "rule": "list",
+        "span": [
+            53,
+            55
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            53,
+            55
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            60,
+            63
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            64,
+            66
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            71,
+            74
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            80,
+            82
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            87,
+            90
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            94,
+            96
+        ],
+        "kind": "no-rules-match"
+    }
+]
