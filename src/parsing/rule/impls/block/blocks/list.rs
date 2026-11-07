@@ -994,6 +994,66 @@ fn parse_list_item<'r, 't>(
         if fused_close {
             elements.push(text!("]"));
         }
+        // Live ends a run formation inside an explicit [[li]] body at the
+        // completing pair's closer: run items after the closer escape to
+        // the enclosing list as its items instead of re-forming a second
+        // list inside this item (lihoist p12/p15/d6-24.3). When the
+        // assembled body is exactly [formation list, native tail list],
+        // split the tail list's items out as sibling items.
+        let core_end = elements
+            .iter()
+            .rposition(|element| !element.is_whitespace())
+            .map_or(0, |index| index + 1);
+        let plain_native = |items: &Vec<ListItem<'t>>| {
+            !items.is_empty()
+                && items.iter().all(|item| {
+                    matches!(
+                        item,
+                        ListItem::Elements { elements, .. }
+                            if elements
+                                .iter()
+                                .all(|element| matches!(element, Element::Text(_)))
+                    )
+                })
+        };
+        let escaped_items: Option<Vec<ListItem<'t>>> = match &elements[..core_end] {
+            [
+                Element::List {
+                    items: head_items,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                Element::List {
+                    items: tail_items,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+            ] if plain_native(head_items) && plain_native(tail_items) => {
+                Some(tail_items.clone())
+            }
+            _ => None,
+        };
+        if let Some(tail_items) = escaped_items {
+            elements.truncate(core_end - 1);
+            // The removed tail list's leading line break joins the escaped
+            // items, matching the break the enclosing list puts between items.
+            let element =
+                Element::Partial(PartialElement::ListItem(ListItem::Elements {
+                    elements,
+                    attributes,
+                }));
+            let mut output = vec![element];
+            output.extend(
+                tail_items
+                    .into_iter()
+                    .map(|item| Element::Partial(PartialElement::ListItem(item))),
+            );
+            return success_elements_with_paragraph_safety(
+                false,
+                Elements::Multiple(output),
+                errors,
+            );
+        }
         let element = Element::Partial(PartialElement::ListItem(ListItem::Elements {
             elements,
             attributes,
