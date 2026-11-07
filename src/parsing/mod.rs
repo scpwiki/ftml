@@ -415,6 +415,7 @@ fn repair_bracket_run_tokenization<'t>(
     // below: a candidate that has nothing left which could end a block
     // head cannot form a block, so it never needs a parser built for it.
     let mut head_gate = BracketRunHeadGate::default();
+    let mut name_gate = BracketRunNameGate::default();
     while index + 1 < tokens.len() {
         let comment_head = tokens[index].token == Token::LeftLink
             && tokens[index].span.end - tokens[index].span.start == 3
@@ -465,6 +466,7 @@ fn repair_bracket_run_tokenization<'t>(
                 repaired = true;
                 index += 2;
                 head_gate.reset(index);
+            name_gate.reset();
                 continue;
             }
         }
@@ -477,6 +479,12 @@ fn repair_bracket_run_tokenization<'t>(
             continue;
         }
         if !head_gate.has_head_terminator_at_or_after(&tokens, source, index + 2) {
+            index += 1;
+            continue;
+        }
+        if !name_gate.head_name_may_form(&tokens, source, index + 2, settings.layout)
+            && !bracket_run_residual_opener_may_form(source, tokens[index].span.start, settings.layout)
+        {
             index += 1;
             continue;
         }
@@ -500,6 +508,7 @@ fn repair_bracket_run_tokenization<'t>(
             repaired = true;
             index += 2;
             head_gate.reset(index);
+            name_gate.reset();
             continue;
         }
         let segment_candidate = candidate;
@@ -523,6 +532,7 @@ fn repair_bracket_run_tokenization<'t>(
             repaired = true;
             index += 3;
             head_gate.reset(index);
+            name_gate.reset();
             continue;
         }
         if bracket_run_segment_prefix(
@@ -537,6 +547,7 @@ fn repair_bracket_run_tokenization<'t>(
             repaired = true;
             index += 2;
             head_gate.reset(index);
+            name_gate.reset();
             continue;
         }
         index += 1;
@@ -620,6 +631,306 @@ fn bracket_run_token_can_end_head(
 /// performs before scanning a segment: the token must be `[[` and the head
 /// word must spell `iftags`. Being a superset is safe here; it can only
 /// make the repair run a probe it would have run anyway.
+#[derive(Debug, Default)]
+struct BracketRunNameGate {
+    stretch: Option<BracketRunNameStretch>,
+}
+
+#[derive(Debug)]
+struct BracketRunNameStretch {
+    head_index: usize,
+    terminator: usize,
+    window_end: usize,
+    skipped_comment: bool,
+    first_letter: Option<usize>,
+}
+
+fn bracket_run_lookup_may_match(name: &str, layout: crate::layout::Layout) -> bool {
+    if self::rule::impls::block::get_block_rule_with_name_for_layout(name, layout)
+        .is_some()
+    {
+        return true;
+    }
+    match name.strip_suffix('_') {
+        Some(stripped) => {
+            self::rule::impls::block::get_block_rule_with_name_for_layout(
+                stripped, layout,
+            )
+            .is_some()
+        }
+        None => false,
+    }
+}
+
+fn bracket_run_segment_may_form(
+    tokens: &[ExtractedToken],
+    source: &str,
+    visited_start: usize,
+    visited_end: usize,
+) -> bool {
+    let limit = visited_end.saturating_add(8192).min(tokens.len());
+    let mut last_head: Option<usize> = None;
+    for position in visited_start..limit {
+        let token = tokens[position].token;
+        if position < visited_end
+            && token == Token::LeftBlock
+            && bracket_run_iftags_head_may_start(tokens, position, source)
+        {
+            last_head = Some(position);
+        }
+        if token == Token::LeftBlockEnd
+            && let Some(head) = last_head
+            && position - head <= 8192
+            && bracket_run_iftags_closer_may_match(tokens, source, position)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn bracket_run_iftags_closer_may_match(
+    tokens: &[ExtractedToken],
+    source: &str,
+    closer: usize,
+) -> bool {
+    let mut index = closer + 1;
+    while tokens.get(index).map(|token| token.token) == Some(Token::Whitespace) {
+        index += 1;
+    }
+    let Some(first) = tokens.get(index) else {
+        return true;
+    };
+    if first.token == Token::InputEnd {
+        return true;
+    }
+    let name_start = first.span.start;
+    let mut name_end = name_start;
+    let mut fused_end = name_start;
+    let mut steps = 0usize;
+    while let Some(token) = tokens.get(index) {
+        steps += 1;
+        if steps > 64 {
+            return true;
+        }
+        match token.token {
+            Token::Whitespace
+            | Token::LineBreak
+            | Token::ParagraphBreak
+            | Token::RightBlock
+            | Token::InputEnd => break,
+            Token::RightLink => {
+                name_end = token.span.end;
+                index += 1;
+            }
+            _ => {
+                name_end = token.span.end;
+                fused_end = token.span.end;
+                index += 1;
+            }
+        }
+    }
+    if name_end == name_start {
+        return true;
+    }
+    let Some(text) = source.get(name_start..name_end) else {
+        return true;
+    };
+    if text.eq_ignore_ascii_case("iftags")
+        || text.trim_end_matches(']').eq_ignore_ascii_case("iftags")
+    {
+        return true;
+    }
+    source
+        .get(name_start..fused_end)
+        .is_some_and(|text| text.eq_ignore_ascii_case("iftags"))
+}
+
+fn bracket_run_collected_may_match(
+    collected: &str,
+    layout: crate::layout::Layout,
+) -> bool {
+    let name = if layout.legacy() {
+        self::wikidot_text::trim_wikidot_ascii(collected)
+    } else {
+        collected.trim()
+    };
+    if bracket_run_lookup_may_match(name, layout) {
+        return true;
+    }
+    if layout.legacy() {
+        if let Some((at, _)) = name
+            .char_indices()
+            .find(|(_, ch)| matches!(ch, '\u{b}' | '\u{c}'))
+        {
+            let prefix = &name[..at];
+            if !prefix.is_empty() && bracket_run_lookup_may_match(prefix, layout) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn bracket_run_residual_opener_may_form(
+    source: &str,
+    start: usize,
+    layout: crate::layout::Layout,
+) -> bool {
+    if !layout.legacy() {
+        return false;
+    }
+    [start, start + 2].iter().any(|at| {
+        let Some(rest) = source.get(*at..) else {
+            return false;
+        };
+        ["[[embedvideo]]]", "[[gallery]]]", "[[span_]]]"].iter().any(
+            |literal| {
+                rest.get(..literal.len())
+                    .is_some_and(|head| head.eq_ignore_ascii_case(literal))
+            },
+        )
+    })
+}
+
+impl BracketRunNameGate {
+    fn head_name_may_form(
+        &mut self,
+        tokens: &[ExtractedToken<'_>],
+        source: &str,
+        from: usize,
+        layout: crate::layout::Layout,
+    ) -> bool {
+        let mut index = from;
+        if !layout.legacy() {
+            while tokens
+                .get(index)
+                .is_some_and(|token| token.token == Token::Whitespace)
+            {
+                index += 1;
+            }
+        }
+        let Some(first) = tokens.get(index) else {
+            return false;
+        };
+        if first.token == Token::InputEnd {
+            return false;
+        }
+        let head_start = first.span.start;
+        if let Some(stretch) = &self.stretch {
+            if index >= stretch.head_index && index <= stretch.terminator {
+                if stretch.skipped_comment {
+                    match stretch.first_letter {
+                        None => return false,
+                        Some(byte) if byte >= head_start => return true,
+                        _ => {}
+                    }
+                } else if let Some(collected) =
+                    source.get(head_start..stretch.window_end)
+                {
+                    return bracket_run_collected_may_match(collected, layout);
+                }
+            }
+        }
+        let mut window_end = head_start;
+        let mut cursor = index;
+        let mut skipped_comment = false;
+        loop {
+            if cursor - index > 16384 {
+                return true;
+            }
+            let Some(token) = tokens.get(cursor) else {
+                return false;
+            };
+            match token.token {
+                Token::Whitespace
+                | Token::LineBreak
+                | Token::ParagraphBreak
+                | Token::RightBlock => {
+                    window_end = window_end.max(token.span.start);
+                    break;
+                }
+                Token::InputEnd => return false,
+                Token::LeftComment => {
+                    let Some((next, end)) =
+                        bracket_run_comment_end(tokens, source, cursor)
+                    else {
+                        return false;
+                    };
+                    skipped_comment = true;
+                    window_end = window_end.max(end);
+                    cursor = next;
+                }
+                _ => {
+                    window_end = window_end.max(token.span.end);
+                    cursor += 1;
+                }
+            }
+        }
+        let Some(window) = source.get(head_start..window_end) else {
+            return true;
+        };
+        if bracket_run_segment_may_form(tokens, source, index, cursor) {
+            return true;
+        }
+        if !skipped_comment {
+            let verdict = bracket_run_collected_may_match(window, layout);
+            self.stretch = Some(BracketRunNameStretch {
+                head_index: index,
+                terminator: cursor,
+                window_end,
+                skipped_comment: false,
+                first_letter: None,
+            });
+            return verdict;
+        }
+        let first_letter = window
+            .bytes()
+            .position(|byte| byte.is_ascii_alphabetic())
+            .map(|offset| head_start + offset);
+        self.stretch = Some(BracketRunNameStretch {
+            head_index: index,
+            terminator: cursor,
+            window_end,
+            skipped_comment: true,
+            first_letter,
+        });
+        first_letter.is_some()
+    }
+
+    fn reset(&mut self) {
+        self.stretch = None;
+    }
+}
+
+fn bracket_run_comment_end(
+    tokens: &[ExtractedToken<'_>],
+    source: &str,
+    comment: usize,
+) -> Option<(usize, usize)> {
+    let mut index = comment + 1;
+    loop {
+        let token = tokens.get(index)?;
+        if matches!(
+            token.token,
+            Token::GeneratedPageLink | Token::GeneratedTagLinks | Token::RuntimeText
+        ) {
+            return None;
+        }
+        let window = self::collect::TokenWindow::from_slice(&tokens[index..])?;
+        if let Some(count) = self::collect::comment_closer_token_count_at(window, 0) {
+            let end = tokens
+                .get(index + count)
+                .map_or(source.len(), |token| token.span.start);
+            return Some((index + count, end));
+        }
+        if token.token == Token::InputEnd {
+            return None;
+        }
+        index += 1;
+    }
+}
+
 fn bracket_run_iftags_head_may_start(
     tokens: &[ExtractedToken<'_>],
     index: usize,
