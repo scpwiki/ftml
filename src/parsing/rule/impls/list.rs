@@ -1178,6 +1178,7 @@ fn collapse_wikidot_run_element_in<'t>(element: Element<'t>, in_run: bool) -> El
             items,
             attributes,
             wikidot_explicit_block,
+            wikidot_unclosed,
         } => {
             let child_in_run = in_run || !wikidot_explicit_block;
             let items = items
@@ -1203,6 +1204,7 @@ fn collapse_wikidot_run_element_in<'t>(element: Element<'t>, in_run: bool) -> El
                 items,
                 attributes,
                 wikidot_explicit_block,
+                wikidot_unclosed,
             };
             if wikidot_explicit_block && in_run {
                 hoist_fuse_wikidot_run_items(list)
@@ -1257,6 +1259,7 @@ fn collapse_wikidot_run_list<'t>(element: Element<'t>) -> Element<'t> {
         mut items,
         attributes,
         wikidot_explicit_block,
+        wikidot_unclosed,
     } = element
     else {
         return element;
@@ -1287,6 +1290,7 @@ fn collapse_wikidot_run_list<'t>(element: Element<'t>) -> Element<'t> {
             items,
             attributes,
             wikidot_explicit_block,
+            wikidot_unclosed,
         };
     }
     let formation_present = match &items[0] {
@@ -1301,6 +1305,7 @@ fn collapse_wikidot_run_list<'t>(element: Element<'t>) -> Element<'t> {
             items,
             attributes,
             wikidot_explicit_block,
+            wikidot_unclosed,
         };
     }
     let inner = match items.pop() {
@@ -1338,6 +1343,7 @@ fn collapse_wikidot_run_list<'t>(element: Element<'t>) -> Element<'t> {
                 items,
                 attributes,
                 wikidot_explicit_block,
+                wikidot_unclosed,
             };
         }
     };
@@ -1351,6 +1357,7 @@ fn hoist_wikidot_run_list<'t>(native_ltype: ListType, inner: Element<'t>) -> Ele
         items,
         attributes,
         wikidot_explicit_block,
+        wikidot_unclosed,
     } = inner
     else {
         return inner;
@@ -1361,6 +1368,7 @@ fn hoist_wikidot_run_list<'t>(native_ltype: ListType, inner: Element<'t>) -> Ele
             items,
             attributes,
             wikidot_explicit_block,
+            wikidot_unclosed,
         });
     }
     let items = items.into_iter().flat_map(fuse_wikidot_run_item).collect();
@@ -1369,6 +1377,7 @@ fn hoist_wikidot_run_list<'t>(native_ltype: ListType, inner: Element<'t>) -> Ele
         items,
         attributes,
         wikidot_explicit_block,
+        wikidot_unclosed,
     }
 }
 
@@ -1378,6 +1387,7 @@ fn hoist_fuse_wikidot_run_items<'t>(list: Element<'t>) -> Element<'t> {
         items,
         attributes,
         wikidot_explicit_block,
+        wikidot_unclosed,
     } = list
     else {
         return list;
@@ -1387,6 +1397,7 @@ fn hoist_fuse_wikidot_run_items<'t>(list: Element<'t>) -> Element<'t> {
         items: items.into_iter().flat_map(fuse_wikidot_run_item).collect(),
         attributes,
         wikidot_explicit_block,
+        wikidot_unclosed,
     }
 }
 
