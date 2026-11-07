@@ -24,7 +24,7 @@ use crate::parsing::rule::impls::block::RULE_BLOCK;
 use crate::settings::WikitextMode;
 use crate::tree::{
     AcceptsPartial, AttributeMap, ContainerType, PartialElement, Table, TableCell,
-    TableRow, TableType,
+    TableRow, TableType, WikidotBlockShell,
 };
 use std::borrow::Cow;
 use std::num::NonZeroU32;
@@ -1066,14 +1066,15 @@ fn parse_column_span_semantic(value: &str) -> Option<NonZeroU32> {
 
 fn strip_cell_paragraph_boundaries(elements: &mut Vec<Element<'_>>) {
     let mut leading_empty = 0;
-    for element in elements.iter_mut() {
-        let Element::Container(paragraph) = element else {
+    for index in 0..elements.len() {
+        let keep_break_before_align = next_content_is_align(elements, index);
+        let Element::Container(paragraph) = &mut elements[index] else {
             break;
         };
         if paragraph.ctype() != ContainerType::Paragraph {
             break;
         }
-        trim_cell_whitespace(paragraph.elements_mut());
+        trim_cell_paragraph(paragraph.elements_mut(), keep_break_before_align);
         if !paragraph.elements().is_empty() {
             break;
         }
@@ -1092,6 +1093,45 @@ fn strip_cell_paragraph_boundaries(elements: &mut Vec<Element<'_>>) {
             break;
         }
         elements.pop();
+    }
+}
+
+fn next_content_is_align(elements: &[Element<'_>], index: usize) -> bool {
+    elements[index + 1..]
+        .iter()
+        .find(|element| {
+            !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
+        })
+        .is_some_and(is_align_block)
+}
+
+fn is_align_block(element: &Element<'_>) -> bool {
+    match element {
+        Element::Container(container) => {
+            matches!(container.ctype(), ContainerType::Align(_))
+        }
+        Element::Partial(PartialElement::WikidotBlockOpen(
+            WikidotBlockShell::Align { .. },
+        )) => true,
+        _ => false,
+    }
+}
+
+fn trim_cell_paragraph(elements: &mut Vec<Element<'_>>, keep_trailing_break: bool) {
+    let had_trailing_break = elements
+        .iter()
+        .rev()
+        .find(|element| {
+            !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
+        })
+        .is_some_and(|element| *element == Element::LineBreak);
+    trim_cell_whitespace(elements);
+    if keep_trailing_break
+        && had_trailing_break
+        && !elements.is_empty()
+        && !matches!(elements.last(), Some(Element::LineBreak))
+    {
+        elements.push(Element::LineBreak);
     }
 }
 
