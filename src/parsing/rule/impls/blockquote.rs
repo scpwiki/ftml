@@ -21,7 +21,7 @@
 use super::footnote_first::{
     remove_first_footnote, starts_footnote, unowned_footnote_first,
 };
-use super::line_owner::{LineOwner, try_consume_lost_owner_block};
+use super::line_owner::{LineOwner, LostOwnerBlock, try_consume_lost_owner_block};
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::paragraph::{
@@ -405,6 +405,149 @@ fn is_iftags_open_at(source: &str, at: usize) -> bool {
         && bytes[6] != b'_'
 }
 
+struct MidlineHoist<'r, 't> {
+    prefix: Vec<Element<'t>>,
+    prefix_errors: Vec<ParseError>,
+    committed: Parser<'r, 't>,
+    lost: LostOwnerBlock<'t>,
+}
+
+/// An explicit `[[ul]]` or `[[ol]]` that appears after other content on a
+/// quote line, with an unowned body, ends the quote and hoists out, the same
+/// as when it starts the line. The prefix is either inline content (the quote
+/// keeps it as a bare row) or a bare native list marker (live drops both
+/// shells). Returns the collected prefix and the parser state after the
+/// hoisted list, or None when the line is not this shape.
+fn try_midline_lost_owner_list<'r, 't>(
+    parser: &Parser<'r, 't>,
+    absolute_depth: usize,
+    physical_depth: usize,
+) -> Option<MidlineHoist<'r, 't>>
+where
+    'r: 't,
+{
+    let source = parser.full_text().inner();
+    let mut prefix_kinds: Vec<Token> = Vec::new();
+    let mut head_index = None;
+    let mut head_start = 0;
+    for (index, token) in std::iter::once(parser.current())
+        .chain(parser.remaining().iter())
+        .enumerate()
+    {
+        match token.token {
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => break,
+            Token::LeftBlock => {
+                head_index = Some(index);
+                head_start = token.span.start;
+                break;
+            }
+            kind => prefix_kinds.push(kind),
+        }
+    }
+    let Some(head_index) = head_index else { return None; };
+    if head_index == 0 {
+        return None;
+    }
+    let marker_only = prefix_kinds.len() <= 2
+        && matches!(
+            prefix_kinds.first(),
+            Some(Token::BulletItem | Token::NumberedItem)
+        )
+        && prefix_kinds[1..]
+            .iter()
+            .all(|kind| *kind == Token::Whitespace);
+    if !marker_only
+        && (prefix_kinds.iter().all(|kind| *kind == Token::Whitespace)
+            || prefix_kinds.iter().any(|kind| {
+                matches!(
+                    kind,
+                    Token::Quote
+                        | Token::BulletItem
+                        | Token::NumberedItem
+                        | Token::Heading
+                        | Token::Colon
+                )
+            }))
+    {
+        return None;
+    }
+
+    let mut head_parser = parser.clone();
+    for _ in 0..head_index {
+        head_parser.step().ok()?;
+    }
+    let (name, _, _) = head_parser.clone().get_block_name(false).ok()?;
+    let view = name.strip_suffix('_').unwrap_or(&name);
+    if !view.eq_ignore_ascii_case("ul") && !view.eq_ignore_ascii_case("ol") {
+        return None;
+    }
+    let after_head_line = &source[head_start.min(source.len())..];
+    let line_end = after_head_line.find('\n')?;
+    let next_line = after_head_line[line_end + 1..].lines().next()?;
+    if !next_line.trim_start().starts_with("[[") {
+        return None;
+    }
+
+    let mut prefix = Vec::new();
+    let mut prefix_errors = Vec::new();
+    if !marker_only {
+        let mut collect_parser = parser.clone();
+        collect_parser.set_native_blockquote_depth(Some(absolute_depth));
+        let close = [
+            ParseCondition::current(Token::LineBreak),
+            ParseCondition::current(Token::ParagraphBreak),
+            ParseCondition::current(Token::InputEnd),
+            ParseCondition::current(Token::LeftBlock),
+        ];
+        let Ok(result) = collect_native_blockquote_line(&mut collect_parser, &close) else { return None; };
+        let line = result.item;
+        let collect_errors = result.errors;
+        if !line.escaped_units.is_empty() {
+            return None;
+        }
+        prefix = line.elements;
+        prefix_errors = collect_errors;
+        while matches!(prefix.last(), Some(Element::Text(text)) if text.chars().all(|c| c.is_whitespace())) {
+            prefix.pop();
+        }
+        if let Some(Element::Text(text)) = prefix.last_mut() {
+            let trimmed = text.trim_end_matches([' ', '\t']);
+            if trimmed.len() < text.len() {
+                if trimmed.is_empty() {
+                    prefix.pop();
+                } else {
+                    *text = trimmed.to_owned().into();
+                }
+            }
+        }
+        if prefix.is_empty()
+            || prefix
+                .iter()
+                .any(|element| !element.paragraph_safe() || matches!(element, Element::LineBreak))
+        {
+            return None;
+        }
+    }
+
+    head_parser.mark_virtual_start_of_line();
+    let lost = try_consume_lost_owner_block(
+        &mut head_parser,
+        LineOwner::Quote {
+            depth: physical_depth,
+        },
+    )
+    .ok()??;
+    if !lost.hoisted_list {
+        return None;
+    }
+    Some(MidlineHoist {
+        prefix,
+        prefix_errors,
+        committed: head_parser,
+        lost,
+    })
+}
+
 /// Whether the token stream after a hoisted list begins a block construct on
 /// the next line. Live keeps the list's line break only before a block; inline
 /// text on the next line joins the list without one.
@@ -689,6 +832,55 @@ fn try_consume_fn<'r, 't>(
                     )
                 })
                 .expect("tokenization always ends with input-end");
+        if parser.settings().layout.legacy()
+            && let Some(midline) =
+                try_midline_lost_owner_list(parser, absolute_depth, physical_depth)
+        {
+            let MidlineHoist {
+                prefix,
+                prefix_errors,
+                committed,
+                lost,
+            } = midline;
+            errors.extend(prefix_errors);
+            errors.extend(lost.errors);
+            if lost.hoisted_list
+                && let Some((_, _, row)) = depths.last_mut()
+            {
+                row.paragraph_safe = false;
+                row.keep_trailing_break = true;
+                if !matches!(row.elements.last(), Some(Element::LineBreak)) {
+                    row.elements.push(Element::LineBreak);
+                }
+            }
+            if prefix.is_empty() {
+                consumed_pruned_row = true;
+            } else {
+                depths.push((
+                    depth - 1,
+                    (),
+                    NativeQuoteRow {
+                        elements: prefix,
+                        paragraph_safe: false,
+                        paragraph_split: None,
+                        empty_spaced: false,
+                        indent: row_indent,
+                        source_line: None,
+                        cut_boundary: false,
+                        keep_trailing_break: false,
+                    },
+                ));
+            }
+            parser.update(&committed);
+            escaped_elements.extend(lost.body);
+            if lost.append_unquoted_close_break
+                || lost.hoisted_list && next_line_starts_block(parser)
+            {
+                escaped_elements.push(Element::LineBreak);
+            }
+            break;
+        }
+
         parser.set_native_blockquote_depth(Some(absolute_depth));
         let result = collect_native_blockquote_line(parser, close);
         parser.set_native_blockquote_depth(original_depth);
