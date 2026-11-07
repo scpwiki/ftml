@@ -164,6 +164,7 @@ pub use self::embed_audio::BLOCK_EMBED_AUDIO;
 pub use self::embed_video::BLOCK_EMBED_VIDEO;
 pub use self::equation_ref::BLOCK_EQUATION_REF;
 pub use self::file::BLOCK_FILE;
+pub(in crate::parsing::rule::impls::block) use self::footnote::parse_footnote_ref;
 pub use self::footnote::{BLOCK_FOOTNOTE, BLOCK_FOOTNOTE_BLOCK};
 pub use self::gallery::BLOCK_GALLERY;
 pub use self::hidden::BLOCK_HIDDEN;

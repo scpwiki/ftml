@@ -7066,6 +7066,7 @@ where
                     scan
                 };
                 let mut in_quote = false;
+                let mut head_terminated = false;
                 loop {
                     let current = self.current();
                     if current.token == Token::InputEnd {
@@ -7129,6 +7130,18 @@ where
                                 _ => {}
                             },
                         }
+                        if block_rule.name == "block-collapsible"
+                            && current.token == Token::LeftBlock
+                            && let Some((range, head_closed)) =
+                                self.try_consume_collapsible_head_footnote()?
+                        {
+                            elisions.push(range);
+                            if head_closed {
+                                head_terminated = true;
+                                break;
+                            }
+                            continue;
+                        }
                         if !raw_head
                             && current.token == Token::LeftBlock
                             && let Some(segment) = consume_iftags_segment(self)?
@@ -7155,6 +7168,18 @@ where
                     }
                     if current.token == Token::DoubleQuote {
                         in_quote = !in_quote;
+                    }
+                    if block_rule.name == "block-collapsible"
+                        && current.token == Token::LeftBlock
+                        && let Some((range, head_closed)) =
+                            self.try_consume_collapsible_head_footnote()?
+                    {
+                        elisions.push(range);
+                        if head_closed {
+                            head_terminated = true;
+                            break;
+                        }
+                        continue;
                     }
                     if !raw_head
                         && current.token == Token::LeftBlock
@@ -7218,8 +7243,9 @@ where
                 let head =
                     CommentElidedText::new(self.full_text().inner(), span, comments)
                         .with_segments(elisions);
-                let fused_close = self.current().token == Token::RightLink;
-                if fused_close {
+                let fused_close =
+                    head_terminated || self.current().token == Token::RightLink;
+                if fused_close && !head_terminated {
                     self.note_fused_name_residual(self.current().span.end);
                     self.step()?;
                 }
@@ -7233,6 +7259,47 @@ where
             in_head && !right_block_consumed,
         )?;
         Ok((arguments, body_start))
+    }
+
+    fn try_consume_collapsible_head_footnote(
+        &mut self,
+    ) -> Result<Option<(std::ops::Range<usize>, bool)>, ParseError> {
+        if self.current().token != Token::LeftBlock {
+            return Ok(None);
+        }
+        let start = self.current().span.start;
+        let mut probe = self.clone();
+        probe.get_optional_space()?;
+        let Ok((name, in_head, _)) = probe.get_block_name(false) else {
+            return Ok(None);
+        };
+        if !name.eq_ignore_ascii_case("footnote") {
+            return Ok(None);
+        }
+        let before = self.footnote_count();
+        probe.set_block(&super::blocks::BLOCK_FOOTNOTE);
+        let parsed = super::blocks::parse_footnote_ref(
+            &mut probe, "footnote", start, false, false, in_head,
+        );
+        let Ok(parsed) = parsed else {
+            self.truncate_footnotes(before);
+            return Ok(None);
+        };
+        if self.footnote_count() == before {
+            self.truncate_footnotes(before);
+            return Ok(None);
+        }
+        let fused = matches!(
+            &parsed.item,
+            Elements::Multiple(elements)
+                if matches!(elements.last(), Some(Element::Text(text)) if text.as_ref() == "]")
+        );
+        self.update(&probe);
+        let head_closed = fused && self.current().token == Token::RightBracket;
+        if head_closed {
+            self.step()?;
+        }
+        Ok(Some((start..self.current().span.start, head_closed)))
     }
 
     pub fn get_head_name_map(
