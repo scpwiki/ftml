@@ -484,8 +484,15 @@ where
         *paragraph_safe &= item_paragraph_safe;
         parser.update(&sub_parser);
         if is_close {
-            let escaped = elements.split_off(boundary);
+            let mut escaped = elements.split_off(boundary);
             trim_wikidot_flat_close_space(&mut elements);
+            if ends_at_break
+                && !ends_run
+                && flat_close_left_inline_residue(&escaped)
+                && !next_line_opens_list(parser)
+            {
+                escaped.push(Element::LineBreak);
+            }
             let control = if elements.is_empty() {
                 None
             } else {
@@ -651,6 +658,28 @@ where
     *paragraph_safe &= item_paragraph_safe;
     parser.update(&sub_parser);
     Ok(ListItemStep::Item((depth, list_type, elements), ends_run))
+}
+
+fn next_line_opens_list(parser: &Parser) -> bool {
+    let mut probe = parser.clone();
+    if probe.current().token == Token::Whitespace {
+        if probe.step().is_err() {
+            return false;
+        }
+    }
+    matches!(
+        probe.current().token,
+        Token::BulletItem | Token::NumberedItem
+    )
+}
+
+fn flat_close_left_inline_residue(escaped: &[Element]) -> bool {
+    escaped.iter().any(|element| match element {
+        Element::Partial(PartialElement::WikidotBlockClose(_)) => false,
+        Element::Text(text) => text.chars().any(|c| c != ' ' && c != '\t'),
+        Element::LineBreak | Element::LineBreaks(_) => false,
+        _ => true,
+    })
 }
 
 /// Live Wikidot does not split a list at a comment-only line between items:
