@@ -31,8 +31,8 @@ use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::parser::{QuoteBodyLineStatus, QuoteEscapedUnit};
 use crate::parsing::rule::impls::block::parser::WikidotHeadSpaceRegion;
 use crate::tree::{
-    AcceptsPartial, AttributeMap, Container, LinkLabel, LinkLocation, PartialElement,
-    Tab, TabViewItem,
+    AcceptsPartial, AttributeMap, Container, ContainerType, LinkLabel, LinkLocation,
+    PartialElement, Tab, TabViewItem,
 };
 
 pub const BLOCK_TABVIEW: BlockRule = BlockRule {
@@ -354,6 +354,156 @@ where
     }
 }
 
+fn element_is_plain_prose(element: &Element<'_>) -> bool {
+    match element {
+        Element::Text(_) | Element::LineBreak | Element::LineBreaks(_) => true,
+        Element::Container(container)
+            if container.ctype() == ContainerType::Paragraph =>
+        {
+            container.elements().iter().all(element_is_plain_prose)
+        }
+        _ => false,
+    }
+}
+
+fn relocate_ejected_tab_prose<'t>(
+    items: Vec<TabViewItem<'t>>,
+    remote_ordinals: &[usize],
+) -> (Vec<TabViewItem<'t>>, usize, Vec<(usize, Vec<Element<'t>>)>) {
+    let mut kept = Vec::new();
+    let mut splices = Vec::new();
+    let mut ordinal = 0usize;
+    let mut remote_seen = 0usize;
+    let mut runs = 0usize;
+    for item in items {
+        match item {
+            TabViewItem::Content(content)
+                if content.iter().all(element_is_plain_prose) =>
+            {
+                let mut inline = prose_line(content);
+                if remote_seen > 0 && !inline.is_empty() {
+                    inline.insert(0, Element::Text(std::borrow::Cow::Borrowed("\n")));
+                }
+                if !inline.is_empty() {
+                    splices.push((remote_seen, inline));
+                }
+            }
+            TabViewItem::Content(content) => {
+                runs += 1;
+                kept.push(TabViewItem::Content(content));
+            }
+            TabViewItem::Tab(tab) => {
+                if remote_ordinals.contains(&ordinal) {
+                    remote_seen += 1;
+                }
+                ordinal += 1;
+                kept.push(TabViewItem::Tab(tab));
+            }
+            other => kept.push(other),
+        }
+    }
+    (kept, runs, splices)
+}
+
+fn prose_line<'t>(content: Vec<Element<'t>>) -> Vec<Element<'t>> {
+    let mut inline = Vec::new();
+    for element in content {
+        match element {
+            Element::Container(container)
+                if container.ctype() == ContainerType::Paragraph =>
+            {
+                inline.extend(Vec::<Element<'t>>::from(container));
+            }
+            other => inline.push(other),
+        }
+    }
+    while matches!(
+        inline.last(),
+        Some(Element::LineBreak | Element::LineBreaks(_))
+    ) {
+        inline.pop();
+    }
+    if !inline.is_empty() {
+        inline.push(Element::LineBreak);
+    }
+    inline
+}
+
+fn tabview_tail_element<'t>(tail: Vec<Element<'t>>) -> Element<'t> {
+    let mut attributes = AttributeMap::new();
+    attributes.insert_raw(cow!(crate::tree::WIKIDOT_TABVIEW_TAIL_MARKER), cow!(""));
+    Element::Container(Container::new(ContainerType::Div, tail, attributes))
+}
+
+fn div_closer_line<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    if parser.current().token != Token::LeftBlockEnd {
+        return false;
+    }
+    let mut end = parser.clone();
+    let Ok(name) = end.get_end_block() else {
+        return false;
+    };
+    if !name.eq_ignore_ascii_case("div") {
+        return false;
+    }
+    if end.get_optional_space().is_err() {
+        return false;
+    }
+    matches!(
+        end.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    )
+}
+
+fn absorb_yielded_div_tail<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<Vec<Element<'t>>>
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    let mut tail = Vec::new();
+    let mut saw_text = false;
+    loop {
+        match probe.current().token {
+            Token::InputEnd | Token::ParagraphBreak => return None,
+            Token::LineBreak => {
+                let mut next = probe.clone();
+                next.step().ok()?;
+                if saw_text && div_closer_line(&next) {
+                    probe = next;
+                    continue;
+                }
+                if saw_text {
+                    return None;
+                }
+                tail.push(Element::LineBreak);
+                probe.step().ok()?;
+            }
+            Token::LeftBlockEnd if div_closer_line(&probe) => {
+                let mut end = probe.clone();
+                end.get_end_block().ok()?;
+                end.get_optional_space().ok()?;
+                parser.update(&end);
+                return Some(tail);
+            }
+            Token::Identifier | Token::Other | Token::Whitespace => {
+                if probe.current().token != Token::Whitespace {
+                    saw_text = true;
+                }
+                tail.push(Element::Text(std::borrow::Cow::Borrowed(
+                    probe.current().slice,
+                )));
+                probe.step().ok()?;
+            }
+            _ => return None,
+        }
+    }
+}
+
 fn parse_tabview<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -448,6 +598,7 @@ fn parse_tabview<'r, 't>(
             return Err(error);
         }
     };
+    let div_yielded = parser.take_wikidot_div_yielded_to_tab();
 
     let mut remote_ordinals = Vec::new();
     if quote_ejection {
@@ -484,6 +635,15 @@ fn parse_tabview<'r, 't>(
         }
     }
     close_content_run(&mut run, &mut items, &mut runs, true);
+
+    let mut pending_splices = Vec::new();
+    if quote_ejection && !remote_ordinals.is_empty() && parser.tab_split_has_panel() {
+        let (kept, kept_runs, moved) =
+            relocate_ejected_tab_prose(std::mem::take(&mut items), &remote_ordinals);
+        items = kept;
+        runs = kept_runs;
+        pending_splices = moved;
+    }
 
     let records_added = parser.degraded_title_record_count() - records_at_entry;
     let native = !parser.settings().layout.legacy();
@@ -544,6 +704,14 @@ fn parse_tabview<'r, 't>(
             }
             ordinal += 1;
         }
+    }
+
+    if !pending_splices.is_empty() {
+        parser.insert_tab_split_segment_runs(pending_splices);
+    }
+
+    if div_yielded && let Some(tail) = absorb_yielded_div_tail(parser) {
+        items.push(TabViewItem::Content(vec![tabview_tail_element(tail)]));
     }
 
     let tabview = Element::TabView(items);

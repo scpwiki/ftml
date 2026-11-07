@@ -182,6 +182,7 @@ pub(super) struct BlockScanCache<'t> {
     /// ejection: every later tab opener in that view lives in a later quote
     /// segment (Wikidot's cross-segment panel split).
     wikidot_tabview_ejected: Cell<bool>,
+    wikidot_div_yielded_to_tab: Cell<bool>,
     /// Ordinal of the next tab parsed inside the current quoted tabview.
     wikidot_tabview_tab_ordinal: Cell<usize>,
     /// Ordinals of tabs whose panels render outside the navset (bare panel in
@@ -432,6 +433,68 @@ pub(crate) fn wikidot_anchor_block_open_depth_before(
         search = idx + 2;
     }
     depth
+}
+
+fn segment_has_tab_panel(elements: &[Element<'_>]) -> bool {
+    let Element::Container(container) = elements.last() else {
+        return false;
+    };
+    if container.ctype() != crate::tree::ContainerType::Blockquote {
+        return false;
+    }
+    let nested = container.elements();
+    if matches!(
+        nested.last(),
+        Some(Element::Container(inner))
+            if inner.ctype() == crate::tree::ContainerType::Blockquote
+    ) {
+        return segment_has_tab_panel(nested);
+    }
+    nested.iter().any(|element| {
+        matches!(
+            element,
+            Element::Container(panel)
+                if panel
+                    .attributes()
+                    .get()
+                    .contains_key(crate::tree::WIKIDOT_TAB_PANEL_MARKER)
+        )
+    })
+}
+
+fn tab_split_panel_children<'a, 't>(
+    elements: &'a mut Vec<Element<'t>>,
+) -> Option<&'a mut Vec<Element<'t>>> {
+    let is_quote = matches!(
+        elements.last(),
+        Some(Element::Container(container))
+            if container.ctype() == crate::tree::ContainerType::Blockquote
+    );
+    if !is_quote {
+        return None;
+    }
+    let Element::Container(container) = elements.last_mut()? else {
+        return None;
+    };
+    let nested = container.elements_mut();
+    if matches!(
+        nested.last(),
+        Some(Element::Container(inner))
+            if inner.ctype() == crate::tree::ContainerType::Blockquote
+    ) {
+        return tab_split_panel_children(nested);
+    }
+    let has_panel = nested.iter().any(|element| {
+        matches!(
+            element,
+            Element::Container(panel)
+                if panel
+                    .attributes()
+                    .get()
+                    .contains_key(crate::tree::WIKIDOT_TAB_PANEL_MARKER)
+        )
+    });
+    has_panel.then_some(nested)
 }
 
 impl<'r, 't> Parser<'r, 't> {
@@ -1823,6 +1886,27 @@ impl<'r, 't> Parser<'r, 't> {
             .set(value);
     }
 
+    pub(crate) fn set_wikidot_div_yielded_to_tab(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_div_yielded_to_tab
+            .set(true);
+    }
+
+    pub(crate) fn wikidot_div_yielded_to_tab(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_div_yielded_to_tab
+            .get()
+    }
+
+    pub(crate) fn take_wikidot_div_yielded_to_tab(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let value = cache.wikidot_div_yielded_to_tab.get();
+        cache.wikidot_div_yielded_to_tab.set(false);
+        value
+    }
+
     pub(crate) fn wikidot_tabview_tab_ordinal(&self) -> usize {
         self.block_end_scan_cache
             .borrow()
@@ -1933,6 +2017,50 @@ impl<'r, 't> Parser<'r, 't> {
         }
         current.push(element);
         true
+    }
+
+    pub(crate) fn tab_split_has_panel(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        cache.quote_escaped_units.iter().any(|unit| {
+            let QuoteEscapedUnit::Elements(elements, _) = unit else {
+                return false;
+            };
+            segment_has_tab_panel(elements)
+        })
+    }
+
+    pub(crate) fn insert_tab_split_segment_runs(
+        &self,
+        splices: Vec<(usize, Vec<Element<'t>>)>,
+    ) {
+        if splices.iter().all(|(_, extra)| extra.is_empty()) {
+            return;
+        }
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let units = &mut cache.quote_escaped_units;
+        let Some(index) = units.iter().enumerate().rev().find_map(|(index, unit)| {
+            let QuoteEscapedUnit::Elements(elements, _) = unit else {
+                return None;
+            };
+            segment_has_tab_panel(elements).then_some(index)
+        }) else {
+            return;
+        };
+        let QuoteEscapedUnit::Elements(elements, _) = &mut units[index] else {
+            return;
+        };
+        let Some(current) = tab_split_panel_children(elements) else {
+            return;
+        };
+        for (at, extra) in splices.into_iter().rev() {
+            if extra.is_empty() {
+                continue;
+            }
+            let at = at.min(current.len());
+            for (offset, element) in extra.into_iter().enumerate() {
+                current.insert(at + offset, element);
+            }
+        }
     }
 
     pub(crate) fn push_quote_escaped_unit(&self, unit: QuoteEscapedUnit<'t>) {
