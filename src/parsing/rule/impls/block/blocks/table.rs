@@ -341,20 +341,24 @@ fn partition_wikidot_foster<'t>(tail: Vec<Element<'t>>) -> Vec<Element<'t>> {
             Element::Partial(ref partial) if partial.is_wikidot_block_control()
         );
         if hoisted {
-            if !run.is_empty() {
-                pre.push(Element::Partial(PartialElement::WikidotFoster(
-                    std::mem::take(&mut run),
-                )));
-            }
+            push_foster_run(&mut run, &mut pre);
             pre.push(element);
         } else {
             run.push(element);
         }
     }
-    if !run.is_empty() {
-        pre.push(Element::Partial(PartialElement::WikidotFoster(run)));
-    }
+    push_foster_run(&mut run, &mut pre);
     pre
+}
+
+fn push_foster_run<'t>(run: &mut Vec<Element<'t>>, pre: &mut Vec<Element<'t>>) {
+    if run.iter().all(|element| element.is_whitespace()) {
+        run.clear();
+    } else if !run.is_empty() {
+        pre.push(Element::Partial(PartialElement::WikidotFoster(
+            std::mem::take(run),
+        )));
+    }
 }
 
 fn is_cell_closer(source: &str) -> bool {

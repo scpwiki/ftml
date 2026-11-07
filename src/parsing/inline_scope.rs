@@ -4818,6 +4818,7 @@ struct WikidotFrameAssembly<'t> {
     output: Vec<Element<'t>>,
     stack: Vec<WikidotFrameBuild<'t>>,
     collapsible_closes: BTreeMap<usize, WikidotCollapsibleClose<'t>>,
+    note_opens: BTreeSet<usize>,
     heading_frame: Option<WikidotHeadingFrame<'t>>,
     reopen: Option<WikidotReopenState<'t>>,
     forced_collapsible_closes: BTreeSet<usize>,
@@ -4832,6 +4833,7 @@ impl<'t> WikidotFrameAssembly<'t> {
             output: Vec::new(),
             stack: Vec::new(),
             collapsible_closes: BTreeMap::new(),
+            note_opens: BTreeSet::new(),
             heading_frame: None,
             reopen: None,
             forced_collapsible_closes: BTreeSet::new(),
@@ -4933,7 +4935,8 @@ impl<'t> WikidotFrameAssembly<'t> {
                     link: None,
                 });
             }
-            WikidotBlockShell::Note { .. } => {
+            WikidotBlockShell::Note { head } => {
+                self.note_opens.insert(head);
                 self.stack.push(WikidotFrameBuild {
                     attributes: wikidot_frame_attributes(&[("class", "wiki-note")]),
                     children: Vec::new(),
@@ -5159,7 +5162,13 @@ impl<'t> WikidotFrameAssembly<'t> {
                 self.pop_frame();
                 self.pop_frame();
             }
-            WikidotBlockCloseKind::Note { .. } | WikidotBlockCloseKind::Align { .. } => {
+            WikidotBlockCloseKind::Note { head } => {
+                self.strip_paragraph_before_close();
+                if self.note_opens.remove(&head) {
+                    self.pop_frame();
+                }
+            }
+            WikidotBlockCloseKind::Align { .. } => {
                 self.strip_paragraph_before_close();
                 self.pop_frame();
             }
@@ -5210,6 +5219,57 @@ impl<'t> WikidotFrameAssembly<'t> {
         }
     }
 
+    fn wrap_note_frame_children(attributes: &AttributeMap<'_>, children: &mut Vec<Element<'_>>) {
+        let is_note = attributes
+            .get()
+            .get("class")
+            .is_some_and(|value| value.as_ref() == "wiki-note");
+        if !is_note || children.is_empty() {
+            return;
+        }
+        if matches!(children.first(), Some(Element::LineBreak)) {
+            return;
+        }
+        let mut previous_break = false;
+        for element in children.iter() {
+            let inline = match element {
+                Element::Text(_) | Element::Footnote(_) => true,
+                Element::LineBreak => !previous_break,
+                Element::Container(container) => matches!(
+                    container.ctype(),
+                    ContainerType::Bold
+                        | ContainerType::Italics
+                        | ContainerType::Underline
+                        | ContainerType::Superscript
+                        | ContainerType::Subscript
+                        | ContainerType::Strikethrough
+                        | ContainerType::Monospace
+                        | ContainerType::Span
+                        | ContainerType::HeadingLabel
+                        | ContainerType::Mark
+                        | ContainerType::Insertion
+                        | ContainerType::Deletion
+                        | ContainerType::Hidden
+                        | ContainerType::Invisible
+                        | ContainerType::Size
+                        | ContainerType::Ruby
+                        | ContainerType::RubyText
+                ),
+                _ => false,
+            };
+            if !inline {
+                return;
+            }
+            previous_break = matches!(element, Element::LineBreak);
+        }
+        let wrapped = Element::Container(Container::new(
+            ContainerType::Paragraph,
+            std::mem::take(children),
+            AttributeMap::new(),
+        ));
+        children.push(wrapped);
+    }
+
     fn pop_frame(&mut self) {
         let Some(mut frame) = self.stack.pop() else {
             return;
@@ -5220,6 +5280,7 @@ impl<'t> WikidotFrameAssembly<'t> {
         if matches!(frame.children.last(), Some(Element::LineBreak)) {
             frame.children.pop();
         }
+        Self::wrap_note_frame_children(&frame.attributes, &mut frame.children);
         let suffix = self.take_row_suffix(&mut frame);
         if frame.link.is_none() {
             form_wikidot_frame_paragraphs(&mut frame.children);
@@ -5264,6 +5325,7 @@ impl<'t> WikidotFrameAssembly<'t> {
             if matches!(frame.children.last(), Some(Element::LineBreak)) {
                 frame.children.pop();
             }
+            Self::wrap_note_frame_children(&frame.attributes, &mut frame.children);
             let suffix = self.take_row_suffix(&mut frame);
             if frame.link.is_none() {
                 form_wikidot_frame_paragraphs(&mut frame.children);
@@ -5306,6 +5368,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                 }
             }
             let omit_close = self.at_root;
+            Self::wrap_note_frame_children(&frame.attributes, &mut frame.children);
             let suffix = self.take_row_suffix(&mut frame);
             if frame.link.is_none() {
                 form_wikidot_frame_paragraphs(&mut frame.children);
