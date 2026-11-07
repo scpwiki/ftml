@@ -22,7 +22,8 @@ use super::BLOCK_ANCHOR;
 use super::BLOCK_SPAN;
 use super::prelude::*;
 use super::{
-    consume_wikidot_flat_head_break, wikidot_flat_pair_for_head, wikidot_scan_pairs_head,
+    consume_wikidot_flat_head_break, wikidot_eject_after_lost_owner_collapsible,
+    wikidot_flat_pair_for_head, wikidot_scan_pairs_head,
 };
 use crate::delayed::DelayedElement;
 use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal};
@@ -1278,7 +1279,7 @@ fn parse_fn<'r, 't>(
 
     let mut attributes = wikidot_div_head_attributes(parser, &mut arguments);
     arguments.insert_explicit_empty_marker(&mut attributes);
-    let hoisted = if parser.settings().layout.legacy() {
+    let mut hoisted = if parser.settings().layout.legacy() {
         wikidot_div_try_hoist_trailing_literal_close_lists(
             &mut elements,
             &attributes,
@@ -1287,6 +1288,24 @@ fn parse_fn<'r, 't>(
     } else {
         None
     };
+    if parser.settings().layout.legacy()
+        && !flag_score
+        && attributes.get().is_empty()
+        && let Some(ejected) = wikidot_eject_after_lost_owner_collapsible(
+            parser,
+            &mut elements,
+            body_start_byte,
+            body_end_byte,
+        )
+    {
+        match hoisted {
+            Some(mut trailing) => {
+                trailing.extend(ejected);
+                hoisted = Some(trailing);
+            }
+            None => hoisted = Some(ejected),
+        }
+    }
     let mut row_suffix =
         crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements);
     if parser.settings().layout.legacy()

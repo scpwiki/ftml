@@ -21,7 +21,8 @@
 use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
-    trim_wikidot_trailing_explicit_list_break, wikidot_flat_pair_for_head,
+    trim_wikidot_trailing_explicit_list_break, wikidot_eject_after_lost_owner_collapsible,
+    wikidot_flat_pair_for_head,
 };
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{PartialElement, WikidotBlockShell};
@@ -98,6 +99,7 @@ fn parse_note_block<'r, 't>(
 
     let legacy = parser.settings().layout.legacy();
     parser.set_note_flag(legacy);
+    let body_start_byte = parser.current().span.start;
     let body = if legacy {
         parser.get_body_elements_with_context(&BLOCK_NOTE, legacy, body_start, None)
     } else {
@@ -105,10 +107,22 @@ fn parse_note_block<'r, 't>(
     };
     parser.set_note_flag(false);
     let (mut elements, errors, paragraph_safe) = body?.into();
+    let body_end_byte = parser.current().span.start;
+    let mut ejected = Vec::new();
     if legacy {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
         drop_wikidot_trailing_vanish_breaks(&mut elements);
         unwrap_wikidot_paragraph_after_explicit_list(&mut elements);
+        if arguments.is_empty()
+            && let Some(after) = wikidot_eject_after_lost_owner_collapsible(
+                parser,
+                &mut elements,
+                body_start_byte,
+                body_end_byte,
+            )
+        {
+            ejected = after;
+        }
     }
     let row_suffix = if legacy {
         crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements)
@@ -125,10 +139,11 @@ fn parse_note_block<'r, 't>(
     // In the Wikidot layout the note stays paragraph-unsafe: text following
     // the closer is a bare continuation with no fresh paragraph, exactly like
     // the generic div block.
-    if row_suffix.is_empty() {
+    if row_suffix.is_empty() && ejected.is_empty() {
         ok!(paragraph_safe && !legacy; element, errors)
     } else {
         let mut output = vec![element];
+        output.extend(ejected);
         output.extend(row_suffix);
         ok!(false; output, errors)
     }

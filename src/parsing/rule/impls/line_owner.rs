@@ -426,28 +426,167 @@ fn lost_owner_list_body_is_sibling_items(parser: &Parser<'_, '_>, ltype: ListTyp
     })
 }
 
-fn hoisted_leaf_list<'t>(element: Element<'t>, ltype: ListType) -> Option<Element<'t>> {
+/// A hoisted sibling explicit list decomposes into one native list per
+/// run that the explicit list packed: a sibling run that holds a
+/// collapsible (or follows one) is its own list, so the followers of an
+/// item collapsible form a separate list instead of continuing the item
+/// that holds the collapsible.
+fn hoisted_split_lists<'t>(element: Element<'t>, ltype: ListType) -> Vec<Element<'t>> {
     let Element::List {
         attributes, items, ..
     } = element
     else {
-        return None;
+        return Vec::new();
     };
-    let mut leaves = Vec::new();
+    let mut chunks: Vec<Vec<ListItem<'t>>> = Vec::new();
+    let mut current: Vec<ListItem<'t>> = Vec::new();
+    let mut armed = false;
     for item in items {
-        collect_hoisted_leaf_items(item, &mut leaves);
+        collect_hoisted_chunk_item(item, &mut chunks, &mut current, &mut armed);
     }
-    leaves.retain(|item| !hoisted_item_is_empty(item));
-    if leaves.is_empty() {
-        return None;
+    if !current.is_empty() {
+        chunks.push(current);
     }
-    Some(Element::List {
-        ltype,
-        attributes,
-        items: leaves,
-        wikidot_explicit_block: false,
-        wikidot_unclosed: false,
-    })
+    for chunk in &mut chunks {
+        chunk.retain(|item| !hoisted_item_is_empty(item));
+    }
+    chunks
+        .into_iter()
+        .filter(|chunk| !chunk.is_empty())
+        .map(|items| Element::List {
+            ltype,
+            attributes: attributes.clone(),
+            items,
+            wikidot_explicit_block: false,
+            wikidot_unclosed: false,
+        })
+        .collect()
+}
+
+/// Seals the current chunk so the following sibling run starts a new list.
+fn start_new_hoisted_chunk<'t>(
+    chunks: &mut Vec<Vec<ListItem<'t>>>,
+    current: &mut Vec<ListItem<'t>>,
+) {
+    if !current.is_empty() {
+        chunks.push(std::mem::take(current));
+    }
+}
+
+/// Collects one item of a decomposing hoist into the current chunk,
+/// cutting a new chunk at each sibling run past a collapsible.
+fn collect_hoisted_chunk_item<'t>(
+    item: ListItem<'t>,
+    chunks: &mut Vec<Vec<ListItem<'t>>>,
+    current: &mut Vec<ListItem<'t>>,
+    armed: &mut bool,
+) {
+    match item {
+        ListItem::SubList { element } => match *element {
+            Element::List {
+                items,
+                wikidot_explicit_block: false,
+                ..
+            } => {
+                if *armed || items.iter().any(hoisted_item_contains_collapsible) {
+                    start_new_hoisted_chunk(chunks, current);
+                    *armed = true;
+                }
+                for sub in items {
+                    collect_hoisted_chunk_item(sub, chunks, current, armed);
+                }
+            }
+            // An explicit nested list (or any non-list content) keeps
+            // the existing flatten, inside the current chunk.
+            other => {
+                collect_hoisted_leaf_items(
+                    ListItem::SubList {
+                        element: Box::new(other),
+                    },
+                    current,
+                );
+            }
+        },
+        ListItem::Elements {
+            attributes,
+            elements,
+        } => {
+            let mut lists = Vec::new();
+            let mut rest = Vec::new();
+            partition_hoisted_elements(elements, &mut lists, &mut rest);
+            if lists.is_empty() {
+                current.push(ListItem::Elements {
+                    attributes,
+                    elements: rest,
+                });
+                return;
+            }
+            if !rest
+                .iter()
+                .all(|element| matches!(element, Element::LineBreak))
+            {
+                current.push(ListItem::Elements {
+                    attributes,
+                    elements: rest,
+                });
+            }
+            for list in lists {
+                match list {
+                    Element::List {
+                        items,
+                        wikidot_explicit_block: false,
+                        ..
+                    } => {
+                        if *armed || items.iter().any(hoisted_item_contains_collapsible) {
+                            start_new_hoisted_chunk(chunks, current);
+                            *armed = true;
+                        }
+                        for sub in items {
+                            collect_hoisted_chunk_item(sub, chunks, current, armed);
+                        }
+                    }
+                    Element::List { items, .. } => {
+                        for sub in items {
+                            collect_hoisted_leaf_items(sub, current);
+                        }
+                    }
+                    other => {
+                        collect_hoisted_leaf_items(
+                            ListItem::SubList {
+                                element: Box::new(other),
+                            },
+                            current,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn hoisted_item_contains_collapsible(item: &ListItem<'_>) -> bool {
+    match item {
+        ListItem::Elements { elements, .. } => {
+            elements.iter().any(hoisted_element_contains_collapsible)
+        }
+        ListItem::SubList { element } => match &**element {
+            Element::List { items, .. } => items.iter().any(hoisted_item_contains_collapsible),
+            other => hoisted_element_contains_collapsible(other),
+        },
+    }
+}
+
+fn hoisted_element_contains_collapsible(element: &Element<'_>) -> bool {
+    match element {
+        Element::Collapsible { .. } => true,
+        Element::Partial(PartialElement::ListItem(item)) => hoisted_item_contains_collapsible(item),
+        Element::List { items, .. } => items.iter().any(hoisted_item_contains_collapsible),
+        Element::Container(container) => container
+            .elements()
+            .iter()
+            .any(hoisted_element_contains_collapsible),
+        _ => false,
+    }
 }
 
 fn collect_hoisted_leaf_items<'t>(item: ListItem<'t>, leaves: &mut Vec<ListItem<'t>>) {
@@ -604,7 +743,7 @@ where
     let body = if let Some(sibling_ltype) = decompose_siblings {
         let mut elements = elements.into_iter();
         match elements.next() {
-            Some(list) => hoisted_leaf_list(list, sibling_ltype).into_iter().collect(),
+            Some(list) => hoisted_split_lists(list, sibling_ltype),
             None => Vec::new(),
         }
     } else {
