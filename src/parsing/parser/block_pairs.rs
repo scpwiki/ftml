@@ -906,6 +906,20 @@ impl<'t> Scanner<'t> {
         })
     }
 
+    fn starts_line_or_list_item(&self, index: usize) -> bool {
+        let first = self.line_first[self.line_of[index]];
+        self.tokens[first..index].iter().all(|token| {
+            matches!(
+                token.token,
+                Token::Quote
+                    | Token::Whitespace
+                    | Token::InputStart
+                    | Token::BulletItem
+                    | Token::NumberedItem
+            )
+        })
+    }
+
     fn followed_by_break(&self, mut index: usize) -> bool {
         while let Some(token) = self.tokens.get(index) {
             match token.token {
@@ -1524,7 +1538,7 @@ impl<'t> Scanner<'t> {
             | WikidotBlockKind::AlignLeft
             | WikidotBlockKind::AlignJustify => {
                 !self.in_bibliography_body(closer_index)
-                    && self.starts_line(closer_index)
+                    && self.starts_line_or_list_item(closer_index)
                     && self.followed_immediately_by_break(closer_end)
             }
             _ => true,
