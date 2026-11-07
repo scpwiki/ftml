@@ -95,8 +95,6 @@ pub struct ParagraphStack<'t> {
     /// wrapped paragraph start with `<br />` before the following text.
     wikidot_math_next_paragraph_leads_with_br: bool,
     wikidot_toc_next_paragraph_leads_with_br: bool,
-    /// The finished run ends in a simple-row leftover `||`. The next content
-    /// line stays bare, with its leading break kept.
     wikidot_row_suffix_break: bool,
 
     finished: Vec<Element<'t>>,

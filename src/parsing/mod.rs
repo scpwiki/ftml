@@ -837,7 +837,6 @@ pub struct UnstructuredParseResult<'r, 't> {
     /// Whether a footnote block was placed during parsing.
     pub has_footnote_block: bool,
 
-    /// A simple-table row left a `||` that enclosing frames must close before.
     #[serde(default)]
     pub wikidot_row_suffix: bool,
 
