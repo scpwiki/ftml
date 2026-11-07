@@ -5180,6 +5180,9 @@ impl<'t> WikidotFrameAssembly<'t> {
             frame.children.pop();
         }
         let suffix = self.take_row_suffix(&mut frame);
+        if frame.link.is_none() {
+            form_wikidot_frame_paragraphs(&mut frame.children);
+        }
         self.top().push(Element::WikidotBlockFrame {
             attributes: frame.attributes,
             children: frame.children,
@@ -5221,6 +5224,9 @@ impl<'t> WikidotFrameAssembly<'t> {
                 frame.children.pop();
             }
             let suffix = self.take_row_suffix(&mut frame);
+            if frame.link.is_none() {
+                form_wikidot_frame_paragraphs(&mut frame.children);
+            }
             self.top().push(Element::WikidotBlockFrame {
                 attributes: frame.attributes,
                 children: frame.children,
@@ -5260,6 +5266,9 @@ impl<'t> WikidotFrameAssembly<'t> {
             }
             let omit_close = self.at_root;
             let suffix = self.take_row_suffix(&mut frame);
+            if frame.link.is_none() {
+                form_wikidot_frame_paragraphs(&mut frame.children);
+            }
             self.top().push(Element::WikidotBlockFrame {
                 attributes: frame.attributes,
                 children: frame.children,
@@ -5270,6 +5279,89 @@ impl<'t> WikidotFrameAssembly<'t> {
         }
         self.output
     }
+}
+
+fn form_wikidot_frame_paragraphs<'t>(children: &mut Vec<Element<'t>>) {
+    if children.iter().any(|element| {
+        matches!(element, Element::Container(container) if container.ctype() == ContainerType::Paragraph)
+    }) {
+        return;
+    }
+    fn is_break(element: &Element<'_>) -> bool {
+        matches!(element, Element::LineBreak | Element::LineBreaks(_))
+    }
+    let stretch_end = children
+        .iter()
+        .position(|element| !element.paragraph_safe())
+        .unwrap_or(children.len());
+    fn is_void(element: &Element<'_>) -> bool {
+        match element {
+            Element::WikidotBlockFrame {
+                children,
+                collapsible_link: None,
+                ..
+            } => children.iter().all(is_void),
+            Element::Container(container) => container.elements().iter().all(is_void),
+            Element::Text(text) => text.is_empty(),
+            _ => false,
+        }
+    }
+    let qualifies = stretch_end == children.len()
+        || matches!(
+            children.get(stretch_end),
+            Some(Element::Container(container)) if matches!(container.ctype(), ContainerType::Header(_))
+        )
+        || children[stretch_end..].iter().all(is_void);
+    if !qualifies {
+        return;
+    }
+    fn flush<'t>(run: &mut Vec<Element<'t>>, out: &mut Vec<Element<'t>>) {
+        if run.iter().all(is_break) {
+            out.append(run);
+            return;
+        }
+        while run.first().is_some_and(is_break) {
+            run.remove(0);
+        }
+        while run.last().is_some_and(is_break) {
+            run.pop();
+        }
+        if !run.is_empty() {
+            out.push(Element::Container(Container::new(
+                ContainerType::Paragraph,
+                mem::take(run),
+                AttributeMap::new(),
+            )));
+        }
+        run.clear();
+    }
+    let rest: Vec<Element<'t>> = children.split_off(stretch_end);
+    let stretch: Vec<Element<'t>> = mem::take(children);
+    let mut out: Vec<Element<'t>> = Vec::with_capacity(stretch.len() + rest.len());
+    let mut run: Vec<Element<'t>> = Vec::new();
+    let mut break_run = 0_u32;
+    for element in stretch {
+        let breaks = match &element {
+            Element::LineBreak => Some(1),
+            Element::LineBreaks(count) => Some(count.get()),
+            _ => None,
+        };
+        if let Some(units) = breaks {
+            break_run += units;
+            if break_run >= 2 && run.iter().any(|element| !is_break(element)) {
+                flush(&mut run, &mut out);
+                break_run = 0;
+                continue;
+            }
+            run.push(element);
+            continue;
+        }
+        break_run = 0;
+        run.push(element);
+    }
+    flush(&mut run, &mut out);
+    out.extend(rest);
+    *children = out;
 }
 
 fn frame_ejects_row_suffix(attributes: &AttributeMap<'_>) -> bool {
