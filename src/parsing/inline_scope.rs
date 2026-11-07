@@ -2710,6 +2710,20 @@ fn lower_sequence<'t>(
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+                if matches!(
+                    element,
+                    Element::List {
+                        wikidot_explicit_block: true,
+                        ..
+                    }
+                ) {
+                    end_anchor_at_explicit_list(
+                        &mut output,
+                        &mut run,
+                        active,
+                        &mut last_run_outer_scope,
+                    );
+                }
                 lower_children(
                     &mut element,
                     valid,
@@ -3695,6 +3709,25 @@ fn wikidot_close_anchor_scope<'t>(
     if trailing_space {
         output.push(text!(" "));
     }
+}
+
+fn end_anchor_at_explicit_list<'t>(
+    output: &mut Vec<Element<'t>>,
+    run: &mut Vec<Element<'t>>,
+    active: &mut ActiveScopes<'t>,
+    last_run_outer_scope: &mut RunMergeState,
+) {
+    let Some(position) = active.anchor_position() else {
+        return;
+    };
+    if !active.scope_is_pending(position) {
+        close_live_anchor(output, run, active, last_run_outer_scope);
+    }
+    let Some(position) = active.anchor_position() else {
+        return;
+    };
+    active.kill_from(position);
+    active.pop_istack_through_anchor();
 }
 
 fn close_live_anchor<'t>(
