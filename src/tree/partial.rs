@@ -519,6 +519,7 @@ mod tests {
                 PartialElement::Tab(Tab {
                     label: cow!("tab"),
                     elements: vec![text!("contents")],
+                    wikidot_label_spans: Vec::new(),
                 }),
                 "Tab",
                 ParseErrorKind::TabOutsideTabView,

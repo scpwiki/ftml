@@ -18,14 +18,16 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::Element;
 use super::clone::{elements_to_owned, string_to_owned};
+use super::{AttributeMap, Element};
 use std::borrow::Cow;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Tab<'t> {
     pub label: Cow<'t, str>,
     pub elements: Vec<Element<'t>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wikidot_label_spans: Vec<AttributeMap<'t>>,
 }
 
 impl Tab<'_> {
@@ -33,6 +35,11 @@ impl Tab<'_> {
         Tab {
             label: string_to_owned(&self.label),
             elements: elements_to_owned(&self.elements),
+            wikidot_label_spans: self
+                .wikidot_label_spans
+                .iter()
+                .map(AttributeMap::to_owned)
+                .collect(),
         }
     }
 }

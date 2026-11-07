@@ -1,0 +1,55 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "span",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "tab-view",
+                        "data": [
+                            {
+                                "label": "A",
+                                "elements": [
+                                    {
+                                        "element": "table",
+                                        "data": {
+                                            "type": "simple",
+                                            "attributes": {},
+                                            "rows": [
+                                                {
+                                                    "attributes": {},
+                                                    "cells": [
+                                                        {
+                                                            "header": false,
+                                                            "column-span": 1,
+                                                            "align": null,
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "math",
+                                                                    "data": {
+                                                                        "name": null,
+                                                                        "latex-source": "m"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "element": "line-break"
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -667,6 +667,7 @@ fn malformed_partial_elements_render_fallback_html() {
             Element::Partial(PartialElement::Tab(Tab {
                 label: Cow::Borrowed("tab-label"),
                 elements: vec![Element::Text(Cow::Borrowed("tab-body"))],
+                wikidot_label_spans: Vec::new(),
             })),
             Element::Partial(PartialElement::RubyText(RubyText {
                 attributes: AttributeMap::new(),
@@ -725,6 +726,7 @@ fn malformed_partial_elements_render_fallback_text() {
             Element::Partial(PartialElement::Tab(Tab {
                 label: Cow::Borrowed("tab-label"),
                 elements: vec![Element::Text(Cow::Borrowed("tab-body"))],
+                wikidot_label_spans: Vec::new(),
             })),
             "tab-label\ntab-body",
         ),
@@ -765,6 +767,7 @@ fn malformed_partial_elements_render_fallback_text() {
             Element::Partial(PartialElement::Tab(Tab {
                 label: Cow::Borrowed("tab-label"),
                 elements: vec![Element::Text(Cow::Borrowed("tab-body"))],
+                wikidot_label_spans: Vec::new(),
             })),
             "prefix\ntab-label\ntab-body",
         ),
