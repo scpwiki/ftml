@@ -138,7 +138,7 @@ pub fn render_code(
 /// live does: `&`, `<`, `>`, and `"` are escaped, while `'` is left as-is.
 /// (The shared escaped-content path would render `'` as `&#39;`, which live
 /// never emits inside code.)
-fn escape_wikidot_code(contents: &str) -> String {
+pub(crate) fn escape_wikidot_code(contents: &str) -> String {
     let mut out = String::with_capacity(contents.len());
     for ch in contents.chars() {
         match ch {

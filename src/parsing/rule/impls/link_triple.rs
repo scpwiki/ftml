@@ -26,7 +26,7 @@ use crate::parsing::collect::{
     complete_fused_bracket_close, consume_iftags_segment_fused, consume_valid_comment,
     iftags_segment_fused,
 };
-use crate::parsing::{discard_wikidot_controls, trim_wikidot_ascii_cow};
+use crate::parsing::{discard_wikidot_controls, trim_cow, trim_wikidot_ascii_cow};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use crate::url::is_url;
 use std::borrow::Cow;
@@ -341,10 +341,7 @@ fn build_separate<'r, 't>(
     let label = if legacy {
         trim_wikidot_ascii_cow(discard_wikidot_controls(label))
     } else {
-        match label {
-            Cow::Borrowed(label) => Cow::Borrowed(label.trim()),
-            Cow::Owned(label) => Cow::Owned(label.trim().to_owned()),
-        }
+        trim_cow(label)
     };
 
     let parsed_link = parse_link_location(

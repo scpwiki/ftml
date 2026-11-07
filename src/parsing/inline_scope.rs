@@ -4092,7 +4092,7 @@ fn trim_trailing_space(elements: &mut Vec<Element<'_>>) {
     }
 }
 
-fn trim_one_trailing_text_space(elements: &mut Vec<Element<'_>>) {
+pub(crate) fn trim_one_trailing_text_space(elements: &mut Vec<Element<'_>>) {
     let Some(Element::Text(text)) = elements.last_mut() else {
         return;
     };

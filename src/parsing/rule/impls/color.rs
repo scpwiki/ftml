@@ -612,7 +612,7 @@ pub(crate) fn normalize_color(color: &str) -> Cow<'_, str> {
     }
 }
 
-fn is_safe_color(color: &str) -> bool {
+pub(crate) fn is_safe_color(color: &str) -> bool {
     color.chars().all(|ch| {
         !ch.is_control()
             && !matches!(ch, ';' | '{' | '}' | '<' | '>' | '"' | '\'' | '\\' | '&')

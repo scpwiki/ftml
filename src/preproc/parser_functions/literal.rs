@@ -18,6 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+use crate::preproc::quote_depth_and_body;
 use std::ops::Range;
 
 #[derive(Debug, Default)]
@@ -286,16 +287,6 @@ fn collect_wikidot_literal_blocks(source: &str, ranges: &mut Vec<Range<usize>>) 
     if let Some(block) = active {
         ranges.push(block.start..source.len());
     }
-}
-
-fn quote_depth_and_body(mut body: &str) -> (usize, &str) {
-    let mut quote_depth = 0;
-    body = body.trim_start_matches([' ', '\t']);
-    while let Some(rest) = body.strip_prefix('>') {
-        quote_depth += 1;
-        body = rest.trim_start_matches([' ', '\t']);
-    }
-    (quote_depth, body)
 }
 
 fn literal_block(lower: &str) -> Option<(&'static str, usize)> {

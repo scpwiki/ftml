@@ -34,11 +34,7 @@ fn require_label<'r, 't>(
     parser: &Parser<'r, 't>,
     value: Option<Cow<'t, str>>,
 ) -> Result<Cow<'t, str>, ParseError> {
-    let label = match value {
-        Some(Cow::Borrowed(value)) => Cow::Borrowed(value.trim()),
-        Some(Cow::Owned(value)) => Cow::Owned(value.trim().to_owned()),
-        None => Cow::Borrowed(""),
-    };
+    let label = value.map(trim_cow).unwrap_or(Cow::Borrowed(""));
 
     if label.is_empty() {
         warn!("No label provided in [[bibcite]], failing rule");

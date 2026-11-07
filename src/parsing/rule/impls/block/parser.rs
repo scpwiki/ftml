@@ -35,7 +35,7 @@ use crate::parsing::parser::{
 };
 use crate::parsing::{
     ExtractedToken, ParagraphSplitEntry, ParagraphSplitKind, ParseError, ParseErrorKind,
-    ParseResult, Parser, Token, gather_paragraphs,
+    ParseResult, Parser, Token, gather_paragraphs, trim_wikidot_ascii,
 };
 use crate::tree::{AttributeMap, Container, ContainerType, Element, Elements};
 use crate::wikidot_raw_escape::{PLACEHOLDER_CLOSE, PLACEHOLDER_OPEN, raw_escapes};
@@ -761,7 +761,7 @@ pub(crate) fn wikidot_physical_line_has_textual_div_closer(
         .any(|w| w.eq_ignore_ascii_case(b"[[/div]]"))
 }
 
-fn wikidot_trim_argument_fragment(value: &str) -> &str {
+pub(crate) fn wikidot_trim_argument_fragment(value: &str) -> &str {
     value.trim_matches([' ', '\t', '\n', '\r', '\0', '\u{000B}'])
 }
 
@@ -1650,7 +1650,7 @@ where
         let rule = self.rule();
         collect_text_keep(self, rule, stops, &[], Some(kind)).map(|(name, last)| {
             let name = if self.settings().layout.legacy() {
-                name.trim_matches([' ', '\t', '\r', '\n'])
+                trim_wikidot_ascii(name)
             } else {
                 name.trim()
             };
@@ -1713,7 +1713,7 @@ where
         let legacy = self.settings().layout.legacy();
         fn trim_head_word(name: &str, legacy: bool) -> &str {
             if legacy {
-                name.trim_matches([' ', '\t', '\r', '\n'])
+                trim_wikidot_ascii(name)
             } else {
                 name.trim()
             }
@@ -1774,7 +1774,7 @@ where
             if last.token != Token::RightLink || last.slice != "]]]" {
                 return Err(self.make_err(ParseErrorKind::BlockExpectedEnd));
             }
-            Ok((name.trim_matches([' ', '\t', '\r', '\n']), false))
+            Ok((trim_wikidot_ascii(name), false))
         })
     }
 
@@ -1808,10 +1808,7 @@ where
             }
             _ => return Err(self.make_err(ParseErrorKind::BlockExpectedEnd)),
         };
-        Ok((
-            name.trim_matches([' ', '\t', '\r', '\n']),
-            residual_close_bracket,
-        ))
+        Ok((trim_wikidot_ascii(name), residual_close_bracket))
     }
 
     pub fn get_end_block(&mut self) -> Result<Cow<'t, str>, ParseError> {
@@ -1910,7 +1907,7 @@ where
             &[],
             Some(ParseErrorKind::BlockMissingName),
         )?;
-        let name = name.trim_matches([' ', '\t', '\r', '\n']);
+        let name = trim_wikidot_ascii(name);
 
         let base_name = name.strip_suffix('_').unwrap_or(name);
         if last.token == Token::RightLink

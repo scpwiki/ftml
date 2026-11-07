@@ -88,10 +88,8 @@ fn wikidot_heading_owns_underscore(parser: &Parser<'_, '_>) -> bool {
     let line_start = source[..underscore]
         .rfind('\n')
         .map_or(0, |index| index + 1);
-    let mut prefix = source[line_start..underscore].trim_start_matches([' ', '\t']);
-    while let Some(rest) = prefix.strip_prefix('>') {
-        prefix = rest.trim_start_matches([' ', '\t']);
-    }
+    let (_, prefix) =
+        crate::preproc::quote_depth_and_body(&source[line_start..underscore]);
     let pluses = prefix.bytes().take_while(|byte| *byte == b'+').count();
     if pluses == 0 {
         return false;

@@ -28,19 +28,14 @@ use crate::parsing::collect::{
     iftags_segment_fused,
 };
 use crate::parsing::unmatched_close_scan::{LinkLabelScanMemo, LinkTargetScanMemo};
-use crate::parsing::{ParseSuccess, discard_wikidot_controls, trim_wikidot_ascii_cow};
+use crate::parsing::{
+    ParseSuccess, discard_wikidot_controls, trim_cow, trim_wikidot_ascii_cow,
+};
 use crate::tree::{AnchorTarget, LinkLabel, LinkLocation, LinkType};
 use crate::url::is_url;
 use std::borrow::Cow;
 
 const MAX_WIKIDOT_SINGLE_LINK_TARGET_BYTES: usize = 64 * 1024;
-
-fn trim_cow(value: Cow<'_, str>) -> Cow<'_, str> {
-    match value {
-        Cow::Borrowed(value) => Cow::Borrowed(value.trim()),
-        Cow::Owned(value) => Cow::Owned(value.trim().to_owned()),
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum WikidotLinkDisposition {

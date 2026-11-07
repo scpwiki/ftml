@@ -10,6 +10,7 @@
  * (at your option) any later version.
  */
 
+use super::super::parser::wikidot_trim_argument_fragment;
 use super::prelude::*;
 use crate::parsing::collect::{
     collect_text_resolved_head, consume_valid_comment, iftags_segment_fused,
@@ -190,7 +191,7 @@ fn parse_fn<'r, 't>(
 }
 
 fn parse_button_head(head: &str, wikidot: bool) -> Option<ParsedButton<'_>> {
-    let head = trim_wikidot_space(head);
+    let head = wikidot_trim_argument_fragment(head);
     if head.is_empty() {
         return None;
     }
@@ -202,7 +203,7 @@ fn parse_button_head(head: &str, wikidot: bool) -> Option<ParsedButton<'_>> {
     }
     .unwrap_or(head.len());
     let action = &head[..action_end];
-    let tail = trim_wikidot_space(&head[action_end..]);
+    let tail = wikidot_trim_argument_fragment(&head[action_end..]);
 
     if action.eq_ignore_ascii_case("set-tags") {
         return Some(parse_set_tags(tail, wikidot));
@@ -259,7 +260,7 @@ fn parse_set_tags(mut tail: &str, wikidot: bool) -> ParsedButton<'_> {
         tail = if wikidot {
             tail.trim_start_matches(is_wikidot_set_tags_separator)
         } else {
-            trim_wikidot_space(tail)
+            wikidot_trim_argument_fragment(tail)
         };
         let end = if wikidot {
             tail.find(is_wikidot_set_tags_separator)
@@ -337,10 +338,6 @@ fn set_tags_value<'t>(token: &'t str, wikidot: bool) -> Option<Cow<'t, str>> {
 
 fn nonempty(value: Option<Cow<'_, str>>) -> Option<Cow<'_, str>> {
     value.filter(|value| !value.is_empty())
-}
-
-fn trim_wikidot_space(value: &str) -> &str {
-    value.trim_matches(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n' | '\0' | '\u{000b}'))
 }
 
 fn unknown_button_error<'t>(action: Cow<'t, str>) -> Element<'t> {

@@ -1451,7 +1451,9 @@ fn try_consume_inner<'r, 't>(
                                     | Token::InputEnd
                             )
                         {
-                            trim_one_trailing_ascii_space(&mut elements);
+                            crate::parsing::inline_scope::trim_one_trailing_text_space(
+                                &mut elements,
+                            );
                         }
 
                         let elements_before = elements.len();
@@ -1574,18 +1576,6 @@ fn comment_left_nothing(elements: &Elements<'_>) -> bool {
         Elements::None => true,
         Elements::Single(Element::Delayed(delayed)) => delayed.is_empty_suppression(),
         _ => false,
-    }
-}
-
-fn trim_one_trailing_ascii_space(elements: &mut Vec<Element<'_>>) {
-    let Some(Element::Text(text)) = elements.last_mut() else {
-        return;
-    };
-    if text.ends_with(' ') {
-        text.to_mut().pop();
-        if text.is_empty() {
-            elements.pop();
-        }
     }
 }
 
