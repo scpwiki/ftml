@@ -2875,6 +2875,9 @@ fn lower_sequence<'t>(
             // scope and drop the span, or emit the anchor after the iframe.
             run.push(element);
             run_has_content = true;
+        } else if html_joins_open_inline_scope(&element, active) {
+            run.push(element);
+            run_has_content = true;
         } else {
             flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
             if !is_vanished_empty_div(&element) {
@@ -3494,6 +3497,16 @@ fn eject_segment_trailing_space(elements: &mut Vec<Element<'_>>) {
         }
         elements.push(text!(" "));
     }
+}
+
+fn html_joins_open_inline_scope(
+    element: &Element<'_>,
+    active: &ActiveScopes<'_>,
+) -> bool {
+    matches!(element, Element::Html { .. })
+        && active
+            .iter_active_rev()
+            .any(|scope| matches!(scope.kind, ScopeKind::Size | ScopeKind::Span))
 }
 
 fn is_block_boundary(element: &Element<'_>) -> bool {

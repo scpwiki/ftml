@@ -404,13 +404,15 @@ fn normalize_wikidot_code_body_bytes(text: &mut String) {
 
     let code_ranges = crate::wikidot_code::active_body_ranges(text);
     let raw_ranges = wikidot_inline_raw_body_ranges(text);
-    if code_ranges.is_empty() && raw_ranges.is_empty() {
+    let html_ranges = wikidot_html_body_ranges(text);
+    if code_ranges.is_empty() && raw_ranges.is_empty() && html_ranges.is_empty() {
         return;
     }
 
     let mut output = String::with_capacity(text.len());
     let mut code_index = 0usize;
     let mut raw_index = 0usize;
+    let mut html_index = 0usize;
     for (index, character) in text.char_indices() {
         while code_ranges
             .get(code_index)
@@ -424,15 +426,24 @@ fn normalize_wikidot_code_body_bytes(text: &mut String) {
         {
             raw_index += 1;
         }
+        while html_ranges
+            .get(html_index)
+            .is_some_and(|range| range.end <= index)
+        {
+            html_index += 1;
+        }
         let in_code = code_ranges
             .get(code_index)
             .is_some_and(|range| range.contains(&index));
         let in_raw = raw_ranges
             .get(raw_index)
             .is_some_and(|range| range.contains(&index));
+        let in_html = html_ranges
+            .get(html_index)
+            .is_some_and(|range| range.contains(&index));
 
         match character {
-            '\t' if in_code || in_raw => output.push_str("    "),
+            '\t' if in_code || in_raw || in_html => output.push_str("    "),
             // NOTE: Non-breaking spaces in code bodies are intentionally NOT
             // converted here. Live serves them as regular spaces, but only
             // after trailing-whitespace trimming (which preserves NBSP while
@@ -445,6 +456,89 @@ fn normalize_wikidot_code_body_bytes(text: &mut String) {
         }
     }
     *text = output;
+}
+
+/// Bodies of Wikidot `[[html]]` blocks whose closer is followed by ASCII
+/// whitespace or the end of the source. A tab in that body is four spaces in
+/// the bytes handed to the host. An opener inside a bibliography stays on the
+/// one-space prose rule, because `block-html` does not form there.
+fn wikidot_html_body_ranges(source: &str) -> Vec<Range<usize>> {
+    let bytes = source.as_bytes();
+    let mut ranges = Vec::new();
+    let mut bibliography_depth = 0usize;
+    let mut index = 0usize;
+    while index < source.len() {
+        let line_start = index == 0 || bytes[index - 1] == b'\n';
+        if line_start && bibliography_depth == 0 {
+            if let Some(opener_end) = wikidot_html_opener_end(source, index) {
+                if let Some(closer_at) = wikidot_html_closer_at(source, opener_end) {
+                    ranges.push(opener_end..closer_at);
+                    index = closer_at + "[[/html]]".len();
+                    continue;
+                }
+            }
+        }
+        if line_start && wikidot_exact_marker(source, index, "[[bibliography]]") {
+            bibliography_depth += 1;
+            index += "[[bibliography]]".len();
+            continue;
+        }
+        if line_start
+            && bibliography_depth > 0
+            && wikidot_exact_marker(source, index, "[[/bibliography]]")
+        {
+            bibliography_depth -= 1;
+            index += "[[/bibliography]]".len();
+            continue;
+        }
+        index += source[index..].chars().next().map_or(1, char::len_utf8);
+    }
+    ranges
+}
+
+fn wikidot_exact_marker(source: &str, index: usize, marker: &str) -> bool {
+    let Some(rest) = source.get(index..) else {
+        return false;
+    };
+    let Some(after) = rest.get(marker.len()..) else {
+        return false;
+    };
+    rest.get(..marker.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(marker))
+        && (after.is_empty() || after.as_bytes()[0].is_ascii_whitespace())
+}
+
+fn wikidot_html_opener_end(source: &str, index: usize) -> Option<usize> {
+    let rest = source.get(index..)?;
+    let head = rest.get(..6)?;
+    if !head.eq_ignore_ascii_case("[[html") {
+        return None;
+    }
+    let after = rest.as_bytes().get(6).copied()?;
+    if rest[6..].starts_with("]]") {
+        return Some(index + 8);
+    }
+    if !after.is_ascii_whitespace() {
+        return None;
+    }
+    let close = rest[6..].find("]]")?;
+    Some(index + 6 + close + 2)
+}
+
+fn wikidot_html_closer_at(source: &str, from: usize) -> Option<usize> {
+    let mut cursor = from;
+    while let Some(relative) = source[cursor..].find("[[/") {
+        let at = cursor + relative;
+        let rest = &source[at..];
+        if rest.len() >= 9 && rest[..9].eq_ignore_ascii_case("[[/html]]") {
+            let next = rest.as_bytes().get(9).copied();
+            if next.is_none_or(|byte| byte.is_ascii_whitespace()) {
+                return Some(at);
+            }
+        }
+        cursor = at + 3;
+    }
+    None
 }
 
 fn wikidot_inline_raw_body_ranges(source: &str) -> Vec<Range<usize>> {
