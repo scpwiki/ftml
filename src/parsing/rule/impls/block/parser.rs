@@ -3114,7 +3114,7 @@ where
                     ));
                 }
             } else if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
-                if self.quote_body_literal_residuals()
+                if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
                 {
                     self.step()?;
@@ -5737,7 +5737,7 @@ where
                 }
             }
             if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
-                if self.quote_body_literal_residuals()
+                if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
                     && block_rule.name.starts_with("block-list-")
                 {
@@ -6469,7 +6469,7 @@ where
     }
 
     fn quotes_then_block_end(&self, block_rule: &BlockRule) -> bool {
-        if !self.quote_body_literal_residuals() || self.current().token != Token::Quote {
+        if self.quote_body_literal_residuals() != Some(true) || self.current().token != Token::Quote {
             return false;
         }
         let required = self.native_blockquote_depth().unwrap_or(0);
