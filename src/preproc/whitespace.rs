@@ -458,10 +458,6 @@ fn normalize_wikidot_code_body_bytes(text: &mut String) {
     *text = output;
 }
 
-/// Bodies of Wikidot `[[html]]` blocks whose closer is followed by ASCII
-/// whitespace or the end of the source. A tab in that body is four spaces in
-/// the bytes handed to the host. An opener inside a bibliography stays on the
-/// one-space prose rule, because `block-html` does not form there.
 fn wikidot_html_body_ranges(source: &str) -> Vec<Range<usize>> {
     let bytes = source.as_bytes();
     let mut ranges = Vec::new();
