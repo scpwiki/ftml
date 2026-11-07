@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::parsing::{ParagraphSplitKind, ParserWrap, strip_newlines};
 use crate::tree::{
     AcceptsPartial, AttributeMap, Container, ContainerType, ListItem, ListType,
@@ -179,7 +180,22 @@ fn parse_list_block_impl<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let body = parser.get_body_elements(block_rule, false)?;
+    // Inside a quote, a later line-start '>' is list text. The ordinary body
+    // walk reads it as another blockquote. Surplus markers still hide the closer.
+    let body = if wikidot
+        && let Some(depth) = parser.native_blockquote_depth()
+        && (parser.has_native_blockquote_body_end(block_rule, depth)
+            || parser.has_surplus_quote_list_close(block_rule, depth))
+    {
+        parser.get_body_elements_with_literal_quote_context(
+            block_rule,
+            false,
+            BlockBodyStart::NextPhysicalLine,
+            None,
+        )?
+    } else {
+        parser.get_body_elements(block_rule, false)?
+    };
     let fused_close = parser.wikidot_body_closed_with_fused_close(block_rule);
     let closer_has_same_line_residual = !matches!(
         parser.current().token,

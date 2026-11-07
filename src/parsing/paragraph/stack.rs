@@ -385,6 +385,13 @@ impl<'t> ParagraphStack<'t> {
         ) {
             return;
         }
+        // A surplus quote mark before an explicit list is its own paragraph
+        // (`<p>&gt;</p><ul>`). Other leading runs still dissolve.
+        if let Some(Element::Container(container)) = self.finished.get(paragraph_index)
+            && paragraph_is_only_quote_residue(container)
+        {
+            return;
+        }
         let paragraph = self.finished.remove(paragraph_index);
         self.shift_wikidot_div_literal_run_before(paragraph_index);
         let Element::Container(container) = paragraph else {
@@ -1942,6 +1949,27 @@ impl<'t> ParagraphStack<'t> {
 
         self.finished
     }
+}
+
+fn paragraph_is_only_quote_residue(paragraph: &Container<'_>) -> bool {
+    let mut saw_quote = false;
+    for element in paragraph.elements() {
+        match element {
+            Element::Text(text) => {
+                let trimmed = text.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                if !trimmed.bytes().all(|byte| byte == b'>') {
+                    return false;
+                }
+                saw_quote = true;
+            }
+            Element::LineBreak => {}
+            _ => return false,
+        }
+    }
+    saw_quote
 }
 
 fn paragraph_is_only_marker(paragraph: &Container<'_>, marker: &str) -> bool {

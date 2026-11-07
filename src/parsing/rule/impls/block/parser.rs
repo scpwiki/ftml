@@ -3097,7 +3097,33 @@ where
         let mut first = true;
 
         loop {
-            if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+            if self.quotes_then_block_end(block_rule) {
+                // The closer line's quote marks are item text. `consume` would
+                // strip the row prefix, and the close disposition would then
+                // keep [[/li]] as text because the marks are no longer in front
+                // of it. Record the marks and end on the closer directly.
+                let prefix = self.take_quoted_closer_marks()?;
+                segments
+                    .last_mut()
+                    .expect("segments always has a current segment")
+                    .extend(prefix);
+                if self
+                    .verify_end_block(first, block_rule, false, false)
+                    .is_some()
+                {
+                    return Ok(crate::parsing::ParseSuccess::new(
+                        segments,
+                        all_errors,
+                        paragraph_safe,
+                    ));
+                }
+            } else if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                if self.quote_body_literal_residuals()
+                    && self.current().token == Token::LineBreak
+                {
+                    self.step()?;
+                    continue;
+                }
                 return Err(self.make_err(ParseErrorKind::EndOfInput));
             }
 
@@ -4420,7 +4446,12 @@ where
         }
         let has_later_close =
             allow_inline_quote_close && !has_close && self.has_body_end_block(block_rule);
-        if !has_close && !has_later_close {
+        let has_surplus_list_close = !has_close
+            && !has_later_close
+            && literal_residual_quotes
+            && block_rule.name.starts_with("block-list-")
+            && self.has_surplus_quote_list_close(block_rule, required_depth);
+        if !has_close && !has_later_close && !has_surplus_list_close {
             if block_rule.name == "block-note" {
                 return self.get_body_elements(block_rule, as_paragraphs);
             }
@@ -5696,7 +5727,30 @@ where
         let mut first = true;
 
         loop {
+            // A list closer line's quote marks are the row prefix, not item
+            // text. Leaving the residual mark for `consume` appends it to the
+            // last item.
+            if block_rule.name.starts_with("block-list-")
+                && self.quotes_then_block_end(block_rule)
+            {
+                let mut probe = self.clone();
+                if probe.take_quoted_closer_marks().is_ok()
+                    && probe
+                        .verify_end_block(first, block_rule, false, false)
+                        .is_some()
+                {
+                    self.update(&probe);
+                    return Ok(());
+                }
+            }
             if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
+                if self.quote_body_literal_residuals()
+                    && self.current().token == Token::LineBreak
+                    && block_rule.name.starts_with("block-list-")
+                {
+                    self.step()?;
+                    continue;
+                }
                 if self.wikidot_tab_quote_ejection() && !self.discarding_hidden_body() {
                     if block_rule.name == "block-tabview"
                         && self.wikidot_tabview_ejected()
@@ -6419,6 +6473,111 @@ where
         required_depth: usize,
     ) -> bool {
         self.has_native_blockquote_body_end_with_mode(block_rule, required_depth, false)
+    }
+
+    /// A closer line keeps every `>` as item text. A content line still strips
+    /// the quote-row prefix in `prepare_quote_body_line`.
+    fn quotes_then_block_end(&self, block_rule: &BlockRule) -> bool {
+        if !self.quote_body_literal_residuals() || self.current().token != Token::Quote {
+            return false;
+        }
+        let required = self.native_blockquote_depth().unwrap_or(0);
+        let mut probe = self.clone();
+        let mut depth = 0usize;
+        while probe.current().token == Token::Quote {
+            depth += probe.current().slice.len();
+            if probe.step().is_err() || probe.get_optional_space().is_err() {
+                return false;
+            }
+        }
+        // A closer line whose quotes are only the row prefix stays on the
+        // ordinary strip path. Surplus quotes are item text, including the
+        // row prefix on that same line.
+        if depth <= required {
+            return false;
+        }
+        let matching_close = probe.get_end_block().is_ok_and(|name| {
+            block_rule_accepts_end_name(
+                block_rule,
+                name.strip_suffix('_').unwrap_or(&name),
+                self.settings().layout.legacy(),
+            )
+        });
+        let _ = probe.get_optional_space();
+        matching_close && token_is_body_boundary(probe.current().token)
+    }
+
+    /// Quote marks on a closer line, including the space between them, then
+    /// the space that sits in front of the closer itself.
+    fn take_quoted_closer_marks(&mut self) -> Result<Vec<Element<'t>>, ParseError> {
+        let elements = self.take_literal_quote_prefix()?;
+        if self.current().token == Token::Whitespace {
+            let mut probe = self.clone();
+            if probe.step().is_ok() && probe.current().token == Token::LeftBlockEnd {
+                self.step()?;
+            }
+        }
+        Ok(elements)
+    }
+
+    /// Quote marks on a closer line, including the space between them.
+    /// `consume` would strip the row prefix before any rule saw the text.
+    fn take_literal_quote_prefix(&mut self) -> Result<Vec<Element<'t>>, ParseError> {
+        let mut elements = Vec::new();
+        while matches!(self.current().token, Token::Quote | Token::Whitespace) {
+            if self.current().token == Token::Whitespace {
+                let mut probe = self.clone();
+                if probe.step().is_err() || probe.current().token != Token::Quote {
+                    break;
+                }
+            }
+            elements.push(Element::Text(Cow::Borrowed(self.current().slice)));
+            self.step()?;
+        }
+        Ok(elements)
+    }
+
+    /// A quoted list closer may sit behind more `>` markers than the row depth.
+    /// Those extra markers are item text on other lines and are transparent here.
+    pub(crate) fn has_surplus_quote_list_close(
+        &self,
+        block_rule: &BlockRule,
+        required_depth: usize,
+    ) -> bool {
+        let mut parser = self.clone();
+        loop {
+            let Some((_, _, after_prefix)) =
+                parser.scan_absolute_quote_prefix(required_depth)
+            else {
+                return false;
+            };
+            parser.update(&after_prefix);
+            let mut end = parser.clone();
+            let matching_close = end.get_end_block().is_ok_and(|name| {
+                block_rule_accepts_end_name(
+                    block_rule,
+                    name.strip_suffix('_').unwrap_or(&name),
+                    self.settings().layout.legacy(),
+                )
+            });
+            if matching_close {
+                let _ = end.get_optional_space();
+                if token_is_body_boundary(end.current().token) {
+                    return true;
+                }
+            }
+            while !token_is_body_boundary(parser.current().token) {
+                if parser.step().is_err() {
+                    return false;
+                }
+            }
+            if parser.current().token != Token::LineBreak {
+                return false;
+            }
+            if parser.step().is_err() {
+                return false;
+            }
+        }
     }
 
     #[rustfmt::skip]

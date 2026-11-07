@@ -2144,6 +2144,11 @@ impl<'r, 't> Parser<'r, 't> {
         self.quote_body_cursor
     }
 
+    pub(crate) fn quote_body_literal_residuals(&self) -> bool {
+        self.quote_body_cursor
+            .is_some_and(|cursor| cursor.literal_residual_quotes)
+    }
+
     pub(crate) fn set_quote_body_cursor(&mut self, cursor: Option<QuoteBodyCursor>) {
         self.quote_body_cursor = cursor;
     }
