@@ -36,6 +36,22 @@ pub const RULE_RAW: Rule = Rule {
     try_consume_fn,
 };
 
+fn wikidot_raw_has_preceding_content(parser: &Parser<'_, '_>, opener_start: usize) -> bool {
+    let source = parser.full_text().inner();
+    let before = &source[..opener_start.min(source.len())];
+    let bytes = before.as_bytes();
+    let mut block_start = 0;
+    if bytes.len() >= 2 {
+        for i in (0..bytes.len() - 1).rev() {
+            if bytes[i] == 10 && bytes[i + 1] == 10 {
+                block_start = i + 2;
+                break;
+            }
+        }
+    }
+    before[block_start..].chars().any(|c| !c.is_whitespace())
+}
+
 fn wikidot_footnote_claimable<'r, 't>(parser: &Parser<'r, 't>) -> bool
 where
     'r: 't,
@@ -54,6 +70,7 @@ fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     debug!("Consuming tokens until end of raw");
+    let opener_start = parser.current().span.start;
 
     let ending_token = match parser.current().token {
         Token::Raw => Token::Raw,
@@ -225,6 +242,7 @@ fn try_consume_fn<'r, 't>(
         if parser.settings().layout.legacy()
             && ending_token == Token::Raw
             && token == Token::LeftBlock
+            && wikidot_raw_has_preceding_content(parser, opener_start)
             && super::footnote_first::starts_footnote(parser)
             && wikidot_footnote_claimable(parser)
         {
