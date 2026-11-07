@@ -1107,6 +1107,14 @@ fn tabview_break_stays_in_open_span(segment: &[Element<'_>], index: usize) -> bo
     depth > 0
 }
 
+fn wikidot_li_frame_depth_delta(element: &Element) -> i32 {
+    match element {
+        Element::Partial(PartialElement::WikidotBlockOpen(_)) => 1,
+        Element::Partial(PartialElement::WikidotBlockClose(_)) => -1,
+        _ => 0,
+    }
+}
+
 fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
     match element {
         Element::Container(container) => matches!(
@@ -1142,14 +1150,27 @@ fn assemble_wikidot_li_segments<'t>(
     }
     for segment in &mut segments {
         let mut index = 1;
+        let mut frame_depth = segment
+            .first()
+            .map_or(0, wikidot_li_frame_depth_delta);
         while index < segment.len() {
+            let break_after_outermost_close = frame_depth == 0
+                && matches!(
+                    segment[index - 1],
+                    Element::Partial(PartialElement::WikidotBlockClose(_))
+                )
+                && segment
+                    .get(index + 1)
+                    .is_some_and(|element| element.paragraph_safe());
             if segment[index] == Element::LineBreak
                 && !segment[index - 1].paragraph_safe()
                 && !wikidot_li_break_kept_after_block(&segment[index - 1])
+                && !break_after_outermost_close
                 && !tabview_break_stays_in_open_span(segment, index)
             {
                 segment.remove(index);
             } else {
+                frame_depth += wikidot_li_frame_depth_delta(&segment[index]);
                 index += 1;
             }
         }
