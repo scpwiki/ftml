@@ -169,11 +169,27 @@ pub(crate) fn wikidot_outer_div_still_open_at_collapsible_close(
         Some(after_prefix + close_rel + 2)
     }
 
+    fn iftags_open_extent(lower: &str, pos: usize, limit: usize) -> Option<usize> {
+        const PREFIX: &[u8] = b"[[iftags";
+        if !marker_extent_ignore_case(lower, pos, PREFIX) {
+            return None;
+        }
+        let after_prefix = pos + PREFIX.len();
+        let next = lower.as_bytes().get(after_prefix).copied()?;
+        if !matches!(next, b' ' | b'\t' | b']') {
+            return None;
+        }
+        let tail = lower.get(after_prefix..limit)?;
+        let close_rel = tail.find("]]")?;
+        Some(after_prefix + close_rel + 2)
+    }
+
     let lower = source.to_ascii_lowercase();
     let limit = collapsible_close_byte.min(source.len());
     let mut pos = scan_from;
     let mut collapsible_depth = 1usize;
     let mut div_depth = 0usize;
+    let mut iftags_depth = 0usize;
 
     while pos < limit {
         pos = skip_past_literal(literal, pos, limit);
@@ -190,8 +206,15 @@ pub(crate) fn wikidot_outer_div_still_open_at_collapsible_close(
             pos += "[[/collapsible]]".len();
             continue;
         }
-        if marker_extent_ignore_case(&lower, pos, b"[[/div]]") {
+        if marker_extent_ignore_case(&lower, pos, b"[[/iftags]]") {
             if collapsible_depth == 1 {
+                iftags_depth = iftags_depth.saturating_sub(1);
+            }
+            pos += "[[/iftags]]".len();
+            continue;
+        }
+        if marker_extent_ignore_case(&lower, pos, b"[[/div]]") {
+            if collapsible_depth == 1 && iftags_depth == 0 {
                 div_depth = div_depth.saturating_sub(1);
             }
             pos += "[[/div]]".len();
@@ -202,8 +225,15 @@ pub(crate) fn wikidot_outer_div_still_open_at_collapsible_close(
             pos = end;
             continue;
         }
-        if let Some(end) = div_open_extent(&lower, pos, limit) {
+        if let Some(end) = iftags_open_extent(&lower, pos, limit) {
             if collapsible_depth == 1 {
+                iftags_depth += 1;
+            }
+            pos = end;
+            continue;
+        }
+        if let Some(end) = div_open_extent(&lower, pos, limit) {
+            if collapsible_depth == 1 && iftags_depth == 0 {
                 div_depth += 1;
             }
             pos = end;
