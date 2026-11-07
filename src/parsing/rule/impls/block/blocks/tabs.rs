@@ -2208,6 +2208,12 @@ fn wikidot_tab_head_has_raw_construct(text: &str) -> bool {
 /// The line break that ends the last quoted row of a tab body is the row
 /// terminator, not content: live drops it before the panel paragraph closes.
 fn trim_wikidot_quote_tab_body_break<'t>(elements: &mut Vec<Element<'t>>) {
+    while matches!(elements.last(), Some(Element::LineBreak)) {
+        elements.pop();
+    }
+    if elements.is_empty() {
+        return;
+    }
     let Some(Element::Container(paragraph)) = elements.last_mut() else {
         return;
     };
