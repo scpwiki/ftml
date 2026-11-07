@@ -615,6 +615,317 @@ pub(crate) fn wikidot_simple_table_markers_literal_on_line_after_explicit_li(
     lower.starts_with("[[li ") || lower.starts_with("[[li\t")
 }
 
+struct UnclosedRow {
+    resume: usize,
+    swallow: Vec<usize>,
+}
+
+fn finish_discarded_unclosed_row<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    plan: UnclosedRow,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    while parser.current().token != Token::InputEnd
+        && parser.current().span.start < plan.resume
+    {
+        parser.step()?;
+    }
+    for closer in plan.swallow {
+        parser.push_wikidot_discarded_row_closer(closer);
+    }
+    let cell = TableCell {
+        elements: Vec::new(),
+        header: false,
+        column_span: NonZeroU32::new(1).unwrap(),
+        align: None,
+        attributes: AttributeMap::new(),
+    };
+    let row = TableRow {
+        cells: vec![cell],
+        attributes: AttributeMap::new(),
+    };
+    finish_simple_table(vec![row], Vec::new())
+}
+
+fn legacy_unclosed_row(text: &str, pipe: usize) -> Option<UnclosedRow> {
+    let bytes = text.as_bytes();
+    if pipe.checked_add(2).is_none_or(|end| end > bytes.len())
+        || &bytes[pipe..pipe + 2] != b"||"
+    {
+        return None;
+    }
+    let mut index = pipe + 2;
+    let mut pending_closers = Vec::new();
+    let mut saw_explicit_list = false;
+    while index < bytes.len() {
+        if let Some(next) = skip_score_div(text, index) {
+            index = next;
+            continue;
+        }
+        if let Some(next) = eat_ullist_opener(text, index, &mut pending_closers) {
+            saw_explicit_list = true;
+            index = next;
+            continue;
+        }
+        if let Some(next) = eat_ullist_closer(text, index) {
+            index = next;
+            continue;
+        }
+        if source_list_line(text, index) {
+            if !saw_explicit_list {
+                return None;
+            }
+            let end = end_of_source_list(text, index);
+            if text[index..end].contains("||") {
+                return None;
+            }
+            return Some(unclosed_plan(end, &pending_closers));
+        }
+        if let Some((closer, next)) = plain_span_opener(text, index) {
+            pending_closers.push(closer);
+            index = next;
+            continue;
+        }
+        if let Some(block) = cutting_block(text, index) {
+            if !saw_explicit_list {
+                return None;
+            }
+            pending_closers.push(block.closer);
+            return Some(unclosed_plan(block.body, &pending_closers));
+        }
+        if bytes[index] == b'|' && bytes.get(index + 1) == Some(&b'|') {
+            return None;
+        }
+        if bytes[index] == b'\n' {
+            if index >= 2 && bytes[index - 2] == b' ' && bytes[index - 1] == b'_' {
+                index += 1;
+                continue;
+            }
+            if !saw_explicit_list {
+                return None;
+            }
+            let after = index + 1;
+            if text[after..].starts_with("||") {
+                return None;
+            }
+            return Some(unclosed_plan(after, &pending_closers));
+        }
+        index += utf8_len(bytes[index]);
+    }
+    None
+}
+
+fn unclosed_plan(resume: usize, closers: &[usize]) -> UnclosedRow {
+    UnclosedRow {
+        resume,
+        swallow: closers
+            .iter()
+            .copied()
+            .filter(|closer| *closer >= resume)
+            .collect(),
+    }
+}
+
+struct CuttingBlock {
+    body: usize,
+    closer: usize,
+}
+
+fn utf8_len(byte: u8) -> usize {
+    if byte < 0x80 {
+        1
+    } else if byte < 0xE0 {
+        2
+    } else if byte < 0xF0 {
+        3
+    } else {
+        4
+    }
+}
+
+fn bracket_inner(text: &str, index: usize) -> Option<(&str, usize)> {
+    let bytes = text.as_bytes();
+    if index + 4 > bytes.len() || bytes[index] != b'[' || bytes[index + 1] != b'[' {
+        return None;
+    }
+    let close = text[index + 2..].find("]]")?;
+    let inner = &text[index + 2..index + 2 + close];
+    if inner.contains('\n') {
+        return None;
+    }
+    Some((inner, index + 2 + close + 2))
+}
+
+fn tag_word(inner: &str) -> &str {
+    inner.split_whitespace().next().unwrap_or(inner)
+}
+
+fn find_balanced_closer(text: &str, from: usize, name: &str) -> Option<usize> {
+    let mut depth = 1u32;
+    let mut index = from;
+    while index < text.len() {
+        if let Some((inner, end)) = bracket_inner(text, index) {
+            let word = tag_word(inner);
+            let closing = word.starts_with('/');
+            let base = word.trim_start_matches('/').trim_end_matches('_');
+            if base.eq_ignore_ascii_case(name) {
+                if closing {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(index);
+                    }
+                } else {
+                    depth += 1;
+                }
+            }
+            index = end;
+            continue;
+        }
+        index += utf8_len(text.as_bytes()[index]);
+    }
+    None
+}
+
+fn eat_ullist_opener(
+    text: &str,
+    index: usize,
+    pending: &mut Vec<usize>,
+) -> Option<usize> {
+    let (inner, end) = bracket_inner(text, index)?;
+    let word = tag_word(inner);
+    if word.starts_with('/') {
+        return None;
+    }
+    let base = word.trim_end_matches('_');
+    if !matches!(base.to_ascii_lowercase().as_str(), "ul" | "ol" | "li") {
+        return None;
+    }
+    let closer = find_balanced_closer(text, end, base)?;
+    pending.push(closer);
+    let bytes = text.as_bytes();
+    let mut next = end;
+    while next < bytes.len() && bytes[next].is_ascii_whitespace() {
+        next += 1;
+    }
+    Some(next)
+}
+
+fn eat_ullist_closer(text: &str, index: usize) -> Option<usize> {
+    let (inner, end) = bracket_inner(text, index)?;
+    let word = tag_word(inner);
+    let base = word.trim_start_matches('/');
+    if !word.starts_with('/') {
+        return None;
+    }
+    let bytes = text.as_bytes();
+    match base.to_ascii_lowercase().as_str() {
+        "li" => {
+            let mut next = end;
+            while next < bytes.len() && bytes[next].is_ascii_whitespace() {
+                next += 1;
+            }
+            Some(next)
+        }
+        "ul" | "ol" => {
+            let next = if bytes.get(end) == Some(&b'\n') {
+                end + 1
+            } else {
+                end
+            };
+            Some(next)
+        }
+        _ => None,
+    }
+}
+
+fn plain_span_opener(text: &str, index: usize) -> Option<(usize, usize)> {
+    let (inner, end) = bracket_inner(text, index)?;
+    let word = tag_word(inner);
+    if !word.eq_ignore_ascii_case("span") {
+        return None;
+    }
+    let closer = find_balanced_closer(text, end, "span")?;
+    Some((closer, end))
+}
+
+fn skip_score_div(text: &str, index: usize) -> Option<usize> {
+    let (inner, end) = bracket_inner(text, index)?;
+    let word = tag_word(inner);
+    if !word.eq_ignore_ascii_case("div_") {
+        return None;
+    }
+    let closer = find_balanced_closer(text, end, "div")?;
+    let (_, after) = bracket_inner(text, closer)?;
+    let bytes = text.as_bytes();
+    let mut next = after;
+    while next < bytes.len() && bytes[next] == b' ' {
+        next += 1;
+    }
+    Some(next)
+}
+
+fn cutting_block(text: &str, index: usize) -> Option<CuttingBlock> {
+    let (inner, end) = bracket_inner(text, index)?;
+    let word = tag_word(inner);
+    if word.starts_with('/') || word.eq_ignore_ascii_case("div_") {
+        return None;
+    }
+    let bytes = text.as_bytes();
+    if word.eq_ignore_ascii_case("div") {
+        let mut cursor = end;
+        while bytes.get(cursor) == Some(&b' ') {
+            cursor += 1;
+        }
+        if bytes.get(cursor) != Some(&b'\n') {
+            return None;
+        }
+        let closer = find_balanced_closer(text, end, "div")?;
+        return Some(CuttingBlock {
+            body: cursor + 1,
+            closer,
+        });
+    }
+    if word.eq_ignore_ascii_case("collapsible") {
+        let closer = find_balanced_closer(text, end, "collapsible")?;
+        return Some(CuttingBlock { body: end, closer });
+    }
+    if word.eq_ignore_ascii_case("note") {
+        if bytes.get(end) != Some(&b'\n') {
+            return None;
+        }
+        let closer = find_balanced_closer(text, end, "note")?;
+        return Some(CuttingBlock {
+            body: end + 1,
+            closer,
+        });
+    }
+    None
+}
+
+fn source_list_line(text: &str, index: usize) -> bool {
+    if index > 0 && text.as_bytes().get(index - 1) != Some(&b'\n') {
+        return false;
+    }
+    let bytes = text.as_bytes();
+    let mut cursor = index;
+    while bytes.get(cursor) == Some(&b' ') {
+        cursor += 1;
+    }
+    matches!(
+        (bytes.get(cursor), bytes.get(cursor + 1)),
+        (Some(b'*') | Some(b'#'), Some(b' '))
+    )
+}
+
+fn end_of_source_list(text: &str, mut index: usize) -> usize {
+    while source_list_line(text, index) {
+        match text[index..].find('\n') {
+            Some(offset) => index += offset + 1,
+            None => return text.len(),
+        }
+    }
+    index
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -650,6 +961,15 @@ fn try_consume_inner<'r, 't>(
         && parser.wikidot_line_follows_explicit_list(parser.current().span.start)
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
+    if parser.settings().layout.legacy()
+        && parser.current().token == Token::TableColumn
+        && parser.current().slice == "||"
+        && let Some(plan) =
+            legacy_unclosed_row(parser.full_text().inner(), parser.current().span.start)
+    {
+        return finish_discarded_unclosed_row(parser, plan);
     }
 
     let mut rows = Vec::new();
