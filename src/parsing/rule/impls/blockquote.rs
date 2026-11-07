@@ -47,6 +47,7 @@ struct NativeQuoteRow<'t> {
     source_line: Option<&'t str>,
     cut_boundary: bool,
     keep_trailing_break: bool,
+    marker_final: bool,
 }
 
 struct QuoteFlatSplit<'t> {
@@ -778,6 +779,7 @@ fn try_consume_fn<'r, 't>(
                         source_line: None,
                         cut_boundary: false,
                         keep_trailing_break: false,
+                        marker_final: false,
                     },
                 ));
             } else {
@@ -881,6 +883,7 @@ fn try_consume_fn<'r, 't>(
                         source_line: None,
                         cut_boundary: false,
                         keep_trailing_break: false,
+                        marker_final: false,
                     },
                 ));
             }
@@ -931,6 +934,14 @@ fn try_consume_fn<'r, 't>(
             }
         }
         let mut elements = line.elements;
+        let marker_row = parser.settings().layout.legacy()
+            && quote_row_line_ends_with_marker(
+                parser.full_text().inner(),
+                content_start,
+                line_text_end,
+            );
+        let marker_next_is_quote = parser.current().token == Token::Quote;
+        let marker_final = marker_row && !marker_next_is_quote;
         let mut paragraph_split = line.paragraph_split;
         if leave_indented_whitespace
             && elements.len() > 1
@@ -1091,7 +1102,7 @@ fn try_consume_fn<'r, 't>(
                         if container.ctype() == ContainerType::Div
                 )
             });
-        let keep_line_break = if parser.settings().layout.legacy() {
+        let mut keep_line_break = if parser.settings().layout.legacy() {
             paragraph_safe
                 || alignment_block
                 || note_row
@@ -1103,6 +1114,12 @@ fn try_consume_fn<'r, 't>(
             !consumed_past_line || paragraph_safe
         };
 
+        if marker_row
+            && (marker_next_is_quote
+                || matches!(elements.last(), Some(Element::LineBreaks(_))))
+        {
+            keep_line_break = false;
+        }
         if !empty_spaced_row
             && keep_line_break
             && !absorbed_unquoted_footnote
@@ -1158,6 +1175,7 @@ fn try_consume_fn<'r, 't>(
                         source_line,
                         cut_boundary,
                         keep_trailing_break: false,
+                        marker_final: false,
                     },
                 ));
             }
@@ -1198,6 +1216,7 @@ fn try_consume_fn<'r, 't>(
                     source_line,
                     cut_boundary: false,
                     keep_trailing_break: false,
+                        marker_final: false,
                 },
             ));
             push_quote_row_units(
@@ -1220,6 +1239,8 @@ fn try_consume_fn<'r, 't>(
                 && counts.iter().map(|entry| entry.0).sum::<usize>() == elements.len()
         });
         let cut_boundary = parser.take_wikidot_table_cut_boundary();
+        let keep_trailing_break = marker_final
+            && !matches!(elements.last(), Some(Element::LineBreaks(_)));
         let row = NativeQuoteRow {
             elements,
             paragraph_safe,
@@ -1228,7 +1249,8 @@ fn try_consume_fn<'r, 't>(
             indent: row_indent,
             source_line,
             cut_boundary,
-            keep_trailing_break: false,
+            keep_trailing_break,
+            marker_final,
         };
         if flatten_following_rows {
             escaped_rows.push(row);
@@ -1434,6 +1456,7 @@ fn push_quote_row_units<'t>(
             source_line: None,
             cut_boundary: false,
             keep_trailing_break: false,
+                        marker_final: false,
         };
         if flatten {
             escaped_rows.push(row);
@@ -1534,6 +1557,14 @@ fn collect_native_blockquote_line<'r, 't>(
     }
 }
 
+fn quote_row_line_ends_with_marker(source: &str, start: usize, end: usize) -> bool {
+    let line = &source[start.min(source.len())..end.min(source.len())];
+    let trimmed = line.trim_end_matches([' ', '\t', '\r']);
+    trimmed.len() >= 2
+        && trimmed.ends_with('_')
+        && matches!(trimmed.as_bytes()[trimmed.len() - 2], b' ' | b'\t')
+}
+
 fn build_blockquote_element(
     list: DepthList<(), NativeQuoteRow>,
     wikidot: bool,
@@ -1550,10 +1581,12 @@ fn build_blockquote_element(
     };
 
     let mut keep_trailing_break = false;
+    let mut marker_final = false;
     for item in list {
         match item {
             DepthItem::Item(row) => {
                 keep_trailing_break = row.keep_trailing_break;
+                marker_final = row.marker_final;
                 push_native_quote_row(&mut stack, row, wikidot);
             }
             DepthItem::List(_, list) => {
@@ -1573,6 +1606,9 @@ fn build_blockquote_element(
     let mut elements = stack.into_elements();
     if wikidot {
         elements = unwrap_scored_alias_quote_paragraphs(elements);
+        if marker_final {
+            elements = unwrap_all_quote_paragraphs(elements);
+        }
     }
     if elements.is_empty() {
         return None;
@@ -1599,6 +1635,21 @@ fn unwrap_scored_alias_quote_paragraphs(elements: Vec<Element<'_>>) -> Vec<Eleme
                     ) || ParagraphStack::wikidot_run_ends_with_scored_alias(
                         container.elements(),
                     )) =>
+            {
+                output.append(container.elements_mut());
+            }
+            other => output.push(other),
+        }
+    }
+    output
+}
+
+fn unwrap_all_quote_paragraphs(elements: Vec<Element<'_>>) -> Vec<Element<'_>> {
+    let mut output = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            Element::Container(mut container)
+                if container.ctype() == ContainerType::Paragraph =>
             {
                 output.append(container.elements_mut());
             }
