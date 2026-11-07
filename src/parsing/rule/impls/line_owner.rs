@@ -316,6 +316,13 @@ where
         parser,
         RULE_PAGE,
         Some(|parser: &mut Parser<'r, 't>| {
+            if parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && parser.wikidot_stack_accepts_table_cell_end()
+                && parser.wikidot_flat_pair_open_at(parser.current().span.start)
+            {
+                return Ok(true);
+            }
             consume_matching_close(
                 parser,
                 close_name,

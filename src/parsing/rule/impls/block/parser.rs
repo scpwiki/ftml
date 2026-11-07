@@ -4896,6 +4896,28 @@ where
             }
 
             if result.is_none()
+                && parser.settings().layout.legacy()
+                && !parser.discarding_hidden_body()
+                && matches!(
+                    block_rule.name,
+                    "block-div"
+                        | "block-collapsible"
+                        | "block-note"
+                        | "block-align-left"
+                        | "block-align-right"
+                        | "block-align-center"
+                        | "block-align-justify"
+                )
+                && parser.wikidot_ancestor_boundary_accepts_table_cell_end()
+                && parser.wikidot_flat_pair_open_at(parser.current().span.start)
+            {
+                if block_rule.name == "block-div" {
+                    parser.set_wikidot_div_yielded_to_tab();
+                }
+                return Ok(true);
+            }
+
+            if result.is_none()
                 && !parser.discarding_hidden_body()
                 && parser.at_ancestor_body_end_boundary()
             {
@@ -6096,6 +6118,24 @@ where
                 } else {
                     self.record_wikidot_yield_orphan_closes(0, 1);
                 }
+                return Ok(());
+            }
+
+            if matches!(
+                block_rule.name,
+                "block-div"
+                    | "block-collapsible"
+                    | "block-note"
+                    | "block-align-left"
+                    | "block-align-right"
+                    | "block-align-center"
+                    | "block-align-justify"
+            ) && !self.discarding_hidden_body()
+                && self.settings().layout.legacy()
+                && self.at_body_end_boundary()
+                && self.wikidot_ancestor_boundary_accepts_table_cell_end()
+                && self.wikidot_flat_pair_open_at(self.current().span.start)
+            {
                 return Ok(());
             }
 
