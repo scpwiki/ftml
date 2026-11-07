@@ -109,10 +109,13 @@ fn parse_fn<'r, 't>(
         parser.leave_wikidot_bibliography_body();
     }
     let body = body?;
-    if !parser.discarding_hidden_body() {
+    let footnote_tail = if !parser.discarding_hidden_body() {
         wikidot_skip_orphan_closers_after_bibliography_body(parser);
         wikidot_consume_collapsible_opened_in_body(parser, body_start);
-    }
+        wikidot_consume_footnote_opened_in_body(parser, source, body_start)
+    } else {
+        None
+    };
     let (elements, errors, _) = body.into();
     let crossed_residual = wikidot_candidate
         .then(|| {
@@ -169,6 +172,20 @@ fn parse_fn<'r, 't>(
                 in_residual = true;
             }
         }
+    }
+
+    if let Some(line) = footnote_tail {
+        if !line.is_empty() {
+            bibliography.add_residual(Element::Text(line));
+        }
+        bibliography.add_residual(Element::FootnoteBlock {
+            title: None,
+            hide: false,
+            wikidot_wrappers: Vec::new(),
+            wikidot_inline_suffix: false,
+            wikidot_inline_prefix: false,
+        });
+        parser.set_footnote_block();
     }
 
     if wikidot_candidate {
@@ -377,6 +394,119 @@ fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
         .as_bytes()
         .windows(needle.len())
         .position(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
+fn wikidot_consume_footnote_opened_in_body<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    source: &'t str,
+    body_start: usize,
+) -> Option<Cow<'t, str>>
+where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return None;
+    }
+    if parser.current().token != Token::LeftBlockEnd {
+        return None;
+    }
+    let closer_byte = parser.current().span.start;
+    if !wikidot_footnote_opener_unclosed(source, body_start, closer_byte) {
+        return None;
+    }
+    let mut probe = parser.clone();
+    let Ok(name) = probe.get_end_block() else {
+        return None;
+    };
+    if !name.eq_ignore_ascii_case("footnote") {
+        return None;
+    }
+    let line = wikidot_take_plain_tail_line(&mut probe, source);
+    parser.update(&probe);
+    Some(line.unwrap_or(Cow::Borrowed("")))
+}
+
+fn wikidot_footnote_opener_unclosed(
+    source: &str,
+    body_start: usize,
+    closer_byte: usize,
+) -> bool {
+    let Some(region) = source.get(body_start..closer_byte) else {
+        return false;
+    };
+    let mut opens = 0usize;
+    let mut closes = 0usize;
+    let mut index = 0usize;
+    while index < region.len() {
+        let rest = &region[index..];
+        if rest.len() >= 13 && rest[..13].eq_ignore_ascii_case("[[/footnote]]") {
+            closes += 1;
+            index += 13;
+            continue;
+        }
+        if rest.len() >= 12 && rest[..12].eq_ignore_ascii_case("[[footnote]]") {
+            opens += 1;
+            index += 12;
+            continue;
+        }
+        index += 1;
+    }
+    opens > closes
+}
+
+fn wikidot_take_plain_tail_line<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    source: &'t str,
+) -> Option<Cow<'t, str>>
+where
+    'r: 't,
+{
+    if parser.current().token != Token::LineBreak {
+        return None;
+    }
+    let mut line = parser.clone();
+    if line.step().is_err() {
+        return None;
+    }
+    let start = line.current().span.start;
+    if matches!(
+        line.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    ) {
+        return None;
+    }
+    let mut end = start;
+    loop {
+        let token = line.current().token;
+        if matches!(
+            token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            break;
+        }
+        if !wikidot_plain_tail_token(token) {
+            return None;
+        }
+        end = line.current().span.end;
+        if line.step().is_err() {
+            break;
+        }
+    }
+    let text = source.get(start..end).filter(|text| !text.is_empty())?;
+    parser.update(&line);
+    Some(Cow::Borrowed(text))
+}
+
+fn wikidot_plain_tail_token(token: Token) -> bool {
+    matches!(
+        token,
+        Token::Identifier
+            | Token::Other
+            | Token::Whitespace
+            | Token::Email
+            | Token::Url
+            | Token::UrlStar
+    )
 }
 
 fn wikidot_consume_collapsible_opened_in_body<'r, 't>(
@@ -641,5 +771,42 @@ mod tests {
             html,
             "<p>A claim<sup class=\"footnoteref\"><a id=\"footnoteref-1\" href=\"javascript:;\" class=\"footnoteref\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnote-1&#39;)\">1</a></sup>.</p><p>[[bibliography]]</p><div class=\"footnotes-footer\"><div class=\"title\">Footnotes</div><div class=\"footnote-footer\" id=\"footnote-1\"><a href=\"javascript:;\" onclick=\"WIKIDOT.page.utils.scrollToReference(&#39;footnoteref-1&#39;)\">1</a>. with a note</div></div>",
         );
+    }
+
+    #[test]
+    fn wikidot_footnote_opened_in_body_keeps_tail_inside() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = "[[bibliography]]\n: a : A\n[[footnote]]\n: b : B\n[[/bibliography]]\n[[/footnote]]\nafter";
+        let tokenization = crate::tokenize(source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(!html.contains("[[/footnote]]"), "{html}");
+        assert_eq!(html.matches("footnotes-footer").count(), 1, "{html}");
+        let tail = html.find("after").expect("after");
+        let footer = html.find("footnotes-footer").expect("footer");
+        let bibitems_close = html.rfind("</div>").expect("close");
+        assert!(tail < footer && footer < bibitems_close, "{html}");
+        assert!(!tree.needs_footnote_block);
+    }
+
+    #[test]
+    fn wikidot_footnote_closed_in_body_keeps_footer_outside() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let source = "[[bibliography]]\n: a : A\n[[footnote]]\n: b : B\n[[/footnote]]\n[[/bibliography]]\nafter";
+        let tokenization = crate::tokenize(source);
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+
+        assert!(errors.is_empty(), "{errors:#?}");
+        assert!(!html.contains("[[/footnote]]"), "{html}");
+        let after = html.find("<p>after</p>").expect("after");
+        let bibitems_close = html.find("</div><p>after</p>").expect("bibitems");
+        let footer = html.find("footnotes-footer").expect("footer");
+        assert!(bibitems_close < after && after < footer, "{html}");
+        assert!(tree.needs_footnote_block);
     }
 }
