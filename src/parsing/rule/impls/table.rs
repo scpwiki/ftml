@@ -437,6 +437,51 @@ fn simple_table_row_block_interior<'t>(
     }
 }
 
+fn element_is_row_suffix(element: &Element<'_>) -> bool {
+    matches!(element, Element::Text(text) if text.as_ref() == "||")
+}
+
+fn row_suffix_index<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    elements: &[Element<'t>],
+) -> Option<usize> {
+    let at = parser.wikidot_row_suffix_at()?;
+    if let Some(index) = elements.iter().rposition(element_is_row_suffix) {
+        return Some(index);
+    }
+    if parser.current().span.start > at {
+        parser.clear_wikidot_row_suffix_at();
+    }
+    None
+}
+
+pub(crate) fn eject_wikidot_row_suffix<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    elements: &mut Vec<Element<'t>>,
+) -> Vec<Element<'t>> {
+    let Some(index) = row_suffix_index(parser, elements) else {
+        return Vec::new();
+    };
+    if elements.len() == index + 2 && matches!(elements.last(), Some(Element::LineBreak))
+    {
+        elements.pop();
+    }
+    elements.split_off(index)
+}
+
+pub(crate) fn keep_wikidot_row_suffix<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    elements: &mut Vec<Element<'t>>,
+) -> Option<usize> {
+    let index = row_suffix_index(parser, elements)?;
+    if elements.len() == index + 2 && matches!(elements.last(), Some(Element::LineBreak))
+    {
+        elements.pop();
+    }
+    parser.clear_wikidot_row_suffix_at();
+    Some(index)
+}
+
 fn take_simple_row_line_suffix<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Vec<Element<'t>>, ParseError> {
@@ -1326,8 +1371,14 @@ fn try_consume_inner<'r, 't>(
                             match simple_table_row_block_interior(new_items) {
                                 Ok(mut interior) => {
                                     if !parser.in_wikidot_span_body() {
-                                        interior
-                                            .extend(take_simple_row_line_suffix(parser)?);
+                                        let suffix_at = parser.current().span.start;
+                                        let suffix = take_simple_row_line_suffix(parser)?;
+                                        if !suffix.is_empty() {
+                                            interior.extend(suffix);
+                                        }
+                                        if interior.iter().any(element_is_row_suffix) {
+                                            parser.set_wikidot_row_suffix_at(suffix_at);
+                                        }
                                     }
                                     elements.clear();
                                     push_cell(

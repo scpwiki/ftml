@@ -127,6 +127,7 @@ fn include_page<'r, 't>(
         table_of_contents_depths: Vec::new(),
         footnotes: Vec::new(),
         has_footnote_block: std::convert::identity(has_footnote_block),
+        wikidot_row_suffix: false,
         bibliographies: Default::default(),
     })
 }

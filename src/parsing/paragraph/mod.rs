@@ -289,6 +289,13 @@ where
                             stack.mark_wikidot_invisible_line_occupancy();
                         }
                     }
+                    if parser.settings().layout.legacy()
+                        && parser.current().token == Token::LineBreak
+                        && stack.wikidot_row_suffix_break_pending()
+                        && !wikidot_line_after_break_has_content(parser)
+                    {
+                        stack.clear_wikidot_row_suffix_break();
+                    }
                     parser.set_wikidot_line_follows_block(
                         stack.wikidot_line_break_follows_block(),
                     );
@@ -1289,6 +1296,24 @@ pub(crate) fn batch_is_seam_bounded(elements: &[Element]) -> bool {
     })
 }
 
+fn wikidot_line_after_break_has_content(parser: &Parser<'_, '_>) -> bool {
+    let mut probe = parser.clone();
+    if probe.step().is_err() {
+        return false;
+    }
+    loop {
+        match probe.current().token {
+            Token::Whitespace => {
+                if probe.step().is_err() {
+                    return false;
+                }
+            }
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => return false,
+            _ => return true,
+        }
+    }
+}
+
 fn push_elements<'t>(
     stack: &mut ParagraphStack<'t>,
     elements: Elements<'t>,
@@ -1308,6 +1333,11 @@ fn push_elements<'t>(
             {
                 stack.mark_wikidot_tabview_boundary();
             }
+            let row_suffix_tail = !paragraph_safe
+                && matches!(
+                    elements.last(),
+                    Some(Element::Text(text)) if text.as_ref() == "||"
+                );
             let per_element = batch_is_seam_bounded(&elements)
                 && elements.iter().any(|element| !element.paragraph_safe());
             for element in elements {
@@ -1317,6 +1347,9 @@ fn push_elements<'t>(
                     paragraph_safe
                 };
                 push_element(stack, element, element_safe);
+            }
+            if row_suffix_tail {
+                stack.mark_wikidot_row_suffix_break();
             }
         }
     }
@@ -1389,6 +1422,7 @@ fn push_element<'t>(
         {
             stack.clear_crossed_collapsible_tail();
             stack.mark_next_unwrapped_after_block();
+            stack.clear_wikidot_row_suffix_break();
         }
         stack.push_element(element, paragraph_safe);
     }

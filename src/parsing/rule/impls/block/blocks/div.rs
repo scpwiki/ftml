@@ -1242,6 +1242,8 @@ fn parse_fn<'r, 't>(
     } else {
         None
     };
+    let row_suffix =
+        crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements);
     let element =
         Element::Container(Container::new(ContainerType::Div, elements, attributes));
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_DIV);
@@ -1255,6 +1257,7 @@ fn parse_fn<'r, 't>(
             output.push(text!("]"));
         }
         output.push(wikidot_crossed_ol_tail());
+        output.extend(row_suffix);
         return ok!(false; output, errors);
     }
     if parser.take_wikidot_crossed_list_break_sentinel()? {
@@ -1266,6 +1269,7 @@ fn parse_fn<'r, 't>(
             output.push(text!("]"));
         }
         output.push(Element::LineBreak);
+        output.extend(row_suffix);
         ok!(false; output, errors)
     } else if fused_close {
         let mut output = vec![element];
@@ -1273,10 +1277,16 @@ fn parse_fn<'r, 't>(
             output.extend(rest);
         }
         output.push(text!("]"));
+        output.extend(row_suffix);
         ok!(false; output, errors)
     } else if let Some(rest) = hoisted {
         let mut output = vec![element];
         output.extend(rest);
+        output.extend(row_suffix);
+        ok!(false; output, errors)
+    } else if !row_suffix.is_empty() {
+        let mut output = vec![element];
+        output.extend(row_suffix);
         ok!(false; output, errors)
     } else {
         ok!(element, errors)

@@ -871,16 +871,17 @@ struct BibliographyLowering<'b, 't> {
 
 #[cfg(test)]
 fn lower_wikidot_inline_size_scopes<'t>(elements: &mut Vec<Element<'t>>) {
-    lower_wikidot_inline_size_scopes_with_bibliographies(elements, None);
+    lower_wikidot_inline_size_scopes_with_bibliographies(elements, None, false);
 }
 
 pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     elements: &mut Vec<Element<'t>>,
     mut bibliographies: Option<&mut BibliographyList<'t>>,
+    row_suffix: bool,
 ) -> Vec<bool> {
     flatten_crossing_inline_containers(elements);
     flatten_anchor_crossing_inline_containers(elements);
-    build_wikidot_block_frames(elements, true);
+    build_wikidot_block_frames(elements, true, row_suffix);
     let mut lowered = Vec::new();
     let (valid, close_pairs) = match bibliographies.as_deref_mut() {
         Some(list) => {
@@ -889,7 +890,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
                 for (_, items) in bibliography.slice_mut() {
                     flatten_crossing_inline_containers(items);
                     flatten_anchor_crossing_inline_containers(items);
-                    build_wikidot_bibliography_frames(items);
+                    build_wikidot_bibliography_frames(items, row_suffix);
                 }
             }
             collect_valid_scope_pairs_with_bibliographies(elements, list)
@@ -923,10 +924,11 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
 
 pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     elements: &mut Vec<Element<'t>>,
+    row_suffix: bool,
 ) {
     flatten_crossing_inline_containers(elements);
     flatten_anchor_crossing_inline_containers(elements);
-    build_wikidot_block_frames(elements, false);
+    build_wikidot_block_frames(elements, false, row_suffix);
     let (valid, close_pairs) = collect_valid_scope_pairs(elements);
 
     let mut ordinal = 0;
@@ -955,7 +957,7 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
     for (_, elements) in bibliography.slice_mut() {
         flatten_crossing_inline_containers(elements);
         flatten_anchor_crossing_inline_containers(elements);
-        build_wikidot_bibliography_frames(elements);
+        build_wikidot_bibliography_frames(elements, false);
     }
     let mut ordinal = 0;
     let mut pending = PendingScopes::default();
@@ -4784,10 +4786,11 @@ struct WikidotFrameAssembly<'t> {
     forced_collapsible_closes: BTreeSet<usize>,
     swallow_orphan_div_break: bool,
     at_root: bool,
+    row_suffix: bool,
 }
 
 impl<'t> WikidotFrameAssembly<'t> {
-    fn new(at_root: bool) -> Self {
+    fn new(at_root: bool, row_suffix: bool) -> Self {
         WikidotFrameAssembly {
             output: Vec::new(),
             stack: Vec::new(),
@@ -4797,6 +4800,7 @@ impl<'t> WikidotFrameAssembly<'t> {
             forced_collapsible_closes: BTreeSet::new(),
             swallow_orphan_div_break: false,
             at_root,
+            row_suffix,
         }
     }
 
@@ -5177,12 +5181,29 @@ impl<'t> WikidotFrameAssembly<'t> {
         if matches!(frame.children.last(), Some(Element::LineBreak)) {
             frame.children.pop();
         }
+        let suffix = self.take_row_suffix(&mut frame);
         self.top().push(Element::WikidotBlockFrame {
             attributes: frame.attributes,
             children: frame.children,
             collapsible_link: frame.link,
             omit_close: false,
         });
+        self.top().extend(suffix);
+    }
+
+    fn take_row_suffix(&self, frame: &mut WikidotFrameBuild<'t>) -> Vec<Element<'t>> {
+        if !self.row_suffix || !frame_ejects_row_suffix(&frame.attributes) {
+            return Vec::new();
+        }
+        let Some(index) = frame.children.iter().rposition(|element| {
+            matches!(element, Element::Text(text) if text.as_ref() == "||")
+        }) else {
+            return Vec::new();
+        };
+        if index + 1 != frame.children.len() {
+            return Vec::new();
+        }
+        frame.children.split_off(index)
     }
 
     /// Each shell closer tag closes the innermost open div if one exists (B2,
@@ -5201,12 +5222,14 @@ impl<'t> WikidotFrameAssembly<'t> {
             if matches!(frame.children.last(), Some(Element::LineBreak)) {
                 frame.children.pop();
             }
+            let suffix = self.take_row_suffix(&mut frame);
             self.top().push(Element::WikidotBlockFrame {
                 attributes: frame.attributes,
                 children: frame.children,
                 collapsible_link: frame.link,
                 omit_close: false,
             });
+            self.top().extend(suffix);
         }
     }
 
@@ -5238,27 +5261,47 @@ impl<'t> WikidotFrameAssembly<'t> {
                 }
             }
             let omit_close = self.at_root;
+            let suffix = self.take_row_suffix(&mut frame);
             self.top().push(Element::WikidotBlockFrame {
                 attributes: frame.attributes,
                 children: frame.children,
                 collapsible_link: None,
                 omit_close,
             });
+            self.top().extend(suffix);
         }
         self.output
     }
 }
 
-fn build_wikidot_bibliography_frames<'t>(elements: &mut Vec<Element<'t>>) {
+fn frame_ejects_row_suffix(attributes: &AttributeMap<'_>) -> bool {
+    let class = attributes
+        .get()
+        .get("class")
+        .map(|value| value.as_ref())
+        .unwrap_or("");
+    !matches!(
+        class,
+        "collapsible-block"
+            | "collapsible-block-folded"
+            | "collapsible-block-unfolded"
+            | "collapsible-block-unfolded-link"
+    )
+}
+
+fn build_wikidot_bibliography_frames<'t>(
+    elements: &mut Vec<Element<'t>>,
+    row_suffix: bool,
+) {
     for element in elements.iter_mut() {
         visit_children_mut(element, &mut |children| {
-            build_wikidot_block_frames(children, false);
+            build_wikidot_block_frames(children, false, row_suffix);
         });
     }
     if !elements.iter().any(is_wikidot_block_partial) {
         return;
     }
-    let mut assembly = WikidotFrameAssembly::new(false);
+    let mut assembly = WikidotFrameAssembly::new(false, row_suffix);
     for element in mem::take(elements) {
         match element {
             Element::Partial(PartialElement::WikidotBlockClose(_))
@@ -5272,16 +5315,20 @@ fn build_wikidot_bibliography_frames<'t>(elements: &mut Vec<Element<'t>>) {
     *elements = assembly.finish();
 }
 
-fn build_wikidot_block_frames<'t>(elements: &mut Vec<Element<'t>>, at_root: bool) {
+fn build_wikidot_block_frames<'t>(
+    elements: &mut Vec<Element<'t>>,
+    at_root: bool,
+    row_suffix: bool,
+) {
     for element in elements.iter_mut() {
         visit_children_mut(element, &mut |children| {
-            build_wikidot_block_frames(children, false);
+            build_wikidot_block_frames(children, false, row_suffix);
         });
     }
     if !elements.iter().any(is_wikidot_block_partial) {
         return;
     }
-    let mut assembly = WikidotFrameAssembly::new(at_root);
+    let mut assembly = WikidotFrameAssembly::new(at_root, row_suffix);
     for element in mem::take(elements) {
         assembly.push(element);
     }

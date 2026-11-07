@@ -95,6 +95,9 @@ pub struct ParagraphStack<'t> {
     /// wrapped paragraph start with `<br />` before the following text.
     wikidot_math_next_paragraph_leads_with_br: bool,
     wikidot_toc_next_paragraph_leads_with_br: bool,
+    /// The finished run ends in a simple-row leftover `||`. The next content
+    /// line stays bare, with its leading break kept.
+    wikidot_row_suffix_break: bool,
 
     finished: Vec<Element<'t>>,
 
@@ -121,7 +124,28 @@ impl<'t> ParagraphStack<'t> {
     }
 
     #[inline]
+    pub(crate) fn mark_wikidot_row_suffix_break(&mut self) {
+        if self.wikidot {
+            self.wikidot_row_suffix_break = true;
+        }
+    }
+
+    pub(crate) fn wikidot_row_suffix_break_pending(&self) -> bool {
+        self.wikidot_row_suffix_break
+    }
+
+    pub(crate) fn clear_wikidot_row_suffix_break(&mut self) {
+        self.wikidot_row_suffix_break = false;
+    }
+
     pub(crate) fn wikidot_line_break_follows_block(&self) -> bool {
+        if self.wikidot_row_suffix_break
+            && self.wikidot
+            && self.current_empty()
+            && matches!(self.finished.last(), Some(Element::Text(text)) if text.as_ref() == "||")
+        {
+            return true;
+        }
         self.wikidot
             && self.current_empty()
             && (self.crossed_collapsible_tail
