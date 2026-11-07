@@ -1599,6 +1599,43 @@ fn row_ends_with_formed_div(elements: &[Element<'_>]) -> bool {
         })
 }
 
+fn quote_row_explicit_list_leaves_residue_bare(
+    wikidot: bool,
+    elements: &[Element<'_>],
+) -> bool {
+    wikidot
+        && elements.iter().any(|element| {
+            matches!(
+                element,
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            )
+        })
+}
+
+fn row_has_quote_residue(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| match element {
+        Element::Text(text) => {
+            let trimmed = text.trim();
+            !trimmed.is_empty() && trimmed.bytes().all(|byte| byte == b'>')
+        }
+        _ => false,
+    })
+}
+
+fn quote_residue_text(element: &Element<'_>, keep_space: bool) -> bool {
+    let Element::Text(text) = element else {
+        return false;
+    };
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return keep_space;
+    }
+    trimmed.bytes().all(|byte| byte == b'>')
+}
+
 fn push_native_quote_row<'t>(
     stack: &mut ParagraphStack<'t>,
     row: NativeQuoteRow<'t>,
@@ -1670,7 +1707,8 @@ fn push_native_quote_row<'t>(
             || (wikidot && alignment_block)
             || (wikidot && note_block)
             || wikidot_block_close_row
-            || wikidot_tabview_row_end;
+            || wikidot_tabview_row_end
+            || quote_row_explicit_list_leaves_residue_bare(wikidot, &row.elements);
         let has_simple_table = row.elements.iter().any(|element| {
             matches!(
                 element,
@@ -1681,6 +1719,9 @@ fn push_native_quote_row<'t>(
         let seam_bounded =
             crate::parsing::paragraph::batch_is_seam_bounded(&row.elements);
         let last_index = counts.len() - 1;
+        let keep_quote_paragraph =
+            quote_row_explicit_list_leaves_residue_bare(wikidot, &row.elements)
+                && row_has_quote_residue(&row.elements);
         let mut iter = row.elements.into_iter();
         for (index, (count, safe, _)) in counts.iter().enumerate() {
             if index > 0 {
@@ -1705,6 +1746,8 @@ fn push_native_quote_row<'t>(
                     true
                 } else if per_element {
                     element.paragraph_safe()
+                } else if keep_quote_paragraph && quote_residue_text(&element, true) {
+                    true
                 } else {
                     *safe
                 };
@@ -1745,7 +1788,8 @@ fn push_native_quote_row<'t>(
         || (wikidot && alignment_block)
         || (wikidot && note_block)
         || wikidot_block_close_row
-        || wikidot_tabview_row_end;
+        || wikidot_tabview_row_end
+        || quote_row_explicit_list_leaves_residue_bare(wikidot, &row.elements);
     let has_simple_table = row.elements.iter().any(|element| {
         matches!(
             element,
@@ -1756,11 +1800,16 @@ fn push_native_quote_row<'t>(
         && crate::parsing::paragraph::batch_is_seam_bounded(&row.elements)
         && row.elements.iter().any(|element| !element.paragraph_safe()))
         || wikidot_block_close_row;
+    let keep_quote_paragraph =
+        quote_row_explicit_list_leaves_residue_bare(wikidot, &row.elements)
+            && row_has_quote_residue(&row.elements);
     for element in row.elements {
         let paragraph_safe = if note_block && element == Element::LineBreak {
             true
         } else if per_element {
             element.paragraph_safe()
+        } else if keep_quote_paragraph && quote_residue_text(&element, true) {
+            true
         } else {
             row.paragraph_safe
         };

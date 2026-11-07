@@ -1,0 +1,197 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": {
+                    "align": "center"
+                },
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "hidden",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "collapsible",
+                                    "data": {
+                                        "elements": [
+                                            {
+                                                "element": "list",
+                                                "data": {
+                                                    "type": "bullet",
+                                                    "attributes": {},
+                                                    "items": [
+                                                        {
+                                                            "item-type": "elements",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "text",
+                                                                    "data": "n"
+                                                                },
+                                                                {
+                                                                    "element": "footnote",
+                                                                    "data": 1
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ],
+                                        "attributes": {},
+                                        "start-open": false,
+                                        "show-text": null,
+                                        "hide-text": null,
+                                        "show-top": true,
+                                        "show-bottom": false
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "footnote-block",
+            "data": {
+                "title": null,
+                "hide": false
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "list",
+                "data": {
+                    "type": "bullet",
+                    "attributes": {},
+                    "items": [
+                        {
+                            "item-type": "elements",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "list",
+                                    "data": {
+                                        "type": "bullet",
+                                        "attributes": {},
+                                        "items": [
+                                            {
+                                                "item-type": "sub-list",
+                                                "element": "list",
+                                                "data": {
+                                                    "type": "bullet",
+                                                    "attributes": {},
+                                                    "items": [
+                                                        {
+                                                            "item-type": "elements",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "partial",
+                                                                    "data": {
+                                                                        "ListItem": {
+                                                                            "item-type": "elements",
+                                                                            "attributes": {},
+                                                                            "elements": [
+                                                                                {
+                                                                                    "element": "list",
+                                                                                    "data": {
+                                                                                        "type": "bullet",
+                                                                                        "attributes": {},
+                                                                                        "items": [
+                                                                                            {
+                                                                                                "item-type": "elements",
+                                                                                                "attributes": {},
+                                                                                                "elements": [
+                                                                                                    {
+                                                                                                        "element": "container",
+                                                                                                        "data": {
+                                                                                                            "type": "hidden",
+                                                                                                            "attributes": {},
+                                                                                                            "elements": [
+                                                                                                                {
+                                                                                                                    "element": "list",
+                                                                                                                    "data": {
+                                                                                                                        "type": "bullet",
+                                                                                                                        "attributes": {},
+                                                                                                                        "items": [
+                                                                                                                            {
+                                                                                                                                "item-type": "elements",
+                                                                                                                                "attributes": {},
+                                                                                                                                "elements": [
+                                                                                                                                    {
+                                                                                                                                        "element": "container",
+                                                                                                                                        "data": {
+                                                                                                                                            "type": "span",
+                                                                                                                                            "attributes": {},
+                                                                                                                                            "elements": [
+                                                                                                                                                {
+                                                                                                                                                    "element": "list",
+                                                                                                                                                    "data": {
+                                                                                                                                                        "type": "bullet",
+                                                                                                                                                        "attributes": {},
+                                                                                                                                                        "items": [
+                                                                                                                                                            {
+                                                                                                                                                                "item-type": "elements",
+                                                                                                                                                                "attributes": {},
+                                                                                                                                                                "elements": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "element": "text",
+                                                                                                                                                                        "data": "+"
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "element": "text",
+                                                                                                                                                                        "data": " "
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "element": "text",
+                                                                                                                                                                        "data": "h"
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            }
+                                                                                                                                                        ]
+                                                                                                                                                    }
+                                                                                                                                                }
+                                                                                                                                            ]
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            ]
+                                                                                                        }
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        ]
+    ]
+}

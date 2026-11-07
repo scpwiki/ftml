@@ -21,6 +21,7 @@
 use super::append_wikidot_footnote_trailing_list_break;
 use super::prelude::*;
 use crate::parsing::parse_boolean;
+use crate::tree::AttributeMap;
 use crate::parsing::rule::impls::comment_closer_token_count;
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
@@ -131,7 +132,22 @@ fn parse_footnote_ref<'r, 't>(
         let repaired =
             crate::parsing::footnote::repair_wikidot_footnote_list_chrome(&mut elements);
         let note_took_the_list_break = parser.take_suppress_footnote_list_break();
-        if !repaired && !note_took_the_list_break {
+        let closer_marker = wikidot_footnote_closer_line_list_marker(&parser);
+        if let Some(marker) = closer_marker
+            && matches!(
+                elements.last(),
+                Some(Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                })
+            )
+        {
+            elements.push(Element::Container(Container::new(
+                ContainerType::Paragraph,
+                vec![text!(marker)],
+                AttributeMap::new(),
+            )));
+        } else if !repaired && !note_took_the_list_break {
             append_wikidot_footnote_trailing_list_break(&mut elements);
         }
     }
@@ -142,6 +158,27 @@ fn parse_footnote_ref<'r, 't>(
         ok!(true; vec![Element::Footnote(index.into()), text!("]")], errors)
     } else {
         ok!(Element::Footnote(index.into()), errors)
+    }
+}
+
+fn wikidot_footnote_closer_line_list_marker(
+    parser: &Parser<'_, '_>,
+) -> Option<&'static str> {
+    let source = parser.full_text().inner();
+    let mut end = parser.current().span.start.min(source.len());
+    while end > 0 && matches!(source.as_bytes()[end - 1], b' ' | b'\t') {
+        end -= 1;
+    }
+    if end < 2 || &source[end - 2..end] != "]]" {
+        return None;
+    }
+    let lowered = source[..end].to_ascii_lowercase();
+    let opener = lowered.rfind("[[/footnote")?;
+    let line_start = source[..opener].rfind('\n').map_or(0, |index| index + 1);
+    match source[line_start..opener].trim() {
+        "*" => Some("*"),
+        "#" => Some("#"),
+        _ => None,
     }
 }
 

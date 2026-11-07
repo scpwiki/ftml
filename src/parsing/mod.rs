@@ -329,6 +329,9 @@ where
                         parsed.wikidot_row_suffix,
                     );
                 }
+                for footnote in &mut footnotes {
+                    footnote::drop_empty_footnote_list_items_deep(footnote);
+                }
                 for (index, bibliography) in
                     bibliographies.slice_mut().iter_mut().enumerate()
                 {
