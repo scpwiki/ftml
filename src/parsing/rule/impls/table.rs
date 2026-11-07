@@ -21,6 +21,7 @@
 use super::block::blocks::BLOCK_TABLE;
 use super::prelude::*;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
+use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{
     Alignment, AttributeMap, Container, ContainerType, PartialElement, Table, TableCell,
     TableRow, TableType,
@@ -1809,6 +1810,17 @@ fn try_consume_inner<'r, 't>(
                                     parser.step()?;
                                 }
                                 parser.set_wikidot_table_cut_boundary();
+                                // A div opened on this row line ends the
+                                // enclosing div's gather at the row block's
+                                // closer; live then silently consumes the next
+                                // excess bare `[[/div]]` rather than
+                                // literalising it.
+                                if pair.kind == WikidotBlockKind::Div
+                                    && parser.in_wikidot_div_body()
+                                    && !parser.discarding_hidden_body()
+                                {
+                                    parser.set_wikidot_row_absorb_div_close(true);
+                                }
                                 return finish_simple_table(rows, errors);
                             }
                         }

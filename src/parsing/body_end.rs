@@ -284,3 +284,91 @@ impl BodyEndBoundary {
             .any(|item| name.eq_ignore_ascii_case(item))
     }
 }
+
+impl<'r, 't> Parser<'r, 't> {
+    /// Whether the current token is a bare `[[/div]]` closer that the
+    /// row-close absorb flag will silently consume: exact `div` name,
+    /// exact non-fused `]]` terminator.
+    pub(crate) fn at_wikidot_row_absorb_div_close(&self) -> bool
+    where
+        'r: 't,
+    {
+        if self.current().token != Token::LeftBlockEnd
+            || !self.wikidot_row_absorb_div_close()
+        {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        let mut name = String::new();
+        loop {
+            match probe.current().token {
+                Token::RightBlock => break,
+                Token::InputEnd | Token::ParagraphBreak | Token::RightLink => {
+                    return false;
+                }
+                _ => {
+                    name.push_str(probe.current().slice);
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+        name.eq_ignore_ascii_case("div")
+    }
+
+    /// Whether the break at the current token precedes an absorbed div
+    /// closer that is itself followed by an enclosing-body closer line:
+    /// consecutive closer lines share no break in live, so this break
+    /// vanishes.
+    pub(crate) fn wikidot_row_absorb_break_before_closer_line(&self) -> bool
+    where
+        'r: 't,
+    {
+        if self.current().token != Token::LineBreak {
+            return false;
+        }
+        let mut probe = self.clone();
+        if probe.step().is_err() {
+            return false;
+        }
+        if !probe.at_wikidot_row_absorb_div_close() {
+            return false;
+        }
+        // Step past the absorbed closer.
+        probe.step().ok();
+        loop {
+            match probe.current().token {
+                Token::RightBlock => {
+                    probe.step().ok();
+                    break;
+                }
+                Token::InputEnd | Token::ParagraphBreak | Token::RightLink => {
+                    return false;
+                }
+                _ => {
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+        // Step past the absorbed line's break, if any.
+        while probe.current().token == Token::LineBreak {
+            if probe.step().is_err() {
+                return false;
+            }
+        }
+        if probe.current().token != Token::LeftBlockEnd {
+            return false;
+        }
+        let mut end = probe.clone();
+        let Ok(name) = end.get_end_block() else {
+            return false;
+        };
+        self.body_end_boundary_accepts(name.strip_suffix('_').unwrap_or(name.as_ref()))
+    }
+}

@@ -171,6 +171,17 @@ where
                     Token::LineBreak | Token::ParagraphBreak
                 ),
         );
+        // Consecutive closer lines share no break in live: the break before
+        // an absorbed div closer that ends at an enclosing body's closer
+        // line vanishes entirely.
+        if parser.settings().layout.legacy()
+            && parser.current().token == Token::LineBreak
+            && parser.wikidot_row_absorb_break_before_closer_line()
+        {
+            parser.step()?;
+            line_prefix_whitespace_only = true;
+            continue;
+        }
         // The line-break rule drops this newline because a closer follows it.
         // Live still emits the break, outside the paragraph that the closer ends.
         if parser.settings().layout.legacy()
