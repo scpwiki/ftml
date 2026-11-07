@@ -1178,6 +1178,18 @@ fn format_class_index(kind: InlineFormatKind) -> usize {
     }
 }
 
+fn format_fosters_into_explicit_list(ctype: ContainerType) -> bool {
+    matches!(
+        ctype,
+        ContainerType::Italics
+            | ContainerType::Underline
+            | ContainerType::Strikethrough
+            | ContainerType::Superscript
+            | ContainerType::Subscript
+            | ContainerType::Monospace
+    )
+}
+
 fn format_kind_of(ctype: ContainerType) -> Option<InlineFormatKind> {
     match ctype {
         ContainerType::Bold => Some(InlineFormatKind::Bold),
@@ -1200,6 +1212,10 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
     }
     let mut output = Vec::with_capacity(elements.len());
     for mut element in mem::take(elements) {
+        if foster_sole_explicit_list(&mut element) {
+            output.push(element);
+            continue;
+        }
         if let Some(kind) = format_kind_literalised_around_flow_block(&element)
             && let Element::Container(container) = &mut element
         {
@@ -1314,6 +1330,72 @@ fn is_wikidot_flow_block(element: &Element<'_>) -> bool {
             PartialElement::WikidotBlockOpen(_) | PartialElement::WikidotBlockClose(_),
         ) => true,
         _ => false,
+    }
+}
+
+/// An explicit list eats the newlines inside it before inline pairing, so the
+/// markers pair across the list. A block start then closes that inline and the
+/// next item text reopens it. The paired container is that pre-tidy shape.
+fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
+    let Element::Container(container) = &element else {
+        return false;
+    };
+    let ctype = container.ctype();
+    if !format_fosters_into_explicit_list(ctype) {
+        return false;
+    }
+    let mut saw_list = false;
+    for child in container.elements() {
+        match child {
+            Element::LineBreak | Element::LineBreaks(_) => {}
+            Element::Text(text) if text.trim().is_empty() => {}
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            } if !saw_list => saw_list = true,
+            _ => return false,
+        }
+    }
+    if !saw_list {
+        return false;
+    }
+    let Element::Container(container) = element else {
+        return false;
+    };
+    let children = mem::take(container.elements_mut());
+    let mut list = children
+        .into_iter()
+        .find(|child| {
+            matches!(
+                child,
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            )
+        })
+        .expect("explicit list");
+    wrap_explicit_list_items(&mut list, ctype);
+    *element = list;
+    true
+}
+
+fn wrap_explicit_list_items(list: &mut Element<'_>, ctype: ContainerType) {
+    let Element::List { items, .. } = list else {
+        return;
+    };
+    for item in items.iter_mut() {
+        match item {
+            ListItem::Elements { elements, .. } => {
+                let inner = mem::take(elements);
+                elements.push(Element::Container(Container::new(
+                    ctype,
+                    inner,
+                    AttributeMap::new(),
+                )));
+            }
+            ListItem::SubList { element } => wrap_explicit_list_items(element, ctype),
+        }
     }
 }
 

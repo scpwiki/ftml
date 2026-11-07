@@ -21,7 +21,8 @@
 use super::inline_delimiter::{
     ReachableCloseMode, append_split_close_leftover, append_wikidot_line_close_space,
     assert_unpadded_open, block_name_at, inline_body_padded_through_seams, is_block_name,
-    link_name_at, prepend_split_close_leftover, validate_reachable_close,
+    legacy_format_body_contains_table, link_name_at, prepend_split_close_leftover,
+    validate_reachable_close,
 };
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
@@ -150,6 +151,9 @@ fn finish_collected<'r, 't>(
                 if inline_body_padded_through_seams(container.elements())
         )
     {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if parser.settings().layout.legacy() && legacy_format_body_contains_table(&elements) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if parser.settings().layout.legacy()

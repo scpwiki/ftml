@@ -22,8 +22,20 @@ use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
 use crate::parsing::parser::closer_scan::count_scan_token_visit;
-use crate::tree::Container;
+use crate::tree::{Container, Element};
 use std::borrow::Cow;
+
+/// Wikidot's table rule runs before inline pairing and splits a glued marker
+/// onto its own paragraph. A format whose body holds that table never pairs.
+pub(super) fn legacy_format_body_contains_table(elements: &Elements<'_>) -> bool {
+    let Elements::Single(Element::Container(container)) = elements else {
+        return false;
+    };
+    container
+        .elements()
+        .iter()
+        .any(|element| matches!(element, Element::Table(_)))
+}
 
 pub(super) fn assert_unpadded_open<'r, 't>(
     parser: &mut Parser<'r, 't>,
