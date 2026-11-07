@@ -1028,6 +1028,34 @@ impl<'r, 't> Parser<'r, 't> {
             .on_list_item_line(byte)
     }
 
+    /// A `[[/row]]` or `[[/table]]` on a bullet line is item text. The list
+    /// wraps that line before Tableadv runs, so the closer cannot see a later
+    /// `[[/row]]`. A cell closer earlier on the same line still reaches it.
+    pub(crate) fn wikidot_list_line_table_closer_is_item_text(
+        &self,
+        byte: usize,
+    ) -> bool {
+        if !self.wikidot_byte_on_list_item_line(byte) {
+            return false;
+        }
+        let source = self.full_text().inner();
+        let line_start = source[..byte]
+            .rfind(['\n', '\r'])
+            .map(|index| index + 1)
+            .unwrap_or(0);
+        let line = &source[line_start..byte];
+        let cell_end = ["[[/cell]]", "[[/hcell]]"]
+            .into_iter()
+            .filter_map(|needle| {
+                last_ignore_ascii_case(line, needle).map(|at| at + needle.len())
+            })
+            .max();
+        match cell_end {
+            Some(after) if line[after..].chars().all(char::is_whitespace) => false,
+            _ => true,
+        }
+    }
+
     pub(crate) fn wikidot_byte_in_quote_run(&self, byte: usize) -> bool {
         if !self.settings().layout.legacy() {
             return false;
@@ -3517,6 +3545,28 @@ pub struct ParserMutableState {
 #[inline]
 fn make_shared_vec<T>() -> Rc<RefCell<Vec<T>>> {
     Rc::new(RefCell::new(Vec::new()))
+}
+
+fn last_ignore_ascii_case(haystack: &str, needle: &str) -> Option<usize> {
+    let haystack = haystack.as_bytes();
+    let needle = needle.as_bytes();
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    let mut index = haystack.len() - needle.len();
+    loop {
+        if haystack[index..index + needle.len()]
+            .iter()
+            .zip(needle)
+            .all(|(left, right)| left.to_ascii_lowercase() == *right)
+        {
+            return Some(index);
+        }
+        if index == 0 {
+            return None;
+        }
+        index -= 1;
+    }
 }
 
 #[cfg(test)]

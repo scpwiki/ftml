@@ -238,6 +238,14 @@ fn extract_table_cells<'r, 't>(
                 cells.push(cell);
             }
 
+            // A bullet `[[/row]]` stays a list item. It is inside the row
+            // span and tidy pulls that list out in front of the table.
+            Element::List { .. } if !cells.is_empty() => {
+                foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
+                    element,
+                ])));
+            }
+
             Element::Partial(PartialElement::WikidotFoster(_)) => {
                 foster.push(element);
             }
@@ -317,6 +325,81 @@ fn partition_wikidot_foster<'t>(tail: Vec<Element<'t>>) -> Vec<Element<'t>> {
 
 fn is_cell_closer(source: &str) -> bool {
     source.eq_ignore_ascii_case("[[/cell]]") || source.eq_ignore_ascii_case("[[/hcell]]")
+}
+
+fn next_cell_closer(haystack: &str) -> Option<(usize, usize)> {
+    let mut best: Option<(usize, usize)> = None;
+    for needle in ["[[/cell]]", "[[/hcell]]"] {
+        if let Some(index) = find_ignore_ascii_case(haystack, needle) {
+            if best.is_none_or(|(at, _)| index < at) {
+                best = Some((index, needle.len()));
+            }
+        }
+    }
+    best
+}
+
+/// The table's own closer. A `[[/table]]` on a list line is item text, so it
+/// does not end the region the cell closer is allowed to reach.
+fn legacy_table_region_end(parser: &Parser<'_, '_>, from: usize) -> usize {
+    let source = parser.full_text().inner();
+    let mut search = from;
+    while search < source.len() {
+        let Some(rel) = find_ignore_ascii_case(&source[search..], "[[/table]]") else {
+            return source.len();
+        };
+        let at = search + rel;
+        if !parser.wikidot_byte_on_list_item_line(at) {
+            return at;
+        }
+        search = at + "[[/table]]".len();
+    }
+    source.len()
+}
+
+/// List runs before Tableadv and wraps a bullet line in list-end tokens.
+/// Those tokens sit between a bullet `[[/cell]]` and a `[[/row]]` on a later
+/// line, so that closer does not reach the row. A later line-start closer
+/// still can. With no reaching closer, the row pattern fails and the markers
+/// stay literal.
+fn legacy_some_cell_closer_reaches_row(parser: &Parser<'_, '_>, from: usize) -> bool {
+    let source = parser.full_text().inner();
+    let region_end = legacy_table_region_end(parser, from);
+    let mut search = from;
+    while search < region_end {
+        let Some((rel, len)) = next_cell_closer(&source[search..region_end]) else {
+            return false;
+        };
+        let closer = search + rel;
+        let closer_end = closer + len;
+        let Some(row_rel) =
+            find_ignore_ascii_case(&source[closer_end..region_end], "[[/row]]")
+        else {
+            return false;
+        };
+        let row = closer_end + row_rel;
+        let gap = &source[closer_end..row];
+        if gap_is_space_or_quote_prefix(gap) {
+            let on_list = parser.wikidot_byte_on_list_item_line(closer);
+            let same_line = !gap.contains('\n') && !gap.contains('\r');
+            if !on_list || same_line {
+                return true;
+            }
+        }
+        search = closer_end;
+    }
+    false
+}
+
+/// Quote prefixes are eaten before Tableadv runs. They are not list-end tokens.
+fn gap_is_space_or_quote_prefix(gap: &str) -> bool {
+    gap.split(['\n', '\r']).all(|line| {
+        let mut rest = line;
+        while let Some(tail) = rest.strip_prefix('>') {
+            rest = tail;
+        }
+        rest.chars().all(char::is_whitespace)
+    })
 }
 
 fn explicit_closer_name<'r: 't, 't>(
@@ -686,6 +769,11 @@ fn parse_row<'r, 't>(
     flag_score: bool,
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    // A row opener on a native list-item line is item text. List already
+    // claimed the line, so Tableadv never sees a row head there.
+    if parser.settings().layout.legacy() && parser.in_wikidot_single_line_content() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let owner_start = table_opener_start(parser, opener_start);
     if let Some(error) =
         cached_underclosed_table_error(parser, BLOCK_TABLE_ROW.name, owner_start)
@@ -827,6 +915,12 @@ fn parse_cell_regular<'r, 't>(
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let legacy = parser.settings().layout.legacy();
+    if legacy && parser.in_wikidot_single_line_content() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if legacy && !legacy_some_cell_closer_reaches_row(parser, opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let cache_rule = if legacy {
         BLOCK_TABLE_CELL_BODY.name
     } else {
@@ -900,6 +994,12 @@ fn parse_cell_header<'r, 't>(
     in_head: bool,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let legacy = parser.settings().layout.legacy();
+    if legacy && parser.in_wikidot_single_line_content() {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if legacy && !legacy_some_cell_closer_reaches_row(parser, opener_start) {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     let cache_rule = BLOCK_TABLE_CELL_BODY.name;
     let owner_start = table_opener_start(parser, opener_start);
     if let Some(error) = cached_underclosed_table_error(parser, cache_rule, owner_start) {
