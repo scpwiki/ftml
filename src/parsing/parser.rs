@@ -436,7 +436,7 @@ pub(crate) fn wikidot_anchor_block_open_depth_before(
 }
 
 fn segment_has_tab_panel(elements: &[Element<'_>]) -> bool {
-    let Element::Container(container) = elements.last() else {
+    let Some(Element::Container(container)) = elements.last() else {
         return false;
     };
     if container.ctype() != crate::tree::ContainerType::Blockquote {
