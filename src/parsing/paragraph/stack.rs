@@ -91,6 +91,7 @@ pub struct ParagraphStack<'t> {
     wikidot_bare_after_explicit_list: bool,
     wikidot_explicit_pre_candidate: bool,
     wikidot_suppress_explicit_pre_dissolve: bool,
+    wikidot_dissolved_pre_candidate: bool,
     wikidot_post_empty_list_break: bool,
     /// After `[[/math]]`, some closer-line whitespace tails make live's next
     /// wrapped paragraph start with `<br />` before the following text.
@@ -401,6 +402,48 @@ impl<'t> ParagraphStack<'t> {
         }
     }
 
+    /// The dissolved analog of `wikidot_dissolve_explicit_pre_candidate`:
+    /// at page root live keeps a paragraph parked directly before an
+    /// all-empty explicit list bare (`x<br><br>`), not only before a
+    /// formed list. Only a trailing run of LineBreaks may follow the
+    /// paragraph; any real content after the dissolved list keeps it
+    /// wrapped. Body gathers suppress this, like the formed rule.
+    fn wikidot_dissolve_empty_list_pre_candidate(&mut self) {
+        self.wikidot_dissolved_pre_candidate = false;
+        if self.wikidot_suppress_explicit_pre_dissolve {
+            return;
+        }
+        let mut tail = self.finished.len();
+        while tail > 0 && self.finished[tail - 1] == Element::LineBreak {
+            tail -= 1;
+        }
+        if tail == self.finished.len() || tail == 0 {
+            return;
+        }
+        let paragraph_index = tail - 1;
+        if !matches!(
+            self.finished.get(paragraph_index),
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Paragraph
+        ) {
+            return;
+        }
+        if let Some(Element::Container(container)) = self.finished.get(paragraph_index)
+            && paragraph_is_only_quote_residue(container)
+        {
+            return;
+        }
+        let paragraph = self.finished.remove(paragraph_index);
+        self.shift_wikidot_div_literal_run_before(paragraph_index);
+        let Element::Container(container) = paragraph else {
+            return;
+        };
+        let elements: Vec<Element<'t>> = container.into();
+        for (offset, element) in elements.into_iter().enumerate() {
+            self.finished.insert(paragraph_index + offset, element);
+        }
+    }
+
     fn wikidot_note_explicit_pre_candidate(&mut self, pre_attached: bool) {
         if !self.wikidot
             || self.wikidot_suppress_explicit_pre_dissolve
@@ -422,6 +465,7 @@ impl<'t> ParagraphStack<'t> {
     fn wikidot_clear_post_explicit_list_state(&mut self) {
         self.wikidot_bare_after_explicit_list = false;
         self.wikidot_explicit_pre_candidate = false;
+        self.wikidot_dissolved_pre_candidate = false;
         self.wikidot_post_empty_list_break = false;
     }
 
@@ -568,6 +612,7 @@ impl<'t> ParagraphStack<'t> {
             self.wikidot_pop_post_list_break();
         }
         self.wikidot_explicit_pre_candidate = false;
+        self.wikidot_dissolved_pre_candidate = false;
     }
 
     fn wikidot_handle_post_list_block_follower(
@@ -1363,12 +1408,35 @@ impl<'t> ParagraphStack<'t> {
                         if container.ctype() == ContainerType::Div
                 );
                 self.close_wikidot_div_literal_run(followed_by_div);
-                self.finished.push(element);
+                // Consecutive opens of the same all-empty explicit list
+                // collapse to a single break on live: the break an earlier
+                // dissolve left at the tail absorbs the next dissolve of
+                // the same run. A paragraph break starts a new run.
+                let duplicate_empty_list_break = invisible_block_line
+                    && empty_list_break
+                    && !self.wikidot_suppress_explicit_pre_dissolve
+                    && !paragraph_break_separated
+                    && self.wikidot_post_empty_list_break;
+                if !duplicate_empty_list_break {
+                    self.finished.push(element);
+                }
             }
             if invisible_block_line {
                 if empty_list_break {
                     self.wikidot_post_empty_list_break = true;
                     self.wikidot_bare_after_explicit_list = true;
+                    if !self.wikidot_suppress_explicit_pre_dissolve {
+                        let len = self.finished.len();
+                        if len >= 2
+                            && matches!(
+                                self.finished.get(len - 2),
+                                Some(Element::Container(container))
+                                    if container.ctype() == ContainerType::Paragraph
+                            )
+                        {
+                            self.wikidot_dissolved_pre_candidate = true;
+                        }
+                    }
                 } else if self.wikidot_post_explicit_list_break() {
                     self.wikidot_bare_after_explicit_list = true;
                 }
@@ -1921,6 +1989,9 @@ impl<'t> ParagraphStack<'t> {
         self.unwrap_bare_bold_before_explicit_list();
         if self.wikidot_explicit_pre_candidate {
             self.wikidot_dissolve_explicit_pre_candidate();
+        }
+        if self.wikidot_dissolved_pre_candidate {
+            self.wikidot_dissolve_empty_list_pre_candidate();
         }
         self.end_paragraph();
         self.remove_pending_aligned_image_separator();
