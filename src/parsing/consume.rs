@@ -1810,12 +1810,30 @@ fn try_consume_wikidot_row_absorb_div_close<'r, 't>(
     if !parser.at_wikidot_row_absorb_div_close() {
         return None;
     }
+    let at_line_start = parser.start_of_line();
     let _ = parser.take_wikidot_row_absorb_div_close();
     step_over_wikidot_designated_end(parser)?;
     // The absorbed closer's line break goes with it (live emits no break
-    // after a silently consumed closer).
-    if parser.current().token == Token::LineBreak {
+    // after a silently consumed closer) — including when trailing spaces
+    // come first (`[[/div]]   ` eats both), but preserved before
+    // trailing content ([[/div]] y keeps its break and space).
+    let mut probe = parser.clone();
+    while probe.current().token == Token::Whitespace {
+        probe.step().ok()?;
+    }
+    let probe_break = probe.current().token;
+    if probe_break == Token::LineBreak {
+        while parser.current().token == Token::Whitespace {
+            parser.step().ok()?;
+        }
         parser.step().ok()?;
+    }
+    // Only a bare stray on its own line carries the absorb-neighborhood
+    // break/wrapper mechanics; mid-line or content-bearing strays leave
+    // the surrounding breaks and wrapping alone, as does one with no
+    // line following it at all.
+    if at_line_start && matches!(probe_break, Token::LineBreak | Token::ParagraphBreak) {
+        parser.mark_wikidot_row_absorb_div_close_seen();
     }
     Some(Ok(crate::parsing::ParseSuccess::new(
         Elements::None,

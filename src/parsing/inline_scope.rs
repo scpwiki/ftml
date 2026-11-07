@@ -4923,6 +4923,9 @@ struct WikidotFrameBuild<'t> {
     children: Vec<Element<'t>>,
     scored_div: bool,
     link: Option<WikidotFrameLink<'t>>,
+    /// Head byte of a note frame, so a crossed close that pops the
+    /// frame early retires that head from `note_opens`.
+    note_head: Option<usize>,
 }
 
 struct WikidotHeadingFrame<'t> {
@@ -4974,10 +4977,12 @@ struct WikidotFrameAssembly<'t> {
     stack: Vec<WikidotFrameBuild<'t>>,
     collapsible_closes: BTreeMap<usize, WikidotCollapsibleClose<'t>>,
     note_opens: BTreeSet<usize>,
+    div_crossed_notes: BTreeSet<usize>,
     heading_frame: Option<WikidotHeadingFrame<'t>>,
     reopen: Option<WikidotReopenState<'t>>,
     forced_collapsible_closes: BTreeSet<usize>,
     swallow_orphan_div_break: bool,
+    swallow_orphan_note_break: bool,
     at_root: bool,
     row_suffix: bool,
 }
@@ -4989,10 +4994,12 @@ impl<'t> WikidotFrameAssembly<'t> {
             stack: Vec::new(),
             collapsible_closes: BTreeMap::new(),
             note_opens: BTreeSet::new(),
+            div_crossed_notes: BTreeSet::new(),
             heading_frame: None,
             reopen: None,
             forced_collapsible_closes: BTreeSet::new(),
             swallow_orphan_div_break: false,
+            swallow_orphan_note_break: false,
             at_root,
             row_suffix,
         }
@@ -5011,6 +5018,12 @@ impl<'t> WikidotFrameAssembly<'t> {
     fn push(&mut self, element: Element<'t>) {
         if self.swallow_orphan_div_break {
             self.swallow_orphan_div_break = false;
+            if matches!(element, Element::LineBreak) {
+                return;
+            }
+        }
+        if self.swallow_orphan_note_break {
+            self.swallow_orphan_note_break = false;
             if matches!(element, Element::LineBreak) {
                 return;
             }
@@ -5088,6 +5101,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     children: Vec::new(),
                     scored_div: scored,
                     link: None,
+                    note_head: None,
                 });
             }
             WikidotBlockShell::Note { head } => {
@@ -5097,6 +5111,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     children: Vec::new(),
                     scored_div: false,
                     link: None,
+                    note_head: Some(head),
                 });
             }
             WikidotBlockShell::Align { alignment, .. } => {
@@ -5108,6 +5123,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     children: Vec::new(),
                     scored_div: false,
                     link: None,
+                    note_head: None,
                 });
             }
             WikidotBlockShell::Collapsible {
@@ -5135,6 +5151,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     children: Vec::new(),
                     scored_div: false,
                     link: None,
+                    note_head: None,
                 });
                 if let Some(heading) = &reopen_heading
                     && !heading.label_empty
@@ -5161,6 +5178,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                             spans: Vec::new(),
                             heading: reopen_heading.clone(),
                         }),
+                        note_head: None,
                     });
                 } else {
                     self.push_shell_link(
@@ -5180,6 +5198,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     children: Vec::new(),
                     scored_div: false,
                     link: None,
+                    note_head: None,
                 });
                 if show_top {
                     if reopen_heading.is_some() {
@@ -5196,6 +5215,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                                 spans: Vec::new(),
                                 heading: reopen_heading.clone(),
                             }),
+                            note_head: None,
                         });
                     } else {
                         self.push_shell_link(
@@ -5214,6 +5234,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     children: Vec::new(),
                     scored_div: false,
                     link: None,
+                    note_head: None,
                 });
                 if let Some(heading) = reopen_heading {
                     let mut attributes = AttributeMap::new();
@@ -5274,6 +5295,12 @@ impl<'t> WikidotFrameAssembly<'t> {
                 } else {
                     self.strip_paragraph_before_close();
                 }
+                // A div close that crosses a note frame marks it: the
+                // note's own closer line will arrive orphaned, and live
+                // eats its break (W17).
+                if let Some(head) = self.stack.last().and_then(|frame| frame.note_head) {
+                    self.div_crossed_notes.insert(head);
+                }
                 self.pop_frame();
             }
             WikidotBlockCloseKind::CollapsibleCrossedBottom { head, .. } => {
@@ -5319,8 +5346,18 @@ impl<'t> WikidotFrameAssembly<'t> {
             }
             WikidotBlockCloseKind::Note { head } => {
                 self.strip_paragraph_before_close();
+                // A note frame that a div close crossed early leaves this
+                // closer line orphaned; live eats its break too — but only
+                // when nothing else is open (a div still open around the
+                // note keeps its own break).
+                let div_crossed =
+                    self.div_crossed_notes.contains(&head) && self.stack.is_empty();
                 if self.note_opens.remove(&head) {
                     self.pop_frame();
+                }
+                if div_crossed {
+                    self.div_crossed_notes.remove(&head);
+                    self.swallow_orphan_note_break = true;
                 }
             }
             WikidotBlockCloseKind::Align { .. } => {

@@ -25,6 +25,7 @@ mod stack_orders;
 pub use self::stack::ParagraphStack;
 pub(crate) use self::stack::collapsible_has_direct_literal_nested_opener;
 
+use super::body_end::WikidotRowAbsorbStrayRun;
 use super::collect::{TokenWindow, comment_bridge_end};
 use super::consume::consume;
 use super::parser::QuoteBodyLineStatus;
@@ -71,6 +72,7 @@ where
     let mut walk_visited: Vec<(usize, BodyWalkKey)> = Vec::new();
     let mut walk_started = false;
     let mut literal_gallery_pending = false;
+    let mut absorb_stray_break_neutralized = false;
     let mut line_prefix_whitespace_only = true;
     while !finished {
         let quote_line_status = parser.prepare_quote_body_line()?;
@@ -182,6 +184,45 @@ where
             line_prefix_whitespace_only = true;
             continue;
         }
+        // An absorbed stray line swallows the break run before it in live:
+        // a blank line that only precedes the absorbed closer is not a
+        // paragraph boundary (it becomes one `<br>` with following content
+        // unwrapped), and a stray carrying trailing text eats the break
+        // run so the text joins the previous line.
+        if parser.settings().layout.legacy()
+            && matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            )
+            && let Some(run) = parser.wikidot_row_absorb_stray_break_run()
+        {
+            match run {
+                WikidotRowAbsorbStrayRun::TrailingContent => {
+                    parser.step()?;
+                    parser.clear_start_of_line();
+                    line_prefix_whitespace_only = true;
+                    continue;
+                }
+                WikidotRowAbsorbStrayRun::BareLine => {
+                    // The break run is synthesised here (once) as the
+                    // single `<br>` live renders for the absorbed line, and
+                    // the current paragraph is closed so the following
+                    // line stays unwrapped. A bare LineBreak before a bare
+                    // stray normally produces exactly one `<br>` already;
+                    // closing an open wrapped paragraph here matches live
+                    // (`<p>text</p><br>y` after an open paragraph).
+                    if !absorb_stray_break_neutralized {
+                        stack.end_paragraph();
+                        stack.mark_next_unwrapped();
+                        stack.push_element(Element::LineBreak, true);
+                        absorb_stray_break_neutralized = true;
+                    }
+                    parser.step()?;
+                    line_prefix_whitespace_only = true;
+                    continue;
+                }
+            }
+        }
         // The line-break rule drops this newline because a closer follows it.
         // Live still emits the break, outside the paragraph that the closer ends.
         if parser.settings().layout.legacy()
@@ -246,6 +287,14 @@ where
                     push_element(&mut stack, Element::LineBreak, true);
                     stack.mark_wikidot_demoted_comment_break();
                 } else {
+                    // A paragraph break right after the absorbed stray
+                    // merges with the absorbed line's own single break:
+                    // live renders `||<p>y</p>`, never `||<br><p>y</p>`.
+                    if parser.settings().layout.legacy()
+                        && parser.take_wikidot_row_absorb_div_close_seen()
+                    {
+                        stack.pop_line_break();
+                    }
                     stack.end_paragraph_at_break();
                 }
 
@@ -355,6 +404,26 @@ where
             let paragraph_split = consumed.paragraph_split.take();
             let (elements, mut errors, paragraph_safe) = consumed.into();
             let mut elements = elements;
+            // Any produced element other than the absorbed stray itself
+            // ends the absorb neighborhood's paragraph-merge window.
+            if parser.settings().layout.legacy() && !matches!(elements, Elements::None) {
+                parser.take_wikidot_row_absorb_div_close_seen();
+            }
+            // With no preceding break token reaching this gather (e.g. the
+            // list's own gather ate it), the absorbed stray still closes
+            // any open paragraph, keeps the following line unwrapped and
+            // renders the `<br>` its line stands for.
+            if parser.settings().layout.legacy()
+                && matches!(elements, Elements::None)
+                && parser.wikidot_row_absorb_div_close_seen()
+            {
+                stack.end_paragraph();
+                stack.mark_next_unwrapped();
+                if !absorb_stray_break_neutralized {
+                    stack.push_element(Element::LineBreak, true);
+                }
+            }
+            absorb_stray_break_neutralized = false;
             let literal_list_item = stack.wikidot_list_break_follows_list()
                 && errors
                     .iter()

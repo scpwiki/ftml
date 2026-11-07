@@ -20,6 +20,17 @@
 
 use super::{Parser, Token};
 
+/// What an absorb-armed stray line looks like after a leading break run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WikidotRowAbsorbStrayRun {
+    /// The stray line carries trailing inline content (`[[/div]] y`): live
+    /// eats the break run and the trailing text joins the previous line.
+    TrailingContent,
+    /// The stray line is bare (only the closer, then the break): live
+    /// renders the break run as one `<br>`, following content unwrapped.
+    BareLine,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub(super) struct BodyEndBoundary {
     accepts_names: &'static [&'static str],
@@ -445,6 +456,76 @@ impl<'r, 't> Parser<'r, 't> {
             }
         }
         name.eq_ignore_ascii_case("div")
+    }
+
+    /// Whether the break run at the current token leads to the next
+    /// absorbable bare `[[/div]]` closer, and which shape the stray line
+    /// takes. The caller must be positioned on a break token.
+    pub(crate) fn wikidot_row_absorb_stray_break_run(
+        &self,
+    ) -> Option<WikidotRowAbsorbStrayRun>
+    where
+        'r: 't,
+    {
+        if !matches!(
+            self.current().token,
+            Token::LineBreak | Token::ParagraphBreak
+        ) {
+            return None;
+        }
+        if !self.wikidot_row_absorb_div_close() {
+            return None;
+        }
+        let mut probe = self.clone();
+        while matches!(
+            probe.current().token,
+            Token::LineBreak | Token::ParagraphBreak
+        ) {
+            if probe.step().is_err() {
+                return None;
+            }
+        }
+        if !probe.at_wikidot_row_absorb_div_close() {
+            return None;
+        }
+        // Step past the absorbed closer.
+        probe.step().ok();
+        loop {
+            match probe.current().token {
+                Token::RightBlock => {
+                    probe.step().ok();
+                    break;
+                }
+                Token::InputEnd | Token::ParagraphBreak | Token::RightLink => {
+                    return None;
+                }
+                _ => {
+                    if probe.step().is_err() {
+                        return None;
+                    }
+                }
+            }
+        }
+        while probe.current().token == Token::Whitespace {
+            if probe.step().is_err() {
+                return None;
+            }
+        }
+        // Nothing follows the stray line at end of input: the absorb
+        // neighborhood produces no visible break at all there.
+        if probe.current().token == Token::InputEnd {
+            return None;
+        }
+        Some(
+            if matches!(
+                probe.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            ) {
+                WikidotRowAbsorbStrayRun::BareLine
+            } else {
+                WikidotRowAbsorbStrayRun::TrailingContent
+            },
+        )
     }
 
     /// Whether the break at the current token precedes an absorbed div
