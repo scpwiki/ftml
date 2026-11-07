@@ -1000,10 +1000,16 @@ fn assemble_wikidot_li_segments<'t>(
         strip_newlines(&mut elements);
     }
     // L85 scope-6: a trailing newline after a nested list stays raw on live
-    // (no break element). Other trailing content keeps the break.
+    // (no break element). A trailing blockquote does too. Other trailing
+    // content keeps the break.
     // L85 scope-5: same for a trailing simple table (T5-item-table-end).
     let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }));
     let trailing_table = matches!(elements.last(), Some(Element::Table(_)));
+    let trailing_blockquote = matches!(
+        elements.last(),
+        Some(Element::Container(container))
+            if container.ctype() == ContainerType::Blockquote
+    );
     if had_trailing_empty
         && elements
             .last()
@@ -1023,6 +1029,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !matches!(elements.last(), Some(Element::LineBreak))
             && !trailing_nested_list
             && !trailing_table
+            && !trailing_blockquote
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)
         {
