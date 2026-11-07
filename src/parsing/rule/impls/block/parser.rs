@@ -3098,10 +3098,6 @@ where
 
         loop {
             if self.quotes_then_block_end(block_rule) {
-                // The closer line's quote marks are item text. `consume` would
-                // strip the row prefix, and the close disposition would then
-                // keep [[/li]] as text because the marks are no longer in front
-                // of it. Record the marks and end on the closer directly.
                 let prefix = self.take_quoted_closer_marks()?;
                 segments
                     .last_mut()
@@ -5727,9 +5723,6 @@ where
         let mut first = true;
 
         loop {
-            // A list closer line's quote marks are the row prefix, not item
-            // text. Leaving the residual mark for `consume` appends it to the
-            // last item.
             if block_rule.name.starts_with("block-list-")
                 && self.quotes_then_block_end(block_rule)
             {
@@ -6475,8 +6468,6 @@ where
         self.has_native_blockquote_body_end_with_mode(block_rule, required_depth, false)
     }
 
-    /// A closer line keeps every `>` as item text. A content line still strips
-    /// the quote-row prefix in `prepare_quote_body_line`.
     fn quotes_then_block_end(&self, block_rule: &BlockRule) -> bool {
         if !self.quote_body_literal_residuals() || self.current().token != Token::Quote {
             return false;
@@ -6490,9 +6481,6 @@ where
                 return false;
             }
         }
-        // A closer line whose quotes are only the row prefix stays on the
-        // ordinary strip path. Surplus quotes are item text, including the
-        // row prefix on that same line.
         if depth <= required {
             return false;
         }
@@ -6507,8 +6495,6 @@ where
         matching_close && token_is_body_boundary(probe.current().token)
     }
 
-    /// Quote marks on a closer line, including the space between them, then
-    /// the space that sits in front of the closer itself.
     fn take_quoted_closer_marks(&mut self) -> Result<Vec<Element<'t>>, ParseError> {
         let elements = self.take_literal_quote_prefix()?;
         if self.current().token == Token::Whitespace {
@@ -6520,8 +6506,6 @@ where
         Ok(elements)
     }
 
-    /// Quote marks on a closer line, including the space between them.
-    /// `consume` would strip the row prefix before any rule saw the text.
     fn take_literal_quote_prefix(&mut self) -> Result<Vec<Element<'t>>, ParseError> {
         let mut elements = Vec::new();
         while matches!(self.current().token, Token::Quote | Token::Whitespace) {
@@ -6537,8 +6521,6 @@ where
         Ok(elements)
     }
 
-    /// A quoted list closer may sit behind more `>` markers than the row depth.
-    /// Those extra markers are item text on other lines and are transparent here.
     pub(crate) fn has_surplus_quote_list_close(
         &self,
         block_rule: &BlockRule,

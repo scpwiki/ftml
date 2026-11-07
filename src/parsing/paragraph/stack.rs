@@ -385,8 +385,6 @@ impl<'t> ParagraphStack<'t> {
         ) {
             return;
         }
-        // A surplus quote mark before an explicit list is its own paragraph
-        // (`<p>&gt;</p><ul>`). Other leading runs still dissolve.
         if let Some(Element::Container(container)) = self.finished.get(paragraph_index)
             && paragraph_is_only_quote_residue(container)
         {

@@ -180,8 +180,6 @@ fn parse_list_block_impl<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    // Inside a quote, a later line-start '>' is list text. The ordinary body
-    // walk reads it as another blockquote. Surplus markers still hide the closer.
     let body = if wikidot
         && let Some(depth) = parser.native_blockquote_depth()
         && (parser.has_native_blockquote_body_end(block_rule, depth)
