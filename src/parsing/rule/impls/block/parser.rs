@@ -804,12 +804,17 @@ enum WikidotHeadScan {
     EndsAtSingleBracket,
     /// The head ends at the first `]]`, whatever the quoting.
     Plain,
+    /// A `]]` ends the head anywhere, but inside a double-quoted value a
+    /// `]]]` is a link close and is kept as head text; outside quotes a
+    /// `]]]` ends the head like a `]]`.
+    QuotedLinksPass,
 }
 
 fn wikidot_head_scan(block_rule: &BlockRule) -> WikidotHeadScan {
     match block_rule.name() {
         "block-div" => WikidotHeadScan::LineEndGreedy,
         "block-table" | "block-toc" => WikidotHeadScan::QuotedValuesAreLiteral,
+        "block-collapsible" => WikidotHeadScan::QuotedLinksPass,
         "block-anchor"
         | "block-span"
         | "block-code"
@@ -7169,6 +7174,16 @@ where
                             },
                             WikidotHeadScan::Plain => match current.token {
                                 Token::RightBlock | Token::RightLink => break,
+                                _ => {}
+                            },
+                            WikidotHeadScan::QuotedLinksPass => match current.token {
+                                Token::LeftComment => {
+                                    comments.push(consume_valid_comment(self)?);
+                                    continue;
+                                }
+                                Token::DoubleQuote => in_quote = !in_quote,
+                                Token::RightBlock => break,
+                                Token::RightLink if !in_quote => break,
                                 _ => {}
                             },
                         }

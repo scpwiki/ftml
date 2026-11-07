@@ -619,7 +619,35 @@ fn canonicalize_extra_block_head_closers(lines: &mut [String], literal_lines: &[
         if !OWNERS.iter().any(|owner| name.eq_ignore_ascii_case(owner)) {
             continue;
         }
-        let Some(close) = head.find("]]") else {
+        let head_bytes = head.as_bytes();
+        let mut link_depth = 0usize;
+        let mut cursor = 0usize;
+        let mut close = None;
+        while cursor + 1 < head_bytes.len() {
+            if head_bytes[cursor] == b'['
+                && head_bytes.get(cursor + 1) == Some(&b'[')
+                && head_bytes.get(cursor + 2) == Some(&b'[')
+            {
+                link_depth += 1;
+                cursor += 3;
+                continue;
+            }
+            if head_bytes[cursor] == b']' && head_bytes[cursor + 1] == b']' {
+                if link_depth > 0 {
+                    link_depth -= 1;
+                    cursor += if head_bytes.get(cursor + 2) == Some(&b']') {
+                        3
+                    } else {
+                        2
+                    };
+                    continue;
+                }
+                close = Some(cursor);
+                break;
+            }
+            cursor += 1;
+        }
+        let Some(close) = close else {
             continue;
         };
         let close = open + 2 + close;
