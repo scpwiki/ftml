@@ -23,6 +23,23 @@ const BIBLIOGRAPHY_SPLIT_TAIL: u16 = 1 << 14;
 /// Sentinel for "no scored div direct body" in the packed field.
 const SCORED_DIV_DIRECT_INACTIVE: u32 = u32::MAX;
 
+/// Div keeps a 2-bit count (max 3). The other three kinds are one bit each.
+/// Slots stay inside `crossed_closes` and do not overlap.
+fn crossed_close_slot(name: &str) -> Option<(u16, u16)> {
+    let name = name.strip_prefix("block-").unwrap_or(name);
+    if name.eq_ignore_ascii_case("div") {
+        Some((0, 3))
+    } else if name.eq_ignore_ascii_case("collapsible") {
+        Some((2, 1))
+    } else if name.eq_ignore_ascii_case("blockquote") {
+        Some((3, 1))
+    } else if name.eq_ignore_ascii_case("anchor") || name.eq_ignore_ascii_case("a") {
+        Some((4, 1))
+    } else {
+        None
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WikidotState {
     div_body_depth: u16,
@@ -38,6 +55,12 @@ pub(super) struct WikidotState {
     simple_table_crossed_closers: u16,
     center_body_depth: u16,
     flags: u16,
+    /// List-cross closers that ended an outer body early. A separate field
+    /// because the high bits of `flags` are MODULE_EMPTY_BODY, HEADING_LINE,
+    /// ADVANCED_TABLE_CELL_BODY, and BIBLIOGRAPHY_SPLIT_TAIL. Packing the
+    /// collapsible count into bit 13 made every advanced-cell parse swallow
+    /// `[[/collapsible]]`.
+    crossed_closes: u16,
     crossed_collapsible_tail: bool,
 }
 
@@ -57,6 +80,7 @@ impl Default for WikidotState {
             simple_table_crossed_closers: 0,
             center_body_depth: 0,
             flags: 0,
+            crossed_closes: 0,
             crossed_collapsible_tail: false,
         }
     }
@@ -304,38 +328,26 @@ impl Parser<'_, '_> {
     }
 
     pub(crate) fn record_wikidot_crossed_close(&mut self, block_rule_name: &str) {
-        let (shift, max) = match block_rule_name {
-            "block-div" => (11, 3),
-            "block-collapsible" => (13, 1),
-            "block-blockquote" => (14, 1),
-            "block-anchor" => (15, 1),
-            _ => return,
+        let Some((shift, max)) = crossed_close_slot(block_rule_name) else {
+            return;
         };
-        if (self.wikidot.flags >> shift) & max < max {
-            self.wikidot.flags += 1 << shift;
+        if (self.wikidot.crossed_closes >> shift) & max < max {
+            self.wikidot.crossed_closes += 1 << shift;
         }
     }
 
     pub(crate) fn has_wikidot_crossed_close(&self) -> bool {
-        self.wikidot.flags >> 11 != 0
+        self.wikidot.crossed_closes != 0
     }
 
     pub(crate) fn take_wikidot_crossed_close(&mut self, end_name: &str) -> bool {
-        let (shift, max) = if end_name.eq_ignore_ascii_case("div") {
-            (11, 3)
-        } else if end_name.eq_ignore_ascii_case("collapsible") {
-            (13, 1)
-        } else if end_name.eq_ignore_ascii_case("blockquote") {
-            (14, 1)
-        } else if end_name.eq_ignore_ascii_case("a") {
-            (15, 1)
-        } else {
+        let Some((shift, max)) = crossed_close_slot(end_name) else {
             return false;
         };
-        if (self.wikidot.flags >> shift) & max == 0 {
+        if (self.wikidot.crossed_closes >> shift) & max == 0 {
             return false;
         }
-        self.wikidot.flags -= 1 << shift;
+        self.wikidot.crossed_closes -= 1 << shift;
         true
     }
 
