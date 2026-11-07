@@ -1,0 +1,29 @@
+[
+    {
+        "token": "whitespace",
+        "rule": "anchor",
+        "span": [
+            6,
+            8
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "left-block-anchor",
+        "rule": "fallback",
+        "span": [
+            0,
+            3
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            8,
+            10
+        ],
+        "kind": "no-rules-match"
+    }
+]
