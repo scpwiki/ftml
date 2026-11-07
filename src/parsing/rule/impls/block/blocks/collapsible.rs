@@ -22,7 +22,8 @@ use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
     trim_wikidot_trailing_explicit_list_break,
-    wikidot_block_pair_for_block_head_byte, wikidot_flat_pair_for_head,
+    unwrap_wikidot_paragraph_after_explicit_list, wikidot_block_pair_for_block_head_byte,
+    wikidot_flat_pair_for_head,
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -618,6 +619,7 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy() {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
         drop_wikidot_trailing_vanish_breaks(&mut elements);
+        unwrap_wikidot_paragraph_after_explicit_list(&mut elements);
     }
     if parser.settings().layout.legacy()
         && parser.pending_wikidot_collapsible_closer()

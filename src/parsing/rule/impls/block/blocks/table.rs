@@ -19,6 +19,7 @@
  */
 
 use super::prelude::*;
+use super::unwrap_wikidot_paragraph_after_explicit_list;
 use crate::parsing::ParserWrap;
 use crate::parsing::rule::impls::block::RULE_BLOCK;
 use crate::settings::WikitextMode;
@@ -1326,6 +1327,9 @@ fn parse_cell<'r, 't>(
         strip_cell_paragraph_boundaries(&mut elements);
         if !preserve_single_paragraph {
             unwrap_single_cell_paragraph(&mut elements);
+        }
+        if legacy {
+            unwrap_wikidot_paragraph_after_explicit_list(&mut elements);
         }
     }
 

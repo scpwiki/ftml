@@ -21,8 +21,9 @@
 use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
-    trim_wikidot_trailing_explicit_list_break, wikidot_eject_after_lost_owner_collapsible,
-    wikidot_flat_pair_for_head,
+    trim_wikidot_trailing_explicit_list_break,
+    unwrap_wikidot_paragraph_after_explicit_list,
+    wikidot_eject_after_lost_owner_collapsible, wikidot_flat_pair_for_head,
 };
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::tree::{PartialElement, WikidotBlockShell};
@@ -146,45 +147,6 @@ fn parse_note_block<'r, 't>(
         output.extend(ejected);
         output.extend(row_suffix);
         ok!(false; output, errors)
-    }
-}
-
-/// The line after an explicit list inside a note is the list's continuation.
-/// Live glues that line to the list. A blank line is already a break plus
-/// bare text, so only a paragraph parked directly against the list is unwrapped.
-fn unwrap_wikidot_paragraph_after_explicit_list(elements: &mut Vec<Element<'_>>) {
-    let mut index = 0;
-    while index < elements.len() {
-        let explicit_list = matches!(
-            &elements[index],
-            Element::List {
-                wikidot_explicit_block: true,
-                ..
-            }
-        );
-        let next = index + 1;
-        let one_line_paragraph = elements.get(next).is_some_and(|element| {
-            matches!(
-                element,
-                Element::Container(container)
-                    if container.ctype() == ContainerType::Paragraph
-                        && container
-                            .elements()
-                            .iter()
-                            .all(|child| !matches!(child, Element::LineBreak))
-            )
-        });
-        if explicit_list && one_line_paragraph {
-            let Element::Container(container) = elements.remove(next) else {
-                unreachable!("the following element was a paragraph");
-            };
-            let children: Vec<Element<'_>> = container.into();
-            let added = children.len();
-            elements.splice(next..next, children);
-            index += 1 + added;
-            continue;
-        }
-        index += 1;
     }
 }
 
