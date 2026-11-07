@@ -319,11 +319,15 @@ where
                     inline_scope::lower_wikidot_inline_size_scopes_with_bibliographies(
                         &mut elements,
                         Some(&mut bibliographies),
+                        parsed.wikidot_row_suffix,
                     );
                 heading::normalize_wikidot_headings(&mut elements);
                 inline_format::lower_wikidot_root_dash_runs(&mut elements);
                 for footnote in &mut footnotes {
-                    inline_scope::lower_wikidot_inline_size_scopes_inline(footnote);
+                    inline_scope::lower_wikidot_inline_size_scopes_inline(
+                        footnote,
+                        parsed.wikidot_row_suffix,
+                    );
                 }
                 for (index, bibliography) in
                     bibliographies.slice_mut().iter_mut().enumerate()
@@ -755,6 +759,7 @@ where
     let footnotes = parser.remove_footnotes();
     let has_footnote_block = parser.has_footnote_block();
     let bibliographies = parser.remove_bibliographies();
+    let wikidot_row_suffix = parser.wikidot_row_suffix_at().is_some();
 
     UnstructuredParseResult {
         result,
@@ -764,6 +769,7 @@ where
         footnotes,
         has_footnote_block,
         bibliographies,
+        wikidot_row_suffix,
     }
 }
 
@@ -830,6 +836,9 @@ pub struct UnstructuredParseResult<'r, 't> {
 
     /// Whether a footnote block was placed during parsing.
     pub has_footnote_block: bool,
+
+    #[serde(default)]
+    pub wikidot_row_suffix: bool,
 
     /// The list of bibliographies.
     ///

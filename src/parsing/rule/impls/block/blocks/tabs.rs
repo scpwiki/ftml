@@ -429,7 +429,10 @@ fn prose_line<'t>(content: Vec<Element<'t>>) -> Vec<Element<'t>> {
     inline
 }
 
-fn tabview_tail_element<'t>(tail: Vec<Element<'t>>) -> Element<'t> {
+fn tabview_tail_element<'t>(mut tail: Vec<Element<'t>>) -> Element<'t> {
+    if matches!(tail.last(), Some(Element::LineBreak)) {
+        tail.pop();
+    }
     let mut attributes = AttributeMap::new();
     attributes.insert_raw(cow!(crate::tree::WIKIDOT_TABVIEW_TAIL_MARKER), cow!(""));
     Element::Container(Container::new(ContainerType::Div, tail, attributes))
@@ -635,6 +638,31 @@ fn parse_tabview<'r, 't>(
         }
     }
     close_content_run(&mut run, &mut items, &mut runs, true);
+
+    if parser.wikidot_row_suffix_at().is_some() {
+        let suffix_index = items.last().and_then(|item| {
+            let TabViewItem::Content(content) = item else {
+                return None;
+            };
+            content.iter().rposition(|element| {
+                matches!(element, Element::Text(text) if text.as_ref() == "||")
+            })
+        });
+        if let Some(index) = suffix_index {
+            let Some(TabViewItem::Content(mut content)) = items.pop() else {
+                unreachable!("suffix index was taken from the last content item");
+            };
+            let mut tail = content.split_off(index);
+            if tail.len() == 2 && matches!(tail.last(), Some(Element::LineBreak)) {
+                tail.pop();
+            }
+            if !content.is_empty() {
+                items.push(TabViewItem::Content(content));
+            }
+            items.push(TabViewItem::Content(vec![tabview_tail_element(tail)]));
+            parser.clear_wikidot_row_suffix_at();
+        }
+    }
 
     let mut pending_splices = Vec::new();
     if quote_ejection && !remote_ordinals.is_empty() && parser.tab_split_has_panel() {
@@ -2414,6 +2442,11 @@ fn parse_tab<'r, 't>(
     if legacy {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
     }
+    let row_suffix = if legacy {
+        crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements)
+    } else {
+        Vec::new()
+    };
 
     // A tab whose opener sits in a later quote segment (after an ejection in
     // this view) renders its panel as a bare div in that segment, not inside
@@ -2446,7 +2479,13 @@ fn parse_tab<'r, 't>(
         wikidot_label_spans: Vec::new(),
     }));
 
-    success_elements_with_paragraph_safety(false, element, errors)
+    if row_suffix.is_empty() {
+        success_elements_with_paragraph_safety(false, element, errors)
+    } else {
+        let mut output = vec![element];
+        output.extend(row_suffix);
+        ok!(false; output, errors)
+    }
 }
 
 #[cfg(test)]

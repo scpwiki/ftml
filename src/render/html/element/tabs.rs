@@ -250,6 +250,10 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                     }
                 });
             if let Some(tail) = tail {
+                let tail = match tail {
+                    [head @ .., Element::LineBreak] => head,
+                    tail => tail,
+                };
                 render_elements(ctx, tail);
             }
             for element in trailing {

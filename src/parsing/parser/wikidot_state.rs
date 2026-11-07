@@ -65,6 +65,7 @@ pub(super) struct WikidotState {
     pending_note_list_closer: bool,
     suppress_footnote_list_break: bool,
     list_depth_at_footnote: Option<usize>,
+    row_suffix_at: Option<usize>,
 }
 
 impl Default for WikidotState {
@@ -88,6 +89,7 @@ impl Default for WikidotState {
             pending_note_list_closer: false,
             suppress_footnote_list_break: false,
             list_depth_at_footnote: None,
+            row_suffix_at: None,
         }
     }
 }
@@ -96,6 +98,7 @@ impl WikidotState {
     pub(super) fn attempt_key(self) -> Self {
         Self {
             div_body_depth: self.div_body_depth.min(1),
+            row_suffix_at: None,
             ..self
         }
     }
@@ -377,6 +380,18 @@ impl Parser<'_, '_> {
         let closed = self.wikidot.flags & COLLAPSIBLE_CONTENT_CLOSED != 0;
         set_flag(&mut self.wikidot.flags, COLLAPSIBLE_CONTENT_CLOSED, false);
         closed
+    }
+
+    pub(crate) fn set_wikidot_row_suffix_at(&mut self, byte: usize) {
+        self.wikidot.row_suffix_at = Some(byte);
+    }
+
+    pub(crate) fn wikidot_row_suffix_at(&self) -> Option<usize> {
+        self.wikidot.row_suffix_at
+    }
+
+    pub(crate) fn clear_wikidot_row_suffix_at(&mut self) {
+        self.wikidot.row_suffix_at = None;
     }
 
     pub(crate) fn set_wikidot_collapsible_closed_at_deeper_quote(&mut self, value: bool) {

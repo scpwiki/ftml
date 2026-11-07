@@ -194,6 +194,11 @@ pub fn parse_alignment_block<'r, 't>(
     if span_keeps_head_breaks && align_parsed_body_keeps_span_head_breaks(&elements) {
         elements.insert(0, Element::LineBreaks(NonZeroU32::new(2).unwrap()));
     }
+    let row_suffix = if parser.settings().layout.legacy() {
+        crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements)
+    } else {
+        Vec::new()
+    };
 
     let element = Element::Container(Container::new(
         ContainerType::Align(alignment),
@@ -201,7 +206,13 @@ pub fn parse_alignment_block<'r, 't>(
         AttributeMap::new(),
     ));
 
-    ok!(element, errors)
+    if row_suffix.is_empty() {
+        ok!(element, errors)
+    } else {
+        let mut output = vec![element];
+        output.extend(row_suffix);
+        ok!(false; output, errors)
+    }
 }
 
 fn align_body_keeps_span_head_breaks(parser: &Parser<'_, '_>) -> bool {

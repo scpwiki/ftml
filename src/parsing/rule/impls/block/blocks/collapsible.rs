@@ -548,7 +548,7 @@ fn parse_fn<'r, 't>(
             elements.insert(0, Element::LineBreak);
         }
     }
-    let unfolded_tail_start = if parser.take_wikidot_collapsible_content_closed() {
+    let mut unfolded_tail_start = if parser.take_wikidot_collapsible_content_closed() {
         let tail_start = elements.len();
         let tail = parser.get_body_elements_with_literal_quote_context(
             &BLOCK_COLLAPSIBLE,
@@ -570,6 +570,15 @@ fn parse_fn<'r, 't>(
     } else {
         None
     };
+    if unfolded_tail_start.is_none()
+        && parser.settings().layout.legacy()
+        && let Some(index) = crate::parsing::rule::impls::keep_wikidot_row_suffix(
+            parser,
+            &mut elements,
+        )
+    {
+        unfolded_tail_start = Some(index);
+    }
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_COLLAPSIBLE);
     parser.set_in_wikidot_collapsible(previous_collapsible_context);
     if parser.settings().layout.legacy() {

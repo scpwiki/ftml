@@ -663,6 +663,13 @@ where
     parser.update(&close);
     let close_element = Element::Partial(PartialElement::WikidotBlockClose(kind));
     if render_interior_close_has_midrow_suffix(parser) {
+        let at = parser.current().span.start;
+        let rest = parser.full_text().inner().get(at..).unwrap_or("");
+        let line = rest.split(['\n', '\r']).next().unwrap_or("");
+        let trimmed = line.trim_start_matches([' ', '\t']);
+        if trimmed.starts_with("||") {
+            parser.set_wikidot_row_suffix_at(at + line.len() - trimmed.len());
+        }
         return Ok(Some(ok!(false; close_element, Vec::new())));
     }
     while parser.current().token == Token::Whitespace {

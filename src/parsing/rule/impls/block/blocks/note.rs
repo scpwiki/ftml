@@ -109,6 +109,11 @@ fn parse_note_block<'r, 't>(
         trim_wikidot_trailing_explicit_list_break(&mut elements);
         unwrap_wikidot_paragraph_after_explicit_list(&mut elements);
     }
+    let row_suffix = if legacy {
+        crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements)
+    } else {
+        Vec::new()
+    };
 
     let element = Element::Container(Container::new(
         ContainerType::Note,
@@ -119,7 +124,13 @@ fn parse_note_block<'r, 't>(
     // In the Wikidot layout the note stays paragraph-unsafe: text following
     // the closer is a bare continuation with no fresh paragraph, exactly like
     // the generic div block.
-    ok!(paragraph_safe && !legacy; element, errors)
+    if row_suffix.is_empty() {
+        ok!(paragraph_safe && !legacy; element, errors)
+    } else {
+        let mut output = vec![element];
+        output.extend(row_suffix);
+        ok!(false; output, errors)
+    }
 }
 
 /// The line after an explicit list inside a note is the list's continuation.
