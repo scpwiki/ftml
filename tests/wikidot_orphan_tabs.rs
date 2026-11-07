@@ -71,11 +71,20 @@ fn only_direct_tabview_children_activate_as_tabs() {
     );
     assert!(text.starts_with("[[tab]]\nbefore\n[[/tab]]\n"), "{text:?}");
     assert!(text.ends_with("[[tab]]\nafter\n[[/tab]]"), "{text:?}");
+    // Live (saved-page probes muse-probe-tvp-o1/o1b, BRIEF-TVP (17)) ends the
+    // outer tab at its FIRST closer: the orphan `[[tab Inner]]…[[/tab]]` pair
+    // inside the body is literal text, and the tail, the malformed head, and
+    // the stray closer that follow are recovery content, not part of the
+    // outer tab. The former nested-tab veto swallowed them into the tab.
+    assert!(text.contains("outer\n[[tab Inner]]\nnested"), "{text:?}");
     assert!(
-        text.contains("outer\n[[tab Inner]]\nnested\n[[/tab]]\ntail"),
+        !text.contains("nested\n[[/tab]]\ntail"),
+        "outer tab must not swallow the first closer: {text:?}"
+    );
+    assert!(
+        text.contains("nested\n\ntail\n[[tab Broken]\nmalformed\n[[/tab]]"),
         "{text:?}"
     );
-    assert!(text.contains("[[tab Broken]\nmalformed"), "{text:?}");
     assert_eq!(html.matches("class=\"yui-navset\"").count(), 1, "{html}");
     assert_eq!(html.matches("class=\"selected\"").count(), 1, "{html}");
     assert!(html.contains("&lt;unsafe&gt;"), "{html}");

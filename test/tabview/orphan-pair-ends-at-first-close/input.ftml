@@ -1,0 +1,12 @@
+[[tabview]]
+[[tab Outer]]
+outer text
+[[tab Inner]]
+nested text
+[[/tab]]
+tail text
+[[/tab]]
+[[tab Second]]
+second body
+[[/tab]]
+[[/tabview]]

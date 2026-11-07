@@ -4870,27 +4870,9 @@ where
         allow_inline_quote_close: bool,
     ) -> ParseResult<'r, 't, Vec<Element<'t>>> {
         let mut first = true;
-        let wikidot_tab = self.settings().layout.legacy()
-            && !self.discarding_hidden_body()
-            && block_rule.name == "block-tab";
-        let mut nested_wikidot_tabs = 0_usize;
-        let mut last_nested_wikidot_tab = None;
-        let mut inner_tabview_text_seen = false;
         let rule = self.rule();
 
         let is_end = move |parser: &mut Parser<'r, 't>| {
-            if wikidot_tab
-                && !inner_tabview_text_seen
-                && let Some(opener) = parser.wikidot_nested_tab_opener()
-                && last_nested_wikidot_tab != Some(opener)
-            {
-                last_nested_wikidot_tab = Some(opener);
-                nested_wikidot_tabs += 1;
-            }
-            if wikidot_tab && !inner_tabview_text_seen {
-                inner_tabview_text_seen = parser.wikidot_tabview_opener_in_line_text();
-            }
-            let before_end = parser.clone();
             let first_iteration = first;
             let result = parser.verify_end_block(
                 first,
@@ -4900,20 +4882,11 @@ where
             );
             first = false;
 
-            if result.is_some()
-                && nested_wikidot_tabs > 0
-                && parser.wikidot_later_tab_close_exists()
-            {
-                parser.update(&before_end);
-                if matches!(
-                    before_end.current().token,
-                    Token::LineBreak | Token::ParagraphBreak
-                ) {
-                    return Ok(false);
-                }
-                nested_wikidot_tabs -= 1;
-                return Ok(false);
-            }
+            // A tab ends at its first closer. An orphan `[[tab]]…[[/tab]]` pair
+            // inside a tab body does not reserve that closer: live ends the
+            // outer tab at the first closer and treats the tail as recovery
+            // content (saved-page probes muse-probe-tvp-o1/o12, BRIEF-TVP (17);
+            // the former nested-tab veto encoded behavior live does not have).
 
             if result.is_none()
                 && parser.discarding_hidden_body()
@@ -4988,74 +4961,6 @@ where
             Ok(result.is_some())
         };
         gather_paragraphs(self, rule, Some(is_end))
-    }
-
-    fn wikidot_later_tab_close_exists(&self) -> bool {
-        let mut scan = self.clone();
-        loop {
-            match scan.current().token {
-                Token::InputEnd => return false,
-                Token::LeftBlockEnd => {
-                    let mut end = scan.clone();
-                    if end.get_end_block().is_ok_and(|name| {
-                        name.strip_suffix('_')
-                            .unwrap_or(&name)
-                            .eq_ignore_ascii_case("tab")
-                    }) {
-                        return true;
-                    }
-                }
-                _ => {}
-            }
-            if scan.step().is_err() {
-                return false;
-            }
-        }
-    }
-
-    fn wikidot_nested_tab_opener(&self) -> Option<usize> {
-        let start = match self.current().token {
-            Token::LeftBlock => self.current().span.start,
-            Token::LineBreak | Token::ParagraphBreak => self.current().span.end,
-            _ => return None,
-        };
-        let full_text = self.full_text().inner();
-        let suffix = &full_text[start..];
-        let leading_space = suffix.len() - suffix.trim_start_matches([' ', '\t']).len();
-        let opener = start + leading_space;
-        let source = &full_text[opener..];
-        let physical_line = source.split_once('\n').map_or(source, |(line, _)| line);
-        let end = physical_line.find("]]")?;
-        let head = source[..end].strip_prefix("[[")?;
-        let mut parts = head.split_whitespace();
-        parts
-            .next()
-            .is_some_and(|name| name.eq_ignore_ascii_case("tab"))
-            .then_some(opener)
-    }
-
-    fn wikidot_tabview_opener_in_line_text(&self) -> bool {
-        let full_text = self.full_text().inner();
-        let pos = self.current().span.start.min(full_text.len());
-        let line_start = full_text[..pos].rfind('\n').map_or(0, |index| index + 1);
-        let line_end = full_text[pos..]
-            .find('\n')
-            .map_or(full_text.len(), |index| pos + index);
-        let line = &full_text[line_start..line_end];
-        let head_offset = line.len() - line.trim_start_matches([' ', '\t']).len();
-        let mut search = 0_usize;
-        while let Some(found) = line[search..].find("[[") {
-            let open = search + found;
-            let rest = &line[open + 2..];
-            let name_len = rest
-                .find(|c: char| c.is_whitespace() || c == ']')
-                .unwrap_or(rest.len());
-            if rest[..name_len].eq_ignore_ascii_case("tabview") {
-                return open != head_offset;
-            }
-            search = open + 2;
-        }
-        false
     }
 
     fn get_body_elements_no_paragraphs(
