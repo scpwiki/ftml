@@ -1,0 +1,66 @@
+{
+    "elements": [
+        {
+            "element": "table",
+            "data": {
+                "type": "advanced",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "table",
+                                        "data": {
+                                            "type": "simple",
+                                            "attributes": {},
+                                            "rows": [
+                                                {
+                                                    "attributes": {},
+                                                    "cells": [
+                                                        {
+                                                            "header": false,
+                                                            "column-span": 1,
+                                                            "align": null,
+                                                            "attributes": {},
+                                                            "elements": []
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "element": "line-break"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "table"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "||"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

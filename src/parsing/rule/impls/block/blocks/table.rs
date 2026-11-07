@@ -566,7 +566,10 @@ fn next_cell_closer(haystack: &str) -> Option<(usize, usize)> {
 }
 
 /// The table's own closer. A `[[/table]]` on a list line is item text, so it
-/// does not end the region the cell closer is allowed to reach.
+/// does not end the region the cell closer is allowed to reach. Likewise, a
+/// `[[/table]]` immediately followed by `||` — the `||` that closes a
+/// simple-table row — is cell content for the enclosing advanced table, not
+/// that table's end.
 fn legacy_table_region_end(parser: &Parser<'_, '_>, from: usize) -> usize {
     let source = parser.full_text().inner();
     let mut search = from;
@@ -575,10 +578,12 @@ fn legacy_table_region_end(parser: &Parser<'_, '_>, from: usize) -> usize {
             return source.len();
         };
         let at = search + rel;
-        if !parser.wikidot_byte_on_list_item_line(at) {
+        let after = at + "[[/table]]".len();
+        let content_of_cell = source[after..].starts_with("||");
+        if !parser.wikidot_byte_on_list_item_line(at) && !content_of_cell {
             return at;
         }
-        search = at + "[[/table]]".len();
+        search = after;
     }
     source.len()
 }
