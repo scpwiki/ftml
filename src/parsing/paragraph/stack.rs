@@ -1714,11 +1714,6 @@ impl<'t> ParagraphStack<'t> {
         self.paragraph_break_since_element = true;
     }
 
-    /// A literal `**` glued to `[[ul]]` stays bare text when the list holds a
-    /// block strong cannot enter (a nested list, a table, a div). The same
-    /// prefix stays a paragraph when that block never forms, as in
-    /// `||[[tabview]]`. A paragraph that still begins with `**[[` and is cut
-    /// off by the list is the unformed-block form of the same split.
     fn unwrap_bare_bold_before_explicit_list(&mut self) {
         if !self.wikidot {
             return;
