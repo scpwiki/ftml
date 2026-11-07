@@ -1075,13 +1075,18 @@ fn wrap_inline_line_after_list(segment: &mut Vec<Element>) {
             end += 1;
         }
         let run: Vec<Element> = segment.drain(start..end).collect();
-        if !run.iter().any(
-            |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
-        ) {
+        if !segment_has_block_marker(&run)
+            || !run.iter().any(
+                |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
+            )
+        {
             segment.splice(start..start, run);
             index = start + 1;
             continue;
         }
+        // Only an inline run carrying a literal block marker (e.g. a lone
+        // `[[/hidden]]` line after a list) is paragraph-wrapped; a plain
+        // continuation line stays bare beside the list.
         segment.insert(
             start,
             Element::Container(Container::new(
