@@ -714,6 +714,14 @@ impl<'r, 't> Parser<'r, 't> {
         })
     }
 
+    pub(crate) fn wikidot_iftags_elisions(&self) -> Vec<Range<usize>> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_block_pairs
+            .iftags_elisions()
+            .to_vec()
+    }
+
     pub(crate) fn wikidot_greedy_tail_within(&self, from: usize, to: usize) -> bool {
         self.block_end_scan_cache
             .borrow()

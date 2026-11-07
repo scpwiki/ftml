@@ -102,6 +102,7 @@ pub(crate) struct WikidotBlockPairs {
     closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
     foster_heads: BTreeSet<usize>,
     greedy_ranges: Vec<(usize, usize)>,
+    iftags_elisions: Vec<Range<usize>>,
     heading_ranges: Vec<(usize, usize)>,
     closer_end_bytes: BTreeMap<usize, usize>,
 }
@@ -192,6 +193,10 @@ impl WikidotBlockPairs {
         }
         let range = self.greedy_ranges[index - 1];
         (byte < range.1).then_some(range)
+    }
+
+    pub(crate) fn iftags_elisions(&self) -> &[Range<usize>] {
+        &self.iftags_elisions
     }
 
     pub(crate) fn shows_stolen_head(
@@ -511,6 +516,7 @@ struct Scanner<'t> {
     head_event_bytes: BTreeSet<usize>,
     closer_event_bytes: BTreeSet<(WikidotBlockKind, usize)>,
     greedy_ranges: Vec<(usize, usize)>,
+    iftags_elisions: Vec<Range<usize>>,
 }
 
 impl<'t> Scanner<'t> {
@@ -698,8 +704,10 @@ impl<'t> Scanner<'t> {
             head_event_bytes: BTreeSet::new(),
             closer_event_bytes: BTreeSet::new(),
             greedy_ranges: Vec::new(),
+            iftags_elisions: Vec::new(),
         };
         scanner.footnote_zones = scanner.compute_footnote_zones();
+        scanner.iftags_elisions = scanner.compute_iftags_elisions();
         scanner
     }
 
@@ -949,6 +957,32 @@ impl<'t> Scanner<'t> {
             index += 1;
         }
         None
+    }
+
+    fn compute_iftags_elisions(&self) -> Vec<Range<usize>> {
+        let mut ranges = Vec::new();
+        let mut index = 0usize;
+        while index < self.tokens.len() {
+            if let Some(zone_end) = self.zone_end(index) {
+                index = zone_end;
+                continue;
+            }
+            if self.tokens[index].token == Token::LeftBlock
+                && let Some(segment) = self.segment_at(index)
+            {
+                let start = self.tokens[index].span.start;
+                if segment.include_body {
+                    ranges.push(start..segment.body.start);
+                    ranges.push(segment.body.end..segment.range_end);
+                } else {
+                    ranges.push(start..segment.range_end);
+                }
+                index = segment.end.max(index + 1);
+                continue;
+            }
+            index += 1;
+        }
+        ranges
     }
 
     fn segment_at(&self, start: usize) -> Option<SegmentHit> {
@@ -1372,6 +1406,7 @@ impl<'t> Scanner<'t> {
             self.source,
             url,
             close_start,
+            &self.iftags_elisions,
         )?;
         Some((close_start, tail_end))
     }
@@ -1720,6 +1755,7 @@ impl<'t> Scanner<'t> {
             closer_event_bytes: self.closer_event_bytes,
             foster_heads,
             greedy_ranges,
+            iftags_elisions: self.iftags_elisions,
             heading_ranges: self.heading_ranges,
             closer_end_bytes,
         }
