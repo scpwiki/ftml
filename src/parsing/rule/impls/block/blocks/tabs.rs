@@ -2387,8 +2387,6 @@ fn parse_tab<'r, 't>(
         None
     };
 
-    // A marker past the tabview's quote depth stays text. Live does not nest
-    // a blockquote there.
     let restore_literal_residuals = legacy
         && parser.wikidot_tab_quote_ejection()
         && parser.quote_body_literal_residuals() == Some(false);
