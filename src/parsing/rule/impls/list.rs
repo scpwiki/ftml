@@ -213,6 +213,9 @@ fn try_consume_fn<'r, 't>(
 
     let mut hoisted_footnote_blocks = Vec::new();
     if parser.settings().layout.legacy()
+        && depths.iter().any(|(_, _, elements)| {
+            !elements.is_empty() && !wikidot_item_is_only_footnote_block(elements)
+        })
         && let Some((_, _, elements)) = depths.last_mut()
         && wikidot_item_is_only_footnote_block(elements)
         && let Some(block) = footnote_block_in(elements)
