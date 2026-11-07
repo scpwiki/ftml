@@ -46,6 +46,7 @@ struct NativeQuoteRow<'t> {
     indent: usize,
     source_line: Option<&'t str>,
     cut_boundary: bool,
+    keep_trailing_break: bool,
 }
 
 struct QuoteFlatSplit<'t> {
@@ -633,6 +634,7 @@ fn try_consume_fn<'r, 't>(
                         indent: row_indent,
                         source_line: None,
                         cut_boundary: false,
+                        keep_trailing_break: false,
                     },
                 ));
             } else {
@@ -644,6 +646,7 @@ fn try_consume_fn<'r, 't>(
                 // A list hoisted out of the quote interrupts the row paragraph:
                 // live leaves the preceding row bare with its line break.
                 row.paragraph_safe = false;
+                row.keep_trailing_break = true;
                 if !matches!(row.elements.last(), Some(Element::LineBreak)) {
                     row.elements.push(Element::LineBreak);
                 }
@@ -915,6 +918,7 @@ fn try_consume_fn<'r, 't>(
                         indent: row_indent,
                         source_line,
                         cut_boundary,
+                        keep_trailing_break: false,
                     },
                 ));
             }
@@ -954,6 +958,7 @@ fn try_consume_fn<'r, 't>(
                     indent: row_indent,
                     source_line,
                     cut_boundary: false,
+                    keep_trailing_break: false,
                 },
             ));
             push_quote_row_units(
@@ -984,6 +989,7 @@ fn try_consume_fn<'r, 't>(
             indent: row_indent,
             source_line,
             cut_boundary,
+            keep_trailing_break: false,
         };
         if flatten_following_rows {
             escaped_rows.push(row);
@@ -1188,6 +1194,7 @@ fn push_quote_row_units<'t>(
             indent: 0,
             source_line: None,
             cut_boundary: false,
+            keep_trailing_break: false,
         };
         if flatten {
             escaped_rows.push(row);
@@ -1303,10 +1310,15 @@ fn build_blockquote_element(
         ParagraphStack::new()
     };
 
+    let mut keep_trailing_break = false;
     for item in list {
         match item {
-            DepthItem::Item(row) => push_native_quote_row(&mut stack, row, wikidot),
+            DepthItem::Item(row) => {
+                keep_trailing_break = row.keep_trailing_break;
+                push_native_quote_row(&mut stack, row, wikidot);
+            }
             DepthItem::List(_, list) => {
+                keep_trailing_break = false;
                 if let Some(blockquote) = build_blockquote_element(list, wikidot) {
                     stack.pop_line_break();
                     stack.push_element(blockquote, false);
@@ -1315,7 +1327,10 @@ fn build_blockquote_element(
         }
     }
 
-    stack.pop_line_break();
+    // The hoist recorded this break. The usual pop would drop the br live keeps.
+    if !keep_trailing_break {
+        stack.pop_line_break();
+    }
     let mut elements = stack.into_elements();
     if wikidot {
         elements = unwrap_scored_alias_quote_paragraphs(elements);
