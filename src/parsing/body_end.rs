@@ -169,6 +169,29 @@ impl<'r, 't> Parser<'r, 't> {
         })
     }
 
+    pub(crate) fn wikidot_table_wrapped_by_flat_block(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let Some((_, ancestors)) = cache.body_end_boundaries.split_last() else {
+            return false;
+        };
+        let accepts = |boundary: &BodyEndBoundary, name: &str| {
+            !boundary.confined
+                && boundary
+                    .accepts_names
+                    .iter()
+                    .any(|accepted| accepted.eq_ignore_ascii_case(name))
+        };
+        let Some(table_idx) = ancestors
+            .iter()
+            .rposition(|boundary| accepts(boundary, "table"))
+        else {
+            return false;
+        };
+        ancestors[..table_idx]
+            .iter()
+            .any(|boundary| accepts(boundary, "div") || accepts(boundary, "collapsible"))
+    }
+
     /// Whether the end block at the current position names a table cell
     /// whose boundary sits on an ancestor body, so a collected inner body
     /// (an explicit list item inside the cell) must yield to the cell.

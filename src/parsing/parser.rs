@@ -197,6 +197,8 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_tabview_ejected: Cell<bool>,
     wikidot_div_yielded_to_tab: Cell<bool>,
     wikidot_list_cut_by_cell_end: Cell<bool>,
+    wikidot_li_tail_transfer: Option<Element<'t>>,
+    wikidot_explicit_list_yield_tail: Cell<bool>,
     /// Ordinal of the next tab parsed inside the current quoted tabview.
     wikidot_tabview_tab_ordinal: Cell<usize>,
     /// Ordinals of tabs whose panels render outside the navset (bare panel in
@@ -2019,6 +2021,46 @@ impl<'r, 't> Parser<'r, 't> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_list_cut_by_cell_end
+            .set(false);
+    }
+
+    pub(crate) fn set_wikidot_li_tail_transfer(&self, element: Element<'t>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_li_tail_transfer = Some(element);
+    }
+
+    pub(crate) fn take_wikidot_li_tail_transfer(&self) -> Option<Element<'t>> {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_li_tail_transfer
+            .take()
+    }
+
+    pub(crate) fn clear_wikidot_li_tail_transfer(&self) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_li_tail_transfer = None;
+    }
+
+    pub(crate) fn set_wikidot_explicit_list_yield_tail(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_explicit_list_yield_tail
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_explicit_list_yield_tail(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let value = cache.wikidot_explicit_list_yield_tail.get();
+        cache.wikidot_explicit_list_yield_tail.set(false);
+        value
+    }
+
+    pub(crate) fn clear_wikidot_explicit_list_yield_tail(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_explicit_list_yield_tail
             .set(false);
     }
 
