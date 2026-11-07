@@ -25,6 +25,7 @@ use super::line_owner::{
 use super::prelude::*;
 use crate::parsing::collect::{collect_consume_keep_split, consume_valid_comment};
 use crate::parsing::paragraph::ParagraphStack;
+use crate::parsing::parser::QuoteBodyLineStatus;
 use crate::parsing::{
     DepthItem, DepthList, ParagraphSplitEntry, ParagraphSplitKind, ParseSuccess,
     process_depths,
@@ -99,6 +100,15 @@ fn try_consume_fn<'r, 't>(
         if !depths.is_empty() && skip_wikidot_list_comment_lines(parser, &depths)? {
             continue;
         }
+        // The item collector stops on the line break, so the next row is still
+        // a `>` token. Strip it before deciding the list has ended.
+        if !depths.is_empty()
+            && parser.in_note()
+            && parser.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary
+        {
+            ended = true;
+            continue;
+        }
         match parse_next_list_item(
             parser,
             &mut errors,
@@ -108,7 +118,10 @@ fn try_consume_fn<'r, 't>(
             ListItemStep::End => ended = true,
             ListItemStep::Item(item, ends_run) => {
                 depths.push(item);
-                ended = ends_run || parser.native_blockquote_depth().is_some();
+                // A quote-owned note already stripped the `>` prefix, so the
+                // depth field must not turn every bullet into its own list.
+                ended = ends_run
+                    || parser.native_blockquote_depth().is_some() && !parser.in_note();
             }
             ListItemStep::Fallback(elements) => {
                 debug_assert!(depths.is_empty());
@@ -623,6 +636,17 @@ where
         return Ok(ListItemStep::Fallback(fallback));
     }
 
+    // The collapsible on this bullet owns no following lines. Ending the run
+    // here keeps the next bullets as a sibling list.
+    if parser.in_note()
+        && sub_parser.pending_wikidot_collapsible_closer()
+        && elements
+            .iter()
+            .any(|element| matches!(element, Element::Collapsible { .. }))
+    {
+        ends_run = true;
+    }
+
     errors.append(&mut item_errors);
     *paragraph_safe &= item_paragraph_safe;
     parser.update(&sub_parser);
@@ -816,6 +840,7 @@ fn collect_list_item_elements<'r, 't>(
         ParseCondition::current(Token::InputEnd),
         ParseCondition::source_line_start(Token::BulletItem),
         ParseCondition::source_line_start(Token::NumberedItem),
+        ParseCondition::QuotePreparedListMarker,
     ];
 
     let restore_line = if parser.settings().layout.legacy() {
