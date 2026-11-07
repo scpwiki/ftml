@@ -4937,7 +4937,9 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: false,
                     link: None,
                 });
-                if let Some(heading) = &reopen_heading {
+                if let Some(heading) = &reopen_heading
+                    && !heading.label_empty
+                {
                     let empty = self.reopen_heading_element(Vec::new(), heading);
                     self.top().push(empty);
                 }
