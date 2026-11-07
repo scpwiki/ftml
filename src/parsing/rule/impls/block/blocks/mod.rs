@@ -211,9 +211,9 @@ pub use self::underline::BLOCK_UNDERLINE;
 pub use self::user::BLOCK_USER;
 
 use crate::parsing::parser::Parser;
-use crate::parsing::parser::block_pairs::WikidotBlockPair;
+use crate::parsing::parser::block_pairs::{WikidotBlockKind, WikidotBlockPair};
 use crate::parsing::{ParseError, Token};
-use crate::tree::Element;
+use crate::tree::{Element, ListItem, PartialElement};
 
 /// Live Wikidot keeps no trailing `<br>` after an explicit `[[ul]]`/`[[ol]]`
 /// block that ends a note, alignment, collapsible or tab body: the block's
@@ -263,6 +263,165 @@ pub(crate) fn append_wikidot_footnote_trailing_list_break(
         })
     ) {
         elements.push(Element::LineBreak);
+    }
+}
+
+/// Live Wikidot closes a div or note at the closer line of a collapsible
+/// opened on a list line inside it: everything in the body gathered after
+/// that line belongs outside the block, in order. The boundary is the
+/// saved block-pair scan's closer for a list-line collapsible head in
+/// the body; elements decide by the source position of the text they
+/// carry. Anything without carried text keeps the body's side until the
+/// first carried position past the boundary.
+// The boundary is carried text, not head offsets: elements store no
+// spans, so only the borrowed slices' addresses tell where they came
+// from. This is not head-offset math.
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn wikidot_eject_after_lost_owner_collapsible<'t>(
+    parser: &Parser<'_, '_>,
+    elements: &mut Vec<Element<'t>>,
+    body_start_byte: usize,
+    body_end_byte: usize,
+) -> Option<Vec<Element<'t>>> {
+    let source = parser.full_text().inner();
+    let closer_byte = parser
+        .wikidot_block_pairs_closed_between(body_start_byte, body_end_byte)
+        .into_iter()
+        .filter_map(|(_, pair)| {
+            if pair.kind == WikidotBlockKind::Collapsible
+                && (body_start_byte..body_end_byte).contains(&pair.head_byte)
+                && byte_head_on_list_item_line(source, pair.head_byte)
+            {
+                Some(pair.closer_byte)
+            } else {
+                None
+            }
+        })
+        .min()?;
+    let source_ptr = source.as_ptr() as usize;
+    let index = elements.iter().position(|element| {
+        element_source_offset(source_ptr, element).is_some_and(|offset| offset > closer_byte)
+    })?;
+    if index == 0 {
+        return None;
+    }
+    Some(elements.split_off(index))
+}
+
+fn byte_head_on_list_item_line(source: &str, byte: usize) -> bool {
+    let line_start = source[..byte].rfind('\n').map_or(0, |at| at + 1);
+    let line_end = source[byte..]
+        .find('\n')
+        .map_or(source.len(), |at| byte + at);
+    let line = &source[line_start..line_end];
+    let after_leading = line.trim_start_matches([' ', '\t']);
+    let Some(marker) = after_leading.strip_prefix(['*', '#']) else {
+        return false;
+    };
+    let Some(after_marker) = marker.strip_prefix([' ', '\t']) else {
+        return false;
+    };
+    line_start + (line.len() - after_marker.len()) == byte
+}
+
+fn element_source_offset<'t>(source_ptr: usize, element: &Element<'t>) -> Option<usize> {
+    let mut result = None;
+    scan_element_source_offset(source_ptr, element, &mut result);
+    result
+}
+
+fn consider_source_ptr(source_ptr: usize, result: &mut Option<usize>, ptr: usize) {
+    if ptr >= source_ptr {
+        let offset = ptr - source_ptr;
+        *result = Some(result.map_or(offset, |current| current.min(offset)));
+    }
+}
+
+#[allow(clippy::disallowed_methods)]
+fn scan_element_source_offset<'t>(
+    source_ptr: usize,
+    element: &Element<'t>,
+    result: &mut Option<usize>,
+) {
+    match element {
+        Element::Text(text)
+        | Element::Raw(text)
+        | Element::Variable(text)
+        | Element::Email(text)
+        | Element::AnchorName(text) => {
+            if let std::borrow::Cow::Borrowed(text) = text {
+                consider_source_ptr(source_ptr, result, text.as_ptr() as usize);
+            }
+        }
+        Element::Container(container) => {
+            for child in container.elements() {
+                scan_element_source_offset(source_ptr, child, result);
+            }
+        }
+        Element::Collapsible {
+            elements,
+            show_text,
+            hide_text,
+            ..
+        } => {
+            for child in elements {
+                scan_element_source_offset(source_ptr, child, result);
+            }
+            for optional in [show_text, hide_text] {
+                if let Some(std::borrow::Cow::Borrowed(text)) = optional {
+                    consider_source_ptr(source_ptr, result, text.as_ptr() as usize);
+                }
+            }
+        }
+        Element::Anchor { elements, .. } => {
+            for child in elements {
+                scan_element_source_offset(source_ptr, child, result);
+            }
+        }
+        Element::List { items, .. } => {
+            for item in items {
+                scan_list_item_source_offset(source_ptr, item, result);
+            }
+        }
+        Element::Table(table) => {
+            for row in &table.rows {
+                for cell in &row.cells {
+                    for child in &cell.elements {
+                        scan_element_source_offset(source_ptr, child, result);
+                    }
+                }
+            }
+        }
+        Element::Partial(partial) => match partial {
+            PartialElement::ListItem(item) => {
+                scan_list_item_source_offset(source_ptr, item, result);
+            }
+            PartialElement::WikidotBlockOpen(shell) => {
+                consider_source_ptr(source_ptr, result, shell.head_byte());
+            }
+            PartialElement::WikidotBlockClose(kind) => {
+                consider_source_ptr(source_ptr, result, kind.head_byte());
+            }
+            _ => {}
+        },
+        _ => {}
+    }
+}
+
+fn scan_list_item_source_offset<'t>(
+    source_ptr: usize,
+    item: &ListItem<'t>,
+    result: &mut Option<usize>,
+) {
+    match item {
+        ListItem::Elements { elements, .. } => {
+            for child in elements {
+                scan_element_source_offset(source_ptr, child, result);
+            }
+        }
+        ListItem::SubList { element } => {
+            scan_element_source_offset(source_ptr, element, result);
+        }
     }
 }
 
