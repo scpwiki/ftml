@@ -204,3 +204,46 @@ fn quoted_unclosed_ruby_lines_finish_in_list_mode() {
         "fallback must preserve observable source"
     );
 }
+
+#[test]
+fn nested_unclosed_tab_pairs_stay_within_budget() {
+    let page_info = page_info();
+    let pairs: String = (0..64)
+        .map(|index| format!("[[tabview]]\t\n[[tab t{index}]]\t\n"))
+        .collect();
+    let closed = "[[tabview]]\n[[tab a]]x[[/tab]]\n[[/tabview]]";
+
+    for mode in [WikitextMode::Page, WikitextMode::PageNav] {
+        let settings = WikitextSettings::from_mode(mode, Layout::Wikijump);
+        let tokenization = ftml::tokenize(&pairs);
+        let started = Instant::now();
+        let (tree, errors) = ftml::parse(&tokenization, &page_info, &settings).into();
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{mode:?}: 64 unclosed tab pairs took {:?}",
+            started.elapsed(),
+        );
+        assert!(
+            !errors.is_empty(),
+            "{mode:?}: unclosed tab pairs must report errors"
+        );
+        assert!(
+            !tree.elements.is_empty(),
+            "{mode:?}: fallback must preserve observable source"
+        );
+
+        let tokenization = ftml::tokenize(closed);
+        let started = Instant::now();
+        let (tree, _errors) = ftml::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{mode:?}: closed tabview took {:?}",
+            started.elapsed(),
+        );
+        assert!(
+            !html.contains("[[tabview]]"),
+            "{mode:?}: a closed tabview must still form a block, got {html:?}",
+        );
+    }
+}
