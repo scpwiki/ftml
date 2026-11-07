@@ -388,6 +388,87 @@ fn finish_simple_table<'r, 't>(
     ok!(false; table, errors)
 }
 
+fn finish_simple_table_then<'r, 't>(
+    rows: Vec<TableRow<'t>>,
+    interior: Vec<Element<'t>>,
+    errors: Vec<ParseError>,
+) -> ParseResult<'r, 't, Elements<'t>> {
+    let table = simple_table(rows);
+    if interior.is_empty() {
+        return ok!(false; table, errors);
+    }
+    let mut elements = Vec::with_capacity(interior.len() + 1);
+    elements.push(table);
+    elements.extend(interior);
+    ok!(false; Elements::Multiple(elements), errors)
+}
+
+fn simple_table_row_block_interior<'t>(
+    elements: Elements<'t>,
+) -> Result<Vec<Element<'t>>, Elements<'t>> {
+    fn is_row_block(element: &Element<'_>) -> bool {
+        match element {
+            Element::Container(container) => container.ctype() == ContainerType::Note,
+            Element::Collapsible { .. } => true,
+            _ => false,
+        }
+    }
+    fn interior<'t>(element: Element<'t>) -> Vec<Element<'t>> {
+        match element {
+            Element::Container(container) => container.into(),
+            Element::Collapsible { elements, .. } => elements,
+            other => vec![other],
+        }
+    }
+    match elements {
+        Elements::Single(element) if is_row_block(&element) => Ok(interior(element)),
+        Elements::Multiple(items) if items.iter().any(is_row_block) => {
+            let mut out = Vec::new();
+            for element in items {
+                if is_row_block(&element) {
+                    out.extend(interior(element));
+                } else {
+                    out.push(element);
+                }
+            }
+            Ok(out)
+        }
+        other => Err(other),
+    }
+}
+
+fn take_simple_row_line_suffix<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Vec<Element<'t>>, ParseError> {
+    let mut suffix = Vec::new();
+    loop {
+        match parser.current().token {
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => break,
+            Token::LeftBlock | Token::LeftBlockStar | Token::LeftBlockEnd => break,
+            _ => {
+                let slice = parser.current().slice;
+                if !slice.is_empty() {
+                    suffix.push(text!(slice));
+                }
+                parser.step()?;
+            }
+        }
+    }
+    Ok(suffix)
+}
+
+fn block_opens_on_simple_row(source: &str, opener_byte: usize, end_byte: usize) -> bool {
+    if opener_byte >= end_byte || opener_byte > source.len() {
+        return false;
+    }
+    let line_start = source[..opener_byte]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    source[line_start..opener_byte].contains("||")
+        && source[opener_byte..end_byte.min(source.len())].contains('\n')
+}
+
 fn finish_table_or_fail<'r, 't>(
     parser: &Parser<'r, 't>,
     rows: Vec<TableRow<'t>>,
@@ -894,6 +975,7 @@ fn try_consume_inner<'r, 't>(
                             return finish_simple_table(rows, errors);
                         }
                         let comment = parser.current().token == Token::LeftComment;
+                        let row_block_byte = parser.current().span.start;
                         let consumed = if table_block_head_crosses_line(parser) {
                             let literal = parser.current().slice;
                             parser.step()?;
@@ -914,6 +996,37 @@ fn try_consume_inner<'r, 't>(
                                 parser.take_wikidot_simple_table_crossed_closers();
                         }
                         let new_items = consumed.chain(&mut errors, &mut paragraph_break);
+                        let end_byte = parser.current().span.start;
+                        let new_items = if wikidot
+                            && block_opens_on_simple_row(
+                                parser.full_text().inner(),
+                                row_block_byte,
+                                end_byte,
+                            ) {
+                            match simple_table_row_block_interior(new_items) {
+                                Ok(mut interior) => {
+                                    if !parser.in_wikidot_span_body() {
+                                        interior
+                                            .extend(take_simple_row_line_suffix(parser)?);
+                                    }
+                                    elements.clear();
+                                    push_cell(
+                                        &mut cells,
+                                        &mut elements,
+                                        cell_start,
+                                        &mut pending_inline_scopes,
+                                    );
+                                    push_row(&mut rows, &mut cells);
+                                    parser.set_wikidot_table_cut_boundary();
+                                    return finish_simple_table_then(
+                                        rows, interior, errors,
+                                    );
+                                }
+                                Err(items) => items,
+                            }
+                        } else {
+                            new_items
+                        };
                         if wikidot && !saw_open && cell_holds_flat_open(&new_items) {
                             saw_open = true;
                             // L8.5: a cross-line pipe-head pair renders its
