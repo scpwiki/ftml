@@ -31,29 +31,39 @@ pub fn isolate_ids(id_string: &str) -> String {
     if id_string.is_empty() {
         return String::new();
     }
-    let mut words = id_string.split_whitespace();
-    let Some(first) = words.next() else {
+
+    let mut collapsed = String::with_capacity(id_string.len());
+    let mut pending_space = false;
+    let mut started = false;
+    for ch in id_string.chars() {
+        if ch.is_whitespace() {
+            if started {
+                pending_space = true;
+            }
+            continue;
+        }
+        if pending_space {
+            collapsed.push(' ');
+            pending_space = false;
+        }
+        started = true;
+        collapsed.push(ch);
+    }
+    if collapsed.is_empty() {
         return PREFIX.to_owned();
-    };
-    let leading_space = id_string.starts_with(char::is_whitespace);
-    let prefixed = first.starts_with(PREFIX);
-
-    let mut isolated_ids = String::with_capacity(id_string.len() + PREFIX.len() + 1);
-
-    if !prefixed {
-        isolated_ids.push_str(PREFIX);
     }
-    if leading_space && !prefixed {
+    // A leading space means the value does not already start with `u-`.
+    // ` u-a` becomes `u- u-a`. `u- a` already starts with the prefix.
+    if id_string.starts_with(PREFIX) {
+        return collapsed;
+    }
+
+    let mut isolated_ids = String::with_capacity(collapsed.len() + PREFIX.len() + 1);
+    isolated_ids.push_str(PREFIX);
+    if id_string.starts_with(char::is_whitespace) {
         isolated_ids.push(' ');
     }
-
-    isolated_ids.push_str(first);
-
-    for word in words {
-        isolated_ids.push(' ');
-        isolated_ids.push_str(word);
-    }
-
+    isolated_ids.push_str(&collapsed);
     isolated_ids
 }
 
@@ -91,4 +101,5 @@ fn test_isolate_ids() {
     test!("apple u-banana cherry", "u-apple u-banana cherry");
     test!("u-", "u-");
     test!("u-u-apple", "u-u-apple");
+    test!(" u-a", "u- u-a");
 }
