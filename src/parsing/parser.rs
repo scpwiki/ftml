@@ -169,6 +169,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_iftags_body_end: Cell<Option<usize>>,
     pending_iftags_end_swallows: Vec<usize>,
     wikidot_discarded_row_closers: BTreeSet<usize>,
+    pub(super) wikidot_yield_orphan_closes: BTreeSet<usize>,
     wikidot_li_paired_heads: std::collections::BTreeSet<usize>,
     wikidot_li_pairing_depth: Cell<usize>,
     wikidot_li_heads: Vec<WikidotLiHead>,
@@ -594,6 +595,7 @@ impl<'r, 't> Parser<'r, 't> {
                     inline_pairs::WikidotInlineMarkers::default()
                 };
                 BlockScanCache {
+                    wikidot_yield_orphan_closes: BTreeSet::new(),
                     wikidot_div_stream_marks: if settings.layout.legacy() {
                         wikidot_state::compute_wikidot_div_stream_marks(
                             tokenization.tokens(),

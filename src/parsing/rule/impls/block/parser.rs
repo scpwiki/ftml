@@ -2357,6 +2357,102 @@ where
         })
     }
 
+    pub(crate) fn record_wikidot_yield_orphan_closes(
+        &self,
+        li_depth: usize,
+        list_depth: usize,
+    ) {
+        let mut scan = self.clone();
+        let mut li_depth = li_depth;
+        let mut list_depth = list_depth;
+        let mut found: Vec<usize> = Vec::new();
+        for _ in 0..1024 {
+            match scan.current().token {
+                Token::InputEnd => break,
+                Token::LeftBlock | Token::LeftBlockStar => {
+                    let mut probe = scan.clone();
+                    if !scan.wikidot_byte_on_list_item_line(scan.current().span.start)
+                        && let Ok((name, _, _)) = probe.get_block_name(false)
+                    {
+                        let name = name.strip_suffix('_').unwrap_or(&name);
+                        if name.eq_ignore_ascii_case("li") {
+                            li_depth += 1;
+                        } else if name.eq_ignore_ascii_case("ul")
+                            || name.eq_ignore_ascii_case("ol")
+                        {
+                            list_depth += 1;
+                        }
+                    }
+                    if scan.step().is_err() {
+                        break;
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    let start = scan.current().span.start;
+                    let mut probe = scan.clone();
+                    let Ok(raw_name) = probe.get_end_block() else {
+                        break;
+                    };
+                    let name = raw_name.strip_suffix('_').unwrap_or(&raw_name);
+                    let on_list_line = scan.wikidot_byte_on_list_item_line(start);
+                    if name.eq_ignore_ascii_case("li") {
+                        if !on_list_line {
+                            if li_depth == 1 {
+                                found.push(start);
+                            }
+                            li_depth = li_depth.saturating_sub(1);
+                        }
+                        scan.update(&probe);
+                    } else if name.eq_ignore_ascii_case("ul")
+                        || name.eq_ignore_ascii_case("ol")
+                    {
+                        if !on_list_line && list_depth == 1 {
+                            found.push(start);
+                            list_depth = 0;
+                            scan.update(&probe);
+                            break;
+                        }
+                        if !on_list_line {
+                            list_depth = list_depth.saturating_sub(1);
+                        }
+                        scan.update(&probe);
+                    } else if !on_list_line
+                        && (name.eq_ignore_ascii_case("row")
+                            || name.eq_ignore_ascii_case("hrow")
+                            || name.eq_ignore_ascii_case("table"))
+                    {
+                        break;
+                    } else {
+                        scan.update(&probe);
+                    }
+                }
+                _ => {
+                    if scan.step().is_err() {
+                        break;
+                    }
+                }
+            }
+            if li_depth == 0 && list_depth == 0 {
+                break;
+            }
+        }
+        if !found.is_empty() {
+            self.block_end_scan_cache
+                .borrow_mut()
+                .wikidot_yield_orphan_closes
+                .extend(found);
+        }
+    }
+
+    pub(crate) fn wikidot_yield_orphan_close_here(&self) -> bool {
+        self.current().token == Token::LeftBlockEnd
+            && self
+                .block_end_scan_cache
+                .borrow()
+                .wikidot_yield_orphan_closes
+                .contains(&self.current().span.start)
+    }
+
     pub(crate) fn terminate_at_wikidot_list_close(
         &mut self,
         block_rule: &BlockRule,
@@ -3359,6 +3455,19 @@ where
                 && !self.discarding_hidden_body()
                 && self.wikidot_at_joined_bibliography_closer()
             {
+                return Ok(crate::parsing::ParseSuccess::new(
+                    segments,
+                    all_errors,
+                    paragraph_safe,
+                ));
+            }
+
+            if !self.discarding_hidden_body()
+                && self.settings().layout.legacy()
+                && self.at_body_end_boundary()
+                && self.wikidot_ancestor_boundary_accepts_table_cell_end()
+            {
+                self.record_wikidot_yield_orphan_closes(1, 1);
                 return Ok(crate::parsing::ParseSuccess::new(
                     segments,
                     all_errors,
@@ -5944,6 +6053,34 @@ where
                 && !self.discarding_hidden_body()
                 && self.wikidot_at_joined_bibliography_closer()
             {
+                return Ok(());
+            }
+
+            if !matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered" | "block-list-item"
+            ) && self.wikidot_yield_orphan_close_here()
+            {
+                let mut probe = self.clone();
+                if probe.get_end_block().is_ok() {
+                    self.update(&probe);
+                    continue;
+                }
+            }
+
+            if matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered" | "block-list-item"
+            ) && !self.discarding_hidden_body()
+                && self.settings().layout.legacy()
+                && self.at_body_end_boundary()
+                && self.wikidot_ancestor_boundary_accepts_table_cell_end()
+            {
+                if block_rule.name == "block-list-item" {
+                    self.record_wikidot_yield_orphan_closes(1, 0);
+                } else {
+                    self.record_wikidot_yield_orphan_closes(0, 1);
+                }
                 return Ok(());
             }
 
