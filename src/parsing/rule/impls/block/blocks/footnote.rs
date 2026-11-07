@@ -130,7 +130,8 @@ fn parse_footnote_ref<'r, 't>(
     if parser.settings().layout.legacy() {
         let repaired =
             crate::parsing::footnote::repair_wikidot_footnote_list_chrome(&mut elements);
-        if !repaired {
+        let note_took_the_list_break = parser.take_suppress_footnote_list_break();
+        if !repaired && !note_took_the_list_break {
             append_wikidot_footnote_trailing_list_break(&mut elements);
         }
     }
@@ -289,6 +290,7 @@ fn wikidot_footnote_block_has_inline_prefix(
 struct ParserWrap<'p, 'r, 't> {
     parser: &'p mut Parser<'r, 't>,
     zone_restore: Option<Option<usize>>,
+    list_depth_restore: Option<Option<usize>>,
 }
 
 impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
@@ -299,6 +301,7 @@ impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
         ParserWrap {
             parser,
             zone_restore: None,
+            list_depth_restore: None,
         }
     }
 
@@ -306,6 +309,9 @@ impl<'p, 'r, 't> ParserWrap<'p, 'r, 't> {
         let until = wikidot_footnote_zone_end(self.parser);
         self.zone_restore = Some(self.parser.wikidot_footnote_zone_until());
         self.parser.set_wikidot_footnote_zone_until(Some(until));
+        self.list_depth_restore = Some(self.parser.list_depth_at_footnote());
+        self.parser
+            .set_list_depth_at_footnote(Some(self.parser.wikidot_li_pairing_depth()));
     }
 }
 
@@ -330,6 +336,9 @@ impl Drop for ParserWrap<'_, '_, '_> {
         self.parser.set_footnote_flag(false);
         if let Some(previous) = self.zone_restore {
             self.parser.set_wikidot_footnote_zone_until(previous);
+        }
+        if let Some(previous) = self.list_depth_restore {
+            self.parser.set_list_depth_at_footnote(previous);
         }
     }
 }

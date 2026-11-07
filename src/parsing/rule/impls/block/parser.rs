@@ -2378,6 +2378,9 @@ where
             return false;
         }
         self.record_wikidot_crossed_close(block_rule.name);
+        if block_rule.name == "block-note" {
+            self.set_pending_note_list_closer(true);
+        }
         true
     }
 

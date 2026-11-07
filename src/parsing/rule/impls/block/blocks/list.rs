@@ -169,6 +169,15 @@ fn parse_list_block_impl<'r, 't>(
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    if wikidot
+        && note_list_would_take_enclosing_closer(
+            parser,
+            _opener_start,
+            block_rule.accepts_names[0],
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
 
     let body = parser.get_body_elements(block_rule, false)?;
     let fused_close = parser.wikidot_body_closed_with_fused_close(block_rule);
@@ -362,6 +371,7 @@ fn parse_list_block_impl<'r, 't>(
         && !flag_score
         && !closer_has_same_line_residual
         && !content_after_list
+        && !parser.pending_note_list_closer()
     {
         let mut output = vec![element];
         if fused_close {
@@ -746,6 +756,115 @@ fn trailing_wikidot_bibliography(elements: &[Element<'_>]) -> bool {
     )
 }
 
+fn note_list_would_take_enclosing_closer<'r, 't>(
+    parser: &Parser<'r, 't>,
+    opener_start: usize,
+    kind: &str,
+) -> bool
+where
+    'r: 't,
+{
+    // The enclosing list has to have opened inside this footnote. A list
+    // that is still open from outside the footnote keeps its own closer.
+    let Some(depth_at_footnote) = parser.list_depth_at_footnote() else {
+        return false;
+    };
+    if !parser.in_note() || parser.wikidot_li_pairing_depth() <= depth_at_footnote + 1 {
+        return false;
+    }
+    if same_kind_list_depth_before(parser.full_text().inner(), opener_start, kind) <= 0 {
+        return false;
+    }
+    same_kind_closers_ahead(parser, kind) < 2
+}
+
+fn same_kind_list_depth_before(source: &str, opener_start: usize, kind: &str) -> i32 {
+    let end = opener_start.min(source.len());
+    let mut depth = 0i32;
+    let mut index = 0usize;
+    let text = &source[..end];
+    while let Some(found) = text[index..].find("[[") {
+        let start = index + found;
+        match list_marker_at(text, start, kind) {
+            Some(true) => depth += 1,
+            Some(false) => depth -= 1,
+            None => {}
+        }
+        index = start + 2;
+    }
+    depth
+}
+
+fn same_kind_closers_ahead<'r, 't>(parser: &Parser<'r, 't>, kind: &str) -> usize
+where
+    'r: 't,
+{
+    let mut scan = parser.clone();
+    let mut nested = 0i32;
+    let mut closers = 0usize;
+    loop {
+        if scan.current().token == Token::InputEnd || scan.at_hard_body_end_boundary() {
+            break;
+        }
+        let before = scan.current().span.start;
+        match scan.current().token {
+            Token::LeftBlock => {
+                let mut probe = scan.clone();
+                if let Ok((name, _, _)) = probe.get_block_name(false) {
+                    let name = name.strip_suffix('_').unwrap_or(&name);
+                    if name.eq_ignore_ascii_case(kind) {
+                        nested += 1;
+                    }
+                }
+            }
+            Token::LeftBlockEnd => {
+                let mut probe = scan.clone();
+                if let Ok(name) = probe.get_end_block() {
+                    let name = name.strip_suffix('_').unwrap_or(&name);
+                    if name.eq_ignore_ascii_case(kind) {
+                        if nested == 0 {
+                            closers += 1;
+                        } else {
+                            nested -= 1;
+                        }
+                    }
+                    scan.update(&probe);
+                    if scan.current().span.start != before {
+                        continue;
+                    }
+                }
+            }
+            _ => {}
+        }
+        if scan.step().is_err() || scan.current().span.start == before {
+            break;
+        }
+    }
+    closers
+}
+
+/// `Some(true)` is an opener, `Some(false)` a closer, of `kind`.
+fn list_marker_at(text: &str, start: usize, kind: &str) -> Option<bool> {
+    let rest = text.get(start..)?;
+    let (closer, name_at) = if let Some(rest) = rest.strip_prefix("[[/") {
+        (true, rest)
+    } else {
+        (false, rest.strip_prefix("[[")?)
+    };
+    let name = name_at.get(..kind.len())?;
+    if !name.eq_ignore_ascii_case(kind) {
+        return None;
+    }
+    let after = name_at.get(kind.len()..)?;
+    if closer {
+        after.starts_with("]]").then_some(false)
+    } else if after.starts_with("]]") || after.starts_with([' ', '\t']) {
+        Some(true)
+    } else {
+        None
+    }
+}
+
 fn parse_list_item<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -795,6 +914,7 @@ fn parse_list_item<'r, 't>(
             segments,
             source,
             parser.in_wikidot_bibliography_body(),
+            parser.pending_note_list_closer(),
         );
         if fused_close {
             elements.push(text!("]"));
@@ -904,6 +1024,7 @@ fn assemble_wikidot_li_segments<'t>(
     mut segments: Vec<Vec<Element<'t>>>,
     source: &str,
     in_bibliography_body: bool,
+    note_yielded_list_closer: bool,
 ) -> Vec<Element<'t>> {
     let mut had_trailing_empty = false;
     while segments
@@ -1030,6 +1151,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !trailing_nested_list
             && !trailing_table
             && !trailing_blockquote
+            && !note_yielded_list_closer
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)
         {
@@ -1114,6 +1236,7 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             segments,
             source,
             parser.in_wikidot_bibliography_body(),
+            parser.pending_note_list_closer(),
         );
         if fused_close {
             elements.push(text!("]"));
