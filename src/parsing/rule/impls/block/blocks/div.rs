@@ -670,7 +670,9 @@ fn wikidot_div_try_hoist_trailing_literal_close_lists<'t>(
         let Some(close_name) = wikidot_literal_list_item_close_name(&concat) else {
             break;
         };
-        let prefix = &elements[..elements.len() - 1];
+        let Some((_, prefix)) = elements.split_last() else {
+            break;
+        };
         if !wikidot_prefix_has_literal_block_opener(prefix, &close_name) {
             break;
         }

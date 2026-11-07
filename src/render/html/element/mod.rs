@@ -177,13 +177,6 @@ pub fn render_elements(ctx: &mut HtmlContext, elements: &[Element]) {
                 render_element(ctx, element);
                 index += 1;
                 if ctx.layout().legacy()
-                    && matches!(element, Element::Collapsible { .. })
-                    && matches!(elements.get(index), Some(Element::LineBreak))
-                {
-                    index += 1;
-                    continue;
-                }
-                if ctx.layout().legacy()
                     && matches!(element, Element::HorizontalRule)
                     && matches!(elements.get(index), Some(Element::HorizontalRule))
                 {

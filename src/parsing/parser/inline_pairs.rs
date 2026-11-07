@@ -410,6 +410,12 @@ fn scan_chunk(
 
     for (offset, token) in tokens[range.clone()].iter().enumerate() {
         if is_marker(token.token) {
+            let index = range.start + offset;
+            if scan.removed[offset]
+                && removed_bold_kept_for_footnote_rule(tokens, &range, &scan, index)
+            {
+                continue;
+            }
             let role = if scan.removed[offset] {
                 InlineMarkerRole::Removed
             } else {
@@ -434,6 +440,42 @@ fn scan_chunk(
         markers.roles.insert(tokens[pair.open].span.start, open);
         markers.roles.insert(tokens[pair.close].span.start, close);
     }
+}
+
+fn removed_bold_in_chunk(scan: &ChunkScan<'_, '_>, index: usize) -> bool {
+    scan.range.contains(&index) && tokens_bold(scan, index) && scan.is_removed(index)
+}
+
+fn tokens_bold(scan: &ChunkScan<'_, '_>, index: usize) -> bool {
+    scan.tokens
+        .get(index)
+        .is_some_and(|token| token.token == Token::Bold)
+}
+
+fn removed_bold_kept_for_footnote_rule(
+    tokens: &[ExtractedToken<'_>],
+    range: &Range<usize>,
+    scan: &ChunkScan<'_, '_>,
+    index: usize,
+) -> bool {
+    if !tokens_bold(scan, index) {
+        return false;
+    }
+    let partner = if removed_bold_in_chunk(scan, index + 1) {
+        index + 1
+    } else if removed_bold_in_chunk(scan, index.wrapping_sub(1)) {
+        index - 1
+    } else {
+        return false;
+    };
+    if index.max(partner) + 1 != range.end {
+        return false;
+    }
+    tokens.get(range.end).is_some_and(|token| {
+        token.token == Token::LeftBlock
+            && block_name(tokens, range.end)
+                .is_some_and(|name| name.eq_ignore_ascii_case("footnote"))
+    })
 }
 
 /// `M(|[^\s](?:.*[^\s])?)M` ungreedy, except that a strike has no empty form.
