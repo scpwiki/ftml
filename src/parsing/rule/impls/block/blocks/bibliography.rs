@@ -111,6 +111,7 @@ fn parse_fn<'r, 't>(
     let body = body?;
     if !parser.discarding_hidden_body() {
         wikidot_skip_orphan_closers_after_bibliography_body(parser);
+        wikidot_consume_collapsible_opened_in_body(parser, body_start);
     }
     let (elements, errors, _) = body.into();
     let crossed_residual = wikidot_candidate
@@ -376,6 +377,35 @@ fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
         .as_bytes()
         .windows(needle.len())
         .position(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
+fn wikidot_consume_collapsible_opened_in_body<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    body_start: usize,
+) where
+    'r: 't,
+{
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return;
+    }
+    if parser.current().token != Token::LeftBlockEnd {
+        return;
+    }
+    let closer_byte = parser.current().span.start;
+    let Some(pair) = parser.wikidot_block_pair_at_closer_byte(closer_byte) else {
+        return;
+    };
+    if pair.kind != crate::parsing::parser::block_pairs::WikidotBlockKind::Collapsible
+        || pair.head_byte < body_start
+    {
+        return;
+    }
+    let mut probe = parser.clone();
+    if probe.get_end_block().is_err() {
+        return;
+    }
+    parser.update(&probe);
+    parser.set_crossed_collapsible_tail(true);
 }
 
 fn wikidot_skip_orphan_closers_after_bibliography_body<'r, 't>(

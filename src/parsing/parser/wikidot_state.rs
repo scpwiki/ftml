@@ -38,6 +38,7 @@ pub(super) struct WikidotState {
     simple_table_crossed_closers: u16,
     center_body_depth: u16,
     flags: u16,
+    crossed_collapsible_tail: bool,
 }
 
 impl Default for WikidotState {
@@ -56,6 +57,7 @@ impl Default for WikidotState {
             simple_table_crossed_closers: 0,
             center_body_depth: 0,
             flags: 0,
+            crossed_collapsible_tail: false,
         }
     }
 }
@@ -413,6 +415,16 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_bibliography_split_tail(&mut self, value: bool) {
         set_flag(&mut self.wikidot.flags, BIBLIOGRAPHY_SPLIT_TAIL, value);
+    }
+
+    pub(crate) fn set_crossed_collapsible_tail(&mut self, value: bool) {
+        self.wikidot.crossed_collapsible_tail = value;
+    }
+
+    pub(crate) fn take_crossed_collapsible_tail(&mut self) -> bool {
+        let marked = self.wikidot.crossed_collapsible_tail;
+        self.wikidot.crossed_collapsible_tail = false;
+        marked
     }
 
     pub(crate) fn in_wikidot_simple_table_cell(&self) -> bool {

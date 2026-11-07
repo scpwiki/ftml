@@ -462,6 +462,9 @@ where
                     }
                 }
             }
+            if parser.take_crossed_collapsible_tail() {
+                stack.mark_crossed_collapsible_tail();
+            }
             if parser.take_wikidot_bare_div_literal() {
                 stack.mark_next_unwrapped();
             }
@@ -1326,6 +1329,7 @@ fn push_element<'t>(
             && element == Element::LineBreak
             && stack.wikidot_line_break_follows_block()
         {
+            stack.clear_crossed_collapsible_tail();
             stack.mark_next_unwrapped_after_block();
         }
         stack.push_element(element, paragraph_safe);
