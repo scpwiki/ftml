@@ -34,8 +34,8 @@ use crate::preproc::{
 };
 use crate::tree::{
     AttributeMap, Container, ContainerType, ListItem, ListType, PartialElement,
-    WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER, WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER,
-    WikidotBlockShell,
+    WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER, WIKIDOT_HEADING_COLLAPSIBLE_LINE_END_MARKER,
+    WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER, WikidotBlockShell,
 };
 use std::borrow::Cow;
 
@@ -390,8 +390,17 @@ fn parse_fn<'r, 't>(
             elements.push(Element::Partial(
                 PartialElement::WikidotCollapsibleHeadingEnd,
             ));
+            let mut body_elements = wikidot_heading_collapsible_body(body);
+            if line_tail.is_empty()
+                && let Some(Element::Container(container)) = body_elements.first_mut()
+                && container.ctype() == ContainerType::Paragraph
+            {
+                container
+                    .attributes_mut()
+                    .insert(WIKIDOT_HEADING_COLLAPSIBLE_LINE_END_MARKER, cow!(""));
+            }
             elements.push(Element::Partial(PartialElement::WikidotCollapsibleTail(
-                wikidot_heading_collapsible_body(body),
+                body_elements,
             )));
             elements.push(close);
             if line_tail.is_empty() {

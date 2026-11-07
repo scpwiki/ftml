@@ -1437,6 +1437,16 @@ fn lower_root_sequence<'t>(
             let collapsible_heading_tail = paragraph_attributes
                 .remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER)
                 .is_some();
+            let heading_line_ended = paragraph_attributes
+                .remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_LINE_END_MARKER)
+                .is_some();
+            if previous_heading_collapsible_tail
+                && !collapsible_heading_body
+                && !collapsible_heading_tail
+                && let Some(wrapper) = active.heading_wrapper.take()
+            {
+                active.kill_scope(wrapper);
+            }
             let starts_in_scored_span = active.has_scored_scope();
             let starts_in_inline_scope = active.has_active_scope();
             let previous_is_own_chunk_block = collapsible_heading_body
@@ -1513,7 +1523,8 @@ fn lower_root_sequence<'t>(
             group.elements.append(container.elements_mut());
             group.ends_with_scored_span = effects.scored_span_at_end;
             previous_scored_close = effects.scored_span_at_end;
-            previous_heading_collapsible_tail = collapsible_heading_tail;
+            previous_heading_collapsible_tail =
+                collapsible_heading_tail || heading_line_ended;
             continue;
         }
 
@@ -4619,6 +4630,7 @@ struct WikidotFrameAssembly<'t> {
     heading_frame: Option<WikidotHeadingFrame<'t>>,
     reopen: Option<WikidotReopenState<'t>>,
     forced_collapsible_closes: BTreeSet<usize>,
+    swallow_orphan_div_break: bool,
     at_root: bool,
 }
 
@@ -4631,6 +4643,7 @@ impl<'t> WikidotFrameAssembly<'t> {
             heading_frame: None,
             reopen: None,
             forced_collapsible_closes: BTreeSet::new(),
+            swallow_orphan_div_break: false,
             at_root,
         }
     }
@@ -4646,6 +4659,12 @@ impl<'t> WikidotFrameAssembly<'t> {
     }
 
     fn push(&mut self, element: Element<'t>) {
+        if self.swallow_orphan_div_break {
+            self.swallow_orphan_div_break = false;
+            if matches!(element, Element::LineBreak) {
+                return;
+            }
+        }
         match element {
             Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
                 self.open_shell(shell);
@@ -4891,6 +4910,12 @@ impl<'t> WikidotFrameAssembly<'t> {
     fn close_kind(&mut self, kind: WikidotBlockCloseKind<'_>) {
         match kind {
             WikidotBlockCloseKind::Div { scored, .. } => {
+                if !scored && self.stack.is_empty() {
+                    self.strip_paragraph_before_close();
+                    self.swallow_orphan_div_break =
+                        matches!(self.top().last(), Some(Element::LineBreak));
+                    return;
+                }
                 if scored {
                     self.unwrap_paragraph_before_close();
                 } else {

@@ -177,6 +177,9 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         .is_some()
         || bytes
             .get(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER)
+            .is_some()
+        || bytes
+            .get(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_LINE_END_MARKER)
             .is_some();
     let heading_barrier = layout.legacy()
         && matches!(container.ctype(), ContainerType::Header(_))
@@ -210,6 +213,7 @@ pub fn render_container_internal(ctx: &mut HtmlContext, container: &Container) {
         let mut attributes = container.attributes().clone();
         attributes.remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER);
         attributes.remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER);
+        attributes.remove(crate::tree::WIKIDOT_HEADING_COLLAPSIBLE_LINE_END_MARKER);
         empty_quote_attributes.insert(attributes)
     } else if preserve_explicit_empty_values {
         let mut attributes = container.attributes().clone();
