@@ -860,13 +860,13 @@ fn repair_raw_strike_pairs_pass<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     let mut index = 0;
 
     while index < input.len() {
-        let valid_open = input[index]
-            .as_ref()
-            .is_some_and(|element| is_exact_text(element, "--"))
-            && input
-                .get(index + 1)
-                .and_then(Option::as_ref)
-                .is_none_or(|element| !element_starts_with_ascii_space(element));
+        let valid_open = input[index].as_ref().is_some_and(|element| {
+            is_exact_text(element, "--")
+                && !dash_marker_occupies_its_line_at(&input, index)
+        }) && input
+            .get(index + 1)
+            .and_then(Option::as_ref)
+            .is_none_or(|element| !element_starts_with_ascii_space(element));
         let Some(close) = valid_open.then(|| next_closes[index]).flatten() else {
             output.push(take_element(&mut input, index));
             index += 1;
@@ -1063,7 +1063,9 @@ fn strike_shed_opener(
     let element = input[index].as_ref()?;
     if is_exact_text(element, "--") {
         let next = input.get(index + 1).and_then(Option::as_ref);
-        if next.is_some_and(element_starts_with_ascii_space) {
+        if next.is_some_and(element_starts_with_ascii_space)
+            || dash_marker_occupies_its_line_at(input, index)
+        {
             return None;
         }
         return Some((1, 0));
@@ -1078,7 +1080,7 @@ fn strike_shed_opener(
 /// Suffix array of positions whose text can close a shed strike.
 fn strike_shed_close_candidates(input: &[Option<Element<'_>>]) -> Vec<Option<usize>> {
     next_matching_indices(input, |index, element| {
-        if index == 0 {
+        if index == 0 || dash_marker_occupies_its_line_at(input, index) {
             return false;
         }
         let Element::Text(value) = element else {
@@ -3984,6 +3986,7 @@ fn next_valid_dash_closes(elements: &[Element<'_>]) -> Vec<Option<usize>> {
         }
         let valid_close = dash_run_len(&elements[index])
             .is_some_and(|length| length >= 2)
+            && !dash_marker_occupies_its_line(elements, index)
             && index
                 .checked_sub(1)
                 .and_then(|previous| elements.get(previous))
@@ -4081,11 +4084,80 @@ pub(crate) fn wikidot_dash_run_elements<'t>(run_len: usize) -> Vec<Element<'t>> 
     elements
 }
 
+fn dash_marker_occupies_its_line(elements: &[Element<'_>], index: usize) -> bool {
+    elements.get(index).and_then(text) == Some("--")
+        && line_edge_beside_marker(elements, index, true)
+        && line_edge_beside_marker(elements, index, false)
+}
+
+fn dash_marker_occupies_its_line_at(
+    elements: &[Option<Element<'_>>],
+    index: usize,
+) -> bool {
+    elements.get(index).and_then(Option::as_ref).and_then(text) == Some("--")
+        && option_line_edge(elements, index, true)
+        && option_line_edge(elements, index, false)
+}
+
+fn option_line_edge(
+    elements: &[Option<Element<'_>>],
+    index: usize,
+    before: bool,
+) -> bool {
+    let mut cursor = index;
+    loop {
+        if before {
+            if cursor == 0 {
+                return true;
+            }
+            cursor -= 1;
+        } else {
+            cursor += 1;
+            if cursor >= elements.len() {
+                return true;
+            }
+        }
+        let Some(element) = elements[cursor].as_ref() else {
+            continue;
+        };
+        match element {
+            Element::LineBreak | Element::LineBreaks(_) => return true,
+            Element::Text(value) if value.chars().all(char::is_whitespace) => continue,
+            _ => return false,
+        }
+    }
+}
+
+fn line_edge_beside_marker(elements: &[Element<'_>], index: usize, before: bool) -> bool {
+    let mut cursor = index;
+    loop {
+        if before {
+            if cursor == 0 {
+                return true;
+            }
+            cursor -= 1;
+        } else {
+            cursor += 1;
+            if cursor >= elements.len() {
+                return true;
+            }
+        }
+        match &elements[cursor] {
+            Element::LineBreak | Element::LineBreaks(_) => return true,
+            Element::Text(value) if value.chars().all(char::is_whitespace) => continue,
+            _ => return false,
+        }
+    }
+}
+
 fn outer_candidate<'t>(
     elements: &[Element<'t>],
     start: usize,
 ) -> Option<OuterCandidate<'t>> {
     let marker = text(elements.get(start)?)?;
+    if marker == "--" && dash_marker_occupies_its_line(elements, start) {
+        return None;
+    }
     let simple = match marker {
         "**" => Some((FormatKind::Bold, ContainerType::Bold, "**")),
         "//" => Some((FormatKind::Italics, ContainerType::Italics, "//")),

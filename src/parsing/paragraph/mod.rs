@@ -1096,12 +1096,16 @@ fn elements_begin_with_wikidot_center(elements: &Elements<'_>) -> bool {
         Elements::Multiple(elements) => elements.first(),
         Elements::None => None,
     };
-    matches!(
-        first,
-        Some(Element::Container(container))
-            if container.ctype()
+    match first {
+        Some(Element::Container(container)) => {
+            container.ctype()
                 == crate::tree::ContainerType::Align(crate::tree::Alignment::Center)
-    )
+        }
+        Some(Element::Partial(crate::tree::PartialElement::WikidotBlockOpen(
+            crate::tree::WikidotBlockShell::Align { alignment, .. },
+        ))) => *alignment == crate::tree::Alignment::Center,
+        _ => false,
+    }
 }
 
 fn wikidot_empty_raw_line_kind(

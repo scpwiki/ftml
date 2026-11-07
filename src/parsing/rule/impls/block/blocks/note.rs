@@ -72,7 +72,11 @@ fn parse_note_block<'r, 't>(
         return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
     }
 
-    if !parser.start_of_line() {
+    let head_ended_at_break = matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    );
+    if !parser.start_of_line() && !head_ended_at_break {
         return Err(parser.make_err(ParseErrorKind::NotSupportedInline));
     }
 

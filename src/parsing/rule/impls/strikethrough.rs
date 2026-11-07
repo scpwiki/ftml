@@ -38,6 +38,11 @@ pub const RULE_STRIKETHROUGH_TILDE: Rule = Rule {
 
 fn dash<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     trace!("Trying to create a double dash strikethrough");
+    if parser.settings().layout.legacy()
+        && super::dash::double_dash_occupies_its_line(parser)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     try_consume_strikethrough(parser, RULE_STRIKETHROUGH_DASH, Token::DoubleDash)
 }
 
