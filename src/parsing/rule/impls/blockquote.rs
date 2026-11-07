@@ -48,6 +48,7 @@ struct NativeQuoteRow<'t> {
     cut_boundary: bool,
     keep_trailing_break: bool,
     marker_final: bool,
+    residual_block: bool,
 }
 
 struct QuoteFlatSplit<'t> {
@@ -780,6 +781,7 @@ fn try_consume_fn<'r, 't>(
                         cut_boundary: false,
                         keep_trailing_break: false,
                         marker_final: false,
+                        residual_block: false,
                     },
                 ));
             } else {
@@ -884,6 +886,7 @@ fn try_consume_fn<'r, 't>(
                         cut_boundary: false,
                         keep_trailing_break: false,
                         marker_final: false,
+                        residual_block: false,
                     },
                 ));
             }
@@ -1189,6 +1192,7 @@ fn try_consume_fn<'r, 't>(
                         cut_boundary,
                         keep_trailing_break: false,
                         marker_final: false,
+                        residual_block: false,
                     },
                 ));
             }
@@ -1230,6 +1234,7 @@ fn try_consume_fn<'r, 't>(
                     cut_boundary: false,
                     keep_trailing_break: false,
                         marker_final: false,
+                        residual_block: false,
                 },
             ));
             push_quote_row_units(
@@ -1255,6 +1260,19 @@ fn try_consume_fn<'r, 't>(
         let keep_trailing_break = quote_end_list_break
             || (marker_final
                 && !matches!(elements.last(), Some(Element::LineBreaks(_))));
+        let residual_block = parser.settings().layout.legacy()
+            && match elements.iter().position(|element| {
+                matches!(
+                    element,
+                    Element::Container(container)
+                        if container.ctype() == ContainerType::Div
+                )
+            }) {
+                Some(position) if position > 0 => elements[..position]
+                    .iter()
+                    .all(|element| quote_residue_text(element, true)),
+                _ => false,
+            };
         let row = NativeQuoteRow {
             elements,
             paragraph_safe,
@@ -1265,6 +1283,7 @@ fn try_consume_fn<'r, 't>(
             cut_boundary,
             keep_trailing_break,
             marker_final,
+            residual_block,
         };
         if flatten_following_rows {
             escaped_rows.push(row);
@@ -1471,6 +1490,7 @@ fn push_quote_row_units<'t>(
             cut_boundary: false,
             keep_trailing_break: false,
                         marker_final: false,
+                        residual_block: false,
         };
         if flatten {
             escaped_rows.push(row);
@@ -1596,11 +1616,13 @@ fn build_blockquote_element(
 
     let mut keep_trailing_break = false;
     let mut marker_final = false;
+    let mut residual_chunk = false;
     for item in list {
         match item {
             DepthItem::Item(row) => {
                 keep_trailing_break = row.keep_trailing_break;
                 marker_final = row.marker_final;
+                residual_chunk |= row.residual_block;
                 push_native_quote_row(&mut stack, row, wikidot);
             }
             DepthItem::List(_, list) => {
@@ -1622,6 +1644,9 @@ fn build_blockquote_element(
         elements = unwrap_scored_alias_quote_paragraphs(elements);
         if marker_final {
             elements = unwrap_all_quote_paragraphs(elements);
+        }
+        if residual_chunk {
+            elements = unwrap_residue_quote_paragraphs(elements);
         }
     }
     if elements.is_empty() {
@@ -1664,6 +1689,25 @@ fn unwrap_all_quote_paragraphs(elements: Vec<Element<'_>>) -> Vec<Element<'_>> {
         match element {
             Element::Container(mut container)
                 if container.ctype() == ContainerType::Paragraph =>
+            {
+                output.append(container.elements_mut());
+            }
+            other => output.push(other),
+        }
+    }
+    output
+}
+
+fn unwrap_residue_quote_paragraphs(elements: Vec<Element<'_>>) -> Vec<Element<'_>> {
+    let mut output = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            Element::Container(mut container)
+                if container.ctype() == ContainerType::Paragraph
+                    && container
+                        .elements()
+                        .iter()
+                        .any(|element| quote_residue_text(element, false)) =>
             {
                 output.append(container.elements_mut());
             }
@@ -1952,7 +1996,7 @@ fn push_native_quote_row<'t>(
     if wikidot && alignment_block {
         stack.ensure_wikidot_trailing_line_break();
     }
-    if wikidot && !row.paragraph_safe && !alignment_block {
+    if wikidot && !row.paragraph_safe && !alignment_block && !row.residual_block {
         stack.pop_line_break();
     }
     let split_counts = row
