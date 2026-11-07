@@ -1143,7 +1143,7 @@ fn collect_surround_seam_edits(
         let full = captures.get(0).unwrap().range();
         if paired_ranges
             .iter()
-            .any(|range| ranges_overlap(range, &full))
+            .any(|range| range.start < full.end && full.start < range.end)
             || !range_crosses_seam(&full, seams)
         {
             continue;
@@ -1169,10 +1169,6 @@ fn range_crosses_seam(range: &Range<usize>, seams: &[usize]) -> bool {
 fn seam_touches_run(start: usize, end: usize, seams: &[usize]) -> bool {
     let candidate = seams.partition_point(|seam| *seam < start);
     seams.get(candidate).is_some_and(|seam| *seam <= end)
-}
-
-fn ranges_overlap(left: &Range<usize>, right: &Range<usize>) -> bool {
-    left.start < right.end && right.start < left.end
 }
 
 fn replace_wikidot_angle_quotes_outside_owners(text: &mut String, buffer: &mut String) {

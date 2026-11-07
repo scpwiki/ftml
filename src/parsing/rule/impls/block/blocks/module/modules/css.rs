@@ -202,12 +202,12 @@ impl CssListPagesScan {
     {
         if self.nested_end_blocks > 0
             && self.open_list_pages == 0
-            && wikidot_parser_starts_css(body_probe)
+            && wikidot_parser_starts_module(body_probe, "css")
         {
             return CssListPagesStep::Boundary(Some(CssListPagesBoundary::Unclosed));
         }
 
-        if wikidot_parser_starts_list_pages(body_probe) {
+        if wikidot_parser_starts_module(body_probe, "listpages") {
             self.open_list_pages += 1;
         }
 
@@ -234,14 +234,6 @@ impl CssListPagesScan {
     }
 }
 
-fn wikidot_parser_starts_list_pages(parser: &Parser<'_, '_>) -> bool {
-    wikidot_parser_starts_module(parser, "listpages")
-}
-
-fn wikidot_parser_starts_css(parser: &Parser<'_, '_>) -> bool {
-    wikidot_parser_starts_module(parser, "css")
-}
-
 fn wikidot_parser_starts_module(parser: &Parser<'_, '_>, module_name: &str) -> bool {
     let source = parser.full_text().inner();
     let start = parser.current().span.start;
@@ -259,17 +251,13 @@ fn wikidot_list_pages_head_offsets(body: &str) -> Vec<usize> {
     let mut offsets = Vec::new();
 
     for line in body.split_inclusive('\n') {
-        if wikidot_line_starts_list_pages(line) {
+        if wikidot_line_starts_module(line, "listpages") {
             offsets.push(offset);
         }
         offset += line.len();
     }
 
     offsets
-}
-
-fn wikidot_line_starts_list_pages(line: &str) -> bool {
-    wikidot_line_starts_module(line, "listpages")
 }
 
 fn wikidot_line_starts_module(line: &str, module_name: &str) -> bool {
