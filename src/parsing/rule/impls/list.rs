@@ -208,6 +208,11 @@ fn try_consume_fn<'r, 't>(
     }
 
     if depths.is_empty() && escaped_elements.is_empty() {
+        if parser.settings().layout.legacy()
+            && parser.current().span.start > entry_parser.current().span.start
+        {
+            return Ok(ParseSuccess::new(Vec::new().into(), errors, true));
+        }
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
