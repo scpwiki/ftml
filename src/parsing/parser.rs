@@ -3337,7 +3337,7 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub(crate) fn restore_shared_registries(
-        &mut self,
+        &self,
         snapshot: SharedRegistries<'t>,
     ) {
         *self.footnotes.borrow_mut() = snapshot.footnotes;

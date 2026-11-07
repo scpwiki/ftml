@@ -202,7 +202,8 @@ where
     'r: 't,
 {
     let quote_aware = parser.quote_body_cursor().is_some();
-    parser.evaluate_fn(|parser| {
+    let snapshot = parser.snapshot_shared_registries();
+    let result = parser.evaluate_fn(|parser| {
         parser.step()?;
         let padded = parser.current().token == Token::Whitespace;
         parser.get_optional_space()?;
@@ -243,5 +244,7 @@ where
         }
         let rules = own_line_rules(parser.current().token);
         Ok(rules.iter().any(|rule| rule.try_consume(parser).is_ok()))
-    })
+    });
+    parser.restore_shared_registries(snapshot);
+    result
 }
