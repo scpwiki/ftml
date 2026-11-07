@@ -230,6 +230,9 @@ fn try_consume_fn<'r, 't>(
     let list_count = elements.len();
     elements.extend(hoisted_footnote_blocks);
     elements.extend(escaped_elements);
+    if elements.is_empty() && parser.settings().layout.legacy() {
+        paragraph_safe = true;
+    }
 
     let mut result = ParseSuccess::new(elements.into(), errors, paragraph_safe);
     if let Some((entries, escape_safe)) = gate_escape {
