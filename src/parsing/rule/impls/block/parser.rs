@@ -2391,6 +2391,81 @@ where
         true
     }
 
+    /// A later `[[/li]]` still inside the oldest open item pairs this close
+    /// with the innermost item. The last close pairs with the oldest item.
+    fn take_wikidot_li_pair(
+        queue: &mut std::collections::VecDeque<usize>,
+        heads: &[crate::parsing::parser::WikidotLiHead],
+        after_close: &Self,
+        depth: usize,
+    ) -> Option<usize> {
+        let floor = queue.front().and_then(|pos| {
+            heads
+                .iter()
+                .find(|head| head.pos == *pos)
+                .map(|head| head.depth)
+        });
+        let innermost = floor
+            .is_some_and(|floor| after_close.wikidot_li_close_before_floor(depth, floor));
+        if innermost {
+            queue.pop_back()
+        } else {
+            queue.pop_front()
+        }
+    }
+
+    fn wikidot_li_close_before_floor(&self, mut depth: usize, floor: usize) -> bool {
+        let mut scan = self.clone();
+        loop {
+            if scan.current().token == Token::InputEnd || scan.at_hard_body_end_boundary()
+            {
+                return false;
+            }
+            match scan.current().token {
+                Token::LeftBlock => {
+                    let mut probe = scan.clone();
+                    if let Ok((name, _, _)) = probe.get_block_name(false) {
+                        let name = name.strip_suffix('_').unwrap_or(&name);
+                        if name.eq_ignore_ascii_case("ul")
+                            || name.eq_ignore_ascii_case("ol")
+                        {
+                            depth += 1;
+                        }
+                    }
+                    if scan.step().is_err() {
+                        return false;
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    let mut probe = scan.clone();
+                    if let Ok(name) = probe.get_end_block() {
+                        let name = name.strip_suffix('_').unwrap_or(&name);
+                        if name.eq_ignore_ascii_case("ul")
+                            || name.eq_ignore_ascii_case("ol")
+                        {
+                            if depth == 0 || depth - 1 < floor {
+                                return false;
+                            }
+                            depth -= 1;
+                            scan.update(&probe);
+                        } else if name.eq_ignore_ascii_case("li") {
+                            return true;
+                        } else if scan.step().is_err() {
+                            return false;
+                        }
+                    } else if scan.step().is_err() {
+                        return false;
+                    }
+                }
+                _ => {
+                    if scan.step().is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn compute_wikidot_li_pairing(&self) {
         use std::collections::{BTreeSet, VecDeque};
 
@@ -2442,7 +2517,9 @@ where
                                 scan.update(&probe);
                             } else if name.eq_ignore_ascii_case("li") {
                                 let close_pos = scan.current().span.start;
-                                let paired_head = queue.pop_front();
+                                let paired_head = Self::take_wikidot_li_pair(
+                                    &mut queue, &heads, &probe, depth,
+                                );
                                 if let Some(head) = paired_head {
                                     paired.insert(head);
                                 }
@@ -2481,7 +2558,12 @@ where
                                         }
                                         depth -= 1;
                                     } else if name.eq_ignore_ascii_case("li") {
-                                        if let Some(head) = queue.pop_front() {
+                                        if let Some(head) = Self::take_wikidot_li_pair(
+                                            &mut queue,
+                                            &heads,
+                                            &name_probe,
+                                            depth,
+                                        ) {
                                             paired.insert(head);
                                         }
                                     }
