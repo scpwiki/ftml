@@ -25,34 +25,42 @@ use std::borrow::Cow;
 
 pub fn render_iframe(ctx: &mut HtmlContext, url: &str, attributes: &AttributeMap) {
     debug!("Rendering iframe block (url '{url}')");
-    let src = if ctx.layout().legacy() {
-        crate::url::percent_encode_non_ascii(url)
-    } else {
-        normalize_href(url, None)
-    };
-
     if ctx.layout().legacy() {
-        let get = |name| {
-            attributes
-                .get()
-                .get(name)
-                .map_or("", std::convert::AsRef::as_ref)
-        };
-        let mut iframe = ctx.html().iframe();
-        iframe.attr_single_quoted("src", &[src.as_ref()]);
-        iframe.attr_single_quoted("align", &[get("align")]);
-        iframe.attr_single_quoted("frameborder", &[get("frameborder")]);
-        iframe.attr_single_quoted("height", &[get("height")]);
-        iframe.attr_single_quoted("scrolling", &[get("scrolling")]);
-        iframe.attr_single_quoted("width", &[get("width")]);
-        iframe.attr_single_quoted("class", &[get("class")]);
-        iframe.attr_single_quoted("style", &[get("style")]);
+        render_legacy_iframe(ctx, url, attributes, false);
     } else {
+        let src = normalize_href(url, None);
         ctx.html().iframe().attr(attr!(
             "src" => &src,
             "crossorigin";;
             attributes
         ));
+    }
+}
+
+pub(super) fn render_legacy_iframe(
+    ctx: &mut HtmlContext,
+    url: &str,
+    attributes: &AttributeMap,
+    omit_close: bool,
+) {
+    let src = crate::url::percent_encode_non_ascii(url);
+    let get = |name| {
+        attributes
+            .get()
+            .get(name)
+            .map_or("", std::convert::AsRef::as_ref)
+    };
+    let mut iframe = ctx.html().iframe();
+    iframe.attr_single_quoted("src", &[src.as_ref()]);
+    iframe.attr_single_quoted("align", &[get("align")]);
+    iframe.attr_single_quoted("frameborder", &[get("frameborder")]);
+    iframe.attr_single_quoted("height", &[get("height")]);
+    iframe.attr_single_quoted("scrolling", &[get("scrolling")]);
+    iframe.attr_single_quoted("width", &[get("width")]);
+    iframe.attr_single_quoted("class", &[get("class")]);
+    iframe.attr_single_quoted("style", &[get("style")]);
+    if omit_close {
+        iframe.omit_close();
     }
 }
 

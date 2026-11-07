@@ -29,6 +29,10 @@ use crate::tree::{
 pub fn render_container(ctx: &mut HtmlContext, container: &Container) {
     debug!("Rendering container '{}'", container.ctype().name());
 
+    if super::link::render_wikidot_paragraph_anchor_iframe(ctx, container) {
+        return;
+    }
+
     if render_wikidot_split_tab_panel(ctx, container) {
         return;
     }
