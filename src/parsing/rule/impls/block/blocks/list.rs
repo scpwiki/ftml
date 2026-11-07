@@ -133,7 +133,7 @@ fn parse_list_block_impl<'r, 't>(
     (block_rule, list_type): (&BlockRule, ListType),
     parser: &mut Parser<'r, 't>,
     name: &str,
-    _opener_start: usize,
+    opener_start: usize,
     flag_star: bool,
     flag_score: bool,
     in_head: bool,
@@ -164,7 +164,7 @@ fn parse_list_block_impl<'r, 't>(
     // line before the closer absorbed every closer for the block.
     if wikidot
         && parser.wikidot_greedy_tail_eats_closers(
-            _opener_start,
+            opener_start,
             &[block_rule.accepts_names[0]],
         )
     {
@@ -173,12 +173,23 @@ fn parse_list_block_impl<'r, 't>(
     if wikidot
         && note_list_would_take_enclosing_closer(
             parser,
-            _opener_start,
+            opener_start,
             block_rule.accepts_names[0],
         )
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+
+    // Depth-1 explicit lists in an advanced table cell get a stable
+    // ordinal for cross-li break relocation (see `wikidot_div_list_ordinal`).
+    let this_list_ordinal = if wikidot
+        && parser.wikidot_li_pairing_depth() == 1
+        && parser.in_wikidot_advanced_table_cell_body()
+    {
+        Some(parser.wikidot_cell_list_ordinal())
+    } else {
+        None
+    };
 
     let body = if wikidot
         && let Some(depth) = parser.native_blockquote_depth()
@@ -196,6 +207,7 @@ fn parse_list_block_impl<'r, 't>(
         parser.get_body_elements(block_rule, false)?
     };
     let fused_close = parser.wikidot_body_closed_with_fused_close(block_rule);
+    let list_end = parser.current().span.start;
     let closer_has_same_line_residual = !matches!(
         parser.current().token,
         Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
@@ -249,6 +261,15 @@ fn parse_list_block_impl<'r, 't>(
 
     let content_follows = wikidot_content_follows(parser.remaining());
 
+    // Cross-li splice transfer keeps the emptied yielding item in `items`
+    // so same-list truncation and whole-list ejection below can address
+    // it. Only when the fallback transfer actually fired.
+    let cross_keep_empty = wikidot
+        && parser.wikidot_explicit_list_yield_tail_peek()
+        && parser.has_wikidot_li_tail_transfer()
+        && parser.wikidot_cell_div_li_opener().is_some()
+        && parser.wikidot_table_wrapped_by_flat_block();
+
     for element in elements {
         match element {
             Element::Partial(PartialElement::ListItem(list_item)) => {
@@ -261,6 +282,7 @@ fn parse_list_block_impl<'r, 't>(
                 );
                 partial_count += 1;
                 if !matches!(&list_item, ListItem::Elements { elements, .. } if elements.is_empty())
+                    || cross_keep_empty
                 {
                     partial_item_indices.push(items.len());
                     items.push(list_item);
@@ -340,6 +362,90 @@ fn parse_list_block_impl<'r, 't>(
                     elements.push(Element::LineBreak);
                 }
             }
+        }
+    }
+
+    // The div list's ordinal is recorded as soon as any list owning the
+    // div item assembles, even before the yielding list is parsed, so
+    // cell-stage break relocation can find it. The pairing scan starts
+    // just after the `[[ul]]` head, so this list's direct li heads sit
+    // at scan depth 0.
+    if wikidot
+        && this_list_ordinal.is_some()
+        && let Some(div_opener) = parser.wikidot_cell_div_li_opener()
+    {
+        let (all_heads, _) = parser.wikidot_li_items_at_depth(0);
+        if all_heads
+            .iter()
+            .any(|head| *head > opener_start && *head < list_end && *head == div_opener)
+        {
+            parser.record_wikidot_div_list_ordinal(this_list_ordinal.unwrap());
+        }
+    }
+
+    // Cross-li splice transfer (list-assembly half): eject the yielding
+    // list's content strictly after the first div item. Same-list keeps
+    // the prefix and stashes the intermediates; a separate yielding list
+    // ejects whole under the outer-wrap slot.
+    if wikidot
+        && parser.wikidot_explicit_list_yield_tail_peek()
+        && parser.has_wikidot_li_tail_transfer()
+        && parser.wikidot_table_wrapped_by_flat_block()
+        && let Some(div_opener) = parser.wikidot_cell_div_li_opener()
+    {
+        let (all_heads, _) = parser.wikidot_li_items_at_depth(0);
+        let heads: Vec<usize> = all_heads
+            .iter()
+            .copied()
+            .filter(|head| *head > opener_start && *head < list_end)
+            .collect();
+        if heads.len() == items.len() {
+            if let Some(ordinal) = this_list_ordinal
+                && heads.iter().any(|head| *head == div_opener)
+            {
+                parser.record_wikidot_div_list_ordinal(ordinal);
+            }
+            match heads.iter().position(|head| *head == div_opener) {
+                Some(div_index) if div_index + 1 < items.len() => {
+                    let ejected = items.split_off(div_index + 1);
+                    let mut eject_vec: Vec<Element<'t>> = Vec::new();
+                    for item in ejected {
+                        match item {
+                            ListItem::Elements { elements, .. } => {
+                                eject_vec.extend(elements);
+                            }
+                            ListItem::SubList { element } => {
+                                eject_vec.push(*element);
+                            }
+                        }
+                    }
+                    parser.extend_wikidot_cross_li_eject(eject_vec);
+                    parser.set_wikidot_cross_li_fired();
+                }
+                Some(_) => {}
+                None => {
+                    // Separate yielding list: eject whole, suppress the
+                    // cell element, stash the outer for re-wrapping.
+                    let outer = Element::List {
+                        ltype: list_type,
+                        items: std::mem::take(&mut items),
+                        attributes: attributes.clone(),
+                        wikidot_explicit_block: true,
+                        wikidot_unclosed: false,
+                    };
+                    parser.set_wikidot_cross_li_outer(outer);
+                    parser.set_wikidot_cross_li_fired();
+                    // Keep the yielding out of the cell: return no element.
+                    return ok!(false; Elements::None, errors);
+                }
+            }
+        } else if matches!(
+            items.last(),
+            Some(ListItem::Elements { elements, .. }) if elements.is_empty()
+        ) {
+            // Heads do not line up (literal items in play): restore the
+            // pre-cross behaviour by dropping the kept empty yielding item.
+            items.pop();
         }
     }
 
@@ -950,6 +1056,25 @@ fn parse_list_item<'r, 't>(
         let source_end = parser.current().span.start;
         let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_LI);
         let (segments, errors, _) = body.into();
+        // Cross-li splice transfer trigger (first-wins, cell-scoped): a
+        // completed `[[div]]` pair inside this item's body arms the later
+        // yielding item in the same cell.
+        if wikidot
+            && parser.in_wikidot_advanced_table_cell_body()
+            && parser.wikidot_cell_div_li_opener().is_none()
+            && segments.iter().any(|segment| {
+                segment.iter().any(|element| {
+                    matches!(
+                        element,
+                        Element::Partial(PartialElement::WikidotBlockClose(
+                            WikidotBlockCloseKind::Div { .. }
+                        ))
+                    )
+                })
+            })
+        {
+            parser.record_wikidot_cell_div_li_opener(opener_start);
+        }
         let source = &parser.full_text().inner()[body_start..source_end];
         let mut elements = assemble_wikidot_li_segments(
             segments,

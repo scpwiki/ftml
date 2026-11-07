@@ -3316,6 +3316,17 @@ where
         None
     }
 
+    /// Cross-li fallback: remove the trailing inner list of the yielding
+    /// segment when a div pair already formed in an earlier list item of
+    /// the same cell (see `wikidot_cell_div_li_opener`).
+    fn take_li_tail_list(segment: &mut Vec<Element<'t>>) -> Option<Element<'t>> {
+        let last = segment.len().checked_sub(1)?;
+        if matches!(segment[last], Element::List { .. }) {
+            return Some(segment.remove(last));
+        }
+        None
+    }
+
     pub(crate) fn wikidot_li_closed_at_shallower_quote_line(&self) -> bool {
         if !self.settings().layout.legacy() {
             return false;
@@ -3567,6 +3578,13 @@ where
                 if self.wikidot_table_wrapped_by_flat_block()
                     && let Some(segment) = segments.last_mut()
                     && let Some(element) = Self::take_li_tail_transfer(segment)
+                {
+                    self.set_wikidot_li_tail_transfer(element);
+                } else if self.wikidot_table_wrapped_by_flat_block()
+                    && self.wikidot_cell_div_li_opener().is_some()
+                    && !self.has_wikidot_li_tail_transfer()
+                    && let Some(segment) = segments.last_mut()
+                    && let Some(element) = Self::take_li_tail_list(segment)
                 {
                     self.set_wikidot_li_tail_transfer(element);
                 }

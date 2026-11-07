@@ -230,6 +230,24 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_list_cut_by_cell_end: Cell<bool>,
     wikidot_li_tail_transfer: Option<Element<'t>>,
     wikidot_explicit_list_yield_tail: Cell<bool>,
+    /// First explicit `[[li]]` head byte in the current cell whose body
+    /// carries a `[[div]]` close partial. Records the cell-scoped trigger
+    /// for the cross-li splice transfer (first-wins).
+    wikidot_cell_div_li_opener: Option<usize>,
+    /// Count of depth-1 explicit lists opened in the current cell, and
+    /// the ordinal of the list owning the first div item. Lets cell
+    /// extraction relocate the div-item trailing break without byte
+    /// information in the assembled elements.
+    wikidot_cell_list_count: Cell<usize>,
+    wikidot_div_list_ordinal: Option<usize>,
+    /// Foster-prefix elements produced when a cross-li transfer fires
+    /// (relocated div-item trailing break, then ejected intermediate
+    /// content in stream order). Consumed in table cell extraction.
+    wikidot_cross_li_eject: Vec<Element<'t>>,
+    /// Ejected outer list of a separate-list cross-li yield, used to
+    /// re-wrap the merged inner cut list in extraction.
+    wikidot_cross_li_outer: Option<Element<'t>>,
+    wikidot_cross_li_fired: Cell<bool>,
     /// Ordinal of the next tab parsed inside the current quoted tabview.
     wikidot_tabview_tab_ordinal: Cell<usize>,
     /// Ordinals of tabs whose panels render outside the navset (bare panel in
@@ -2107,6 +2125,120 @@ impl<'r, 't> Parser<'r, 't> {
         self.block_end_scan_cache
             .borrow_mut()
             .wikidot_li_tail_transfer = None;
+    }
+
+    pub(crate) fn has_wikidot_li_tail_transfer(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_tail_transfer
+            .is_some()
+    }
+
+    pub(crate) fn record_wikidot_cell_div_li_opener(&self, opener: usize) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        if cache.wikidot_cell_div_li_opener.is_none() {
+            cache.wikidot_cell_div_li_opener = Some(opener);
+        }
+    }
+
+    pub(crate) fn wikidot_cell_div_li_opener(&self) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_cell_div_li_opener
+    }
+
+    pub(crate) fn clear_wikidot_cell_div_li_opener(&self) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_cell_div_li_opener = None;
+    }
+
+    pub(crate) fn wikidot_cell_list_ordinal(&self) -> usize {
+        let cache = self.block_end_scan_cache.borrow();
+        let ordinal = cache.wikidot_cell_list_count.get();
+        cache.wikidot_cell_list_count.set(ordinal + 1);
+        ordinal
+    }
+
+    pub(crate) fn clear_wikidot_cell_list_count(&self) {
+        {
+            let cache = self.block_end_scan_cache.borrow();
+            cache.wikidot_cell_list_count.set(0);
+        }
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_div_list_ordinal = None;
+    }
+
+    pub(crate) fn wikidot_div_list_ordinal(&self) -> Option<usize> {
+        self.block_end_scan_cache.borrow().wikidot_div_list_ordinal
+    }
+
+    pub(crate) fn record_wikidot_div_list_ordinal(&self, ordinal: usize) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        if cache.wikidot_div_list_ordinal.is_none() {
+            cache.wikidot_div_list_ordinal = Some(ordinal);
+        }
+    }
+
+    pub(crate) fn prepend_wikidot_cross_li_eject(&self, element: Element<'t>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_cross_li_eject
+            .insert(0, element);
+    }
+
+    pub(crate) fn wikidot_cross_li_eject(&self) -> Vec<Element<'t>> {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        std::mem::take(&mut cache.wikidot_cross_li_eject)
+    }
+
+    pub(crate) fn extend_wikidot_cross_li_eject(&self, elements: Vec<Element<'t>>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_cross_li_eject
+            .extend(elements);
+    }
+
+    pub(crate) fn set_wikidot_cross_li_outer(&self, element: Element<'t>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_cross_li_outer = Some(element);
+    }
+
+    pub(crate) fn take_wikidot_cross_li_outer(&self) -> Option<Element<'t>> {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_cross_li_outer
+            .take()
+    }
+
+    pub(crate) fn clear_wikidot_cross_li_eject(&self) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        cache.wikidot_cross_li_eject.clear();
+        cache.wikidot_cross_li_outer = None;
+        cache.wikidot_cross_li_fired.set(false);
+    }
+
+    pub(crate) fn set_wikidot_cross_li_fired(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_cross_li_fired
+            .set(true);
+    }
+
+    pub(crate) fn wikidot_cross_li_fired(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_cross_li_fired
+            .get()
+    }
+
+    pub(crate) fn wikidot_explicit_list_yield_tail_peek(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_explicit_list_yield_tail
+            .get()
     }
 
     pub(crate) fn set_wikidot_explicit_list_yield_tail(&self) {
