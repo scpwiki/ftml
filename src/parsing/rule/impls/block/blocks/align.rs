@@ -183,6 +183,28 @@ pub fn parse_alignment_block<'r, 't>(
         return ok!(open);
     }
 
+    // First-fit binding: a scan-seen head with a visible same-kind closer
+    // after it lost that closer to an outer opener and must stay literal.
+    // Scan-blind heads (zoned closers, dropped arguments) and truly unclosed
+    // heads fall through to the legacy path, which already fails unclosed.
+    if parser.settings().layout.legacy()
+        && parser
+            .wikidot_block_pair_at_head_byte(opener_start)
+            .is_none()
+        && (parser.discarding_hidden_body()
+            || parser.wikidot_scan_shows_stolen_head(
+                match alignment {
+                    Alignment::Center => WikidotBlockKind::AlignCenter,
+                    Alignment::Right => WikidotBlockKind::AlignRight,
+                    Alignment::Left => WikidotBlockKind::AlignLeft,
+                    Alignment::Justify => WikidotBlockKind::AlignJustify,
+                },
+                opener_start,
+            ))
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     if !parser.has_body_end_block(block_rule) {
         return Err(parser.make_end_of_input_err());
     }
