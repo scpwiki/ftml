@@ -36,6 +36,20 @@ pub const RULE_RAW: Rule = Rule {
     try_consume_fn,
 };
 
+fn wikidot_footnote_claimable<'r, 't>(parser: &Parser<'r, 't>) -> bool
+where
+    'r: 't,
+{
+    let mut probe = parser.clone();
+    if probe
+        .get_head_none(&super::block::blocks::BLOCK_FOOTNOTE, false)
+        .is_err()
+    {
+        return false;
+    }
+    probe.has_body_end_block(&super::block::blocks::BLOCK_FOOTNOTE)
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -206,6 +220,15 @@ fn try_consume_fn<'r, 't>(
 
             let raw = decode_semicolon_entities(&content).into_owned();
             return success_elements(Element::Raw(Cow::Owned(raw)));
+        }
+
+        if parser.settings().layout.legacy()
+            && ending_token == Token::Raw
+            && token == Token::LeftBlock
+            && super::footnote_first::starts_footnote(parser)
+            && wikidot_footnote_claimable(parser)
+        {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
 
         if matches!(token, Token::RightRaw | Token::Raw) {
