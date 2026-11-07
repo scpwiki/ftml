@@ -19,7 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::tree::TabViewItem;
+use crate::tree::{AttributeMap, TabViewItem};
 use std::iter;
 
 pub fn render_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
@@ -115,6 +115,33 @@ pub fn render_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
         });
 }
 
+fn render_wikidot_tab_anchor(
+    ctx: &mut HtmlContext,
+    label: &str,
+    label_spans: &[AttributeMap],
+) {
+    fn render_wrapped(ctx: &mut HtmlContext, label: &str, label_spans: &[AttributeMap]) {
+        let Some((attributes, remaining)) = label_spans.split_first() else {
+            ctx.html()
+                .a()
+                .attr(attr!("href" => "javascript:;"))
+                .inner(|ctx| {
+                    // Live emits an empty anchor, not an
+                    // empty <em> wrapper, when the title
+                    // resolves to nothing.
+                    if !label.is_empty() {
+                        ctx.html().em().contents(label);
+                    }
+                });
+            return;
+        };
+        ctx.html().span().attr(attr!(;; attributes)).inner(|ctx| {
+            render_wrapped(ctx, label, remaining);
+        });
+    }
+    render_wrapped(ctx, label, label_spans);
+}
+
 fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
     let id = ctx.random().generate_wikidot_tabview_id();
     ctx.require_wikidot_tab_view(id.clone());
@@ -139,17 +166,11 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                                 "class" => "selected"; if tab_index == 0,
                             ))
                             .inner(|ctx| {
-                                ctx.html()
-                                    .a()
-                                    .attr(attr!("href" => "javascript:;"))
-                                    .inner(|ctx| {
-                                        // Live emits an empty anchor, not an
-                                        // empty <em> wrapper, when the title
-                                        // resolves to nothing.
-                                        if !tab.label.is_empty() {
-                                            ctx.html().em().contents(&tab.label);
-                                        }
-                                    });
+                                render_wikidot_tab_anchor(
+                                    ctx,
+                                    &tab.label,
+                                    &tab.wikidot_label_spans,
+                                );
                             });
                         ctx.push_raw('\n');
                         tab_index += 1;
@@ -390,10 +411,12 @@ mod tests {
                 TabViewItem::Tab(Tab {
                     label: cow!("Apple"),
                     elements: vec![text!("one")],
+                    wikidot_label_spans: Vec::new(),
                 }),
                 TabViewItem::Tab(Tab {
                     label: cow!("Banana"),
                     elements: vec![text!("two")],
+                    wikidot_label_spans: Vec::new(),
                 }),
             ])],
             ..SyntaxTree::default()
@@ -444,10 +467,12 @@ mod tests {
                 Element::TabView(vec![TabViewItem::Tab(Tab {
                     label: cow!("A"),
                     elements: vec![text!("one")],
+                    wikidot_label_spans: Vec::new(),
                 })]),
                 Element::TabView(vec![TabViewItem::Tab(Tab {
                     label: cow!("B"),
                     elements: vec![text!("two")],
+                    wikidot_label_spans: Vec::new(),
                 })]),
             ],
             ..SyntaxTree::default()
@@ -483,6 +508,7 @@ mod tests {
             elements: vec![Element::TabView(vec![TabViewItem::Tab(Tab {
                 label: cow!("</em><script>alert(1)</script>"),
                 elements: vec![text!(attack)],
+                wikidot_label_spans: Vec::new(),
             })])],
             ..SyntaxTree::default()
         };
@@ -510,6 +536,7 @@ mod tests {
             elements: vec![Element::TabView(vec![TabViewItem::Tab(Tab {
                 label: cow!("Empty"),
                 elements: Vec::new(),
+                wikidot_label_spans: Vec::new(),
             })])],
             ..SyntaxTree::default()
         };

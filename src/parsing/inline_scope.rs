@@ -1,7 +1,7 @@
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, Heading, HeadingReopen, InlineFormatKind,
-    ListItem, PartialElement, TableType, WIKIDOT_HEADING_REOPEN_MARKER,
+    ListItem, PartialElement, TabViewItem, TableType, WIKIDOT_HEADING_REOPEN_MARKER,
     WIKIDOT_WS_MONO_VANISH_MARKER, WikidotBlockCloseKind, WikidotBlockShell,
     WikidotFrameLink,
 };
@@ -3743,6 +3743,17 @@ fn attach_wikidot_block_label_spans<'t>(
         Element::TableOfContents { .. } if has_size => {
             active.retire_size_scopes();
             *trim_next_break = true;
+        }
+        Element::TabView(items) => {
+            if label_spans.is_empty() {
+                return;
+            }
+            for item in items {
+                let (TabViewItem::Tab(tab) | TabViewItem::Remote(tab)) = item else {
+                    continue;
+                };
+                tab.wikidot_label_spans = label_spans.clone();
+            }
         }
         _ => {}
     }

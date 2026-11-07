@@ -2231,7 +2231,11 @@ fn parse_tab<'r, 't>(
         }
     }
 
-    let element = Element::Partial(PartialElement::Tab(Tab { label, elements }));
+    let element = Element::Partial(PartialElement::Tab(Tab {
+        label,
+        elements,
+        wikidot_label_spans: Vec::new(),
+    }));
 
     success_elements_with_paragraph_safety(false, element, errors)
 }
