@@ -29,6 +29,9 @@ use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal
 use crate::parsing::consume::consume;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
+use crate::preproc::{
+    LiteralRegionIndex, wikidot_outer_div_still_open_at_collapsible_close,
+};
 use crate::settings::WikitextMode;
 use crate::tree::{
     AcceptsPartial, AttributeMap, ContainerType, ListItem, ListType, PartialElement,
@@ -886,6 +889,44 @@ where
     Ok(Some(Element::Text(literal.into())))
 }
 
+fn same_line_div_drops_tail_after_wrapped_center(
+    parser: &Parser<'_, '_>,
+    opener_start: usize,
+) -> bool {
+    let source = parser.full_text().inner();
+    let lower = source.to_ascii_lowercase();
+    let line_end = source[opener_start..]
+        .find('\n')
+        .map_or(source.len(), |offset| opener_start + offset);
+    if !lower[opener_start..line_end].contains("[[/div]]") {
+        return false;
+    }
+    let mut head = None;
+    let mut search = 0usize;
+    while search < opener_start {
+        let Some(rel) = lower[search..opener_start].find("[[collapsible") else {
+            break;
+        };
+        let at = search + rel;
+        head = Some(at);
+        search = at + "[[collapsible".len();
+    }
+    let Some(head) = head else {
+        return false;
+    };
+    let Some(close_rel) = lower[opener_start..].find("[[/collapsible]]") else {
+        return false;
+    };
+    let literal = LiteralRegionIndex::new(source);
+    let (_, wrapped) = wikidot_outer_div_still_open_at_collapsible_close(
+        source,
+        &literal,
+        head,
+        opener_start + close_rel,
+    );
+    wrapped
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -996,7 +1037,20 @@ fn parse_fn<'r, 't>(
         && (!arguments.is_empty() || arguments.has_empty_key())
         && parser.has_body_end_block_on_line(&BLOCK_DIV)
     {
-        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        if same_line_div_drops_tail_after_wrapped_center(parser, opener_start) {
+            while !matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            ) {
+                parser.step()?;
+            }
+            if parser.current().token == Token::LineBreak {
+                parser.step()?;
+            }
+            body_start = BlockBodyStart::NextPhysicalLine;
+        } else {
+            return Err(parser.make_err(ParseErrorKind::RuleFailed));
+        }
     }
     if parser.settings().layout.legacy()
         && parser.settings().mode != WikitextMode::List
