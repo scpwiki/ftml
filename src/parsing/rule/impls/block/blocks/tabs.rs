@@ -644,16 +644,14 @@ fn parse_tabview<'r, 't>(
             let TabViewItem::Content(content) = item else {
                 return None;
             };
-            content.iter().rposition(|element| {
-                matches!(element, Element::Text(text) if text.as_ref() == "||")
-            })
+            crate::parsing::rule::impls::wikidot_row_suffix_start_index(content)
         });
         if let Some(index) = suffix_index {
             let Some(TabViewItem::Content(mut content)) = items.pop() else {
                 unreachable!("suffix index was taken from the last content item");
             };
             let mut tail = content.split_off(index);
-            if tail.len() == 2 && matches!(tail.last(), Some(Element::LineBreak)) {
+            if matches!(tail.last(), Some(Element::LineBreak)) {
                 tail.pop();
             }
             if !content.is_empty() {

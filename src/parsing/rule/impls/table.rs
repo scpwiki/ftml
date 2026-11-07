@@ -446,12 +446,27 @@ fn element_is_row_suffix(element: &Element<'_>) -> bool {
     matches!(element, Element::Text(text) if text.as_ref() == "||")
 }
 
+pub(crate) fn wikidot_row_suffix_start_index(elements: &[Element<'_>]) -> Option<usize> {
+    if let Some(close) = elements.iter().rposition(|element| {
+        matches!(
+            element,
+            Element::Partial(PartialElement::WikidotBlockClose(_))
+        )
+    }) {
+        let start = close + 1;
+        if start < elements.len() {
+            return Some(start);
+        }
+    }
+    elements.iter().rposition(element_is_row_suffix)
+}
+
 fn row_suffix_index<'r, 't>(
     parser: &mut Parser<'r, 't>,
     elements: &[Element<'t>],
 ) -> Option<usize> {
     let at = parser.wikidot_row_suffix_at()?;
-    if let Some(index) = elements.iter().rposition(element_is_row_suffix) {
+    if let Some(index) = wikidot_row_suffix_start_index(elements) {
         return Some(index);
     }
     if parser.current().span.start > at {
@@ -467,8 +482,7 @@ pub(crate) fn eject_wikidot_row_suffix<'r, 't>(
     let Some(index) = row_suffix_index(parser, elements) else {
         return Vec::new();
     };
-    if elements.len() == index + 2 && matches!(elements.last(), Some(Element::LineBreak))
-    {
+    if matches!(elements.last(), Some(Element::LineBreak)) {
         elements.pop();
     }
     elements.split_off(index)
@@ -479,8 +493,7 @@ pub(crate) fn keep_wikidot_row_suffix<'r, 't>(
     elements: &mut Vec<Element<'t>>,
 ) -> Option<usize> {
     let index = row_suffix_index(parser, elements)?;
-    if elements.len() == index + 2 && matches!(elements.last(), Some(Element::LineBreak))
-    {
+    if matches!(elements.last(), Some(Element::LineBreak)) {
         elements.pop();
     }
     parser.clear_wikidot_row_suffix_at();

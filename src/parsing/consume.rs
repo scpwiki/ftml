@@ -411,7 +411,7 @@ where
         return None;
     }
     if parser.wikidot_byte_on_list_item_line(closer_byte)
-        && !render_interior_close_line_has_pipe_suffix(parser, closer_byte)
+        && !render_interior_close_line_has_suffix(parser, closer_byte)
     {
         return None;
     }
@@ -430,7 +430,7 @@ fn render_interior_close_line_is_quoted(source: &str, closer_byte: usize) -> boo
         .starts_with('>')
 }
 
-fn render_interior_close_line_has_pipe_suffix(
+fn render_interior_close_line_has_suffix(
     parser: &Parser<'_, '_>,
     closer_byte: usize,
 ) -> bool {
@@ -449,9 +449,7 @@ fn render_interior_close_line_has_pipe_suffix(
     else {
         return false;
     };
-    line[close_end..]
-        .trim_start_matches([' ', '\t'])
-        .starts_with("||")
+    !line[close_end..].trim_start_matches([' ', '\t']).is_empty()
 }
 
 fn render_interior_close_has_midrow_suffix(parser: &Parser<'_, '_>) -> bool {
@@ -696,9 +694,7 @@ where
         let rest = parser.full_text().inner().get(at..).unwrap_or("");
         let line = rest.split(['\n', '\r']).next().unwrap_or("");
         let trimmed = line.trim_start_matches([' ', '\t']);
-        if trimmed.starts_with("||") {
-            parser.set_wikidot_row_suffix_at(at + line.len() - trimmed.len());
-        }
+        parser.set_wikidot_row_suffix_at(at + line.len() - trimmed.len());
         return Ok(Some(ok!(false; close_element, Vec::new())));
     }
     while parser.current().token == Token::Whitespace {

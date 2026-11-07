@@ -1,0 +1,20 @@
+[
+    {
+        "token": "table-column",
+        "rule": "list",
+        "span": [
+            33,
+            35
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            33,
+            35
+        ],
+        "kind": "no-rules-match"
+    }
+]
