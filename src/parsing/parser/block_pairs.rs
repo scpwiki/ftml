@@ -1467,6 +1467,16 @@ impl<'t> Scanner<'t> {
         false
     }
 
+    fn followed_immediately_by_break(&self, index: usize) -> bool {
+        match self.tokens.get(index) {
+            None => true,
+            Some(token) => matches!(
+                token.token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            ),
+        }
+    }
+
     fn closer_valid(
         &self,
         kind: WikidotBlockKind,
@@ -1480,7 +1490,7 @@ impl<'t> Scanner<'t> {
             | WikidotBlockKind::AlignJustify => {
                 !self.in_bibliography_body(closer_index)
                     && self.starts_line(closer_index)
-                    && self.followed_by_break(closer_end)
+                    && self.followed_immediately_by_break(closer_end)
             }
             _ => true,
         }

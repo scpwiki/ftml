@@ -27,6 +27,7 @@ use super::{
 use crate::delayed::DelayedElement;
 use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal};
 use crate::parsing::consume::consume;
+use crate::parsing::discard_wikidot_controls;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::preproc::{
@@ -255,16 +256,17 @@ fn wikidot_nested_div_literal<'t>(
         } else {
             opener_start
         };
-        let literal =
-            Element::Text(elide_comments_from_literal(&source[start..literal_end]));
+        let literal = Element::Text(discard_wikidot_controls(
+            elide_comments_from_literal(&source[start..literal_end]),
+        ));
         if trailing_break {
             (Elements::Multiple(vec![literal, Element::LineBreak]), false)
         } else {
             (Elements::Single(literal), false)
         }
     } else if line_broken {
-        let literal = Element::Text(elide_comments_from_literal(
-            &source[opener_start..literal_end],
+        let literal = Element::Text(discard_wikidot_controls(
+            elide_comments_from_literal(&source[opener_start..literal_end]),
         ));
         if trailing_break {
             (
@@ -275,8 +277,8 @@ fn wikidot_nested_div_literal<'t>(
             (Elements::Multiple(vec![Element::LineBreak, literal]), true)
         }
     } else {
-        let literal = Element::Text(elide_comments_from_literal(
-            &source[opener_start..literal_end],
+        let literal = Element::Text(discard_wikidot_controls(
+            elide_comments_from_literal(&source[opener_start..literal_end]),
         ));
         if trailing_break {
             (Elements::Multiple(vec![literal, Element::LineBreak]), true)
@@ -389,8 +391,8 @@ where
         };
         if !flag_score && starts_with_bounded_span {
             let literal_end = parser.current().span.start;
-            let literal = Element::Text(elide_comments_from_literal(
-                &source[owner_start..literal_end],
+            let literal = Element::Text(discard_wikidot_controls(
+                elide_comments_from_literal(&source[owner_start..literal_end]),
             ));
             let elements = if line_started_after_physical_newline {
                 Elements::Multiple(vec![Element::LineBreak, literal])
@@ -447,8 +449,8 @@ where
         if !paragraph_safe {
             parser.mark_wikidot_div_literal_recovered();
         }
-        let mut elements = vec![Element::Text(elide_comments_from_literal(
-            &source[literal_start..body_start],
+        let mut elements = vec![Element::Text(discard_wikidot_controls(
+            elide_comments_from_literal(&source[literal_start..body_start]),
         ))];
         let mut errors = Vec::new();
         let mut degraded_from = None;
@@ -480,8 +482,8 @@ where
                     break;
                 }
             }
-            elements.push(Element::Text(elide_comments_from_literal(
-                &source[from..literal_end],
+            elements.push(Element::Text(discard_wikidot_controls(
+                elide_comments_from_literal(&source[from..literal_end]),
             )));
         } else {
             if parser.current().span.start == closer_start {
@@ -490,8 +492,8 @@ where
                         break;
                     }
                 }
-                elements.push(Element::Text(elide_comments_from_literal(
-                    &source[closer_start..owner_end],
+                elements.push(Element::Text(discard_wikidot_controls(
+                    elide_comments_from_literal(&source[closer_start..owner_end]),
                 )));
             }
             // L85 scope-5: in item bodies the newline after a literal div
@@ -893,8 +895,10 @@ where
     let source = parser.full_text().inner();
     let alias_start = gap_end.current().span.start;
     let gap = &source[head_end..alias_start];
-    let mut literal =
-        elide_comments_from_literal(&source[opener_start..head_end]).into_owned();
+    let mut literal = discard_wikidot_controls(elide_comments_from_literal(
+        &source[opener_start..head_end],
+    ))
+    .into_owned();
     // Live keeps same-line spaces after the head but drops a gap that
     // spans a line break.
     if !gap.contains(['\r', '\n']) {
@@ -1035,8 +1039,8 @@ fn parse_fn<'r, 't>(
     {
         let literal_end = delimiter.current().span.start;
         parser.update(&delimiter);
-        return ok!(true; Element::Text(elide_comments_from_literal(
-            &source[opener_start..literal_end],
+        return ok!(true; Element::Text(discard_wikidot_controls(
+            elide_comments_from_literal(&source[opener_start..literal_end]),
         )));
     }
     let head_started_physical_line =

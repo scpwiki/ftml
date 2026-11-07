@@ -196,6 +196,12 @@ fn wikidot_link_label(text: Option<&str>, show: bool) -> &str {
     if text == Some(crate::tree::WIKIDOT_EXPLICIT_EMPTY_LABEL_MARKER) {
         return "";
     }
+    if text.is_some_and(|text| {
+        text.split_once("[[[")
+            .is_some_and(|(_, rest)| rest.contains("]]]"))
+    }) {
+        return "";
+    }
     text.filter(|text| !text.is_empty() && *text != "0")
         .unwrap_or(default)
 }
