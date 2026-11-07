@@ -1714,7 +1714,58 @@ impl<'t> ParagraphStack<'t> {
         self.paragraph_break_since_element = true;
     }
 
+    fn unwrap_bare_bold_before_explicit_list(&mut self) {
+        if !self.wikidot {
+            return;
+        }
+        let mut index = 0;
+        while index + 1 < self.finished.len() {
+            let unwrap = match (&self.finished[index], &self.finished[index + 1]) {
+                (
+                    Element::Container(paragraph),
+                    Element::List {
+                        wikidot_explicit_block: true,
+                        items,
+                        ..
+                    },
+                ) if paragraph.ctype() == ContainerType::Paragraph => {
+                    (paragraph_is_only_marker(paragraph, "**")
+                        && list_items_shield(items))
+                        || paragraph_starts_with_glued_bold_block(paragraph)
+                }
+                _ => false,
+            };
+            if !unwrap {
+                index += 1;
+                continue;
+            }
+            let count = self.unwrap_paragraph_at(index);
+            index += count.max(1);
+        }
+    }
+
+    fn unwrap_paragraph_at(&mut self, index: usize) -> usize {
+        let paragraph = self.finished.remove(index);
+        let Element::Container(container) = paragraph else {
+            return 0;
+        };
+        let elements: Vec<Element<'t>> = container.into();
+        let count = elements.len();
+        if let Some((start, end)) = &mut self.wikidot_div_literal_run {
+            let delta = count as isize - 1;
+            if *start > index {
+                *start = start.saturating_add_signed(delta);
+                *end = end.saturating_add_signed(delta);
+            } else if *end > index {
+                *end = end.saturating_add_signed(delta);
+            }
+        }
+        self.finished.splice(index..index, elements);
+        count
+    }
+
     pub fn into_result<'r>(mut self) -> ParseResult<'r, 't, Vec<Element<'t>>> {
+        self.unwrap_bare_bold_before_explicit_list();
         if self.wikidot_explicit_pre_candidate {
             self.wikidot_dissolve_explicit_pre_candidate();
         }
@@ -1731,6 +1782,7 @@ impl<'t> ParagraphStack<'t> {
     }
 
     pub fn into_elements(mut self) -> Vec<Element<'t>> {
+        self.unwrap_bare_bold_before_explicit_list();
         if self.wikidot_explicit_pre_candidate {
             self.wikidot_dissolve_explicit_pre_candidate();
         }
@@ -1741,6 +1793,74 @@ impl<'t> ParagraphStack<'t> {
         debug_assert!(self.errors.is_empty(), "ParagraphStack errors");
 
         self.finished
+    }
+}
+
+fn paragraph_is_only_marker(paragraph: &Container<'_>, marker: &str) -> bool {
+    let mut saw_marker = false;
+    for element in paragraph.elements() {
+        match element {
+            Element::Text(text) if text.as_ref() == marker && !saw_marker => {
+                saw_marker = true;
+            }
+            Element::LineBreak => {}
+            _ => return false,
+        }
+    }
+    saw_marker
+}
+
+fn paragraph_starts_with_glued_bold_block(paragraph: &Container<'_>) -> bool {
+    let mut glued = String::new();
+    for element in paragraph.elements() {
+        let Element::Text(text) = element else {
+            break;
+        };
+        glued.push_str(text);
+        if glued.starts_with("**[[") {
+            return true;
+        }
+        if !"**[[".starts_with(glued.as_str()) {
+            return false;
+        }
+    }
+    false
+}
+
+fn list_items_shield(items: &[ListItem<'_>]) -> bool {
+    items.iter().any(|item| match item {
+        ListItem::SubList { element } => element_shields_leading_bold(element),
+        ListItem::Elements { elements, .. } => {
+            elements.iter().any(element_shields_leading_bold)
+        }
+    })
+}
+
+fn element_shields_leading_bold(element: &Element<'_>) -> bool {
+    match element {
+        Element::List { .. }
+        | Element::Table(_)
+        | Element::Collapsible { .. }
+        | Element::TabView(_)
+        | Element::Code(_)
+        | Element::Math { .. }
+        | Element::DefinitionList(_) => true,
+        Element::Container(container) => {
+            matches!(
+                container.ctype(),
+                ContainerType::Div
+                    | ContainerType::Blockquote
+                    | ContainerType::Note
+                    | ContainerType::Align(_)
+            ) || container
+                .elements()
+                .iter()
+                .any(element_shields_leading_bold)
+        }
+        Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+            elements.iter().any(element_shields_leading_bold)
+        }
+        _ => false,
     }
 }
 

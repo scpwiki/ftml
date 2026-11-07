@@ -1,0 +1,64 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "bold",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[[blockquote]]"
+                    },
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "blockquote",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "container",
+                                                        "data": {
+                                                            "type": "div",
+                                                            "attributes": {},
+                                                            "elements": []
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "blockquote"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        }
+    ]
+}

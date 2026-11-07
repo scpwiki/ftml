@@ -349,6 +349,8 @@ fn scan_chunk(
             );
             return;
         }
+        // `****` is an empty strong pair. Wikidot deletes it on either side of
+        // a block. A single `**` has no partner, so it stays literal text.
         if marker_positions.len() == 2
             && marker_positions[1] == marker_positions[0] + 1
             && tokens[marker_positions[0]].token == Token::Bold
@@ -357,7 +359,7 @@ fn scan_chunk(
             for i in marker_positions {
                 markers
                     .roles
-                    .insert(tokens[i].span.start, InlineMarkerRole::Literal);
+                    .insert(tokens[i].span.start, InlineMarkerRole::Removed);
             }
             return;
         }
