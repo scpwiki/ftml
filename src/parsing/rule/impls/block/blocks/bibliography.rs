@@ -438,13 +438,22 @@ fn wikidot_footnote_opener_unclosed(
     let mut closes = 0usize;
     let mut index = 0usize;
     while index < region.len() {
-        let rest = &region[index..];
-        if rest.len() >= 13 && rest[..13].eq_ignore_ascii_case("[[/footnote]]") {
+        let Some(rest) = region.get(index..) else {
+            index += 1;
+            continue;
+        };
+        if rest
+            .get(..13)
+            .is_some_and(|head| head.eq_ignore_ascii_case("[[/footnote]]"))
+        {
             closes += 1;
             index += 13;
             continue;
         }
-        if rest.len() >= 12 && rest[..12].eq_ignore_ascii_case("[[footnote]]") {
+        if rest
+            .get(..12)
+            .is_some_and(|head| head.eq_ignore_ascii_case("[[footnote]]"))
+        {
             opens += 1;
             index += 12;
             continue;

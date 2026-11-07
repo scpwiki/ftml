@@ -236,6 +236,41 @@ fn math_dollar_closes(bytes: &[u8], start: usize) -> bool {
     math_open
 }
 
+#[cfg(test)]
+pub(super) fn rewrite_pest_math_closers<'t>(
+    text: &'t str,
+    tokens: Vec<ExtractedToken<'t>>,
+) -> Vec<ExtractedToken<'t>> {
+    let bytes = text.as_bytes();
+    let mut rewritten = Vec::with_capacity(tokens.len() + 1);
+    let mut tokens = tokens.into_iter().peekable();
+    while let Some(token) = tokens.next() {
+        let start = token.span.start;
+        let divergent = token.token == Token::RightMath
+            && has(bytes, start, b"$]]]")
+            && !math_dollar_closes(bytes, start)
+            && tokens.peek().is_some_and(|next| {
+                next.token == Token::RightBracket && next.span.start == token.span.end
+            });
+        if !divergent {
+            rewritten.push(token);
+            continue;
+        }
+        let bracket = tokens.next().expect("peeked right bracket");
+        rewritten.push(ExtractedToken {
+            token: Token::Other,
+            slice: &text[start..start + 1],
+            span: start..start + 1,
+        });
+        rewritten.push(ExtractedToken {
+            token: Token::RightLink,
+            slice: &text[start + 1..bracket.span.end],
+            span: start + 1..bracket.span.end,
+        });
+    }
+    rewritten
+}
+
 fn is_discarded_control(byte: u8) -> bool {
     matches!(byte, 0x00..=0x08 | 0x0b..=0x0c | 0x0e..=0x1a | 0x1c..=0x1f)
 }

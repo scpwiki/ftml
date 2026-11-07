@@ -189,3 +189,15 @@ corpus-test/tabview/eject-blank-before-late-panel/input.ftml	TabView@2..112 desc
 corpus-test/tabview/eject-blank-before-late-panel/input.ftml	Tab@16..59 descent-only
 corpus-test/tabview/eject-blank-before-late-panel/input.ftml	Tab@63..96 descent-only
 l8-preview-q2-tab-d	TabView@0..66 descent-only
+corpus-test/table/bullet-cell-closer-without-later-closer/input.ftml	Table@0..58 scan-only
+corpus-test/table/bullet-cell-closer-without-later-closer/input.ftml	Row@10..47 scan-only
+corpus-test/table/bullet-cell-closer-without-later-closer/input.ftml	Cell@18..38 scan-only
+corpus-test/table/discarded-row-footnote-break-outside-paragraph/input.ftml	Div@16..60 scan-only
+corpus-test/table/glued-source-list-unclosed-row/input.ftml	Div@32..50 scan-only
+corpus-test/bibliography/collapsible-open-in-body/input.ftml	Collapsible@25..83 scan-only
+corpus-test/bibliography/collapsible-open-in-body/input.ftml	Collapsible@25..49 descent-only
+corpus-test/footnote/note-yields-enclosing-list-closers/input.ftml	Note@42..111 scan-only
+corpus-test/footnote/note-yields-enclosing-list-closers/input.ftml	Note@42..86 descent-only
+corpus-test/definition-list/table-opener-line-drops/input.ftml	Table@2..60 scan-only
+corpus-test/definition-list/table-opener-line-drops/input.ftml	structural Row scan=1 tree=0 contained=true
+corpus-test/definition-list/table-opener-line-drops/input.ftml	structural Cell scan=1 tree=0 contained=true
