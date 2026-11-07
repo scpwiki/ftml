@@ -286,7 +286,7 @@ fn split_wikidot_foster<'t>(
                 if parser.wikidot_close_is_foster(kind.head_byte())
         )
     });
-    match split {
+    let (mut cell, mut foster, mut had) = match split {
         Some(index) => {
             let mut cell = elements;
             let mut foster = cell.split_off(index);
@@ -295,7 +295,33 @@ fn split_wikidot_foster<'t>(
             (cell, pre, true)
         }
         None => (elements, Vec::new(), false),
+    };
+    // A simple-row suffix that tidy lifts before the enclosing table arrives
+    // already wrapped. A close-based split never sees it.
+    if lift_ready_foster(&mut cell, &mut foster) {
+        had = true;
     }
+    (cell, foster, had)
+}
+
+fn lift_ready_foster<'t>(
+    cell: &mut Vec<Element<'t>>,
+    foster: &mut Vec<Element<'t>>,
+) -> bool {
+    let mut lifted = false;
+    let mut index = 0;
+    while index < cell.len() {
+        if matches!(
+            cell[index],
+            Element::Partial(PartialElement::WikidotFoster(_))
+        ) {
+            foster.push(cell.remove(index));
+            lifted = true;
+        } else {
+            index += 1;
+        }
+    }
+    lifted
 }
 
 fn partition_wikidot_foster<'t>(tail: Vec<Element<'t>>) -> Vec<Element<'t>> {
