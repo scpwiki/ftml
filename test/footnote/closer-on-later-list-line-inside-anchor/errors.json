@@ -1,0 +1,173 @@
+[
+    {
+        "token": "line-break",
+        "rule": "block-table",
+        "span": [
+            186,
+            187
+        ],
+        "kind": "table-contains-non-row"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            2,
+            4
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            9,
+            11
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "line-break",
+        "rule": "block-table-row",
+        "span": [
+            173,
+            174
+        ],
+        "kind": "table-row-contains-non-cell"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            14,
+            16
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            19,
+            21
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block",
+        "rule": "list",
+        "span": [
+            24,
+            26
+        ],
+        "kind": "table-cell-outside-table"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            24,
+            26
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            30,
+            32
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "table-column",
+        "rule": "list",
+        "span": [
+            92,
+            94
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            92,
+            94
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "table-column",
+        "rule": "list",
+        "span": [
+            95,
+            97
+        ],
+        "kind": "not-start-of-line"
+    },
+    {
+        "token": "table-column",
+        "rule": "fallback",
+        "span": [
+            95,
+            97
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            153,
+            156
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            160,
+            162
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            165,
+            168
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            171,
+            173
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            176,
+            179
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            184,
+            186
+        ],
+        "kind": "no-rules-match"
+    }
+]
