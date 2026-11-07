@@ -1,0 +1,9 @@
+[[=]]
+[[div class="card"]]
+card title
+[[collapsible show="details"]]
+[[/=]]
+[[div style="text-align: left"]]body[[/div]]
+[[/collapsible]]
+[[/div]]
+outside
