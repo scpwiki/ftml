@@ -766,8 +766,6 @@ fn strong_tail_elements(tail: &str) -> Vec<Element<'static>> {
     elements
 }
 
-// Ullist eats the break after [[ul]], so item text lands on the || line.
-// The table rule then splits that one line and drops its last cell.
 fn glued_source_list_cells(
     source: &str,
     pipe: usize,
@@ -1740,10 +1738,6 @@ fn try_consume_inner<'r, 't>(
                                     if !parser.in_wikidot_span_body() {
                                         let suffix_at = parser.current().span.start;
                                         let suffix = take_simple_row_line_suffix(parser)?;
-                                        // The opener sat in the ignored last cell, so its
-                                        // end tags are unmatched. Tidy moves the same-line
-                                        // suffix before the table only when a div-like
-                                        // block still wraps that table.
                                         if parser.in_wikidot_advanced_table_cell_body()
                                             && !suffix.is_empty()
                                             && parser.wikidot_flat_ancestor_wraps_table(

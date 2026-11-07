@@ -689,9 +689,6 @@ impl<'r, 't> Parser<'r, 't> {
             .collect()
     }
 
-    /// A div, collapsible, note, or align still open around the table that
-    /// contains `byte`. A stray end tag can close that ancestor and tidy then
-    /// places the following text before the table.
     pub(crate) fn wikidot_flat_ancestor_wraps_table(&self, byte: usize) -> bool {
         let cache = self.block_end_scan_cache.borrow();
         let pairs = &cache.wikidot_block_pairs;
