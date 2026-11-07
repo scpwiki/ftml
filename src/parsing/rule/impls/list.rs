@@ -212,15 +212,13 @@ fn try_consume_fn<'r, 't>(
     }
 
     let mut hoisted_footnote_blocks = Vec::new();
-    if parser.settings().layout.legacy() {
-        for (_, _, elements) in &mut depths {
-            if wikidot_item_is_only_footnote_block(elements)
-                && let Some(block) = footnote_block_in(elements)
-            {
-                elements.clear();
-                hoisted_footnote_blocks.push(block);
-            }
-        }
+    if parser.settings().layout.legacy()
+        && let Some((_, _, elements)) = depths.last_mut()
+        && wikidot_item_is_only_footnote_block(elements)
+        && let Some(block) = footnote_block_in(elements)
+    {
+        elements.clear();
+        hoisted_footnote_blocks.push(block);
     }
 
     let depths = retain_active_nested_list_types(depths);
