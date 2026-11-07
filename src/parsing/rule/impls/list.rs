@@ -395,6 +395,63 @@ fn wikidot_escape_batches(escaped: &[Element]) -> Vec<ParagraphSplitEntry> {
     entries
 }
 
+/// The split point for a native item whose whole content is a lone `>`
+/// followed by an explicit list: live ends the item at the `>` and renders
+/// the list as a sibling. Returns the index of the list element when the
+/// item elements have exactly that shape.
+fn mid_item_explicit_list_split(elements: &[Element]) -> Option<usize> {
+    let split_at = elements.iter().position(|element| {
+        matches!(
+            element,
+            Element::List {
+                ltype: ListType::Bullet,
+                wikidot_explicit_block: true,
+                ..
+            }
+        )
+    })?;
+    if split_at == 0
+        || !elements[split_at + 1..]
+            .iter()
+            .all(|element| matches!(element, Element::LineBreak))
+    {
+        return None;
+    }
+    let mut prefix = elements[..split_at].iter().filter(|element| {
+        !matches!(element, Element::Text(text) if text.chars().all(|c| c.is_whitespace()))
+    });
+    match (prefix.next(), prefix.next()) {
+        (Some(Element::Text(text)), None) if text.as_ref() == ">" => Some(split_at),
+        _ => None,
+    }
+}
+
+/// Whether the explicit list head on the item's first line has an unowned
+/// body (its next line opens with a block marker rather than item content).
+fn item_line_list_body_is_unowned(parser: &Parser<'_, '_>, content_start: usize) -> bool {
+    let source = parser.full_text().inner();
+    let rest = &source[content_start.min(source.len())..];
+    let Some(line_end) = rest.find('\n') else {
+        return false;
+    };
+    let first_line = &rest[..line_end];
+    let Some(head) = first_line.find("[[") else {
+        return false;
+    };
+    let word: String = first_line[head + 2..]
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    let view = word.strip_suffix('_').unwrap_or(&word);
+    if !view.eq_ignore_ascii_case("ul") && !view.eq_ignore_ascii_case("ol") {
+        return false;
+    }
+    rest[line_end + 1..]
+        .lines()
+        .next()
+        .is_some_and(|line| line.trim_start().starts_with("[["))
+}
+
 fn find_wikidot_flat_boundary(elements: &[Element]) -> Option<(usize, bool)> {
     elements.iter().enumerate().find_map(|(index, element)| {
         let Element::Partial(partial) = element else {
@@ -550,6 +607,30 @@ where
             control,
             escaped_split: Some(entries),
             escaped,
+            escaped_safe: false,
+        });
+    }
+    if escape.is_none()
+        && parser.settings().layout.legacy()
+        && let Some(split_at) = mid_item_explicit_list_split(&elements)
+        && item_line_list_body_is_unowned(parser, content_start)
+    {
+        errors.append(&mut item_errors);
+        *paragraph_safe &= item_paragraph_safe;
+        parser.update(&sub_parser);
+        let mut rest = elements.split_off(split_at);
+        let mut prefix = std::mem::replace(&mut elements, Vec::new());
+        while matches!(prefix.last(), Some(Element::Text(text)) if text.chars().all(|c| c.is_whitespace())) {
+            prefix.pop();
+        }
+        if let Some(Element::LineBreak) = rest.last() {
+            rest.pop();
+            rest.push(Element::LineBreak);
+        }
+        return Ok(ListItemStep::Split {
+            control: Some((depth, list_type, prefix)),
+            escaped: rest,
+            escaped_split: None,
             escaped_safe: false,
         });
     }
@@ -1089,6 +1170,7 @@ pub(crate) fn build_list_element(
         items,
         attributes,
         wikidot_explicit_block: false,
+        wikidot_unclosed: false,
     })
 }
 

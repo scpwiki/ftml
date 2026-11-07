@@ -699,12 +699,14 @@ fn hoist_block_sequence<'t>(elements: Vec<Element<'t>>) -> Vec<Element<'t>> {
                 attributes,
                 items,
                 wikidot_explicit_block,
+                wikidot_unclosed,
             } => {
                 let (list, hoisted) = hoist_list_footnote_block(
                     ltype,
                     attributes,
                     items,
                     wikidot_explicit_block,
+                    wikidot_unclosed,
                 );
                 if let Some(list) = list {
                     output.push(list);
@@ -752,6 +754,7 @@ fn hoist_list_footnote_block<'t>(
     attributes: AttributeMap<'t>,
     mut items: Vec<ListItem<'t>>,
     wikidot_explicit_block: bool,
+    wikidot_unclosed: bool,
 ) -> (Option<Element<'t>>, Option<(Element<'t>, Vec<Element<'t>>)>) {
     let rebuild =
         |items: Vec<ListItem<'t>>, attributes: AttributeMap<'t>| Element::List {
@@ -759,6 +762,7 @@ fn hoist_list_footnote_block<'t>(
             attributes,
             items,
             wikidot_explicit_block,
+            wikidot_unclosed,
         };
 
     if wikidot_explicit_block {

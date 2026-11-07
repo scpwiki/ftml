@@ -297,8 +297,9 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             ltype,
             items,
             attributes,
+            wikidot_unclosed,
             ..
-        } => render_list(ctx, *ltype, items, attributes),
+        } => render_list(ctx, *ltype, items, attributes, *wikidot_unclosed),
         Element::DefinitionList(items) => render_definition_list(ctx, items),
         Element::RadioButton {
             name,

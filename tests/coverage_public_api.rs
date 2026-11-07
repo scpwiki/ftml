@@ -292,11 +292,13 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
                 ltype: ListType::Bullet,
                 attributes: list_attributes,
                 wikidot_explicit_block: false,
+                wikidot_unclosed: false,
                 items: vec![ListItem::SubList {
                     element: Box::new(Element::List {
                         ltype: ListType::Numbered,
                         attributes: AttributeMap::new(),
                         wikidot_explicit_block: false,
+                        wikidot_unclosed: false,
                         items: vec![ListItem::Elements {
                             attributes: AttributeMap::new(),
                             elements: vec![Element::Text(Cow::Borrowed("nested"))],
