@@ -150,6 +150,13 @@ struct ActiveScopes<'t> {
     heading_wrapper: Option<usize>,
     heading_wrapper_dying: bool,
     suppress_scope_wrap: bool,
+    /// Positions of the span/size scopes that were active when a frame
+    /// element's children lowering began (d8-44). While set, a tabview
+    /// adjacent to a frame edge or another block inside those children
+    /// keeps the entering-scope segment live renders (as `<span> </span>`
+    /// or `<span><br></span>`); scopes opened inside the children do not
+    /// take this path.
+    frame_entry: Option<Vec<usize>>,
 }
 
 struct ActiveScopeRevIter<'a, 't> {
@@ -2991,6 +2998,9 @@ fn lower_sequence<'t>(
                     strip_trailing_space_from_vec(&mut run);
                 }
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+                if matches!(element, Element::TabView(_)) {
+                    emit_tabview_lead_segment(&mut output, active);
+                }
                 let is_paragraph = matches!(
                     &element,
                     Element::Container(container)
@@ -3122,9 +3132,20 @@ fn lower_sequence<'t>(
                     last_run_outer_scope.reset();
                 }
             }
+            let is_tabview = matches!(element, Element::TabView(_));
             if !is_empty_paragraph(&element) && !is_vanished_empty_div(&element) {
                 output.push(element);
                 last_run_outer_scope.reset();
+            } else if is_vanished_empty_div(&element) {
+                // A dropped empty div still segments the enclosing span:
+                // live splits the span at the vanished div (spannext b).
+                // The segment=true path gets the same effect by promoting
+                // the div with an owner; the footnote (segment=false) path
+                // would otherwise merge the segments across it.
+                last_run_outer_scope.reset();
+            }
+            if is_tabview {
+                emit_tabview_trail_segment(&mut output, source.peek(), active);
             }
         } else if matches!(element, Element::Iframe { .. }) && active.has_active_scope() {
             // Element::paragraph_safe() is false, so the leaf arm would emit
@@ -3246,6 +3267,100 @@ fn wrap_scope_elements<'t>(
         ))];
     }
     elements
+}
+
+/// The outermost still-live span/size wrapper that entered the current frame
+/// element's children from outside (d8-44), or `None` when no entering scope
+/// survives at the call site (e.g. a heading killed it, or a math/heading
+/// tabview retired it). The segment takes this single wrapper: live carries
+/// only the outermost label onto tabview-adjacent segments.
+fn tabview_frame_wrapper<'t>(
+    active: &ActiveScopes<'t>,
+) -> Option<(ContainerType, AttributeMap<'t>)> {
+    let entry = active.frame_entry.as_deref()?;
+    let mut position = active.outer_active_position();
+    while let Some(current) = position {
+        if entry.contains(&current) {
+            let scope = &active.scopes[current];
+            if matches!(scope.kind, ScopeKind::Span | ScopeKind::Size)
+                && let ScopeWrapper::Container { ctype, attributes } = &scope.wrapper
+            {
+                return Some((*ctype, attributes.clone()));
+            }
+        }
+        position = active.scopes[current].next_active;
+    }
+    None
+}
+
+/// Push the leading segment live keeps before a tabview inside a frame
+/// element's children (d8-44), if an entering scope is live. Previous
+/// element `None` (tabview first in the children) or a list/table renders a
+/// space; a div/note/code renders a break; a paragraph merges into text; a
+/// tabview's leading has already been emitted by the left tabview's
+/// trailing rule.
+fn emit_tabview_lead_segment<'t>(
+    output: &mut Vec<Element<'t>>,
+    active: &ActiveScopes<'t>,
+) {
+    let space = match output.last() {
+        None => true,
+        Some(Element::Container(container)) => match container.ctype() {
+            ContainerType::Div | ContainerType::Note | ContainerType::Align(_) => false,
+            _ => return,
+        },
+        Some(Element::List { .. } | Element::Table(_)) => true,
+        Some(Element::Code(_)) => false,
+        Some(Element::WikidotBlockFrame { .. }) => false,
+        Some(_) => return,
+    };
+    let Some(wrapper) = tabview_frame_wrapper(active) else {
+        return;
+    };
+    output.extend(wrap_scope_elements(
+        &[wrapper],
+        vec![if space {
+            text!(" ")
+        } else {
+            Element::LineBreak
+        }],
+    ));
+}
+
+/// Push the trailing segment live keeps after a tabview inside a frame
+/// element's children (d8-44), if an entering scope is still live after the
+/// tabview lowered (a math/heading tabview retires the scope, so its tail
+/// drops). The frame-edge case (`next` is `None`) is left to
+/// `lower_children`, which emits it after the frame eject passes run.
+fn emit_tabview_trail_segment<'t>(
+    output: &mut Vec<Element<'t>>,
+    next: Option<&Element<'t>>,
+    active: &ActiveScopes<'t>,
+) {
+    let space = match next {
+        None => return,
+        Some(Element::Container(container)) => match container.ctype() {
+            ContainerType::Div
+            | ContainerType::Note
+            | ContainerType::Align(_)
+            | ContainerType::Header(_) => true,
+            _ => return,
+        },
+        Some(Element::List { .. } | Element::Table(_) | Element::TabView(_)) => false,
+        Some(Element::Code(_) | Element::WikidotBlockFrame { .. }) => true,
+        Some(_) => return,
+    };
+    let Some(wrapper) = tabview_frame_wrapper(active) else {
+        return;
+    };
+    output.extend(wrap_scope_elements(
+        &[wrapper],
+        vec![if space {
+            text!(" ")
+        } else {
+            Element::LineBreak
+        }],
+    ));
 }
 
 fn run_merges_across_separator(output: &[Element<'_>], next: &Element<'_>) -> bool {
@@ -4681,12 +4796,26 @@ fn lower_children<'t>(
                     | ContainerType::Align(_)
             )
         );
+    let frame_children = eject
+        || matches!(
+            element,
+            Element::Container(container)
+                if container.ctype() == ContainerType::Note
+        );
     let mut lowered = false;
     let truncate_at_entry = matches!(element, Element::List { .. });
     let mut visit = |children: &mut Vec<Element<'t>>| {
         lowered = true;
         if truncate_at_entry {
             active.sync_chain_to_istack();
+        }
+        // Frame-content lowering (d8-44): record which span/size scopes
+        // entered from outside, so tabview-adjacent segments inside this
+        // frame keep the entering scope's segment live renders. Non-frame
+        // children clear the snapshot (tab bodies, list items, ...).
+        let outer_entry = active.frame_entry.take();
+        if frame_children {
+            active.frame_entry = Some(active.active_positions());
         }
         lower_sequence(
             children,
@@ -4717,6 +4846,15 @@ fn lower_children<'t>(
             eject_segment_trailing_space(children);
             strip_trailing_space_from_vec(children);
         }
+        // Trailing frame-edge segment (d8-44): emitted after the eject
+        // passes above, which would eat a trailing space-only segment.
+        if frame_children
+            && matches!(children.last(), Some(Element::TabView(_)))
+            && let Some(wrapper) = tabview_frame_wrapper(active)
+        {
+            children.extend(wrap_scope_elements(&[wrapper], vec![text!(" ")]));
+        }
+        active.frame_entry = outer_entry;
     };
     visit_children_mut(element, &mut visit);
     lowered

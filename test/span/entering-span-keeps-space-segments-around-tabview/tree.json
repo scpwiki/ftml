@@ -1,0 +1,154 @@
+{
+  "elements": [
+    {
+      "element": "table",
+      "data": {
+        "type": "simple",
+        "attributes": {},
+        "rows": [
+          {
+            "attributes": {},
+            "cells": [
+              {
+                "header": false,
+                "column-span": 1,
+                "align": null,
+                "attributes": {},
+                "elements": [
+                  {
+                    "element": "text",
+                    "data": "n"
+                  },
+                  {
+                    "element": "footnote",
+                    "data": 1
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "element": "footnote-block",
+      "data": {
+        "title": null,
+        "hide": false
+      }
+    }
+  ],
+  "footnotes": [
+    [
+      {
+        "element": "container",
+        "data": {
+          "type": "paragraph",
+          "attributes": {},
+          "elements": [
+            {
+              "element": "container",
+              "data": {
+                "type": "bold",
+                "attributes": {},
+                "elements": []
+              }
+            }
+          ]
+        }
+      },
+      {
+        "element": "container",
+        "data": {
+          "type": "span",
+          "attributes": {},
+          "elements": [
+            {
+              "element": "collapsible",
+              "data": {
+                "elements": [
+                  {
+                    "element": "tab-view",
+                    "data": [
+                      {
+                        "label": "A",
+                        "elements": [
+                          {
+                            "element": "container",
+                            "data": {
+                              "type": "paragraph",
+                              "attributes": {},
+                              "elements": [
+                                {
+                                  "element": "container",
+                                  "data": {
+                                    "type": "bold",
+                                    "attributes": {},
+                                    "elements": [
+                                      {
+                                        "element": "text",
+                                        "data": "[[div]]"
+                                      },
+                                      {
+                                        "element": "line-break"
+                                      },
+                                      {
+                                        "element": "text",
+                                        "data": "[[/"
+                                      },
+                                      {
+                                        "element": "text",
+                                        "data": "div"
+                                      },
+                                      {
+                                        "element": "text",
+                                        "data": "]]"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "attributes": {},
+                "start-open": false,
+                "show-text": null,
+                "hide-text": null,
+                "show-top": true,
+                "show-bottom": false
+              }
+            },
+            {
+              "element": "line-break"
+            }
+          ]
+        }
+      },
+      {
+        "element": "container",
+        "data": {
+          "type": "paragraph",
+          "attributes": {},
+          "elements": [
+            {
+              "element": "container",
+              "data": {
+                "type": "bold",
+                "attributes": {},
+                "elements": []
+              }
+            },
+            {
+              "element": "line-break"
+            }
+          ]
+        }
+      }
+    ]
+  ]
+}
