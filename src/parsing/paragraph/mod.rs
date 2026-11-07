@@ -533,7 +533,11 @@ where
                 stack.mark_next_unwrapped_after_block();
             }
             if div_has_same_line_residual {
-                stack.mark_wikidot_same_line_div_residual();
+                if parser.in_wikidot_span_body() {
+                    stack.mark_next_unwrapped_after_block();
+                } else {
+                    stack.mark_wikidot_same_line_div_residual();
+                }
             }
             if let Some(div_like) = fused_block_residual {
                 if div_like {
