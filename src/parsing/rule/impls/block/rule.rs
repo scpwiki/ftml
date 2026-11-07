@@ -580,6 +580,14 @@ where
     }
     if parser.settings().layout.legacy()
         && !parser.discarding_hidden_body()
+        && matches!(block.name, "block-table-cell-regular" | "block-table-cell-header")
+        && parser.in_wikidot_advanced_table_cell_body()
+        && !parser.accepts_partial_here(crate::tree::AcceptsPartial::TableCell)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
         && !wikidot_block_has_physical_line_ownership(
             parser,
             parent_rule,
