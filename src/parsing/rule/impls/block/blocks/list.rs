@@ -909,6 +909,13 @@ fn wrap_inline_line_after_list(segment: &mut Vec<Element>) {
             end += 1;
         }
         let run: Vec<Element> = segment.drain(start..end).collect();
+        if !run.iter().any(
+            |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
+        ) {
+            segment.splice(start..start, run);
+            index = start + 1;
+            continue;
+        }
         segment.insert(
             start,
             Element::Container(Container::new(

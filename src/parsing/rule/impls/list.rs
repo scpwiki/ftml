@@ -486,7 +486,11 @@ where
         if is_close {
             let mut escaped = elements.split_off(boundary);
             trim_wikidot_flat_close_space(&mut elements);
-            if ends_at_break && !ends_run && flat_close_left_inline_residue(&escaped) {
+            if ends_at_break
+                && !ends_run
+                && flat_close_left_inline_residue(&escaped)
+                && !next_line_opens_list(parser)
+            {
                 escaped.push(Element::LineBreak);
             }
             let control = if elements.is_empty() {
@@ -654,6 +658,19 @@ where
     *paragraph_safe &= item_paragraph_safe;
     parser.update(&sub_parser);
     Ok(ListItemStep::Item((depth, list_type, elements), ends_run))
+}
+
+fn next_line_opens_list(parser: &Parser) -> bool {
+    let mut probe = parser.clone();
+    if probe.current().token == Token::Whitespace {
+        if probe.step().is_err() {
+            return false;
+        }
+    }
+    matches!(
+        probe.current().token,
+        Token::BulletItem | Token::NumberedItem
+    )
 }
 
 fn flat_close_left_inline_residue(escaped: &[Element]) -> bool {
