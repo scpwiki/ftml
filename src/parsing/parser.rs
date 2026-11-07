@@ -60,7 +60,7 @@ pub(crate) enum QuoteBodyLineStatus {
     Boundary,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum QuoteBodyLineState {
     NeedPrefix,
     PreparedContent {
@@ -72,7 +72,7 @@ pub(crate) enum QuoteBodyLineState {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct QuoteBodyCursor {
     required_depth: usize,
     line_state: QuoteBodyLineState,
@@ -109,6 +109,9 @@ pub(crate) struct RuleAttemptKey {
     in_color: bool,
     has_footnote_block: bool,
     start_of_line: bool,
+    native_blockquote_depth: Option<usize>,
+    quote_body: Option<QuoteBodyCursor>,
+    inline_bodies: u64,
     wikidot: WikidotState,
 }
 
@@ -1469,15 +1472,6 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     #[inline]
-    pub(crate) fn inside_inline_container_body(&self) -> bool {
-        !self
-            .block_end_scan_cache
-            .borrow()
-            .inline_container_body_names
-            .is_empty()
-    }
-
-    #[inline]
     pub(crate) fn in_quote_body(&self) -> bool {
         self.quote_body_cursor.is_some()
     }
@@ -2269,12 +2263,7 @@ impl<'r, 't> Parser<'r, 't> {
         if RULE_ATTEMPT_MEMO_DISABLED.with(Cell::get) {
             return None;
         }
-        if self.discarding_hidden_body
-            || !self.hidden_body_boundaries.is_empty()
-            || self.native_blockquote_depth.is_some()
-            || self.quote_body_cursor.is_some()
-            || self.inside_inline_container_body()
-        {
+        if self.discarding_hidden_body || !self.hidden_body_boundaries.is_empty() {
             return None;
         }
 
@@ -2292,8 +2281,19 @@ impl<'r, 't> Parser<'r, 't> {
             in_color: self.in_color,
             has_footnote_block: self.has_footnote_block,
             start_of_line: self.start_of_line,
+            native_blockquote_depth: self.native_blockquote_depth,
+            quote_body: self.quote_body_cursor,
+            inline_bodies: self.inline_container_body_key(),
             wikidot: self.wikidot.attempt_key(),
         })
+    }
+
+    fn inline_container_body_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let cache = self.block_end_scan_cache.borrow();
+        let mut hasher = std::hash::DefaultHasher::new();
+        cache.inline_container_body_names.hash(&mut hasher);
+        hasher.finish()
     }
 
     pub(crate) fn start_rule_attempt(&self) -> usize {
@@ -2366,16 +2366,18 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub(crate) fn rule_attempt_failure(&self, rule: &'static str) -> Option<ParseError> {
-        let cache = self.block_end_scan_cache.borrow();
-        if !cache
+        let recorded = self
+            .block_end_scan_cache
+            .borrow()
             .rule_attempt_failure_positions
             .get(self.remaining.len())
-            .is_some_and(|&recorded| recorded)
-        {
+            .is_some_and(|&recorded| recorded);
+        if !recorded {
             return None;
         }
 
         let key = self.rule_attempt_key(rule)?;
+        let cache = self.block_end_scan_cache.borrow();
         let (error, height) = cache
             .rule_attempt_failures
             .get(&key)

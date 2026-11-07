@@ -183,3 +183,24 @@ fn unclosed_strong_openers_finish_in_pagenav_and_draft() {
         );
     }
 }
+
+#[test]
+fn quoted_unclosed_ruby_lines_finish_in_list_mode() {
+    let page_info = page_info();
+    let settings = WikitextSettings::from_mode(WikitextMode::List, Layout::Wikijump);
+    let source = "> [[collapsible show=\"+[[ruby]]\" 100%]]\n".repeat(64);
+    let tokenization = ftml::tokenize(&source);
+    let started = Instant::now();
+    let (tree, errors) = ftml::parse(&tokenization, &page_info, &settings).into();
+
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "quoted ruby lines took {:?}",
+        started.elapsed(),
+    );
+    assert!(!errors.is_empty(), "unclosed ruby lines must report errors");
+    assert!(
+        !tree.elements.is_empty(),
+        "fallback must preserve observable source"
+    );
+}
