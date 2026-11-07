@@ -39,6 +39,9 @@ fn parse_fn<'r, 't>(
     if parser.settings().layout.legacy() && parser.current().token == Token::InputEnd {
         return ok!(false; ModuleParseOutput::None);
     }
+    if let Some(element) = take_css_through_quoted_closer(parser)? {
+        return success_value(element.into(), Vec::new(), false);
+    }
     let css = parser.get_body_text(&BLOCK_MODULE)?;
     let element = Element::Style(css);
     success_value(element.into(), Vec::new(), false)
@@ -118,6 +121,110 @@ fn parse_with_wikidot_boundary<'r, 't>(
     }
 
     parse_fn(parser, name, arguments)
+}
+
+fn take_css_through_quoted_closer<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Result<Option<Element<'t>>, ParseError>
+where
+    'r: 't,
+{
+    let body_start = parser.current().span.start;
+    let source = parser.full_text().inner();
+    let Some(closer) = wikidot_css_closer_after_quoted_module(source, body_start) else {
+        return Ok(None);
+    };
+    let mut css_end = closer.start;
+    if css_end > body_start && source.as_bytes()[css_end - 1] == b'\n' {
+        css_end -= 1;
+        if css_end > body_start && source.as_bytes()[css_end - 1] == b'\r' {
+            css_end -= 1;
+        }
+    }
+    while parser.current().span.start < closer.end {
+        parser.step()?;
+    }
+    Ok(Some(Element::Style(std::borrow::Cow::Borrowed(
+        &source[body_start..css_end],
+    ))))
+}
+
+struct CssModuleCloser {
+    start: usize,
+    end: usize,
+}
+
+/// The real `[[/module]]` when an earlier one sits inside a CSS string.
+/// A first closer outside quotes keeps the existing body scan.
+fn wikidot_css_closer_after_quoted_module(
+    source: &str,
+    body_start: usize,
+) -> Option<CssModuleCloser> {
+    let bytes = source.as_bytes();
+    let mut index = body_start;
+    let mut quote = None;
+    let mut saw_quoted_closer = false;
+    while index < bytes.len() {
+        if let Some(open) = quote {
+            if bytes[index] == b'\\' && index + 1 < bytes.len() {
+                index += 2;
+                continue;
+            }
+            if let Some(closer) = css_module_closer_at(bytes, index) {
+                saw_quoted_closer = true;
+                index = closer.end;
+                continue;
+            }
+            if bytes[index] == open {
+                quote = None;
+            }
+            index += 1;
+            continue;
+        }
+        if bytes[index] == b'"' || bytes[index] == b'\'' {
+            quote = Some(bytes[index]);
+            index += 1;
+            continue;
+        }
+        if let Some(closer) = css_module_closer_at(bytes, index) {
+            if saw_quoted_closer {
+                return Some(closer);
+            }
+            return None;
+        }
+        index += 1;
+    }
+    None
+}
+
+fn css_module_closer_at(bytes: &[u8], index: usize) -> Option<CssModuleCloser> {
+    let tail = bytes.get(index..)?;
+    if !tail.starts_with(b"[[/") {
+        return None;
+    }
+    let mut cursor = 3;
+    while matches!(tail.get(cursor), Some(b' ' | b'\t')) {
+        cursor += 1;
+    }
+    let name = tail.get(cursor..cursor + "module".len())?;
+    if !name.eq_ignore_ascii_case(b"module") {
+        return None;
+    }
+    cursor += "module".len();
+    if tail.get(cursor..cursor + 2) == Some(b"]]".as_slice()) {
+        return Some(CssModuleCloser {
+            start: index,
+            end: index + cursor + 2,
+        });
+    }
+    if matches!(tail.get(cursor), Some(b' ' | b'\t')) {
+        let close = tail[cursor..].windows(2).position(|pair| pair == b"]]")?;
+        return Some(CssModuleCloser {
+            start: index,
+            end: index + cursor + close + 2,
+        });
+    }
+    None
 }
 
 fn wikidot_css_closer(source: &str, body_start: usize, owner_end: usize) -> Option<&str> {
@@ -290,6 +397,23 @@ mod tests {
     use crate::render::Render;
     use crate::render::{html::HtmlRender, text::TextRender};
     use crate::settings::{WikitextMode, WikitextSettings};
+
+    #[test]
+    fn css_module_closer_inside_a_string_stays_in_the_style() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization =
+            crate::tokenize("[[module CSS]]\n.a{content:\"[[/module]]\"}\n[[/module]]");
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            tree.elements,
+            vec![Element::Style(cow!(".a{content:\"[[/module]]\"}"))],
+        );
+        let output = HtmlRender.render(&tree, &page_info, &settings);
+        assert_eq!(output.body, "");
+    }
 
     #[test]
     fn css_module_body_stays_raw_and_disable_argument_is_ignored() {

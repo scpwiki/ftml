@@ -79,6 +79,7 @@ impl InlineFormatKind {
 pub struct HeadingReopen<'t> {
     pub level: HeadingLevel,
     pub id: Option<Cow<'t, str>>,
+    pub label_empty: bool,
 }
 
 impl<'t> HeadingReopen<'t> {
@@ -86,6 +87,7 @@ impl<'t> HeadingReopen<'t> {
         HeadingReopen {
             level: self.level,
             id: self.id.as_ref().map(|id| Cow::Owned(id.to_string())),
+            label_empty: self.label_empty,
         }
     }
 }

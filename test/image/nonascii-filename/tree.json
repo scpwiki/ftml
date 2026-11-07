@@ -1,0 +1,22 @@
+{
+    "elements": [
+        {
+            "element": "image",
+            "data": {
+                "source": {
+                    "type": "direct",
+                    "data": {
+                        "type": "file1",
+                        "data": {
+                            "file": "日本語.png"
+                        }
+                    }
+                },
+                "link": null,
+                "alignment": null,
+                "attributes": {},
+                "target": null
+            }
+        }
+    ]
+}

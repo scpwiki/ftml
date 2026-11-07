@@ -1,0 +1,38 @@
+[
+    {
+        "token": "line-break",
+        "rule": "raw",
+        "span": [
+            3,
+            4
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "raw",
+        "rule": "fallback",
+        "span": [
+            1,
+            3
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "raw",
+        "rule": "raw",
+        "span": [
+            30,
+            32
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "raw",
+        "rule": "fallback",
+        "span": [
+            30,
+            32
+        ],
+        "kind": "no-rules-match"
+    }
+]

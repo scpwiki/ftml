@@ -699,6 +699,21 @@ fn strip_yielded_div_break(elements: &mut [Element<'_>]) {
 }
 
 #[inline(never)]
+fn only_footnote_block<'t>(elements: &[Element<'t>]) -> Option<Element<'t>> {
+    match elements {
+        [block @ Element::FootnoteBlock { .. }] => Some(block.clone()),
+        [Element::Container(container)]
+            if container.ctype() == ContainerType::Paragraph =>
+        {
+            match container.elements() {
+                [block @ Element::FootnoteBlock { .. }] => Some(block.clone()),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 fn normalize_wikidot_div_elements(elements: &mut Vec<Element<'_>>, flag_score: bool) {
     if flag_score {
         let item_count = elements.len();
@@ -1227,6 +1242,9 @@ fn parse_fn<'r, 't>(
         normalize_wikidot_div_elements(&mut elements, flag_score);
         if parser.wikidot_div_yielded_to_tab() {
             strip_yielded_div_break(&mut elements);
+        }
+        if flag_score && let Some(block) = only_footnote_block(&elements) {
+            return ok!(false; block);
         }
     }
 

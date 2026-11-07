@@ -179,11 +179,13 @@ fn render_image_element_wikidot(
     let height = get("height");
     let title = get("title");
     let style = get("style");
+    let image_src = crate::url::percent_encode_non_ascii(image_url);
+    let attachment_href = attachment_link.map(crate::url::percent_encode_non_ascii);
 
     let build_image = |ctx: &mut HtmlContext| {
         let mut image = ctx.html().img();
         image.attr(attr!(
-            "src" => image_url,
+            "src" => image_src.as_ref(),
             "width" => width.unwrap_or(""); if width.is_some(),
             "height" => height.unwrap_or(""); if height.is_some(),
             "title" => title.unwrap_or(""); if title.is_some(),
@@ -203,9 +205,12 @@ fn render_image_element_wikidot(
                 )
                 .inner(build_image);
         }
-        None => match attachment_link {
+        None => match attachment_href.as_ref() {
             Some(url) => {
-                ctx.html().a().attr(attr!("href" => url)).inner(build_image);
+                ctx.html()
+                    .a()
+                    .attr(attr!("href" => url.as_ref()))
+                    .inner(build_image);
             }
             None => build_image(ctx),
         },

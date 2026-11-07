@@ -188,7 +188,7 @@ fn try_consume_fn<'r, 't>(
     let trailing_space = take_edge_space(&mut elements, false);
     if legacy
         && elements.iter().all(
-            |element| matches!(element, Element::Text(text) if text.trim().is_empty()),
+            |element| matches!(element, Element::Text(text) if wikidot_color_body_vanishes(text)),
         )
     {
         elements.clear();
@@ -493,6 +493,10 @@ fn unform_strike_ate_close<'t>(elements: &mut Vec<Element<'t>>) -> bool {
     slot.push(text!("--"));
     slot.extend(children);
     true
+}
+
+fn wikidot_color_body_vanishes(text: &str) -> bool {
+    text.trim().is_empty() && !text.contains('\u{3000}')
 }
 
 fn take_edge_space<'t>(

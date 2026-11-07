@@ -211,6 +211,19 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    let mut hoisted_footnote_blocks = Vec::new();
+    if parser.settings().layout.legacy()
+        && depths.iter().any(|(_, _, elements)| {
+            !elements.is_empty() && !wikidot_item_is_only_footnote_block(elements)
+        })
+        && let Some((_, _, elements)) = depths.last_mut()
+        && wikidot_item_is_only_footnote_block(elements)
+        && let Some(block) = footnote_block_in(elements)
+    {
+        elements.clear();
+        hoisted_footnote_blocks.push(block);
+    }
+
     let depths = retain_active_nested_list_types(depths);
     let depth_lists = process_depths(ListType::Generic, depths);
     let mut elements: Vec<Element> = depth_lists
@@ -218,7 +231,11 @@ fn try_consume_fn<'r, 't>(
         .filter_map(|(ltype, depth_list)| build_list_element(ltype, depth_list))
         .collect();
     let list_count = elements.len();
+    elements.extend(hoisted_footnote_blocks);
     elements.extend(escaped_elements);
+    if elements.is_empty() && parser.settings().layout.legacy() {
+        paragraph_safe = true;
+    }
 
     let mut result = ParseSuccess::new(elements.into(), errors, paragraph_safe);
     if let Some((entries, escape_safe)) = gate_escape {
@@ -989,6 +1006,42 @@ where
         }
     }
     Ok(ends_run)
+}
+
+fn wikidot_item_is_only_footnote_block(elements: &[Element]) -> bool {
+    let mut saw_block = false;
+    for element in elements {
+        match element {
+            Element::LineBreak => {}
+            Element::FootnoteBlock { .. } if !saw_block => saw_block = true,
+            Element::Container(container)
+                if !saw_block
+                    && container.ctype() == crate::tree::ContainerType::Paragraph
+                    && wikidot_item_is_only_footnote_block(container.elements()) =>
+            {
+                saw_block = true;
+            }
+            _ => return false,
+        }
+    }
+    saw_block
+}
+
+fn footnote_block_in<'t>(elements: &[Element<'t>]) -> Option<Element<'t>> {
+    for element in elements {
+        match element {
+            block @ Element::FootnoteBlock { .. } => return Some(block.clone()),
+            Element::Container(container)
+                if container.ctype() == crate::tree::ContainerType::Paragraph =>
+            {
+                if let Some(block) = footnote_block_in(container.elements()) {
+                    return Some(block);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 pub(crate) fn build_list_element(
