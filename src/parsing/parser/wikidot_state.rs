@@ -36,6 +36,7 @@ const CROSSED_COLLAPSIBLE_TAIL: u16 = 1 << 5;
 const PENDING_NOTE_LIST_CLOSER: u16 = 1 << 6;
 const SUPPRESS_FOOTNOTE_LIST_BREAK: u16 = 1 << 7;
 const ADVANCED_CELL_PARAGRAPH: u16 = 1 << 8;
+const ROW_ABSORB_DIV_CLOSE: u16 = 1 << 9;
 
 /// Div keeps a 2-bit count (max 3). The other three kinds are one bit each.
 /// Slots stay inside `crossed_closes` and do not overlap.
@@ -170,6 +171,23 @@ impl Parser<'_, '_> {
     #[inline]
     pub(crate) fn leave_wikidot_div_body(&mut self) {
         self.wikidot.div_body_depth = self.wikidot.div_body_depth.saturating_sub(1);
+    }
+
+    #[inline]
+    pub(crate) fn wikidot_row_absorb_div_close(&self) -> bool {
+        self.wikidot.crossed_closes & ROW_ABSORB_DIV_CLOSE != 0
+    }
+
+    #[inline]
+    pub(crate) fn set_wikidot_row_absorb_div_close(&mut self, value: bool) {
+        set_flag(&mut self.wikidot.crossed_closes, ROW_ABSORB_DIV_CLOSE, value);
+    }
+
+    #[inline]
+    pub(crate) fn take_wikidot_row_absorb_div_close(&mut self) -> bool {
+        let value = self.wikidot.crossed_closes & ROW_ABSORB_DIV_CLOSE != 0;
+        self.set_wikidot_row_absorb_div_close(false);
+        value
     }
 
     #[inline]

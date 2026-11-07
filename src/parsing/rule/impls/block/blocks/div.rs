@@ -1201,6 +1201,7 @@ fn parse_fn<'r, 't>(
     let body_start_byte = parser.current().span.start;
     let parse_as_paragraphs =
         wrap_paragraphs || parser.settings().layout.legacy() && flag_score;
+    let absorb_before_body = parser.wikidot_row_absorb_div_close();
     let body = parser.get_body_elements_with_context(
         &BLOCK_DIV,
         parse_as_paragraphs,
@@ -1228,10 +1229,12 @@ fn parse_fn<'r, 't>(
     let greedy_ate_the_close = greedy && !owns_pair;
     let (mut elements, errors, _) = match body {
         Ok(_) if greedy_ate_the_close => {
+            parser.set_wikidot_row_absorb_div_close(absorb_before_body);
             return Err(parser.make_err(ParseErrorKind::BlockExpectedEnd));
         }
         Ok(body) => body.into(),
         Err(error) => {
+            parser.set_wikidot_row_absorb_div_close(absorb_before_body);
             if cacheable_wikijump_failure && error.kind() == ParseErrorKind::EndOfInput {
                 parser.cache_block_end_scan_outcomes(
                     WIKIJUMP_DIV_FAILURE_CACHE,

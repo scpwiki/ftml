@@ -1764,6 +1764,31 @@ fn try_consume_discarded_row_closer<'r, 't>(
     )))
 }
 
+fn try_consume_wikidot_row_absorb_div_close<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+) -> Option<ParseResult<'r, 't, Elements<'t>>> {
+    if !parser.settings().layout.legacy() || parser.discarding_hidden_body() {
+        return None;
+    }
+    // Only the bare `div` closer is absorbed (live keeps `[[/div_]]` and any
+    // longer name literal), and only in the non-fused `]]` form.
+    if !parser.at_wikidot_row_absorb_div_close() {
+        return None;
+    }
+    let _ = parser.take_wikidot_row_absorb_div_close();
+    step_over_wikidot_designated_end(parser)?;
+    // The absorbed closer's line break goes with it (live emits no break
+    // after a silently consumed closer).
+    if parser.current().token == Token::LineBreak {
+        parser.step().ok()?;
+    }
+    Some(Ok(crate::parsing::ParseSuccess::new(
+        Elements::None,
+        Vec::new(),
+        true,
+    )))
+}
+
 fn try_consume_wikidot_li_listbody_silent_close<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Option<ParseResult<'r, 't, Elements<'t>>> {
@@ -2054,6 +2079,10 @@ pub fn consume<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Eleme
     }
 
     if let Some(result) = try_consume_discarded_row_closer(parser) {
+        return result;
+    }
+
+    if let Some(result) = try_consume_wikidot_row_absorb_div_close(parser) {
         return result;
     }
 
