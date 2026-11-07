@@ -1120,6 +1120,19 @@ fn try_consume_fn<'r, 't>(
         {
             keep_line_break = false;
         }
+        let quote_end_list_break = parser.settings().layout.legacy()
+            && parser.current().token != Token::Quote
+            && matches!(
+                elements.iter().rev().find(|element| {
+                    !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                }),
+                Some(Element::List { wikidot_explicit_block: true, .. })
+            );
+        if quote_end_list_break
+            && !matches!(elements.last(), Some(Element::LineBreak))
+        {
+            elements.push(Element::LineBreak);
+        }
         if !empty_spaced_row
             && keep_line_break
             && !absorbed_unquoted_footnote
@@ -1239,8 +1252,9 @@ fn try_consume_fn<'r, 't>(
                 && counts.iter().map(|entry| entry.0).sum::<usize>() == elements.len()
         });
         let cut_boundary = parser.take_wikidot_table_cut_boundary();
-        let keep_trailing_break = marker_final
-            && !matches!(elements.last(), Some(Element::LineBreaks(_)));
+        let keep_trailing_break = quote_end_list_break
+            || (marker_final
+                && !matches!(elements.last(), Some(Element::LineBreaks(_))));
         let row = NativeQuoteRow {
             elements,
             paragraph_safe,
