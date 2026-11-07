@@ -2945,8 +2945,9 @@ fn lower_sequence<'t>(
                     let completed = active.end_watch();
                     active.drop_block_boundary_scopes(watermark, &completed);
                 }
-                if matches!(element, Element::TabView(_))
-                    && subtree_contains_block_math_or_heading(&element)
+                if matches!(element, Element::Math { .. })
+                    || (matches!(element, Element::TabView(_))
+                        && subtree_contains_block_math_or_heading(&element))
                 {
                     active.retire_span_scopes();
                 }
@@ -3921,8 +3922,8 @@ fn attach_wikidot_block_label_spans<'t>(
             wikidot_label_spans,
             ..
         } => {
-            if !label_spans.is_empty() {
-                *wikidot_label_spans = label_spans;
+            if let Some(outermost) = label_spans.first() {
+                *wikidot_label_spans = vec![outermost.clone()];
             }
             if has_size {
                 active.retire_size_scopes();
