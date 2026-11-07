@@ -21,10 +21,15 @@
 use super::block::blocks::BLOCK_TABLE;
 use super::prelude::*;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
-use crate::tree::{Alignment, PartialElement, Table, TableCell, TableRow, TableType};
+use crate::tree::{
+    Alignment, AttributeMap, Container, ContainerType, PartialElement, Table, TableCell,
+    TableRow, TableType,
+};
+use regex::Regex;
 use std::borrow::Cow;
 use std::mem;
 use std::num::NonZeroU32;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Copy)]
 struct TableCellStart<'t> {
@@ -691,6 +696,362 @@ fn finish_discarded_unclosed_row<'r, 't>(
     finish_simple_table(vec![row], Vec::new())
 }
 
+fn try_glued_source_list_row<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    pipe: usize,
+) -> Result<Option<crate::parsing::ParseSuccess<'r, 't, Elements<'t>>>, ParseError> {
+    let source = parser.full_text().inner();
+    let Some((cells, tail)) = glued_source_list_cells(source, pipe) else {
+        return Ok(None);
+    };
+    while parser.current().token != Token::InputEnd {
+        parser.step()?;
+    }
+    let mut row_cells = Vec::with_capacity(cells.len());
+    for (span, text) in cells {
+        let mut elements = Vec::new();
+        if !text.is_empty() {
+            elements.push(Element::Text(Cow::Owned(text)));
+        }
+        row_cells.push(TableCell {
+            elements,
+            header: false,
+            column_span: NonZeroU32::new(span).unwrap_or(NonZeroU32::new(1).unwrap()),
+            align: None,
+            attributes: AttributeMap::new(),
+        });
+    }
+    let table = simple_table(vec![TableRow {
+        cells: row_cells,
+        attributes: AttributeMap::new(),
+    }]);
+    let mut elements = vec![table];
+    elements.extend(strong_tail_elements(&tail));
+    Ok(Some(crate::parsing::ParseSuccess::new(
+        Elements::Multiple(elements),
+        Vec::new(),
+        false,
+    )))
+}
+
+fn strong_tail_elements(tail: &str) -> Vec<Element<'static>> {
+    let mut elements = Vec::new();
+    let bytes = tail.as_bytes();
+    let mut index = 0;
+    let mut plain = String::new();
+    while index < bytes.len() {
+        if bytes[index] == b'*'
+            && bytes.get(index + 1) == Some(&b'*')
+            && let Some(close) = tail[index + 2..].find("**")
+        {
+            if !plain.is_empty() {
+                elements.push(Element::Text(Cow::Owned(mem::take(&mut plain))));
+            }
+            let body = tail[index + 2..index + 2 + close].to_string();
+            elements.push(Element::Container(Container::new(
+                ContainerType::Bold,
+                vec![Element::Text(Cow::Owned(body))],
+                AttributeMap::new(),
+            )));
+            index += 2 + close + 2;
+            continue;
+        }
+        let ch = tail[index..].chars().next().unwrap();
+        plain.push(ch);
+        index += ch.len_utf8();
+    }
+    if !plain.is_empty() {
+        elements.push(Element::Text(Cow::Owned(plain)));
+    }
+    elements
+}
+
+fn glued_source_list_cells(
+    source: &str,
+    pipe: usize,
+) -> Option<(Vec<(u32, String)>, String)> {
+    if !explicit_list_on_pipe_line(source, pipe)
+        || !pipes_before_list_closer(source, pipe)
+    {
+        return None;
+    }
+    let mut text = String::from("\n");
+    text.push_str(&source[pipe..]);
+    text.push_str("\n\n");
+    text = apply_span(&text);
+    text = apply_div(&text);
+    text = apply_collapsible(&text);
+    text = apply_bullet_list(&text);
+    text = apply_ullist(&text);
+    let Some((row, rest)) = first_unclosed_table_row(&text) else {
+        return None;
+    };
+    let parts: Vec<&str> = row.split("||").collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let last = parts.len() - 1;
+    let mut span = 1u32;
+    let mut cells = Vec::new();
+    for part in parts.iter().take(last).skip(1) {
+        if part.is_empty() {
+            span += 1;
+            continue;
+        }
+        cells.push((span, visible_cell(part)));
+        span = 1;
+    }
+    if cells.is_empty() {
+        return None;
+    }
+    Some((cells, visible_tail(rest)))
+}
+
+fn first_unclosed_table_row(text: &str) -> Option<(&str, &str)> {
+    if !text.starts_with("\n||") {
+        return None;
+    }
+    let bytes = text.as_bytes();
+    let mut index = 1;
+    while index < bytes.len() {
+        if bytes[index] == b'\n' && !text[index + 1..].starts_with("||") {
+            return Some((&text[1..index], &text[index + 1..]));
+        }
+        index += 1;
+    }
+    None
+}
+
+fn explicit_list_on_pipe_line(source: &str, pipe: usize) -> bool {
+    let line_end = source[pipe..]
+        .find(['\n', '\r'])
+        .map(|offset| pipe + offset)
+        .unwrap_or(source.len());
+    let line = &source[pipe..line_end];
+    let lower = line.to_ascii_lowercase();
+    lower.contains("[[ul]]")
+        || lower.contains("[[ol]]")
+        || lower.contains("[[ul ")
+        || lower.contains("[[ol ")
+}
+
+fn pipes_before_list_closer(source: &str, pipe: usize) -> bool {
+    let line_end = source[pipe..]
+        .find(['\n', '\r'])
+        .map(|offset| pipe + offset)
+        .unwrap_or(source.len());
+    let line = &source[pipe..line_end];
+    let lower = line.to_ascii_lowercase();
+    let name = if lower.contains("[[ul]]") || lower.contains("[[ul ") {
+        "ul"
+    } else if lower.contains("[[ol]]") || lower.contains("[[ol ") {
+        "ol"
+    } else {
+        return false;
+    };
+    let Some(opener) = line.find("[[").map(|offset| pipe + offset) else {
+        return false;
+    };
+    let Some(opener_end) = source[opener..]
+        .find("]]")
+        .map(|offset| opener + offset + 2)
+    else {
+        return false;
+    };
+    let Some(closer) = find_balanced_closer(source, opener_end, name) else {
+        return false;
+    };
+    let mut index = line_end;
+    if index < source.len() && source.as_bytes()[index] == b'\r' {
+        index += 1;
+    }
+    if index < source.len() && source.as_bytes()[index] == b'\n' {
+        index += 1;
+    }
+    while index < closer {
+        if source_list_line(source, index) && source[index..closer].contains("||") {
+            let line_end = source[index..]
+                .find('\n')
+                .map(|offset| index + offset)
+                .unwrap_or(source.len());
+            if source[index..line_end.min(closer)].contains("||") {
+                return true;
+            }
+        }
+        if !source_list_line(source, index) {
+            return false;
+        }
+        match source[index..].find('\n') {
+            Some(offset) => index += offset + 1,
+            None => return false,
+        }
+    }
+    false
+}
+
+fn visible_cell(raw: &str) -> String {
+    strip_brackets(&strip_marks(raw)).trim().to_string()
+}
+
+fn visible_tail(raw: &str) -> String {
+    strip_brackets(&strip_marks(raw))
+        .chars()
+        .filter(|character| *character != '\n' && *character != '\r')
+        .collect()
+}
+
+fn strip_marks(text: &str) -> String {
+    let mut out = String::new();
+    let mut inside = false;
+    for character in text.chars() {
+        if character == '\u{E000}' {
+            inside = !inside;
+            continue;
+        }
+        if !inside {
+            out.push(character);
+        }
+    }
+    out
+}
+
+fn strip_brackets(text: &str) -> String {
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[\[[^\]]*\]\]").unwrap());
+    RE.replace_all(text, "").into_owned()
+}
+
+fn marked(kind: &str) -> String {
+    format!("\u{E000}{kind}\u{E000}")
+}
+
+fn repeat_until_stable(text: &str, step: impl Fn(&str) -> String) -> String {
+    let mut current = text.to_string();
+    loop {
+        let next = step(&current);
+        if next == current {
+            return current;
+        }
+        current = next;
+    }
+}
+
+fn apply_span(text: &str) -> String {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?s)([ \t\n]*)\[\[span(_?)(\s[^\]]*)?\]\](.*?)\[\[/span\]\]([ \t\n]*)",
+        )
+        .unwrap()
+    });
+    repeat_until_stable(text, |current| {
+        RE.replacen(current, 1, |caps: &regex::Captures| {
+            format!(
+                "{}{}{}{}{}",
+                caps.get(1).map(|m| m.as_str()).unwrap_or(""),
+                marked("S"),
+                caps.get(4).map(|m| m.as_str()).unwrap_or(""),
+                marked("/S"),
+                caps.get(5).map(|m| m.as_str()).unwrap_or(""),
+            )
+        })
+        .into_owned()
+    })
+}
+
+fn apply_div(text: &str) -> String {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?s)(\n)?\[\[div(_?)(\s.*?)?\]\] *\n(.*?)\[\[/div\]\] *").unwrap()
+    });
+    repeat_until_stable(text, |current| {
+        RE.replacen(current, 1, |caps: &regex::Captures| {
+            let pre = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            format!(
+                "{pre}{pre}{}\n\n{}\n\n{}",
+                marked("D"),
+                caps.get(4).map(|m| m.as_str()).unwrap_or(""),
+                marked("/D"),
+            )
+        })
+        .into_owned()
+    })
+}
+
+fn apply_collapsible(text: &str) -> String {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?s)(\n)?\[\[collapsible(\s.*?)?\]\](.*?)\[\[/collapsible\]\] *")
+            .unwrap()
+    });
+    repeat_until_stable(text, |current| {
+        RE.replacen(current, 1, |caps: &regex::Captures| {
+            let pre = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            format!(
+                "{pre}{pre}{}\n\n{}\n\n{}",
+                marked("C"),
+                caps.get(3).map(|m| m.as_str()).unwrap_or(""),
+                marked("/C"),
+            )
+        })
+        .into_owned()
+    })
+}
+
+fn apply_bullet_list(text: &str) -> String {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mut out = Vec::new();
+    let mut index = 0;
+    while index < lines.len() {
+        if list_item_text(lines[index]).is_some() {
+            let mut items = Vec::new();
+            while index < lines.len() {
+                if let Some(item) = list_item_text(lines[index]) {
+                    items.push(item);
+                    index += 1;
+                    continue;
+                }
+                break;
+            }
+            out.push(format!(
+                "{}{}{}",
+                marked("L"),
+                items.join(&marked("I")),
+                marked("/L")
+            ));
+        } else {
+            out.push(lines[index].to_string());
+            index += 1;
+        }
+    }
+    out.join("\n")
+}
+
+fn list_item_text(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start_matches(' ');
+    trimmed
+        .strip_prefix("* ")
+        .or_else(|| trimmed.strip_prefix("# "))
+}
+
+fn apply_ullist(text: &str) -> String {
+    static UL: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?si)\[\[ul(\s[^\]]*)?\]\]\s*(.*?)\[\[/ul\]\]\n?").unwrap()
+    });
+    static OL: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?si)\[\[ol(\s[^\]]*)?\]\]\s*(.*?)\[\[/ol\]\]\n?").unwrap()
+    });
+    let step = |current: &str, re: &Regex| -> String {
+        re.replacen(current, 1, |caps: &regex::Captures| {
+            format!(
+                "{}{}{}",
+                marked("U"),
+                caps.get(2).map(|group| group.as_str()).unwrap_or(""),
+                marked("/U"),
+            )
+        })
+        .into_owned()
+    };
+    let with_ul = repeat_until_stable(text, |current| step(current, &UL));
+    repeat_until_stable(&with_ul, |current| step(current, &OL))
+}
+
 fn legacy_unclosed_row(text: &str, pipe: usize) -> Option<UnclosedRow> {
     let bytes = text.as_bytes();
     if pipe.checked_add(2).is_none_or(|end| end > bytes.len())
@@ -1011,10 +1372,14 @@ fn try_consume_inner<'r, 't>(
     if parser.settings().layout.legacy()
         && parser.current().token == Token::TableColumn
         && parser.current().slice == "||"
-        && let Some(plan) =
-            legacy_unclosed_row(parser.full_text().inner(), parser.current().span.start)
     {
-        return finish_discarded_unclosed_row(parser, plan);
+        let pipe = parser.current().span.start;
+        if let Some(plan) = legacy_unclosed_row(parser.full_text().inner(), pipe) {
+            return finish_discarded_unclosed_row(parser, plan);
+        }
+        if let Some(success) = try_glued_source_list_row(parser, pipe)? {
+            return Ok(success);
+        }
     }
 
     let mut rows = Vec::new();
@@ -1373,11 +1738,22 @@ fn try_consume_inner<'r, 't>(
                                     if !parser.in_wikidot_span_body() {
                                         let suffix_at = parser.current().span.start;
                                         let suffix = take_simple_row_line_suffix(parser)?;
-                                        if !suffix.is_empty() {
-                                            interior.extend(suffix);
-                                        }
-                                        if interior.iter().any(element_is_row_suffix) {
-                                            parser.set_wikidot_row_suffix_at(suffix_at);
+                                        if parser.in_wikidot_advanced_table_cell_body()
+                                            && !suffix.is_empty()
+                                            && parser.wikidot_flat_ancestor_wraps_table(
+                                                suffix_at,
+                                            )
+                                        {
+                                            interior.push(Element::Partial(
+                                                PartialElement::WikidotFoster(suffix),
+                                            ));
+                                        } else {
+                                            if !suffix.is_empty() {
+                                                interior.extend(suffix);
+                                            }
+                                            if interior.iter().any(element_is_row_suffix) {
+                                                parser.set_wikidot_row_suffix_at(suffix_at);
+                                            }
                                         }
                                     }
                                     elements.clear();

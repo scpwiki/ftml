@@ -689,6 +689,24 @@ impl<'r, 't> Parser<'r, 't> {
             .collect()
     }
 
+    pub(crate) fn wikidot_flat_ancestor_wraps_table(&self, byte: usize) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let pairs = &cache.wikidot_block_pairs;
+        let Some(table_head) = pairs
+            .heads_between(0, byte)
+            .filter(|pair| {
+                pair.kind == block_pairs::WikidotBlockKind::Table && byte < pair.closer_byte
+            })
+            .map(|pair| pair.head_byte)
+            .max()
+        else {
+            return false;
+        };
+        pairs.heads_between(0, table_head).any(|pair| {
+            pair.kind.emits_flat() && pair.closer_byte > byte
+        })
+    }
+
     pub(crate) fn wikidot_greedy_tail_within(&self, from: usize, to: usize) -> bool {
         self.block_end_scan_cache
             .borrow()

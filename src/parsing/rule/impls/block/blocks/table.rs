@@ -288,7 +288,7 @@ fn split_wikidot_foster<'t>(
                 if parser.wikidot_close_is_foster(kind.head_byte())
         )
     });
-    match split {
+    let (mut cell, mut foster, mut had) = match split {
         Some(index) => {
             let mut cell = elements;
             let mut foster = cell.split_off(index);
@@ -297,7 +297,39 @@ fn split_wikidot_foster<'t>(
             (cell, pre, true)
         }
         None => (elements, Vec::new(), false),
+    };
+    if lift_ready_foster(&mut cell, &mut foster) {
+        had = true;
     }
+    (cell, foster, had)
+}
+
+fn lift_ready_foster<'t>(
+    cell: &mut Vec<Element<'t>>,
+    foster: &mut Vec<Element<'t>>,
+) -> bool {
+    let mut lifted = false;
+    let mut index = 0;
+    while index < cell.len() {
+        let is_foster = matches!(
+            cell[index],
+            Element::Partial(PartialElement::WikidotFoster(_))
+        );
+        if is_foster && !followed_by_table(cell, index) {
+            foster.push(cell.remove(index));
+            lifted = true;
+        } else {
+            index += 1;
+        }
+    }
+    lifted
+}
+
+fn followed_by_table(cell: &[Element<'_>], index: usize) -> bool {
+    cell[index + 1..]
+        .iter()
+        .find(|element| !element.is_whitespace())
+        .is_some_and(|element| matches!(element, Element::Table(_)))
 }
 
 fn partition_wikidot_foster<'t>(tail: Vec<Element<'t>>) -> Vec<Element<'t>> {
