@@ -128,6 +128,8 @@ pub(crate) const WIKIDOT_HEADING_COLLAPSIBLE_BODY_MARKER: &str =
     "data-ftml-heading-collapsible-body";
 pub(crate) const WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER: &str =
     "data-ftml-heading-collapsible-tail";
+pub(crate) const WIKIDOT_HEADING_COLLAPSIBLE_LINE_END_MARKER: &str =
+    "data-ftml-heading-collapsible-line-end";
 use std::borrow::Cow;
 use std::collections::HashSet;
 
