@@ -658,11 +658,11 @@ pub(crate) fn wikidot_simple_table_markers_literal_on_line_after_explicit_li(
     if prev_line.is_empty() {
         return false;
     }
-    if prev_line.eq_ignore_ascii_case("[[li]]") {
-        return true;
-    }
     let lower = prev_line.to_ascii_lowercase();
-    lower.starts_with("[[li ") || lower.starts_with("[[li\t")
+    let explicit_marker = lower == "[[li]]"
+        || lower.starts_with("[[li ")
+        || lower.starts_with("[[li\t");
+    explicit_marker && parser.accepts_partial() == crate::tree::AcceptsPartial::ListItem
 }
 
 struct UnclosedRow {
