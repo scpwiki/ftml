@@ -593,6 +593,90 @@ mod tests {
     }
 
     #[test]
+    fn wikidot_saved_page_html_tails() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let iframe = concat!(
+            r#"<iframe src="https://example.com/" allowtransparency="true" "#,
+            r#"frameborder="0" class="html-block-iframe">"#,
+        );
+
+        let cases = [
+            (
+                "[[html]]\n[[bibliography]]\n: a : A\n[[/bibliography]]\n[[/html]]\nafter",
+                vec!["\n[[bibliography]]\n: a : A\n[[/bibliography]]\n"],
+                format!("<p>{iframe}</iframe><br>\nafter</p>"),
+            ),
+            (
+                "[[html]]\n[[bibliography]]\nu0\n[[/html]]\nafter",
+                vec!["\n[[bibliography]]\nu0\n"],
+                format!("<p>{iframe}</iframe><br>\nafter</p>"),
+            ),
+            (
+                "[[html]]\n[[bibliography]]\nu0\n[[/html]]\n: a : A\n[[/bibliography]]\nafter",
+                vec!["\n[[bibliography]]\nu0\n"],
+                format!(
+                    "{iframe}</iframe><br>\n<dl>\n<dt>a</dt>\n<dd>A</dd>\n</dl>\n<p>[[/bibliography]]<br>\nafter</p>"
+                ),
+            ),
+            (
+                "[[size 120%]]\n[[html]]z[[/html]]\n[[/size]]",
+                vec!["z"],
+                format!(
+                    "<p><span style=\"font-size:120%;\">{iframe}<br></iframe></span></p>"
+                ),
+            ),
+            (
+                "[[size 120%]]\n[[html]]z[[/html]]\nafter\n[[/size]]",
+                vec!["z"],
+                format!(
+                    "<p><span style=\"font-size:120%;\">{iframe}<br>\nafter<br></iframe></span></p>"
+                ),
+            ),
+            (
+                "[[span]]\n[[html]]z[[/html]]\n[[/span]]",
+                vec!["z"],
+                format!("<p><span>{iframe}<br></iframe></span></p>"),
+            ),
+            (
+                "[[size 120%]]\nbefore\n[[html]]z[[/html]]\nafter\n[[/size]]",
+                vec!["z"],
+                format!(
+                    "<p><span style=\"font-size:120%;\"><br>\nbefore</span></p><p><span style=\"font-size:120%;\">{iframe}<br>\nafter<br></iframe></span></p>"
+                ),
+            ),
+        ];
+
+        for (source, expected_blocks, expected_html) in cases {
+            let tokenization = crate::tokenize(source);
+            let (tree, errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            let html = crate::render::html::HtmlRender
+                .render(&tree, &page_info, &settings)
+                .body;
+            assert_eq!(tree.html_blocks, expected_blocks, "{source:?}\n{html}");
+            assert_eq!(html, expected_html, "{source:?}: {errors:?}");
+        }
+
+        for (source, expected_body) in [
+            ("[[html]]\ty\t[[/html]]", "    y    "),
+            ("[[html]]\t[[/html]]", "    "),
+            ("[[html]] \t [[/html]]", "      "),
+        ] {
+            let mut text = source.to_owned();
+            crate::preprocess_for_layout(&mut text, Layout::Wikidot);
+            let tokenization = crate::tokenize(&text);
+            let (tree, errors) =
+                crate::parse(&tokenization, &page_info, &settings).into();
+            assert_eq!(
+                tree.html_blocks,
+                [expected_body],
+                "{source:?} preprocessed {text:?}: {errors:?}"
+            );
+        }
+    }
+
+    #[test]
     fn wikidot_html_block_at_line_start_after_text_still_parses() {
         let page_info = PageInfo::dummy();
         let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
