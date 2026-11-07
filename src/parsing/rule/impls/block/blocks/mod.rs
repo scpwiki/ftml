@@ -250,6 +250,46 @@ pub(crate) fn drop_wikidot_trailing_vanish_breaks(elements: &mut Vec<Element<'_>
     }
 }
 
+/// Live glues the text runs parked directly after an explicit list in a
+/// flat body (align/div/note/collapsible/cell): they are the list's
+/// continuation and stay bare, rather than opening a paragraph. A blank
+/// line between the list and the text already lands as [LineBreak, Text]
+/// and needs no unwrap; a block predecessor keeps following text wrapped
+/// (hr/table), so only an immediately preceding list unwraps its paragraph.
+pub(crate) fn unwrap_wikidot_paragraph_after_explicit_list(elements: &mut Vec<Element<'_>>) {
+    let mut index = 0;
+    while index < elements.len() {
+        let explicit_list = matches!(
+            &elements[index],
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        );
+        let next = index + 1;
+        let paragraph = elements
+            .get(next)
+            .is_some_and(|element| {
+                matches!(
+                    element,
+                    Element::Container(container)
+                        if container.ctype() == crate::tree::ContainerType::Paragraph
+                )
+            });
+        if explicit_list && paragraph {
+            let Element::Container(container) = elements.remove(next) else {
+                unreachable!("the following element was a paragraph");
+            };
+            let children: Vec<Element<'_>> = container.into();
+            let added = children.len();
+            elements.splice(next..next, children);
+            index += 1 + added;
+            continue;
+        }
+        index += 1;
+    }
+}
+
 /// Live Wikidot keeps the line break an explicit list leaves at the end of a
 /// footnote body, unlike the other paragraph bodies.
 pub(crate) fn append_wikidot_footnote_trailing_list_break(

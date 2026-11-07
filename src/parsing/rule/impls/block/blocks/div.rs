@@ -22,8 +22,9 @@ use super::BLOCK_ANCHOR;
 use super::BLOCK_SPAN;
 use super::prelude::*;
 use super::{
-    consume_wikidot_flat_head_break, wikidot_eject_after_lost_owner_collapsible,
-    wikidot_flat_pair_for_head, wikidot_scan_pairs_head,
+    consume_wikidot_flat_head_break, unwrap_wikidot_paragraph_after_explicit_list,
+    wikidot_eject_after_lost_owner_collapsible, wikidot_flat_pair_for_head,
+    wikidot_scan_pairs_head,
 };
 use crate::delayed::DelayedElement;
 use crate::parsing::collect::{consume_valid_comment, elide_comments_from_literal};
@@ -819,6 +820,7 @@ fn normalize_wikidot_div_elements(elements: &mut Vec<Element<'_>>, flag_score: b
             elements[index] = text!("\n");
         }
     }
+    unwrap_wikidot_paragraph_after_explicit_list(elements);
 }
 
 fn skip_trailing_head_space<'r, 't>(

@@ -1643,7 +1643,10 @@ fn build_blockquote_element(
     }
 
     // The hoist recorded this break. The usual pop would drop the br live keeps.
-    if !keep_trailing_break {
+    // A trailing break an all-empty explicit list dissolved to is body
+    // content on live (a quoted empty list renders
+    // <blockquote><br></blockquote>), not pop fodder.
+    if !keep_trailing_break && !stack.wikidot_trailing_empty_list_break() {
         stack.pop_line_break();
     }
     let mut elements = stack.into_elements();
@@ -2107,6 +2110,16 @@ fn push_native_quote_row<'t>(
         stack.record_next_element_line_start(true);
         return;
     }
+    // A row carrying only a line break lifted from an all-empty explicit
+    // list arms the stack's empty-list state, as the top-level gather
+    // does, so the post-list break handling (bare neighbours, break
+    // collapse) applies in quote bodies too.
+    if wikidot
+        && !row.paragraph_safe
+        && matches!(row.elements.as_slice(), [Element::LineBreak])
+    {
+        stack.mark_wikidot_empty_list_break();
+    }
     let alignment_block = row.elements.iter().any(|element| {
         matches!(
             element,
@@ -2118,7 +2131,15 @@ fn push_native_quote_row<'t>(
     if wikidot && alignment_block {
         stack.ensure_wikidot_trailing_line_break();
     }
-    if wikidot && !row.paragraph_safe && !alignment_block && !row.residual_block {
+    let empty_list_break_row = wikidot
+        && !row.paragraph_safe
+        && matches!(row.elements.as_slice(), [Element::LineBreak]);
+    if wikidot
+        && !row.paragraph_safe
+        && !alignment_block
+        && !row.residual_block
+        && !empty_list_break_row
+    {
         stack.pop_line_break();
     }
     let split_counts = row
