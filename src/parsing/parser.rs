@@ -175,6 +175,7 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_li_closes: Vec<WikidotLiClose>,
     wikidot_li_collect_stack: Vec<Option<usize>>,
     wikidot_explicit_list_ends: std::collections::BTreeSet<usize>,
+    wikidot_preserve_empty_lists: Cell<bool>,
     gate_items_allowed: Cell<bool>,
     title_footnote_fused_end: Cell<bool>,
     degraded_title_records: Vec<usize>,
@@ -1364,6 +1365,22 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .head_had_segment
             .set(value);
+    }
+
+    #[inline]
+    pub(crate) fn wikidot_preserve_empty_lists(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_preserve_empty_lists
+            .get()
+    }
+
+    #[inline]
+    pub(crate) fn set_wikidot_preserve_empty_lists(&self, value: bool) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_preserve_empty_lists
+            .replace(value)
     }
 
     #[inline]

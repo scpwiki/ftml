@@ -31,8 +31,18 @@ pub fn collect_container<'r, 't>(
     kind: Option<ParseErrorKind>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
     let quote_cursor = QuoteBodyCursorInstallation::install(parser);
+    let preserve_empty_lists = parser.settings().layout.legacy()
+        && container_type == ContainerType::Bold;
+    let previous_preserve = if preserve_empty_lists {
+        parser.set_wikidot_preserve_empty_lists(true)
+    } else {
+        false
+    };
 
     let collection = collect_consume(parser, rule, closes, invalids, kind);
+    if preserve_empty_lists {
+        parser.set_wikidot_preserve_empty_lists(previous_preserve);
+    }
     quote_cursor.uninstall(parser);
     let collection = collection?;
     let split_close_leftover = collection.split_close_leftover.clone();
