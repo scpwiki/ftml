@@ -20,7 +20,8 @@
 
 use super::prelude::*;
 use super::{
-    consume_wikidot_flat_head_break, trim_wikidot_trailing_explicit_list_break,
+    consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
+    trim_wikidot_trailing_explicit_list_break,
     wikidot_block_pair_for_block_head_byte, wikidot_flat_pair_for_head,
 };
 use crate::parsing::condition::ParseCondition;
@@ -583,6 +584,7 @@ fn parse_fn<'r, 't>(
     parser.set_in_wikidot_collapsible(previous_collapsible_context);
     if parser.settings().layout.legacy() {
         trim_wikidot_trailing_explicit_list_break(&mut elements);
+        drop_wikidot_trailing_vanish_breaks(&mut elements);
     }
     if parser.settings().layout.legacy()
         && parser.pending_wikidot_collapsible_closer()

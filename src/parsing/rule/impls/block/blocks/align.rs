@@ -20,8 +20,8 @@
 
 use super::prelude::*;
 use super::{
-    consume_wikidot_flat_head_break, trim_wikidot_trailing_explicit_list_break,
-    wikidot_flat_pair_for_head,
+    consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
+    trim_wikidot_trailing_explicit_list_break, wikidot_flat_pair_for_head,
 };
 use crate::delayed::DelayedElement;
 use crate::parsing::parser::block_pairs::WikidotBlockKind;
@@ -239,6 +239,7 @@ pub fn parse_alignment_block<'r, 't>(
             merge_adjacent_native_lists(&mut elements);
         }
         trim_wikidot_trailing_explicit_list_break(&mut elements);
+        drop_wikidot_trailing_vanish_breaks(&mut elements);
     }
     if span_keeps_head_breaks && align_parsed_body_keeps_span_head_breaks(&elements) {
         elements.insert(0, Element::LineBreaks(NonZeroU32::new(2).unwrap()));
