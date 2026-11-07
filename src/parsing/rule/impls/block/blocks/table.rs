@@ -302,6 +302,55 @@ fn extract_table_rows<'r, 't>(
     Ok((rows, residuals, foster))
 }
 
+/// Wrap a merged cross-li inner list in the ejected outer list of a
+/// separate-list yield. The merged list replaces the outer's innermost
+/// trailing list (the cut); without an outer the inner fosters alone.
+fn cross_li_wrap_outer<'t>(
+    outer: Option<Element<'t>>,
+    inner: Element<'t>,
+) -> Vec<Element<'t>> {
+    let Some(Element::List {
+        ltype,
+        mut items,
+        attributes,
+        wikidot_explicit_block,
+        wikidot_unclosed,
+    }) = outer
+    else {
+        return vec![inner];
+    };
+    // Seed the outer's innermost trailing list position: the last item's
+    // last list element, or append the inner when it has none.
+    let mut slot: Option<(usize, Option<usize>)> = None;
+    for (item_index, item) in items.iter().enumerate() {
+        let crate::tree::ListItem::Elements { elements, .. } = item else {
+            continue;
+        };
+        let position = elements
+            .iter()
+            .rposition(|element| matches!(element, Element::List { .. }));
+        slot = Some((item_index, position));
+    }
+    let Some((item_index, position)) = slot else {
+        return vec![inner];
+    };
+    let crate::tree::ListItem::Elements { elements, .. } = &mut items[item_index] else {
+        return vec![inner];
+    };
+    if let Some(position) = position {
+        elements[position] = inner;
+    } else {
+        elements.push(inner);
+    }
+    vec![Element::List {
+        ltype,
+        items,
+        attributes,
+        wikidot_explicit_block,
+        wikidot_unclosed,
+    }]
+}
+
 #[allow(clippy::type_complexity)]
 fn extract_table_cells<'r, 't>(
     parser: &Parser<'r, 't>,
@@ -309,6 +358,8 @@ fn extract_table_cells<'r, 't>(
     mut straddle_list_pending: bool,
     mut li_tail_transfer: Option<Element<'t>>,
     li_yield_tail: bool,
+    cross_li_eject: Vec<Element<'t>>,
+    mut cross_li_outer: Option<Element<'t>>,
 ) -> Result<(Vec<TableCell<'t>>, Vec<Cow<'t, str>>, Vec<Element<'t>>), ParseError> {
     let mut cells = Vec::new();
     let mut residuals = Vec::new();
@@ -316,6 +367,12 @@ fn extract_table_cells<'r, 't>(
     let mut straddle_tail: Vec<Element<'t>> = Vec::new();
     let mut pending_break = false;
     let mut yield_foster_len = 0usize;
+    for eject in cross_li_eject {
+        foster.push(Element::Partial(PartialElement::WikidotFoster(vec![eject])));
+    }
+    if !foster.is_empty() {
+        yield_foster_len = foster.len();
+    }
 
     for element in elements {
         match element {
@@ -343,19 +400,24 @@ fn extract_table_cells<'r, 't>(
                             },
                         ) if head_type == ltype => {
                             head_items.extend(items);
+                            let merged = Element::List {
+                                ltype,
+                                attributes,
+                                items: head_items,
+                                wikidot_explicit_block,
+                                wikidot_unclosed,
+                            };
+                            let fostered =
+                                cross_li_wrap_outer(cross_li_outer.take(), merged);
                             foster.push(Element::Partial(PartialElement::WikidotFoster(
-                                vec![Element::List {
-                                    ltype,
-                                    attributes,
-                                    items: head_items,
-                                    wikidot_explicit_block,
-                                    wikidot_unclosed,
-                                }],
+                                fostered,
                             )));
                         }
                         (transfer, element) => {
+                            let wrapped =
+                                cross_li_wrap_outer(cross_li_outer.take(), transfer);
                             foster.push(Element::Partial(PartialElement::WikidotFoster(
-                                vec![transfer],
+                                wrapped,
                             )));
                             foster.push(Element::Partial(PartialElement::WikidotFoster(
                                 vec![element],
@@ -443,9 +505,8 @@ fn extract_table_cells<'r, 't>(
         }
     }
     if let Some(transfer) = li_tail_transfer.take() {
-        foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
-            transfer,
-        ])));
+        let wrapped = cross_li_wrap_outer(cross_li_outer.take(), transfer);
+        foster.push(Element::Partial(PartialElement::WikidotFoster(wrapped)));
     }
     if !straddle_tail.is_empty() {
         match rescue_straddle_tail(straddle_tail) {
@@ -1026,6 +1087,9 @@ fn parse_row<'r, 't>(
         parser.clear_wikidot_list_cut_by_cell_end();
         parser.clear_wikidot_li_tail_transfer();
         parser.clear_wikidot_explicit_list_yield_tail();
+        parser.clear_wikidot_cell_div_li_opener();
+        parser.clear_wikidot_cross_li_eject();
+        parser.clear_wikidot_cell_list_count();
     }
     let parsed = match parse_block(
         parser,
@@ -1062,12 +1126,24 @@ fn parse_row<'r, 't>(
         None
     };
     let li_yield_tail = legacy && parser.take_wikidot_explicit_list_yield_tail();
+    let cross_li_eject = if legacy {
+        parser.wikidot_cross_li_eject()
+    } else {
+        Vec::new()
+    };
+    let cross_li_outer = if legacy {
+        parser.take_wikidot_cross_li_outer()
+    } else {
+        None
+    };
     let (cells, residuals, foster) = extract_table_cells(
         parser,
         parsed.elements,
         straddle_list_pending,
         li_tail_transfer,
         li_yield_tail,
+        cross_li_eject,
+        cross_li_outer,
     )?;
     if cells.is_empty() && parser.settings().layout.legacy() {
         return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
@@ -1155,6 +1231,44 @@ fn close_nested_anchor_scopes<'t>(elements: &mut Vec<Element<'t>>) -> usize {
     closed + anchors
 }
 
+/// Relocate the kept div-item's trailing line break to the foster lead
+/// when a cross-li transfer fired in this cell. Only the div list's last
+/// (kept) item owns the break; ejected items keep their own breaks.
+fn cross_relocate_div_break<'t>(
+    parser: &Parser<'_, '_>,
+    cell_elements: &mut [Element<'t>],
+) {
+    if !parser.settings().layout.legacy() || !parser.wikidot_cross_li_fired() {
+        return;
+    }
+    let Some(ordinal) = parser.wikidot_div_list_ordinal() else {
+        return;
+    };
+    let Some(element) = cell_elements
+        .iter_mut()
+        .filter_map(|element| match element {
+            Element::List { .. } => Some(element),
+            _ => None,
+        })
+        .nth(ordinal)
+    else {
+        return;
+    };
+    let Element::List { items, .. } = element else {
+        return;
+    };
+    let mut relocated = false;
+    if let Some(crate::tree::ListItem::Elements { elements, .. }) = items.last_mut()
+        && matches!(elements.last(), Some(Element::LineBreak))
+    {
+        elements.pop();
+        relocated = true;
+    }
+    if relocated {
+        parser.prepend_wikidot_cross_li_eject(Element::LineBreak);
+    }
+}
+
 fn parse_cell_regular<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -1189,6 +1303,10 @@ fn parse_cell_regular<'r, 't>(
     };
     let source_start = parser.current().span.start;
     let probe = parser.clone();
+    if legacy {
+        parser.clear_wikidot_cell_div_li_opener();
+        parser.clear_wikidot_cell_list_count();
+    }
     if legacy && !parser.has_body_end_block(&BLOCK_TABLE_CELL_BODY) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -1217,8 +1335,11 @@ fn parse_cell_regular<'r, 't>(
         }
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    let (cell_elements, foster, had_foster) =
+    let (mut cell_elements, foster, had_foster) =
         split_wikidot_foster(parser, parsed.elements);
+    if legacy {
+        cross_relocate_div_break(parser, &mut cell_elements);
+    }
     let preserve_single_paragraph = legacy && (source.contains("\n\n") || had_foster);
     let header = legacy && cell_closer_is_header(&probe, source_end);
 
@@ -1261,6 +1382,10 @@ fn parse_cell_header<'r, 't>(
     let block = (&BLOCK_TABLE_CELL_BODY, "table cell (header)");
     let source_start = parser.current().span.start;
     let probe = (**parser).clone();
+    if legacy {
+        parser.clear_wikidot_cell_div_li_opener();
+        parser.clear_wikidot_cell_list_count();
+    }
     if legacy && !parser.has_body_end_block(&BLOCK_TABLE_CELL_BODY) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
@@ -1289,8 +1414,11 @@ fn parse_cell_header<'r, 't>(
         }
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
-    let (cell_elements, foster, had_foster) =
+    let (mut cell_elements, foster, had_foster) =
         split_wikidot_foster(parser, parsed.elements);
+    if legacy {
+        cross_relocate_div_break(parser, &mut cell_elements);
+    }
     let preserve_single_paragraph = legacy && (source.contains("\n\n") || had_foster);
     let header = cell_closer_is_header(&probe, source_end);
 
