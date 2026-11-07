@@ -259,9 +259,8 @@ fn footnote_row_tail<'r, 't>(
     elements: &mut Vec<Element<'t>>,
 ) -> Vec<Element<'t>> {
     if parser.wikidot_row_suffix_at().is_some()
-        && let Some(index) = elements
-            .iter()
-            .rposition(|element| matches!(element, Element::Text(text) if text.as_ref() == "||"))
+        && let Some(index) =
+            crate::parsing::rule::impls::wikidot_row_suffix_start_index(elements)
         && wikidot_scope_open_at(&elements[..index])
     {
         return Vec::new();

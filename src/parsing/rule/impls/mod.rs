@@ -69,7 +69,9 @@ mod strikethrough;
 mod subscript;
 mod superscript;
 mod table;
-pub(crate) use self::table::{eject_wikidot_row_suffix, keep_wikidot_row_suffix};
+pub(crate) use self::table::{
+    eject_wikidot_row_suffix, keep_wikidot_row_suffix, wikidot_row_suffix_start_index,
+};
 mod text;
 mod underline;
 mod underscore_line_break;
