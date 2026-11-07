@@ -946,6 +946,14 @@ fn same_line_div_drops_tail_after_wrapped_center(
     wrapped
 }
 
+fn wikidot_div_head_line_quote_depth(parser: &Parser<'_, '_>, opener_start: usize) -> usize {
+    let source = parser.full_text().inner();
+    let line_start = source[..opener_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    crate::preproc::quote_depth_and_body(&source[line_start..opener_start]).0
+}
+
 fn parse_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
     name: &str,
@@ -1202,12 +1210,25 @@ fn parse_fn<'r, 't>(
     let parse_as_paragraphs =
         wrap_paragraphs || parser.settings().layout.legacy() && flag_score;
     let absorb_before_body = parser.wikidot_row_absorb_div_close();
-    let body = parser.get_body_elements_with_context(
-        &BLOCK_DIV,
-        parse_as_paragraphs,
-        body_start,
-        None,
-    );
+    let residual_depth_head = parser.settings().layout.legacy()
+        && parser.in_native_blockquote_line()
+        && wikidot_div_head_line_quote_depth(parser, opener_start)
+            > parser.native_blockquote_depth().unwrap_or(0);
+    let body = if residual_depth_head {
+        parser.get_body_elements_with_literal_quote_context(
+            &BLOCK_DIV,
+            parse_as_paragraphs,
+            body_start,
+            None,
+        )
+    } else {
+        parser.get_body_elements_with_context(
+            &BLOCK_DIV,
+            parse_as_paragraphs,
+            body_start,
+            None,
+        )
+    };
     if parser.settings().layout.legacy() {
         if flag_score {
             parser.leave_wikidot_scored_div_direct_body(

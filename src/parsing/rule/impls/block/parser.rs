@@ -4558,7 +4558,6 @@ where
         let has_surplus_list_close = !has_close
             && !has_later_close
             && literal_residual_quotes
-            && block_rule.name.starts_with("block-list-")
             && self.has_surplus_quote_list_close(block_rule, required_depth);
         if !has_close && !has_later_close && !has_surplus_list_close {
             if block_rule.name == "block-note" {
