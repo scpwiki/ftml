@@ -169,6 +169,9 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_footnote_zone_until: Cell<Option<usize>>,
     fused_name_residual: Cell<Option<usize>>,
     head_had_segment: Cell<bool>,
+    /// Sorted entries `(close_start, name_end)` for every `[[/` in the
+    /// preprocessed source; the end name is `source[close_start+3..name_end]`.
+    pub(super) wikidot_source_end_heads: Vec<(usize, usize)>,
     pub(super) wikidot_end_head_scan: Option<(usize, Option<usize>)>,
     pub(super) wikidot_line_break_scan: Option<(usize, Option<usize>)>,
     pub(super) wikidot_lf_line_bounds: Option<(usize, usize)>,
@@ -203,6 +206,40 @@ pub(super) struct BlockScanCache<'t> {
     /// Monotone "no closer ahead" memos for forward closer scans in parser
     /// rules; see `parser/closer_scan.rs`.
     closer_scan: CloserScanCache,
+}
+
+pub(crate) fn wikidot_first_block_close_after_from_heads(
+    heads: &[(usize, usize)],
+    slot: &mut Option<(usize, Option<usize>)>,
+    start: usize,
+) -> Option<usize> {
+    if let Some((scanned_from, found)) = *slot
+        && scanned_from <= start
+        && found.is_none_or(|found| found >= start)
+    {
+        return found;
+    }
+
+    let index = heads.partition_point(|(close_start, _)| *close_start < start);
+    let found = heads.get(index).map(|(close_start, _)| *close_start);
+    *slot = Some((start, found));
+    found
+}
+
+impl BlockScanCache<'_> {
+    /// The next `[[/` at or after `start`. Reuses `wikidot_end_head_scan` so
+    /// repeated queries with non-decreasing `start` stay linear in the number
+    /// of `[[/` heads, not source length.
+    pub(super) fn wikidot_first_block_close_after(
+        &mut self,
+        start: usize,
+    ) -> Option<usize> {
+        wikidot_first_block_close_after_from_heads(
+            &self.wikidot_source_end_heads,
+            &mut self.wikidot_end_head_scan,
+            start,
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -441,10 +478,28 @@ impl<'r, 't> Parser<'r, 't> {
             bibliographies: Rc::new(RefCell::new(BibliographyList::new())),
             quote_scan_cache: Rc::new(RefCell::new(BTreeMap::new())),
             block_end_scan_cache: Rc::new(RefCell::new({
+                let source = tokenization.full_text().inner();
+                let mut wikidot_source_end_heads: Vec<(usize, usize)> = Vec::new();
+                let mut search = 0usize;
+                while let Some(rel) = source.get(search..).and_then(|s| s.find("[[/")) {
+                    let close_start = search + rel;
+                    let name_start = close_start + 3;
+                    let name_end = source
+                        .get(name_start..)
+                        .map(|after_slash| {
+                            name_start
+                                + after_slash
+                                    .find(|c: char| c.is_whitespace() || c == ']')
+                                    .unwrap_or(after_slash.len())
+                        })
+                        .unwrap_or(name_start);
+                    wikidot_source_end_heads.push((close_start, name_end));
+                    search = close_start + 3;
+                }
                 let wikidot_block_pairs = if settings.layout.legacy() {
                     block_pairs::compute_wikidot_block_pairs(
                         tokenization.tokens(),
-                        tokenization.full_text().inner(),
+                        source,
                         page_info,
                     )
                 } else {
@@ -467,6 +522,7 @@ impl<'r, 't> Parser<'r, 't> {
                         BTreeMap::new()
                     },
                     wikidot_block_pairs,
+                    wikidot_source_end_heads,
                     wikidot_inline_markers,
                     closer_scan: CloserScanCache::new(tokenization.tokens().len()),
                     wikidot_line_runs: if settings.layout.legacy() {
