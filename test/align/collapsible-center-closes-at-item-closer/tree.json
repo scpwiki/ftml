@@ -1,0 +1,144 @@
+{
+    "elements": [
+        {
+            "element": "collapsible",
+            "data": {
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": {
+                                "align": "center"
+                            },
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "list",
+                                    "data": {
+                                        "type": "bullet",
+                                        "attributes": {},
+                                        "items": [
+                                            {
+                                                "item-type": "elements",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "collapsible",
+                                                        "data": {
+                                                            "elements": [
+                                                                {
+                                                                    "element": "list",
+                                                                    "data": {
+                                                                        "type": "bullet",
+                                                                        "attributes": {},
+                                                                        "items": [
+                                                                            {
+                                                                                "item-type": "elements",
+                                                                                "attributes": {},
+                                                                                "elements": [
+                                                                                    {
+                                                                                        "element": "text",
+                                                                                        "data": "*"
+                                                                                    },
+                                                                                    {
+                                                                                        "element": "text",
+                                                                                        "data": " "
+                                                                                    },
+                                                                                    {
+                                                                                        "element": "container",
+                                                                                        "data": {
+                                                                                            "type": {
+                                                                                                "align": "center"
+                                                                                            },
+                                                                                            "attributes": {},
+                                                                                            "elements": [
+                                                                                                {
+                                                                                                    "element": "list",
+                                                                                                    "data": {
+                                                                                                        "type": "bullet",
+                                                                                                        "attributes": {},
+                                                                                                        "items": [
+                                                                                                            {
+                                                                                                                "item-type": "elements",
+                                                                                                                "attributes": {},
+                                                                                                                "elements": [
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": "*"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": " "
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": "a"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "element": "footnote",
+                                                                                                                        "data": 1
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "item-type": "elements",
+                                                                                                                "attributes": {},
+                                                                                                                "elements": [
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": "*"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": " "
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                }
+                                                                                            ]
+                                                                                        }
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ],
+                                                            "attributes": {},
+                                                            "start-open": false,
+                                                            "show-text": null,
+                                                            "hide-text": null,
+                                                            "show-top": true,
+                                                            "show-bottom": false
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "attributes": {},
+                "start-open": false,
+                "show-text": null,
+                "hide-text": null,
+                "show-top": true,
+                "show-bottom": false
+            }
+        }
+    ],
+    "footnotes": [
+        [
+            {
+                "element": "text",
+                "data": "f"
+            }
+        ]
+    ],
+    "needs-footnote-block": true
+}
