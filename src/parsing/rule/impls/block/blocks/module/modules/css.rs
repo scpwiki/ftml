@@ -82,6 +82,7 @@ fn parse_with_wikidot_boundary<'r, 't>(
         match body_probe.get_body_text(&BLOCK_MODULE) {
             Ok(body) => {
                 if body.chars().all(char::is_whitespace) {
+                    parser.mark_wikidot_module_line_vanished();
                     let _ = parser.get_body_text(&BLOCK_MODULE)?;
                     let owner_end = parser.current().span.start;
                     let closer = wikidot_css_closer(source, body_start, owner_end)

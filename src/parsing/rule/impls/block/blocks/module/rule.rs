@@ -20,6 +20,7 @@
 
 use super::mapping::get_module_rule_with_name;
 use super::prelude::*;
+use crate::parsing::ParagraphSplitKind;
 use crate::parsing::rule::impls::block::parser::BlockBodyStart;
 use crate::tree::{
     AnchorTarget, AttributeMap, LinkLabel, LinkLocation, LinkType, Module,
@@ -137,7 +138,24 @@ fn parse_fn<'r, 't>(
     let (elements, errors, paragraph_safe) = output.into();
     let _ = parser.take_wikidot_module_empty_body();
 
-    success_elements_with_paragraph_safety(paragraph_safe, elements, errors)
+    let mut success =
+        success_elements_with_paragraph_safety(paragraph_safe, elements, errors);
+    if parser.take_wikidot_module_line_vanished()
+        && let Ok(success) = &mut success
+    {
+        let count = match &success.item {
+            Elements::None => 0,
+            Elements::Single(_) => 1,
+            Elements::Multiple(elements) => elements.len(),
+        };
+        if count > 0 {
+            success.paragraph_split = Some(vec![
+                (0, true, ParagraphSplitKind::Paragraph),
+                (count, true, ParagraphSplitKind::Paragraph),
+            ]);
+        }
+    }
+    success
 }
 
 fn wikidot_valid_module_name(name: &str) -> bool {

@@ -19,6 +19,7 @@ const HEADING_LINE: u16 = 1 << 12;
 /// Parsing the body of an advanced `[[cell]]` / `[[hcell]]` block (legacy `[[table]]` grid).
 const ADVANCED_TABLE_CELL_BODY: u16 = 1 << 13;
 const BIBLIOGRAPHY_SPLIT_TAIL: u16 = 1 << 14;
+const MODULE_LINE_VANISHED: u16 = 1 << 15;
 
 /// Sentinel for "no scored div direct body" in the packed field.
 const SCORED_DIV_DIRECT_INACTIVE: u32 = u32::MAX;
@@ -587,6 +588,16 @@ impl Parser<'_, '_> {
     pub(crate) fn take_wikidot_module_empty_body(&mut self) -> bool {
         let marked = self.wikidot.flags & MODULE_EMPTY_BODY != 0;
         set_flag(&mut self.wikidot.flags, MODULE_EMPTY_BODY, false);
+        marked
+    }
+
+    pub(crate) fn mark_wikidot_module_line_vanished(&mut self) {
+        set_flag(&mut self.wikidot.flags, MODULE_LINE_VANISHED, true);
+    }
+
+    pub(crate) fn take_wikidot_module_line_vanished(&mut self) -> bool {
+        let marked = self.wikidot.flags & MODULE_LINE_VANISHED != 0;
+        set_flag(&mut self.wikidot.flags, MODULE_LINE_VANISHED, false);
         marked
     }
 
