@@ -2385,7 +2385,7 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
             .iter()
             .position(|(start, end)| open >= *start && open < *end)
             .expect("pair open index is inside a segment range");
-        trim_list_end_space(segments[segment_index].as_mut());
+        trim_list_end_space(segments[segment_index]);
         segments[segment_index]
             .push(Element::Partial(PartialElement::InlineFormatClose(kind)));
     }
