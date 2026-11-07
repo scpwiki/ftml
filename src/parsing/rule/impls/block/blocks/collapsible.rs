@@ -298,15 +298,16 @@ fn parse_fn<'r, 't>(
         && !parser.discarding_hidden_body()
         && let Some(pair) = wikidot_block_pair_for_block_head_byte(parser, opener_start)
         && pair.kind == WikidotBlockKind::Collapsible
-        && !pair.flat
     {
         let literal = LiteralRegionIndex::new(parser.full_text().inner());
-        if wikidot_outer_div_still_open_at_collapsible_close(
-            parser.full_text().inner(),
-            &literal,
-            pair.head_byte,
-            pair.closer_byte,
-        ) {
+        let (crossed_div, wrapped_center) =
+            wikidot_outer_div_still_open_at_collapsible_close(
+                parser.full_text().inner(),
+                &literal,
+                pair.head_byte,
+                pair.closer_byte,
+            );
+        if crossed_div && !pair.flat || wrapped_center {
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
     }
