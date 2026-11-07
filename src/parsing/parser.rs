@@ -288,6 +288,8 @@ fn is_optional_space_token(token: Token) -> bool {
         || token == Token::Equals
 }
 
+const NATIVE_BLOCKQUOTE_DEPTH_NONE: u32 = u32::MAX;
+
 #[derive(Debug, Clone)]
 pub struct Parser<'r, 't> {
     page_info: &'r PageInfo<'t>,
@@ -336,7 +338,7 @@ pub struct Parser<'r, 't> {
     in_color: bool,
     has_footnote_block: bool,
     start_of_line: bool,
-    native_blockquote_depth: Option<usize>,
+    native_blockquote_depth: u32,
     quote_body_cursor: Option<QuoteBodyCursor>,
     wikidot: WikidotState,
 }
@@ -628,7 +630,7 @@ impl<'r, 't> Parser<'r, 't> {
             in_color: false,
             has_footnote_block: false,
             start_of_line: true,
-            native_blockquote_depth: None,
+            native_blockquote_depth: NATIVE_BLOCKQUOTE_DEPTH_NONE,
             quote_body_cursor: None,
             wikidot: WikidotState::default(),
         }
@@ -1700,12 +1702,15 @@ impl<'r, 't> Parser<'r, 't> {
 
     #[inline]
     pub fn in_native_blockquote_line(&self) -> bool {
-        self.native_blockquote_depth.is_some()
+        self.native_blockquote_depth != NATIVE_BLOCKQUOTE_DEPTH_NONE
     }
 
     #[inline]
     pub fn native_blockquote_depth(&self) -> Option<usize> {
-        self.native_blockquote_depth
+        match self.native_blockquote_depth {
+            NATIVE_BLOCKQUOTE_DEPTH_NONE => None,
+            depth => Some(depth as usize),
+        }
     }
 
     pub(crate) fn quote_body_line_is_empty_spaced(&self) -> bool {
@@ -1805,7 +1810,7 @@ impl<'r, 't> Parser<'r, 't> {
                 return (physical_depth, cursor.required_depth + physical_depth);
             }
         }
-        (physical_depth, self.native_blockquote_depth.unwrap_or(0) + physical_depth)
+        (physical_depth, self.native_blockquote_depth().unwrap_or(0) + physical_depth)
     }
 
     #[rustfmt::skip]
@@ -2348,7 +2353,7 @@ impl<'r, 't> Parser<'r, 't> {
             in_color: self.in_color,
             has_footnote_block: self.has_footnote_block,
             start_of_line: self.start_of_line,
-            native_blockquote_depth: self.native_blockquote_depth,
+            native_blockquote_depth: self.native_blockquote_depth(),
             quote_body: self.quote_body_cursor,
             inline_bodies: self.inline_container_body_key(),
             wikidot: self.wikidot.attempt_key(),
@@ -2855,7 +2860,12 @@ impl<'r, 't> Parser<'r, 't> {
 
     #[inline]
     pub(crate) fn set_native_blockquote_depth(&mut self, value: Option<usize>) {
-        self.native_blockquote_depth = value;
+        self.native_blockquote_depth = match value {
+            Some(depth) => {
+                u32::try_from(depth).unwrap_or(NATIVE_BLOCKQUOTE_DEPTH_NONE - 1)
+            }
+            None => NATIVE_BLOCKQUOTE_DEPTH_NONE,
+        };
     }
 
     #[inline]
