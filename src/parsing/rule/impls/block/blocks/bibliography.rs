@@ -22,8 +22,9 @@ use super::prelude::*;
 use crate::parsing::consume::wikidot_flat_close_kind_at_byte;
 use crate::parsing::rule::impls::block::parser::parse_wikidot_attributes;
 use crate::tree::{
-    AcceptsPartial, AttributeMap, Bibliography, Container, ContainerType, Element,
-    LinkLabel, LinkLocation, LinkType, PartialElement, WikidotBlockCloseKind,
+    AcceptsPartial, AttributeMap, Bibliography, Container, ContainerType,
+    DefinitionListItem, Element, LinkLabel, LinkLocation, LinkType, PartialElement,
+    WikidotBlockCloseKind,
 };
 use std::borrow::Cow;
 
@@ -224,6 +225,32 @@ fn parse_fn<'r, 't>(
 /// list or collapsible later wraps the line. Such an item is rendered from its
 /// nested tree position: replace the nested definition list with the bibitem
 /// element live produces and number it in source order.
+pub(crate) fn wikidot_split_tail_bibitems<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    items: Vec<DefinitionListItem<'t>>,
+) -> Vec<Element<'t>>
+where
+    'r: 't,
+{
+    items
+        .into_iter()
+        .map(|item| {
+            let citation = parser.allocate_bibliography_split_citation();
+            let mut contents = Vec::with_capacity(item.value_elements.len() + 1);
+            if item.value_elements.is_empty() {
+                contents.push(Element::Text(Cow::Owned(format!("{citation}."))));
+            } else {
+                contents.push(Element::Text(Cow::Owned(format!("{citation}. "))));
+                contents.extend(item.value_elements);
+            }
+            let mut attributes = AttributeMap::new();
+            attributes.insert("class", Cow::Borrowed("bibitem"));
+            attributes.insert("id", Cow::Owned(format!("bibitem-{citation}")));
+            Element::Container(Container::new(ContainerType::Div, contents, attributes))
+        })
+        .collect()
+}
+
 fn convert_nested_bibliography_items<'t>(
     element: &mut Element<'t>,
     bibliography: &mut Bibliography<'t>,

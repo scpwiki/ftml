@@ -83,6 +83,7 @@ fn parse_definition_list<'r, 't>(
     }
 
     if !in_wikidot_bibliography_body(parser)
+        && !parser.bibliography_split_tail()
         && let Some(body) = try_consume_definition_list_block(parser)?
     {
         return ok!(false; Elements::Multiple(body));
@@ -98,7 +99,10 @@ fn parse_definition_list<'r, 't>(
         let next = match scan_item(parser, &mut escape) {
             Ok(success) => success.chain(&mut errors, &mut paragraph_safe),
             Err(error) => {
-                if !items.is_empty() && in_wikidot_bibliography_body(parser) {
+                if !items.is_empty()
+                    && (in_wikidot_bibliography_body(parser)
+                        || parser.bibliography_split_tail())
+                {
                     break;
                 }
                 return Err(error);
@@ -126,6 +130,12 @@ fn parse_definition_list<'r, 't>(
             parser.mark_wikidot_colon_line_vanished();
         }
         ok!(false; Elements::None, errors)
+    } else if parser.bibliography_split_tail() {
+        let elements =
+            crate::parsing::rule::impls::block::blocks::wikidot_split_tail_bibitems(
+                parser, items,
+            );
+        ok!(false; Elements::Multiple(elements), errors)
     } else if let Some((flat, entries, _escape_safe)) = escape {
         let mut elements = vec![Element::DefinitionList(items)];
         elements.extend(flat);

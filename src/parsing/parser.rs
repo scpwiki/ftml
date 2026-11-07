@@ -2925,6 +2925,14 @@ impl<'r, 't> Parser<'r, 't> {
         std::convert::identity(index)
     }
 
+    pub(crate) fn allocate_bibliography_split_citation(&mut self) -> usize {
+        self.bibliographies
+            .borrow_mut()
+            .last_mut()
+            .map(|bibliography| bibliography.allocate_split_tail_citation())
+            .unwrap_or(1)
+    }
+
     #[cold]
     pub fn remove_bibliographies(&mut self) -> BibliographyList<'t> {
         mem::take(&mut self.bibliographies.borrow_mut())
