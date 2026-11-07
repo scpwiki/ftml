@@ -488,8 +488,9 @@ where
             trim_wikidot_flat_close_space(&mut elements);
             if ends_at_break
                 && !ends_run
-                && flat_close_left_inline_residue(&escaped)
                 && !next_line_opens_list(parser)
+                && (flat_close_left_inline_residue(&escaped)
+                    || next_line_is_orphan_closer(parser))
             {
                 escaped.push(Element::LineBreak);
             }
@@ -678,6 +679,25 @@ fn flat_close_left_inline_residue(escaped: &[Element]) -> bool {
         Element::LineBreak | Element::LineBreaks(_) => false,
         _ => true,
     })
+}
+
+fn next_line_is_orphan_closer(parser: &Parser) -> bool {
+    let mut probe = parser.clone();
+    loop {
+        match probe.current().token {
+            Token::Whitespace | Token::LineBreak => {
+                if probe.step().is_err() {
+                    return false;
+                }
+            }
+            Token::LeftBlockEnd => {
+                return parser
+                    .wikidot_block_pair_at_closer_byte(probe.current().span.start)
+                    .is_none();
+            }
+            _ => return false,
+        }
+    }
 }
 
 /// Live Wikidot does not split a list at a comment-only line between items:
