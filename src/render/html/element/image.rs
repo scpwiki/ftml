@@ -146,6 +146,15 @@ fn render_image_element_wikidot(
         })
         .unwrap_or(image_url);
     let invalid_url = dangerous_scheme(safety_url) && !encoded_wikidot_prefix;
+    if invalid_url && alignment.is_none() && wikidot_quoted_attribute_source(image_url) {
+        let alt = image_url.rsplit('/').next().unwrap_or(image_url);
+        // The source is not a URL. Live writes it through as the src attribute,
+        // and the quote inside the value ends that attribute early.
+        ctx.push_raw_str(&format!(
+            "<img src=\"{image_url}\" alt=\"{alt}\" class=\"image\">",
+        ));
+        return;
+    }
     let image_url = if invalid_url {
         "#invalid-url"
     } else {
@@ -266,6 +275,22 @@ fn render_image_element_wikijump(
                 None => build_image(ctx),
             };
         });
+}
+
+fn wikidot_quoted_attribute_source(source: &str) -> bool {
+    let Some((name, value)) = source.split_once('=') else {
+        return false;
+    };
+    if name.is_empty()
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    {
+        return false;
+    }
+    value.len() >= 2
+        && ((value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\'')))
 }
 
 fn render_image_missing(ctx: &mut HtmlContext) {

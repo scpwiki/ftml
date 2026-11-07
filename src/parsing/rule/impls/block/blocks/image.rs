@@ -702,14 +702,19 @@ mod tests {
             row_count += 1;
             let (html, errors) = render_wikidot_preview(&percent_encoded);
             assert!(errors.is_empty(), "{percent_encoded:?}: {errors:#?}");
-            assert_eq!(
-                html,
+            let expected = if name == "image" {
+                concat!(
+                    r#"<img src="srcset="https://example.test/%6a%61vascript%3aalert(1)"" "#,
+                    r#"alt="%6a%61vascript%3aalert(1)"" class="image">"#,
+                )
+                .to_owned()
+            } else {
                 wrap_v7_image(
                     name,
                     r##"<img src="#invalid-url" class="image" alt="">"##.to_owned(),
-                ),
-                "{percent_encoded:?}",
-            );
+                )
+            };
+            assert_eq!(html, expected, "{percent_encoded:?}");
             assert!(!html.contains("<a "), "{percent_encoded:?}: {html}");
             assert!(!html.contains("javascript:"), "{percent_encoded:?}: {html}");
         }

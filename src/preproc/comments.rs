@@ -51,13 +51,15 @@ pub(super) fn substitute_wikidot(text: &mut String) {
             scan = close;
             continue;
         }
-        push_copied_range(&mut output, text, copied_until..open, &break_drops);
+        let (remove_start, remove_end) =
+            comment_only_subscript(text, open, close).unwrap_or((open, close));
+        push_copied_range(&mut output, text, copied_until..remove_start, &break_drops);
         seams.push(output.len());
-        if comment_elision_needs_raw_barrier(text, open, close) {
+        if remove_start == open && comment_elision_needs_raw_barrier(text, open, close) {
             output.push('\0');
         }
-        copied_until = close;
-        scan = close;
+        copied_until = remove_end;
+        scan = remove_end;
         removed = true;
     }
 
@@ -138,6 +140,29 @@ fn elide_comment_only_lines(text: &mut String) {
         output.push_str(&text[copied_until..]);
         *text = output;
     }
+}
+
+/// `,,[!-- c --],,` is a subscript whose body is only a comment. Live drops
+/// the markers and the comment. A bare `,,,,` run is not that shape and stays.
+fn comment_only_subscript(
+    text: &str,
+    open: usize,
+    close: usize,
+) -> Option<(usize, usize)> {
+    let bytes = text.as_bytes();
+    if open < 2 || close + 2 > bytes.len() {
+        return None;
+    }
+    if &bytes[open - 2..open] != b",," || &bytes[close..close + 2] != b",," {
+        return None;
+    }
+    if open >= 3 && bytes[open - 3] == b',' {
+        return None;
+    }
+    if bytes.get(close + 2) == Some(&b',') {
+        return None;
+    }
+    Some((open - 2, close + 2))
 }
 
 fn previous_line_is_blank(text: &str, line_start: usize) -> bool {

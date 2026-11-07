@@ -96,6 +96,22 @@ fn parse_definition_list<'r, 't>(
     let mut residue_vanished = false;
 
     loop {
+        if parser.settings().layout.legacy() && starts_definition_item(parser) {
+            match try_wikidot_definition_block(parser, &mut errors)? {
+                Some(WikidotDefinitionBlock::Items(extra)) => {
+                    items.extend(extra);
+                    if escape.is_some()
+                        || (!starts_definition_item(parser)
+                            && !starts_wikidot_bibliography_item(parser))
+                    {
+                        break;
+                    }
+                    continue;
+                }
+                Some(WikidotDefinitionBlock::DroppedLine) => break,
+                None => {}
+            }
+        }
         let next = match scan_item(parser, &mut escape) {
             Ok(success) => success.chain(&mut errors, &mut paragraph_safe),
             Err(error) => {
@@ -222,6 +238,149 @@ fn split_escape_layout<'t>(
     let mut full_entries = vec![(list_count, false, ParagraphSplitKind::Paragraph)];
     full_entries.extend(entries);
     (elements, full_entries, safe)
+}
+
+enum WikidotDefinitionBlock<'t> {
+    Items(Vec<DefinitionListItem<'t>>),
+    DroppedLine,
+}
+
+/// A definition line whose term starts with a block. An explicit list is a
+/// description only when its closer line has ` : text`; that text is a second
+/// description. Without the tail, the line stays on the ordinary path. A table
+/// opener is not a term: the line is dropped and the table does not open.
+fn try_wikidot_definition_block<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    errors: &mut Vec<ParseError>,
+) -> Result<Option<WikidotDefinitionBlock<'t>>, ParseError>
+where
+    'r: 't,
+{
+    let state = parser.get_mutable_state();
+    let mut candidate = parser.clone();
+    candidate.set_in_wikidot_definition_list_line(true);
+    if candidate.step().is_err() || candidate.step().is_err() {
+        parser.reset_mutable_state(state);
+        return Ok(None);
+    }
+    if candidate.current().token != Token::LeftBlock {
+        parser.reset_mutable_state(state);
+        return Ok(None);
+    }
+
+    let name = {
+        let mut probe = candidate.clone();
+        match probe.get_block_name(false) {
+            Ok((name, _, _)) => name,
+            Err(_) => {
+                parser.reset_mutable_state(state);
+                return Ok(None);
+            }
+        }
+    };
+
+    if name.eq_ignore_ascii_case("table") {
+        let source = candidate.full_text().inner();
+        let start = candidate.current().span.start;
+        let line_end = source[start..]
+            .find('\n')
+            .map_or(source.len(), |offset| start + offset);
+        while candidate.current().span.start < line_end
+            && candidate.current().token != Token::InputEnd
+        {
+            candidate.step()?;
+        }
+        if candidate.current().token == Token::LineBreak {
+            candidate.step()?;
+        }
+        parser.update(&candidate);
+        parser.set_in_wikidot_definition_list_line(false);
+        return Ok(Some(WikidotDefinitionBlock::DroppedLine));
+    }
+
+    if !(name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")) {
+        parser.reset_mutable_state(state);
+        return Ok(None);
+    }
+
+    let mut block_parser = candidate.clone_with_rule(super::RULE_BLOCK);
+    block_parser.set_in_wikidot_definition_list_line(false);
+    let parsed = match super::RULE_BLOCK.try_consume(&mut block_parser) {
+        Ok(success) => success,
+        Err(_) => {
+            parser.reset_mutable_state(state);
+            return Ok(None);
+        }
+    };
+    let (elements, block_errors, _) = parsed.into();
+    let mut value_elements: Vec<Element<'t>> = elements.into_iter().collect();
+    while matches!(value_elements.last(), Some(Element::LineBreak)) {
+        value_elements.pop();
+    }
+    if !value_elements
+        .iter()
+        .any(|element| matches!(element, Element::List { .. }))
+    {
+        parser.reset_mutable_state(state);
+        return Ok(None);
+    }
+
+    let mut trial = block_parser.clone();
+    let tail = match take_same_line_definition(&mut trial, errors)? {
+        Some(tail) => tail,
+        None => {
+            parser.reset_mutable_state(state);
+            return Ok(None);
+        }
+    };
+    errors.extend(block_errors);
+    parser.update(&trial);
+    parser.set_in_wikidot_definition_list_line(false);
+
+    Ok(Some(WikidotDefinitionBlock::Items(vec![
+        DefinitionListItem {
+            key_string: std::borrow::Cow::Borrowed(""),
+            key_elements: Vec::new(),
+            value_elements,
+        },
+        tail,
+    ])))
+}
+
+fn take_same_line_definition<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    errors: &mut Vec<ParseError>,
+) -> Result<Option<DefinitionListItem<'t>>, ParseError>
+where
+    'r: 't,
+{
+    if parser.current().token != Token::Whitespace {
+        return Ok(None);
+    }
+    let mut peek = parser.clone();
+    peek.step()?;
+    if peek.current().token != Token::Colon {
+        return Ok(None);
+    }
+    peek.step()?;
+    if peek.current().token != Token::Whitespace {
+        return Ok(None);
+    }
+    peek.step()?;
+    if matches!(
+        peek.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+    ) {
+        return Ok(None);
+    }
+    parser.update(&peek);
+    let mut paragraph_safe = false;
+    let (value_elements, _, _) = collect_value(parser, errors, &mut paragraph_safe)?;
+    Ok(Some(DefinitionListItem {
+        key_string: std::borrow::Cow::Borrowed(""),
+        key_elements: Vec::new(),
+        value_elements,
+    }))
 }
 
 fn scan_item<'r, 't>(

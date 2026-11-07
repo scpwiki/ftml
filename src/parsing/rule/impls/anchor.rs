@@ -37,9 +37,23 @@ fn try_consume_fn<'r, 't>(
     let source_start = parser.current().span.start;
     assert_step(parser, Token::LeftBlockAnchor)?;
 
-    parser.get_token(Token::Whitespace, ParseErrorKind::RuleFailed)?;
+    let whitespace = parser.get_token(Token::Whitespace, ParseErrorKind::RuleFailed)?;
+    // One whitespace character separates `[[#` from the name. Further
+    // characters belong to the name, so `[[#  a]]` is a spaced name.
+    let surplus = if parser.settings().layout.legacy() {
+        whitespace.chars().next().map_or_else(String::new, |first| {
+            whitespace[first.len_utf8()..].to_owned()
+        })
+    } else {
+        String::new()
+    };
 
-    try_consume_anchor_body(parser, source_start, nested_in_literal_triple_link)
+    try_consume_anchor_body(
+        parser,
+        source_start,
+        nested_in_literal_triple_link,
+        &surplus,
+    )
 }
 
 pub(super) fn try_consume_wikidot_triple_anchor<'r, 't>(
@@ -54,13 +68,14 @@ where
     }
     parser.step()?;
     parser.get_token(Token::Whitespace, ParseErrorKind::RuleFailed)?;
-    try_consume_anchor_body(parser, source_start, true)
+    try_consume_anchor_body(parser, source_start, true, "")
 }
 
 fn try_consume_anchor_body<'r, 't>(
     parser: &mut Parser<'r, 't>,
     source_start: usize,
     nested_in_literal_triple_link: bool,
+    surplus: &str,
 ) -> ParseResult<'r, 't, Elements<'t>>
 where
     'r: 't,
@@ -85,6 +100,11 @@ where
     };
     let (name, closer) =
         collect_text_resolved_fused(parser, RULE_ANCHOR, &close, &invalid, None, false)?;
+    let name = if surplus.is_empty() {
+        name
+    } else {
+        Cow::Owned(format!("{surplus}{name}"))
+    };
     let residual_closer = closer.token == Token::RightLink;
     let valid_wikidot_name = name
         .chars()
@@ -105,16 +125,18 @@ where
     if parser.settings().layout.legacy() && !valid_wikidot_name {
         let without_trailing = name.trim_end_matches([' ', '\t', '\r', '\n']);
         let label = without_trailing.trim_start_matches([' ', '\t', '\r', '\n']);
+        let leading = &without_trailing[..without_trailing.len() - label.len()];
         let trailing = &name[without_trailing.len()..];
-        let mut elements = vec![
-            text!("["),
-            Element::Link {
-                ltype: LinkType::Anchor,
-                link: LinkLocation::Url(Cow::Borrowed("javascript:;")),
-                label: LinkLabel::Text(Cow::Owned(label.to_string())),
-                target: None,
-            },
-        ];
+        let mut elements = vec![text!("[")];
+        if !leading.is_empty() {
+            elements.push(Element::Text(Cow::Owned(leading.to_string())));
+        }
+        elements.push(Element::Link {
+            ltype: LinkType::Anchor,
+            link: LinkLocation::Url(Cow::Borrowed("javascript:;")),
+            label: LinkLabel::Text(Cow::Owned(label.to_string())),
+            target: None,
+        });
         if !trailing.is_empty() {
             elements.push(Element::Text(Cow::Owned(trailing.to_string())));
         }

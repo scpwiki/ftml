@@ -200,6 +200,42 @@ fn next_token(
     (Token::Other, next_char_end(text, start))
 }
 
+/// `$]]` closes math. `$]]]` is instead the tail of a triple link (`[[[$ x $]]]`)
+/// unless a `[[$` math opener is still open, as in `[[$x$]]]`. A `$]]` inside
+/// a comment does not close that opener.
+fn math_dollar_closes(bytes: &[u8], start: usize) -> bool {
+    if !(has(bytes, start, b"$]]]") && bytes.get(start + 4) != Some(&b']')) {
+        return true;
+    }
+    let mut index = 0;
+    let mut math_open = false;
+    while index < start {
+        if has(bytes, index, b"[!--") {
+            let rest = &bytes[index + 4..];
+            if let Some(relative) = rest.windows(3).position(|window| window == b"--]") {
+                index = index + 4 + relative + 3;
+                continue;
+            }
+        }
+        if has(bytes, index, b"[[[") {
+            index += 3;
+            continue;
+        }
+        if has(bytes, index, b"[[$") {
+            math_open = true;
+            index += 3;
+            continue;
+        }
+        if math_open && has(bytes, index, b"$]]") {
+            math_open = false;
+            index += 3;
+            continue;
+        }
+        index += 1;
+    }
+    math_open
+}
+
 fn is_discarded_control(byte: u8) -> bool {
     matches!(byte, 0x00..=0x08 | 0x0b..=0x0c | 0x0e..=0x1a | 0x1c..=0x1f)
 }
@@ -240,7 +276,9 @@ fn scan_literal(
         {
             (Token::RightLink, start + 3)
         }
-        b'$' if has(bytes, start, b"$]]") => (Token::RightMath, start + 3),
+        b'$' if has(bytes, start, b"$]]") && math_dollar_closes(bytes, start) => {
+            (Token::RightMath, start + 3)
+        }
         b']' if has(bytes, start, b"]]")
             && !is_right_link_trailing_bracket(bracket_run_offset) =>
         {
