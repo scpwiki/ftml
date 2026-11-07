@@ -115,6 +115,13 @@ pub(crate) struct RuleAttemptKey {
     wikidot: WikidotState,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct RecursionDepthFailureKey {
+    rule: &'static str,
+    opener_start: usize,
+    depth: usize,
+}
+
 /// A body walk at one position: the rule whose closer it looks for, the parser
 /// context, and what can end it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -141,6 +148,7 @@ pub(super) struct BlockScanCache<'t> {
     composite_span_close_scan_token_visits: Cell<usize>,
     underclosed_block_failures: BTreeMap<(&'static str, usize), ()>,
     deterministic_block_failures: BTreeMap<(&'static str, usize), ParseError>,
+    recursion_depth_failures: HashMap<RecursionDepthFailureKey, ParseError>,
     partial_rejections: BTreeMap<PartialRejectionKey, ParseError>,
     wikidot_tabview_failures: BTreeMap<(usize, bool), ParseError>,
     wikidot_collapsible_failures: BTreeMap<usize, ParseError>,
@@ -2444,6 +2452,46 @@ impl<'r, 't> Parser<'r, 't> {
             .insert((rule, owner_start), error.clone());
     }
 
+    pub(crate) fn recursion_depth_block_failure(
+        &self,
+        rule: &'static str,
+        opener_start: usize,
+    ) -> Option<ParseError> {
+        let cache = self.block_end_scan_cache.borrow();
+        let error = cache
+            .recursion_depth_failures
+            .get(&RecursionDepthFailureKey {
+                rule,
+                opener_start,
+                depth: self.depth,
+            })
+            .cloned()?;
+        cache
+            .peak_depth
+            .set(cache.peak_depth.get().max(self.max_recursion_depth + 1));
+        Some(error)
+    }
+
+    pub(crate) fn cache_recursion_depth_block_failure(
+        &self,
+        rule: &'static str,
+        opener_start: usize,
+        depth: usize,
+        error: &ParseError,
+    ) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .recursion_depth_failures
+            .insert(
+                RecursionDepthFailureKey {
+                    rule,
+                    opener_start,
+                    depth,
+                },
+                error.clone(),
+            );
+    }
+
     pub(crate) fn wikidot_tabview_failure(
         &self,
         owner_start: usize,
@@ -2760,6 +2808,11 @@ impl<'r, 't> Parser<'r, 't> {
         let mut clone = self.clone();
         clone.set_rule(rule);
         clone
+    }
+
+    #[inline]
+    pub(crate) fn depth(&self) -> usize {
+        self.depth
     }
 
     pub fn depth_increment(&mut self) -> Result<(), ParseError> {

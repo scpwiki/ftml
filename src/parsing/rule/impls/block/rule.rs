@@ -733,6 +733,7 @@ struct BlockFailureMemoization {
     wikijump_deterministic: bool,
     wikidot_tabview: bool,
     wikidot_collapsible: bool,
+    depth: usize,
 }
 
 impl BlockFailureMemoization {
@@ -751,6 +752,7 @@ impl BlockFailureMemoization {
             wikidot_collapsible: wikidot_cache_context
                 && block.name == BLOCK_COLLAPSIBLE.name
                 && !parser.in_wikidot_collapsible(),
+            depth: parser.depth(),
         }
     }
 
@@ -763,6 +765,12 @@ impl BlockFailureMemoization {
         if self.wikijump_deterministic
             && let Some(error) =
                 parser.deterministic_block_failure(block.name, opener_start)
+        {
+            return Some(error);
+        }
+        if self.wikijump_deterministic
+            && let Some(error) =
+                parser.recursion_depth_block_failure(block.name, opener_start)
         {
             return Some(error);
         }
@@ -796,6 +804,16 @@ impl BlockFailureMemoization {
                 );
         if self.wikijump_deterministic && deterministic_failure {
             parser.cache_deterministic_block_failure(block.name, opener_start, error);
+        }
+        if self.wikijump_deterministic
+            && error.kind() == ParseErrorKind::RecursionDepthExceeded
+        {
+            parser.cache_recursion_depth_block_failure(
+                block.name,
+                opener_start,
+                self.depth,
+                error,
+            );
         }
         if self.wikidot_tabview && deterministic_failure {
             parser.cache_wikidot_tabview_failure(opener_start, error);
