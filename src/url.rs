@@ -130,7 +130,6 @@ pub fn dangerous_scheme(url: &str) -> bool {
         return false;
     }
 
-    // Get the scheme from the URL
     url.split_once(':')
         .map(|(scheme, _)| {
             if !SCHEME_REGEX.is_match(scheme) {
