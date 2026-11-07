@@ -27,6 +27,7 @@ pub(crate) struct LostOwnerBlock<'t> {
     pub errors: Vec<ParseError>,
     pub append_unquoted_close_break: bool,
     pub hoisted_list: bool,
+    pub sibling_hoisted: bool,
 }
 
 enum BlockHead<'t> {
@@ -218,13 +219,13 @@ where
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
         && lost_owner_list_body_is_unowned(&entry_parser)
     {
-        return parse_lost_owner_list_block(entry_parser, parser, false);
+        return parse_lost_owner_list_block(entry_parser, parser, None);
     }
     if let LineOwner::List { ltype, .. } = owner
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
         && lost_owner_list_body_is_sibling_items(&entry_parser, ltype)
     {
-        return parse_lost_owner_list_block(entry_parser, parser, true);
+        return parse_lost_owner_list_block(entry_parser, parser, Some(ltype));
     }
 
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {
@@ -378,6 +379,7 @@ where
         errors,
         append_unquoted_close_break,
         hoisted_list: false,
+        sibling_hoisted: false,
     }))
 }
 
@@ -417,12 +419,9 @@ fn lost_owner_list_body_is_sibling_items(parser: &Parser<'_, '_>, ltype: ListTyp
     })
 }
 
-fn hoisted_leaf_list<'t>(element: Element<'t>) -> Option<Element<'t>> {
+fn hoisted_leaf_list<'t>(element: Element<'t>, ltype: ListType) -> Option<Element<'t>> {
     let Element::List {
-        ltype,
-        attributes,
-        items,
-        ..
+        attributes, items, ..
     } = element
     else {
         return None;
@@ -535,7 +534,7 @@ fn hoisted_element_is_empty(element: &Element<'_>) -> bool {
 fn parse_lost_owner_list_block<'r, 't>(
     entry: Parser<'r, 't>,
     parser: &mut Parser<'r, 't>,
-    decompose_siblings: bool,
+    decompose_siblings: Option<ListType>,
 ) -> Result<Option<LostOwnerBlock<'t>>, ParseError>
 where
     'r: 't,
@@ -595,10 +594,10 @@ where
         }
     }
     parser.update(&candidate);
-    let body = if decompose_siblings {
+    let body = if let Some(sibling_ltype) = decompose_siblings {
         let mut elements = elements.into_iter();
         match elements.next() {
-            Some(list) => hoisted_leaf_list(list).into_iter().collect(),
+            Some(list) => hoisted_leaf_list(list, sibling_ltype).into_iter().collect(),
             None => Vec::new(),
         }
     } else {
@@ -610,6 +609,7 @@ where
         errors,
         append_unquoted_close_break: false,
         hoisted_list: true,
+        sibling_hoisted: decompose_siblings.is_some(),
     }))
 }
 
