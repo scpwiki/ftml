@@ -238,6 +238,42 @@ fn try_consume_fn<'r, 't>(
     let list_count = elements.len();
     elements.extend(hoisted_footnote_blocks);
     elements.extend(escaped_elements);
+    if parser.settings().layout.legacy() {
+        elements = elements
+            .into_iter()
+            .flat_map(|element| {
+                let element = collapse_wikidot_run_element(element);
+                if let Element::List {
+                    items,
+                    wikidot_explicit_block: false,
+                    ..
+                } = &element
+                    && items.len() == 1
+                    && let ListItem::Elements {
+                        elements: body_elements,
+                        ..
+                    } = &items[0]
+                    && body_elements
+                        .iter()
+                        .filter(|inner| !matches!(inner, Element::LineBreak))
+                        .count()
+                        >= 2
+                    && body_elements
+                        .iter()
+                        .all(|inner| {
+                            matches!(inner, Element::List { .. } | Element::LineBreak)
+                        })
+                {
+                    return body_elements
+                        .iter()
+                        .filter(|inner| !matches!(inner, Element::LineBreak))
+                        .cloned()
+                        .collect();
+                }
+                vec![element]
+            })
+            .collect();
+    }
     if elements.is_empty() && parser.settings().layout.legacy() {
         paragraph_safe = true;
     }
@@ -1128,6 +1164,379 @@ fn footnote_block_in<'t>(elements: &[Element<'t>]) -> Option<Element<'t>> {
         }
     }
     None
+}
+
+
+fn collapse_wikidot_run_element<'t>(element: Element<'t>) -> Element<'t> {
+    collapse_wikidot_run_element_in(element, true)
+}
+
+fn collapse_wikidot_run_element_in<'t>(element: Element<'t>, in_run: bool) -> Element<'t> {
+    match element {
+        Element::List {
+            ltype,
+            items,
+            attributes,
+            wikidot_explicit_block,
+        } => {
+            let child_in_run = in_run || !wikidot_explicit_block;
+            let items = items
+                .into_iter()
+                .map(|item| match item {
+                    ListItem::Elements {
+                        attributes,
+                        elements,
+                    } => ListItem::Elements {
+                        attributes,
+                        elements: elements
+                            .into_iter()
+                            .map(|element| collapse_wikidot_run_element_in(element, child_in_run))
+                            .collect(),
+                    },
+                    ListItem::SubList { element } => ListItem::SubList {
+                        element: Box::new(collapse_wikidot_run_element_in(*element, child_in_run)),
+                    },
+                })
+                .collect();
+            let list = Element::List {
+                ltype,
+                items,
+                attributes,
+                wikidot_explicit_block,
+            };
+            if wikidot_explicit_block && in_run {
+                hoist_fuse_wikidot_run_items(list)
+            } else {
+                collapse_wikidot_run_list(list)
+            }
+        }
+        Element::Partial(PartialElement::ListItem(item)) => {
+            let item = match item {
+                ListItem::Elements {
+                    attributes,
+                    elements,
+                } => ListItem::Elements {
+                    attributes,
+                    elements: elements
+                        .into_iter()
+                        .map(|element| collapse_wikidot_run_element_in(element, in_run))
+                        .collect(),
+                },
+                other => other,
+            };
+            Element::Partial(PartialElement::ListItem(item))
+        }
+        other => other,
+    }
+}
+
+
+fn wikidot_run_formation_present(element: &Element) -> bool {
+    match element {
+        Element::List {
+            items,
+            wikidot_explicit_block,
+            ..
+        } => {
+            *wikidot_explicit_block
+                || items.iter().any(|item| match item {
+                    ListItem::Elements { elements, .. } => {
+                        elements.iter().any(wikidot_run_formation_present)
+                    }
+                    ListItem::SubList { element } => wikidot_run_formation_present(element),
+                })
+        }
+        Element::Partial(PartialElement::ListItem(_)) => true,
+        _ => false,
+    }
+}
+
+fn collapse_wikidot_run_list<'t>(element: Element<'t>) -> Element<'t> {
+    let Element::List {
+        ltype,
+        mut items,
+        attributes,
+        wikidot_explicit_block,
+    } = element
+    else {
+        return element;
+    };
+    if !wikidot_explicit_block {
+        items = items
+            .into_iter()
+            .flat_map(|item| {
+                let ListItem::Elements { elements, .. } = &item else {
+                    return vec![item];
+                };
+                if elements.len() == 1
+                    && let Element::List {
+                        items: inner_items,
+                        wikidot_explicit_block: true,
+                        ..
+                    } = &elements[0]
+                {
+                    return inner_items.clone();
+                }
+                vec![item]
+            })
+            .collect();
+    }
+    if wikidot_explicit_block || items.len() != 1 {
+        return Element::List {
+            ltype,
+            items,
+            attributes,
+            wikidot_explicit_block,
+        };
+    }
+    let formation_present = match &items[0] {
+        ListItem::Elements { elements, .. } => elements
+            .first()
+            .is_some_and(wikidot_run_formation_present),
+        ListItem::SubList { element } => wikidot_run_formation_present(element),
+    };
+    if !formation_present {
+        return Element::List {
+            ltype,
+            items,
+            attributes,
+            wikidot_explicit_block,
+        };
+    }
+    let inner = match items.pop() {
+        Some(ListItem::Elements {
+            elements: mut inner_elements,
+            ..
+        }) if inner_elements.len() == 1
+            || (inner_elements.len() == 2
+                && matches!(inner_elements[1], Element::LineBreak)) =>
+        {
+            if inner_elements.len() == 2 {
+                inner_elements.pop();
+            }
+            inner_elements.pop()
+        }
+        Some(ListItem::SubList { element }) => Some(*element),
+        other => {
+            if let Some(other) = other {
+                items.push(other);
+            }
+            None
+        }
+    };
+    let inner = match inner {
+        Some(inner @ Element::List { .. }) => inner,
+        other => {
+            if let Some(other) = other {
+                items.push(ListItem::Elements {
+                    attributes: AttributeMap::new(),
+                    elements: vec![other],
+                });
+            }
+            return Element::List {
+                ltype,
+                items,
+                attributes,
+                wikidot_explicit_block,
+            };
+        }
+    };
+    hoist_wikidot_run_list(ltype, inner)
+}
+
+
+fn hoist_wikidot_run_list<'t>(native_ltype: ListType, inner: Element<'t>) -> Element<'t> {
+    let Element::List {
+        ltype,
+        items,
+        attributes,
+        wikidot_explicit_block,
+    } = inner
+    else {
+        return inner;
+    };
+    if !wikidot_explicit_block {
+        return collapse_wikidot_run_list(Element::List {
+            ltype,
+            items,
+            attributes,
+            wikidot_explicit_block,
+        });
+    }
+    let items = items.into_iter().flat_map(fuse_wikidot_run_item).collect();
+    Element::List {
+        ltype: native_ltype,
+        items,
+        attributes,
+        wikidot_explicit_block,
+    }
+}
+
+fn hoist_fuse_wikidot_run_items<'t>(list: Element<'t>) -> Element<'t> {
+    let Element::List {
+        ltype,
+        items,
+        attributes,
+        wikidot_explicit_block,
+    } = list
+    else {
+        return list;
+    };
+    Element::List {
+        ltype,
+        items: items.into_iter().flat_map(fuse_wikidot_run_item).collect(),
+        attributes,
+        wikidot_explicit_block,
+    }
+}
+
+fn fuse_wikidot_run_item<'t>(item: ListItem<'t>) -> Vec<ListItem<'t>> {
+    if let ListItem::SubList { element } = &item
+        && let Element::List {
+            items,
+            wikidot_explicit_block: false,
+            ..
+        } = &**element
+        && !items.is_empty()
+        && items.iter().all(|inner| {
+            matches!(inner, ListItem::Elements { elements, .. } if elements.len() == 1)
+        })
+    {
+        return items
+            .iter()
+            .map(|inner| {
+                let ListItem::Elements { elements, .. } = inner else {
+                    unreachable!()
+                };
+                fuse_wikidot_run_item(ListItem::Elements {
+                    attributes: AttributeMap::new(),
+                    elements: vec![elements[0].clone()],
+                })
+            })
+            .flatten()
+            .collect();
+    }
+    let ListItem::Elements {
+        attributes,
+        mut elements,
+    } = item
+    else {
+        return vec![item];
+    };
+    if elements.len() != 1 {
+        return vec![ListItem::Elements {
+            attributes,
+            elements,
+        }];
+    }
+    match elements.pop() {
+        Some(Element::List {
+            items,
+            wikidot_explicit_block: false,
+            ..
+        }) if items
+            .iter()
+            .all(|item| matches!(item, ListItem::Elements { .. })) =>
+        {
+            items
+        }
+        Some(partial @ Element::Partial(PartialElement::ListItem(_))) => {
+            let promoted = match &partial {
+                Element::Partial(PartialElement::ListItem(ListItem::Elements {
+                    elements: inner_elements,
+                    ..
+                })) if inner_elements.len() == 1 => match &inner_elements[0] {
+                    Element::List {
+                        items: body_items,
+                        wikidot_explicit_block: false,
+                        ..
+                    } if body_items
+                        .iter()
+                        .all(|item| matches!(item, ListItem::Elements { .. })) =>
+                    {
+                        Some(body_items.clone())
+                    }
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some(items) = promoted {
+                return items;
+            }
+            let flattened = flatten_wikidot_run_partial(&partial);
+            vec![ListItem::Elements {
+                attributes,
+                elements: vec![flattened.unwrap_or(partial)],
+            }]
+        }
+        Some(other) => vec![ListItem::Elements {
+            attributes,
+            elements: vec![other],
+        }],
+        None => vec![ListItem::Elements {
+            attributes,
+            elements: Vec::new(),
+        }],
+    }
+}
+
+fn flatten_wikidot_run_partial<'t>(partial: &Element<'t>) -> Option<Element<'t>> {
+    let Element::Partial(PartialElement::ListItem(inner)) = partial else {
+        return None;
+    };
+    let ListItem::Elements {
+        elements: inner_elements,
+        ..
+    } = inner
+    else {
+        return None;
+    };
+    let mut elements = inner_elements.clone();
+    loop {
+        if elements.len() != 1 {
+            break;
+        }
+        let Element::List { items, .. } = &elements[0] else {
+            break;
+        };
+        if items.len() != 1 {
+            break;
+        }
+        match &items[0] {
+            ListItem::Elements {
+                elements: item_elements,
+                ..
+            } => {
+                if item_elements.len() == 1
+                    && let Element::Partial(PartialElement::ListItem(deeper)) =
+                        &item_elements[0]
+                    && let ListItem::Elements {
+                        elements: deeper_elements,
+                        ..
+                    } = deeper
+                {
+                    elements = deeper_elements.clone();
+                } else {
+                    elements = item_elements.clone();
+                }
+            }
+            ListItem::SubList { element } => {
+                elements = vec![(**element).clone()];
+            }
+            _ => break,
+        }
+    }
+    if elements == *inner_elements {
+        return None;
+    }
+    let mut inner = inner.clone();
+    if let ListItem::Elements {
+        elements: slot, ..
+    } = &mut inner
+    {
+        *slot = elements;
+    }
+    Some(Element::Partial(PartialElement::ListItem(inner)))
 }
 
 pub(crate) fn build_list_element(
