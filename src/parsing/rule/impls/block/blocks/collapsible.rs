@@ -524,12 +524,24 @@ fn parse_fn<'r, 't>(
         parser.set_in_wikidot_collapsible(previous_collapsible_context);
         return ok!(false; head.into_element(Vec::new()));
     }
-    let body = parser.get_body_elements_with_literal_quote_context(
-        &BLOCK_COLLAPSIBLE,
-        true,
-        body_start,
-        Some(opener_start),
-    );
+    let borrowed_quote_rows = parser.settings().layout.legacy()
+        && parser.native_blockquote_depth().is_some()
+        && parser.quote_body_cursor().is_none()
+        && parser.in_wikidot_div_body();
+    let body = if borrowed_quote_rows {
+        let saved_depth = parser.native_blockquote_depth();
+        parser.set_native_blockquote_depth(None);
+        let collected = parser.get_body_elements(&BLOCK_COLLAPSIBLE, true);
+        parser.set_native_blockquote_depth(saved_depth);
+        collected
+    } else {
+        parser.get_body_elements_with_literal_quote_context(
+            &BLOCK_COLLAPSIBLE,
+            true,
+            body_start,
+            Some(opener_start),
+        )
+    };
     let body = match body {
         Ok(body) => body,
         Err(error) => {
@@ -538,6 +550,18 @@ fn parse_fn<'r, 't>(
         }
     };
     let (mut elements, mut errors, _) = body.into();
+    if borrowed_quote_rows
+        && elements.len() == 1
+        && matches!(
+            elements.first(),
+            Some(Element::Container(container))
+                if container.ctype() == ContainerType::Blockquote
+        )
+    {
+        if let Some(Element::Container(mut container)) = elements.pop() {
+            elements.append(container.elements_mut());
+        }
+    }
     if wikidot_trailing_space_break && !elements.is_empty() {
         // L85: live keeps the trailing-space break inside the opening
         // paragraph (z-head-trail-space-c), not before the content.
