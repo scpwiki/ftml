@@ -1577,8 +1577,23 @@ fn assemble_wikidot_li_segments<'t>(
     // Exception: when the li body's last line closes a NON-list block (for
     // example a `* [[/div]]` line whose formation dissolved into the list),
     // live keeps the break after the list (lihoist p5).
-    let trailing_nested_list = matches!(elements.last(), Some(Element::List { .. }))
-        && !wikidot_li_body_ends_with_flat_block_close(source);
+    let trailing_nested_list = {
+        // A trailing partial close (e.g. a note close that the frame
+        // resolution drops as orphaned) still leaves a nested list as the
+        // tail; live drops the newline after such a list like after a
+        // `* [[/ul]]` close (unlike a non-list block close, p5).
+        let effective = elements
+            .iter()
+            .rev()
+            .find(|element| {
+                !matches!(
+                    element,
+                    Element::Partial(PartialElement::WikidotBlockClose(_))
+                )
+            });
+        matches!(effective, Some(Element::List { .. }))
+            && !wikidot_li_body_ends_with_flat_block_close(source)
+    };
     let trailing_table = matches!(elements.last(), Some(Element::Table(_)));
     let trailing_blockquote = matches!(
         elements.last(),
