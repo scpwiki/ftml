@@ -217,6 +217,10 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_li_heads: Vec<WikidotLiHead>,
     wikidot_li_closes: Vec<WikidotLiClose>,
     wikidot_li_collect_stack: Vec<Option<usize>>,
+    /// The byte of an `[[/li]]` closer deleted from a heading line inside
+    /// this item body (h14/v1): the item already ends conceptually there,
+    /// so a following `[[li]]` opens a sibling item (j6/t1 probes).
+    consumed_li_close_at: Option<usize>,
     wikidot_explicit_list_ends: std::collections::BTreeSet<usize>,
     wikidot_preserve_empty_lists: Cell<bool>,
     gate_items_allowed: Cell<bool>,
@@ -892,6 +896,83 @@ impl<'r, 't> Parser<'r, 't> {
     /// Whether the byte is on a heading line (the scan's definition).
     pub(crate) fn wikidot_byte_on_heading_line(&self, byte: usize) -> bool {
         self.wikidot_heading_line_range(byte).is_some()
+    }
+
+    /// Whether the scan places the byte inside an explicit list item:
+    /// after an `[[li]]` head whose paired `[[/li]]` (if any) lies at or
+    /// after the byte. (The runtime boundary stack is not reliable here
+    /// — list-item speculation can run a trial parse outside the body.)
+    pub(crate) fn wikidot_byte_inside_list_item(&self, byte: usize) -> bool {
+        if !self.settings().layout.legacy() {
+            return false;
+        }
+        let cache = self.block_end_scan_cache.borrow();
+        let Some(head) = cache
+            .wikidot_li_heads
+            .iter()
+            .rev()
+            .find(|head| head.pos <= byte)
+        else {
+            return false;
+        };
+        // A close before the byte (paired to this or a previous head)
+        // means the item ended before the byte.
+        cache
+            .wikidot_li_closes
+            .iter()
+            .all(|close| !(head.pos < close.pos && close.pos < byte))
+    }
+
+    pub(crate) fn set_wikidot_consumed_li_close(&self, byte: usize) {
+        self.block_end_scan_cache.borrow_mut().consumed_li_close_at = Some(byte);
+    }
+
+    pub(crate) fn wikidot_consumed_li_close(&self) -> Option<usize> {
+        self.block_end_scan_cache.borrow().consumed_li_close_at
+    }
+
+    pub(crate) fn clear_wikidot_consumed_li_close(&self) {
+        self.block_end_scan_cache.borrow_mut().consumed_li_close_at = None;
+    }
+
+    /// `[[/li]]`/`[[/ul]]`/`[[/ol]]` closers on the same heading line, as
+    /// (closer start, is_ul), in source order. Live stops an in-item
+    /// heading at such a close and deletes it (h14/v1 probes); at top
+    /// level it stays heading text.
+    pub(crate) fn wikidot_heading_list_closers(
+        &self,
+        from_byte: usize,
+    ) -> Vec<(usize, bool)> {
+        if !self.settings().layout.legacy()
+            || !self.wikidot_byte_inside_list_item(from_byte)
+        {
+            return Vec::new();
+        }
+        let cache = self.block_end_scan_cache.borrow();
+        let pairs = &cache.wikidot_block_pairs;
+        let Some((_, line_end)) = pairs.heading_line_range(from_byte) else {
+            return Vec::new();
+        };
+        let source = self.full_text().inner();
+        let mut closers: Vec<(usize, bool)> = cache
+            .wikidot_li_closes
+            .iter()
+            .filter(|close| from_byte <= close.pos && close.pos < line_end)
+            .map(|close| (close.pos, false))
+            .collect();
+        for (close_start, name_end) in &cache.wikidot_source_end_heads {
+            if *close_start < from_byte || *close_start >= line_end {
+                continue;
+            }
+            let Some(name) = source.get(*close_start + 3..*name_end) else {
+                continue;
+            };
+            if name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol") {
+                closers.push((*close_start, true));
+            }
+        }
+        closers.sort_by_key(|(byte, _)| *byte);
+        closers
     }
 
     /// Flat closers at or after the byte on the same heading line, as

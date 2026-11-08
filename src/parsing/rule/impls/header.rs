@@ -194,11 +194,93 @@ fn collect_wikidot_heading_with_barriers<'r, 't>(
                 &closers,
             );
         }
+        if collapsible_head.is_none() {
+            let list_closers = parser.wikidot_heading_list_closers(from);
+            if !list_closers.is_empty() {
+                let collected =
+                    collect_deleting_list_closers(parser, heading, close, &list_closers)?;
+                let ((elements, errors), _, _) = collected.into();
+                let content = Elements::Single(Element::Container(Container::new(
+                    ctype,
+                    elements,
+                    AttributeMap::new(),
+                )));
+                return Ok(crate::parsing::ParseSuccess::new(
+                    (content, None),
+                    errors,
+                    false,
+                ));
+            }
+        }
     }
 
     let collected = collect_container(parser, RULE_HEADER, ctype, close, &[], None)?;
     let (elements, errors, paragraph_safe) = collected.into();
     Ok(ParseSuccess::new((elements, None), errors, paragraph_safe))
+}
+
+/// Collect heading text across `[[/li]]` stops on the heading line: the
+/// closer is deleted mid-text and the heading continues (j1/j2/j6/x1 live
+/// probes: `h[[/li]]` renders as `h`, a same-line ` y` joins the heading,
+/// following item lines stay bare). No barrier marker, no split.
+fn collect_deleting_list_closers<'r, 't>(
+    parser: &mut Parser<'r, 't>,
+    heading: Heading,
+    close: &[ParseCondition],
+    closers: &[(usize, bool)],
+) -> ParseResult<'r, 't, (Vec<Element<'t>>, Vec<crate::parsing::ParseError>)> {
+    let mut elements: Vec<Element<'t>> = Vec::new();
+    let mut errors = Vec::new();
+    let mut paragraph_safe = true;
+    for &(byte, is_ol_or_ul) in closers {
+        let mut conditions: Vec<ParseCondition> = close.to_vec();
+        conditions.push(ParseCondition::AtSourceByte(byte));
+        let collected =
+            collect_consume_before(parser, RULE_HEADER, &conditions, &[], None)?;
+        let ((chunk, _last), mut step_errors, chunk_safe) = collected.into();
+        errors.append(&mut step_errors);
+        paragraph_safe &= chunk_safe;
+        elements.extend(chunk);
+        if is_ol_or_ul {
+            // c4/j4: the heading hard-stops before `[[/ul]]`/`[[/ol]]` (left
+            // unconsumed); the item/list machinery ends around it. Skip the
+            // post-loop tail collection: it would read the closer as text.
+            let _ = heading;
+            return Ok(crate::parsing::ParseSuccess::new(
+                (elements, errors),
+                Vec::new(),
+                paragraph_safe,
+            ));
+        }
+        let start = parser.current().span.start;
+        if start >= byte {
+            // Delete the closer (zero-width in the heading like it is in
+            // live: h1 `h[[/li]] y` renders `h y`) and keep collecting.
+            let mut probe = parser.clone();
+            if probe.get_end_block().is_ok() {
+                parser.update(&probe);
+                parser.set_wikidot_consumed_li_close(byte);
+            }
+        }
+    }
+    let collected = collect_consume_before(parser, RULE_HEADER, close, &[], None)?;
+    let ((chunk, _last), mut step_errors, chunk_safe) = collected.into();
+    errors.append(&mut step_errors);
+    elements.extend(chunk);
+    paragraph_safe &= chunk_safe;
+    if !matches!(
+        parser.current().token,
+        Token::InputEnd | Token::BulletItem | Token::NumberedItem
+    ) {
+        parser.step()?;
+    }
+    let _ = heading;
+    crate::delayed::trim_trailing_ascii_space(&mut elements);
+    Ok(crate::parsing::ParseSuccess::new(
+        (elements, errors),
+        Vec::new(),
+        paragraph_safe,
+    ))
 }
 
 fn collect_split_wikidot_heading<'r, 't>(
@@ -210,7 +292,7 @@ fn collect_split_wikidot_heading<'r, 't>(
     closers: &[(usize, usize, WikidotBlockKind)],
 ) -> ParseResult<'r, 't, CollectedHeading<'t>> {
     let source = parser.full_text().inner();
-    let mut stops: Vec<usize> = closers.iter().map(|(byte, _, _)| *byte).collect();
+    let mut stops: Vec<usize> = closers.iter().map(|(byte, ..)| *byte).collect();
     if let Some(head) = collapsible_head {
         stops.push(head);
     }
@@ -279,6 +361,7 @@ fn collect_split_wikidot_heading<'r, 't>(
             parser.step()?;
         }
     }
+
 
     if let Some(head) = collapsible_head {
         crate::delayed::trim_trailing_ascii_space(&mut label);

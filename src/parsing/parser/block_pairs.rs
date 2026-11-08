@@ -1711,6 +1711,18 @@ impl<'t> Scanner<'t> {
                     pair.head < *start && *start < pair.closer && pair.closer < *end
                 });
             }
+            if std::env::var("FTML_DBG_PAIRS").is_ok() {
+                let pair = &self.pairs[a];
+                eprintln!(
+                    "PAIR kind={:?} head_tok={} closer_tok={} head_byte={} closer_byte={} flat={}",
+                    pair.kind,
+                    pair.head,
+                    pair.closer,
+                    pair.head_byte,
+                    pair.closer_byte,
+                    flat
+                );
+            }
             self.pairs[a].flat = flat;
         }
         let tables: Vec<(usize, usize)> = self
