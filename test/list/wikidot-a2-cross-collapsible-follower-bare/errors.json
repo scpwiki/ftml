@@ -1,0 +1,92 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-list-unordered",
+        "span": [
+            89,
+            89
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            4,
+            6
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "input-end",
+        "rule": "block-list-item",
+        "span": [
+            89,
+            89
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            7,
+            9
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            11,
+            13
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            51,
+            54
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            56,
+            58
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            59,
+            62
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            64,
+            66
+        ],
+        "kind": "no-rules-match"
+    }
+]

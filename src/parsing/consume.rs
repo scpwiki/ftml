@@ -736,6 +736,27 @@ where
     }
 }
 
+
+/// Item 78: the crossed block close comes directly after the list close with
+/// no intervening content, so the follower break must be emitted. Intervening
+/// content (e.g. `E` before `[[/div]]` in closeout) already produced the break.
+fn wikidot_a2_crossed_direct_after_list(source: &str, close_pos: usize) -> bool {
+    let line_start = source[..close_pos]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    if line_start == 0 {
+        return false;
+    }
+    let prev_end = line_start - 1;
+    let prev_start = source[..prev_end]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let prev = source[prev_start..prev_end].trim_end_matches('\r').trim();
+    prev.eq_ignore_ascii_case("[[/ul]]") || prev.eq_ignore_ascii_case("[[/ol]]")
+}
+
 fn try_consume_structural_close<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> Result<Option<Elements<'t>>, ParseError>
@@ -767,14 +788,43 @@ where
         && parser.current().token == Token::LeftBlockEnd
     {
         let unquoted_close = parser.native_blockquote_depth().is_none();
+        let close_pos = parser.current().span.start;
         let mut close = parser.clone();
         if close
             .get_end_block()
             .is_ok_and(|name| name.eq_ignore_ascii_case("collapsible"))
         {
+            let cross_list_terminated = parser.wikidot_cross_list_terminated_body();
             parser.update(&close);
             parser.set_pending_wikidot_collapsible_closer(false);
             parser.take_wikidot_cross_list_terminated_body();
+            if cross_list_terminated
+                && unquoted_close
+                && !parser.discarding_hidden_body()
+            {
+                let closer_own_line =
+                    wikidot_own_line_prefix(parser.full_text().inner(), close_pos);
+                if closer_own_line && parser.current().token == Token::LineBreak {
+                    let _ = parser.step();
+                }
+                if !matches!(
+                    parser.current().token,
+                    Token::ParagraphBreak | Token::InputEnd
+                ) {
+                    let emit_br = !matches!(
+                        parser.current().token,
+                        Token::Heading
+                            | Token::Equals
+                            | Token::LeftBlock
+                            | Token::LineBreak
+                    ) && wikidot_a2_crossed_direct_after_list(
+                        parser.full_text().inner(),
+                        close_pos,
+                    );
+                    parser.record_wikidot_a2_crossed_follower_bare(emit_br);
+                    return Ok(Some(Elements::None));
+                }
+            }
             return Ok(Some(if unquoted_close {
                 Element::LineBreak.into()
             } else {
@@ -788,14 +838,43 @@ where
         && parser.current().token == Token::LeftBlockEnd
     {
         let unquoted_close = parser.native_blockquote_depth().is_none();
+        let close_pos = parser.current().span.start;
         let mut close = parser.clone();
         if close
             .get_end_block()
             .is_ok_and(|name| name.eq_ignore_ascii_case("div"))
         {
+            let cross_list_terminated = parser.wikidot_cross_list_terminated_body();
             parser.update(&close);
             parser.set_pending_wikidot_div_closer(false);
             parser.take_wikidot_cross_list_terminated_body();
+            if cross_list_terminated
+                && unquoted_close
+                && !parser.discarding_hidden_body()
+            {
+                let closer_own_line =
+                    wikidot_own_line_prefix(parser.full_text().inner(), close_pos);
+                if closer_own_line && parser.current().token == Token::LineBreak {
+                    let _ = parser.step();
+                }
+                if !matches!(
+                    parser.current().token,
+                    Token::ParagraphBreak | Token::InputEnd
+                ) {
+                    let emit_br = !matches!(
+                        parser.current().token,
+                        Token::Heading
+                            | Token::Equals
+                            | Token::LeftBlock
+                            | Token::LineBreak
+                    ) && wikidot_a2_crossed_direct_after_list(
+                        parser.full_text().inner(),
+                        close_pos,
+                    );
+                    parser.record_wikidot_a2_crossed_follower_bare(emit_br);
+                    return Ok(Some(Elements::None));
+                }
+            }
             return Ok(Some(if unquoted_close {
                 Element::LineBreak.into()
             } else {
@@ -815,9 +894,10 @@ where
             let name = name.strip_suffix('_').unwrap_or(&name);
             let closer_own_line =
                 wikidot_own_line_prefix(parser.full_text().inner(), close_pos);
+            let cross_list_terminated = parser.wikidot_cross_list_terminated_body();
             if parser.take_wikidot_crossed_close(name) {
                 parser.update(&close);
-                parser.take_wikidot_cross_list_terminated_body();
+                let terminated = parser.take_wikidot_cross_list_terminated_body();
                 // L85: a silently taken crossed close that starts its own line
                 // absorbs that line's break (closeout keeps a single break
                 // around `[[/div]]`, q-close-in-quote drops it). A closer that
@@ -825,6 +905,32 @@ where
                 // (wikidot_div_closes_at_closer_on_quote_line).
                 if closer_own_line && parser.current().token == Token::LineBreak {
                     let _ = parser.step();
+                }
+                // Item 78 (A2 crossed): a div/collapsible close swallowed
+                // after the explicit list it crossed (body terminated by the
+                // list's li/ul/ol closer) renders the immediate follower as
+                // `<br />` + bare text, not wrapped in a paragraph, unless a
+                // blank line separates them. A blank line/paragraph break or
+                // end of input keeps the ordinary paragraph behavior.
+                let a2_follower = (terminated || cross_list_terminated)
+                    && matches!(name, "div" | "collapsible")
+                    && !matches!(
+                        parser.current().token,
+                        Token::ParagraphBreak | Token::InputEnd
+                    );
+                if a2_follower {
+                    let emit_br = !matches!(
+                        parser.current().token,
+                        Token::Heading
+                            | Token::Equals
+                            | Token::LeftBlock
+                            | Token::LineBreak
+                    ) && wikidot_a2_crossed_direct_after_list(
+                        parser.full_text().inner(),
+                        close_pos,
+                    );
+                    parser.record_wikidot_a2_crossed_follower_bare(emit_br);
+                    return Ok(Some(Elements::None));
                 }
                 return Ok(Some(Elements::None));
             }

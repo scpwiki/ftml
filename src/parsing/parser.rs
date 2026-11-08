@@ -381,6 +381,9 @@ pub(super) struct BlockScanCache<'t> {
     /// mark site; only top-level lists record (nested parses stay
     /// item-body-scoped).
     wikidot_post_list_follower_wrap: u8,
+    /// Item 78 (A2 crossed): 0 = none, 1 = bare follower (no `<br />`),
+    /// 2 = `<br />` + bare follower (inline/text, no blank line).
+    wikidot_a2_crossed_follower_bare: Cell<u8>,
     /// Monotone "no closer ahead" memos for forward closer scans in parser
     /// rules; see `parser/closer_scan.rs`.
     closer_scan: CloserScanCache,
@@ -2744,6 +2747,20 @@ impl<'r, 't> Parser<'r, 't> {
                 .borrow_mut()
                 .wikidot_post_list_follower_wrap,
         )
+    }
+
+    pub(crate) fn record_wikidot_a2_crossed_follower_bare(&self, with_br: bool) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_a2_crossed_follower_bare
+            .set(if with_br { 2 } else { 1 });
+    }
+
+    pub(crate) fn take_wikidot_a2_crossed_follower_bare(&self) -> u8 {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_a2_crossed_follower_bare
+            .replace(0)
     }
 
     /// Takes every anchor stamped for `depth`, dropping deeper strays
