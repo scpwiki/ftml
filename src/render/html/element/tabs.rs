@@ -807,6 +807,8 @@ fn tabview_wrapper_tail<'t>(items: &'t [TabViewItem<'t>]) -> Option<&'t [Element
 }
 
 fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
+    let depth = ctx.wikidot_tabview_depth();
+    ctx.set_wikidot_tabview_depth(depth + 1);
     let (items, trailing) = split_bibliography_split_tail(items);
     let tail = tabview_wrapper_tail(items);
     let items = if tail.is_some() {
@@ -869,6 +871,20 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                     matches!(item, TabViewItem::Tab(_) | TabViewItem::Remote(_))
                 })
                 .count();
+            // A stray escaped `[[/tab]]` inside a nested view's Content run
+            // ends that view's `yui-content` at the marker (live leaves the
+            // marker in the outermost view's content; see
+            // `find_wikidot_tabview_break`). The rendering below emits the
+            // prefix items into `yui-content` and the rest into the spill
+            // region after it, both inside this navset.
+            let break_point = if depth >= 1 && tab_count > 0 {
+                find_wikidot_tabview_break(ctx, items)
+            } else {
+                None
+            };
+            let multi_tab_recovery = tab_count > 1;
+            let mut tab_index = 0usize;
+            let mut deferred_lift_break = false;
             ctx.html()
                 .div()
                 .attr(attr!("class" => "yui-content"))
@@ -877,43 +893,74 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                         render_wikidot_tabview_content_only(ctx, items);
                         return;
                     }
-                    let mut tab_index = 0usize;
-                    for item in items {
-                        match item {
-                            TabViewItem::Tab(tab) => {
-                                let tab_id = format!("wiki-tab-0-{tab_index}");
-                                // Live Wikidot hides every panel after the first inline.
-                                ctx.html()
-                                    .div()
-                                    .attr(attr!(
-                                        "id" => &tab_id,
-                                        "style" => "display:none"; if tab_index > 0,
-                                    ))
-                                    .contents(&tab.elements);
-                                tab_index += 1;
+                    let prefix_end = break_point
+                        .as_ref()
+                        .map_or(items.len(), |point| point.item_index + 1);
+                    for (position, item) in items[..prefix_end].iter().enumerate() {
+                        if depth == 0 {
+                            if deferred_lift_break {
+                                ctx.push_raw_str("<br>");
+                                deferred_lift_break = false;
                             }
-                            // The panel is rendered as a bare div in a later
-                            // quote segment; only the nav entry lives here.
-                            TabViewItem::Remote(_) => {
-                                tab_index += 1;
-                            }
-                            TabViewItem::Content(elements) => {
-                                let flat: Vec<&Element> = elements.iter().collect();
-                                if wikidot_tabview_content_has_literal_tabview_closer(
-                                    &flat,
-                                ) {
-                                    render_wikidot_tabview_content_stream(
-                                        ctx,
-                                        &flat,
-                                        tab_count > 1,
-                                    );
-                                } else {
-                                    render_elements(ctx, elements);
-                                }
-                            }
+                            // The first stray in an outermost item lifts
+                            // (probes `muse-probe-tte-*`); later strays in
+                            // the same outermost item stay literal.
+                            ctx.arm_wikidot_tabview_lift();
+                        }
+                        if let Some(point) = &break_point
+                            && position == point.item_index
+                            && let Some((pre_end, _)) = point.run_split
+                            && let TabViewItem::Content(elements) = item
+                        {
+                            render_wikidot_tabview_yui_item(
+                                ctx,
+                                item,
+                                &mut tab_index,
+                                multi_tab_recovery,
+                                Some(&elements[..pre_end]),
+                                depth,
+                            );
+                        } else {
+                            render_wikidot_tabview_yui_item(
+                                ctx,
+                                item,
+                                &mut tab_index,
+                                multi_tab_recovery,
+                                None,
+                                depth,
+                            );
+                        }
+                        if depth == 0 {
+                            deferred_lift_break =
+                                flush_wikidot_tabview_lifts(ctx, deferred_lift_break);
                         }
                     }
                 });
+            if let Some(point) = &break_point {
+                if let (Some((_, post_start)), Some(item)) =
+                    (point.run_split, items.get(point.item_index))
+                    && let TabViewItem::Content(elements) = item
+                {
+                    render_wikidot_tabview_yui_item(
+                        ctx,
+                        item,
+                        &mut tab_index,
+                        multi_tab_recovery,
+                        Some(&elements[post_start..]),
+                        depth,
+                    );
+                }
+                for item in &items[point.item_index + 1..] {
+                    render_wikidot_tabview_yui_item(
+                        ctx,
+                        item,
+                        &mut tab_index,
+                        multi_tab_recovery,
+                        None,
+                        depth,
+                    );
+                }
+            }
             if let Some(tail) = tail {
                 let tail = match tail {
                     [head @ .., Element::LineBreak] => head,
@@ -925,6 +972,246 @@ fn render_wikidot_tabview(ctx: &mut HtmlContext, items: &[TabViewItem]) {
                 render_element(ctx, element);
             }
         });
+    ctx.set_wikidot_tabview_depth(depth);
+}
+
+/// Where a nested legacy tabview's `yui-content` stops because of a stray
+/// escaped `[[/tab]]` in a Content run: the last prefix item, plus the split
+/// of that item's run when the stray is in this view's own Content item.
+struct WikidotTabviewBreak {
+    item_index: usize,
+    run_split: Option<(usize, usize)>,
+}
+
+/// Find the first stray escaped `[[/tab]]` in document order and, when it is
+/// in this view's own Content run, queue its lift to the outermost view.
+/// When the stray is in a descendant view, this view only breaks after the
+/// item containing it; the descendant queues the lift when it renders.
+fn find_wikidot_tabview_break(
+    ctx: &mut HtmlContext,
+    items: &[TabViewItem],
+) -> Option<WikidotTabviewBreak> {
+    if !ctx.wikidot_tabview_lift_armed() {
+        return None;
+    }
+    for (index, item) in items.iter().enumerate() {
+        match item {
+            TabViewItem::Content(elements) => {
+                if let Some(split) = wikidot_tabview_stray_split(elements) {
+                    ctx.queue_wikidot_tabview_lift();
+                    return Some(WikidotTabviewBreak {
+                        item_index: index,
+                        run_split: Some(split),
+                    });
+                }
+            }
+            TabViewItem::Tab(tab) | TabViewItem::Remote(tab) => {
+                if elements_contain_stray_tab_close(&tab.elements) {
+                    return Some(WikidotTabviewBreak {
+                        item_index: index,
+                        run_split: None,
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Split a Content run at its first literal `[[/tab]]` text run, returning
+/// the pre-marker end (with trailing line breaks dropped: live ends the
+/// content before the marker without them) and the post-marker start (with
+/// one leading line break dropped: the marker line's own break is consumed
+/// by the lift, whose `<br>[[/tab]]<br>` carries it).
+fn wikidot_tabview_stray_split(elements: &[Element]) -> Option<(usize, usize)> {
+    let flat: Vec<&Element> = elements.iter().collect();
+    for start in 0..flat.len() {
+        if let Some(end) = match_wikidot_literal_text_run(&flat, start, "[[/tab]]") {
+            let mut pre_end = start;
+            while pre_end > 0
+                && matches!(
+                    flat[pre_end - 1],
+                    Element::LineBreak | Element::LineBreaks { .. }
+                )
+            {
+                pre_end -= 1;
+            }
+            let mut post_start = end;
+            if matches!(
+                flat.get(post_start),
+                Some(Element::LineBreak | Element::LineBreaks { .. })
+            ) {
+                post_start += 1;
+            }
+            return Some((pre_end, post_start));
+        }
+    }
+    None
+}
+
+/// Whether any descendant tabview in these elements has a stray escaped
+/// `[[/tab]]` in one of its Content runs (so an enclosing view's content
+/// breaks after the item holding it).
+fn elements_contain_stray_tab_close(elements: &[Element]) -> bool {
+    elements.iter().any(|element| match element {
+        Element::TabView(items) => items.iter().any(|item| match item {
+            TabViewItem::Content(elements) => {
+                wikidot_tabview_stray_split(elements).is_some()
+            }
+            TabViewItem::Tab(tab) | TabViewItem::Remote(tab) => {
+                elements_contain_stray_tab_close(&tab.elements)
+            }
+        }),
+        Element::Container(container) => {
+            elements_contain_stray_tab_close(container.elements())
+        }
+        Element::Table(table) => table.rows.iter().any(|row| {
+            row.cells
+                .iter()
+                .any(|cell| elements_contain_stray_tab_close(&cell.elements))
+        }),
+        Element::Anchor { elements, .. }
+        | Element::Color { elements, .. }
+        | Element::Include { elements, .. }
+        | Element::WikidotBlockFrame {
+            children: elements, ..
+        } => elements_contain_stray_tab_close(elements),
+        Element::Collapsible {
+            elements,
+            wikidot_block_open_elements,
+            unfolded_tail_start,
+            ..
+        } => {
+            let (elements, unfolded_tail) = unfolded_tail_start
+                .map(|start| elements.split_at(start.min(elements.len())))
+                .unwrap_or((elements.as_slice(), &[][..]));
+            elements_contain_stray_tab_close(elements)
+                || elements_contain_stray_tab_close(unfolded_tail)
+                || elements_contain_stray_tab_close(wikidot_block_open_elements)
+        }
+        Element::List { items, .. } => items.iter().any(|item| match item {
+            ListItem::Elements { elements, .. } => {
+                elements_contain_stray_tab_close(elements)
+            }
+            ListItem::SubList { element } => {
+                elements_contain_stray_tab_close(std::slice::from_ref(&**element))
+            }
+        }),
+        Element::DefinitionList(items) => items.iter().any(|item| {
+            elements_contain_stray_tab_close(&item.key_elements)
+                || elements_contain_stray_tab_close(&item.value_elements)
+        }),
+        Element::Partial(partial) => match partial {
+            PartialElement::Tab(tab) => elements_contain_stray_tab_close(&tab.elements),
+            PartialElement::ListItem(ListItem::Elements { elements, .. }) => {
+                elements_contain_stray_tab_close(elements)
+            }
+            PartialElement::ListItem(ListItem::SubList { element }) => {
+                elements_contain_stray_tab_close(std::slice::from_ref(&**element))
+            }
+            PartialElement::TableRow(row) => row
+                .cells
+                .iter()
+                .any(|cell| elements_contain_stray_tab_close(&cell.elements)),
+            PartialElement::TableCell(cell) => {
+                elements_contain_stray_tab_close(&cell.elements)
+            }
+            PartialElement::WikidotFoster(elements)
+            | PartialElement::WikidotCollapsibleTail(elements) => {
+                elements_contain_stray_tab_close(elements)
+            }
+            PartialElement::RubyText(ruby) => {
+                elements_contain_stray_tab_close(&ruby.elements)
+            }
+            _ => false,
+        },
+        _ => false,
+    })
+}
+
+/// Render one tabview item into `yui-content` (or the spill region after it).
+/// `content_run`, when set, renders that slice of a Content run instead of
+/// the whole run (the stray-break prefix/post parts).
+fn render_wikidot_tabview_yui_item(
+    ctx: &mut HtmlContext,
+    item: &TabViewItem,
+    tab_index: &mut usize,
+    multi_tab_recovery: bool,
+    content_run: Option<&[Element]>,
+    depth: usize,
+) {
+    match item {
+        TabViewItem::Tab(tab) => {
+            let tab_id = format!("wiki-tab-0-{tab_index}");
+            let index = *tab_index;
+            *tab_index += 1;
+            // Live closes an outermost panel right after a strayed inner
+            // view: everything after it in the panel spills into the
+            // outermost content (probes `muse-probe-tte-m1/m2`).
+            let panel_break = if depth == 0 {
+                tab.elements
+                    .iter()
+                    .enumerate()
+                    .find(|(_, element)| {
+                        elements_contain_stray_tab_close(std::slice::from_ref(element))
+                    })
+                    .map(|(position, _)| position)
+                    .filter(|position| *position + 1 < tab.elements.len())
+            } else {
+                None
+            };
+            if let Some(break_at) = panel_break {
+                if index > 0 {
+                    ctx.push_raw_str(&format!(
+                        "<div id=\"{tab_id}\" style=\"display:none\">"
+                    ));
+                } else {
+                    ctx.push_raw_str(&format!("<div id=\"{tab_id}\">"));
+                }
+                render_elements(ctx, &tab.elements[..=break_at]);
+                ctx.push_raw_str("</div>");
+                render_elements(ctx, &tab.elements[break_at + 1..]);
+            } else {
+                // Live Wikidot hides every panel after the first inline.
+                ctx.html()
+                    .div()
+                    .attr(attr!(
+                        "id" => &tab_id,
+                        "style" => "display:none"; if index > 0,
+                    ))
+                    .contents(&tab.elements);
+            }
+        }
+        // The panel is rendered as a bare div in a later
+        // quote segment; only the nav entry lives here.
+        TabViewItem::Remote(_) => {
+            *tab_index += 1;
+        }
+        TabViewItem::Content(elements) => {
+            let run = content_run.unwrap_or(elements);
+            let flat: Vec<&Element> = run.iter().collect();
+            if wikidot_tabview_content_has_literal_tabview_closer(&flat) {
+                render_wikidot_tabview_content_stream(ctx, &flat, multi_tab_recovery);
+            } else {
+                render_elements(ctx, run);
+            }
+        }
+    }
+}
+
+/// Emit queued lifted `[[/tab]]` markers in the outermost view's content:
+/// each as `<br>[[/tab]]`, with the trailing `<br>` deferred until the next
+/// item (live drops it when the marker ends the content). Returns whether a
+/// deferred break is pending.
+fn flush_wikidot_tabview_lifts(ctx: &mut HtmlContext, deferred_break: bool) -> bool {
+    let mut lifts = ctx.take_wikidot_tabview_lifts();
+    let mut deferred = deferred_break;
+    while lifts > 0 {
+        ctx.push_raw_str("<br>[[/tab]]");
+        lifts -= 1;
+        deferred = true;
+    }
+    deferred
 }
 
 fn split_bibliography_split_tail<'a, 't>(
