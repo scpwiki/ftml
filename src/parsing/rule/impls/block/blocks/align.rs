@@ -172,7 +172,7 @@ pub fn parse_alignment_block<'r, 't>(
             alignment,
         };
         let open = Element::Partial(PartialElement::WikidotBlockOpen(shell));
-        if span_keeps_head_breaks && align_body_keeps_span_head_breaks(parser) {
+        if span_keeps_head_breaks {
             // Separate LineBreak elements collapse to one in the paragraph
             // stack. Wikidot puts both newlines back as one run, and a span
             // keeps that run only when a block follows. Prose absorbs it.
@@ -243,7 +243,7 @@ pub fn parse_alignment_block<'r, 't>(
         drop_wikidot_trailing_vanish_breaks(&mut elements);
         unwrap_wikidot_paragraph_after_explicit_list(&mut elements);
     }
-    if span_keeps_head_breaks && align_parsed_body_keeps_span_head_breaks(&elements) {
+    if span_keeps_head_breaks {
         elements.insert(0, Element::LineBreaks(NonZeroU32::new(2).unwrap()));
     }
     let row_suffix = if parser.settings().layout.legacy() {
@@ -267,58 +267,16 @@ pub fn parse_alignment_block<'r, 't>(
     }
 }
 
-fn align_body_keeps_span_head_breaks(parser: &Parser<'_, '_>) -> bool {
-    let mut look = parser.clone();
-    loop {
-        match look.current().token {
-            Token::Quote | Token::Whitespace => {
-                if look.step().is_err() {
-                    return false;
-                }
-            }
-            Token::Heading
-            | Token::LeftBlock
-            | Token::LeftBlockStar
-            | Token::LeftBlockAnchor
-            | Token::Pipe
-            | Token::TableColumn
-            | Token::TableColumnCenter
-            | Token::TableColumnRight
-            | Token::TableColumnTitle
-            | Token::BulletItem
-            | Token::NumberedItem
-            | Token::DoubleDash
-            | Token::TripleDash => return true,
-            _ => return false,
-        }
-    }
-}
-
-fn align_parsed_body_keeps_span_head_breaks(elements: &[Element<'_>]) -> bool {
-    elements.iter().any(|element| {
-        matches!(
-            element,
-            Element::HorizontalRule
-                | Element::Collapsible { .. }
-                | Element::Table(_)
-                | Element::List { .. }
-                | Element::TabView(_)
-                | Element::Code(_)
-                | Element::Partial(_)
-        ) || matches!(
-            element,
-            Element::Container(container) if !matches!(container.ctype(), ContainerType::Paragraph)
-        )
-    })
-}
-
-fn align_span_keeps_head_breaks(parser: &Parser<'_, '_>, opener_start: usize) -> bool {
+fn align_span_keeps_head_breaks(parser: &Parser<'_, '_>, _opener_start: usize) -> bool {
     if !parser.settings().layout.legacy() || !parser.in_wikidot_span_body() {
         return false;
     }
-    // A list item absorbs the align's restored newlines.
-    if parser.wikidot_byte_on_list_item_line(opener_start)
-        || parser.wikidot_li_inside_item_body()
+    // A table cell absorbs the align's restored newlines when the open span
+    // started outside the cell (p4/idx3748 saved-page probes); a span
+    // opened inside the cell keeps them (q1/idx3706). Note/collapsible/
+    // div/tabview/list contexts always keep.
+    if parser.in_wikidot_advanced_table_cell_body()
+        && !parser.wikidot_span_opened_inside_cell()
     {
         return false;
     }
