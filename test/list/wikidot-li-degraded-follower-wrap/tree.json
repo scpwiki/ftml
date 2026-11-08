@@ -1,0 +1,148 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {
+                            "style": "list-style: none"
+                        },
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "[["
+                            },
+                            {
+                                "element": "text",
+                                "data": "li"
+                            },
+                            {
+                                "element": "text",
+                                "data": "]]"
+                            },
+                            {
+                                "element": "line-break"
+                            },
+                            {
+                                "element": "text",
+                                "data": "x"
+                            },
+                            {
+                                "element": "container",
+                                "data": {
+                                    "type": {
+                                        "header": {
+                                            "level": 1,
+                                            "has-toc": true
+                                        }
+                                    },
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "h"
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "element": "text",
+                                "data": "y"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "element": "container",
+            "data": {
+                "type": "paragraph",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": "[["
+                    },
+                    {
+                        "element": "text",
+                        "data": "li"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "z"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "li"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    },
+                    {
+                        "element": "line-break"
+                    },
+                    {
+                        "element": "text",
+                        "data": "[[/"
+                    },
+                    {
+                        "element": "text",
+                        "data": "ul"
+                    },
+                    {
+                        "element": "text",
+                        "data": "]]"
+                    }
+                ]
+            }
+        }
+    ],
+    "table-of-contents": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "link",
+                                "data": {
+                                    "type": "table-of-contents",
+                                    "link": "#toc0",
+                                    "label": {
+                                        "text": "h"
+                                    },
+                                    "target": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

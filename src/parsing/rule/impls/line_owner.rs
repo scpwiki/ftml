@@ -273,6 +273,129 @@ pub(crate) fn own_line_li_close_after(source: &str, from_byte: usize) -> Option<
     None
 }
 
+/// Post-list follower for the f7 post-heading wrap (BRIEF-F7R83 (c),
+/// probes muse-probe-f7r-* / muse-probe-f7r2-* / f7r3-* / f7r4-*): the
+/// saved-page verdict is that a list's items paragraph-wrap their
+/// post-heading trailing chunk when the physical line IMMEDIATELY after the
+/// enclosing list's own-line closer is content that does not start a
+/// sibling block: plain text, inline content (`[[span]]`...), a stray
+/// block closer, an unformed/paired code/math/align/blockquote block, or a
+/// blank line. It stays bare when that line is `+ h` style heading, `----`
+///, a list head, or a FORMED flat-pair head (`[[div]]`/`[[note]]`/
+/// `[[collapsible]]` with a later matching closer). The predicate returns
+/// whether that follower allows wrapping; it finds the enclosing list's
+/// closer by depth-counting own-line ul/ol heads/closers from
+/// `from_byte` (the position after the item being assembled).
+pub(crate) fn wikidot_list_follower_wraps_items(source: &str, from_byte: usize) -> bool {
+    let from_byte = from_byte.min(source.len());
+    // `from_byte` sits inside the target list's region (an assembled item's
+    // end, or the list-rule entry right after the head). Scanning starts at
+    // the next line: the line containing `from_byte` belongs to the current
+    // item/head, never to a closer. Depth 1 seeds "inside the target list"
+    // so same-line heads (`[[span]][[ul]]`) already contribute their frame.
+    let line_start = source[..from_byte]
+        .rfind('\n')
+        .map_or(0, |offset| offset + 1);
+    let line_end = source[line_start..]
+        .find('\n')
+        .map_or(source.len(), |offset| line_start + offset);
+    let mut depth = 1usize;
+    let mut pos = line_end + 1;
+    let mut line_start = pos;
+    while pos < source.len() {
+        let line_end = source[pos..]
+            .find('\n')
+            .map_or(source.len(), |offset| pos + offset);
+        let raw = &source[line_start..line_end];
+        let trimmed = raw.trim_matches([' ', '\t']);
+        if trimmed.eq_ignore_ascii_case("[[ul]]")
+            || trimmed.eq_ignore_ascii_case("[[ol]]")
+        {
+            depth += 1;
+        } else if trimmed.eq_ignore_ascii_case("[[/ul]]")
+            || trimmed.eq_ignore_ascii_case("[[/ol]]")
+        {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                return wikidot_list_follower_line_wraps(source, line_end);
+            }
+        }
+        pos = line_end + 1;
+        line_start = pos;
+    }
+    false
+}
+
+/// Whether the line following a list-closer line allows the post-heading
+/// wrap: every content line except the block-start classes named in
+/// `wikidot_list_follower_wraps_items`. EOF and contentless lines other
+/// than blank lines do not wrap.
+fn wikidot_list_follower_line_wraps(source: &str, closer_line_end: usize) -> bool {
+    if closer_line_end >= source.len() {
+        return false;
+    }
+    let next_start = closer_line_end + 1;
+    let next_end = source[next_start..]
+        .find('\n')
+        .map_or(source.len(), |offset| next_start + offset);
+    let next = &source[next_start..next_end];
+    let trimmed = next.trim_matches([' ', '\t']);
+    if trimmed.is_empty() {
+        return true;
+    }
+    // A heading line (1-6 `+` + whitespace) suppresses the wrap.
+    let plus_run = trimmed
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == b'+')
+        .count();
+    if (1..=6).contains(&plus_run) && trimmed[plus_run..].starts_with([' ', '\t']) {
+        return false;
+    }
+    // `----` (FTML's TripleDash token) suppresses; `====` does not.
+    if trimmed.len() >= 4 && trimmed.bytes().all(|byte| byte == b'-') {
+        return false;
+    }
+    if trimmed.eq_ignore_ascii_case("[[ul]]") || trimmed.eq_ignore_ascii_case("[[ol]]") {
+        return false;
+    }
+    // A FORMED flat-pair head (div/note/collapsible) suppresses; an
+    // unclosed one (no later closer) is text content and wraps.
+    if let Some(kind) = wikidot_list_follower_flat_head(trimmed) {
+        let closer = match kind {
+            "div" => "[[/div]]",
+            "note" => "[[/note]]",
+            _ => "[[/collapsible]]",
+        };
+        let after = source[next_end..]
+            .lines()
+            .any(|line| line.trim_matches([' ', '\t']).eq_ignore_ascii_case(closer));
+        return !after;
+    }
+    true
+}
+
+/// The flat-pair kind of a head line: a lone `[[div]]`/`[[note]]`/
+/// `[[collapsible]]` block token, possibly with attributes (`[[div
+/// class="c"]]`). Attribute-free and attribute forms only; trailing text
+/// after the token (`[[div]] x`) is not a head.
+fn wikidot_list_follower_flat_head(trimmed: &str) -> Option<&'static str> {
+    let inner = trimmed.strip_prefix("[[")?.strip_suffix("]]")?;
+    let name_end = inner
+        .find(|c: char| c.is_whitespace() || c == ']')
+        .unwrap_or(inner.len());
+    let name = &inner[..name_end].trim();
+    if name.eq_ignore_ascii_case("div") {
+        Some("div")
+    } else if name.eq_ignore_ascii_case("note") {
+        Some("note")
+    } else if name.eq_ignore_ascii_case("collapsible") {
+        Some("collapsible")
+    } else {
+        None
+    }
+}
+
 fn line_matches_close(line: &str, close_name: &str) -> bool {
     line.strip_prefix("[[/")
         .and_then(|inner| inner.strip_suffix("]]"))
