@@ -1,0 +1,108 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "numbered",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "list",
+                                "data": {
+                                    "type": "numbered",
+                                    "attributes": {},
+                                    "items": [
+                                        {
+                                            "item-type": "elements",
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "x"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "element": "list",
+                                "data": {
+                                    "type": "bullet",
+                                    "attributes": {},
+                                    "items": [
+                                        {
+                                            "item-type": "elements",
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "list",
+                                                    "data": {
+                                                        "type": "numbered",
+                                                        "attributes": {},
+                                                        "items": [
+                                                            {
+                                                                "item-type": "sub-list",
+                                                                "element": "list",
+                                                                "data": {
+                                                                    "type": "bullet",
+                                                                    "attributes": {},
+                                                                    "items": [
+                                                                        {
+                                                                            "item-type": "elements",
+                                                                            "attributes": {},
+                                                                            "elements": [
+                                                                                {
+                                                                                    "element": "partial",
+                                                                                    "data": {
+                                                                                        "ListItem": {
+                                                                                            "item-type": "elements",
+                                                                                            "attributes": {},
+                                                                                            "elements": [
+                                                                                                {
+                                                                                                    "element": "list",
+                                                                                                    "data": {
+                                                                                                        "type": "bullet",
+                                                                                                        "attributes": {},
+                                                                                                        "items": [
+                                                                                                            {
+                                                                                                                "item-type": "elements",
+                                                                                                                "attributes": {},
+                                                                                                                "elements": [
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": "y"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                }
+                                                                                            ]
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
