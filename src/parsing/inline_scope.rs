@@ -2198,9 +2198,7 @@ fn seal_format_segment<'t>(
         output.extend(mem::take(run));
         return;
     }
-    if format_segment_has_content(run)
-        || (keep_leading_breaks && !run.is_empty())
-    {
+    if format_segment_has_content(run) || (keep_leading_breaks && !run.is_empty()) {
         *formed = true;
         let mut attributes = AttributeMap::new();
         if stop_at_list {
@@ -2211,8 +2209,7 @@ fn seal_format_segment<'t>(
         }
         if first_list && !stop_at_list && wrap_lead {
             // The own-line opener of the pair: live renders the leading chunk as a paragraph chunk.
-            attributes
-                .insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
+            attributes.insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
         }
         output.push(Element::Container(Container::new(
             ctype,
@@ -4497,6 +4494,39 @@ fn lower_sequence<'t>(
                 );
             } else {
                 let block_boundary = is_block_boundary(&element);
+                // 62(b) defect 2 (align-div-in-item): a break-only scope segment
+                // at a paragraph/block→block boundary is owned by block assembly.
+                // Live swallows it; crossed-scope lowering otherwise emits it as
+                // a bare `<span><br>…</span>`. Drop a discrete break-only span
+                // element, or a break-only run, when bracketed by a paragraph or
+                // block-boundary output and a block-boundary (sibling/next).
+                let last_is_pb = matches!(
+                    output.last(),
+                    Some(Element::Container(c)) if c.ctype() == ContainerType::Paragraph
+                ) || output.last().is_some_and(is_block_boundary);
+                let next_is_block_boundary_not_align = matches!(
+                    source.peek(),
+                    Some(next) if is_block_boundary(next)
+                        && !matches!(next, Element::Container(c) if matches!(c.ctype(), ContainerType::Align(_)))
+                );
+                if block_boundary
+                    && !matches!(&element, Element::Container(c) if matches!(c.ctype(), ContainerType::Align(_)))
+                    && !run.is_empty()
+                    && last_is_pb
+                    && active.has_active_scope()
+                    && run
+                        .iter()
+                        .all(|e| matches!(e, Element::LineBreak | Element::LineBreaks(_)))
+                {
+                    run.clear();
+                }
+                if is_break_only_span(&element)
+                    && last_is_pb
+                    && next_is_block_boundary_not_align
+                    && active.has_active_scope()
+                {
+                    continue;
+                }
                 if block_boundary && active.has_active_scope() {
                     strip_trailing_space_from_vec(&mut run);
                 }
@@ -4609,6 +4639,21 @@ fn lower_sequence<'t>(
                     segment,
                     bib,
                 );
+                // 62(b) defect 2, B-open-P (adi4-note-then-align): when an
+                // align follows a block+preserved-break sibling, live drops the
+                // align body's leading break-only scope segment.
+                if matches!(&element, Element::Container(c) if matches!(c.ctype(), ContainerType::Align(_)))
+                    && output.len() >= 2
+                    && is_break_only_span(output.last().unwrap())
+                    && is_block_boundary(&output[output.len() - 2])
+                {
+                    if let Element::Container(c) = &mut element {
+                        while matches!(c.elements().first(), Some(e) if is_break_only_span(e))
+                        {
+                            c.elements_mut().remove(0);
+                        }
+                    }
+                }
                 clear_format_label_inside_marker(&mut element);
                 if let Some((tag, _)) = root_parts {
                     if stopped_pre_segment(&element) {
@@ -6068,6 +6113,23 @@ fn is_empty_paragraph(element: &Element<'_>) -> bool {
         Element::Container(container)
             if container.ctype() == ContainerType::Paragraph && container.elements().is_empty()
     )
+}
+
+/// A span/inline container whose only visible content is line breaks (a scope
+/// segment carrying a boundary break). Live swallows these at block/paragraph
+/// boundaries in crossed-scope lowering (align-div-in-item defect 2 / 62b).
+fn is_break_only_span(element: &Element<'_>) -> bool {
+    let Element::Container(container) = element else {
+        return false;
+    };
+    if !matches!(container.ctype(), ContainerType::Span) {
+        return false;
+    }
+    let els = container.elements();
+    !els.is_empty()
+        && els
+            .iter()
+            .all(|el| matches!(el, Element::LineBreak | Element::LineBreaks(_)))
 }
 
 fn contains_inline_scope_control(element: &Element<'_>) -> bool {
