@@ -680,6 +680,25 @@ fn migrated_break_dropped_before_following_line(parser: &Parser<'_, '_>) -> bool
     )
 }
 
+/// The degraded trailing shell an ordered list closed at a shallower quote
+/// depth leaves behind live: a bullet list holding only one
+/// list-style-none item with a break and no closing tags (the a5e3e034c
+/// degraded form). An unordered list leaves a plain break instead.
+fn ordered_boundary_close_shell() -> Element<'static> {
+    let mut item_attributes = AttributeMap::new();
+    item_attributes.insert("style", cow!("list-style: none"));
+    Element::List {
+        ltype: ListType::Bullet,
+        items: vec![ListItem::Elements {
+            elements: vec![Element::LineBreak],
+            attributes: item_attributes,
+        }],
+        attributes: AttributeMap::new(),
+        wikidot_explicit_block: false,
+        wikidot_unclosed: true,
+    }
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -704,6 +723,7 @@ fn try_consume_fn<'r, 't>(
     let mut flatten_following_rows = false;
     let mut append_unquoted_close_break = false;
     let mut append_from_list_boundary = false;
+    let mut append_from_ordered_list_boundary = false;
     let mut flat_split: Option<QuoteFlatSplit<'t>> = None;
     let mut first_row_depth: Option<usize> = None;
 
@@ -1146,11 +1166,22 @@ fn try_consume_fn<'r, 't>(
                 }),
                 Some(Element::List { wikidot_explicit_block: true, .. })
             );
+        let quote_end_ordered_list_row = quote_end_list_row
+            && matches!(
+                elements.iter().rev().find(|element| {
+                    !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                }),
+                Some(Element::List {
+                    ltype: ListType::Numbered,
+                    ..
+                })
+            );
         let boundary_list_close = parser.take_wikidot_quote_boundary_list_close();
         let quote_end_list_break = quote_end_list_row && !boundary_list_close;
         if quote_end_list_row && boundary_list_close {
             append_unquoted_close_break = true;
             append_from_list_boundary = true;
+            append_from_ordered_list_boundary = quote_end_ordered_list_row;
         }
         if quote_end_list_break
             && !matches!(elements.last(), Some(Element::LineBreak))
@@ -1370,7 +1401,11 @@ fn try_consume_fn<'r, 't>(
             && !(append_from_list_boundary
                 && migrated_break_dropped_before_following_line(parser))
         {
-            elements.push(Element::LineBreak);
+            if append_from_ordered_list_boundary {
+                elements.push(ordered_boundary_close_shell());
+            } else {
+                elements.push(Element::LineBreak);
+            }
         }
         return ok!(false; elements, errors);
     }
@@ -1385,7 +1420,11 @@ fn try_consume_fn<'r, 't>(
         && !(append_from_list_boundary
             && migrated_break_dropped_before_following_line(parser))
     {
-        elements.push(Element::LineBreak);
+        if append_from_ordered_list_boundary {
+            elements.push(ordered_boundary_close_shell());
+        } else {
+            elements.push(Element::LineBreak);
+        }
         if let Some(last) = split_counts.last_mut() {
             last.0 += 1;
         }
