@@ -75,6 +75,7 @@ pub fn render_code(
     contents: &str,
     open_elements: &[Element],
     label_spans: &[AttributeMap],
+    format_wrappers: &[crate::tree::InlineFormatKind],
 ) {
     debug!(
         "Rendering code block (language {})",
@@ -84,7 +85,14 @@ pub fn render_code(
     ctx.handle().post_code(index, contents);
 
     if ctx.layout().legacy() {
-        render_wikidot_code(ctx, language, contents, open_elements, label_spans);
+        render_wikidot_code(
+            ctx,
+            language,
+            contents,
+            open_elements,
+            label_spans,
+            format_wrappers,
+        );
         return;
     }
 
@@ -158,6 +166,7 @@ fn render_wikidot_code(
     contents: &str,
     open_elements: &[Element],
     label_spans: &[AttributeMap],
+    format_wrappers: &[crate::tree::InlineFormatKind],
 ) {
     ctx.html()
         .div()
@@ -178,6 +187,7 @@ fn render_wikidot_code(
                             render_wikidot_code_contents(
                                 ctx,
                                 label_spans,
+                                format_wrappers,
                                 &mut |_ctx: &mut HtmlContext| {},
                             );
                         });
@@ -188,11 +198,16 @@ fn render_wikidot_code(
             let render_plain = |ctx: &mut HtmlContext| {
                 let escaped = escape_wikidot_code(contents);
                 ctx.html().pre().inner(|ctx| {
-                    render_wikidot_code_contents(ctx, label_spans, &mut |ctx| {
-                        ctx.html().code().inner(|ctx| {
-                            ctx.push_raw_str(&escaped);
-                        });
-                    });
+                    render_wikidot_code_contents(
+                        ctx,
+                        label_spans,
+                        format_wrappers,
+                        &mut |ctx| {
+                            ctx.html().code().inner(|ctx| {
+                                ctx.push_raw_str(&escaped);
+                            });
+                        },
+                    );
                 });
             };
 
@@ -206,6 +221,7 @@ fn render_wikidot_code(
                                         render_wikidot_code_contents(
                                             ctx,
                                             label_spans,
+                                            format_wrappers,
                                             &mut |ctx| ctx.push_raw_str(&highlighted),
                                         );
                                     });
@@ -223,6 +239,97 @@ fn render_wikidot_code(
 fn render_wikidot_code_contents(
     ctx: &mut HtmlContext,
     label_spans: &[AttributeMap],
+    format_wrappers: &[crate::tree::InlineFormatKind],
+    contents: &mut dyn FnMut(&mut HtmlContext),
+) {
+    let Some((kind, remaining_wrappers)) = format_wrappers.split_first() else {
+        render_code_span_contents(ctx, label_spans, contents);
+        return;
+    };
+    use crate::tree::InlineFormatKind;
+    match kind {
+        InlineFormatKind::Bold => {
+            ctx.html().tag("strong").inner(|ctx| {
+                render_wikidot_code_contents(
+                    ctx,
+                    label_spans,
+                    remaining_wrappers,
+                    contents,
+                )
+            });
+        }
+        InlineFormatKind::Italics => {
+            ctx.html().em().inner(|ctx| {
+                render_wikidot_code_contents(
+                    ctx,
+                    label_spans,
+                    remaining_wrappers,
+                    contents,
+                )
+            });
+        }
+        InlineFormatKind::Underline => {
+            ctx.html()
+                .span()
+                .attr(attr!("style" => "text-decoration: underline;"))
+                .inner(|ctx| {
+                    render_wikidot_code_contents(
+                        ctx,
+                        label_spans,
+                        remaining_wrappers,
+                        contents,
+                    )
+                });
+        }
+        InlineFormatKind::Strikethrough => {
+            ctx.html()
+                .span()
+                .attr(attr!("style" => "text-decoration: line-through;"))
+                .inner(|ctx| {
+                    render_wikidot_code_contents(
+                        ctx,
+                        label_spans,
+                        remaining_wrappers,
+                        contents,
+                    )
+                });
+        }
+        InlineFormatKind::Superscript => {
+            ctx.html().sup().inner(|ctx| {
+                render_wikidot_code_contents(
+                    ctx,
+                    label_spans,
+                    remaining_wrappers,
+                    contents,
+                )
+            });
+        }
+        InlineFormatKind::Subscript => {
+            ctx.html().sub().inner(|ctx| {
+                render_wikidot_code_contents(
+                    ctx,
+                    label_spans,
+                    remaining_wrappers,
+                    contents,
+                )
+            });
+        }
+        InlineFormatKind::Monospace => {
+            ctx.html().tag("tt").inner(|ctx| {
+                render_wikidot_code_contents(
+                    ctx,
+                    label_spans,
+                    remaining_wrappers,
+                    contents,
+                )
+            });
+        }
+    }
+}
+
+fn render_code_span_contents(
+    ctx: &mut HtmlContext,
+    label_spans: &[AttributeMap],
     contents: &mut dyn FnMut(&mut HtmlContext),
 ) {
     let Some((attributes, remaining)) = label_spans.split_first() else {
@@ -232,7 +339,7 @@ fn render_wikidot_code_contents(
     ctx.html()
         .span()
         .attr(attr!(;; attributes))
-        .inner(|ctx| render_wikidot_code_contents(ctx, remaining, contents));
+        .inner(|ctx| render_code_span_contents(ctx, remaining, contents));
 }
 
 #[cfg(test)]

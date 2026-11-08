@@ -35,6 +35,13 @@ pub struct CodeBlock<'t> {
     /// compatibility wrappers, not authored code attributes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wikidot_label_spans: Vec<AttributeMap<'t>>,
+    /// Inline format scopes (bold/italics/underline/…) that straddle this
+    /// Wikidot code block as they cross an explicit list also reopen their
+    /// wrapper inside `<pre>` around the code contents, like live does when
+    /// the format pair forms across the block. Renderer-owned compatibility
+    /// wrappers, not authored code attributes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wikidot_code_format_wrappers: Vec<crate::tree::InlineFormatKind>,
 }
 
 impl CodeBlock<'_> {
@@ -51,6 +58,7 @@ impl CodeBlock<'_> {
                 .iter()
                 .map(AttributeMap::to_owned)
                 .collect(),
+            wikidot_code_format_wrappers: self.wikidot_code_format_wrappers.clone(),
         }
     }
 }

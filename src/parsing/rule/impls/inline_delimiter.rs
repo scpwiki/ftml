@@ -21,8 +21,9 @@
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
+use crate::parsing::inline_scope::visit_children;
 use crate::parsing::parser::closer_scan::count_scan_token_visit;
-use crate::tree::{Container, Element};
+use crate::tree::{Container, Element, ListItem};
 use std::borrow::Cow;
 
 /// Wikidot's table rule runs before inline pairing and splits a glued marker
@@ -35,6 +36,113 @@ pub(super) fn legacy_format_body_contains_table(elements: &Elements<'_>) -> bool
         .elements()
         .iter()
         .any(|element| matches!(element, Element::Table(_)))
+}
+
+/// Live rejects an inline format pair whose body holds an explicit list item
+/// with a `[[code]]` block preceded by content — text, another block — in
+/// that same item (measured on sandbox-for-codex for every format; the
+/// markers stay literal there). An item whose code block is the FIRST
+/// content keeps the pair: live forms it and segments around the block.
+/// Each list item opens a fresh content scope; between items the rule is
+/// irrelevant. At the top level the body's own sequence is one scope.
+pub(super) fn legacy_format_body_code_preceded_by_content(
+    elements: &Elements<'_>,
+) -> bool {
+    let Elements::Single(Element::Container(container)) = elements else {
+        return false;
+    };
+    code_preceded_by_content_in_elements(container.elements())
+}
+
+/// `pub(super)` sibling for call sites that hold a bare vector of body
+/// elements rather than a collected container.
+pub(super) fn code_preceded_by_content_in_elements(elements: &[Element<'_>]) -> bool {
+    list_items_have_content_before_code(elements)
+        || top_level_has_content_before_code(elements)
+}
+
+fn top_level_has_content_before_code(elements: &[Element<'_>]) -> bool {
+    let mut content = false;
+    scope_has_content_before_code(elements, &mut content)
+}
+
+fn list_items_have_content_before_code(elements: &[Element<'_>]) -> bool {
+    for element in elements {
+        match element {
+            Element::List { items, .. } => {
+                for item in items {
+                    if item_has_content_before_code(item) {
+                        return true;
+                    }
+                }
+            }
+            _ => {
+                // Lists nested deeper in the body also own fresh item
+                // scopes; check them via their own enumeration.
+                let mut found = false;
+                visit_children(element, &mut |children| {
+                    if !found && list_items_have_content_before_code(children) {
+                        found = true;
+                    }
+                });
+                if found {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn item_has_content_before_code(item: &ListItem<'_>) -> bool {
+    match item {
+        ListItem::Elements { elements, .. } => {
+            top_level_has_content_before_code(elements)
+        }
+        ListItem::SubList { element } => match element.as_ref() {
+            Element::List { items, .. } => items.iter().any(item_has_content_before_code),
+            _ => false,
+        },
+    }
+}
+
+fn scope_has_content_before_code(elements: &[Element<'_>], content: &mut bool) -> bool {
+    for element in elements {
+        match element {
+            Element::LineBreak | Element::LineBreaks(_) => {}
+            Element::Text(text) if text.trim().is_empty() => {}
+            Element::Code(_) => {
+                if *content {
+                    return true;
+                }
+                *content = true;
+            }
+            Element::List { items, .. } => {
+                // A nested list's items open fresh item scopes, so any
+                // code block misplaced inside them rejects the pair too.
+                for item in items {
+                    if item_has_content_before_code(item) {
+                        return true;
+                    }
+                }
+                // A nested list is content in its enclosing scope.
+                *content = true;
+            }
+            _ => {
+                let mut recursed = false;
+                visit_children(element, &mut |children| {
+                    if !recursed && scope_has_content_before_code(children, content) {
+                        recursed = true;
+                    }
+                });
+                if recursed {
+                    return true;
+                }
+                *content = true;
+            }
+        }
+    }
+    false
 }
 
 pub(super) fn assert_unpadded_open<'r, 't>(

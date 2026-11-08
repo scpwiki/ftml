@@ -201,6 +201,12 @@ fn try_consume_fn<'r, 't>(
         return ok!(false; vec![opening, table, closing], errors);
     }
 
+    if parser.settings().layout.legacy()
+        && super::inline_delimiter::code_preceded_by_content_in_elements(&elements)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     let element = Element::Container(Container::new(
         ContainerType::Monospace,
         elements,
