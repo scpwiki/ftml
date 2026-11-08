@@ -1038,6 +1038,38 @@ where
         }
     }
     parser.update(&candidate);
+    // The flipped list carries a synthetic break item; when this list's
+    // decomposition (via the sibling-items branch below) drops both it
+    // and the unclosed flag, the anchor is live's remaining "anchor
+    // list tail": stash it for the enclosing list's return to re-emit
+    // when the enclosing list is numbered (LT46 p23-ord).
+    if let Some(Element::List { attributes, .. }) = elements.first()
+        && decompose_siblings.is_some()
+        && elements.first().is_some_and(|element| matches!(
+            element,
+            Element::List {
+                ltype: ListType::Bullet,
+                wikidot_unclosed: true,
+                ..
+            }
+        ))
+    {
+        let anchor = Element::List {
+            ltype: ListType::Bullet,
+            items: vec![ListItem::Elements {
+                elements: vec![Element::LineBreak],
+                attributes: {
+                    let mut item_attributes = AttributeMap::new();
+                    item_attributes.insert("style", cow!("list-style: none"));
+                    item_attributes
+                },
+            }],
+            attributes: attributes.clone(),
+            wikidot_explicit_block: true,
+            wikidot_unclosed: true,
+        };
+        parser.stash_wikidot_list_anchor_chrome(parser.wikidot_li_pairing_depth(), anchor);
+    }
     let body = if let Some(sibling_ltype) = decompose_siblings {
         let mut elements = elements.into_iter();
         match elements.next() {

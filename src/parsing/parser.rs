@@ -248,6 +248,13 @@ pub(super) struct BlockScanCache<'t> {
     /// re-wrap the merged inner cut list in extraction.
     wikidot_cross_li_outer: Option<Element<'t>>,
     wikidot_cross_li_fired: Cell<bool>,
+    /// Anchor lists stashed when a numbered lost-owner list's flipped,
+    /// unclosed list decomposes into sibling items (LT46 p23-ord): each
+    /// carries the pairing depth of its enclosing explicit list, and the
+    /// enclosing list's return takes (and re-emits, when numbered) its
+    /// own depth's anchors. Keeps the anchor out of the decompose
+    /// discarded on the floor.
+    wikidot_list_anchor_chromes: Vec<(usize, Element<'t>)>,
     /// Ordinal of the next tab parsed inside the current quoted tabview.
     wikidot_tabview_tab_ordinal: Cell<usize>,
     /// Ordinals of tabs whose panels render outside the navset (bare panel in
@@ -2256,6 +2263,53 @@ impl<'r, 't> Parser<'r, 't> {
         cache.wikidot_cross_li_eject.clear();
         cache.wikidot_cross_li_outer = None;
         cache.wikidot_cross_li_fired.set(false);
+    }
+
+    pub(crate) fn stash_wikidot_list_anchor_chrome(
+        &self,
+        depth: usize,
+        element: Element<'t>,
+    ) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_list_anchor_chromes
+            .push((depth, element));
+    }
+
+    /// Takes every anchor stamped for `depth`, dropping deeper strays
+    /// (which can only be left by lists whose returns never ran) and
+    /// keeping shallower stamps for outer lists. The take site at an
+    /// explicit list's return decides whether the payload renders: raw
+    /// chrome when the enclosing list is numbered, nothing otherwise.
+    pub(crate) fn take_wikidot_list_anchor_chromes_at(
+        &self,
+        depth: usize,
+    ) -> Vec<Element<'t>> {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        let mut taken = Vec::new();
+        cache
+            .wikidot_list_anchor_chromes
+            .retain(|(stamp, element)| {
+                if *stamp >= depth {
+                    if *stamp == depth {
+                        taken.push(element.clone());
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
+        taken
+    }
+
+    /// Drops anchors stamped for deeper (or equal) lists before the
+    /// owning list's gather runs; entries of still-open outer lists are
+    /// shallower and survive.
+    pub(crate) fn drop_wikidot_list_anchor_chromes_at(&self, depth: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_list_anchor_chromes
+            .retain(|(stamp, _)| *stamp < depth);
     }
 
     pub(crate) fn set_wikidot_cross_li_fired(&self) {

@@ -152,6 +152,12 @@ fn parse_list_block_impl<'r, 't>(
     assert!(!flag_star, "List block doesn't allow star flag");
     assert_block_name(block_rule, name);
 
+    // Drop anchor-chrome strays from lists whose returns never ran;
+    // entries of still-open outer lists are shallower and survive.
+    if wikidot {
+        parser.drop_wikidot_list_anchor_chromes_at(parser.wikidot_li_pairing_depth());
+    }
+
     let arguments = parser.get_head_map_wikidot(block_rule, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
     // lihoist p6: an explicit-list head on a list-item line inside an
@@ -257,6 +263,15 @@ fn parse_list_block_impl<'r, 't>(
         }
         return ok!(false; elements, errors);
     }
+
+    // Anchor lists for decomposed numbered lost-owner formations inside
+    // this list's body (LT46 p23-ord): re-emitted after this list's
+    // close when it is numbered (the L85 slot below), dropped otherwise.
+    let anchor_chromes = if wikidot {
+        parser.take_wikidot_list_anchor_chromes_at(parser.wikidot_li_pairing_depth())
+    } else {
+        Vec::new()
+    };
 
     let mut items = Vec::new();
     let mut literal_elements = Vec::new();
@@ -596,7 +611,16 @@ fn parse_list_block_impl<'r, 't>(
                     wikidot_explicit_block: true,
                     wikidot_unclosed: true,
                 }),
-                _ => output.push(Element::LineBreak),
+                _ => {}
+            }
+            // A numbered list re-emits the anchor lists stashed by
+            // decomposed numbered lost-owner formations in the break's
+            // place (LT46 p23-ord). With neither suppressed nor stashed
+            // material, the ordinary post-list break remains.
+            if list_type == ListType::Numbered && !anchor_chromes.is_empty() {
+                output.extend(anchor_chromes);
+            } else if closer_line_marker.is_none() {
+                output.push(Element::LineBreak);
             }
         }
         ok!(false; output, errors)
@@ -1565,7 +1589,7 @@ fn split_mixed_deep_marker_list<'t>(list: Element<'t>) -> Option<Vec<Element<'t>
     };
     let mut segments: Vec<Element<'t>> = Vec::new();
     let mut group: Vec<ListItem<'t>> = Vec::new();
-    let mut flush_group = |group: &mut Vec<ListItem<'t>>, segments: &mut Vec<Element<'t>>| {
+    let flush_group = |group: &mut Vec<ListItem<'t>>, segments: &mut Vec<Element<'t>>| {
         if !group.is_empty() {
             segments.push(Element::List {
                 ltype,
