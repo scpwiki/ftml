@@ -3110,7 +3110,20 @@ where
                                 pairs.insert(close_pos, (kind, crossed));
                             } else if sat.front() == Some(&frame) {
                                 sat.pop_front();
-                            } else {
+                            }
+                            // The frame is nowhere in stack or sat-front:
+                            // this closer either still pairs with a scannable
+                            // head outside the region (a genuine crossing) or
+                            // is an orphan (no head anywhere). Only the former
+                            // breaches and force-pops; orphans stay literal
+                            // and must not stop the item or eat the break
+                            // before them (note/align precedent; l1/divpair/
+                            // dint orphan probes, BRIEF-F7R83 (d)).
+                            else if sat.contains(&frame)
+                                || self
+                                    .wikidot_block_pair_at_closer_byte(close_pos)
+                                    .is_some()
+                            {
                                 while let Some((stack_kind, _, seen)) = stack.pop() {
                                     if !seen {
                                         sat.push_back(stack_kind);

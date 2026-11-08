@@ -334,6 +334,16 @@ fn parse_list_block_impl<'r, 't>(
     let mut partial_count = 0usize;
     let mut skipped_empty_partial = false;
 
+    // BRIEF-F7R83 (b/c): degraded (none-styled) items form in the element
+    // loop below, never through parse_list_item's segment assembly, so the
+    // post-heading wrap gate arrives as a plain bool (frame || follower).
+    let li_wrap_enclosing = wikidot
+        && (parser.wikidot_flat_pair_open_at(opener_start)
+            || crate::parsing::rule::impls::line_owner::wikidot_list_follower_wraps_items(
+                parser.full_text().inner(),
+                opener_start,
+            ));
+
     if flag_score {
         strip_newlines(&mut elements);
     }
@@ -382,6 +392,7 @@ fn parse_list_block_impl<'r, 't>(
                     wikidot,
                     flag_score,
                     content_follows,
+                    li_wrap_enclosing,
                 );
                 partial_count += 1;
                 if !matches!(&list_item, ListItem::Elements { elements, .. } if elements.is_empty())
@@ -401,6 +412,7 @@ fn parse_list_block_impl<'r, 't>(
                     wikidot,
                     flag_score,
                     content_follows,
+                    li_wrap_enclosing,
                 );
                 if wikidot
                     && !flag_score
@@ -444,6 +456,7 @@ fn parse_list_block_impl<'r, 't>(
         wikidot,
         flag_score,
         content_follows,
+        li_wrap_enclosing,
     );
 
     let mut b5_escaped: Option<Vec<Element<'t>>> = None;
@@ -860,6 +873,7 @@ fn push_literal_list_item<'t>(
     append_to_last: bool,
     outer_list_is_scored: bool,
     content_follows: bool,
+    f7_enclosing: bool,
 ) {
     while elements.last().is_some_and(Element::is_whitespace) {
         elements.pop();
@@ -886,6 +900,9 @@ fn push_literal_list_item<'t>(
         }
         item_elements.append(elements);
     } else {
+        if f7_enclosing {
+            wrap_post_heading_segments(elements, true);
+        }
         if append_to_last && !outer_list_is_scored {
             wrap_wikidot_malformed_scored_items(elements, content_follows);
         }
@@ -1596,7 +1613,14 @@ fn parse_list_item<'r, 't>(
                 .wikidot_li_cross_pair_at(parser.current().span.start)
                 .is_some_and(|(_, crossed)| crossed))
             || consumed.is_some();
-        let enclosing_block = parser.wikidot_flat_pair_open_at(body_start);
+        // BRIEF-F7R83 (c): the post-heading wrap is also gated by what
+        // follows the enclosing list — see
+        // `wikidot_list_follower_wraps_items` (probes muse-probe-f7r-*).
+        let enclosing_block = parser.wikidot_flat_pair_open_at(body_start)
+            || crate::parsing::rule::impls::line_owner::wikidot_list_follower_wraps_items(
+                parser.full_text().inner(),
+                body_start,
+            );
         // NL81 (E): take shadowed-div-region signal before assembly so the
         // region-end break can be positioned. Clear swallowed-block's
         // all-linebreaks flag state separately.
