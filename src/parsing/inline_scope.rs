@@ -1672,6 +1672,185 @@ fn subtree_contains_flow_block(element: &Element<'_>) -> bool {
     found
 }
 
+/// How a flow block was classified while scanning an explicit-list item in
+/// source order for the head-wrap decision.
+enum PreListFlowBlock {
+    /// An align block: live p-wraps the pre-list run unconditionally.
+    Align,
+    /// A blockquote block: live p-wraps the pre-list run when the blockquote
+    /// subtree carries visible content; an empty one swallows the list on
+    /// live (quoted-plain residual family).
+    BlockquoteVisible(bool),
+    /// Any other flow block: live p-wraps only when visible inline content
+    /// (text) precedes it in the same item.
+    Other,
+    /// A table/tabview: live never p-wraps the pre-list run for them,
+    /// regardless of preceding text.
+    Table,
+}
+
+impl PreListFlowBlock {
+    /// The verdict for the pre-list run given visible inline content seen
+    /// before this block in the same item.
+    fn verdict(&self, seen_inline: bool) -> bool {
+        match self {
+            PreListFlowBlock::Align => true,
+            PreListFlowBlock::BlockquoteVisible(visible) => *visible,
+            PreListFlowBlock::Other => seen_inline,
+            PreListFlowBlock::Table => false,
+        }
+    }
+}
+
+/// Classify a flow block element by the head-wrap verdict it forces.
+fn pre_list_flow_block(element: &Element<'_>) -> Option<PreListFlowBlock> {
+    match element {
+        Element::Table(_) | Element::TabView(_) => Some(PreListFlowBlock::Table),
+        Element::Math { .. } => Some(PreListFlowBlock::Other),
+        Element::WikidotBlockFrame { .. } => Some(PreListFlowBlock::Other),
+        Element::Collapsible { .. } => Some(PreListFlowBlock::Other),
+        Element::List {
+            wikidot_explicit_block: false,
+            ..
+        } => Some(PreListFlowBlock::Other),
+        Element::Partial(
+            PartialElement::WikidotBlockOpen(_) | PartialElement::WikidotBlockClose(_),
+        ) => Some(PreListFlowBlock::Other),
+        Element::Container(container) => match container.ctype() {
+            ContainerType::Align(_) => Some(PreListFlowBlock::Align),
+            ContainerType::Blockquote => Some(PreListFlowBlock::BlockquoteVisible(
+                container_subtree_has_visible_content(container.elements()),
+            )),
+            ContainerType::Div | ContainerType::Note => Some(PreListFlowBlock::Other),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The block contributes visible content if it shows something of its own:
+/// non-blank text, or any non-break element with visible content of its
+/// own. An empty blockquote (only empty containers and breaks) is invisible.
+fn element_has_visible_content(element: &Element<'_>) -> bool {
+    match element {
+        Element::LineBreak | Element::LineBreaks(_) => false,
+        Element::Text(text) => !text.trim().is_empty(),
+        Element::Container(container) => {
+            container.elements().iter().any(element_has_visible_content)
+        }
+        Element::Color { elements, .. }
+        | Element::Anchor { elements, .. }
+        | Element::Collapsible { elements, .. } => {
+            elements.iter().any(element_has_visible_content)
+        }
+        Element::WikidotBlockFrame { children, .. } => {
+            children.iter().any(element_has_visible_content)
+        }
+        Element::List { items, .. } => items.iter().any(|item| match item {
+            ListItem::Elements { elements, .. } => {
+                elements.iter().any(element_has_visible_content)
+            }
+            ListItem::SubList { element } => element_has_visible_content(element),
+        }),
+        _ => true,
+    }
+}
+
+/// Whether the subtree carries any visible content: a non-blank text run or
+/// any other non-break element. A blockquote wrapping only breaks and empty
+/// blocks stays bare on live (and its list is dropped there); one with
+/// content p-wraps the pre-list run.
+fn container_subtree_has_visible_content(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(element_has_visible_content)
+}
+
+/// Scan for the first flow block in source order, tracking visible inline
+/// content. Returns the verdict for the pre-list run, or `None` when the
+/// subtree holds no flow block at all.
+fn first_flow_block_verdict(
+    element: &Element<'_>,
+    seen_inline: &mut bool,
+) -> Option<bool> {
+    if let Some(block) = pre_list_flow_block(element) {
+        return Some(block.verdict(*seen_inline));
+    }
+    match element {
+        Element::LineBreak | Element::LineBreaks(_) => {}
+        Element::Text(text) => {
+            if !text.trim().is_empty() {
+                *seen_inline = true;
+            }
+        }
+        _ => {
+            let mut verdict = None;
+            visit_children(element, &mut |children| {
+                for child in children {
+                    if verdict.is_none()
+                        && let Some(result) = first_flow_block_verdict(child, seen_inline)
+                    {
+                        verdict = Some(result);
+                    }
+                }
+            });
+            return verdict;
+        }
+    }
+    None
+}
+
+fn item_pre_list_head_wraps(elements: &[Element<'_>]) -> bool {
+    let mut seen_inline = false;
+    for element in elements {
+        if let Some(verdict) = first_flow_block_verdict(element, &mut seen_inline) {
+            return verdict;
+        }
+    }
+    false
+}
+
+/// Whether live wraps the pre-list run of a crossed, rejected format pair
+/// in a paragraph: an item either opens with an align flow block, opens an
+/// inline-visible run before its first flow block, or opens a blockquote
+/// carrying visible content. A leading table/tabview keeps the run bare,
+/// and so does any item whose first block is not one of those shapes (the
+/// native-list poison keeps the current bare behavior).
+fn crossed_pre_list_head_should_wrap(list: &Element<'_>) -> bool {
+    let Element::List {
+        items,
+        wikidot_explicit_block: true,
+        ..
+    } = list
+    else {
+        return false;
+    };
+    items.iter().any(|item| match item {
+        ListItem::Elements { elements, .. } => item_pre_list_head_wraps(elements),
+        ListItem::SubList { element } => {
+            item_pre_list_head_wraps(std::slice::from_ref(element))
+        }
+    })
+}
+
+fn format_open_marker(text: &str) -> bool {
+    matches!(text, "**" | "//" | "__" | "^^" | ",," | "--" | "{{")
+}
+
+/// Whether a pending pre-list run is the head of a rejected crossed format
+/// pair: it starts with a bare format open marker and contains no format
+/// container of its own. The formed path's pending opens with the still-
+/// unlowered format container instead, so it is never matched here.
+fn pending_starts_with_format_marker(pending: &[Element<'_>]) -> bool {
+    matches!(
+        pending.first(),
+        Some(Element::Text(text)) if format_open_marker(text.as_ref())
+    ) && !pending.iter().any(|element| {
+        matches!(
+            element,
+            Element::Container(container) if format_kind_of(container.ctype()).is_some()
+        )
+    })
+}
+
 fn format_segment_has_content(elements: &[Element<'_>]) -> bool {
     elements.iter().any(|element| match element {
         Element::LineBreak | Element::LineBreaks(_) => false,
@@ -2112,6 +2291,7 @@ fn lower_root_sequence<'t>(
             active,
             trim_next_break,
             bib,
+            Some(&element),
         ) {
             previous_scored_close = false;
         }
@@ -2375,6 +2555,7 @@ fn lower_root_sequence<'t>(
         active,
         trim_next_break,
         bib,
+        None,
     );
     flush_paragraph_group(&mut output, &mut paragraph_group);
     *elements = output;
@@ -2574,6 +2755,7 @@ fn flush_root_pending<'t>(
     active: &mut ActiveScopes<'t>,
     trim_next_break: &mut bool,
     bib: &mut Option<BibliographyLowering<'_, 't>>,
+    next: Option<&Element<'t>>,
 ) -> bool {
     if pending.is_empty() {
         return false;
@@ -2582,6 +2764,15 @@ fn flush_root_pending<'t>(
     active.sync_chain_to_istack();
     let scope_before = active.outer_active_position();
     let scope_open_at_start = active.has_active_scope();
+    // A crossed rejected format pair leaves its pre-list run as bare
+    // marker text and scope segments (the markers were lifted out of the
+    // format container at flatten time). Live wraps that run in a paragraph
+    // exactly when the crossed list's items warrant it (the align/
+    // text-before-block/blockquote shapes; see `crossed_pre_list_head_should_wrap`).
+    // Quoted-native poisons keep the bare head (d832-full).
+    let wrap_crossed_head = next.is_some_and(|next| {
+        crossed_pre_list_head_should_wrap(next) && !subtree_contains_native_list(next)
+    }) && pending_starts_with_format_marker(pending);
     let mut sequence = mem::take(pending);
     lower_sequence(
         &mut sequence,
@@ -2594,6 +2785,18 @@ fn flush_root_pending<'t>(
         bib,
     );
     drop_segment_trailing_space(&mut sequence);
+    if wrap_crossed_head && !sequence.is_empty() {
+        // Live: the pre-list run closes into a fresh paragraph before the
+        // explicit list (`<p>**<span><br></span></p><ul>…`). The run can
+        // never have been wrapped at gather time (it contains the list), so
+        // the wrapper is materialised here, after lowering drained the
+        // scope segments it encloses.
+        sequence = vec![Element::Container(Container::new(
+            ContainerType::Paragraph,
+            sequence,
+            AttributeMap::new(),
+        ))];
+    }
     if scope_open_at_start
         && matches!(
             output.last(),
