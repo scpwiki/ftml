@@ -1,0 +1,61 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {
+                                        "style": "list-style: none"
+                                    },
+                                    "elements": [
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "blockquote",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "partial",
+                                                        "data": {
+                                                            "ListItem": {
+                                                                "item-type": "elements",
+                                                                "attributes": {},
+                                                                "elements": [
+                                                                    {
+                                                                        "element": "text",
+                                                                        "data": "u"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "element": "math",
+            "data": {
+                "name": null,
+                "latex-source": "x"
+            }
+        }
+    ]
+}

@@ -684,11 +684,11 @@ fn migrated_break_dropped_before_following_line(parser: &Parser<'_, '_>) -> bool
 /// blockquote boundary-closes and a blank line precedes the follower.
 ///
 /// Determined from saved-page probes (sandbox-for-codex,
-/// muse-probe-qcl-s3* / muse-probe-qcl-v7*):
+/// muse-probe-qcl-s3* / muse-probe-qcl-v7* and muse-probe-ub56-*):
 /// - `Paragraph`: the following paragraph forms and live renders the break
 ///   as its leading element (`<p><br>x</p>`).
 /// - `Suppress`: a block forms instead and live drops the break entirely
-///   (`<hr>`, `<h1>`, the code block, the head-alone div block).
+///   (`<hr>`, `<h1>`, the code block, the head-alone div/note/math block).
 /// - `Keep`: live keeps the break (or the ordered degraded shell) outside
 ///   the follower (EOF, a following quote line, a new list, an image).
 enum BlankFollowerLead {
@@ -731,7 +731,6 @@ fn migrated_break_follower_after_blank_line(
         Token::InputEnd
         | Token::Quote
         | Token::LeftBlockStar
-        | Token::LeftBlockEnd
         | Token::BulletItem
         | Token::NumberedItem
         | Token::TableColumn
@@ -744,6 +743,10 @@ fn migrated_break_follower_after_blank_line(
         | Token::Colon
         | Token::Pipe => BlankFollowerLead::Keep,
         Token::TripleDash | Token::Heading => BlankFollowerLead::Suppress,
+        // A stray block closer is literal paragraph text to both engines;
+        // live leads that paragraph with the migrated break
+        // (muse-probe-ub56-s3blankstray{div,note,span,code,tabview,strike}).
+        Token::LeftBlockEnd => BlankFollowerLead::Paragraph,
         Token::LeftBlock => {
             let Some(identifier) = remaining.get(first + 1) else {
                 return BlankFollowerLead::Keep;
@@ -761,12 +764,20 @@ fn migrated_break_follower_after_blank_line(
             if name.eq_ignore_ascii_case("image") {
                 return BlankFollowerLead::Keep;
             }
-            if name.eq_ignore_ascii_case("div") || name.eq_ignore_ascii_case("note") {
+            if name.eq_ignore_ascii_case("div")
+                || name.eq_ignore_ascii_case("note")
+                || name.eq_ignore_ascii_case("math")
+                || name.eq_ignore_ascii_case("raw")
+            {
                 // Same-line content forms literal inline text inside the
-                // paragraph (muse-probe-qcl-s3blankdiv / s3blanknote); a
-                // head-alone div forms a block and live drops the break
-                // (muse-probe-qcl-s3blankdivalone). A head-alone note is
-                // unprobed and stays Keep.
+                // paragraph (muse-probe-qcl-s3blankdiv / s3blanknote and
+                // muse-probe-ub56-s3blankmath / s3blankraw). A head-alone
+                // div/note/math forms a block and live drops the break
+                // (muse-probe-qcl-s3blankdivalone,
+                // muse-probe-ub56-s3blanknotealone / s3blankmathalone).
+                // A head-alone raw stays a literal paragraph and live
+                // keeps the break leading it
+                // (muse-probe-ub56-s3blankrawalone).
                 let mut cursor = first + 1;
                 let mut head_end = None;
                 while let Some(token) = remaining.get(cursor) {
@@ -783,10 +794,10 @@ fn migrated_break_follower_after_blank_line(
                     match token.token {
                         Token::Whitespace => cursor += 1,
                         Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
-                            return if name.eq_ignore_ascii_case("div") {
-                                BlankFollowerLead::Suppress
+                            return if name.eq_ignore_ascii_case("raw") {
+                                BlankFollowerLead::Paragraph
                             } else {
-                                BlankFollowerLead::Keep
+                                BlankFollowerLead::Suppress
                             };
                         }
                         _ => return BlankFollowerLead::Paragraph,
