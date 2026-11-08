@@ -41,6 +41,15 @@ const PENDING_DIV_CLOSER: u16 = 1 << 10;
 const ROW_ABSORB_DIV_CLOSE_SEEN: u16 = 1 << 11;
 const QUOTE_BOUNDARY_BREAK_LEADS_PARAGRAPH: u16 = 1 << 12;
 
+/// A note/div/collapsible body that was terminated by an item's own
+/// `[[/li]]` close inside a list item: its body's final paragraph keeps
+/// the trailing line break (u10; g1/g4/g5/g6). The closer byte itself is
+/// recorded in the Rc'd `cross_li_terminated_at` cache slot.
+/// A note/div/collapsible body that was terminated by any list close
+/// (`[[/li]]`/`[[/ul]]`/`[[/ol]]`) inside a list item: the item and list
+/// trailing-break pushes are suppressed (g8/s2/s3, and g1 with bit 12).
+const CROSS_LIST_TERMINATED_BODY: u16 = 1 << 13;
+
 /// Div keeps a 2-bit count (max 3). The other three kinds are one bit each.
 /// Slots stay inside `crossed_closes` and do not overlap.
 fn crossed_close_slot(name: &str) -> Option<(u16, u16)> {
@@ -420,6 +429,51 @@ impl Parser<'_, '_> {
             return false;
         }
         self.wikidot.crossed_closes -= 1 << shift;
+        true
+    }
+
+    pub(crate) fn record_wikidot_cross_li_terminated_at(&mut self, closer_byte: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .cross_li_terminated_at = Some(closer_byte);
+    }
+
+    /// The closer byte recorded by the innermost crossed `[[/li]]`
+    /// termination, if any (u10).
+    pub(crate) fn wikidot_cross_li_terminated_at(&self) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .cross_li_terminated_at
+    }
+
+    pub(crate) fn take_wikidot_cross_li_terminated_at(&mut self) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .cross_li_terminated_at
+            .take()
+    }
+
+    pub(crate) fn record_wikidot_cross_list_terminated_body(&mut self) {
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            CROSS_LIST_TERMINATED_BODY,
+            true,
+        );
+    }
+
+    pub(crate) fn wikidot_cross_list_terminated_body(&self) -> bool {
+        self.wikidot.crossed_closes & CROSS_LIST_TERMINATED_BODY != 0
+    }
+
+    pub(crate) fn take_wikidot_cross_list_terminated_body(&mut self) -> bool {
+        if self.wikidot.crossed_closes & CROSS_LIST_TERMINATED_BODY == 0 {
+            return false;
+        }
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            CROSS_LIST_TERMINATED_BODY,
+            false,
+        );
         true
     }
 

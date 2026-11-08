@@ -567,6 +567,7 @@ fn parse_list_block_impl<'r, 't>(
         && !closer_has_same_line_residual
         && !content_after_list
         && !parser.pending_note_list_closer()
+        && !parser.wikidot_cross_list_terminated_body()
     {
         let mut output = vec![element];
         if fused_close {
@@ -1185,7 +1186,7 @@ fn parse_list_item<'r, 't>(
             segments,
             source,
             parser.in_wikidot_bibliography_body(),
-            parser.pending_note_list_closer(),
+            parser.pending_note_list_closer() || parser.wikidot_cross_list_terminated_body(),
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
         );
@@ -1920,7 +1921,7 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             segments,
             source,
             parser.in_wikidot_bibliography_body(),
-            parser.pending_note_list_closer(),
+            parser.pending_note_list_closer() || parser.wikidot_cross_list_terminated_body(),
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
         );

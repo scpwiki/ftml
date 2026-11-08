@@ -279,6 +279,38 @@ pub(crate) fn trim_wikidot_trailing_explicit_list_break(elements: &mut Vec<Eleme
     }
 }
 
+/// u10: a note/div/collapsible body that was terminated by the item's own
+/// `[[/li]]` close (terminated with the line break still pending) keeps the
+/// break at the end of its final paragraph; the gathered paragraphs dropped
+/// it at flush, so restore it here. Live keeps it only when the paragraph
+/// is the body's last element and the terminator closes an item whose head
+/// predates this body (`footnote/note-yields-enclosing-list-closers`: a
+/// text run followed by a math block keeps its own last break dropped).
+pub(crate) fn restore_crossed_li_terminated_body_break(
+    parser: &mut Parser<'_, '_>,
+    body_start_byte: usize,
+    elements: &mut Vec<Element<'_>>,
+) {
+    let Some(closer_byte) = parser.take_wikidot_cross_li_terminated_at() else {
+        return;
+    };
+    let paired_head = parser
+        .wikidot_li_close_record(closer_byte)
+        .and_then(|record| record.paired);
+    if !paired_head.is_some_and(|head| head < body_start_byte) {
+        return;
+    }
+    let Some(Element::Container(container)) = elements.last_mut() else {
+        return;
+    };
+    if container.ctype() != crate::tree::ContainerType::Paragraph {
+        return;
+    }
+    if !matches!(container.elements().last(), Some(Element::LineBreak)) {
+        container.elements_mut().push(Element::LineBreak);
+    }
+}
+
 pub(crate) fn drop_wikidot_trailing_vanish_breaks(elements: &mut Vec<Element<'_>>) {
     let mut popped = false;
     while matches!(elements.last(), Some(Element::LineBreak)) {

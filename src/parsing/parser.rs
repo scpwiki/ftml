@@ -286,6 +286,12 @@ pub(super) struct BlockScanCache<'t> {
     /// absorption depends on this, rescued from lost mutable state into
     /// the shared cache like `pending_iftags_end_swallows`).
     advanced_cell_span_depths: Vec<u16>,
+
+    /// The `[[/li]]` closer byte that terminated the innermost
+    /// note/div/collapsible body at a list close (u10): the body keeps
+    /// its final paragraph's trailing break when the closer closes an item
+    /// whose head predates that body.
+    cross_li_terminated_at: Option<usize>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
     pub(super) unmatched_close_scan: super::unmatched_close_scan::UnmatchedCloseScanCache,
     /// Monotone scan slot for the Wikidot anchor-label walk's termination

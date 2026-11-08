@@ -21,9 +21,9 @@
 use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
-    merge_adjacent_native_lists, trim_wikidot_trailing_explicit_list_break,
-    unwrap_wikidot_paragraph_after_explicit_list, wikidot_block_pair_for_block_head_byte,
-    wikidot_flat_pair_for_head,
+    merge_adjacent_native_lists, restore_crossed_li_terminated_body_break,
+    trim_wikidot_trailing_explicit_list_break, unwrap_wikidot_paragraph_after_explicit_list,
+    wikidot_block_pair_for_block_head_byte, wikidot_flat_pair_for_head,
 };
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
@@ -627,6 +627,7 @@ fn parse_fn<'r, 't>(
     let fused_close = parser.wikidot_body_closed_with_fused_close(&BLOCK_COLLAPSIBLE);
     parser.set_in_wikidot_collapsible(previous_collapsible_context);
     if parser.settings().layout.legacy() {
+        restore_crossed_li_terminated_body_break(parser, opener_start, &mut elements);
         trim_wikidot_trailing_explicit_list_break(&mut elements);
         drop_wikidot_trailing_vanish_breaks(&mut elements);
         unwrap_wikidot_paragraph_after_explicit_list(&mut elements);

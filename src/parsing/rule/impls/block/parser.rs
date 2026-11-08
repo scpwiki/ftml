@@ -2601,6 +2601,21 @@ where
             return false;
         }
         self.record_wikidot_crossed_close(block_rule.name);
+        // u10: a body terminated by the item's own `[[/li]]` close with
+        // the break pending keeps its final paragraph's trailing break;
+        // any list-close termination suppresses the item/list
+        // trailing-break pushes. Div/collapsible share the note family;
+        // analog probe g7 (code swallowed) excluded.
+        if matches!(
+            block_rule.name,
+            "block-note" | "block-div" | "block-collapsible"
+        ) {
+            self.record_wikidot_cross_list_terminated_body();
+            if stepped_line_break && name.eq_ignore_ascii_case("li") {
+                let closer_byte = self.current().span.start;
+                self.record_wikidot_cross_li_terminated_at(closer_byte);
+            }
+        }
         if block_rule.name == "block-note" {
             self.set_pending_note_list_closer(true);
         }
