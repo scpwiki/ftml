@@ -93,6 +93,25 @@ where
             }
             parser.clear_wikidot_merge_follow();
         }
+        // BRIEF-MF65b: escaped-region stray closers render nothing in
+        // live. Swallow the line and its trailing break, emit nothing.
+        if parser.settings().layout.legacy()
+            && close_condition_fn.is_none()
+            && parser.wikidot_tail_active()
+            && parser.start_of_line()
+            && let Some(end) = wikidot_tail_stray_closer_line(parser)
+        {
+            while parser.current().span.start < end {
+                if parser.step().is_err() {
+                    break;
+                }
+            }
+            if parser.current().token == Token::LineBreak {
+                parser.step()?;
+            }
+            line_prefix_whitespace_only = true;
+            continue;
+        }
         let quote_line_status = parser.prepare_quote_body_line()?;
         if quote_line_status == QuoteBodyLineStatus::Boundary {
             if parser.quote_boundary_closes_body() {
@@ -728,6 +747,14 @@ where
     }
 
     parser.clear_wikidot_merge_follow();
+    // BRIEF-MF65b: the escaped region kept the closing list's anchor
+    // chrome; emit it after the region has rendered (live leaves it at
+    // the end).
+    if parser.settings().layout.legacy() && close_condition_fn.is_none() {
+        for chrome in parser.take_pending_tail_chromes() {
+            stack.push_element(chrome, false);
+        }
+    }
     stack.into_result()
 }
 
@@ -972,6 +999,37 @@ where
             close.current().token,
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
         )
+}
+
+/// BRIEF-MF65b: in the escaped region (after a numbered lost-owner
+/// formation closed its enclosing numbered list), a bare `[[/li]]`,
+/// `[[/ol]]` or `[[/ul]]` alone on its line is a silent no-op in live.
+/// Returns the byte one past the line's `]]` when the current line is one.
+fn wikidot_tail_stray_closer_line<'r, 't>(parser: &Parser<'r, 't>) -> Option<usize>
+where
+    'r: 't,
+{
+    let source = parser.full_text().inner();
+    let start = parser.current().span.start.min(source.len());
+    let line_start = source[..start].rfind('\n').map_or(0, |offset| offset + 1);
+    let line_end = source[start..]
+        .find('\n')
+        .map_or(source.len(), |offset| start + offset);
+    let raw = &source[line_start..line_end];
+    let line = raw.trim_matches([' ', '\t']);
+    let inner = line
+        .strip_prefix("[[/")
+        .and_then(|inner| inner.strip_suffix("]]"))
+        .map(str::trim);
+    let is_stray = matches!(inner, Some(name)
+        if name.eq_ignore_ascii_case("li")
+            || name.eq_ignore_ascii_case("ol")
+            || name.eq_ignore_ascii_case("ul"));
+    if !is_stray {
+        return None;
+    }
+    let lead = raw.len() - raw.trim_start_matches([' ', '\t']).len();
+    Some(line_start + lead + line.len())
 }
 
 fn wikidot_explicit_list_opener<'r, 't>(parser: &Parser<'r, 't>) -> bool
