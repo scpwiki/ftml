@@ -261,7 +261,7 @@ fn parse_list_block_impl<'r, 't>(
             || (matches!(
                 block_rule.name,
                 "block-list-unordered" | "block-list-ordered"
-            ) && parser.has_li_close_before_list_close(depth)))
+            ) && parser.has_li_close_before_list_close(depth).is_some()))
     {
         parser.get_body_elements_with_literal_quote_context(
             block_rule,
@@ -576,11 +576,7 @@ fn parse_list_block_impl<'r, 't>(
     // numbered list at the first numbered lost-owner formation's consumed
     // starred close; the remaining items and elements render at top level.
     let mut escape_tail: Option<Vec<Element<'t>>> = None;
-    if wikidot
-        && !flag_score
-        && list_type == ListType::Numbered
-        && b5_escaped.is_none()
-    {
+    if wikidot && !flag_score && list_type == ListType::Numbered && b5_escaped.is_none() {
         escape_tail = multi_formation_escape(parser, &mut items, hoist_count);
         if escape_tail.is_some() {
             parser.set_wikidot_tail_mode(0);
@@ -1539,20 +1535,18 @@ fn parse_list_item<'r, 't>(
         // content into this explicit li. Unwrap the dissolved run list so
         // its items become this li's content / split into sibling items.
         if parser.take_wikidot_li_unowned_dissolve_at(body_start, source_end) {
-            if let Some(mut output) =
-                unowned_dissolve_unwrap(&mut elements, &attributes)
+            if let Some(mut output) = unowned_dissolve_unwrap(&mut elements, &attributes)
             {
                 // output[0] replaces this li's elements; rest are sibling partials
                 if output.len() == 1 {
                     elements = output.pop().unwrap();
                 } else {
                     let first = output.remove(0);
-                    let element = Element::Partial(PartialElement::ListItem(
-                        ListItem::Elements {
+                    let element =
+                        Element::Partial(PartialElement::ListItem(ListItem::Elements {
                             elements: first,
                             attributes: attributes.clone(),
-                        },
-                    ));
+                        }));
                     let mut result = vec![element];
                     for elems in output {
                         result.push(Element::Partial(PartialElement::ListItem(
@@ -3171,22 +3165,25 @@ fn multi_formation_escape<'t>(
     // numbered lost-owner formation (live closes the enclosing numbered
     // list there). A leading bullet formation or explicit list keeps the
     // choreography nested.
-    if parser.wikidot_first_formation_numbered_at(parser.wikidot_li_pairing_depth()) != Some(true)
+    if parser.wikidot_first_formation_numbered_at(parser.wikidot_li_pairing_depth())
+        != Some(true)
     {
         return None;
     }
     // The first numbered lost-owner formation sits inside the first item;
     // its flipped list is the item's first non-explicit list.
     let first_list = match items.first() {
-        Some(ListItem::Elements { elements, .. }) => elements.iter().position(|element| {
-            matches!(
-                element,
-                Element::List {
-                    wikidot_explicit_block: false,
-                    ..
-                }
-            )
-        }),
+        Some(ListItem::Elements { elements, .. }) => {
+            elements.iter().position(|element| {
+                matches!(
+                    element,
+                    Element::List {
+                        wikidot_explicit_block: false,
+                        ..
+                    }
+                )
+            })
+        }
         _ => return None,
     };
     let Some(first_list) = first_list else {

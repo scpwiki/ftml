@@ -49,6 +49,10 @@ struct NativeQuoteRow<'t> {
     keep_trailing_break: bool,
     marker_final: bool,
     residual_block: bool,
+    /// First content row after a paired `[[/ul]]`/`[[/ol]]` close that
+    /// came from a quoted-depth item close (BL57c): live wraps it in a
+    /// paragraph (ulclose-y), unlike the unquoted/v2 follower.
+    quoted_close_paragraph_follower: bool,
 }
 
 struct QuoteFlatSplit<'t> {
@@ -446,7 +450,9 @@ where
             kind => prefix_kinds.push(kind),
         }
     }
-    let Some(head_index) = head_index else { return None; };
+    let Some(head_index) = head_index else {
+        return None;
+    };
     if head_index == 0 {
         return None;
     }
@@ -501,7 +507,10 @@ where
             ParseCondition::current(Token::InputEnd),
             ParseCondition::current(Token::LeftBlock),
         ];
-        let Ok(result) = collect_native_blockquote_line(&mut collect_parser, &close) else { return None; };
+        let Ok(result) = collect_native_blockquote_line(&mut collect_parser, &close)
+        else {
+            return None;
+        };
         let line = result.item;
         let collect_errors = result.errors;
         if !line.escaped_units.is_empty() {
@@ -509,7 +518,8 @@ where
         }
         prefix = line.elements;
         prefix_errors = collect_errors;
-        while matches!(prefix.last(), Some(Element::Text(text)) if text.chars().all(|c| c.is_whitespace())) {
+        while matches!(prefix.last(), Some(Element::Text(text)) if text.chars().all(|c| c.is_whitespace()))
+        {
             prefix.pop();
         }
         if let Some(Element::Text(text)) = prefix.last_mut() {
@@ -523,9 +533,9 @@ where
             }
         }
         if prefix.is_empty()
-            || prefix
-                .iter()
-                .any(|element| !element.paragraph_safe() || matches!(element, Element::LineBreak))
+            || prefix.iter().any(|element| {
+                !element.paragraph_safe() || matches!(element, Element::LineBreak)
+            })
         {
             return None;
         }
@@ -861,6 +871,7 @@ fn try_consume_fn<'r, 't>(
     let mut absorb_unquoted_close_break = false;
     let mut flat_split: Option<QuoteFlatSplit<'t>> = None;
     let mut first_row_depth: Option<usize> = None;
+    let mut pending_paired_close_quoted_follower_paragraph = false;
 
     if parser.settings().layout.legacy()
         && let Some(gate_quote) = virtual_gate_quote_leader(parser)
@@ -951,6 +962,7 @@ fn try_consume_fn<'r, 't>(
                         keep_trailing_break: false,
                         marker_final: false,
                         residual_block: false,
+                        quoted_close_paragraph_follower: false,
                     },
                 ));
             } else {
@@ -1056,6 +1068,7 @@ fn try_consume_fn<'r, 't>(
                         keep_trailing_break: false,
                         marker_final: false,
                         residual_block: false,
+                        quoted_close_paragraph_follower: false,
                     },
                 ));
             }
@@ -1111,7 +1124,10 @@ fn try_consume_fn<'r, 't>(
             };
         if is_paired_close_row {
             errors.truncate(errors_before);
+            let quoted_follower =
+                parser.take_wikidot_pending_paired_list_close_quoted_follower();
             let _ = parser.take_wikidot_pending_paired_list_close();
+            pending_paired_close_quoted_follower_paragraph = quoted_follower;
         }
         for unit in line
             .escaped_units
@@ -1338,7 +1354,10 @@ fn try_consume_fn<'r, 't>(
                 elements.iter().rev().find(|element| {
                     !matches!(element, Element::LineBreak | Element::LineBreaks(_))
                 }),
-                Some(Element::List { wikidot_explicit_block: true, .. })
+                Some(Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                })
             );
         let quote_end_ordered_list_row = quote_end_list_row
             && matches!(
@@ -1415,9 +1434,7 @@ fn try_consume_fn<'r, 't>(
         if li_auto_list_row {
             quote_run_active = false;
         }
-        if quote_end_list_break
-            && !matches!(elements.last(), Some(Element::LineBreak))
-        {
+        if quote_end_list_break && !matches!(elements.last(), Some(Element::LineBreak)) {
             elements.push(Element::LineBreak);
         }
         if !empty_spaced_row
@@ -1478,6 +1495,7 @@ fn try_consume_fn<'r, 't>(
                         keep_trailing_break: false,
                         marker_final: false,
                         residual_block: false,
+                        quoted_close_paragraph_follower: false,
                     },
                 ));
             }
@@ -1518,8 +1536,9 @@ fn try_consume_fn<'r, 't>(
                     source_line,
                     cut_boundary: false,
                     keep_trailing_break: false,
-                        marker_final: false,
-                        residual_block: false,
+                    marker_final: false,
+                    residual_block: false,
+                    quoted_close_paragraph_follower: false,
                 },
             ));
             push_quote_row_units(
@@ -1537,14 +1556,18 @@ fn try_consume_fn<'r, 't>(
         } else {
             None
         };
+        let quoted_close_paragraph_follower =
+            pending_paired_close_quoted_follower_paragraph && !is_paired_close_row;
+        if quoted_close_paragraph_follower {
+            pending_paired_close_quoted_follower_paragraph = false;
+        }
         let paragraph_split = paragraph_split.filter(|counts| {
             counts.len() >= 2
                 && counts.iter().map(|entry| entry.0).sum::<usize>() == elements.len()
         });
         let cut_boundary = parser.take_wikidot_table_cut_boundary();
         let keep_trailing_break = quote_end_list_break
-            || (marker_final
-                && !matches!(elements.last(), Some(Element::LineBreaks(_))));
+            || (marker_final && !matches!(elements.last(), Some(Element::LineBreaks(_))));
         let residual_block = parser.settings().layout.legacy()
             && match elements.iter().position(|element| {
                 matches!(
@@ -1569,6 +1592,7 @@ fn try_consume_fn<'r, 't>(
             keep_trailing_break,
             marker_final,
             residual_block,
+            quoted_close_paragraph_follower,
         };
         if flatten_following_rows {
             escaped_rows.push(row);
@@ -1820,8 +1844,9 @@ fn push_quote_row_units<'t>(
             source_line: None,
             cut_boundary: false,
             keep_trailing_break: false,
-                        marker_final: false,
-                        residual_block: false,
+            marker_final: false,
+            residual_block: false,
+            quoted_close_paragraph_follower: false,
         };
         if flatten {
             escaped_rows.push(row);
@@ -1953,7 +1978,9 @@ fn build_blockquote_element(
             DepthItem::Item(row) => {
                 keep_trailing_break = row.keep_trailing_break;
                 marker_final = row.marker_final;
-                residual_chunk |= row.residual_block || row_has_residual_div(&row) || row_has_residual_list(&row);
+                residual_chunk |= row.residual_block
+                    || row_has_residual_div(&row)
+                    || row_has_residual_list(&row);
                 push_native_quote_row(&mut stack, row, wikidot);
             }
             DepthItem::List(_, list) => {
@@ -2053,9 +2080,11 @@ fn row_has_residual_div(row: &NativeQuoteRow<'_>) -> bool {
 }
 
 fn row_has_residual_list(row: &NativeQuoteRow<'_>) -> bool {
-    match row.elements.iter().position(|element| {
-        matches!(element, Element::List { .. })
-    }) {
+    match row
+        .elements
+        .iter()
+        .position(|element| matches!(element, Element::List { .. }))
+    {
         // A list that closed at this row's own depth (its end break kept on
         // the row) leaves quote residue behind at the outer depth; a list
         // closed deeper (all rows at the deeper depth) keeps the residue
@@ -2069,10 +2098,7 @@ fn row_has_residual_list(row: &NativeQuoteRow<'_>) -> bool {
                     .any(|element| quote_residue_text(element, false))
                 && matches!(
                     row.elements.get(position + 1),
-                    Some(
-                        Element::LineBreak
-                            | Element::LineBreaks(_),
-                    )
+                    Some(Element::LineBreak | Element::LineBreaks(_),)
                 )
         }
         _ => false,
@@ -2593,6 +2619,27 @@ fn push_native_quote_row<'t>(
         }
         if leaves_following_content_unwrapped {
             stack.mark_next_unwrapped();
+        }
+        return;
+    }
+    if wikidot && row.quoted_close_paragraph_follower {
+        let mut elements = row.elements;
+        while matches!(
+            elements.last(),
+            Some(Element::LineBreak | Element::LineBreaks(_))
+        ) {
+            elements.pop();
+        }
+        if !elements.is_empty() {
+            stack.pop_line_break();
+            stack.push_element(
+                Element::Container(Container::new(
+                    ContainerType::Paragraph,
+                    elements,
+                    AttributeMap::new(),
+                )),
+                false,
+            );
         }
         return;
     }

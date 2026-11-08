@@ -162,10 +162,8 @@ pub(super) struct BlockScanCache<'t> {
     peak_depth: Cell<usize>,
     rule_attempt_failures: HashMap<RuleAttemptKey, (ParseError, usize)>,
     rule_attempt_failure_positions: Vec<bool>,
-    rule_attempt_successes: HashMap<
-        (RuleAttemptKey, u64),
-        (RuleAttemptSuccess<'t>, usize, u64),
-    >,
+    rule_attempt_successes:
+        HashMap<(RuleAttemptKey, u64), (RuleAttemptSuccess<'t>, usize, u64)>,
     rule_attempt_success_positions: Vec<bool>,
     rule_attempt_success_tokens: usize,
     rule_attempt_success_clock: u64,
@@ -200,6 +198,10 @@ pub(super) struct BlockScanCache<'t> {
     /// A paired quoted `[[ /ul]]`/`[[ /ol]]` awaits in the next quote run:
     /// its row renders as an empty-list-style break (BRIEF-QR45 part (b)).
     wikidot_pending_paired_list_close: Cell<bool>,
+    /// The pending paired close was set by a quoted-depth item close
+    /// (BL57c blank-in-li-body path): the fresh run's first content row
+    /// after the paired close renders as a paragraph on live (ulclose-y).
+    wikidot_pending_paired_list_close_quoted_follower: Cell<bool>,
     /// UL/OL body is in shallower-text boundary mode (BRIEF-QT52): a
     /// shallower non-`[[/li]]`-close line after an `[[li]]` head, with no
     /// `[[/li]]` before the later quoted list close, soft-ends the UL at
@@ -223,6 +225,10 @@ pub(super) struct BlockScanCache<'t> {
     /// and restored alongside the shallower flags in
     /// `get_body_elements_with_context_policy`.
     wikidot_quote_boundary_blank_in_li_body: Cell<bool>,
+    /// The blank-in-li-body `[[/li]]` close was at the required depth
+    /// (quoted) rather than shallower: the fresh run's first content row
+    /// after the paired close renders as a paragraph (ulclose-y).
+    wikidot_quote_boundary_blank_in_li_body_quoted_close: Cell<bool>,
     /// BRIEF-BH57a: shallow text was hoisted out of an explicit list body
     /// before its unquoted `[[/li]]` close AND the next non-blank row after
     /// that close is reachable unquoted text, so the hoisted run merges into
@@ -867,16 +873,17 @@ impl<'r, 't> Parser<'r, 't> {
         let Some(table_head) = pairs
             .heads_between(0, byte)
             .filter(|pair| {
-                pair.kind == block_pairs::WikidotBlockKind::Table && byte < pair.closer_byte
+                pair.kind == block_pairs::WikidotBlockKind::Table
+                    && byte < pair.closer_byte
             })
             .map(|pair| pair.head_byte)
             .max()
         else {
             return false;
         };
-        pairs.heads_between(0, table_head).any(|pair| {
-            pair.kind.emits_flat() && pair.closer_byte > byte
-        })
+        pairs
+            .heads_between(0, table_head)
+            .any(|pair| pair.kind.emits_flat() && pair.closer_byte > byte)
     }
 
     pub(crate) fn wikidot_iftags_elisions(&self) -> Vec<Range<usize>> {
@@ -1451,12 +1458,32 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_pending_paired_list_close
             .set(true);
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_pending_paired_list_close_quoted_follower
+            .set(false);
+    }
+
+    pub(crate) fn set_wikidot_pending_paired_list_close_quoted_follower(&self) {
+        let cache = self.block_end_scan_cache.borrow();
+        cache.wikidot_pending_paired_list_close.set(true);
+        cache
+            .wikidot_pending_paired_list_close_quoted_follower
+            .set(true);
     }
 
     pub(crate) fn take_wikidot_pending_paired_list_close(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let _ = cache
+            .wikidot_pending_paired_list_close_quoted_follower
+            .take();
+        cache.wikidot_pending_paired_list_close.take()
+    }
+
+    pub(crate) fn take_wikidot_pending_paired_list_close_quoted_follower(&self) -> bool {
         self.block_end_scan_cache
             .borrow()
-            .wikidot_pending_paired_list_close
+            .wikidot_pending_paired_list_close_quoted_follower
             .take()
     }
 
@@ -1516,24 +1543,34 @@ impl<'r, 't> Parser<'r, 't> {
             .take()
     }
 
-    pub(crate) fn set_wikidot_quote_boundary_blank_in_li_body(&self) {
-        self.block_end_scan_cache
-            .borrow()
-            .wikidot_quote_boundary_blank_in_li_body
-            .set(true);
+    pub(crate) fn set_wikidot_quote_boundary_blank_in_li_body(&self, quoted_close: bool) {
+        let cache = self.block_end_scan_cache.borrow();
+        cache.wikidot_quote_boundary_blank_in_li_body.set(true);
+        cache
+            .wikidot_quote_boundary_blank_in_li_body_quoted_close
+            .set(quoted_close);
     }
 
-    pub(crate) fn take_wikidot_quote_boundary_blank_in_li_body(&self) -> bool {
-        self.block_end_scan_cache
-            .borrow()
-            .wikidot_quote_boundary_blank_in_li_body
-            .take()
+    pub(crate) fn take_wikidot_quote_boundary_blank_in_li_body(&self) -> (bool, bool) {
+        let cache = self.block_end_scan_cache.borrow();
+        let quoted = cache
+            .wikidot_quote_boundary_blank_in_li_body_quoted_close
+            .take();
+        let set = cache.wikidot_quote_boundary_blank_in_li_body.take();
+        (set, quoted)
     }
 
     pub(crate) fn wikidot_quote_boundary_blank_in_li_body(&self) -> bool {
         self.block_end_scan_cache
             .borrow()
             .wikidot_quote_boundary_blank_in_li_body
+            .get()
+    }
+
+    pub(crate) fn wikidot_quote_boundary_blank_in_li_body_quoted_close(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_blank_in_li_body_quoted_close
             .get()
     }
 
@@ -2769,7 +2806,12 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub(crate) fn take_pending_tail_chromes(&self) -> Vec<Element<'t>> {
-        std::mem::take(&mut self.block_end_scan_cache.borrow_mut().wikidot_pending_tail_chromes)
+        std::mem::take(
+            &mut self
+                .block_end_scan_cache
+                .borrow_mut()
+                .wikidot_pending_tail_chromes,
+        )
     }
 
     pub(crate) fn push_enclosing_list_numbered(&self, numbered: bool) {
@@ -2812,7 +2854,10 @@ impl<'r, 't> Parser<'r, 't> {
 
     /// The kind (numbered/bullet head) of the first sibling-hoisted list
     /// formation at `depth`, if any.
-    pub(crate) fn wikidot_first_formation_numbered_at(&self, depth: usize) -> Option<bool> {
+    pub(crate) fn wikidot_first_formation_numbered_at(
+        &self,
+        depth: usize,
+    ) -> Option<bool> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_run_formations
@@ -3426,14 +3471,15 @@ impl<'r, 't> Parser<'r, 't> {
             return None;
         }
 
-        let key = (self.rule_attempt_key(rule)?, self.success_boundary_key(rule));
+        let key = (
+            self.rule_attempt_key(rule)?,
+            self.success_boundary_key(rule),
+        );
         let mut cache = self.block_end_scan_cache.borrow_mut();
         let plain = cache
             .rule_attempt_successes
             .get(&key)
-            .filter(|(_, height, _)| {
-                self.depth + height <= self.max_recursion_depth
-            })
+            .filter(|(_, height, _)| self.depth + height <= self.max_recursion_depth)
             .map(|_| key);
         let found_key = plain.or_else(|| {
             let at_depth = (
@@ -3508,12 +3554,8 @@ impl<'r, 't> Parser<'r, 't> {
             split_close_leftover: output.split_close_leftover.clone(),
             consumed,
             accepts_partial: sub_parser.accepts_partial,
-            accepts_partial_offset: (sub_parser.accepts_partial_depth != 0).then(
-                || {
-                    sub_parser.accepts_partial_depth as isize
-                        - self.depth as isize
-                },
-            ),
+            accepts_partial_offset: (sub_parser.accepts_partial_depth != 0)
+                .then(|| sub_parser.accepts_partial_depth as isize - self.depth as isize),
             in_footnote: sub_parser.in_footnote,
             in_note: sub_parser.in_note,
             in_color: sub_parser.in_color,
@@ -3535,9 +3577,7 @@ impl<'r, 't> Parser<'r, 't> {
         cache.rule_attempt_success_tokens += consumed;
         if cache.rule_attempt_success_tokens > RULE_ATTEMPT_SUCCESS_TOKEN_BUDGET {
             let target = RULE_ATTEMPT_SUCCESS_TOKEN_BUDGET * 3 / 4;
-            let mut coldest: Vec<
-                (u64, usize, (RuleAttemptKey, u64)),
-            > = cache
+            let mut coldest: Vec<(u64, usize, (RuleAttemptKey, u64))> = cache
                 .rule_attempt_successes
                 .iter()
                 .map(|(key, (success, _, tick))| (*tick, success.consumed, *key))
@@ -3568,12 +3608,9 @@ impl<'r, 't> Parser<'r, 't> {
             self.step_to_remaining(success.consumed - 1);
         }
         self.accepts_partial = success.accepts_partial;
-        self.accepts_partial_depth = success
-            .accepts_partial_offset
-            .map_or(0, |offset| {
-                u16::try_from((self.depth as isize + offset).max(0))
-                    .unwrap_or(u16::MAX)
-            });
+        self.accepts_partial_depth = success.accepts_partial_offset.map_or(0, |offset| {
+            u16::try_from((self.depth as isize + offset).max(0)).unwrap_or(u16::MAX)
+        });
         self.in_footnote = success.in_footnote;
         self.in_note = success.in_note;
         self.in_color = success.in_color;
@@ -4076,10 +4113,7 @@ impl<'r, 't> Parser<'r, 't> {
         }
     }
 
-    pub(crate) fn restore_shared_registries(
-        &self,
-        snapshot: SharedRegistries<'t>,
-    ) {
+    pub(crate) fn restore_shared_registries(&self, snapshot: SharedRegistries<'t>) {
         *self.footnotes.borrow_mut() = snapshot.footnotes;
         *self.footnote_row_tails.borrow_mut() = snapshot.footnote_row_tails;
         *self.html_blocks.borrow_mut() = snapshot.html_blocks;
@@ -4154,9 +4188,7 @@ impl<'r, 't> Parser<'r, 't> {
     }
 
     pub fn set_footnote_row_tail(&mut self, index: usize, tail: Vec<Element<'t>>) {
-        let slot = index
-            .checked_sub(1)
-            .expect("footnote indexes are 1-based");
+        let slot = index.checked_sub(1).expect("footnote indexes are 1-based");
         self.footnote_row_tails.borrow_mut()[slot] = tail;
     }
 
