@@ -751,7 +751,20 @@ fn parse_list_block_impl<'r, 't>(
         // BRIEF-MF65b: the closing list's anchor chrome — the first
         // formation's — renders after the escaped region in live (input
         // end). Anchors of escaped formations render nothing in live.
-        if list_type == ListType::Numbered && !anchor_chromes.is_empty() {
+        // Item 86(a): with a post-list follower at absolute end, live
+        // suppresses the chrome and paragraph-wraps the follower (the
+        // pw65a follower-wrap family reaches the escaped path here).
+        let stash_formed = list_type == ListType::Numbered && !anchor_chromes.is_empty();
+        let follower_wrap = closer_line_marker.is_some() || stash_formed;
+        let content_after_list = (parser.wikidot_next_line_has_content()
+            || (follower_wrap
+                && parser.wikidot_next_line_has_content_skipping_blanks()))
+            && !parser.body_end_boundary_accepts("iftags")
+            && !parser.has_pending_iftags_end_ahead();
+        if wikidot && !nested && follower_wrap {
+            parser.record_wikidot_post_list_follower_wrap(stash_formed);
+        }
+        if stash_formed && !content_after_list {
             let mut chromes = anchor_chromes;
             let first = chromes.remove(0);
             parser.stash_pending_tail_chromes(vec![first]);
