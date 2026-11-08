@@ -1,0 +1,6 @@
+[[tabview]]
+[[tab Outer]]
+outer text
+Inner
+
+inner body

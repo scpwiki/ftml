@@ -180,8 +180,12 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
                             | "block-align-left"
                             | "block-align-right"
                     ))
-                // Live keeps the break before a kept [[iftags]] body that
-                // starts on the opener's line.
+                // Live keeps the single separator newline before a tabview
+                // when a bare block precedes it (the break renders as a
+                // bare `<br>`; gather publishes the block-adjacency as
+                // `wikidot_line_follows_block`). Saved-page probes
+                // muse-probe-tvp-o3-ad, muse-probe-tfp-ad7/ad9/w14.
+                && !(block_rule.name == BLOCK_TABVIEW.name && parser.wikidot_line_follows_block())
                 && !preserves_preceding_line_break(parser, block_rule)
                 && !(quote_body && block_rule.name != BLOCK_NOTE.name)),
             None => Ok(false),

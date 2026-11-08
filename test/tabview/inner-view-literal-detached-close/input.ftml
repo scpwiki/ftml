@@ -1,0 +1,14 @@
+[[tabview]]
+[[tab Outer]]
+outer text
+[[tabview]]
+[[tab Inner]]
+inner body
+[[/tab]]
+inner tail
+[[/tabview]]
+[[/tab]]
+[[tab Second]]
+second body
+[[/tab]]
+[[/tabview]]

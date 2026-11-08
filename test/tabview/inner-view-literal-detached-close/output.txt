@@ -1,0 +1,15 @@
+Outer
+
+outer text
+[[tabview]]
+Inner
+
+inner body
+
+
+inner tail
+[[/tabview]]
+
+Second
+
+second body

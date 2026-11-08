@@ -689,6 +689,22 @@ fn parse_tabview<'r, 't>(
             .wikidot_block_pair_at_head_byte(opener_start)
             .is_some_and(|pair| pair.kind == WikidotBlockKind::TabView);
 
+    // Leftmost Text_Wiki precedence: a nested view only forms when the
+    // block-pair scan paired it. A nested view whose greedy closer is the
+    // enclosing view's closer (inner view unterminated, detached, or
+    // mid-line; the enclosing view pairs the same closer instead) stays
+    // literal, and the enclosing tab ends at its first closer
+    // (saved-page probes muse-probe-tvp-o3-c/h/q, muse-probe-tfp-w2/w7,
+    // w11/w12). Mirrors the scan's enclosing-tab tail constraint.
+    if !native
+        && !quote_ejection
+        && parser.body_end_boundary_accepts("tab")
+        && !scan_paired
+    {
+        restore_wikidot_tabview_split_state(parser, previous_split);
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+
     // A failed tab head (one whose title is an elided footnoteblock) leaves its
     // source literal inside the view; live keeps the view and renders that
     // content instead of failing the whole tabview.

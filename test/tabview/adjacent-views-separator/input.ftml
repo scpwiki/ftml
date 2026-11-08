@@ -1,0 +1,18 @@
+[[tabview]]
+[[tab A]]
+body a
+[[/tab]]
+[[/tabview]]
+[[tabview]]
+[[tab B]]
+body b
+[[tabview]]
+[[tab Inner]]
+inner body
+[[/tab]]
+[[/tabview]]
+[[/tab]]
+[[tab C]]
+body c
+[[/tab]]
+[[/tabview]]

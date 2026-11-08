@@ -510,6 +510,10 @@ struct Scanner<'t> {
         std::cell::RefCell<std::collections::HashMap<(usize, usize), Option<Measure>>>,
     measure_guard: std::cell::Cell<usize>,
     measure_guard_trips: std::cell::Cell<usize>,
+    /// Number of enclosing `find_tab_end` scans. Greater than zero means the
+    /// measure in progress runs inside a tab body, so a view's closer scan
+    /// must not steal the enclosing (earlier) view's closer."""
+    tab_body_scan_depth: std::cell::Cell<u32>,
     tabview_banned_lines: Vec<bool>,
     footnote_body_depth: usize,
     footnote_zones: Vec<(usize, usize)>,
@@ -698,6 +702,7 @@ impl<'t> Scanner<'t> {
             ),
             measure_guard: std::cell::Cell::new(0),
             measure_guard_trips: std::cell::Cell::new(0),
+            tab_body_scan_depth: std::cell::Cell::new(0),
             tabview_banned_lines: vec![false; line_count],
             footnote_body_depth: 0,
             footnote_zones: Vec::new(),
@@ -2767,6 +2772,20 @@ impl<'t> Scanner<'t> {
         limit: usize,
         depth: usize,
     ) -> Option<(usize, usize, usize)> {
+        self.tab_body_scan_depth
+            .set(self.tab_body_scan_depth.get() + 1);
+        let result = self.find_tab_end_inner(start, limit, depth);
+        self.tab_body_scan_depth
+            .set(self.tab_body_scan_depth.get() - 1);
+        result
+    }
+
+    fn find_tab_end_inner(
+        &self,
+        start: usize,
+        limit: usize,
+        depth: usize,
+    ) -> Option<(usize, usize, usize)> {
         let mut j = start;
         while j < limit {
             if let Some(zone_end) = self.zone_end(j) {
@@ -2927,6 +2946,122 @@ impl<'t> Scanner<'t> {
         }
     }
 
+    /// After a nested view's accepted closer: whether the enclosing view
+    /// still has a closer of its own after this closer, i.e. this span left
+    /// an outer section for the enclosing view (or its remaining outer
+    /// tabs) to close with. Leftmost Text_Wiki matching only releases the
+    /// closer to the nested view when a later outer section exists
+    /// (saved-page probes muse-probe-tvp-o3-c / h / q / s and
+    /// muse-probe-tfp-w1..w14: no outer section at the closer means the
+    /// enclosing view keeps it and the nested view stays literal, even when
+    /// the nested view itself is clean). A detached view closer in this
+    /// window is not an outer section, and a next view opener ends the
+    /// window with no section.
+    fn tabview_outer_section_follows(
+        &self,
+        from: usize,
+        limit: usize,
+        depth: usize,
+    ) -> bool {
+        if depth > MAX_SCAN_DEPTH {
+            return false;
+        }
+        let mut j = from;
+        while j < limit {
+            if let Some(zone_end) = self.zone_end(j) {
+                j = zone_end.min(limit);
+                continue;
+            }
+            match self.tokens[j].token {
+                Token::LeftBlock | Token::LeftBlockStar => {
+                    let Some(thead) = self.read_head(j, false) else {
+                        j += 1;
+                        continue;
+                    };
+                    let Some(rule_name) = self.classify(&thead) else {
+                        j += 1;
+                        continue;
+                    };
+                    match Self::kind_of(rule_name) {
+                        Some(WikidotBlockKind::TabView) => {
+                            if self.tabview_banned(j) || !self.line_prefix_clean(j) {
+                                j = thead.head_end;
+                                continue;
+                            }
+                            // The next view is a sibling: the outer
+                            // continuation a nested view still needs can
+                            // live past it (z-two-sibling-inners). Skip a
+                            // whole sibling view when it pairs; otherwise
+                            // step past its head only.
+                            match self.measure_tabview(j, &thead, limit, depth + 1) {
+                                Some(measure) => {
+                                    j = measure.end;
+                                }
+                                None => {
+                                    j = thead.head_end;
+                                }
+                            }
+                        }
+                        Some(WikidotBlockKind::Tab) => {
+                            let Some((_, _, tc_end)) =
+                                self.find_tab_end(thead.head_end, limit, depth + 1)
+                            else {
+                                j = thead.head_end;
+                                continue;
+                            };
+                            let Some(after) = self.skip_structure_space(tc_end, limit)
+                            else {
+                                return false;
+                            };
+                            if self
+                                .read_kind_closer(after, WikidotBlockKind::TabView)
+                                .is_some()
+                            {
+                                return true;
+                            }
+                            j = thead.head_end;
+                        }
+                        _ => {
+                            j = thead.head_end;
+                        }
+                    }
+                }
+                Token::LeftBlockEnd => {
+                    let Some(close) = self.read_head(j, true) else {
+                        j += 1;
+                        continue;
+                    };
+                    match self.classify(&close).and_then(Self::kind_of) {
+                        Some(WikidotBlockKind::TabView) => return false,
+                        Some(WikidotBlockKind::Tab) => {
+                            // The enclosing tab's own close: an attached
+                            // view closer right after it is the enclosing
+                            // view's closer (no surviving tab section is
+                            // needed in addition to it).
+                            let Some(after) =
+                                self.skip_structure_space(close.head_end, limit)
+                            else {
+                                return false;
+                            };
+                            if self
+                                .read_kind_closer(after, WikidotBlockKind::TabView)
+                                .is_some()
+                            {
+                                return true;
+                            }
+                            j = close.head_end;
+                        }
+                        _ => {
+                            j = close.head_end;
+                        }
+                    }
+                }
+                _ => j += 1,
+            }
+        }
+        false
+    }
+
     fn measure_tabview(
         &self,
         head_index: usize,
@@ -2937,9 +3072,16 @@ impl<'t> Scanner<'t> {
         if depth > MAX_SCAN_DEPTH {
             return None;
         }
-        if let Some(cached) = self.tabview_measure_memo.borrow().get(&(head_index, limit))
-        {
-            return cached.clone();
+        // A view measured inside a tab body gets the enclosing-tab tail
+        // constraint (see `measure_tabview_inner`), which a result cached
+        // from an unnested measure must not mask; keep nested measures out
+        // of the memo.
+        if self.tab_body_scan_depth.get() == 0 {
+            if let Some(cached) =
+                self.tabview_measure_memo.borrow().get(&(head_index, limit))
+            {
+                return cached.clone();
+            }
         }
         if self.measure_guard.get() >= MAX_SCAN_DEPTH {
             self.measure_guard_trips
@@ -2950,7 +3092,9 @@ impl<'t> Scanner<'t> {
         let trips_before = self.measure_guard_trips.get();
         let result = self.measure_tabview_inner(head_index, head, limit, 0);
         self.measure_guard.set(self.measure_guard.get() - 1);
-        if self.measure_guard_trips.get() == trips_before {
+        if self.measure_guard_trips.get() == trips_before
+            && self.tab_body_scan_depth.get() == 0
+        {
             self.tabview_measure_memo
                 .borrow_mut()
                 .insert((head_index, limit), result.clone());
@@ -3196,6 +3340,15 @@ impl<'t> Scanner<'t> {
         if depth > MAX_SCAN_DEPTH {
             return None;
         }
+        // Measured inside a tab body: leftmost-opener precedence applies.
+        // Live pairs a nested view's attached closer only when a further
+        // outer tab section follows it before the next view opener; when
+        // the closer ends the page's outer section (or is the enclosing
+        // view's own closer), the enclosing view keeps it and the nested
+        // view stays literal (saved-page probes muse-probe-tvp-o3-c/h/q and
+        // muse-probe-tfp-w1..w14).
+        let nested_in_tab = self.tab_body_scan_depth.get() > 0;
+
         let mut measure = Measure {
             end: 0,
             pairs: Vec::new(),
@@ -3230,6 +3383,11 @@ impl<'t> Scanner<'t> {
                     // the scan continues toward a later attached closer.
                     pos = close.head_end;
                     continue;
+                }
+                if nested_in_tab
+                    && !self.tabview_outer_section_follows(close.head_end, limit, depth)
+                {
+                    return None;
                 }
                 if !first_construct || (tabs == 0 && !degraded_content) {
                     return None;
