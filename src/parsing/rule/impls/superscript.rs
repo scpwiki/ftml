@@ -74,5 +74,6 @@ fn try_consume_fn<'r, 't>(
     }
     let elements =
         append_wikidot_line_close_space(elements, parser.settings().layout.legacy());
+    let elements = super::bold::mark_span_list_close_tail(parser, elements);
     ok!(paragraph_safe; elements, errors)
 }
