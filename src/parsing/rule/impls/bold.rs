@@ -551,7 +551,9 @@ fn find_stop_at_list_container<'e, 't>(
 fn find_stop_at_list_container_mut<'e, 't>(
     elements: &'e mut Elements<'t>,
 ) -> Option<&'e mut Container<'t>> {
-    fn candidate_mut<'c, 't>(element: &'c mut Element<'t>) -> Option<&'c mut Container<'t>> {
+    fn candidate_mut<'c, 't>(
+        element: &'c mut Element<'t>,
+    ) -> Option<&'c mut Container<'t>> {
         let Element::Container(container) = element else {
             return None;
         };
