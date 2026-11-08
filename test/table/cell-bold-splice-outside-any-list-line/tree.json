@@ -1,0 +1,71 @@
+{
+    "elements": [
+        {
+            "element": "table",
+            "data": {
+                "type": "advanced",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "list",
+                                        "data": {
+                                            "type": "bullet",
+                                            "attributes": {},
+                                            "items": [
+                                                {
+                                                    "item-type": "elements",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "text",
+                                                            "data": "**"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "x"
+                                                        },
+                                                        {
+                                                            "element": "line-break"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "[[/"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "cell"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "]]"
+                                                        },
+                                                        {
+                                                            "element": "line-break"
+                                                        },
+                                                        {
+                                                            "element": "text",
+                                                            "data": "**"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
