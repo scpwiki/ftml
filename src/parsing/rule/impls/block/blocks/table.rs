@@ -200,10 +200,18 @@ fn straddle_tail_text(element: &Element<'_>) -> Option<String> {
     }
 }
 
-fn rescue_straddle_tail<'t>(tail: Vec<Element<'t>>) -> Option<Vec<Element<'t>>> {
+/// A rescue that fails returns the original tail so the caller can
+/// decide whether the un-rescued text still belongs in the splice tail
+/// (a spliced row fosters its residue) or is genuinely out of place.
+fn rescue_straddle_tail<'t>(
+    tail: Vec<Element<'t>>,
+) -> Result<Vec<Element<'t>>, Vec<Element<'t>>> {
     let mut text = String::new();
     for element in &tail {
-        text.push_str(&straddle_tail_text(element)?);
+        let Some(piece) = straddle_tail_text(element) else {
+            return Err(tail);
+        };
+        text.push_str(&piece);
     }
     let lower = text.to_ascii_lowercase();
     let mut best: Option<(usize, usize)> = None;
@@ -215,7 +223,9 @@ fn rescue_straddle_tail<'t>(tail: Vec<Element<'t>>) -> Option<Vec<Element<'t>>> 
             best = Some((at, needle.len()));
         }
     }
-    let (at, len) = best?;
+    let Some((at, len)) = best else {
+        return Err(tail);
+    };
     let start = if at > 0 && text.as_bytes()[at - 1] == b'\n' {
         at - 1
     } else {
@@ -232,7 +242,7 @@ fn rescue_straddle_tail<'t>(tail: Vec<Element<'t>>) -> Option<Vec<Element<'t>>> 
             elements.push(Element::Text(segment.to_string().into()));
         }
     }
-    Some(elements)
+    Ok(elements)
 }
 
 #[allow(clippy::type_complexity)]
@@ -295,8 +305,8 @@ fn extract_table_rows<'r, 't>(
     }
     if !straddle_tail.is_empty() {
         match rescue_straddle_tail(straddle_tail) {
-            Some(fostered) => foster.extend(fostered),
-            None => return Err(parser.make_err(ParseErrorKind::TableContainsNonRow)),
+            Ok(fostered) => foster.extend(fostered),
+            Err(_) => return Err(parser.make_err(ParseErrorKind::TableContainsNonRow)),
         }
     }
 
@@ -352,6 +362,15 @@ fn cross_li_wrap_outer<'t>(
     }]
 }
 
+/// One spliced list item's elements in source order (an item's own
+/// elements inline; a sublist stays one whole element).
+fn flatten_list_item<'t>(item: crate::tree::ListItem<'t>) -> Vec<Element<'t>> {
+    match item {
+        crate::tree::ListItem::Elements { elements, .. } => elements,
+        crate::tree::ListItem::SubList { element } => vec![*element],
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn extract_table_cells<'r, 't>(
     parser: &Parser<'r, 't>,
@@ -367,6 +386,18 @@ fn extract_table_cells<'r, 't>(
     let mut foster = Vec::new();
     let mut straddle_tail: Vec<Element<'t>> = Vec::new();
     let mut pending_break = false;
+    // A cut or an explicit-li yield in this row means the row's
+    // closing tokens were spliced: whatever bare text follows belongs
+    // to the splice's residue, not to genuine row content.
+    let splice_active = li_yield_tail || straddle_list_pending;
+    // A `[[div]]` that opens on a spliced list line is a real block on
+    // live: the head's list markers are the splice's residue, not
+    // nested-item context. It still parses flat (the source line has
+    // `*` markers), but the frame builder pairs opens and closes
+    // only within one region. Gather the open, the remaining spliced
+    // lines, and the matching close into one foster region so the
+    // pair forms a `<div>` around the list (live divafter).
+    let mut open_div: Option<(Vec<Element<'t>>, usize)> = None;
     // Post-yield row-tail items (li-Foster) swallow the close lines' line
     // breaks: each item-close and kept list closer line's newline belongs
     // to its structural closer, not to the foster.
@@ -390,7 +421,12 @@ fn extract_table_cells<'r, 't>(
             // A bullet `[[/row]]` stays a list item. It is inside the row
             // span and tidy pulls that list out in front of the table.
             Element::List { .. } if !cells.is_empty() => {
-                if let Some(transfer) = li_tail_transfer.take() {
+                if let Some((region, _)) = &mut open_div {
+                    // Inside a spliced tail's div the following lines
+                    // stay one nested list: live opens the div and
+                    // parses its body as block content.
+                    region.push(element);
+                } else if let Some(transfer) = li_tail_transfer.take() {
                     match (transfer, element) {
                         (
                             Element::List {
@@ -437,18 +473,64 @@ fn extract_table_cells<'r, 't>(
                     let Element::List { items, .. } = element else {
                         unreachable!()
                     };
+                    let mut items = items;
                     let mut bare = Vec::new();
-                    for item in items {
-                        match item {
-                            crate::tree::ListItem::Elements { elements, .. } => {
-                                bare.extend(elements);
-                            }
-                            crate::tree::ListItem::SubList { element } => {
-                                bare.push(*element);
-                            }
+                    let div_head = items.iter().position(|item| {
+                        matches!(
+                            item,
+                            crate::tree::ListItem::Elements { elements, .. }
+                                if elements.iter().any(|e| matches!(
+                                    e,
+                                    Element::Partial(
+                                        PartialElement::WikidotBlockOpen(_)
+                                    )
+                                ))
+                        )
+                    });
+                    if let Some(div_at) = div_head {
+                        // Split the spliced list at the div head: the
+                        // prefix and the head line's own text before
+                        // the marker flatten as before; from the
+                        // marker on, the line items gather into one
+                        // region so the frame builder can pair the
+                        // div around the list.
+                        let mut rest = items.split_off(div_at);
+                        let head_item = rest.remove(0);
+                        let crate::tree::ListItem::Elements { elements, .. } = head_item
+                        else {
+                            unreachable!()
+                        };
+                        let mut elements = elements;
+                        let open_at = elements
+                            .iter()
+                            .position(|e| {
+                                matches!(
+                                    e,
+                                    Element::Partial(PartialElement::WikidotBlockOpen(_))
+                                )
+                            })
+                            .expect("div head position is present");
+                        bare.extend(
+                            items
+                                .into_iter()
+                                .flat_map(|item| flatten_list_item(item).into_iter()),
+                        );
+                        bare.extend(elements.drain(..open_at));
+                        let mut region = vec![elements.remove(0)];
+                        region.extend(elements);
+                        for item in rest {
+                            region.extend(flatten_list_item(item));
                         }
+                        foster
+                            .push(Element::Partial(PartialElement::WikidotFoster(bare)));
+                        open_div = Some((region, 1));
+                    } else {
+                        for item in items {
+                            bare.extend(flatten_list_item(item));
+                        }
+                        foster
+                            .push(Element::Partial(PartialElement::WikidotFoster(bare)));
                     }
-                    foster.push(Element::Partial(PartialElement::WikidotFoster(bare)));
                     if li_yield_tail {
                         yield_foster_len = foster.len();
                     }
@@ -475,7 +557,40 @@ fn extract_table_cells<'r, 't>(
                     let tail = std::mem::take(&mut straddle_tail);
                     foster.push(Element::Partial(PartialElement::WikidotFoster(tail)));
                 }
-                foster.push(element);
+                if matches!(
+                    element,
+                    Element::Partial(PartialElement::WikidotBlockOpen(_))
+                ) {
+                    if let Some((region, depth)) = &mut open_div {
+                        // A nested head while one region is open.
+                        *depth += 1;
+                        region.push(element);
+                    } else {
+                        foster.push(Element::Partial(PartialElement::WikidotFoster(
+                            vec![element],
+                        )));
+                    }
+                } else if let Some((region, depth)) = &mut open_div {
+                    // The pair's close ends the region: flush it as a
+                    // single foster region (open + list + close).
+                    *depth -= 1;
+                    region.push(element);
+                    if *depth == 0 {
+                        let (finished, _) = open_div.take().expect("open div region");
+                        foster.push(Element::Partial(PartialElement::WikidotFoster(
+                            finished,
+                        )));
+                        if li_yield_tail {
+                            absorb_item_close_breaks = true;
+                            pending_break = false;
+                            yield_foster_len = foster.len();
+                        }
+                    }
+                } else {
+                    foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
+                        element,
+                    ])));
+                }
             }
 
             Element::Text(text) if !cells.is_empty() && is_cell_closer(&text) => {
@@ -525,15 +640,30 @@ fn extract_table_cells<'r, 't>(
         let wrapped = cross_li_wrap_outer(cross_li_outer.take(), transfer);
         foster.push(Element::Partial(PartialElement::WikidotFoster(wrapped)));
     }
+    if let Some((unclosed, _)) = open_div.take() {
+        // An unmatched spliced-tail head (its close was spent
+        // elsewhere) still flushes as one region.
+        foster.push(Element::Partial(PartialElement::WikidotFoster(unclosed)));
+    }
     if !straddle_tail.is_empty() {
         match rescue_straddle_tail(straddle_tail) {
-            Some(fostered) => {
+            Ok(fostered) => {
                 if !fostered.is_empty() {
                     foster
                         .push(Element::Partial(PartialElement::WikidotFoster(fostered)));
                 }
             }
-            None => return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell)),
+            Err(tail) if splice_active => {
+                // A splice is active in this row, so the tail is the
+                // splice's residue: live fosters it as-is (a bare
+                // closer like `**` is the fostered tail's inline
+                // closer, so it must survive to the marker pass)
+                // instead of rejecting the whole row.
+                foster.push(Element::Partial(PartialElement::WikidotFoster(tail)));
+            }
+            Err(_) => {
+                return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
+            }
         }
     }
 
