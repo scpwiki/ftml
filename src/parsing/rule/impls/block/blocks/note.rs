@@ -93,7 +93,13 @@ fn parse_note_block<'r, 't>(
             .is_none()
         && (parser.discarding_hidden_body()
             || parser
-                .wikidot_scan_shows_stolen_head(WikidotBlockKind::Note, opener_start))
+                .wikidot_scan_shows_stolen_head(WikidotBlockKind::Note, opener_start)
+            // d446-neighbors: a note head inside a list item body with no
+            // `[[/note]]` anywhere after it stays literal on live (a6/a7/a9);
+            // the legacy body path would otherwise form a div ending at the
+            // item boundary. Scan-blind zoned closers still fall through.
+            || (parser.wikidot_li_collect_top().is_some()
+                && !parser.has_body_end_block(&BLOCK_NOTE)))
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }

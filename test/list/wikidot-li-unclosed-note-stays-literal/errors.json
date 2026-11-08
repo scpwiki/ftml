@@ -1,0 +1,29 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-note",
+        "span": [
+            40,
+            40
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            14,
+            16
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            20,
+            22
+        ],
+        "kind": "no-rules-match"
+    }
+]
