@@ -1203,6 +1203,72 @@ fn join_lines<'t>(lines: Vec<Vec<Element<'t>>>) -> Vec<Element<'t>> {
 /// for a NON-list block (e.g. `* [[/div]]` whose formation dissolved into a
 /// native run). In that case the dissolved formation's trailing break is
 /// kept after the resulting list, unlike after a `* [[/ul]]`/`[[li]]` close.
+/// Item 65(c): unwrap a dissolved unowned-formation run list in an
+/// explicit li body. Returns per-li element vecs (first = this li's
+/// new content, rest = sibling split items), or None if not applicable.
+fn unowned_dissolve_unwrap<'t>(
+    elements: &mut Vec<Element<'t>>,
+    _li_attributes: &AttributeMap<'t>,
+) -> Option<Vec<Vec<Element<'t>>>> {
+    // Sole-element: the entire li body is the dissolved run list.
+    if elements.len() == 1
+        && let Some(Element::List {
+            items,
+            wikidot_explicit_block: false,
+            wikidot_unclosed: false,
+            ..
+        }) = elements.first()
+    {
+        let items = items.clone();
+        let out: Vec<Vec<Element<'t>>> = items
+            .into_iter()
+            .map(|item| match item {
+                ListItem::Elements { elements, .. } => elements,
+                ListItem::SubList { element } => vec![*element],
+            })
+            .collect();
+        return if out.is_empty() { None } else { Some(out) };
+    }
+    // Mixed: find a dissolved run list element and split around it.
+    // The dissolve marker was taken for this body range, so a
+    // non-explicit run-formed list here is the dissolution product.
+    let pos = elements.iter().rposition(|e| {
+        matches!(
+            e,
+            Element::List {
+                wikidot_explicit_block: false,
+                wikidot_unclosed: false,
+                ..
+            }
+        )
+    })?;
+    let Element::List { items, .. } = elements.remove(pos) else {
+        return None;
+    };
+    let dissolved: Vec<Vec<Element<'t>>> = items
+        .into_iter()
+        .map(|item| match item {
+            ListItem::Elements { elements, .. } => elements,
+            ListItem::SubList { element } => vec![*element],
+        })
+        .collect();
+    if dissolved.is_empty() {
+        return None;
+    }
+    // Everything before the dissolved list stays in this li (possibly
+    // mixed with trailing content after `pos` which is rare; keep it).
+    // For the after-text shape, preceding bare text in the li body
+    // becomes this li's content, and dissolved items follow as siblings.
+    let mut result = Vec::with_capacity(1 + dissolved.len());
+    let mut first = std::mem::take(elements);
+    // If `before` content is just bare text/inline that should form its
+    // own li, keep it as-is (the li's attributes apply). The dissolved
+    // items become sibling lis.
+    result.push(first);
+    result.extend(dissolved);
+    Some(result)
+}
+
 fn wikidot_li_body_ends_with_flat_block_close(source: &str) -> bool {
     let lowered = source.to_ascii_lowercase();
     let body = lowered
@@ -1468,6 +1534,41 @@ fn parse_list_item<'r, 't>(
         if post_yield_scope {
             let element = Element::Partial(PartialElement::WikidotFoster(elements));
             return success_elements_with_paragraph_safety(false, element, errors);
+        }
+        // Item 65(c): an unowned lost-owner list formation dissolved its
+        // content into this explicit li. Unwrap the dissolved run list so
+        // its items become this li's content / split into sibling items.
+        if parser.take_wikidot_li_unowned_dissolve_at(body_start, source_end) {
+            if let Some(mut output) =
+                unowned_dissolve_unwrap(&mut elements, &attributes)
+            {
+                // output[0] replaces this li's elements; rest are sibling partials
+                if output.len() == 1 {
+                    elements = output.pop().unwrap();
+                } else {
+                    let first = output.remove(0);
+                    let element = Element::Partial(PartialElement::ListItem(
+                        ListItem::Elements {
+                            elements: first,
+                            attributes: attributes.clone(),
+                        },
+                    ));
+                    let mut result = vec![element];
+                    for elems in output {
+                        result.push(Element::Partial(PartialElement::ListItem(
+                            ListItem::Elements {
+                                elements: elems,
+                                attributes: AttributeMap::new(),
+                            },
+                        )));
+                    }
+                    return success_elements_with_paragraph_safety(
+                        false,
+                        Elements::Multiple(result),
+                        errors,
+                    );
+                }
+            }
         }
         // lihoist p23: a body folding to a single native run list whose only
         // items are depth-2+ marker lines is no formation in live — the

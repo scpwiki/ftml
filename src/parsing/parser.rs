@@ -260,6 +260,10 @@ pub(super) struct BlockScanCache<'t> {
     /// body's byte range. `Cell` because scan-cache clones and set probes
     /// share the Rc'd cache.
     wikidot_li_swallowed_block: Cell<Option<usize>>,
+    /// Item 65(c): an unowned lost-owner list formation dissolved inside an
+    /// explicit `[[li]]` body. Records the formation head byte so the owning
+    /// li body can unwrap the dissolved run list into the enclosing item.
+    wikidot_li_unowned_dissolve: Cell<Option<usize>>,
     /// The byte of an `[[/li]]` closer deleted from a heading line inside
     /// this item body (h14/v1): the item already ends conceptually there,
     /// so a following `[[li]]` opens a sibling item (j6/t1 probes).
@@ -1854,6 +1858,32 @@ impl<'r, 't> Parser<'r, 't> {
         match cache.wikidot_li_swallowed_block.get() {
             Some(pos) if pos >= start && pos < end => {
                 cache.wikidot_li_swallowed_block.set(None);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Item 65(c): record an unowned lost-owner list formation that
+    /// dissolved inside an explicit `[[li]]` body.
+    pub(crate) fn note_wikidot_li_unowned_dissolve(&self, head_byte: usize) {
+        let cache = self.block_end_scan_cache.borrow();
+        if cache.wikidot_li_unowned_dissolve.get().is_none() {
+            cache.wikidot_li_unowned_dissolve.set(Some(head_byte));
+        }
+    }
+
+    /// True when an unowned dissolve head byte lands inside
+    /// `[start, end)`; consumes the flag in that case.
+    pub(crate) fn take_wikidot_li_unowned_dissolve_at(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        match cache.wikidot_li_unowned_dissolve.get() {
+            Some(pos) if pos >= start && pos < end => {
+                cache.wikidot_li_unowned_dissolve.set(None);
                 true
             }
             _ => false,
