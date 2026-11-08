@@ -1342,6 +1342,22 @@ impl<'t> ParagraphStack<'t> {
             }
             self.current.push(element);
         } else {
+            // An inline format that literalises around the explicit list it
+            // crossed renders as the literal marker bytes, not a block: live
+            // keeps the runs around it in the same bare chunk (the
+            // `[[hidden]]` head and tail render as bare text), so the
+            // paragraph the prose started is neither closed before the
+            // literal bytes nor reopened after them
+            // (muse-probe-d832t-d832-full).
+            if self.wikidot
+                && crate::parsing::inline_scope::literalises_around_explicit_list(
+                    &element,
+                )
+            {
+                self.current.push(element);
+                self.current_unwrapped = true;
+                return;
+            }
             if self.current.is_empty() {
                 self.wikidot_toc_next_paragraph_leads_with_br = false;
             }

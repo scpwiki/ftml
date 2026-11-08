@@ -1677,6 +1677,34 @@ fn segment_format_list_items<'t>(
     }
 }
 
+/// Whether an inline format container will be re-emitted as literal markers
+/// around the explicit list it crosses: a format container with a direct
+/// explicit-list child, no flow block of its own, and a native list nested
+/// somewhere inside it (the poisoned path of `format_explicit_list_segments`).
+pub(crate) fn literalises_around_explicit_list(element: &Element<'_>) -> bool {
+    let Element::Container(container) = element else {
+        return false;
+    };
+    if format_kind_of(container.ctype()).is_none() {
+        return false;
+    }
+    if !container.elements().iter().any(|child| {
+        matches!(
+            child,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        )
+    }) {
+        return false;
+    }
+    if container.elements().iter().any(is_wikidot_flow_block) {
+        return false;
+    }
+    subtree_contains_native_list(element)
+}
+
 fn format_explicit_list_segments<'t>(
     element: &mut Element<'t>,
 ) -> Option<Vec<Element<'t>>> {
