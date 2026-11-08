@@ -898,6 +898,12 @@ impl<'t> ParagraphStack<'t> {
         if elements.is_empty() {
             return;
         }
+        if self.wikidot && self.wikidot_quote_boundary_next_paragraph_leads_with_br {
+            self.wikidot_quote_boundary_next_paragraph_leads_with_br = false;
+            if !matches!(elements.first(), Some(Element::LineBreak)) {
+                elements.insert(0, Element::LineBreak);
+            }
+        }
         let paragraph = Element::Container(Container::new(
             ContainerType::Paragraph,
             elements,

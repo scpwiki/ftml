@@ -680,27 +680,123 @@ fn migrated_break_dropped_before_following_line(parser: &Parser<'_, '_>) -> bool
     )
 }
 
-fn migrated_break_leads_blank_follower_paragraph(parser: &Parser<'_, '_>) -> bool {
+/// What live does with the migrated break when an explicit list inside a
+/// blockquote boundary-closes and a blank line precedes the follower.
+///
+/// Determined from saved-page probes (sandbox-for-codex,
+/// muse-probe-qcl-s3* / muse-probe-qcl-v7*):
+/// - `Paragraph`: the following paragraph forms and live renders the break
+///   as its leading element (`<p><br>x</p>`).
+/// - `Suppress`: a block forms instead and live drops the break entirely
+///   (`<hr>`, `<h1>`, the code block, the head-alone div block).
+/// - `Keep`: live keeps the break (or the ordered degraded shell) outside
+///   the follower (EOF, a following quote line, a new list, an image).
+enum BlankFollowerLead {
+    Paragraph,
+    Suppress,
+    Keep,
+}
+
+/// See the `BlankFollowerLead` documentation for the evidence.
+fn migrated_break_follower_after_blank_line(parser: &Parser<'_, '_>) -> BlankFollowerLead {
     if !matches!(
         parser.current().token,
         Token::LineBreak | Token::ParagraphBreak
     ) {
-        return false;
+        return BlankFollowerLead::Keep;
     }
-    for token in parser.remaining() {
+    let remaining = parser.remaining();
+    let mut index = 0;
+    let first = loop {
+        let Some(token) = remaining.get(index) else {
+            return BlankFollowerLead::Keep;
+        };
         match token.token {
-            Token::Whitespace | Token::LineBreak | Token::ParagraphBreak => {}
-            Token::InputEnd
-            | Token::Quote
-            | Token::LeftBlock
-            | Token::LeftBlockStar
-            | Token::LeftBlockEnd
-            | Token::BulletItem
-            | Token::NumberedItem => return false,
-            _ => return true,
+            Token::Whitespace | Token::LineBreak | Token::ParagraphBreak => index += 1,
+            _ => break index,
         }
+    };
+    // `1. q` opens a new ordered list rather than a paragraph.
+    if remaining[first].token == Token::Identifier
+        && remaining[first].slice.chars().all(|c| c.is_ascii_digit())
+        && let Some(dot) = remaining.get(first + 1)
+        && dot.token == Token::Other
+        && dot.slice == "."
+    {
+        return BlankFollowerLead::Keep;
     }
-    false
+    match remaining[first].token {
+        Token::InputEnd
+        | Token::Quote
+        | Token::LeftBlockStar
+        | Token::LeftBlockEnd
+        | Token::BulletItem
+        | Token::NumberedItem
+        | Token::TableColumn
+        | Token::TableColumnRight
+        | Token::TableColumnCenter
+        | Token::TableColumnTitle
+        | Token::LeftComment
+        | Token::DoubleDash
+        | Token::Equals
+        | Token::Colon
+        | Token::Pipe => BlankFollowerLead::Keep,
+        Token::TripleDash | Token::Heading => BlankFollowerLead::Suppress,
+        Token::LeftBlock => {
+            let Some(identifier) = remaining.get(first + 1) else {
+                return BlankFollowerLead::Keep;
+            };
+            if identifier.token != Token::Identifier {
+                return BlankFollowerLead::Keep;
+            }
+            let name = identifier.slice;
+            if name.eq_ignore_ascii_case("span") || name.eq_ignore_ascii_case("tabview") {
+                return BlankFollowerLead::Paragraph;
+            }
+            if name.eq_ignore_ascii_case("code") {
+                return BlankFollowerLead::Suppress;
+            }
+            if name.eq_ignore_ascii_case("image") {
+                return BlankFollowerLead::Keep;
+            }
+            if name.eq_ignore_ascii_case("div") || name.eq_ignore_ascii_case("note") {
+                // Same-line content forms literal inline text inside the
+                // paragraph (muse-probe-qcl-s3blankdiv / s3blanknote); a
+                // head-alone div forms a block and live drops the break
+                // (muse-probe-qcl-s3blankdivalone). A head-alone note is
+                // unprobed and stays Keep.
+                let mut cursor = first + 1;
+                let mut head_end = None;
+                while let Some(token) = remaining.get(cursor) {
+                    if token.token == Token::RightBlock {
+                        head_end = Some(cursor + 1);
+                        break;
+                    }
+                    cursor += 1;
+                }
+                let Some(mut cursor) = head_end else {
+                    return BlankFollowerLead::Keep;
+                };
+                while let Some(token) = remaining.get(cursor) {
+                    match token.token {
+                        Token::Whitespace => cursor += 1,
+                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                            return if name.eq_ignore_ascii_case("div") {
+                                BlankFollowerLead::Suppress
+                            } else {
+                                BlankFollowerLead::Keep
+                            };
+                        }
+                        _ => return BlankFollowerLead::Paragraph,
+                    }
+                }
+                BlankFollowerLead::Keep
+            } else {
+                BlankFollowerLead::Keep
+            }
+        }
+        _ => BlankFollowerLead::Paragraph,
+    }
 }
 
 /// The degraded trailing shell an ordered list closed at a shallower quote
@@ -1516,16 +1612,21 @@ fn try_consume_fn<'r, 't>(
             && !(append_from_list_boundary
                 && migrated_break_dropped_before_following_line(parser))
         {
-            if append_from_list_boundary
-                && migrated_break_leads_blank_follower_paragraph(parser)
+            match append_from_list_boundary
+                .then(|| migrated_break_follower_after_blank_line(parser))
             {
-                parser.mark_wikidot_quote_boundary_break_leads_paragraph();
-            } else if append_from_ordered_list_boundary {
-                elements.push(ordered_boundary_close_shell(
-                    parser.current().token == Token::Quote,
-                ));
-            } else {
-                elements.push(Element::LineBreak);
+                Some(BlankFollowerLead::Paragraph) => {
+                    parser.mark_wikidot_quote_boundary_break_leads_paragraph();
+                }
+                Some(BlankFollowerLead::Suppress) => {}
+                _ if append_from_ordered_list_boundary => {
+                    elements.push(ordered_boundary_close_shell(
+                        parser.current().token == Token::Quote,
+                    ));
+                }
+                _ => {
+                    elements.push(Element::LineBreak);
+                }
             }
         }
         return ok!(false; elements, errors);
@@ -1541,20 +1642,24 @@ fn try_consume_fn<'r, 't>(
         && !(append_from_list_boundary
             && migrated_break_dropped_before_following_line(parser))
     {
-        if append_from_list_boundary
-            && migrated_break_leads_blank_follower_paragraph(parser)
+        match append_from_list_boundary
+            .then(|| migrated_break_follower_after_blank_line(parser))
         {
-            parser.mark_wikidot_quote_boundary_break_leads_paragraph();
-        } else {
-            if append_from_ordered_list_boundary {
-                elements.push(ordered_boundary_close_shell(
-                    parser.current().token == Token::Quote,
-                ));
-            } else {
-                elements.push(Element::LineBreak);
+            Some(BlankFollowerLead::Paragraph) => {
+                parser.mark_wikidot_quote_boundary_break_leads_paragraph();
             }
-            if let Some(last) = split_counts.last_mut() {
-                last.0 += 1;
+            Some(BlankFollowerLead::Suppress) => {}
+            _ => {
+                if append_from_ordered_list_boundary {
+                    elements.push(ordered_boundary_close_shell(
+                        parser.current().token == Token::Quote,
+                    ));
+                } else {
+                    elements.push(Element::LineBreak);
+                }
+                if let Some(last) = split_counts.last_mut() {
+                    last.0 += 1;
+                }
             }
         }
     }
