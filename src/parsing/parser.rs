@@ -229,6 +229,12 @@ pub(super) struct BlockScanCache<'t> {
     /// one paragraph with it instead of rendering bare. Blank lines between
     /// the vanished close and that row are transparent until then.
     wikidot_merge_follow: Cell<bool>,
+    /// UL/OL body never got going (BRIEF-UE57b): the first body line is
+    /// shallower than the required native blockquote depth, so no
+    /// `[[li]]` head was seen before the boundary. Live dissolves the
+    /// list entirely when a bare list close quoted at the required
+    /// depth is still ahead — the head line produces no output.
+    wikidot_quote_boundary_evaporation: Cell<bool>,
     wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
     wikidot_heading_barrier: Option<usize>,
     wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
@@ -1514,6 +1520,27 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_merge_follow
             .set(false);
+    }
+
+    pub(crate) fn set_wikidot_quote_boundary_evaporation(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_evaporation
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_evaporation(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_evaporation
+            .take()
+    }
+
+    pub(crate) fn wikidot_quote_boundary_evaporation(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_evaporation
+            .get()
     }
 
     pub(crate) fn wikidot_flat_close_splits_quote_run(&self, head_byte: usize) -> bool {

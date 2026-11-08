@@ -232,6 +232,39 @@ where
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
         && lost_owner_list_body_is_unowned(&entry_parser)
     {
+        // BRIEF-UE57b: a quoted explicit list head whose first body
+        // line is shallower than the required quote depth dissolves in
+        // live when a bare list close is ahead (the evaporation
+        // family). Do not hoist the list to the top level; let the
+        // quote run dissolve it instead.
+        if matches!(owner, LineOwner::Quote { .. }) {
+            let physical_depth = match owner {
+                LineOwner::Quote { depth } => depth,
+                _ => unreachable!(),
+            };
+            let (_, absolute_depth) =
+                entry_parser.native_blockquote_depths(physical_depth);
+            let block_rule = if view.eq_ignore_ascii_case("ul") {
+                &super::block::blocks::BLOCK_UL
+            } else {
+                &super::block::blocks::BLOCK_OL
+            };
+            let mut body_probe = entry_parser.clone();
+            while !matches!(
+                body_probe.current().token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            ) {
+                if body_probe.step().is_err() {
+                    break;
+                }
+            }
+            if body_probe.current().token == Token::LineBreak {
+                let _ = body_probe.step();
+            }
+            if body_probe.has_shallower_quote_evaporation(block_rule, absolute_depth) {
+                return Ok(None);
+            }
+        }
         return parse_lost_owner_list_block(entry_parser, parser, None);
     }
     if let LineOwner::List { ltype, .. } = owner

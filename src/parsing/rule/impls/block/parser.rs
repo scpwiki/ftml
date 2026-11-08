@@ -5026,11 +5026,22 @@ where
                 "block-list-unordered" | "block-list-ordered"
             )
             && self.has_shallower_quote_text_line(block_rule, required_depth);
+        let has_shallower_evaporation = !has_close
+            && !has_later_close
+            && !has_surplus_list_close
+            && !has_shallower_close
+            && literal_residual_quotes
+            && matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            )
+            && self.has_shallower_quote_evaporation(block_rule, required_depth);
         let has_shallower_li_close = !has_close
             && !has_later_close
             && !has_surplus_list_close
             && !has_shallower_close
             && !has_shallower_text_line
+            && !has_shallower_evaporation
             && literal_residual_quotes
             && matches!(
                 block_rule.name,
@@ -5062,6 +5073,7 @@ where
             && !has_shallower_li_close
             && !has_shallower_text_line
             && !has_blank_in_li_close
+            && !has_shallower_evaporation
         {
             if block_rule.name == "block-note" {
                 return self.get_body_elements(block_rule, as_paragraphs);
@@ -5074,11 +5086,15 @@ where
         let previous_shallower_text = self.take_wikidot_quote_boundary_shallower_text();
         let previous_blank_in_li_body =
             self.take_wikidot_quote_boundary_blank_in_li_body();
+        let previous_evaporation = self.take_wikidot_quote_boundary_evaporation();
         if has_shallower_li_close {
             self.set_wikidot_quote_boundary_shallower_li();
         }
         if has_shallower_text_line {
             self.set_wikidot_quote_boundary_shallower_text();
+        }
+        if has_shallower_evaporation {
+            self.set_wikidot_quote_boundary_evaporation();
         }
         if literal_residual_quotes {
             self.install_quote_body_cursor_with_literal_residuals(required_depth);
@@ -5115,6 +5131,10 @@ where
         let _ = self.take_wikidot_quote_boundary_blank_in_li_body();
         if previous_blank_in_li_body {
             self.set_wikidot_quote_boundary_blank_in_li_body();
+        }
+        let _ = self.take_wikidot_quote_boundary_evaporation();
+        if previous_evaporation {
+            self.set_wikidot_quote_boundary_evaporation();
         }
 
         match result {
@@ -6379,6 +6399,23 @@ where
                     // blanks absorbed; the closer line is next.
                     continue;
                 }
+                // BRIEF-UE57b: a UL/OL whose body soft-ended before
+                // any `[[li]]` head or same-depth content (the first
+                // body line was shallower than the required depth)
+                // dissolves in live when a bare list close quoted at
+                // the required depth is still ahead: the list vanishes
+                // without forming any element and the head line
+                // produces no output. The attempted lines stay
+                // unconsumed; the fresh quote run renders the paired
+                // close as break (BRIEF-QR45/QT52 machinery).
+                if self.wikidot_quote_boundary_evaporation()
+                    && self.shallower_text_list_close_ahead(block_rule)
+                {
+                    self.set_wikidot_quote_boundary_li_auto_close();
+                    self.set_wikidot_pending_paired_list_close();
+                    self.set_wikidot_evaporated_list(true);
+                    return Ok(());
+                }
                 // BRIEF-QT52: a UL/OL in shallower-text mode soft-ends at
                 // the first shallower line (text, blank, or block markup)
                 // when a bare list close quoted at the required depth is
@@ -7530,6 +7567,57 @@ where
             // A `ParagraphBreak` terminator is left for the next loop
             // iteration: it marks the blank line following this one.
         }
+    }
+
+    /// Whether a UL/OL body dissolves entirely in live (BRIEF-UE57b):
+    /// the body's FIRST line is shallower than the required native
+    /// blockquote depth — no `[[li]]` head and no same-depth content was
+    /// seen — and from that line a bare list close quoted at the
+    /// required depth comes before any bare `[[/li]]` close line. Live
+    /// then absorbs the head line into the close: no `<ul>`/`<ol>`/`<li>`
+    /// element and no head text are emitted.
+    ///
+    /// A first line at the required depth or deeper (quoted text, a
+    /// quoted blank, block markup) consumes normally and the list forms
+    /// degraded, so it never qualifies; same-depth content followed by a
+    /// shallow line is likewise out of scope (y-then-x live evidence:
+    /// the list forms with the consumed content). Blank lines arrive as
+    /// the `ParagraphBreak` line terminator and are always depth 0, so
+    /// `> [[ul]]` / blank / … evaporates too.
+    pub(crate) fn has_shallower_quote_evaporation(
+        &self,
+        block_rule: &BlockRule,
+        required_depth: usize,
+    ) -> bool {
+        if required_depth == 0 || !self.settings().layout.legacy() {
+            return false;
+        }
+        if self.current().token == Token::ParagraphBreak {
+            // A blank line is shallower than any required depth.
+            return self.shallower_text_region_has_quoted_list_close(
+                block_rule,
+                required_depth,
+                &self.clone(),
+            );
+        }
+        let mut probe = self.clone();
+        let mut depth = 0usize;
+        while probe.current().token == Token::Quote {
+            depth += probe.current().slice.len();
+            if probe.step().is_err() || probe.get_optional_space().is_err() {
+                return false;
+            }
+        }
+        if depth >= required_depth {
+            // Same-depth or deeper first line: content is consumed and
+            // the list forms; no evaporation.
+            return false;
+        }
+        self.shallower_text_region_has_quoted_list_close(
+            block_rule,
+            required_depth,
+            &probe,
+        )
     }
 
     /// Whether the fresh quote run's quoted `[[ /ul]]`/`[[ /ol]]` close is

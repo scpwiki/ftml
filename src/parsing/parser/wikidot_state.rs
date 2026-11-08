@@ -40,6 +40,11 @@ const ROW_ABSORB_DIV_CLOSE: u16 = 1 << 9;
 const PENDING_DIV_CLOSER: u16 = 1 << 10;
 const ROW_ABSORB_DIV_CLOSE_SEEN: u16 = 1 << 11;
 const QUOTE_BOUNDARY_BREAK_LEADS_PARAGRAPH: u16 = 1 << 12;
+/// An explicit UL/OL soft-ended before any `[[li]]` head in its body
+/// (BRIEF-UE57b): the list rule returns `Elements::None` so the head
+/// line emits nothing at all (live's evaporation). Bit 13 belongs to
+/// CROSS_LIST_TERMINATED_BODY (PR #1242); 14 and 15 are free on main.
+const EVAPORATED_LIST: u16 = 1 << 14;
 
 /// A note/div/collapsible body that was terminated by an item's own
 /// `[[/li]]` close inside a list item: its body's final paragraph keeps
@@ -86,8 +91,10 @@ pub(super) struct WikidotState {
     /// because the high bits of `flags` are MODULE_EMPTY_BODY, HEADING_LINE,
     /// ADVANCED_TABLE_CELL_BODY, and BIBLIOGRAPHY_SPLIT_TAIL. Packing the
     /// collapsible count into bit 13 made every advanced-cell parse swallow
-    /// `[[/collapsible]]`. Bits 5..=8 hold four one-bit states (see the
-    /// CROSSED_COLLAPSIBLE_TAIL and sibling constants).
+    /// `[[/collapsible]]`. Bits 5 and up hold the one-bit states (see the
+    /// CROSSED_COLLAPSIBLE_TAIL and sibling constants); bit 13 is
+    /// CROSS_LIST_TERMINATED_BODY (PR #1242); bit 14 is EVAPORATED_LIST
+    /// (BRIEF-UE57b, cleared in the list rule of the same attempt).
     crossed_closes: u16,
     list_depth_at_footnote: u32,
     row_suffix_at: u32,
@@ -623,6 +630,16 @@ impl Parser<'_, '_> {
             CROSSED_COLLAPSIBLE_TAIL,
             value,
         );
+    }
+
+    pub(crate) fn set_wikidot_evaporated_list(&mut self, value: bool) {
+        set_flag(&mut self.wikidot.crossed_closes, EVAPORATED_LIST, value);
+    }
+
+    pub(crate) fn take_wikidot_evaporated_list(&mut self) -> bool {
+        let marked = self.wikidot.crossed_closes & EVAPORATED_LIST != 0;
+        set_flag(&mut self.wikidot.crossed_closes, EVAPORATED_LIST, false);
+        marked
     }
 
     pub(crate) fn pending_note_list_closer(&self) -> bool {
