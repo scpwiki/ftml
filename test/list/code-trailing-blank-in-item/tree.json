@@ -1,0 +1,37 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "bullet",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "code",
+                                "data": {
+                                    "contents": "x",
+                                    "language": null,
+                                    "name": null
+                                }
+                            },
+                            {
+                                "element": "line-break"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "code-blocks": [
+        {
+            "contents": "x",
+            "language": null,
+            "name": null
+        }
+    ]
+}

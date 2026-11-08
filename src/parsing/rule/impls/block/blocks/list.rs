@@ -2130,12 +2130,35 @@ fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
     }
 }
 
+/// L85: live emits no break after a trailing block in an item body
 /// L85: live emits no break after a trailing math block in an item body
-/// (saved-page probes muse-probe-mi6x2-item-math). The other formed
-/// blocks keep their trailing break; the math rule consumed the closer
-/// line's newline.
+/// (saved-page probes muse-probe-mi6x2-item-math). Formed blocks drop
+/// the trailing break with a trailing blank before [[/li]] (divblank/noteblank/codeblank/collblank/alignblank; probes muse-probe-mi74-*),
+/// and [[toc]] drops it in both cases (item-toc/tocblank; probes muse-probe-mi74-toc-*).
 fn wikidot_li_trailing_break_dropped_after_math(element: &Element) -> bool {
     matches!(element, Element::Math { .. })
+}
+
+fn wikidot_li_trailing_break_dropped_after_block_blank(element: &Element) -> bool {
+    match element {
+        Element::Math { .. } => true,
+        Element::Collapsible { .. } | Element::Code { .. } => true,
+        Element::TableOfContents { .. } => true,
+        Element::Container(container) => matches!(
+            container.ctype(),
+            ContainerType::Div | ContainerType::Align(_) | ContainerType::Note
+        ),
+        _ => false,
+    }
+}
+
+/// Drop trailing break in normal case (no trailing blank)
+fn wikidot_li_trailing_break_dropped_after_block_always(element: &Element) -> bool {
+    match element {
+        Element::Math { .. } => true,
+        Element::TableOfContents { .. } => true,
+        _ => false,
+    }
 }
 
 fn assemble_wikidot_li_segments<'t>(
@@ -2298,12 +2321,13 @@ fn assemble_wikidot_li_segments<'t>(
         Some(Element::Container(container))
             if container.ctype() == ContainerType::Blockquote
     );
-    // Live drops the trailing break after a trailing math block in an item
-    // body, with or without a trailing blank line (saved-page probes
-    // muse-probe-mi6x2-item-math, muse-probe-mi6x3-mathblank).
-    let trailing_math_block = elements
+    // Live drops the trailing break after trailing blocks in an item body
+    let trailing_block_drops_break_blank = elements
         .last()
-        .is_some_and(wikidot_li_trailing_break_dropped_after_math);
+        .is_some_and(wikidot_li_trailing_break_dropped_after_block_blank);
+    let trailing_block_drops_break_always = elements
+        .last()
+        .is_some_and(wikidot_li_trailing_break_dropped_after_block_always);
     // d446-neighbors: after a heading, rule, or separator at item top level
     // live puts the trailing break after the whole list, not inside the item
     // (a4/a16/a17, h3/h4/h10); [[...]]-formed blocks and quote/table keep it
@@ -2326,7 +2350,8 @@ fn assemble_wikidot_li_segments<'t>(
             .is_some_and(|element| !element.paragraph_safe())
         && !trailing_nested_list
         && !trailing_line_block
-        && !trailing_math_block
+        && !trailing_table
+        && !trailing_block_drops_break_blank
     {
         elements.push(Element::LineBreak);
     } else if !had_trailing_empty && !terminated_at_cross_close {
@@ -2356,7 +2381,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !trailing_table
             && !trailing_blockquote
             && !trailing_line_block
-            && !trailing_math_block
+            && !trailing_block_drops_break_always
             && !note_yielded_list_closer
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)
