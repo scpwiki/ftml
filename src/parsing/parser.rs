@@ -246,6 +246,14 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_li_heads: Vec<WikidotLiHead>,
     wikidot_li_closes: Vec<WikidotLiClose>,
     wikidot_li_collect_stack: Vec<Option<usize>>,
+    /// The byte of the `[[div]]` head when a bare div block was swallowed
+    /// as a lost-owner block inside an explicit `[[li]]` body and produced
+    /// nothing (its matched `[[/div]]` is on a later native list line).
+    /// Live keeps the explicit list alive with a bare break in this case;
+    /// `parse_list_item` takes the flag when the swallow lands inside its
+    /// body's byte range. `Cell` because scan-cache clones and set probes
+    /// share the Rc'd cache.
+    wikidot_li_swallowed_block: Cell<Option<usize>>,
     /// The byte of an `[[/li]]` closer deleted from a heading line inside
     /// this item body (h14/v1): the item already ends conceptually there,
     /// so a following `[[li]]` opens a sibling item (j6/t1 probes).
@@ -1760,6 +1768,36 @@ impl<'r, 't> Parser<'r, 't> {
             .wikidot_li_collect_stack
             .last()
             .copied()
+    }
+
+    /// Record that a bare div block was swallowed as a lost-owner block
+    /// inside an explicit `[[li]]` body and produced nothing (its matched
+    /// closer sits on a later native list line). The swallow's head byte
+    /// identifies the owning body; `parse_list_item` takes the flag only
+    /// when that byte lies inside the body's range, so sibling or nested
+    /// items are unaffected.
+    pub(crate) fn note_wikidot_li_swallowed_block(&self, head_byte: usize) {
+        let cache = self.block_end_scan_cache.borrow();
+        if cache.wikidot_li_swallowed_block.get().is_none() {
+            cache.wikidot_li_swallowed_block.set(Some(head_byte));
+        }
+    }
+
+    /// True when a swallowed bare div block head byte lands inside
+    /// `[start, end)`; consumes the flag in that case.
+    pub(crate) fn take_wikidot_li_swallowed_block_at(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        match cache.wikidot_li_swallowed_block.get() {
+            Some(pos) if pos >= start && pos < end => {
+                cache.wikidot_li_swallowed_block.set(None);
+                true
+            }
+            _ => false,
+        }
     }
 
     /// The innermost enclosing `[[li]]` head on the collect stack, if any.
