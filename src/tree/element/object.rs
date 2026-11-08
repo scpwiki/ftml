@@ -245,6 +245,8 @@ pub enum Element<'t> {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         collapsible_link: Option<WikidotFrameLink<'t>>,
         omit_close: bool,
+        #[serde(default, skip_serializing_if = "is_false")]
+        outer_close_eof: bool,
     },
 
     TableOfContents {
@@ -797,6 +799,7 @@ impl Element<'_> {
                 children,
                 collapsible_link,
                 omit_close,
+                outer_close_eof,
             } => Element::WikidotBlockFrame {
                 attributes: attributes.to_owned(),
                 children: elements_to_owned(children),
@@ -804,6 +807,7 @@ impl Element<'_> {
                     .as_ref()
                     .map(WikidotFrameLink::to_owned),
                 omit_close: *omit_close,
+                outer_close_eof: *outer_close_eof,
             },
             Element::TableOfContents { align, attributes } => Element::TableOfContents {
                 align: *align,

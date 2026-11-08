@@ -6523,6 +6523,14 @@ fn lower_children<'t>(
         active.frame_entry = outer_entry;
     };
     visit_children_mut(element, &mut visit);
+    if let Element::WikidotBlockFrame {
+        outer_close_eof: true,
+        children,
+        ..
+    } = element
+    {
+        fix_outer_close_eof_breaks(children);
+    }
     lowered
 }
 
@@ -7104,6 +7112,7 @@ impl<'t> WikidotFrameAssembly<'t> {
             children: Vec::new(),
             collapsible_link: Some(link),
             omit_close: false,
+            outer_close_eof: false,
         });
     }
 
@@ -7311,6 +7320,7 @@ impl<'t> WikidotFrameAssembly<'t> {
             children: frame.children,
             collapsible_link: frame.link,
             omit_close: false,
+            outer_close_eof: frame.outer_close_eof,
         });
         self.top().extend(suffix);
     }
@@ -7356,6 +7366,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                 children: frame.children,
                 collapsible_link: frame.link,
                 omit_close: false,
+                outer_close_eof: frame.outer_close_eof,
             });
             self.top().extend(suffix);
         }
@@ -7388,6 +7399,9 @@ impl<'t> WikidotFrameAssembly<'t> {
                     frame.children.pop();
                 }
             }
+            if self.at_root && frame.outer_close_eof {
+                fix_outer_close_eof_breaks(&mut frame.children);
+            }
             let omit_close = self.at_root && !frame.outer_close_eof;
             Self::wrap_note_frame_children(&frame.attributes, &mut frame.children);
             let suffix = self.take_row_suffix(&mut frame);
@@ -7399,11 +7413,144 @@ impl<'t> WikidotFrameAssembly<'t> {
                 children: frame.children,
                 collapsible_link: None,
                 omit_close,
+                outer_close_eof: frame.outer_close_eof,
             });
             self.top().extend(suffix);
         }
         self.output
     }
+}
+
+/// R2 (v2v4 break accounting, item 82a): an `outer_close_eof` frame's post-
+/// list heading-wrapper span carries the final closer's literal plus breaks.
+/// The closer line contributes one `<br>`; the block's end contributes one
+/// `<br>`; an outer scope boundary absorbs the block-end break (observed as
+/// 1 break already present on the terminal closer span); a second list splits
+/// the breaks (the closer span is followed by a list — leave it). Gated to
+/// root `outer_close_eof` frames only.
+fn fix_outer_close_eof_breaks<'t>(children: &mut Vec<Element<'t>>) {
+    // Find the closer-literal span: a plain Span container whose leading text
+    // forms `[[/div]]`, `[[/note]]`, or `[[/collapsible]]`. Prefer the one
+    // that is the heading wrapper's post-list emission (after a list, in this
+    // frame). A split case puts the closer span before a following List.
+    let closer_idx = children.iter().rposition(|el| is_closer_literal_span(el));
+    let Some(idx) = closer_idx else {
+        return;
+    };
+    // Split by a second list: the closer span is followed by a List element
+    // somewhere after it in the frame — the split structure is already
+    // correct (second-list case). Leave it.
+    if children[idx + 1..].iter().any(|el| matches!(el, Element::List { .. })) {
+        return;
+    }
+    // Terminal closer span (possibly followed by a Paragraph, e.g. blank-text).
+    let followed_by_paragraph = matches!(children.get(idx + 1), Some(Element::Container(c)) if c.ctype() == ContainerType::Paragraph);
+    let Element::Container(container) = &mut children[idx] else {
+        return;
+    };
+    if container.ctype() != ContainerType::Span {
+        return;
+    }
+    let elements = container.elements_mut();
+    let literal_end = closer_literal_text_len(elements);
+    if literal_end == 0 {
+        return;
+    }
+    // Partition: [literal..literal_end] = closer text, rest = breaks/space/text
+    let rest: Vec<Element<'t>> = elements.drain(literal_end..).collect();
+    if followed_by_paragraph {
+        // blank-text: replace any trailing space/break in the span with
+        // `<br><br>` (closer line + block end). The following paragraph is
+        // unchanged.
+        elements.push(Element::LineBreak);
+        elements.push(Element::LineBreak);
+        let _ = rest; // space discarded
+        return;
+    }
+    // Count structure of rest.
+    let mut breaks = 0usize;
+    let mut has_text = false;
+    for el in &rest {
+        match el {
+            Element::LineBreak => breaks += 1,
+            Element::LineBreaks(n) => breaks += n.get() as usize,
+            Element::Text(t) if t.trim().is_empty() => {}
+            _ => has_text = true,
+        }
+    }
+    if !has_text {
+        // Simple terminal: base-div family (0 breaks) or span-wrap absorption
+        // (1 break) or already correct (2+). Target 2 breaks unless 1 break
+        // is already present (absorption).
+        if breaks == 0 {
+            elements.push(Element::LineBreak);
+            elements.push(Element::LineBreak);
+        } else {
+            // 1 break = absorption case (span-wrap/size-wrap) — keep.
+            // 2+ = keep.
+            elements.extend(rest);
+        }
+    } else {
+        // trail-text: closer line break after literal, then content, then
+        // block-end breaks. Live: `[[/div]]<br>t<br><br>`.
+        // Current rest: `[line-break, text(t)]`. Produce: closer br, t, br, br.
+        elements.push(Element::LineBreak); // closer line
+        let mut content: Vec<Element<'t>> = Vec::new();
+        for el in rest {
+            // skip leading breaks (we added the closer-line break)
+            if matches!(el, Element::LineBreak | Element::LineBreaks(_)) && content.is_empty() {
+                continue;
+            }
+            content.push(el);
+        }
+        while matches!(
+            content.last(),
+            Some(Element::LineBreak | Element::LineBreaks(_))
+        ) || matches!(content.last(), Some(Element::Text(t)) if t.trim().is_empty())
+        {
+            content.pop();
+        }
+        elements.extend(content);
+        elements.push(Element::LineBreak);
+        elements.push(Element::LineBreak); // block end (2 breaks total at end)
+    }
+}
+
+/// Is this a plain Span container whose text content starts with a block
+/// closer literal `[[/div]]`, `[[/note]]`, or `[[/collapsible]]`?
+fn is_closer_literal_span(el: &Element<'_>) -> bool {
+    let Element::Container(c) = el else { return false; };
+    if c.ctype() != ContainerType::Span {
+        return false;
+    }
+    closer_literal_text_len(c.elements()) > 0
+}
+
+/// Returns the number of leading elements that form `[[/div]]`, `[[/note]]`,
+/// or `[[/collapsible]]` by concatenating direct Text children, or 0.
+fn closer_literal_text_len(elements: &[Element<'_>]) -> usize {
+    let mut s = String::new();
+    let mut end = 0usize;
+    for (i, el) in elements.iter().enumerate() {
+        if let Element::Text(t) = el {
+            s.push_str(t);
+            end = i + 1;
+            if s == "[[/div]]" || s == "[[/note]]" || s == "[[/collapsible]]" {
+                return end;
+            }
+            // Still a prefix of a closer?
+            if "[[/div]]".starts_with(&s)
+                || "[[/note]]".starts_with(&s)
+                || "[[/collapsible]]".starts_with(&s)
+            {
+                continue;
+            }
+            return 0;
+        } else {
+            return 0;
+        }
+    }
+    0
 }
 
 fn form_wikidot_frame_paragraphs<'t>(children: &mut Vec<Element<'t>>) {
