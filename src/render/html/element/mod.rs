@@ -406,12 +406,14 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             name: _,
             wikidot_block_open_elements,
             wikidot_label_spans,
+            wikidot_code_format_wrappers,
         }) => render_code(
             ctx,
             ref_cow!(language),
             contents,
             wikidot_block_open_elements,
             wikidot_label_spans,
+            wikidot_code_format_wrappers,
         ),
         Element::Math {
             name,

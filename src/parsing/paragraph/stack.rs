@@ -1730,6 +1730,9 @@ impl<'t> ParagraphStack<'t> {
             Element::List { items, .. } => {
                 items.iter().any(Self::wikidot_list_item_starts_with_block)
             }
+            // A code block at item start owns the item's head line; live
+            // dissolves the pre-list paragraph there.
+            Element::Code(_) => true,
             Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
                 elements
                     .first()
@@ -1807,6 +1810,9 @@ impl<'t> ParagraphStack<'t> {
             Element::List { items, .. } => {
                 items.iter().any(Self::wikidot_list_item_holds_block)
             }
+            // A code block held anywhere in an item counts (the pre-list
+            // paragraph unwrap at the explicit-list arm in push_element).
+            Element::Code(_) => true,
             Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
                 elements.iter().any(Self::wikidot_element_holds_item_block)
             }

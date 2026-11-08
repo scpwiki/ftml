@@ -295,6 +295,11 @@ fn finish_collected<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if parser.settings().layout.legacy()
+        && super::inline_delimiter::legacy_format_body_code_preceded_by_content(&elements)
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
+    if parser.settings().layout.legacy()
         && matches!(
             &elements,
             Elements::Single(Element::Container(container)) if container.elements().is_empty()

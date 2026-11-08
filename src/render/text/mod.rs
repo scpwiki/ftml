@@ -280,6 +280,7 @@ mod tests {
                 name: None,
                 wikidot_block_open_elements: Vec::new(),
                 wikidot_label_spans: Vec::new(),
+                wikidot_code_format_wrappers: Vec::new(),
             }),
             Element::Code(CodeBlock {
                 contents: Cow::Borrowed("body"),
@@ -287,6 +288,7 @@ mod tests {
                 name: None,
                 wikidot_block_open_elements: Vec::new(),
                 wikidot_label_spans: Vec::new(),
+                wikidot_code_format_wrappers: Vec::new(),
             }),
         ];
 

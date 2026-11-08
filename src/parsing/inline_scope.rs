@@ -2118,6 +2118,114 @@ pub(crate) fn label_scope_straddles_list(elements: &[Element<'_>]) -> bool {
     false
 }
 
+/// Whether live paragraph-wraps the own-line leading chunk before a crossed
+/// explicit list (the marker own-line pre-list chunk). Live wraps it for
+/// items whose first content is inline text (visible or break-only), for a
+/// leading blockquote, and in the CK61-pinned own-line opener shapes; an
+/// item whose first content is a code block keeps the chunk bare (like a
+/// leading bare div/math/table first block, the pair forms only when the
+/// item has inline content before it). The marker is consumed by
+/// `rewrite_block_chunk_prefix`.
+fn formed_chunk_wraps(list: &Element<'_>) -> bool {
+    let Element::List { items, .. } = list else {
+        return true;
+    };
+    for item in items {
+        let first = match item {
+            ListItem::Elements { elements, .. } => elements.iter().find(|element| {
+                !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+            }),
+            ListItem::SubList { element } => Some(element.as_ref()),
+        };
+        let Some(first) = first else {
+            continue;
+        };
+        if matches!(first, Element::Code(_)) {
+            // The item opens with a code block: live keeps the pre-list
+            // chunk bare.
+            return false;
+        }
+        return true;
+    }
+    true
+}
+
+/// Flush the collected run for a segmented format crossing an explicit list
+/// or a `[[code]]` block. Leading breaks are trimmed except for the
+/// own-line opener of the pair (live renders that leading chunk as a
+/// paragraph chunk, CK61) and for a run seeded by a code boundary (live keeps
+/// the break between the code div and the following content). An empty or
+/// break-only run is dropped unless the pair is stopped at the boundary (its
+/// content continues unstyled), or it is the own-line opener (kept and
+/// tagged `WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER`), or it was seeded by a code
+/// boundary (emitted as a format segment); otherwise it becomes a format
+/// segment (formed), tagged for the stopped-pair family and the own-line
+/// opener family when applicable.
+fn seal_format_segment<'t>(
+    output: &mut Vec<Element<'t>>,
+    run: &mut Vec<Element<'t>>,
+    ctype: ContainerType,
+    formed: &mut bool,
+    stop_at_list: bool,
+    boundary_seen: bool,
+    keep_leading_breaks: bool,
+    wrap_lead: bool,
+) {
+    let first_list = !boundary_seen;
+    if stop_at_list || !first_list {
+        if !keep_leading_breaks {
+            while matches!(
+                run.first(),
+                Some(Element::LineBreak | Element::LineBreaks(_))
+            ) {
+                run.remove(0);
+            }
+        }
+    }
+    if stop_at_list && boundary_seen {
+        output.extend(mem::take(run));
+        return;
+    }
+    if format_segment_has_content(run)
+        || (keep_leading_breaks && !run.is_empty())
+    {
+        *formed = true;
+        let mut attributes = AttributeMap::new();
+        if stop_at_list {
+            // Tag the styled pre-list segment so lowering leaves the
+            // enclosing scope's stack entry in place (see
+            // `stopped_pre_segment`).
+            attributes.insert(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, Cow::Borrowed(""));
+        }
+        if first_list && !stop_at_list && wrap_lead {
+            // The own-line opener of the pair: live renders the leading chunk as a paragraph chunk.
+            attributes
+                .insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
+        }
+        output.push(Element::Container(Container::new(
+            ctype,
+            mem::take(run),
+            attributes,
+        )));
+        return;
+    }
+    if !stop_at_list && first_list && wrap_lead && !run.is_empty() {
+        // A break-only leading chunk (the own-line opener of the pair, nothing on
+        // its line but the marker). Live still emits the paragraph chunk; keep
+        // the run, marked.
+        *formed = true;
+        let mut attributes = AttributeMap::new();
+        attributes.insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
+        output.push(Element::Container(Container::new(
+            ctype,
+            mem::take(run),
+            attributes,
+        )));
+        return;
+    }
+    run.clear();
+}
+
 fn segment_format_run<'t>(
     elements: Vec<Element<'t>>,
     ctype: ContainerType,
@@ -2128,6 +2236,9 @@ fn segment_format_run<'t>(
     let mut output = Vec::with_capacity(elements.len());
     let mut run: Vec<Element<'t>> = Vec::new();
     let mut seen_list = false;
+    // A run seeded by a code block keeps its leading break(s); live keeps
+    // the break between the code div and the following content.
+    let mut run_starts_after_code = false;
     for element in elements {
         if matches!(
             element,
@@ -2136,53 +2247,16 @@ fn segment_format_run<'t>(
                 ..
             }
         ) {
-            let first_list = !seen_list;
-            if stop_at_list || !first_list {
-                while matches!(
-                    run.first(),
-                    Some(Element::LineBreak | Element::LineBreaks(_))
-                ) {
-                    run.remove(0);
-                }
-            }
-            if stop_at_list && seen_list {
-                output.extend(mem::take(&mut run));
-            } else if format_segment_has_content(&run) {
-                *formed = true;
-                let mut attributes = AttributeMap::new();
-                if stop_at_list {
-                    // Tag the styled pre-list segment so lowering leaves the
-                    // enclosing scope's stack entry in place (see
-                    // `stopped_pre_segment`).
-                    attributes
-                        .insert(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, Cow::Borrowed(""));
-                }
-                if first_list && !stop_at_list {
-                    // The own-line opener of the pair: live renders the
-                    // leading chunk as a paragraph chunk.
-                    attributes
-                        .insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
-                }
-                output.push(Element::Container(Container::new(
-                    ctype,
-                    mem::take(&mut run),
-                    attributes,
-                )));
-            } else if !stop_at_list && first_list && !run.is_empty() {
-                // A break-only leading chunk (the own-line opener of the
-                // pair, nothing on its line but the marker). Live still
-                // emits the paragraph chunk; keep the run, marked.
-                *formed = true;
-                let mut attributes = AttributeMap::new();
-                attributes.insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
-                output.push(Element::Container(Container::new(
-                    ctype,
-                    mem::take(&mut run),
-                    attributes,
-                )));
-            } else {
-                run.clear();
-            }
+            seal_format_segment(
+                &mut output,
+                &mut run,
+                ctype,
+                formed,
+                stop_at_list,
+                seen_list,
+                mem::replace(&mut run_starts_after_code, false),
+                !seen_list && !stop_at_list && formed_chunk_wraps(&element),
+            );
             let mut list = element;
             segment_format_list_items(
                 &mut list,
@@ -2193,21 +2267,46 @@ fn segment_format_run<'t>(
             );
             output.push(list);
             seen_list = true;
+        } else if let Element::Code(mut code) = element {
+            // Live segments the format pair around a [[code]] block inside
+            // the item: the code div stays bare, and the pair re-forms on
+            // the far side (wrapping the code block's inline content in
+            // `<pre>` too).
+            seal_format_segment(
+                &mut output,
+                &mut run,
+                ctype,
+                formed,
+                stop_at_list,
+                seen_list,
+                mem::replace(&mut run_starts_after_code, false),
+                true,
+            );
+            if let Some(kind) = format_kind_of(ctype) {
+                code.wikidot_code_format_wrappers.push(kind);
+            }
+            output.push(Element::Code(code));
+            seen_list = true;
+            run_starts_after_code = true;
         } else {
             run.push(element);
         }
     }
-    while matches!(
-        run.first(),
-        Some(Element::LineBreak | Element::LineBreaks(_))
-    ) {
-        run.remove(0);
+    if !run_starts_after_code {
+        while matches!(
+            run.first(),
+            Some(Element::LineBreak | Element::LineBreaks(_))
+        ) {
+            run.remove(0);
+        }
     }
     if stop_at_list && seen_list {
         // Stopped pair (underline/strike in an inline scope): the segment
         // after the list keeps its content but no styling.
         output.extend(run);
-    } else if format_segment_has_content(&run) {
+    } else if format_segment_has_content(&run)
+        || (run_starts_after_code && !run.is_empty())
+    {
         *formed = true;
         output.push(Element::Container(Container::new(
             ctype,
@@ -2484,6 +2583,40 @@ struct ParagraphGroup<'t> {
     ends_at_advanced_table: bool,
 }
 
+/// Split every format container in this sequence that holds an inline-kind
+/// `[[code]]` block into segments around it: the code div stays bare, and
+/// the pair re-forms on the far side, reopening its format wrapper inside
+/// the code block's `<pre>` content (rendered from the code element's
+/// wrapper list). Live keeps the break between the code div and the
+/// following content in the re-formed segment.
+fn split_code_children_of_format_containers<'t>(elements: &mut Vec<Element<'t>>) {
+    let original = mem::take(elements);
+    let mut output = Vec::with_capacity(original.len());
+    for mut element in original {
+        let split = matches!(
+            &element,
+            Element::Container(container)
+                if format_kind_of(container.ctype()).is_some()
+                    && container
+                        .elements()
+                        .iter()
+                        .any(|child| matches!(child, Element::Code(_)))
+        );
+        if !split {
+            output.push(element);
+            continue;
+        }
+        let Element::Container(container) = &mut element else {
+            unreachable!()
+        };
+        let ctype = container.ctype();
+        let children = mem::take(container.elements_mut());
+        let mut formed = false;
+        output.extend(segment_format_run(children, ctype, &mut formed, false));
+    }
+    *elements = output;
+}
+
 fn lower_root_sequence<'t>(
     elements: &mut Vec<Element<'t>>,
     valid: &BTreeSet<usize>,
@@ -2492,6 +2625,7 @@ fn lower_root_sequence<'t>(
     trim_next_break: &mut bool,
     bib: &mut Option<BibliographyLowering<'_, 't>>,
 ) {
+    split_code_children_of_format_containers(elements);
     let mut output = Vec::with_capacity(elements.len());
     let mut paragraph_group: Option<ParagraphGroup<'t>> = None;
     let mut previous_scored_close = false;
@@ -3096,11 +3230,21 @@ fn flush_root_pending<'t>(
     // scope (the scope-continuation merges in `append_root_sequence` own
     // those), and ordinary inline content parked at a root boundary keeps
     // the bare-append behaviour.
+    let formed_chunk_wraps = next.is_some_and(|next| {
+        matches!(
+            next,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        ) && formed_chunk_wraps(next)
+    });
     if !scope_open_at_start
         && at_explicit_list
         && pending_has_format
         && sequence_has_inline_content(&sequence)
         && sequence.iter().all(Element::paragraph_safe)
+        && formed_chunk_wraps
     {
         if group_flushed
             && let Some(Element::Container(paragraph)) = output.last_mut()
@@ -3403,6 +3547,7 @@ fn lower_sequence<'t>(
     // inline seam space there); all other call sites stay `false`.
     bare_root: bool,
 ) -> SequenceEffects {
+    split_code_children_of_format_containers(elements);
     let mut output = Vec::with_capacity(elements.len());
     let mut run = Vec::new();
     let mut run_has_content = false;
@@ -6167,7 +6312,10 @@ fn insert_wikidot_heading_label_span(elements: &mut Vec<Element<'_>>) {
     )));
 }
 
-fn visit_children<'t>(element: &Element<'t>, visit: &mut dyn FnMut(&[Element<'t>])) {
+pub(crate) fn visit_children<'t>(
+    element: &Element<'t>,
+    visit: &mut dyn FnMut(&[Element<'t>]),
+) {
     match element {
         Element::Container(container) => visit(container.elements()),
         Element::Table(table) => {
