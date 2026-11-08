@@ -214,8 +214,17 @@ fn is_format_event(element: &Element<'_>) -> bool {
 }
 
 fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
+    let defer = foster_deferral_indices(elements);
     let mut normalized = Vec::with_capacity(elements.len());
+    let mut index = 0;
     for mut element in mem::take(elements) {
+        // Held raw; the advanced table's foster join (or its gate-fail
+        // path, which normalizes them like the visit would) owns them.
+        if defer[index] {
+            normalized.push(element);
+            index += 1;
+            continue;
+        }
         if is_segment_container(&element) {
             if !normalize_segment_container_with_foster(&mut normalized, &mut element)
                 && !normalize_segment_container_with_run(&mut normalized, &mut element)
@@ -232,8 +241,38 @@ fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
             visit_children_mut(&mut element, normalize_sequence);
         }
         normalized.push(element);
+        index += 1;
     }
     *elements = normalized;
+}
+
+/// Indices of `WikidotFoster` partials that form the contiguous run an
+/// advanced table's foster join consumes (its backward scan only matches
+/// fosters and line breaks). Those tails must reach the join
+/// un-normalized: their own `--` is claimed by pairing first, and a
+/// standalone visit would dash-convert it before the join runs.
+fn foster_deferral_indices<'t>(elements: &[Element<'t>]) -> Vec<bool> {
+    let mut defer = vec![false; elements.len()];
+    for index in 0..elements.len() {
+        let Element::Table(table) = &elements[index] else {
+            continue;
+        };
+        if table.table_type != TableType::Advanced {
+            continue;
+        }
+        let mut cursor = index;
+        while cursor > 0 {
+            cursor -= 1;
+            match &elements[cursor] {
+                Element::Partial(PartialElement::WikidotFoster(_)) => {
+                    defer[cursor] = true;
+                }
+                Element::LineBreak => {}
+                _ => break,
+            }
+        }
+    }
+    defer
 }
 
 fn normalize_segment_container_with_run<'t>(
@@ -1733,6 +1772,12 @@ fn normalize_segment_container_with_foster<'t>(
         .iter()
         .any(|segment| stream_has_pairing_material(segment))
     {
+        // Deferred fosters were held raw so the tail markers could be
+        // paired first; with no pairing material anywhere, normalize
+        // them exactly as the standalone visit would have.
+        for element in &mut fosters_split {
+            visit_children_mut(element, normalize_sequence);
+        }
         preceding.append(&mut fosters_split);
         normalize_segment_container(container);
         return true;
@@ -1987,8 +2032,19 @@ fn stream_has_pairing_material(elements: &[Element<'_>]) -> bool {
                 stream_has_pairing_material(std::slice::from_ref(element.as_ref()))
             }
         }),
-        _ => sequence_has_pairing_material(std::slice::from_ref(element)),
+        _ => stream_marker_text_family(element),
     })
+}
+
+/// Whether a single stream element counts as segment pairing material:
+/// the usual sequence material, plus the raw `--`/`^^`/`,,` markers,
+/// which the segment (not sequence) pairing must see to claim them
+/// across items before dash conversion or the script-level passes.
+fn stream_marker_text_family(element: &Element<'_>) -> bool {
+    if sequence_has_pairing_material(std::slice::from_ref(element)) {
+        return true;
+    }
+    matches!(element, Element::Text(value) if matches!(value.as_ref(), "--" | ",," | "^^"))
 }
 
 fn dash_segment_placeholder<'t>() -> Element<'t> {
@@ -2257,7 +2313,14 @@ fn repair_literal_marker_pairs_segments<'t>(
             kind,
             kind == InlineFormatKind::Strikethrough,
             None,
+            None,
         );
+    }
+    // Script formats cross items the same way (live pairs them across
+    // nesting), but they are not EDGE_MARKERS: their containers are not
+    // re-paired as marker edges.
+    for kind in [InlineFormatKind::Subscript, InlineFormatKind::Superscript] {
+        found |= pair_symmetric_markers(&projection, &mut roles, kind, false, None, None);
     }
     if !inside_monospace {
         found |= pair_monospace_markers(&projection, &mut roles, None);
@@ -2326,6 +2389,19 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
             kind,
             kind == InlineFormatKind::Strikethrough,
             Some(&mut pairs),
+            Some(foster_start),
+        );
+    }
+    // Script formats cross items and the splice the same way (live
+    // pairs them across nesting and into the fostered tail).
+    for kind in [InlineFormatKind::Subscript, InlineFormatKind::Superscript] {
+        found |= pair_symmetric_markers(
+            &projection,
+            &mut roles,
+            kind,
+            false,
+            Some(&mut pairs),
+            Some(foster_start),
         );
     }
     if !inside_monospace {
@@ -2451,6 +2527,7 @@ fn repair_literal_marker_pairs_pass<'t>(
             &mut roles,
             kind,
             kind == InlineFormatKind::Strikethrough,
+            None,
             None,
         );
     }
@@ -2793,6 +2870,7 @@ fn pair_symmetric_markers<'t>(
     kind: InlineFormatKind,
     edges_required: bool,
     mut pairs: Option<&mut Vec<(usize, usize, InlineFormatKind)>>,
+    foster_start: Option<usize>,
 ) -> bool {
     let marker = kind.open_marker();
     let mut siblings: Vec<Option<usize>> = vec![None; projection.len()];
@@ -2873,7 +2951,19 @@ fn pair_symmetric_markers<'t>(
                     projection[index],
                     ProjItem::EdgeOpen(_) | ProjItem::EdgeClose(_)
                 );
-                if edges_required && !pairs_edges {
+                // On the foster path a raw `--` closer in the fostered
+                // tail still pairs with a raw `--` opener in the cells
+                // (live pairs across the splice before dash conversion
+                // claims the `--`); the caller's splice-context filter
+                // then keeps or reverts the pair. Tail-internal pairs
+                // stay with the sequence-level strike recovery.
+                let raw_foster_pair = foster_start.is_some_and(|start| {
+                    open_index < start
+                        && index >= start
+                        && matches!(projection[open_index], ProjItem::Text(_))
+                        && matches!(projection[index], ProjItem::Text(_))
+                });
+                if edges_required && !pairs_edges && !raw_foster_pair {
                     open = Some(index);
                     continue;
                 }
