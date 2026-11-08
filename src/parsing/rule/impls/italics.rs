@@ -176,6 +176,7 @@ fn finish_collected<'r, 't>(
         Some(leftover) => append_split_close_leftover(elements, leftover),
         None => elements,
     };
+    let elements = super::bold::mark_span_list_close_tail(parser, elements);
     ok!(paragraph_safe; elements, errors)
 }
 

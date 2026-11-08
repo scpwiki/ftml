@@ -131,6 +131,19 @@ pub(crate) const WIKIDOT_HEADING_COLLAPSIBLE_TAIL_MARKER: &str =
     "data-ftml-heading-collapsible-tail";
 pub(crate) const WIKIDOT_HEADING_COLLAPSIBLE_LINE_END_MARKER: &str =
     "data-ftml-heading-collapsible-line-end";
+/// Marks a bold format pair that closed beyond an explicit list inside a span
+/// body with a single newline then the span close: the after-list paragraph
+/// materialises a bare break-only span segment (live's trailing `<span><br>`
+/// after the list). Consumed by inline-scope lowering; never rendered (all
+/// `data-ftml-*` keys are omitted by the HTML builder).
+pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
+    "data-ftml-span-list-close-tail-break";
+/// Sibling mark for the same close when the following span-content text is
+/// adjacent (no newline): the after-list paragraph appends bare and carries
+/// no inserted leading break. Consumed by inline-scope lowering; never
+/// rendered.
+pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER: &str =
+    "data-ftml-span-list-close-tail-bare";
 use std::borrow::Cow;
 use std::collections::HashSet;
 

@@ -27,6 +27,7 @@ use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
 use crate::tree::{PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
+use std::borrow::Cow;
 
 pub const RULE_BOLD: Rule = Rule {
     name: "bold",
@@ -268,7 +269,72 @@ fn finish_collected<'r, 't>(
         Some(leftover) => append_split_close_leftover(elements, leftover),
         None => elements,
     };
+    let elements = mark_span_list_close_tail(parser, elements);
     ok!(paragraph_safe; elements, errors)
+}
+
+/// A bold or italics pair that closed beyond an explicit list inside a span
+/// body leaves two live shapes on the following span-content paragraph
+/// (spanin family). The syntax tree loses the newline-count distinction
+/// there, so the gap after the close marker is classified here, from the
+/// token stream, and stamped on the format container as an internal marker
+/// for inline-scope lowering:
+/// a single newline then `[[/span]]` (break-only tail segment materialises
+/// after the list) or adjacent content text (the after-list paragraph is
+/// bare with no inserted leading break). At this point the parser sits on
+/// the first token after the bold close.
+pub(super) fn mark_span_list_close_tail<'r, 't>(
+    parser: &Parser<'r, 't>,
+    mut elements: Elements<'t>,
+) -> Elements<'t> {
+    if !parser.settings().layout.legacy() || !parser.in_wikidot_span_body() {
+        return elements;
+    }
+    let Elements::Single(Element::Container(container)) = &elements else {
+        return elements;
+    };
+    if !matches!(
+        container.ctype(),
+        ContainerType::Bold | ContainerType::Italics
+    ) {
+        return elements;
+    }
+    let crosses_explicit_list = container.elements().iter().any(|child| {
+        matches!(
+            child,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        )
+    });
+    if !crosses_explicit_list {
+        return elements;
+    }
+    if container
+        .elements()
+        .iter()
+        .any(|child| crate::parsing::inline_scope::is_wikidot_flow_block(child))
+    {
+        return elements;
+    }
+    let current = parser.current();
+    let rest = parser.remaining();
+    let marker =
+        if current.token == Token::LineBreak && block_head_is(rest, 0, "span", true) {
+            crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER
+        } else if matches!(current.token, Token::RuntimeText | Token::Identifier)
+            && !current.slice.trim().is_empty()
+        {
+            crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER
+        } else {
+            return elements;
+        };
+    let Elements::Single(Element::Container(container)) = &mut elements else {
+        unreachable!("single bold element checked above")
+    };
+    container.attributes_mut().insert(marker, Cow::Borrowed(""));
+    elements
 }
 
 #[cfg(test)]
