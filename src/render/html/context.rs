@@ -78,6 +78,14 @@ where
     /// address: the flat Text_Wiki tab lists `(label, spans)` in nav order.
     wikidot_tabview_nav_overrides:
         HashMap<usize, Vec<(String, Vec<AttributeMap<'static>>)>>,
+    /// Enclosing legacy Wikidot tabview render depth (0 = outermost view).
+    wikidot_tabview_depth: usize,
+    /// Escaped `[[/tab]]` literals lifted out of nested tabviews, queued for
+    /// emission by the outermost tabview's content (BRIEF-TE54).
+    wikidot_tabview_pending_lifts: usize,
+    /// Whether the next nested stray `[[/tab]]` may lift (first per outermost
+    /// tabview item; later strays stay literal).
+    wikidot_tabview_lift_armed: bool,
     bibliography_render_stack: Vec<String>,
     footnote_render_stack: Vec<usize>,
 }
@@ -176,6 +184,9 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
             named_equations: HashMap::new(),
             wikidot_equation_numbers: HashMap::new(),
             wikidot_tabview_nav_overrides: HashMap::new(),
+            wikidot_tabview_depth: 0,
+            wikidot_tabview_pending_lifts: 0,
+            wikidot_tabview_lift_armed: false,
             bibliography_render_stack: Vec::new(),
             footnote_render_stack: Vec::new(),
         }
@@ -372,6 +383,34 @@ impl<'i, 'h, 'e, 't> HtmlContext<'i, 'h, 'e, 't> {
         items: usize,
     ) -> Option<&Vec<(String, Vec<AttributeMap<'static>>)>> {
         self.wikidot_tabview_nav_overrides.get(&items)
+    }
+
+    /// Current legacy Wikidot tabview nesting depth (0 = outermost view).
+    pub(crate) fn wikidot_tabview_depth(&self) -> usize {
+        self.wikidot_tabview_depth
+    }
+
+    pub(crate) fn set_wikidot_tabview_depth(&mut self, depth: usize) {
+        self.wikidot_tabview_depth = depth;
+    }
+
+    /// Queue one escaped `[[/tab]]` literal for emission by the outermost
+    /// tabview's content, and disarm further lifts in this outermost item.
+    pub(crate) fn queue_wikidot_tabview_lift(&mut self) {
+        self.wikidot_tabview_pending_lifts += 1;
+        self.wikidot_tabview_lift_armed = false;
+    }
+
+    pub(crate) fn take_wikidot_tabview_lifts(&mut self) -> usize {
+        std::mem::take(&mut self.wikidot_tabview_pending_lifts)
+    }
+
+    pub(crate) fn wikidot_tabview_lift_armed(&self) -> bool {
+        self.wikidot_tabview_lift_armed
+    }
+
+    pub(crate) fn arm_wikidot_tabview_lift(&mut self) {
+        self.wikidot_tabview_lift_armed = true;
     }
 
     pub fn continue_equation_index_at(&mut self, index: NonZeroUsize) {

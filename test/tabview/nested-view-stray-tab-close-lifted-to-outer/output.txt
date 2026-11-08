@@ -1,0 +1,21 @@
+Outer
+
+outer text
+[[tabview]]
+In1
+
+body 1
+
+
+typo
+
+In2
+
+body 2
+
+
+[[/tab]]
+[[tab Second]]
+second body
+[[/tab]]
+[[/tabview]]
