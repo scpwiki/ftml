@@ -1,0 +1,72 @@
+{
+  "elements": [
+    {
+      "element": "container",
+      "data": {
+        "type": "bold",
+        "attributes": {},
+        "elements": [
+          {
+            "element": "container",
+            "data": {
+              "type": "span",
+              "attributes": {},
+              "elements": [
+                {
+                  "element": "list",
+                  "data": {
+                    "type": "bullet",
+                    "attributes": {},
+                    "items": [
+                      {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                          {
+                            "element": "container",
+                            "data": {
+                              "type": "blockquote",
+                              "attributes": {},
+                              "elements": [
+                                {
+                                  "element": "list",
+                                  "data": {
+                                    "type": "bullet",
+                                    "attributes": {},
+                                    "items": [
+                                      {
+                                        "item-type": "elements",
+                                        "attributes": {},
+                                        "elements": [
+                                          {
+                                            "element": "container",
+                                            "data": {
+                                              "type": "blockquote",
+                                              "attributes": {},
+                                              "elements": []
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "element": "line-break"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

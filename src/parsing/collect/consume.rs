@@ -90,6 +90,7 @@ pub fn collect_consume_keep<'r, 't>(
     let (last, errors, paragraph_safe) = collection.into();
     if parser.settings().layout.legacy() {
         collapse_adjacent_ascii_spaces(&mut all_elements);
+        collapse_post_list_break_pair(&mut all_elements);
     }
 
     let item = (all_elements, last);
@@ -311,6 +312,35 @@ fn collapse_adjacent_ascii_spaces(elements: &mut Vec<Element<'_>>) {
         previous_was_space = is_space;
         keep
     });
+}
+
+/// A crossed explicit list emits the post-list trailing break when the line
+/// after it has no same-paragraph content (the list rule's `!content_after_list`
+/// branch), the paragraph stack pops that break when content arrives, and the
+/// stack also drops the source newline into the same empty run. A format collect
+/// has no stack, so the emitted break and the source newline survive as
+/// adjacent breaks; the span-close rule then re-spaces them before the literal
+/// close marker, and live keeps neither. Two adjacent breaks after an explicit
+/// list only arise this way inside a collect: a literal blank line would be a
+/// paragraph break, which already fails the collect outright.
+fn collapse_post_list_break_pair(elements: &mut Vec<Element<'_>>) {
+    let mut index = 0;
+    while index + 2 < elements.len() {
+        if matches!(
+            &elements[index],
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        ) && elements[index + 1] == Element::LineBreak
+            && elements[index + 2] == Element::LineBreak
+        {
+            elements.remove(index + 2);
+            elements.remove(index + 1);
+        } else {
+            index += 1;
+        }
+    }
 }
 
 fn elements_into_vec<'t>(elements: Elements<'t>) -> Vec<Element<'t>> {
