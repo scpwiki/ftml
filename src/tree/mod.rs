@@ -144,6 +144,21 @@ pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
 /// rendered.
 pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER: &str =
     "data-ftml-span-list-close-tail-bare";
+/// Marks an underline or strikethrough pair that closed beyond an explicit
+/// list inside a Wikidot inline scope (`[[span]]`, `[[size]]`, `[[a]]`):
+/// live carries its styling only up to the list (see
+/// `mark_format_stop_at_list`). Consumed by inline-scope lowering;
+/// never rendered.
+pub(crate) const WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER: &str =
+    "data-ftml-format-stops-at-list";
+/// Sibling marks for that stopped pair's post-list tail: a single newline
+/// then the scope close (materialises a bare `<br>` after the list) or
+/// adjacent content text (the after-list paragraph appends bare, with no
+/// scope tags). Consumed by inline-scope lowering; never rendered.
+pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
+    "data-ftml-understrike-list-close-tail-break";
+pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER: &str =
+    "data-ftml-understrike-list-close-tail-bare";
 use std::borrow::Cow;
 use std::collections::HashSet;
 

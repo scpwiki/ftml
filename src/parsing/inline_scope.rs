@@ -1,10 +1,12 @@
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, Heading, HeadingReopen, InlineFormatKind,
-    ListItem, PartialElement, TabViewItem, TableType, WIKIDOT_HEADING_REOPEN_MARKER,
+    ListItem, PartialElement, TabViewItem, TableType,
+    WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, WIKIDOT_HEADING_REOPEN_MARKER,
     WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER, WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
-    WIKIDOT_WS_MONO_VANISH_MARKER, WikidotBlockCloseKind, WikidotBlockShell,
-    WikidotFrameLink,
+    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER, WIKIDOT_WS_MONO_VANISH_MARKER,
+    WikidotBlockCloseKind, WikidotBlockShell, WikidotFrameLink,
 };
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -542,16 +544,25 @@ impl<'t> ActiveScopes<'t> {
         }
     }
 
-    fn apply_subtree_istack(&mut self, element: &Element<'t>) {
+    fn apply_subtree_istack(&mut self, element: &mut Element<'t>) {
         if let Some((tag, wrapper)) = inline_scope_parts(element) {
             self.istack_push_inline(tag, wrapper);
-            if let Some(children) = subtree_children(element) {
+            if let Some(children) = subtree_children_mut(element) {
                 for child in children {
                     self.apply_subtree_istack(child);
                 }
             }
-            self.istack.pop();
-        } else if let Some(children) = subtree_children(element) {
+            // A stopped pre-list segment (see `WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER`)
+            // must leave the enclosing scope's stack entry in place: the
+            // scope survives into the list items on live, unlike an ordinary
+            // underline/strike segment (which shares the `Span` tag and ends
+            // the scope when it closes).
+            if stopped_pre_segment(element) {
+                clear_stop_marker(element);
+            } else {
+                self.istack.pop();
+            }
+        } else if let Some(children) = subtree_children_mut(element) {
             for child in children {
                 self.apply_subtree_istack(child);
             }
@@ -1395,6 +1406,56 @@ fn strip_span_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
     attributes.remove(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER);
 }
 
+/// The stopped underline/strikethrough sibling of the spanin tail: which
+/// bare post-list tail shape the following scope-content paragraph yields.
+/// `Break` materialises a bare `<br>`; `Bare` renders adjacent content
+/// bare with no scope tags.
+fn understrike_list_close_tail_of(
+    attributes: &AttributeMap<'_>,
+) -> Option<SpanListCloseTail> {
+    let map = attributes.get();
+    if map.contains_key(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER) {
+        Some(SpanListCloseTail::Break)
+    } else if map.contains_key(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER) {
+        Some(SpanListCloseTail::Bare)
+    } else {
+        None
+    }
+}
+
+fn strip_understrike_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
+    attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER);
+    attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER);
+}
+
+/// Whether `element` is a styled pre-list segment of a stopped
+/// underline/strikethrough pair. Its lowering must not pop the enclosing
+/// scope's `Span` stack entry (the scope survives into the list items on
+/// live). The marker is consumed here; `data-ftml-*` keys never render.
+fn stopped_pre_segment(element: &Element<'_>) -> bool {
+    let Element::Container(container) = element else {
+        return false;
+    };
+    if !matches!(
+        container.ctype(),
+        ContainerType::Underline | ContainerType::Strikethrough
+    ) {
+        return false;
+    }
+    container
+        .attributes()
+        .get()
+        .contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER)
+}
+
+fn clear_stop_marker(element: &mut Element<'_>) {
+    if let Element::Container(container) = element {
+        container
+            .attributes_mut()
+            .remove(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
+    }
+}
+
 /// An explicit list eats the newlines inside it before inline pairing, so the
 /// markers pair across the list. A block start then closes that inline and the
 /// next item text reopens it. The paired container is that pre-tidy shape.
@@ -1426,6 +1487,11 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
     };
     // Same spanin tail hand-off as for segmented format pairs.
     let tail_mark = span_list_close_tail_of(container.attributes());
+    let understrike_tail_mark = understrike_list_close_tail_of(container.attributes());
+    let stops_at_list = container
+        .attributes()
+        .get()
+        .contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
     let children = mem::take(container.elements_mut());
     let mut list = children
         .into_iter()
@@ -1439,13 +1505,24 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
             )
         })
         .expect("explicit list");
-    wrap_explicit_list_items(&mut list, ctype);
+    if !stops_at_list {
+        wrap_explicit_list_items(&mut list, ctype);
+    }
     if let Some(tail_mark) = tail_mark
         && let Element::List { attributes, .. } = &mut list
     {
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+        };
+        attributes.insert(marker, Cow::Borrowed(""));
+    }
+    if let Some(tail_mark) = understrike_tail_mark
+        && let Element::List { attributes, .. } = &mut list
+    {
+        let marker = match tail_mark {
+            SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
+            SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
         };
         attributes.insert(marker, Cow::Borrowed(""));
     }
@@ -1505,9 +1582,11 @@ fn segment_format_run<'t>(
     elements: Vec<Element<'t>>,
     ctype: ContainerType,
     formed: &mut bool,
+    stop_at_list: bool,
 ) -> Vec<Element<'t>> {
     let mut output = Vec::with_capacity(elements.len());
     let mut run: Vec<Element<'t>> = Vec::new();
+    let mut seen_list = false;
     for element in elements {
         if matches!(
             element,
@@ -1516,30 +1595,51 @@ fn segment_format_run<'t>(
                 ..
             }
         ) {
-            while matches!(run.first(), Some(Element::LineBreak | Element::LineBreaks(_))) {
+            while matches!(
+                run.first(),
+                Some(Element::LineBreak | Element::LineBreaks(_))
+            ) {
                 run.remove(0);
             }
-            if format_segment_has_content(&run) {
+            if stop_at_list && seen_list {
+                output.extend(mem::take(&mut run));
+            } else if format_segment_has_content(&run) {
                 *formed = true;
+                let mut attributes = AttributeMap::new();
+                if stop_at_list {
+                    // Tag the styled pre-list segment so lowering leaves the
+                    // enclosing scope's stack entry in place (see
+                    // `stopped_pre_segment`).
+                    attributes
+                        .insert(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, Cow::Borrowed(""));
+                }
                 output.push(Element::Container(Container::new(
                     ctype,
                     mem::take(&mut run),
-                    AttributeMap::new(),
+                    attributes,
                 )));
             } else {
                 run.clear();
             }
             let mut list = element;
-            segment_format_list_items(&mut list, ctype, formed);
+            segment_format_list_items(&mut list, ctype, formed, stop_at_list);
             output.push(list);
+            seen_list = true;
         } else {
             run.push(element);
         }
     }
-    while matches!(run.first(), Some(Element::LineBreak | Element::LineBreaks(_))) {
+    while matches!(
+        run.first(),
+        Some(Element::LineBreak | Element::LineBreaks(_))
+    ) {
         run.remove(0);
     }
-    if format_segment_has_content(&run) {
+    if stop_at_list && seen_list {
+        // Stopped pair (underline/strike in an inline scope): the segment
+        // after the list keeps its content but no styling.
+        output.extend(run);
+    } else if format_segment_has_content(&run) {
         *formed = true;
         output.push(Element::Container(Container::new(
             ctype,
@@ -1554,6 +1654,7 @@ fn segment_format_list_items<'t>(
     list: &mut Element<'t>,
     ctype: ContainerType,
     formed: &mut bool,
+    stop_at_list: bool,
 ) {
     let Element::List { items, .. } = list else {
         return;
@@ -1561,11 +1662,16 @@ fn segment_format_list_items<'t>(
     for item in items.iter_mut() {
         match item {
             ListItem::Elements { elements, .. } => {
-                let inner = mem::take(elements);
-                *elements = segment_format_run(inner, ctype, formed);
+                if !stop_at_list {
+                    let inner = mem::take(elements);
+                    *elements = segment_format_run(inner, ctype, formed, stop_at_list);
+                }
+                // For a stopped pair the item content is left unstyled.
             }
             ListItem::SubList { element } => {
-                segment_format_list_items(element, ctype, formed);
+                if !stop_at_list {
+                    segment_format_list_items(element, ctype, formed, stop_at_list);
+                }
             }
         }
     }
@@ -1595,6 +1701,7 @@ fn format_explicit_list_segments<'t>(
             unreachable!()
         };
         strip_span_list_close_tail_markers(container.attributes_mut());
+        strip_understrike_list_close_tail_markers(container.attributes_mut());
         return None;
     }
     let poisoned = subtree_contains_native_list(element);
@@ -1602,6 +1709,11 @@ fn format_explicit_list_segments<'t>(
         unreachable!()
     };
     let tail_mark = span_list_close_tail_of(container.attributes());
+    let understrike_tail_mark = understrike_list_close_tail_of(container.attributes());
+    let stops_at_list = container
+        .attributes()
+        .get()
+        .contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
     let children = mem::take(container.elements_mut());
     let literalised = |children: Vec<Element<'t>>| {
         let mut output = Vec::with_capacity(children.len() + 2);
@@ -1614,7 +1726,10 @@ fn format_explicit_list_segments<'t>(
         return Some(literalised(children));
     }
     let mut formed = false;
-    let mut segmented = segment_format_run(children, ctype, &mut formed);
+    let mut segmented = segment_format_run(children, ctype, &mut formed, stops_at_list);
+    // A stopped pair (underline/strike in an inline scope) is formed by the
+    // list alone; its segments carry no styling at or beyond the list.
+    let formed = formed || stops_at_list;
     if let Some(tail_mark) = tail_mark
         && formed
     {
@@ -1624,6 +1739,19 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+        };
+        for element in segmented.iter_mut() {
+            if let Element::List { attributes, .. } = element {
+                attributes.insert(marker, Cow::Borrowed(""));
+            }
+        }
+    }
+    if let Some(tail_mark) = understrike_tail_mark
+        && stops_at_list
+    {
+        let marker = match tail_mark {
+            SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
+            SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
         };
         for element in segmented.iter_mut() {
             if let Element::List { attributes, .. } = element {
@@ -1706,6 +1834,10 @@ fn lower_root_sequence<'t>(
     // explicit list just processed (spanin family); consumed by the next
     // root paragraph.
     let mut list_close_tail: Option<SpanListCloseTail> = None;
+    // Tail shape of a stopped underline/strikethrough pair that closed
+    // beyond the explicit list just processed; consumed by the next root
+    // paragraph like the spanin tail above.
+    let mut understrike_list_close_tail: Option<SpanListCloseTail> = None;
 
     for mut element in mem::take(elements) {
         let is_paragraph = matches!(
@@ -1782,10 +1914,36 @@ fn lower_root_sequence<'t>(
                 container.elements(),
                 [Element::Partial(PartialElement::InlineSpanClose(_))]
             );
+            let understrike_close_only_paragraph = matches!(
+                container.elements(),
+                [Element::Partial(
+                    PartialElement::InlineSpanClose(_)
+                        | PartialElement::InlineSizeClose(_)
+                        | PartialElement::InlineAnchorClose(_)
+                )]
+            );
             let tail_break = matches!(span_tail, Some(SpanListCloseTail::Break))
                 && close_only_paragraph;
             let tail_bare = matches!(span_tail, Some(SpanListCloseTail::Bare))
                 && !close_only_paragraph;
+            // Stopped underline/strikethrough tail: the after-list content
+            // renders bare, outside the inline scope (live `b<br>` / `<br>`
+            // after the list, with no scope tags).
+            let understrike_tail = understrike_list_close_tail.take();
+            let understrike_break =
+                matches!(understrike_tail, Some(SpanListCloseTail::Break))
+                    && understrike_close_only_paragraph;
+            let understrike_bare =
+                matches!(understrike_tail, Some(SpanListCloseTail::Bare))
+                    && !understrike_close_only_paragraph;
+            if understrike_break || understrike_bare {
+                active.retire_span_scopes();
+                active.retire_size_scopes();
+                active.drop_anchor_scopes();
+                if understrike_break {
+                    container.elements_mut().insert(0, Element::LineBreak);
+                }
+            }
             let previous_is_own_chunk_block = collapsible_heading_body
                 || previous_heading_collapsible_tail
                 || matches!(
@@ -1850,6 +2008,8 @@ fn lower_root_sequence<'t>(
                 wrapped: !collapsible_heading_tail
                     && !tail_break
                     && !tail_bare
+                    && !understrike_break
+                    && !understrike_bare
                     && (follows_table
                         || reopens_paragraph_after_separator
                         || !effects.scored_span_opened_unwrapped_at_start
@@ -1894,9 +2054,14 @@ fn lower_root_sequence<'t>(
         match &mut element {
             Element::List { attributes, .. } => {
                 list_close_tail = span_list_close_tail_of(attributes);
+                understrike_list_close_tail = understrike_list_close_tail_of(attributes);
                 strip_span_list_close_tail_markers(attributes);
+                strip_understrike_list_close_tail_markers(attributes);
             }
-            _ => list_close_tail = None,
+            _ => {
+                list_close_tail = None;
+                understrike_list_close_tail = None;
+            }
         }
         let mut sequence = vec![element];
         lower_sequence(
@@ -3025,7 +3190,11 @@ fn lower_sequence<'t>(
                     if stolen {
                         nested_active.tidy_close(*tag);
                     }
-                    nested_active.istack.pop();
+                    if stopped_pre_segment(&element) {
+                        clear_stop_marker(&mut element);
+                    } else {
+                        nested_active.istack.pop();
+                    }
                     active.istack = std::mem::take(&mut nested_active.istack);
                     if stolen {
                         flush_run(
@@ -3097,7 +3266,7 @@ fn lower_sequence<'t>(
                 run.pop();
             }
             if inline_scope_parts(&element).is_some() {
-                active.apply_subtree_istack(&element);
+                active.apply_subtree_istack(&mut element);
             }
             if active.has_anchor_scope() && wikidot_inline_closes_anchor(&element) {
                 let closed = wikidot_close_anchor_scope(
@@ -3122,6 +3291,7 @@ fn lower_sequence<'t>(
             if list_legacy {
                 if let Element::List { attributes, .. } = &mut element {
                     strip_span_list_close_tail_markers(attributes);
+                    strip_understrike_list_close_tail_markers(attributes);
                 }
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
                 if matches!(
@@ -3259,7 +3429,11 @@ fn lower_sequence<'t>(
                     bib,
                 );
                 if root_parts.is_some() {
-                    active.istack.pop();
+                    if stopped_pre_segment(&element) {
+                        clear_stop_marker(&mut element);
+                    } else {
+                        active.istack.pop();
+                    }
                 }
                 if let Some(watermark) = watermark {
                     let completed = active.end_watch();
@@ -3405,6 +3579,16 @@ fn inline_scope_parts<'t>(
 fn subtree_children<'a, 't>(element: &'a Element<'t>) -> Option<&'a [Element<'t>]> {
     match element {
         Element::Container(container) => Some(container.elements()),
+        Element::Color { elements, .. } => Some(elements),
+        _ => None,
+    }
+}
+
+fn subtree_children_mut<'a, 't>(
+    element: &'a mut Element<'t>,
+) -> Option<&'a mut [Element<'t>]> {
+    match element {
+        Element::Container(container) => Some(container.elements_mut()),
         Element::Color { elements, .. } => Some(elements),
         _ => None,
     }
