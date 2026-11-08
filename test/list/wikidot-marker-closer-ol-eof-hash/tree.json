@@ -1,0 +1,23 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "numbered",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "text",
+                                "data": "x"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
