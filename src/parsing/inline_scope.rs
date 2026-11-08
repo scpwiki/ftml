@@ -1424,9 +1424,27 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
             && let Element::Container(container) = &mut element
         {
             let children = mem::take(container.elements_mut());
-            output.push(Element::Text(Cow::Borrowed(kind.open_marker())));
+            // Live wraps a rejected literal marker run at line/block start in a
+            // paragraph (item 84a, harvest-markwrap). The open marker becomes a
+            // paragraph; the close marker stays bare (it follows the fostered
+            // block tail). Strikethrough's `--` renders as an em dash in live
+            // Wikidot text; emit the typographed form so the wrapped marker
+            // matches.
+            let open_text = match kind {
+                InlineFormatKind::Strikethrough => "—",
+                _ => kind.open_marker(),
+            };
+            let close_text = match kind {
+                InlineFormatKind::Strikethrough => "—",
+                _ => kind.close_marker(),
+            };
+            output.push(Element::Container(Container::new(
+                ContainerType::Paragraph,
+                vec![Element::Text(Cow::Borrowed(open_text))],
+                AttributeMap::new(),
+            )));
             output.extend(children);
-            output.push(Element::Text(Cow::Borrowed(kind.close_marker())));
+            output.push(Element::Text(Cow::Borrowed(close_text)));
             continue;
         }
         if !container_flattens(&element) {
@@ -2218,13 +2236,18 @@ fn seal_format_segment<'t>(
         )));
         return;
     }
-    if !stop_at_list && first_list && wrap_lead && !run.is_empty() {
-        // A break-only leading chunk (the own-line opener of the pair, nothing on
-        // its line but the marker). Live still emits the paragraph chunk; keep
-        // the run, marked.
+    if !stop_at_list && first_list && !run.is_empty()
+        && run.iter().all(|e| matches!(e, Element::LineBreak | Element::LineBreaks(_)))
+    {
+        // A break-only leading chunk (own-line opener of the pair). Live emits
+        // it as a segment; paragraph-wrap it only when `wrap_lead` (text-first
+        // / CK61 shapes). Code-first items keep the chunk bare (no <p>) but the
+        // segment itself must remain (item 85 / 84a own-line, harvest-markwrap).
         *formed = true;
         let mut attributes = AttributeMap::new();
-        attributes.insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
+        if wrap_lead {
+            attributes.insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
+        }
         output.push(Element::Container(Container::new(
             ctype,
             mem::take(run),
