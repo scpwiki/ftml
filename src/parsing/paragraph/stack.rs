@@ -432,6 +432,15 @@ impl<'t> ParagraphStack<'t> {
         {
             return;
         }
+        // d446-neighbors: when the list's items hold a div/note/block-quote/
+        // heading/code/collapsible/rule, live keeps the pre-list paragraph
+        // even at stream end (w3-w6/w8/w12/w13); only plain, nested-list,
+        // table, and tabview lists dissolve it at end (w1/w2/w7/w14).
+        if let Some(list) = self.finished.get(paragraph_index + 1)
+            && Self::wikidot_list_holds_nondissolving_block(list)
+        {
+            return;
+        }
         let paragraph = self.finished.remove(paragraph_index);
         self.shift_wikidot_div_literal_run_before(paragraph_index);
         let Element::Container(container) = paragraph else {
@@ -1422,11 +1431,22 @@ impl<'t> ParagraphStack<'t> {
                 }
                 self.current_unwrapped = true;
             }
+            // d446-neighbors: a div/blockquote in an item leaves the pre-list
+            // line bare only when the item starts with it (inner-block pins);
+            // a div/blockquote after item text keeps the line wrapped
+            // (q9/p2/q4). Table/tabview dissolve in any item position
+            // (p6/q2/q3).
             if self.wikidot
                 && !self.current.is_empty()
-                && (Self::wikidot_explicit_list_holds_block(&element)
-                    || (matches!(self.current.last(), Some(Element::LineBreak))
-                        && Self::wikidot_explicit_list_holds_blockquote(&element)))
+                && (Self::wikidot_explicit_list_holds_table_tabview(&element)
+                    || (Self::wikidot_explicit_list_starts_with_block(&element)
+                        && (Self::wikidot_explicit_list_holds_block(&element)
+                            || (matches!(
+                                self.current.last(),
+                                Some(Element::LineBreak)
+                            ) && Self::wikidot_explicit_list_holds_blockquote(
+                                &element,
+                            )))))
             {
                 self.current_unwrapped = true;
             }
@@ -1519,6 +1539,152 @@ impl<'t> ParagraphStack<'t> {
             return false;
         };
         items.iter().any(Self::wikidot_list_item_holds_block)
+    }
+
+    fn wikidot_list_holds_nondissolving_block(element: &Element<'_>) -> bool {
+        let Element::List {
+            wikidot_explicit_block: true,
+            items,
+            ..
+        } = element
+        else {
+            return false;
+        };
+        items
+            .iter()
+            .any(Self::wikidot_list_item_holds_nondissolving_block)
+    }
+
+    fn wikidot_list_item_holds_nondissolving_block(item: &ListItem<'_>) -> bool {
+        match item {
+            ListItem::Elements { elements, .. } => elements
+                .iter()
+                .any(Self::wikidot_element_holds_nondissolving_block),
+            ListItem::SubList { element } => {
+                Self::wikidot_element_holds_nondissolving_block(element)
+            }
+        }
+    }
+
+    fn wikidot_element_holds_nondissolving_block(element: &Element<'_>) -> bool {
+        match element {
+            Element::Container(container) => {
+                matches!(
+                    container.ctype(),
+                    ContainerType::Div
+                        | ContainerType::Note
+                        | ContainerType::Blockquote
+                        | ContainerType::Header(_)
+                        | ContainerType::Align(_)
+                ) || container
+                    .elements()
+                    .iter()
+                    .any(Self::wikidot_element_holds_nondissolving_block)
+            }
+            Element::Collapsible { .. }
+            | Element::Code { .. }
+            | Element::HorizontalRule
+            | Element::ContentSeparator => true,
+            Element::List { items, .. } => items
+                .iter()
+                .any(Self::wikidot_list_item_holds_nondissolving_block),
+            Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+                elements
+                    .iter()
+                    .any(Self::wikidot_element_holds_nondissolving_block)
+            }
+            _ => false,
+        }
+    }
+
+    fn wikidot_explicit_list_starts_with_block(element: &Element<'_>) -> bool {
+        let Element::List {
+            wikidot_explicit_block: true,
+            items,
+            ..
+        } = element
+        else {
+            return false;
+        };
+        items.iter().any(Self::wikidot_list_item_starts_with_block)
+    }
+
+    fn wikidot_list_item_starts_with_block(item: &ListItem<'_>) -> bool {
+        match item {
+            ListItem::Elements { elements, .. } => elements
+                .first()
+                .is_some_and(Self::wikidot_element_starts_with_block),
+            ListItem::SubList { element } => {
+                Self::wikidot_element_starts_with_block(element)
+            }
+        }
+    }
+
+    fn wikidot_element_starts_with_block(element: &Element<'_>) -> bool {
+        match element {
+            Element::Container(container) => {
+                matches!(
+                    container.ctype(),
+                    ContainerType::Div | ContainerType::Blockquote
+                ) || container
+                    .elements()
+                    .first()
+                    .is_some_and(Self::wikidot_element_starts_with_block)
+            }
+            Element::List { items, .. } => {
+                items.iter().any(Self::wikidot_list_item_starts_with_block)
+            }
+            Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+                elements
+                    .first()
+                    .is_some_and(Self::wikidot_element_starts_with_block)
+            }
+            _ => false,
+        }
+    }
+
+    fn wikidot_explicit_list_holds_table_tabview(element: &Element<'_>) -> bool {
+        let Element::List {
+            wikidot_explicit_block: true,
+            items,
+            ..
+        } = element
+        else {
+            return false;
+        };
+        items
+            .iter()
+            .any(Self::wikidot_list_item_holds_table_tabview)
+    }
+
+    fn wikidot_list_item_holds_table_tabview(item: &ListItem<'_>) -> bool {
+        match item {
+            ListItem::Elements { elements, .. } => elements
+                .iter()
+                .any(Self::wikidot_element_holds_table_tabview),
+            ListItem::SubList { element } => {
+                Self::wikidot_element_holds_table_tabview(element)
+            }
+        }
+    }
+
+    fn wikidot_element_holds_table_tabview(element: &Element<'_>) -> bool {
+        match element {
+            Element::Table(_) | Element::TabView(_) => true,
+            Element::Container(container) => container
+                .elements()
+                .iter()
+                .any(Self::wikidot_element_holds_table_tabview),
+            Element::List { items, .. } => items
+                .iter()
+                .any(Self::wikidot_list_item_holds_table_tabview),
+            Element::Color { elements, .. } | Element::Anchor { elements, .. } => {
+                elements
+                    .iter()
+                    .any(Self::wikidot_element_holds_table_tabview)
+            }
+            _ => false,
+        }
     }
 
     fn wikidot_list_item_holds_block(item: &ListItem<'_>) -> bool {

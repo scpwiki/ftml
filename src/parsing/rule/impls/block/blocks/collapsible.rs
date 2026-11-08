@@ -505,7 +505,13 @@ fn parse_fn<'r, 't>(
             || parser.wikidot_scan_shows_stolen_head(
                 WikidotBlockKind::Collapsible,
                 opener_start,
-            ))
+            )
+            // d446-neighbors: a collapsible head inside a list item body with
+            // no `[[/collapsible]]` anywhere after it stays literal on live
+            // (u13); the legacy body path would otherwise form a block ending
+            // at the item boundary. Scan-blind zoned closers still fall through.
+            || (parser.wikidot_li_collect_top().is_some()
+                && !parser.has_body_end_block(&BLOCK_COLLAPSIBLE)))
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }

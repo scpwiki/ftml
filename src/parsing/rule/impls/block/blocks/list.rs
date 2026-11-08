@@ -1762,6 +1762,18 @@ fn assemble_wikidot_li_segments<'t>(
         Some(Element::Container(container))
             if container.ctype() == ContainerType::Blockquote
     );
+    // d446-neighbors: after a heading, rule, or separator at item top level
+    // live puts the trailing break after the whole list, not inside the item
+    // (a4/a16/a17, h3/h4/h10); [[...]]-formed blocks and quote/table keep it
+    // inside (h1-h8).
+    let trailing_line_block = matches!(
+        elements.last(),
+        Some(Element::Container(container))
+            if matches!(container.ctype(), ContainerType::Header(_))
+    ) || matches!(
+        elements.last(),
+        Some(Element::HorizontalRule | Element::ContentSeparator)
+    );
     // d4-46 (b): an item that stopped at a breached outer closer keeps the
     // breaks the consume-time rule left (0 without span, 2 with one); the
     // closer line's newline must not re-add a trailing break here.
@@ -1771,6 +1783,7 @@ fn assemble_wikidot_li_segments<'t>(
             .last()
             .is_some_and(|element| !element.paragraph_safe())
         && !trailing_nested_list
+        && !trailing_line_block
     {
         elements.push(Element::LineBreak);
     } else if !had_trailing_empty && !terminated_at_cross_close {
@@ -1799,6 +1812,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !trailing_nested_list
             && !trailing_table
             && !trailing_blockquote
+            && !trailing_line_block
             && !note_yielded_list_closer
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)

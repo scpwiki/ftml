@@ -1311,7 +1311,11 @@ impl<'r, 't> Parser<'r, 't> {
         // cross scan; they are never flat (l-ul-li-*). d4-46 (b): note pairs
         // pair first-fit and the outer head may already be a flat shell, so a
         // crossed note close still emits after the item terminates at it.
+        // d446-neighbors: a scan-flat div/collapsible head already emitted a
+        // shell at head time (before the cross scan ran), so its crossed close
+        // must still emit as a flat close instead of literalizing.
         if pair.kind != block_pairs::WikidotBlockKind::Note
+            && !pair.flat
             && self.wikidot_li_cross_pair_crossed(pair.closer_byte)
         {
             return false;

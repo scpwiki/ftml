@@ -208,10 +208,16 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
         }
         // An open span in a list item keeps the newline this skip swallowed.
         // A collapsible doubles it. A tabview keeps one. d4-46 (a): a div
-        // doubles it too (a10/a20 saved-page probes).
-        if span_doubles_leading_break && parser.wikidot_li_inside_item_body() {
+        // doubles it too (a10/a20 saved-page probes). d446-neighbors: note
+        // and code double it too (r1/r2/q4/p5 saved-page probes). A tabview
+        // in an item body keeps one even without an open span (w7).
+        if parser.wikidot_li_inside_item_body()
+            && (span_doubles_leading_break || elements_open_tabview(&success.item))
+        {
             let leading_breaks = if elements_open_collapsible(&success.item)
                 || elements_open_div(&success.item)
+                || elements_open_note(&success.item)
+                || elements_open_code(&success.item)
             {
                 2
             } else if elements_open_tabview(&success.item) {
@@ -272,6 +278,30 @@ fn elements_open_div(elements: &Elements<'_>) -> bool {
     match elements {
         Elements::Single(element) => is_div(element),
         Elements::Multiple(elements) => elements.iter().any(is_div),
+        Elements::None => false,
+    }
+}
+
+fn elements_open_note(elements: &Elements<'_>) -> bool {
+    let is_note = |element: &Element<'_>| match element {
+        Element::Container(container) => matches!(container.ctype(), ContainerType::Note),
+        Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+            matches!(shell, crate::tree::WikidotBlockShell::Note { .. })
+        }
+        _ => false,
+    };
+    match elements {
+        Elements::Single(element) => is_note(element),
+        Elements::Multiple(elements) => elements.iter().any(is_note),
+        Elements::None => false,
+    }
+}
+
+fn elements_open_code(elements: &Elements<'_>) -> bool {
+    let is_code = |element: &Element<'_>| matches!(element, Element::Code { .. });
+    match elements {
+        Elements::Single(element) => is_code(element),
+        Elements::Multiple(elements) => elements.iter().any(is_code),
         Elements::None => false,
     }
 }
