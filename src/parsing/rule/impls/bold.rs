@@ -431,8 +431,9 @@ pub(super) fn mark_span_list_close_tail<'r, 't>(
 /// carry its styling across the list on live: only the segment before the
 /// list keeps its styling, the list and the post-list segment are unstyled,
 /// and both markers are consumed. (Bold, italics, superscript and subscript
-/// pair across the list there, and underline/strike pair across it outside
-/// an inline scope and inside `[[div]]`.) Stamp the collected container so
+/// pair across the list in span/size bodies, and underline/strike pair
+/// across it outside an inline scope and inside `[[div]]`; inside an anchor
+/// body every format family stops.) Stamp the collected container so
 /// inline-scope lowering segments it that way, plus its post-list tail
 /// shape. The tail classification is the same token-after-close rule for
 /// post-list segments with and without content (a content-bearing segment
@@ -493,21 +494,23 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     }
 
     let Some(container) = find_stop_at_list_container(&elements) else {
-        eprintln!("DEBUG_CONT: no container found");
         return elements;
     };
-    eprintln!("DEBUG_CONT: found container type {:?}, in_span={}, crosses_checking...", container.ctype(), parser.in_wikidot_span_body());
     // Bold/italics pairs do not carry their styling across an explicit
     // list inside an anchor body on live (li items and the post segment
     // render unstyled; the pre segment keeps styling): the pair forms a
     // stopped pair there, unlike in span/size/free scopes where it crosses
-    // normally. Probed live (frozen ci2-anchor-pre-b; fresh
-    // muse-probe-anchorpre-boldanchorattr-v2/italicsspan-verified twins).
-    // Superscript/subscript/monospace remain unprobed for anchor bodies
-    // and keep the crossing behaviour.
+    // normally. Superscript/subscript/monospace behave the same way in an
+    // anchor body (probed live: muse-probe-anc72-*-cont/multi/fold/nopost —
+    // items unstyled, markers consumed, bare/content/nothing tails),
+    // while they cross normally in span/size/free scopes.
     if !match container.ctype() {
         ContainerType::Underline | ContainerType::Strikethrough => true,
-        ContainerType::Bold | ContainerType::Italics => in_anchor,
+        ContainerType::Bold
+        | ContainerType::Italics
+        | ContainerType::Superscript
+        | ContainerType::Subscript
+        | ContainerType::Monospace => in_anchor,
         _ => false,
     } {
         return elements;
@@ -629,6 +632,9 @@ fn find_stop_at_list_container<'e, 't>(
                 | ContainerType::Strikethrough
                 | ContainerType::Bold
                 | ContainerType::Italics
+                | ContainerType::Superscript
+                | ContainerType::Subscript
+                | ContainerType::Monospace
         )
         .then_some(container)
     }
@@ -654,6 +660,9 @@ fn find_stop_at_list_container_mut<'e, 't>(
                 | ContainerType::Strikethrough
                 | ContainerType::Bold
                 | ContainerType::Italics
+                | ContainerType::Superscript
+                | ContainerType::Subscript
+                | ContainerType::Monospace
         )
         .then_some(container)
     }
