@@ -682,9 +682,11 @@ fn migrated_break_dropped_before_following_line(parser: &Parser<'_, '_>) -> bool
 
 /// The degraded trailing shell an ordered list closed at a shallower quote
 /// depth leaves behind live: a bullet list holding only one
-/// list-style-none item with a break and no closing tags (the a5e3e034c
-/// degraded form). An unordered list leaves a plain break instead.
-fn ordered_boundary_close_shell() -> Element<'static> {
+/// list-style-none item with a break (the a5e3e034c degraded form). At the
+/// end of input it has no closing tags; before a following quoted line live
+/// closes it between the two blockquotes. An unordered list leaves a plain
+/// break instead.
+fn ordered_boundary_close_shell(closed: bool) -> Element<'static> {
     let mut item_attributes = AttributeMap::new();
     item_attributes.insert("style", cow!("list-style: none"));
     Element::List {
@@ -695,7 +697,7 @@ fn ordered_boundary_close_shell() -> Element<'static> {
         }],
         attributes: AttributeMap::new(),
         wikidot_explicit_block: false,
-        wikidot_unclosed: true,
+        wikidot_unclosed: !closed,
     }
 }
 
@@ -1183,6 +1185,37 @@ fn try_consume_fn<'r, 't>(
             append_from_list_boundary = true;
             append_from_ordered_list_boundary = quote_end_ordered_list_row;
         }
+        // A boundary list close followed by a quoted line ends the quote run
+        // there: live starts a new blockquote for the follower and the
+        // migrated break (or the ordered degraded shell) lands between the
+        // two blockquotes.
+        let boundary_list_row = parser.settings().layout.legacy()
+            && !quote_end_list_row
+            && boundary_list_close
+            && parser.current().token == Token::Quote
+            && matches!(
+                elements.iter().rev().find(|element| {
+                    !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                }),
+                Some(Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                })
+            );
+        if boundary_list_row {
+            append_unquoted_close_break = true;
+            append_from_list_boundary = true;
+            append_from_ordered_list_boundary = matches!(
+                elements.iter().rev().find(|element| {
+                    !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                }),
+                Some(Element::List {
+                    ltype: ListType::Numbered,
+                    ..
+                })
+            );
+            quote_run_active = false;
+        }
         if quote_end_list_break
             && !matches!(elements.last(), Some(Element::LineBreak))
         {
@@ -1402,7 +1435,9 @@ fn try_consume_fn<'r, 't>(
                 && migrated_break_dropped_before_following_line(parser))
         {
             if append_from_ordered_list_boundary {
-                elements.push(ordered_boundary_close_shell());
+                elements.push(ordered_boundary_close_shell(
+                    parser.current().token == Token::Quote,
+                ));
             } else {
                 elements.push(Element::LineBreak);
             }
@@ -1421,7 +1456,9 @@ fn try_consume_fn<'r, 't>(
             && migrated_break_dropped_before_following_line(parser))
     {
         if append_from_ordered_list_boundary {
-            elements.push(ordered_boundary_close_shell());
+            elements.push(ordered_boundary_close_shell(
+                parser.current().token == Token::Quote,
+            ));
         } else {
             elements.push(Element::LineBreak);
         }
