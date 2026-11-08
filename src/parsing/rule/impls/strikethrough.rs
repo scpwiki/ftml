@@ -41,6 +41,9 @@ fn dash<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>
     trace!("Trying to create a double dash strikethrough");
     if parser.settings().layout.legacy()
         && super::dash::double_dash_occupies_its_line(parser)
+        && parser
+            .look_ahead(1)
+            .is_none_or(|token| token.token == Token::LineBreak)
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
