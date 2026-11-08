@@ -2830,6 +2830,7 @@ where
             Li,
             Div,
             Coll,
+            Note,
         }
 
         let mut scan = self.clone();
@@ -2920,6 +2921,16 @@ where
                         } else if name.eq_ignore_ascii_case("collapsible") {
                             if !opaque {
                                 stack.push((CrossFrame::Coll, start, false));
+                            }
+                        } else if name.eq_ignore_ascii_case("note") {
+                            // d4-46 (b): notes pair first-fit, so a head whose
+                            // scan closer went to an outer opener (unpaired
+                            // here) stays literal and must not steal the first
+                            // closer from the outer head.
+                            if !opaque
+                                && self.wikidot_block_pair_at_head_byte(start).is_some()
+                            {
+                                stack.push((CrossFrame::Note, start, false));
                             }
                         }
                     }
@@ -3016,12 +3027,23 @@ where
                         }
                     } else if name.eq_ignore_ascii_case("div")
                         || name.eq_ignore_ascii_case("collapsible")
+                        || name.eq_ignore_ascii_case("note")
                     {
-                        if !opaque {
+                        // d4-46 (b): only scan-paired note closers breach;
+                        // orphans stay literal and must not stop the item.
+                        if !opaque
+                            && (name.eq_ignore_ascii_case("div")
+                                || name.eq_ignore_ascii_case("collapsible")
+                                || self
+                                    .wikidot_block_pair_at_closer_byte(close_pos)
+                                    .is_some())
+                        {
                             let (frame, kind) = if name.eq_ignore_ascii_case("div") {
                                 (CrossFrame::Div, WikidotLiCrossKind::Div)
-                            } else {
+                            } else if name.eq_ignore_ascii_case("collapsible") {
                                 (CrossFrame::Coll, WikidotLiCrossKind::Collapsible)
+                            } else {
+                                (CrossFrame::Note, WikidotLiCrossKind::Note)
                             };
                             if let Some(index) = stack
                                 .iter()
@@ -3158,7 +3180,9 @@ where
     }
 
     /// L85: stop a list body at a scan-paired div/collapsible closer whose
-    /// opener is genuinely outside (closein shapes). Scoped to list rules.
+    /// opener is genuinely outside (closein shapes). d4-46 (b): note closers
+    /// too, including flat outer heads that leave no body boundary.
+    /// Scoped to list rules.
     pub(crate) fn wikidot_li_cross_foreign_stop_here(
         &self,
         block_rule: &BlockRule,
@@ -3180,6 +3204,15 @@ where
             return false;
         };
         if !self.wikidot_ancestor_boundary_accepts(kind.boundary_name()) {
+            // d4-46 (b): a flat [[note]] head leaves no body boundary, so an
+            // outer first-fit close inside the item still stops it when its
+            // scan head lies before the list region.
+            if kind.boundary_name() == "note"
+                && let Some(pair) = self.wikidot_block_pair_at_closer_byte(pos)
+                && !self.wikidot_li_cross_head_in_region(pair.head_byte)
+            {
+                return true;
+            }
             return false;
         }
         true
@@ -3201,7 +3234,8 @@ where
     }
 
     /// L85: skip (drop) a scan-redundant `[[/li]]` inside div/collapsible
-    /// bodies (cross shapes). Consumes the closer on success.
+    /// bodies (cross shapes). d4-46 (b): note bodies too. Consumes the
+    /// closer on success.
     pub(crate) fn wikidot_li_cross_skip_redundant_here(
         &mut self,
         rule_name: &str,
@@ -3209,7 +3243,7 @@ where
         if !self.settings().layout.legacy() || self.discarding_hidden_body() {
             return false;
         }
-        if !matches!(rule_name, "block-div" | "block-collapsible") {
+        if !matches!(rule_name, "block-div" | "block-collapsible" | "block-note") {
             return false;
         }
         if self.exact_wikidot_li_close_end().is_none() {

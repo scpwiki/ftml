@@ -1586,8 +1586,67 @@ where
         looks_skippable
     };
 
+    // d4-46 (a): inside a list item with an open [[span]]/[[size]] body, live
+    // keeps the skipped newline as two breaks before a heading, quote,
+    // equals or horizontal-rule line (blank lines already keep two via the
+    // li blank handling; lists/tables keep one via their exclusions above).
+    // Directly in the item only (top boundary is `[[li]]`): a footnote body
+    // nested in an item does not double.
+    let double_break_in_li_span = skip
+        && parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser.wikidot_top_boundary_is_li()
+        && (parser.in_wikidot_span_body() || parser.in_wikidot_size_body())
+        && matches!(
+            parser.look_ahead(next_offset).map(|token| token.token),
+            Some(Token::Heading | Token::Quote | Token::Equals | Token::TripleDash)
+        );
+
+    // d4-46 (b): a break immediately before a breached outer closer follows
+    // the heading rule in a direct item — dropped without an open span/size,
+    // doubled with one (b1/b2/b7 saved-page probes). Only crossed pairs
+    // count; self-contained closes are consumed by their inner bodies.
+    let breached_closer_ahead = {
+        let closer_byte = match parser.look_ahead(0).map(|t| t.token) {
+            Some(Token::LeftBlockEnd) => parser.look_ahead(0).map(|t| t.span.start),
+            Some(Token::Whitespace) => parser
+                .look_ahead(1)
+                .filter(|t| t.token == Token::LeftBlockEnd)
+                .map(|t| t.span.start),
+            _ => None,
+        };
+        closer_byte.and_then(|byte| {
+            parser
+                .wikidot_li_cross_pair_at(byte)
+                .and_then(|(_, crossed)| crossed.then_some(byte))
+        })
+    };
+    let li_cross_close_break = breached_closer_ahead.is_some()
+        && parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser.wikidot_top_boundary_is_li();
+    let double_cross_close_break = li_cross_close_break
+        && (parser.in_wikidot_span_body() || parser.in_wikidot_size_body());
+
     parser.step()?;
+    if li_cross_close_break {
+        if double_cross_close_break {
+            return Ok(Some(ParseSuccess::new(
+                Elements::Multiple(vec![Element::LineBreak, Element::LineBreak]),
+                Vec::new(),
+                true,
+            )));
+        }
+        return Ok(Some(ParseSuccess::new(Elements::None, Vec::new(), true)));
+    }
     if skip {
+        if double_break_in_li_span {
+            return Ok(Some(ParseSuccess::new(
+                Elements::Multiple(vec![Element::LineBreak, Element::LineBreak]),
+                Vec::new(),
+                true,
+            )));
+        }
         Ok(Some(ParseSuccess::new(Elements::None, Vec::new(), true)))
     } else {
         Ok(Some(ParseSuccess::new(

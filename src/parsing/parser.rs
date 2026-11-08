@@ -1295,8 +1295,12 @@ impl<'r, 't> Parser<'r, 't> {
             return false;
         }
         // L85: pairs crossed through explicit-list structure nest under the
-        // cross scan; they are never flat (l-ul-li-*).
-        if self.wikidot_li_cross_pair_crossed(pair.closer_byte) {
+        // cross scan; they are never flat (l-ul-li-*). d4-46 (b): note pairs
+        // pair first-fit and the outer head may already be a flat shell, so a
+        // crossed note close still emits after the item terminates at it.
+        if pair.kind != block_pairs::WikidotBlockKind::Note
+            && self.wikidot_li_cross_pair_crossed(pair.closer_byte)
+        {
             return false;
         }
         // L85: a head inside the scanned list region whose closer falls past

@@ -135,6 +135,26 @@ impl<'r, 't> Parser<'r, 't> {
         false
     }
 
+    /// Whether the innermost (topmost) non-confined body boundary is a list
+    /// item body (directly in `[[li]]`, not under a nested body such as a
+    /// footnote that itself sits in an item). d4-46 (a): the li-span break
+    /// doubling is direct-item only; the footnote pin
+    /// `collapsible/in-list-content-paragraph-heading-footnote` shows a
+    /// heading under a footnote in an item stays un-doubled.
+    pub(crate) fn wikidot_top_boundary_is_li(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        for boundary in cache.body_end_boundaries.iter().rev() {
+            if boundary.confined {
+                continue;
+            }
+            return boundary
+                .accepts_names
+                .iter()
+                .any(|accepted| accepted.eq_ignore_ascii_case("li"));
+        }
+        false
+    }
+
     pub(crate) fn body_end_boundary_accepts(&self, name: &str) -> bool {
         self.block_end_scan_cache
             .borrow()

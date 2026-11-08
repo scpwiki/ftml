@@ -4895,15 +4895,18 @@ fn lower_children<'t>(
         }
         // A heading that ends a frame already consumed its own newline.
         // Leaving the trim set eats the newline after the frame close.
-        if eject
-            && *trim_next_break
-            && matches!(
-                children.last(),
-                Some(Element::Container(container))
-                    if matches!(container.ctype(), ContainerType::Header(_))
-            )
-        {
-            *trim_next_break = false;
+        // d4-46 (b): same when the heading ends the frame through a trailing
+        // list (live keeps both tail breaks after the close).
+        if eject && *trim_next_break {
+            let ends_with_heading =
+                matches!(
+                    children.last(),
+                    Some(Element::Container(container))
+                        if matches!(container.ctype(), ContainerType::Header(_))
+                ) || matches!(children.last(), Some(Element::List { .. }));
+            if ends_with_heading {
+                *trim_next_break = false;
+            }
         }
         if eject {
             eject_segment_trailing_space(children);
