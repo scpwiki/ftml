@@ -123,6 +123,8 @@ pub enum WikidotBlockShell<'t> {
     Align {
         head: usize,
         alignment: Alignment,
+        /// See `Div::outer_close_eof`.
+        outer_close_eof: bool,
     },
 }
 
@@ -175,9 +177,14 @@ impl<'t> WikidotBlockShell<'t> {
                 head: *head,
                 outer_close_eof: *outer_close_eof,
             },
-            WikidotBlockShell::Align { head, alignment } => WikidotBlockShell::Align {
+            WikidotBlockShell::Align {
+                head,
+                alignment,
+                outer_close_eof,
+            } => WikidotBlockShell::Align {
                 head: *head,
                 alignment: *alignment,
+                outer_close_eof: *outer_close_eof,
             },
         }
     }
