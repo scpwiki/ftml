@@ -1193,6 +1193,47 @@ fn parse_list_item<'r, 't>(
             let element = Element::Partial(PartialElement::WikidotFoster(elements));
             return success_elements_with_paragraph_safety(false, element, errors);
         }
+        // lihoist p23: a body folding to a single native run list whose only
+        // items are depth-2+ marker lines is no formation in live — the
+        // lines dissolve to a paragraph when a starred list pair formation
+        // closes inside the body, and to bare text otherwise.
+        if elements.len() == 1
+            && let Some(Element::List { items, .. }) = elements.first()
+            && !items.is_empty()
+            && items.iter().all(|item| {
+                matches!(
+                    item,
+                    ListItem::Elements { elements: inner, .. }
+                        if !inner.is_empty()
+                            && deep_marker_head(&inner[0])
+                            && inner.iter().all(|element| matches!(element, Element::Text(_) | Element::LineBreak))
+                )
+            })
+        {
+            let deep_formation =
+                crate::parsing::rule::impls::line_owner::starred_list_closer_in_source(
+                    source,
+                );
+            let [Element::List { items, .. }] = elements.as_slice() else {
+                unreachable!()
+            };
+            let inner: Vec<Element<'t>> = items
+                .iter()
+                .flat_map(|item| match item {
+                    ListItem::Elements { elements: inner, .. } => inner.clone(),
+                    ListItem::SubList { .. } => Vec::new(),
+                })
+                .collect();
+            if deep_formation {
+                elements = vec![Element::Container(Container::new(
+                    ContainerType::Paragraph,
+                    inner,
+                    AttributeMap::new(),
+                ))];
+            } else {
+                elements = inner;
+            }
+        }
         // Live ends a run formation inside an explicit [[li]] body at the
         // completing pair's closer: run items after the closer escape to
         // the enclosing list as its items instead of re-forming a second
@@ -1456,7 +1497,15 @@ fn segment_has_block_marker(segment: &[Element]) -> bool {
         .any(|element| matches!(element, Element::Text(text) if text.contains("[[")))
 }
 
-fn wrap_inline_line_after_list(segment: &mut Vec<Element>) {
+fn deep_marker_head(element: &Element) -> bool {
+    matches!(element, Element::Text(text) if text.starts_with("**") || text.starts_with("##"))
+}
+
+/// lihoist p23: a depth-2+ marker line (e.g. `** deep`) becomes its own
+/// paragraph segment when a list follows it in the segment or a starred
+/// list pair formation closes inside the body; otherwise it stays a bare
+/// continuation (g2-style).
+fn wrap_inline_line_after_list(segment: &mut Vec<Element>, formation_present: bool) {
     let mut index = 0;
     while index < segment.len() {
         if !matches!(
@@ -1478,15 +1527,34 @@ fn wrap_inline_line_after_list(segment: &mut Vec<Element>) {
         while end < segment.len() && segment[end].paragraph_safe() {
             end += 1;
         }
-        let run: Vec<Element> = segment.drain(start..end).collect();
-        if !segment_has_block_marker(&run)
-            || !run.iter().any(
-                |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
-            )
+        let mut run: Vec<Element> = segment.drain(start..end).collect();
+        let deep_paragraph = !run.is_empty()
+            && deep_marker_head(&run[0])
+            && !segment_has_block_marker(&run)
+            && (formation_present
+                || matches!(
+                    segment.get(start),
+                    Some(Element::List {
+                        wikidot_explicit_block: false,
+                        ..
+                    })
+                ));
+        if !deep_paragraph
+            && (!segment_has_block_marker(&run)
+                || !run.iter().any(
+                    |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
+                ))
         {
             segment.splice(start..start, run);
             index = start + 1;
             continue;
+        }
+        if deep_paragraph {
+            // The break that ended the deep line does not belong inside its
+            // paragraph (p23-after-item).
+            while matches!(run.last(), Some(Element::LineBreak)) {
+                run.pop();
+            }
         }
         // Only an inline run carrying a literal block marker (e.g. a lone
         // `[[/hidden]]` line after a list) is paragraph-wrapped; a plain
@@ -1589,7 +1657,10 @@ fn assemble_wikidot_li_segments<'t>(
                 index += 1;
             }
         }
-        wrap_inline_line_after_list(segment);
+        wrap_inline_line_after_list(
+            segment,
+            crate::parsing::rule::impls::line_owner::starred_list_closer_in_source(source),
+        );
     }
     if let Some(first) = segments.first_mut() {
         while matches!(first.first(), Some(Element::LineBreak)) {
@@ -1705,6 +1776,19 @@ fn assemble_wikidot_li_segments<'t>(
             .unwrap_or(source);
         let quote_prefix_saves_item = wikidot_li_closer_line_is_quote_prefix(body)
             && wikidot_li_break_saves_vanishing_item(&elements);
+        // lihoist p23: a trailing deep-marker paragraph keeps no break
+        // inside it (p23-after-item).
+        let deep_trailing_paragraph = elements.last().is_some_and(|element| {
+            matches!(
+                element,
+                Element::Container(container)
+                    if container.ctype() == ContainerType::Paragraph
+                        && container
+                            .elements()
+                            .first()
+                            .is_some_and(deep_marker_head)
+            )
+        });
         if (body.ends_with('\n') || quote_prefix_saves_item)
             && !matches!(elements.last(), Some(Element::LineBreak))
             && !trailing_nested_list
@@ -1713,6 +1797,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !note_yielded_list_closer
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)
+            && !deep_trailing_paragraph
         {
             if let Some(Element::Container(container)) = elements.last_mut()
                 && container.ctype() == ContainerType::Paragraph

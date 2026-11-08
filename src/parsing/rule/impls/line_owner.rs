@@ -485,6 +485,24 @@ pub(crate) fn head_on_list_item_line(source: &str, head_byte: usize) -> bool {
     rest.chars().all(char::is_whitespace)
 }
 
+/// Whether the body source contains a starred `[[ul]]`/`[[ol]]` closer
+/// line (a starred list pair formation closing inside the body).
+pub(crate) fn starred_list_closer_in_source(source: &str) -> bool {
+    source.lines().any(|line| {
+        let trimmed = line.trim_start_matches([' ', '\t', '>']);
+        let Some(rest) = trimmed
+            .strip_prefix('*')
+            .or_else(|| trimmed.strip_prefix('#'))
+        else {
+            return false;
+        };
+        let lower = rest.trim_start_matches([' ', '\t']).to_ascii_lowercase();
+        ["[[/ul]]", "[[/ul_]]", "[[/ol]]", "[[/ol_]]"]
+            .iter()
+            .any(|needle| lower.starts_with(needle))
+    })
+}
+
 /// Whether a `[[name]]` closer line (starred or unstarred) exists strictly
 /// between `from` and the `[[li]]` body end byte.
 pub(crate) fn closer_for_block_in_range(
