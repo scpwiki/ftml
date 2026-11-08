@@ -1,0 +1,182 @@
+{
+    "elements": [
+        {
+            "element": "table",
+            "data": {
+                "type": "advanced",
+                "attributes": {},
+                "rows": [
+                    {
+                        "attributes": {},
+                        "cells": [
+                            {
+                                "header": false,
+                                "column-span": 1,
+                                "align": null,
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "list",
+                                        "data": {
+                                            "type": "bullet",
+                                            "attributes": {},
+                                            "items": [
+                                                {
+                                                    "item-type": "elements",
+                                                    "attributes": {},
+                                                    "elements": [
+                                                        {
+                                                            "element": "list",
+                                                            "data": {
+                                                                "type": "bullet",
+                                                                "attributes": {},
+                                                                "items": [
+                                                                    {
+                                                                        "item-type": "elements",
+                                                                        "attributes": {},
+                                                                        "elements": [
+                                                                            {
+                                                                                "element": "text",
+                                                                                "data": "*"
+                                                                            },
+                                                                            {
+                                                                                "element": "text",
+                                                                                "data": " "
+                                                                            },
+                                                                            {
+                                                                                "element": "container",
+                                                                                "data": {
+                                                                                    "type": "superscript",
+                                                                                    "attributes": {},
+                                                                                    "elements": [
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "x"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "list",
+                                                                                            "data": {
+                                                                                                "type": "bullet",
+                                                                                                "attributes": {},
+                                                                                                "items": [
+                                                                                                    {
+                                                                                                        "item-type": "elements",
+                                                                                                        "attributes": {},
+                                                                                                        "elements": [
+                                                                                                            {
+                                                                                                                "element": "text",
+                                                                                                                "data": "*"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "element": "text",
+                                                                                                                "data": " "
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "[[/"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "cell"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "]]"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "list",
+                                                                                            "data": {
+                                                                                                "type": "bullet",
+                                                                                                "attributes": {},
+                                                                                                "items": [
+                                                                                                    {
+                                                                                                        "item-type": "elements",
+                                                                                                        "attributes": {},
+                                                                                                        "elements": [
+                                                                                                            {
+                                                                                                                "element": "text",
+                                                                                                                "data": "*"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "element": "text",
+                                                                                                                "data": " "
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "[[/"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "row"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "]]"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "list",
+                                                                                            "data": {
+                                                                                                "type": "bullet",
+                                                                                                "attributes": {},
+                                                                                                "items": [
+                                                                                                    {
+                                                                                                        "item-type": "elements",
+                                                                                                        "attributes": {},
+                                                                                                        "elements": [
+                                                                                                            {
+                                                                                                                "element": "text",
+                                                                                                                "data": "*"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "element": "text",
+                                                                                                                "data": " "
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "[[/"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "table"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "]]"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
