@@ -1650,12 +1650,78 @@ pub(crate) fn subtree_contains_native_list(element: &Element<'_>) -> bool {
     found
 }
 
+/// Whether the subtree contains an explicit list (`[[ul]]`/`[[ol]]`/…) at
+/// any depth. A format pair nested inside another format pair (e.g.
+/// `__**[[ul]]...**__`) reaches its rule exit with the list nested inside
+/// the inner pair's container, so the stopped-pair check must look past
+/// direct children.
+pub(crate) fn subtree_contains_explicit_list(element: &Element<'_>) -> bool {
+    if matches!(
+        element,
+        Element::List {
+            wikidot_explicit_block: true,
+            ..
+        }
+    ) {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        for child in children {
+            if !found && subtree_contains_explicit_list(child) {
+                found = true;
+            }
+        }
+    });
+    found
+}
+
+/// Whether the subtree holds content after an explicit list, at any
+/// nesting depth. An underline/strike pair whose closest enclosing list is
+/// nested inside an inner format pair reaches its rule exit with the list
+/// out of direct-children reach; the stopped-pair tail classification only
+/// needs to know whether anything sits between the last list's end and the
+/// pair's closer. Elements before the last list, line breaks, and empty
+/// text do not count.
+pub(crate) fn post_list_subtree_has_content(elements: &[Element<'_>]) -> bool {
+    fn subtree_has_content(element: &Element<'_>) -> bool {
+        match element {
+            Element::LineBreak | Element::LineBreaks(_) => false,
+            Element::Text(text) => !text.trim().is_empty(),
+            Element::List { .. } => true,
+            _ => true,
+        }
+    }
+    let mut saw_list = false;
+    for element in elements {
+        if saw_list && subtree_has_content(element) {
+            return true;
+        }
+        if matches!(
+            element,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        ) {
+            saw_list = true;
+            continue;
+        }
+        if let Element::Container(container) = element
+            && post_list_subtree_has_content(container.elements())
+        {
+            return true;
+        }
+    }
+    false
+}
+
 /// Whether the subtree contains a flow block: a div/note/align container,
 /// collapsible, tabview, wikidot block frame or block open/close partial
 /// (see `is_wikidot_flow_block`), or a table/math block. `Element::Code`
 /// is deliberately absent: live forms the format pair across an explicit
 /// list whose item holds a code block (it segments instead of rejecting).
-fn subtree_contains_flow_block(element: &Element<'_>) -> bool {
+pub(crate) fn subtree_contains_flow_block(element: &Element<'_>) -> bool {
     if matches!(element, Element::Math { .. } | Element::Table(_))
         || is_wikidot_flow_block(element)
     {
@@ -2164,7 +2230,10 @@ fn lower_root_sequence<'t>(
             let span_tail = list_close_tail.take();
             let close_only_paragraph = matches!(
                 container.elements(),
-                [Element::Partial(PartialElement::InlineSpanClose(_))]
+                [Element::Partial(
+                    PartialElement::InlineSpanClose(_)
+                        | PartialElement::InlineSizeClose(_)
+                )]
             );
             let understrike_close_only_paragraph = matches!(
                 container.elements(),
