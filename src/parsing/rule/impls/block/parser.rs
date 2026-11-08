@@ -7794,8 +7794,14 @@ where
     /// item close line is reachable unquoted text (BRIEF-BH57a): the
     /// hoisted shallow run then renders as one paragraph with that row
     /// instead of bare. `scan` is expected positioned at the terminal
-    /// closer line's content start.
-    fn unquoted_merge_follow_decision(scan: &Parser<'r, 't>) -> (bool, bool) {
+    /// closer line's content start. When the terminal closer is an
+    /// item close immediately followed by an unquoted list close
+    /// (BRIEF-UQ89 (c)), that list close vanishes on live, so the
+    /// decision looks past it at the row after the list close.
+    fn unquoted_merge_follow_decision(
+        scan: &Parser<'r, 't>,
+        skip_vanishing_list_close: bool,
+    ) -> (bool, bool) {
         let mut probe = scan.clone();
         while !matches!(
             probe.current().token,
@@ -7837,6 +7843,38 @@ where
             // A quoted row never merges backwards into the hoisted run.
             if depth > 0 {
                 return (false, crossed_blank);
+            }
+            if skip_vanishing_list_close {
+                let mut closer = row.clone();
+                let is_vanishing = closer.get_end_block().is_ok_and(|name| {
+                    let name = name.strip_suffix('_').unwrap_or(&name);
+                    name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+                });
+                if is_vanishing {
+                    let _ = closer.get_optional_space();
+                    if matches!(
+                        closer.current().token,
+                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                    ) {
+                        // Vanishing unquoted list close: skip the row and
+                        // decide on the row after it.
+                        while !matches!(
+                            probe.current().token,
+                            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                        ) {
+                            if probe.step().is_err() {
+                                return (false, crossed_blank);
+                            }
+                        }
+                        if probe.step().is_err() {
+                            return (false, crossed_blank);
+                        }
+                        if probe.current().token == Token::InputEnd {
+                            return (false, crossed_blank);
+                        }
+                        continue;
+                    }
+                }
             }
             let mut line = row.clone();
             loop {
@@ -7909,7 +7947,7 @@ where
                 });
                 if is_item_close {
                     let (merge, crossed_blank) =
-                        Self::unquoted_merge_follow_decision(&scan);
+                        Self::unquoted_merge_follow_decision(&scan, true);
                     return item_body.then_some((
                         lines,
                         merge,
@@ -7930,7 +7968,7 @@ where
                     });
                 if let Some(kind) = list_close_kind {
                     let (merge, crossed_blank) =
-                        Self::unquoted_merge_follow_decision(&scan);
+                        Self::unquoted_merge_follow_decision(&scan, false);
                     return Some((lines, merge, kind, crossed_blank));
                 }
                 // Any other depth-0 closer: out of this lane.

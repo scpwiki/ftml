@@ -1660,9 +1660,14 @@ fn try_consume_fn<'r, 't>(
             match append_from_list_boundary
                 .then(|| migrated_break_follower_after_blank_line(parser))
             {
-                Some(BlankFollowerLead::Paragraph) => {
+                // BRIEF-UQ89 (b): when the hoisted shallow run merges into
+                // the following paragraph, the boundary break between the
+                // run and the follower stays inside that paragraph; it
+                // must not also lead it.
+                Some(BlankFollowerLead::Paragraph) if !parser.wikidot_merge_follow() => {
                     parser.mark_wikidot_quote_boundary_break_leads_paragraph();
                 }
+                Some(BlankFollowerLead::Paragraph) => {}
                 Some(BlankFollowerLead::Suppress) => {}
                 _ if append_from_ordered_list_boundary => {
                     elements.push(ordered_boundary_close_shell(
@@ -1696,9 +1701,12 @@ fn try_consume_fn<'r, 't>(
         match append_from_list_boundary
             .then(|| migrated_break_follower_after_blank_line(parser))
         {
-            Some(BlankFollowerLead::Paragraph) => {
+            // BRIEF-UQ89 (b): a merging hoisted run keeps the boundary
+            // break inside the merged paragraph, not leading it.
+            Some(BlankFollowerLead::Paragraph) if !parser.wikidot_merge_follow() => {
                 parser.mark_wikidot_quote_boundary_break_leads_paragraph();
             }
+            Some(BlankFollowerLead::Paragraph) => {}
             Some(BlankFollowerLead::Suppress) => {}
             _ => {
                 if append_from_ordered_list_boundary {
