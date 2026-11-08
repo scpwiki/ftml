@@ -151,6 +151,14 @@ pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER: &str =
 /// never rendered.
 pub(crate) const WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER: &str =
     "data-ftml-format-stops-at-list";
+/// Marks the first pre-list segment of an inline format pair that was
+/// segmented around an explicit list (the own-line opener of the pair sits on
+/// a line of its own before the list). Live renders that leading chunk as a
+/// paragraph chunk (`<p><fmt>…</fmt></p>`); lowering materialises that
+/// paragraph (or, directly inside a list item body, unwraps it back to the
+/// bare segment). Consumed by inline-scope lowering; never rendered (all
+/// `data-ftml-*` keys are omitted by the HTML builder).
+pub(crate) const WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER: &str = "data-ftml-block-chunk-prefix";
 /// Sibling marks for that stopped pair's post-list tail: a single newline
 /// then the scope close (materialises a bare `<br>` after the list) or
 /// adjacent content text (the after-list paragraph appends bare, with no

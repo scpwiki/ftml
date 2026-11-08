@@ -1,7 +1,7 @@
 use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, Heading, HeadingReopen, InlineFormatKind,
-    ListItem, PartialElement, TabViewItem, TableType,
+    ListItem, PartialElement, TabViewItem, TableType, WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER,
     WIKIDOT_FORMAT_LABEL_INSIDE_LIST_MARKER,
     WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER,
     WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER,
@@ -972,6 +972,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_with_bibliographies<'t>(
     drop_empty_inline_scopes(elements);
     drop_vanished_paragraphs(elements);
     splice_wikidot_foster(elements);
+    rewrite_block_chunk_prefix(elements, BlockChunkCtx::Block);
     lowered
 }
 
@@ -1010,6 +1011,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
     drop_empty_inline_scopes(elements);
     drop_vanished_paragraphs(elements);
     splice_wikidot_foster(elements);
+    rewrite_block_chunk_prefix(elements, BlockChunkCtx::Block);
 }
 
 pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliography<'t>) {
@@ -1048,6 +1050,7 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
         eject_segment_trailing_space(elements);
         drop_empty_inline_scopes(elements);
         splice_wikidot_foster(elements);
+        rewrite_block_chunk_prefix(elements, BlockChunkCtx::Block);
     }
     bibliography.set_reopened_wrappers(reopened);
 }
@@ -1069,6 +1072,139 @@ fn splice_wikidot_foster<'t>(elements: &mut Vec<Element<'t>>) {
         }
     }
     *elements = spliced;
+}
+
+/// Chunk position for a marked pre-list segment: whether enclosing final
+/// elements define a paragraph chunk already (so the marker only strips) or
+/// not (so the chunk needs its own paragraph wrapper).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BlockChunkCtx {
+    /// A list item body: the leading chunk renders bare.
+    Item,
+    /// Already inside a paragraph chunk: keep it as-is (bare).
+    Paragraph,
+    /// Anywhere else: materialise the paragraph wrapper live emits.
+    Block,
+}
+
+/// A frame whose body is a run of block chunks on live: a marked pre-list
+/// segment inside one is paragraph-wrapped there too (a `div`/`note`/quote/
+/// collapsible body renders `<p>`), unlike a bare in-item segment.
+fn block_chunk_prefix_frame_resets_item<'t>(element: &Element<'t>) -> bool {
+    match element {
+        Element::Container(container) => matches!(
+            container.ctype(),
+            ContainerType::Div
+                | ContainerType::Note
+                | ContainerType::Blockquote
+                | ContainerType::Paragraph
+                | ContainerType::Align(_)
+                | ContainerType::Header(_)
+        ),
+        Element::Table(_)
+        | Element::TabView(_)
+        | Element::Collapsible { .. }
+        | Element::WikidotBlockFrame { .. }
+        | Element::DefinitionList(_)
+        | Element::Gallery(_)
+        | Element::Code(_)
+        | Element::Math { .. }
+        | Element::Iframe { .. }
+        | Element::Html { .. } => true,
+        _ => false,
+    }
+}
+
+/// Materialises the paragraph chunk for an own-line opener of a format pair
+/// that crossed an explicit list: a segment stamped with
+/// `WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER` renders as `<p><fmt>…</fmt></p>` at
+/// block level (root, div/note bodies, quotes, …) and bare directly inside a
+/// list item body, matching live. Runs after scope lowering, so every kept
+/// pre-list segment is visible. The marker is consumed here.
+fn rewrite_block_chunk_prefix<'t>(
+    elements: &mut Vec<Element<'t>>,
+    in_list_item: BlockChunkCtx,
+) {
+    for element in elements.iter_mut() {
+        match element {
+            Element::List { items, .. } => {
+                for item in items {
+                    match item {
+                        ListItem::Elements { elements, .. } => {
+                            rewrite_block_chunk_prefix(elements, BlockChunkCtx::Item);
+                        }
+                        ListItem::SubList { element } => {
+                            rewrite_block_chunk_prefix_element(
+                                element,
+                                BlockChunkCtx::Item,
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {
+                let child_ctx = if matches!(
+                    element,
+                    Element::Container(container)
+                        if container.ctype() == ContainerType::Paragraph
+                ) {
+                    BlockChunkCtx::Paragraph
+                } else if block_chunk_prefix_frame_resets_item(element) {
+                    BlockChunkCtx::Block
+                } else {
+                    in_list_item
+                };
+                let mut visitor = |children: &mut Vec<Element<'t>>| {
+                    rewrite_block_chunk_prefix(children, child_ctx);
+                };
+                visit_children_mut(element, &mut visitor);
+            }
+        }
+    }
+    for element in elements.iter_mut() {
+        let is_marked = matches!(
+            element,
+            Element::Container(container)
+                if container.attributes().get().contains_key(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER)
+        );
+        if !is_marked {
+            continue;
+        }
+        let mut element_owned = mem::replace(element, Element::LineBreak);
+        let inner = match &mut element_owned {
+            Element::Container(container) => {
+                container
+                    .attributes_mut()
+                    .remove(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER);
+                element_owned
+            }
+            _ => unreachable!("marked segment is a container"),
+        };
+        match in_list_item {
+            BlockChunkCtx::Item | BlockChunkCtx::Paragraph => {
+                // A list item body renders the leading chunk bare; a chunk
+                // already inside a paragraph is that paragraph's content.
+                *element = inner;
+            }
+            BlockChunkCtx::Block => {
+                // Block level: live wraps the chunk in a paragraph.
+                *element = Element::Container(Container::new(
+                    ContainerType::Paragraph,
+                    vec![inner],
+                    AttributeMap::new(),
+                ));
+            }
+        }
+    }
+}
+
+fn rewrite_block_chunk_prefix_element<'t>(
+    element: &mut Element<'t>,
+    in_list_item: BlockChunkCtx,
+) {
+    let mut vec = vec![std::mem::replace(element, Element::LineBreak)];
+    rewrite_block_chunk_prefix(&mut vec, in_list_item);
+    *element = vec.pop().expect("rewrite keeps one element");
 }
 
 fn collect_valid_scope_pairs(
@@ -1273,8 +1409,8 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
     }
     let mut output = Vec::with_capacity(elements.len());
     for mut element in mem::take(elements) {
-        if foster_sole_explicit_list(&mut element) {
-            output.push(element);
+        if let Some(replacement) = foster_sole_explicit_list(&mut element) {
+            output.extend(replacement);
             continue;
         }
         if let Some(replacement) = format_explicit_list_segments(&mut element) {
@@ -1535,13 +1671,15 @@ fn clear_format_label_inside_marker(element: &mut Element<'_>) {
 /// An explicit list eats the newlines inside it before inline pairing, so the
 /// markers pair across the list. A block start then closes that inline and the
 /// next item text reopens it. The paired container is that pre-tidy shape.
-fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
+/// Returns the replacement elements when the foster applies (a marked prefix
+/// chunk for the own-line opener, then the fostered list).
+fn foster_sole_explicit_list<'t>(element: &mut Element<'t>) -> Option<Vec<Element<'t>>> {
     let Element::Container(container) = &element else {
-        return false;
+        return None;
     };
     let ctype = container.ctype();
     if !format_fosters_into_explicit_list(ctype) {
-        return false;
+        return None;
     }
     let mut saw_list = false;
     for child in container.elements() {
@@ -1552,14 +1690,14 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
                 wikidot_explicit_block: true,
                 ..
             } if !saw_list => saw_list = true,
-            _ => return false,
+            _ => return None,
         }
     }
     if !saw_list {
-        return false;
+        return None;
     }
     let Element::Container(container) = element else {
-        return false;
+        unreachable!("foster candidate checked above");
     };
     // Same spanin tail hand-off as for segmented format pairs.
     let tail_mark = span_list_close_tail_of(container.attributes());
@@ -1569,9 +1707,10 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
         .get()
         .contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
     let children = mem::take(container.elements_mut());
-    let mut list = children
-        .into_iter()
-        .find(|child| {
+    let mut children = children;
+    let list_index = children
+        .iter()
+        .position(|child| {
             matches!(
                 child,
                 Element::List {
@@ -1581,6 +1720,19 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
             )
         })
         .expect("explicit list");
+    // The own-line opener of the pair (the prefix is all breaks and
+    // whitespace): live renders that leading chunk as a paragraph chunk.
+    // Keep it, marked like the segmented path's first pre-list segment.
+    let prefix: Vec<Element<'t>> = children.drain(..list_index).collect();
+    let mut output = Vec::with_capacity(prefix.len() + 1);
+    if !prefix.is_empty() {
+        let mut attributes = AttributeMap::new();
+        attributes.insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
+        output.push(Element::Container(Container::new(
+            ctype, prefix, attributes,
+        )));
+    }
+    let mut list = children.remove(0);
     if !stops_at_list {
         wrap_explicit_list_items(&mut list, ctype);
     }
@@ -1606,8 +1758,8 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
         };
         attributes.insert(marker, Cow::Borrowed(""));
     }
-    *element = list;
-    true
+    output.push(list);
+    Some(output)
 }
 
 fn wrap_explicit_list_items(list: &mut Element<'_>, ctype: ContainerType) {
@@ -1985,11 +2137,14 @@ fn segment_format_run<'t>(
                 ..
             }
         ) {
-            while matches!(
-                run.first(),
-                Some(Element::LineBreak | Element::LineBreaks(_))
-            ) {
-                run.remove(0);
+            let first_list = !seen_list;
+            if stop_at_list || !first_list {
+                while matches!(
+                    run.first(),
+                    Some(Element::LineBreak | Element::LineBreaks(_))
+                ) {
+                    run.remove(0);
+                }
             }
             if stop_at_list && seen_list {
                 output.extend(mem::take(&mut run));
@@ -2003,6 +2158,24 @@ fn segment_format_run<'t>(
                     attributes
                         .insert(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, Cow::Borrowed(""));
                 }
+                if first_list && !stop_at_list {
+                    // The own-line opener of the pair: live renders the
+                    // leading chunk as a paragraph chunk.
+                    attributes
+                        .insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
+                }
+                output.push(Element::Container(Container::new(
+                    ctype,
+                    mem::take(&mut run),
+                    attributes,
+                )));
+            } else if !stop_at_list && first_list && !run.is_empty() {
+                // A break-only leading chunk (the own-line opener of the
+                // pair, nothing on its line but the marker). Live still
+                // emits the paragraph chunk; keep the run, marked.
+                *formed = true;
+                let mut attributes = AttributeMap::new();
+                attributes.insert(WIKIDOT_BLOCK_CHUNK_PREFIX_MARKER, Cow::Borrowed(""));
                 output.push(Element::Container(Container::new(
                     ctype,
                     mem::take(&mut run),
@@ -4156,6 +4329,7 @@ fn lower_bibliography_block<'t>(
         eject_segment_trailing_space(elements);
         drop_empty_inline_scopes(elements);
         splice_wikidot_foster(elements);
+        rewrite_block_chunk_prefix(elements, BlockChunkCtx::Block);
     }
     bibliography.set_reopened_wrappers(reopened);
 }
