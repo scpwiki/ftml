@@ -149,36 +149,54 @@ impl<'t> ParagraphStack<'t> {
         self.wikidot
             && self.current_empty()
             && (self.crossed_collapsible_tail
-                || self.finished.last().is_some_and(|element| {
-                matches!(
-                    element,
-                    Element::Container(container)
-                        if matches!(
-                            container.ctype(),
-                            ContainerType::Div
-                                | ContainerType::Note
-                                | ContainerType::Blockquote
-                                | ContainerType::Align(_)
-                        )
-                ) || matches!(
-                    element,
-                    Element::Code(_) | Element::Collapsible { .. } | Element::TabView(_)
-                ) || matches!(
-                    element,
-                    Element::Partial(
-                        PartialElement::WikidotBlockClose(
-                            WikidotBlockCloseKind::Div { .. }
-                                | WikidotBlockCloseKind::Collapsible { .. }
-                                | WikidotBlockCloseKind::CollapsibleCrossedBottom { .. }
-                                | WikidotBlockCloseKind::Note { .. }
-                                | WikidotBlockCloseKind::Align { .. }
-                        ) | PartialElement::WikidotBlockOpen(WikidotBlockShell::Div {
-                            scored: true,
-                            ..
-                        })
-                    )
+                || self
+                    .finished
+                    .last()
+                    .is_some_and(Self::finished_tail_keeps_break))
+    }
+
+    /// Whether the finished tail is a block that keeps its following line
+    /// break (the finished-side class used by the leading-break rule).
+    fn finished_tail_keeps_break(element: &Element<'_>) -> bool {
+        matches!(
+            element,
+            Element::Container(container)
+                if matches!(
+                    container.ctype(),
+                    ContainerType::Div
+                        | ContainerType::Note
+                        | ContainerType::Blockquote
+                        | ContainerType::Align(_)
                 )
-            }))
+        ) || matches!(
+            element,
+            Element::Code(_) | Element::Collapsible { .. } | Element::TabView(_)
+        ) || matches!(
+            element,
+            Element::Partial(
+                PartialElement::WikidotBlockClose(
+                    WikidotBlockCloseKind::Div { .. }
+                        | WikidotBlockCloseKind::Collapsible { .. }
+                        | WikidotBlockCloseKind::CollapsibleCrossedBottom { .. }
+                        | WikidotBlockCloseKind::Note { .. }
+                        | WikidotBlockCloseKind::Align { .. }
+                ) | PartialElement::WikidotBlockOpen(WikidotBlockShell::Div {
+                    scored: true,
+                    ..
+                })
+            )
+        )
+    }
+
+    /// Whether the finished side ends on a block that keeps its following
+    /// break, so a lone leading break before a following explicit list is
+    /// content (live probes o-top/o-cell-ol) rather than a para-start drop.
+    fn finished_ends_with_break_kept_block(&self) -> bool {
+        self.wikidot
+            && self
+                .finished
+                .last()
+                .is_some_and(Self::finished_tail_keeps_break)
     }
 
     /// Live's `Deflist` rule (position 46) matches `\n((: ).*\n)` and re-emits the
@@ -969,6 +987,8 @@ impl<'t> ParagraphStack<'t> {
     pub fn push_element(&mut self, element: Element<'t>, paragraph_safe: bool) {
         // L85: a lone leading break before an explicit list vanishes (live
         // keeps real breaks only with content: R1 keeps, para-start drops).
+        // Except: a break after a break-kept block is content, not a para-start
+        // (live o-top/o-cell-ol keep it), and stays bare like the cell rule.
         if self.wikidot
             && matches!(
                 &element,
@@ -985,7 +1005,11 @@ impl<'t> ParagraphStack<'t> {
                 )
             })
         {
-            self.current.pop();
+            if self.finished_ends_with_break_kept_block() {
+                self.current_unwrapped = true;
+            } else {
+                self.current.pop();
+            }
         }
         let paragraph_break_separated = self.paragraph_break_since_element;
         if element != Element::LineBreak {
