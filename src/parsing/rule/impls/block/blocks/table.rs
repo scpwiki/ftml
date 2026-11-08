@@ -276,7 +276,7 @@ fn extract_table_rows<'r, 't>(
                 foster.push(element);
             }
 
-            Element::Text(text) if is_cell_closer(&text) => {
+            Element::Text(text) if is_cell_closer_residual(&text) => {
                 residuals.push(text);
             }
 
@@ -664,13 +664,31 @@ fn extract_table_cells<'r, 't>(
                 }
             }
 
-            Element::Text(text) if !cells.is_empty() && is_cell_closer(&text) => {
+            Element::Text(text) if !cells.is_empty() && is_cell_closer_residual(&text) => {
                 if pending_break && !foster.is_empty() && foster.len() != yield_foster_len
                 {
                     foster.push(Element::LineBreak);
                 }
                 pending_break = false;
-                residuals.push(text);
+                let closer_exact = is_cell_closer(text.trim_end_matches([' ', '\t', '\n', '\r']));
+                let same_line_prefix = !straddle_tail.is_empty()
+                    && !straddle_tail
+                        .iter()
+                        .any(|el| matches!(el, Element::LineBreak));
+                if closer_exact && same_line_prefix {
+                    // Split "text before closer" residual (item 87): the prefix
+                    // accumulated in straddle_tail, the closer arrived as a
+                    // separate element. Merge into one residual line.
+                    let mut prefix = String::new();
+                    for el in straddle_tail.drain(..) {
+                        if let Some(t) = straddle_tail_text(&el) {
+                            prefix.push_str(&t);
+                        }
+                    }
+                    residuals.push(std::borrow::Cow::Owned(format!("{}{}", prefix, text)));
+                } else {
+                    residuals.push(text);
+                }
             }
 
             Element::Text(ref text) if !cells.is_empty() && !text.trim().is_empty() => {
@@ -700,7 +718,14 @@ fn extract_table_cells<'r, 't>(
 
             Element::Delayed(delayed) if delayed.is_suppression_seam() => {}
 
-            element if element.is_whitespace() => {}
+            element if element.is_whitespace() => {
+                if !cells.is_empty()
+                    && !straddle_tail.is_empty()
+                    && matches!(element, Element::Text(_))
+                {
+                    straddle_tail.push(element);
+                }
+            }
 
             element => {
                 return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
@@ -854,6 +879,34 @@ fn push_foster_run<'t>(run: &mut Vec<Element<'t>>, pre: &mut Vec<Element<'t>>) {
 
 fn is_cell_closer(source: &str) -> bool {
     source.eq_ignore_ascii_case("[[/cell]]") || source.eq_ignore_ascii_case("[[/hcell]]")
+}
+
+/// True when `source` is a stray cell/hcell closer residual: either the exact
+/// closer token, or text before the closer on the same line with no text after
+/// it (item 87). Live keeps the whole residual line and a following newline
+/// before the table; text after the closer makes the construction invalid.
+fn is_cell_closer_residual(source: &str) -> bool {
+    if is_cell_closer(source) {
+        return true;
+    }
+    let content = source.trim_end_matches([' ', '\t', '\n', '\r']);
+    let Some((pos, len)) = last_cell_closer(content) else {
+        return false;
+    };
+    pos + len == content.len()
+}
+
+fn last_cell_closer(haystack: &str) -> Option<(usize, usize)> {
+    let lower = haystack.to_ascii_lowercase();
+    let mut best: Option<(usize, usize)> = None;
+    for needle in ["[[/cell]]", "[[/hcell]]"] {
+        if let Some(pos) = lower.rfind(needle) {
+            if best.is_none_or(|(b, _)| pos > b) {
+                best = Some((pos, needle.len()));
+            }
+        }
+    }
+    best
 }
 
 fn next_cell_closer(haystack: &str) -> Option<(usize, usize)> {

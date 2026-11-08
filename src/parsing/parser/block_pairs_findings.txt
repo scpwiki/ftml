@@ -327,3 +327,9 @@ corpus-test/list/wikidot-li-nl81-e-div-pair-text/input.ftml	Div@16..34 scan-only
 corpus-test/list/wikidot-li-nl81-e-div-mid-text/input.ftml	Div@16..41 scan-only
 corpus-test/list/wikidot-li-nl81-e-div-pair-text-ol/input.ftml	Div@16..34 scan-only
 corpus-test/list/wikidot-li-nl81-e-swallow-plain/input.ftml	Div@16..38 scan-only
+corpus-test/table/cell-closer-residual-text-before/input.ftml	Table@0..75 descent-only
+corpus-test/table/cell-closer-residual-text-before/input.ftml	Row@10..64 descent-only
+corpus-test/table/cell-closer-residual-text-before/input.ftml	Cell@18..38 descent-only
+corpus-test/table/hcell-closer-residual-text-before/input.ftml	Table@0..76 descent-only
+corpus-test/table/hcell-closer-residual-text-before/input.ftml	Row@10..65 descent-only
+corpus-test/table/hcell-closer-residual-text-before/input.ftml	Cell@18..38 descent-only
