@@ -282,6 +282,15 @@ fn normalize_segment_container_with_run<'t>(
     let joinable = match container {
         Element::Table(table) => table.table_type == TableType::Simple,
         Element::DefinitionList(_) => true,
+        // Live pairs an own-line opener before an EXPLICIT list with a
+        // marker inside the items: an explicit list is transparent to
+        // marker pairing, so the preceding run joins the items' segment
+        // group. A NATIVE list stays unjoinable — live bars an outside
+        // opener from pairing into it (the #1219 chunk barrier).
+        Element::List {
+            wikidot_explicit_block: true,
+            ..
+        } => true,
         _ => false,
     };
     if !joinable {
@@ -3474,12 +3483,20 @@ fn build_dash_scan<'t>(
     scan
 }
 
+/// A line break adjacent to `--` counts as content for the strike
+/// edge rules: live pairs a `--` opener followed by a line break (the
+/// break renders `<br />` inside the span) and a closer preceded by
+/// one. A space or tab still disqualifies the edge.
+fn dash_stream_edge_adjacent(ch: char) -> bool {
+    !ch.is_whitespace() || ch == '\n'
+}
+
 fn dash_stream_close(stream: &[char], content_start: usize) -> Option<usize> {
     let mut index = content_start + 1;
     while index + 1 < stream.len() {
         if stream[index] == '-'
             && stream[index + 1] == '-'
-            && !stream[index - 1].is_whitespace()
+            && dash_stream_edge_adjacent(stream[index - 1])
         {
             return Some(index);
         }
@@ -3490,7 +3507,9 @@ fn dash_stream_close(stream: &[char], content_start: usize) -> Option<usize> {
 
 fn dash_stream_opener(stream: &[char], from: usize) -> Option<usize> {
     (from..stream.len().saturating_sub(2)).find(|&pos| {
-        stream[pos] == '-' && stream[pos + 1] == '-' && !stream[pos + 2].is_whitespace()
+        stream[pos] == '-'
+            && stream[pos + 1] == '-'
+            && dash_stream_edge_adjacent(stream[pos + 2])
     })
 }
 
