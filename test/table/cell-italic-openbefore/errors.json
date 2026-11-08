@@ -1,0 +1,38 @@
+[
+    {
+        "token": "input-end",
+        "rule": "italics",
+        "span": [
+            109,
+            109
+        ],
+        "kind": "end-of-input"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            41,
+            43
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "italics",
+        "rule": "italics",
+        "span": [
+            55,
+            57
+        ],
+        "kind": "rule-failed"
+    },
+    {
+        "token": "italics",
+        "rule": "fallback",
+        "span": [
+            55,
+            57
+        ],
+        "kind": "no-rules-match"
+    }
+]
