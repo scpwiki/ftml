@@ -315,11 +315,10 @@ where
             || li_end.map_or(true, |end| head_byte < end);
         if !has_deep
             && head_in_body
-            && !closer_for_block_in_range(
+            && !list_closer_in_range(
                 &entry_parser,
                 head_byte,
                 li_end.unwrap_or(entry_parser.full_text().inner().len()),
-                view,
             )
         {
             return Ok(None);
@@ -375,15 +374,16 @@ where
         };
         return parse_lost_owner_list_block(entry_parser, parser, None, dissolve_run);
     }
-    if let LineOwner::List { ltype, .. } = owner
+    if let LineOwner::List { .. } = owner
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
-        && lost_owner_list_body_is_sibling_items(&entry_parser, ltype)
+        && let Some(sibling_ltype) =
+            lost_owner_list_body_sibling_items_ltype(&entry_parser)
     {
         parser.note_wikidot_run_formation(
             parser.wikidot_li_pairing_depth(),
             view.eq_ignore_ascii_case("ol"),
         );
-        return parse_lost_owner_list_block(entry_parser, parser, Some(ltype), None);
+        return parse_lost_owner_list_block(entry_parser, parser, Some(sibling_ltype), None);
     }
 
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {
@@ -674,6 +674,19 @@ pub(crate) fn starred_list_closer_in_source(source: &str) -> bool {
     })
 }
 
+/// Whether a `[[ul]]` or `[[ol]]` closer line (starred or unstarred) exists
+/// strictly between `from` and the `[[li]]` body end byte. Item 88: live
+/// accepts either list close as forming the list, so cross-type closers
+/// count as closers for the p6/item-line formation gate.
+pub(crate) fn list_closer_in_range(
+    parser: &Parser<'_, '_>,
+    from: usize,
+    to: usize,
+) -> bool {
+    closer_for_block_in_range(parser, from, to, "ul")
+        || closer_for_block_in_range(parser, from, to, "ol")
+}
+
 /// Whether a `[[name]]` closer line (starred or unstarred) exists strictly
 /// between `from` and the `[[li]]` body end byte.
 pub(crate) fn closer_for_block_in_range(
@@ -723,22 +736,38 @@ pub(crate) fn consumed_closer_line_marker(
     let to = to.min(source.len());
     let range = &source[..to];
     let lowered = range.to_ascii_lowercase();
-    let needle = format!("[[/{}", name.to_ascii_lowercase());
-    let mut pos = 0;
-    let mut closer_head = None;
-    while let Some(rel) = lowered[pos..].find(&needle) {
-        let at = pos + rel;
-        let after = range.get(at + needle.len()..);
-        if after.is_some_and(|rest| {
-            rest.starts_with("]]")
-                || rest.starts_with(' ')
-                || rest.starts_with('\t')
-                || rest.starts_with('_')
-                || rest.starts_with('\n')
-        }) {
-            closer_head = Some(at);
+    // Item 88: a cross-type list close consumes marker semantics the same
+    // way (a marked `# [[/ol]]` closer anchors like same-name), so when the
+    // cross-close probe is active, scan both list-close names and take the
+    // last closer of either kind.
+    let names: [&str; 2] = if parser.wikidot_li_cross_list_close()
+        && (name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol"))
+    {
+        [name, if name.eq_ignore_ascii_case("ul") { "ol" } else { "ul" }]
+    } else {
+        [name, name]
+    };
+    let mut closer_head: Option<usize> = None;
+    for needle_name in names {
+        let needle = format!("[[/{}", needle_name.to_ascii_lowercase());
+        let mut pos = 0;
+        while let Some(rel) = lowered[pos..].find(&needle) {
+            let at = pos + rel;
+            let after = range.get(at + needle.len()..);
+            if after.is_some_and(|rest| {
+                rest.starts_with("]]")
+                    || rest.starts_with(' ')
+                    || rest.starts_with('\t')
+                    || rest.starts_with('_')
+                    || rest.starts_with('\n')
+            }) {
+                closer_head = Some(closer_head.map_or(at, |old| old.max(at)));
+            }
+            pos = at + needle.len();
         }
-        pos = at + needle.len();
+        if needle_name == name && names[1] == name {
+            break;
+        }
     }
     closer_head.and_then(|head_byte| list_item_line_marker(source, head_byte))
 }
@@ -756,23 +785,31 @@ fn lost_owner_list_body_is_unowned(parser: &Parser<'_, '_>) -> bool {
         .is_some_and(|line| line.trim_start().starts_with("[["))
 }
 
-fn lost_owner_list_body_is_sibling_items(parser: &Parser<'_, '_>, ltype: ListType) -> bool {
-    let marker = match ltype {
-        ListType::Bullet => "*",
-        ListType::Numbered => "#",
-        ListType::Generic => return false,
-    };
+/// The native list type of a sibling-items body: determined by the first
+/// body line's own item marker (`*` bullet, `#` numbered). Item 88: live
+/// decomposes sibling items by the sibling line's marker even when the
+/// enclosing run marker differs (muse-probe-cl88 owned cross-marker
+/// shapes); the enclosing run marker is not authoritative.
+fn lost_owner_list_body_sibling_items_ltype(parser: &Parser<'_, '_>) -> Option<ListType> {
     let source = parser.full_text().inner();
     let start = parser.current().span.start.min(source.len());
     let Some(offset) = source[start..].find('\n') else {
-        return false;
+        return None;
     };
     let body_start = start + offset + 1;
-    source[body_start..].lines().next().is_some_and(|line| {
-        let line = line.trim_start();
-        line.strip_prefix(marker)
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
-    })
+    let line = source[body_start..].lines().next()?.trim_start();
+    // The sibling item must start with `*` or `#` marker followed by
+    // whitespace (or alone on the line).
+    let marker = line.chars().next()?;
+    let rest = line.get(1..)?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    match marker {
+        '*' => Some(ListType::Bullet),
+        '#' => Some(ListType::Numbered),
+        _ => None,
+    }
 }
 
 /// One part of a decomposed hoist: either a run of list items (rendered
@@ -1147,12 +1184,21 @@ fn parse_lost_owner_list_block<'r, 't>(
 where
     'r: 't,
 {
+    // Item 88: a lost-owner list candidate accepts either list close as
+    // its terminator (live any-list-close) when it is either an unowned
+    // dissolve or a sibling decomposition inside an explicit `[[li]]`
+    // body — probed identically on saved pages for both paths
+    // (muse-probe-cl88 owned/unowned). Other candidates stay strict.
+    // Save/restore around the probe so nested candidates nest correctly.
+    let prev_cross =
+        parser.set_wikidot_li_cross_list_close(dissolve_run.is_some() || decompose_siblings.is_some());
     let mut candidate = entry.clone_with_rule(super::RULE_BLOCK);
     let previous_depth = candidate.native_blockquote_depth();
     let previous_cursor = candidate.quote_body_cursor();
     candidate.set_native_blockquote_depth(None);
     candidate.set_quote_body_cursor(None);
     let parsed = super::RULE_BLOCK.try_consume(&mut candidate);
+    parser.set_wikidot_li_cross_list_close(prev_cross);
     candidate.set_native_blockquote_depth(previous_depth);
     candidate.set_quote_body_cursor(previous_cursor);
     let success = match parsed {
@@ -1173,28 +1219,63 @@ where
     if !explicit_list_at_start {
         return Ok(None);
     }
-    // Cross-type close guard (hash-ul-head): ul head consumed by
-    // [[/ol]] (or vice versa) produces a misparsed block; bail on
-    // dissolution so the caller falls through to normal parsing.
+    // Item 88: cross-type close (shapes like `# [[ul]]` consumed by
+    // `[[/ol]]`) — live resolves a list close of either kind as the
+    // inner formation's own terminated close, so dissolution must not
+    // bail on spelling. The safety constraint is positional: the
+    // consumed close must lie inside the enclosing explicit `[[li]]`
+    // body. A candidate that consumed past the li body end stole the
+    // outer list's close (no inner list closer of any kind: [`# [[ul]]`
+    // with only the outer `[[/ol]]` after the li close) and must not
+    // dissolve (live leaves it literal there).
     if dissolve_run.is_some() {
         let source = parser.full_text().inner();
         let end = candidate.current().span.start.min(source.len());
-        let consumed_tail = source[..end].trim_end_matches(|c: char| c.is_whitespace());
-        let lower_tail = consumed_tail.to_ascii_lowercase();
-        let head_was_numbered = matches!(
-            elements.first(),
-            Some(Element::List {
-                ltype: ListType::Numbered,
-                ..
-            })
-        );
-        let bad_close = if head_was_numbered {
-            lower_tail.ends_with("[[/ul]]") || lower_tail.ends_with("[[/ul_]]")
-        } else {
-            lower_tail.ends_with("[[/ol]]") || lower_tail.ends_with("[[/ol_]]")
-        };
-        if bad_close {
-            return Ok(None);
+        let li_bound = entry.wikidot_li_collect_head().and_then(|head| {
+            own_line_li_close_after(source, head)
+                .or_else(|| entry.wikidot_li_body_end_by_head(head))
+        });
+        match li_bound {
+            Some(bound) => {
+                if end > bound {
+                    // Consumed past the li body: stole the outer close.
+                    return Ok(None);
+                }
+                // The enclosing list must retain its own later close: when
+                // the candidate's close is the last list close of any kind
+                // in the source, it is (also) the enclosing list's closer
+                // (outer list unclosed after dissolving), and live leaves
+                // the inner formation unresolved there (muse-probe-cl88
+                // no-outer). A cross-close whose list-type match is
+                // unavailable inside the li body was rationed to the
+                // enclosing list by live's pairing.
+                if !list_closer_in_range(&entry, end, source.len()) {
+                    return Ok(None);
+                }
+            }
+            None => {
+                // No charged li body bound (unclosed outer): keep the
+                // historic spelling guard; live leaves the cross-close
+                // formation unresolved there (muse-probe-cl88 no-outer).
+                let consumed_tail =
+                    source[..end].trim_end_matches(|c: char| c.is_whitespace());
+                let lower_tail = consumed_tail.to_ascii_lowercase();
+                let head_was_numbered = matches!(
+                    elements.first(),
+                    Some(Element::List {
+                        ltype: ListType::Numbered,
+                        ..
+                    })
+                );
+                let bad_close = if head_was_numbered {
+                    lower_tail.ends_with("[[/ul]]") || lower_tail.ends_with("[[/ul_]]")
+                } else {
+                    lower_tail.ends_with("[[/ol]]") || lower_tail.ends_with("[[/ol_]]")
+                };
+                if bad_close {
+                    return Ok(None);
+                }
+            }
         }
     }
     let mut elements = elements;

@@ -194,11 +194,10 @@ fn parse_list_block_impl<'r, 't>(
         )
         && li_head_for_gate.is_some()
         && !gate_has_deep
-        && !crate::parsing::rule::impls::line_owner::closer_for_block_in_range(
+        && !crate::parsing::rule::impls::line_owner::list_closer_in_range(
             parser,
             opener_start,
             gate_body_end.unwrap_or(parser.full_text().inner().len()),
-            head_name,
         )
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -211,13 +210,15 @@ fn parse_list_block_impl<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     // Live leaves the opener literal when a bare-scheme [[iframe]] head on the
-    // line before the closer absorbed every closer for the block.
-    if wikidot
-        && parser.wikidot_greedy_tail_eats_closers(
-            opener_start,
-            &[block_rule.accepts_names[0]],
-        )
-    {
+    // line before the closer absorbed every closer for the block. Item 88: an
+    // unowned-dissolve candidate accepts either list close, so both names
+    // count against the greedy-tail veto.
+    let greedy_names: &[&str] = if parser.wikidot_li_cross_list_close() {
+        &["ul", "ol"]
+    } else {
+        &[block_rule.accepts_names[0]]
+    };
+    if wikidot && parser.wikidot_greedy_tail_eats_closers(opener_start, greedy_names) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
     if wikidot

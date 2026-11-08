@@ -1,0 +1,91 @@
+{
+    "elements": [
+        {
+            "element": "list",
+            "data": {
+                "type": "numbered",
+                "attributes": {},
+                "items": [
+                    {
+                        "item-type": "elements",
+                        "attributes": {},
+                        "elements": [
+                            {
+                                "element": "list",
+                                "data": {
+                                    "type": "numbered",
+                                    "attributes": {},
+                                    "items": [
+                                        {
+                                            "item-type": "elements",
+                                            "attributes": {},
+                                            "elements": [
+                                                {
+                                                    "element": "text",
+                                                    "data": "[["
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": "ul"
+                                                },
+                                                {
+                                                    "element": "text",
+                                                    "data": "]]"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "element": "partial",
+                                "data": {
+                                    "ListItem": {
+                                        "item-type": "elements",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "u"
+                                            }
+                                        ]
+                                    }
+                                }
+                            },
+                            {
+                                "element": "partial",
+                                "data": {
+                                    "ListItem": {
+                                        "item-type": "elements",
+                                        "attributes": {},
+                                        "elements": [
+                                            {
+                                                "element": "text",
+                                                "data": "v"
+                                            }
+                                        ]
+                                    }
+                                }
+                            },
+                            {
+                                "element": "line-break"
+                            },
+                            {
+                                "element": "text",
+                                "data": "[[/"
+                            },
+                            {
+                                "element": "text",
+                                "data": "ol"
+                            },
+                            {
+                                "element": "text",
+                                "data": "]]"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
