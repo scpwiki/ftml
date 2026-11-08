@@ -26,7 +26,11 @@ use super::inline_delimiter::{
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
-use crate::tree::{AttributeMap, Container, Element, PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
+use crate::parsing::inline_scope::SpanListCloseTail;
+use crate::tree::{
+    AttributeMap, Container, Element, PartialElement, WikidotBlockCloseKind,
+    WikidotBlockShell,
+};
 use std::borrow::Cow;
 
 pub const RULE_BOLD: Rule = Rule {
@@ -105,16 +109,23 @@ fn skip_breaks(tokens: &[ExtractedToken<'_>], mut index: usize) -> usize {
     index
 }
 
-/// Classify the gap after a stopped pair's closer for the understrike tail
-/// (see `mark_format_stop_at_list`). Closers of enclosing crossing pairs
-/// (`**__` after the list, at any nesting depth) sit between the stopped
-/// closer and the enclosing scope's close, so they are transparent to the
-/// scan. `LineBreak` then the closer's scope block yields the break tail;
-/// adjacent content yields the bare tail; anything else yields no tail.
-fn stopped_tail_marker(
+/// Classify the gap after a format pair's closer for the spanin and
+/// understrike list-close tail families (`mark_span_list_close_tail`,
+/// `mark_format_stop_at_list`). Closers of enclosing crossing pairs
+/// (`**__` after the list, at any nesting depth) and same-line whitespace
+/// sit inside the gap, so they are transparent: the only question is
+/// whether exactly one line break intervenes between the close and the
+/// next content. A line break then the enclosing scope's close yields
+/// `Break`; content directly adjacent to the close yields `Bare`;
+/// content after one line break yields `Lead`; anything else (a blank
+/// line, and so on) yields no tail, so the following paragraph wraps the
+/// way a normal after-list paragraph does.
+fn classify_tail_gap(
     current: &ExtractedToken<'_>,
     rest: &[ExtractedToken<'_>],
-) -> Option<&'static str> {
+    close_names: &[&str],
+) -> Option<SpanListCloseTail> {
+    let mut break_seen = false;
     let mut cursor = 0usize;
     loop {
         let token: &ExtractedToken<'_> = if cursor == 0 {
@@ -125,22 +136,28 @@ fn stopped_tail_marker(
         cursor += 1;
         match token.token {
             Token::LineBreak => {
-                if block_head_is(rest, cursor - 1, "span", true)
-                    || block_head_is(rest, cursor - 1, "size", true)
-                    || block_head_is(rest, cursor - 1, "a", true)
-                {
-                    return Some(
-                        crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
-                    );
+                if break_seen {
+                    return None;
                 }
-                return None;
+                if close_names
+                    .iter()
+                    .any(|name| block_head_is(rest, cursor - 1, name, true))
+                {
+                    return Some(SpanListCloseTail::Break);
+                }
+                break_seen = true;
             }
-            Token::RuntimeText | Token::Identifier if !token.slice.trim().is_empty() => {
-                return Some(
-                    crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
-                );
+            Token::RuntimeText | Token::Identifier | Token::Raw
+                if !token.slice.trim().is_empty() =>
+            {
+                return Some(if break_seen {
+                    SpanListCloseTail::Lead
+                } else {
+                    SpanListCloseTail::Bare
+                });
             }
-            Token::Bold
+            Token::Whitespace
+            | Token::Bold
             | Token::Italics
             | Token::Underline
             | Token::DoubleDash
@@ -149,6 +166,36 @@ fn stopped_tail_marker(
             | Token::LeftMonospace
             | Token::RightMonospace => continue,
             _ => return None,
+        }
+    }
+}
+
+fn span_tail_marker(tail: SpanListCloseTail) -> &'static str {
+    match tail {
+        SpanListCloseTail::Break => {
+            crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER
+        }
+        SpanListCloseTail::Bare => crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+        SpanListCloseTail::Lead => crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_LEAD_MARKER,
+        SpanListCloseTail::Fold => {
+            unreachable!("the gap classifier never yields fold")
+        }
+    }
+}
+
+fn understrike_tail_marker(tail: SpanListCloseTail) -> &'static str {
+    match tail {
+        SpanListCloseTail::Break => {
+            crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER
+        }
+        SpanListCloseTail::Bare => {
+            crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER
+        }
+        SpanListCloseTail::Lead => {
+            crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER
+        }
+        SpanListCloseTail::Fold => {
+            unreachable!("the gap classifier never yields fold")
         }
     }
 }
@@ -328,7 +375,7 @@ fn finish_collected<'r, 't>(
 }
 
 /// A bold, italics, superscript or subscript pair that closed beyond an
-/// explicit list inside a span or size body leaves two live shapes on the
+/// explicit list inside a span or size body leaves live shapes on the
 /// following scope-content paragraph (spanin family). The syntax tree loses
 /// the newline-count distinction
 /// there, so the gap after the close marker is classified here, from the
@@ -336,9 +383,11 @@ fn finish_collected<'r, 't>(
 /// for inline-scope lowering:
 /// a single newline then `[[/span]]`/`[[/size]]` (break-only tail segment
 /// materialises
-/// after the list) or adjacent content text (the after-list paragraph is
-/// bare with no inserted leading break). At this point the parser sits on
-/// the first token after the pair close.
+/// after the list), adjacent content text (the after-list paragraph is
+/// bare with no inserted leading break), or content on the line after the
+/// close (the after-list paragraph keeps the scope's inline run, renders
+/// bare inside the scope with an inserted leading break). At this point the
+/// parser sits on the first token after the pair close.
 ///
 /// The inverse shape (strong-x family) stamps the same markers: a span or
 /// size scope inside the format pair closes beyond the explicit list (its
@@ -385,18 +434,10 @@ pub(super) fn mark_span_list_close_tail<'r, 't>(
     let current = parser.current();
     let rest = parser.remaining();
     let marker = if in_inline_scope_body {
-        if current.token == Token::LineBreak
-            && (block_head_is(rest, 0, "span", true)
-                || block_head_is(rest, 0, "size", true))
-        {
-            crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER
-        } else if matches!(current.token, Token::RuntimeText | Token::Identifier)
-            && !current.slice.trim().is_empty()
-        {
-            crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER
-        } else {
+        let Some(gap) = classify_tail_gap(current, rest, &["span", "size"]) else {
             return elements;
-        }
+        };
+        span_tail_marker(gap)
     } else {
         if !crate::parsing::inline_scope::label_scope_straddles_list(container.elements())
         {
@@ -474,12 +515,15 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
         let current = parser.current();
         let rest = parser.remaining();
         let tail_marker = if post_has_content {
-            match stopped_tail_marker(current, rest) {
-                Some(marker) => Some(marker),
-                None => Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER),
+            match classify_tail_gap(current, rest, &["span", "size", "a"]) {
+                Some(tail) => Some(understrike_tail_marker(tail)),
+                None => {
+                    Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER)
+                }
             }
         } else {
-            stopped_tail_marker(current, rest)
+            classify_tail_gap(current, rest, &["span", "size", "a"])
+                .map(understrike_tail_marker)
         };
         if let Some(attrs) = find_color_stop_at_list_attrs_mut(&mut elements) {
             attrs.insert(
@@ -541,21 +585,24 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     let rest = parser.remaining();
     // The gap after the stopped pair's closer: a line break then the
     // enclosing scope's close block yields a bare break tail; adjacent
-    // content yields a bare content tail. Markers of enclosing crossing
-    // formats (e.g. `**__` after the list in a nested stopped pair) sit
-    // between this closer and the gap, so they are transparent to the
-    // classification. A content-bearing post-list segment (the fold shape)
-    // stamps the same classification; the FOLD marker is the fallback for a
-    // close marker followed by something other than a newline+scope-close
-    // or adjacent text (e.g. `b__[[/span]]` on one line): live closes the
-    // enclosing scope right after the post-list segment.
+    // content yields a bare content tail; content after one line break
+    // yields a bare tail with an inserted leading break. Markers of
+    // enclosing crossing formats (e.g. `**__` after the list in a nested
+    // stopped pair) sit between this closer and the gap, so they are
+    // transparent to the classification. A content-bearing post-list
+    // segment (the fold shape) stamps the same classification; the FOLD
+    // marker is the fallback for a close marker followed by something
+    // other than a newline+scope-close or adjacent text (e.g.
+    // `b__[[/span]]` on one line): live closes the enclosing scope right
+    // after the post-list segment.
     let tail_marker = if post_has_content {
-        match stopped_tail_marker(current, rest) {
-            Some(marker) => Some(marker),
+        match classify_tail_gap(current, rest, &["span", "size", "a"]) {
+            Some(tail) => Some(understrike_tail_marker(tail)),
             None => Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER),
         }
     } else {
-        stopped_tail_marker(current, rest)
+        classify_tail_gap(current, rest, &["span", "size", "a"])
+            .map(understrike_tail_marker)
     };
     let Some(container) = find_stop_at_list_container_mut(&mut elements) else {
         unreachable!("stop-at-list candidate checked above")

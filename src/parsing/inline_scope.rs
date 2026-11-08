@@ -7,9 +7,11 @@ use crate::tree::{
     WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER,
     WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, WIKIDOT_HEADING_REOPEN_MARKER,
     WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER, WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
+    WIKIDOT_SPAN_LIST_CLOSE_TAIL_LEAD_MARKER,
     WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
     WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
-    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER, WIKIDOT_WS_MONO_VANISH_MARKER,
+    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
+    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER, WIKIDOT_WS_MONO_VANISH_MARKER,
     WikidotBlockCloseKind, WikidotBlockShell, WikidotFrameLink,
 };
 use std::borrow::Cow;
@@ -1560,13 +1562,18 @@ pub(crate) fn is_wikidot_flow_block(element: &Element<'_>) -> bool {
 /// A span-content format pair that closed beyond an explicit list (spanin
 /// family): which tail shape the following span-content paragraph yields.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum SpanListCloseTail {
+pub(crate) enum SpanListCloseTail {
     /// Single newline then `[[/span]]`: materialise a trailing bare
     /// break-only span segment after the list.
     Break,
     /// Span-content text directly adjacent to the close: the after-list
     /// paragraph appends bare with no inserted leading break.
     Bare,
+    /// Span-content text on the line after the close (exactly one
+    /// intervening line break, whitespace aside): the after-list paragraph
+    /// keeps the scope's inline run, renders bare inside the scope, and
+    /// carries an inserted leading break (live `<span><br>\ny<br></span>`).
+    Lead,
     /// The stopped pair's post-list segment has content (the fold shape):
     /// the after-list paragraph renders bare and the enclosing inline
     /// scopes (span/size/anchor) are retired there, so the post segment
@@ -1579,6 +1586,8 @@ fn span_list_close_tail_of(attributes: &AttributeMap<'_>) -> Option<SpanListClos
     let map = attributes.get();
     if map.contains_key(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER) {
         Some(SpanListCloseTail::Break)
+    } else if map.contains_key(WIKIDOT_SPAN_LIST_CLOSE_TAIL_LEAD_MARKER) {
+        Some(SpanListCloseTail::Lead)
     } else if map.contains_key(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER) {
         Some(SpanListCloseTail::Bare)
     } else {
@@ -1588,15 +1597,17 @@ fn span_list_close_tail_of(attributes: &AttributeMap<'_>) -> Option<SpanListClos
 
 fn strip_span_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
     attributes.remove(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER);
+    attributes.remove(WIKIDOT_SPAN_LIST_CLOSE_TAIL_LEAD_MARKER);
     attributes.remove(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER);
 }
 
 /// The stopped underline/strikethrough sibling of the spanin tail: which
 /// bare post-list tail shape the following scope-content paragraph yields.
 /// `Break` materialises a bare `<br>`; `Bare` renders adjacent content
-/// bare with no scope tags; `Fold` covers a content-bearing post-list
-/// segment: the segment renders inside the scope, the following paragraph
-/// renders bare with the enclosing scope retired.
+/// bare with no scope tags; `Lead` renders line-after content bare with an
+/// inserted leading break and no scope tags; `Fold` covers a content-bearing
+/// post-list segment: the segment renders inside the scope, the following
+/// paragraph renders bare with the enclosing scope retired.
 fn understrike_list_close_tail_of(
     attributes: &AttributeMap<'_>,
 ) -> Option<SpanListCloseTail> {
@@ -1605,6 +1616,8 @@ fn understrike_list_close_tail_of(
         Some(SpanListCloseTail::Break)
     } else if map.contains_key(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER) {
         Some(SpanListCloseTail::Bare)
+    } else if map.contains_key(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER) {
+        Some(SpanListCloseTail::Lead)
     } else if map.contains_key(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER) {
         Some(SpanListCloseTail::Fold)
     } else {
@@ -1615,6 +1628,7 @@ fn understrike_list_close_tail_of(
 fn strip_understrike_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
     attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER);
     attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER);
+    attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER);
     attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER);
 }
 
@@ -1771,6 +1785,7 @@ fn foster_sole_explicit_list<'t>(element: &mut Element<'t>) -> Option<Vec<Elemen
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Lead => WIKIDOT_SPAN_LIST_CLOSE_TAIL_LEAD_MARKER,
             SpanListCloseTail::Fold => {
                 unreachable!("span tail family has no fold marker")
             }
@@ -1783,6 +1798,7 @@ fn foster_sole_explicit_list<'t>(element: &mut Element<'t>) -> Option<Vec<Elemen
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Lead => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER,
             SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
         };
         attributes.insert(marker, Cow::Borrowed(""));
@@ -2590,6 +2606,7 @@ fn format_explicit_list_segments<'t>(
                 let marker = match tail_mark {
                     SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
                     SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+                    SpanListCloseTail::Lead => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER,
                     SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
                 };
                 for elem in segmented.iter_mut() {
@@ -2679,6 +2696,7 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Lead => WIKIDOT_SPAN_LIST_CLOSE_TAIL_LEAD_MARKER,
             SpanListCloseTail::Fold => {
                 unreachable!("span tail family has no fold marker")
             }
@@ -2695,6 +2713,7 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Lead => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER,
             SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
         };
         for element in segmented.iter_mut() {
@@ -2712,6 +2731,7 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Lead => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER,
             SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
         };
         for element in segmented.iter_mut() {
@@ -2940,6 +2960,8 @@ fn lower_root_sequence<'t>(
                 && close_only_paragraph;
             let tail_bare = matches!(span_tail, Some(SpanListCloseTail::Bare))
                 && !close_only_paragraph;
+            let tail_lead = matches!(span_tail, Some(SpanListCloseTail::Lead))
+                && !close_only_paragraph;
             // Inverse strong-x tail: the following paragraph renders bare
             // (with a leading break for the `Break` shape; see the insert
             // below). The spanin `Break` gate above keys on a close-only
@@ -2958,6 +2980,9 @@ fn lower_root_sequence<'t>(
             let understrike_bare =
                 matches!(understrike_tail, Some(SpanListCloseTail::Bare))
                     && !understrike_close_only_paragraph;
+            let understrike_lead =
+                matches!(understrike_tail, Some(SpanListCloseTail::Lead))
+                    && !understrike_close_only_paragraph;
             // Fold shape: the stopped pair's post-list segment has content
             // (live closes the scope at the pair's close marker, right after
             // it). The pending post-list run is flushed into the still-open
@@ -2968,11 +2993,15 @@ fn lower_root_sequence<'t>(
             // there as well.
             let understrike_fold =
                 matches!(understrike_tail, Some(SpanListCloseTail::Fold));
-            if understrike_break || understrike_bare || understrike_fold {
+            if understrike_break
+                || understrike_bare
+                || understrike_fold
+                || understrike_lead
+            {
                 active.retire_span_scopes();
                 active.retire_size_scopes();
                 active.drop_anchor_scopes();
-                if understrike_break {
+                if understrike_break || understrike_lead {
                     container.elements_mut().insert(0, Element::LineBreak);
                 }
             }
@@ -3008,6 +3037,16 @@ fn lower_root_sequence<'t>(
                 )
             );
             if label_break && !output.is_empty() && paragraph_group.is_none() {
+                container.elements_mut().insert(0, Element::LineBreak);
+            } else if tail_lead
+                && !output.is_empty()
+                && paragraph_group.is_none()
+                && starts_in_inline_scope
+            {
+                // Content paragraph continuing the scope's inline run after
+                // a line break: it stays bare inside the scope and carries
+                // the break verbatim (the insert renders as `<br>` ahead
+                // of the content's own newline).
                 container.elements_mut().insert(0, Element::LineBreak);
             } else if starts_in_inline_scope
                 && !collapsible_heading_tail
@@ -3047,10 +3086,12 @@ fn lower_root_sequence<'t>(
                 wrapped: !collapsible_heading_tail
                     && !tail_break
                     && !tail_bare
+                    && !tail_lead
                     && !label_break
                     && !label_bare
                     && !understrike_break
                     && !understrike_bare
+                    && !understrike_lead
                     && !understrike_fold
                     && (follows_table
                         || reopens_paragraph_after_separator

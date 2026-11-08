@@ -144,6 +144,14 @@ pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
 /// rendered.
 pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER: &str =
     "data-ftml-span-list-close-tail-bare";
+/// Sibling mark for the same close when the following span-content text
+/// sits on the line after the close (exactly one intervening line break,
+/// whitespace aside): the after-list paragraph keeps the scope's inline
+/// run, renders bare inside the scope with an inserted leading break
+/// (live `<span><br>\ny<br></span>`). Consumed by inline-scope lowering;
+/// never rendered.
+pub(crate) const WIKIDOT_SPAN_LIST_CLOSE_TAIL_LEAD_MARKER: &str =
+    "data-ftml-span-list-close-tail-lead";
 /// Marks an underline or strikethrough pair that closed beyond an explicit
 /// list inside a Wikidot inline scope (`[[span]]`, `[[size]]`, `[[a]]`):
 /// live carries its styling only up to the list (see
@@ -167,6 +175,13 @@ pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
     "data-ftml-understrike-list-close-tail-break";
 pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER: &str =
     "data-ftml-understrike-list-close-tail-bare";
+/// Sibling mark for the same gap with the content on the line after the
+/// close (exactly one intervening line break): the after-list paragraph
+/// appends bare with an inserted leading break once the enclosing scopes
+/// are retired (live `<br>\ny<br>` after the list). Consumed by
+/// inline-scope lowering; never rendered.
+pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_LEAD_MARKER: &str =
+    "data-ftml-understrike-list-close-tail-lead";
 /// Marks a segmented format wrapper around explicit-list item content when
 /// a span/size scope opened INSIDE that format pair and closes beyond the
 /// list (strong-x family: `**[[span]]` over a list). Live nests that scope
