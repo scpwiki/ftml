@@ -246,7 +246,9 @@ fn try_consume_fn<'r, 't>(
         output.push(text!("--"));
         output.push(text!("}}"));
     }
-    ok!(paragraph_safe; output, errors)
+    let elements =
+        super::bold::mark_format_stop_at_list(parser, Elements::Multiple(output));
+    ok!(paragraph_safe; elements, errors)
 }
 
 fn wikidot_padding_only_space_drops(parser: &Parser<'_, '_>) -> bool {
