@@ -230,10 +230,10 @@ fn parse_list_block_impl<'r, 't>(
                 block_rule.name,
                 "block-list-unordered" | "block-list-ordered"
             ) && parser.has_shallower_quote_text_line(block_rule, depth))
-            // BRIEF-BL57c: an `[[li]]` head with a bare `[[/li]]` close
-            // before the list close takes the literal quote body even
-            // though a blank line hides the paired close from the strict
-            // scan.
+            || (matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            ) && parser.has_shallower_quote_evaporation(block_rule, depth))
             || (matches!(
                 block_rule.name,
                 "block-list-unordered" | "block-list-ordered"
@@ -268,6 +268,12 @@ fn parse_list_block_impl<'r, 't>(
         None
     };
     let (mut elements, errors, _) = body.into();
+    // BRIEF-UE57b: pre-li soft-end left the body empty. Live dissolves
+    // the list entirely — emit nothing instead of the
+    // dissolve-to-break the ordinary empty body uses.
+    if parser.take_wikidot_evaporated_list() {
+        return ok!(false; Elements::None, errors);
+    }
 
     if wikidot && name != block_rule.accepts_names[0] {
         strip_newlines(&mut elements);
