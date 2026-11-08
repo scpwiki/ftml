@@ -1600,12 +1600,36 @@ fn parse_list_item<'r, 't>(
         // NL81 (E, all-linebreaks-body): no content survived inside the
         // shadowed region — the region-end break goes before any content
         // that followed the region (or keeps the item alive when empty).
+        // Only prepend when the li does not already start with a formed
+        // block (a swallowed div nested inside other structures must not
+        // inject a break at the outer li's start).
         if !post_yield_scope
             && parser.take_wikidot_li_swallowed_block_at(body_start, source_end)
         {
+            let starts_with_formed_block = elements.first().is_some_and(|element| {
+                matches!(
+                    element,
+                    Element::Container(_)
+                        | Element::Collapsible { .. }
+                        | Element::Code { .. }
+                        | Element::Table(_)
+                        | Element::Module(_)
+                        | Element::HorizontalRule
+                        | Element::ContentSeparator
+                        | Element::Math { .. }
+                        | Element::TabView(_)
+                        | Element::List { .. }
+                        | Element::Html { .. }
+                        | Element::Iframe { .. }
+                        | Element::Include { .. }
+                        | Element::BibliographyBlock { .. }
+                        | Element::Partial(PartialElement::WikidotBlockOpen(_))
+                        | Element::Partial(PartialElement::WikidotFoster(_))
+                )
+            });
             if elements.is_empty() {
                 elements.push(Element::LineBreak);
-            } else {
+            } else if !starts_with_formed_block {
                 elements.insert(0, Element::LineBreak);
             }
         }
