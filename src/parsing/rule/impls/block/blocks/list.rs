@@ -2137,11 +2137,14 @@ fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
 }
 
 /// L85: live emits no break after a trailing block in an item body
+/// L85: live emits no break after a trailing math block in an item body
+/// (saved-page probes muse-probe-mi6x2-item-math). Formed blocks drop
+/// the trailing break with a trailing blank before [[/li]] (divblank/noteblank/codeblank/collblank/alignblank; probes muse-probe-mi74-*),
+/// and [[toc]] drops it in both cases (item-toc/tocblank; probes muse-probe-mi74-toc-*).
 fn wikidot_li_trailing_break_dropped_after_math(element: &Element) -> bool {
     matches!(element, Element::Math { .. })
 }
 
-/// Drop trailing break in had_trailing_empty case (blank line before [[/li]])
 fn wikidot_li_trailing_break_dropped_after_block_blank(element: &Element) -> bool {
     match element {
         Element::Math { .. } => true,
