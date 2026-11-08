@@ -1,0 +1,149 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "blockquote",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "list",
+                                    "data": {
+                                        "type": "bullet",
+                                        "attributes": {},
+                                        "items": [
+                                            {
+                                                "item-type": "elements",
+                                                "attributes": {
+                                                    "style": "list-style: none"
+                                                },
+                                                "elements": [
+                                                    {
+                                                        "element": "container",
+                                                        "data": {
+                                                            "type": "blockquote",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "container",
+                                                                    "data": {
+                                                                        "type": "blockquote",
+                                                                        "attributes": {},
+                                                                        "elements": [
+                                                                            {
+                                                                                "element": "container",
+                                                                                "data": {
+                                                                                    "type": "blockquote",
+                                                                                    "attributes": {},
+                                                                                    "elements": [
+                                                                                        {
+                                                                                            "element": "table",
+                                                                                            "data": {
+                                                                                                "type": "simple",
+                                                                                                "attributes": {},
+                                                                                                "rows": [
+                                                                                                    {
+                                                                                                        "attributes": {},
+                                                                                                        "cells": [
+                                                                                                            {
+                                                                                                                "header": false,
+                                                                                                                "column-span": 1,
+                                                                                                                "align": null,
+                                                                                                                "attributes": {},
+                                                                                                                "elements": [
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": "a"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "line-break"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "table",
+                                                                                            "data": {
+                                                                                                "type": "simple",
+                                                                                                "attributes": {},
+                                                                                                "rows": [
+                                                                                                    {
+                                                                                                        "attributes": {},
+                                                                                                        "cells": [
+                                                                                                            {
+                                                                                                                "header": false,
+                                                                                                                "column-span": 1,
+                                                                                                                "align": null,
+                                                                                                                "attributes": {},
+                                                                                                                "elements": [
+                                                                                                                    {
+                                                                                                                        "element": "text",
+                                                                                                                        "data": "b"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "line-break"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "element": "container",
+                                                                                "data": {
+                                                                                    "type": "paragraph",
+                                                                                    "attributes": {},
+                                                                                    "elements": [
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "[["
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "li"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "]]"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "u"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
