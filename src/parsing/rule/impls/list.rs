@@ -597,6 +597,13 @@ where
                 .control
                 .map(|control| (depth, list_type, vec![control]));
             parser.update(&sub_parser);
+            if let Some(items) = lost.dissolved_run_items {
+                return Ok(ListItemStep::SplitItems {
+                    control,
+                    items,
+                    trailing: None,
+                });
+            }
             let mut body = lost.body;
             let run_leaf = if lost.sibling_hoisted {
                 Some((depth, list_type, std::mem::take(&mut body)))

@@ -28,6 +28,9 @@ pub(crate) struct LostOwnerBlock<'t> {
     pub append_unquoted_close_break: bool,
     pub hoisted_list: bool,
     pub sibling_hoisted: bool,
+    /// Unowned dissolution (item 65c): dissolved inner-list items emitted as
+    /// run items at the given (depth, ltype) instead of as escaped/fused body.
+    pub dissolved_run_items: Option<Vec<(usize, ListType, Vec<Element<'t>>)>>,
 }
 
 enum BlockHead<'t> {
@@ -359,7 +362,18 @@ where
                 return Ok(None);
             }
         }
-        return parse_lost_owner_list_block(entry_parser, parser, None);
+        // Item 65(c): unowned dissolution only applies inside an explicit
+        // [[li]] body (pairing depth > 0). At top level / marker runs the
+        // formation is a hoisted/degraded lost-owner block, not dissolved.
+        let dissolve_run = match owner {
+            LineOwner::List { depth, ltype }
+                if parser.wikidot_li_pairing_depth() > 0 =>
+            {
+                Some((depth, ltype))
+            }
+            _ => None,
+        };
+        return parse_lost_owner_list_block(entry_parser, parser, None, dissolve_run);
     }
     if let LineOwner::List { ltype, .. } = owner
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
@@ -369,7 +383,7 @@ where
             parser.wikidot_li_pairing_depth(),
             view.eq_ignore_ascii_case("ol"),
         );
-        return parse_lost_owner_list_block(entry_parser, parser, Some(ltype));
+        return parse_lost_owner_list_block(entry_parser, parser, Some(ltype), None);
     }
 
     let (head, close_name, body_start) = if name.eq_ignore_ascii_case("div") {
@@ -548,6 +562,7 @@ where
         append_unquoted_close_break,
         hoisted_list: false,
         sibling_hoisted: false,
+        dissolved_run_items: None,
     }))
 }
 
@@ -1122,6 +1137,7 @@ fn parse_lost_owner_list_block<'r, 't>(
     entry: Parser<'r, 't>,
     parser: &mut Parser<'r, 't>,
     decompose_siblings: Option<ListType>,
+    dissolve_run: Option<(usize, ListType)>,
 ) -> Result<Option<LostOwnerBlock<'t>>, ParseError>
 where
     'r: 't,
@@ -1152,14 +1168,39 @@ where
     if !explicit_list_at_start {
         return Ok(None);
     }
+    // Cross-type close guard (hash-ul-head): ul head consumed by
+    // [[/ol]] (or vice versa) produces a misparsed block; bail on
+    // dissolution so the caller falls through to normal parsing.
+    if dissolve_run.is_some() {
+        let source = parser.full_text().inner();
+        let end = candidate.current().span.start.min(source.len());
+        let consumed_tail = source[..end].trim_end_matches(|c: char| c.is_whitespace());
+        let lower_tail = consumed_tail.to_ascii_lowercase();
+        let head_was_numbered = matches!(
+            elements.first(),
+            Some(Element::List {
+                ltype: ListType::Numbered,
+                ..
+            })
+        );
+        let bad_close = if head_was_numbered {
+            lower_tail.ends_with("[[/ul]]") || lower_tail.ends_with("[[/ul_]]")
+        } else {
+            lower_tail.ends_with("[[/ol]]") || lower_tail.ends_with("[[/ol_]]")
+        };
+        if bad_close {
+            return Ok(None);
+        }
+    }
     let mut elements = elements;
-    if matches!(
+    let flipped_numbered = matches!(
         elements.first(),
         Some(Element::List {
             ltype: ListType::Numbered,
             ..
         })
-    ) {
+    );
+    if flipped_numbered {
         while matches!(elements.last(), Some(Element::LineBreak)) {
             elements.pop();
         }
@@ -1185,18 +1226,22 @@ where
     // decomposition (via the sibling-items branch below) drops both it
     // and the unclosed flag, the anchor is live's remaining "anchor
     // list tail": stash it for the enclosing list's return to re-emit
-    // when the enclosing list is numbered (LT46 p23-ord).
-    if let Some(Element::List { attributes, .. }) = elements.first()
-        && decompose_siblings.is_some()
-        && elements.first().is_some_and(|element| matches!(
-            element,
-            Element::List {
-                ltype: ListType::Bullet,
-                wikidot_unclosed: true,
-                ..
-            }
-        ))
-    {
+    // when the enclosing list is numbered (LT46 p23-ord). The same
+    // anchor must be stashed for an unowned dissolution (c1 / item 65c):
+    // the numbered formation dissolves its content but keeps the anchor.
+    let stash_anchor = flipped_numbered
+        && (decompose_siblings.is_some() || dissolve_run.is_some())
+        && elements.first().is_some_and(|element| {
+            matches!(
+                element,
+                Element::List {
+                    ltype: ListType::Bullet,
+                    wikidot_unclosed: true,
+                    ..
+                }
+            )
+        });
+    if stash_anchor && let Some(Element::List { attributes, .. }) = elements.first() {
         let anchor = Element::List {
             ltype: ListType::Bullet,
             items: vec![ListItem::Elements {
@@ -1211,7 +1256,66 @@ where
             wikidot_explicit_block: true,
             wikidot_unclosed: true,
         };
-        parser.stash_wikidot_list_anchor_chrome(parser.wikidot_li_pairing_depth(), anchor);
+        let stash_depth = if dissolve_run.is_some() {
+            1
+        } else {
+            parser.wikidot_li_pairing_depth()
+        };
+        parser.stash_wikidot_list_anchor_chrome(stash_depth, anchor);
+    }
+    // Unowned dissolution (item 65c, c1 shapes): a numbered lost-owner
+    // list whose body is unowned (explicit [[li]] lines, not sibling
+    // marker items) dissolves its content into the enclosing run and
+    // keeps the anchor stashed above. Dissolve the inner list's real
+    // items (dropping the synthetic anchor item added by the flip) into
+    // run items at the enclosing run's depth/type.
+    if let Some((run_depth, run_ltype)) = dissolve_run
+        && decompose_siblings.is_none()
+    {
+        let mut items = match elements.into_iter().next() {
+            Some(Element::List { mut items, .. }) => {
+                if flipped_numbered
+                    && matches!(
+                        items.last(),
+                        Some(ListItem::Elements { elements, attributes })
+                            if elements.len() == 1
+                                && matches!(elements[0], Element::LineBreak)
+                                && attributes.get().get("style").is_some_and(|s| s == "list-style: none")
+                    )
+                {
+                    items.pop();
+                }
+                items
+            }
+            _ => Vec::new(),
+        };
+        items.retain(|item| match item {
+            ListItem::Elements { elements, .. } => !elements
+                .iter()
+                .all(|e| matches!(e, Element::LineBreak)),
+            ListItem::SubList { element } => match &**element {
+                Element::List { items, .. } => !items.is_empty(),
+                _ => true,
+            },
+        });
+        let dissolve_head = entry.current().span.start;
+        let dissolved_run_items: Vec<(usize, ListType, Vec<Element<'t>>)> = items
+            .into_iter()
+            .map(|item| match item {
+                ListItem::Elements { elements, .. } => (run_depth, run_ltype, elements),
+                ListItem::SubList { element } => (run_depth, run_ltype, vec![*element]),
+            })
+            .collect();
+        parser.note_wikidot_li_unowned_dissolve(dissolve_head);
+        return Ok(Some(LostOwnerBlock {
+            control: None,
+            body: Vec::new(),
+            errors,
+            append_unquoted_close_break: false,
+            hoisted_list: true,
+            sibling_hoisted: false,
+            dissolved_run_items: Some(dissolved_run_items),
+        }));
     }
     let body = if let Some(sibling_ltype) = decompose_siblings {
         let mut elements = elements.into_iter();
@@ -1229,6 +1333,7 @@ where
         append_unquoted_close_break: false,
         hoisted_list: true,
         sibling_hoisted: decompose_siblings.is_some(),
+        dissolved_run_items: None,
     }))
 }
 
