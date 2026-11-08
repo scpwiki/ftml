@@ -1630,6 +1630,15 @@ impl<'r, 't> Parser<'r, 't> {
             })
     }
 
+    /// Whether the pair's closer sits on a heading line (the flat
+    /// marking's heading-line-closer predicate).
+    pub(crate) fn wikidot_pair_closer_on_heading_line(
+        &self,
+        pair: &block_pairs::WikidotBlockPair,
+    ) -> bool {
+        self.wikidot_byte_on_heading_line(pair.closer_byte)
+    }
+
     pub(crate) fn wikidot_pair_goes_flat(
         &self,
         pair: &block_pairs::WikidotBlockPair,
