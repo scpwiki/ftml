@@ -1219,7 +1219,8 @@ fn try_consume_fn<'r, 't>(
             );
         let boundary_list_close = parser.take_wikidot_quote_boundary_list_close();
         let li_auto_close = parser.take_wikidot_quote_boundary_li_auto_close();
-        let quote_end_list_break = quote_end_list_row && !boundary_list_close;
+        let quote_end_list_break =
+            quote_end_list_row && !boundary_list_close && !li_auto_close;
         if quote_end_list_row && boundary_list_close {
             append_unquoted_close_break = true;
             append_from_list_boundary = true;

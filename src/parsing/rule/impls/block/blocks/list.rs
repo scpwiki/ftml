@@ -219,7 +219,11 @@ fn parse_list_block_impl<'r, 't>(
             || (matches!(
                 block_rule.name,
                 "block-list-unordered" | "block-list-ordered"
-            ) && parser.has_shallower_quote_li_close(depth)))
+            ) && parser.has_shallower_quote_li_close(depth))
+            || (matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            ) && parser.has_shallower_quote_text_line(block_rule, depth)))
     {
         parser.get_body_elements_with_literal_quote_context(
             block_rule,

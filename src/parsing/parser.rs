@@ -200,6 +200,12 @@ pub(super) struct BlockScanCache<'t> {
     /// A paired quoted `[[ /ul]]`/`[[ /ol]]` awaits in the next quote run:
     /// its row renders as an empty-list-style break (BRIEF-QR45 part (b)).
     wikidot_pending_paired_list_close: Cell<bool>,
+    /// UL/OL body is in shallower-text boundary mode (BRIEF-QT52): a
+    /// shallower non-`[[/li]]`-close line after an `[[li]]` head, with no
+    /// `[[/li]]` before the later quoted list close, soft-ends the UL at
+    /// that boundary instead of joining the next row. The LI outcome
+    /// (degraded vs paired) still comes from the ordinary LI pairing.
+    wikidot_quote_boundary_shallower_text: Cell<bool>,
     wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
     wikidot_heading_barrier: Option<usize>,
     wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
@@ -1293,6 +1299,27 @@ impl<'r, 't> Parser<'r, 't> {
         self.block_end_scan_cache
             .borrow()
             .wikidot_pending_paired_list_close
+            .get()
+    }
+
+    pub(crate) fn set_wikidot_quote_boundary_shallower_text(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_shallower_text
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_shallower_text(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_shallower_text
+            .take()
+    }
+
+    pub(crate) fn wikidot_quote_boundary_shallower_text(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_shallower_text
             .get()
     }
 
