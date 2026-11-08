@@ -889,8 +889,32 @@ fn push_literal_list_item<'t>(
         if append_to_last && !outer_list_is_scored {
             wrap_wikidot_malformed_scored_items(elements, content_follows);
         }
+        // Item 91(c), Wikidot layout only (`append_to_last` carries the
+        // legacy-layout flag at every call site): a degraded literal item
+        // whose first element is a blockquote — i.e. a quote row deeper
+        // than the list's own quote level preceded the degraded head in
+        // source — renders with `display: inline` on live (saved-page
+        // probes muse-probe-di91-*: content-agnostic across blockquote
+        // paragraphs, native/explicit lists, tables, headings; order
+        // sensitive — a deeper row after the head, or any same-depth row
+        // before it, keeps the plain none style). Same-depth block
+        // children (e.g. a formed table first) do not trigger it. The
+        // gate keeps the Wikijump-layout degraded trees (which form such
+        // items for shapes Wikidot pairs cleanly) byte-identical to base.
+        let style = if append_to_last
+            && elements.first().is_some_and(|element| {
+                matches!(
+                    element,
+                    Element::Container(container)
+                        if container.ctype() == ContainerType::Blockquote
+                )
+            }) {
+            "list-style: none; display: inline"
+        } else {
+            "list-style: none"
+        };
         let mut attributes = AttributeMap::new();
-        assert!(attributes.insert("style", cow!("list-style: none")));
+        assert!(attributes.insert("style", cow!(style)));
         items.push(ListItem::Elements {
             elements: std::mem::take(elements),
             attributes,
