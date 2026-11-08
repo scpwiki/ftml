@@ -1263,15 +1263,23 @@ fn parse_table<'r, 't>(
             ok!(false; element, errors)
         }
     } else {
-        let mut elements = Vec::with_capacity(foster.len() + residuals.len() * 2 + 1);
+        let mut elements = Vec::with_capacity(foster.len() + residuals.len() * 2 + 2);
         elements.extend(foster);
         if !residuals.is_empty() {
-            let mut fostered = Vec::with_capacity(residuals.len() * 2 - 1);
+            let count = residuals.len();
+            let mut fostered = Vec::with_capacity(count * 2);
             for (index, residual) in residuals.into_iter().enumerate() {
                 if index > 0 {
                     fostered.push(Element::LineBreak);
                 }
-                fostered.push(Element::Text(residual));
+                if index + 1 == count {
+                    fostered.push(Element::Text(std::borrow::Cow::Owned(format!(
+                        "{}\n",
+                        residual
+                    ))));
+                } else {
+                    fostered.push(Element::Text(residual));
+                }
             }
             elements.push(Element::Partial(PartialElement::WikidotFoster(fostered)));
         }

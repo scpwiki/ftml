@@ -5043,6 +5043,36 @@ fn strip_scope_trailing_space(element: &mut Element<'_>) -> bool {
     }
 }
 
+fn is_cell_closer_residual_text(text: &str) -> bool {
+    let trimmed = text.trim_end_matches(['\n', '\r']);
+    trimmed.eq_ignore_ascii_case("[[/cell]]")
+        || trimmed.eq_ignore_ascii_case("[[/hcell]]")
+}
+
+fn strip_trailing_space_from_vec_preserving_residual_newline(
+    elements: &mut Vec<Element<'_>>,
+) {
+    if let Some(Element::Text(text)) = elements.last() {
+        if text.ends_with('\n') && is_cell_closer_residual_text(text) {
+            let t = text.as_ref();
+            let without_final_nl = t
+                .strip_suffix("\r\n")
+                .or_else(|| t.strip_suffix('\n'))
+                .unwrap_or(t);
+            let trimmed = without_final_nl.trim_end_matches([' ', '\t', '\r']);
+            let suffix = &t[without_final_nl.len()..];
+            let new_text = format!("{}{}", trimmed, suffix);
+            if new_text != t {
+                if let Some(Element::Text(text)) = elements.last_mut() {
+                    *text = std::borrow::Cow::Owned(new_text);
+                }
+            }
+            return;
+        }
+    }
+    strip_trailing_space_from_vec(elements);
+}
+
 fn strip_trailing_space_from_vec(elements: &mut Vec<Element<'_>>) -> bool {
     let mut stripped = false;
     loop {
@@ -5827,6 +5857,27 @@ fn lower_cell_like<'t>(
     active: &mut ActiveScopes<'t>,
     bib: &mut Option<BibliographyLowering<'_, 't>>,
 ) {
+    lower_cell_like_inner(elements, valid, ordinal, active, bib, false);
+}
+
+fn lower_foster<'t>(
+    elements: &mut Vec<Element<'t>>,
+    valid: &BTreeSet<usize>,
+    ordinal: &mut usize,
+    active: &mut ActiveScopes<'t>,
+    bib: &mut Option<BibliographyLowering<'_, 't>>,
+) {
+    lower_cell_like_inner(elements, valid, ordinal, active, bib, true);
+}
+
+fn lower_cell_like_inner<'t>(
+    elements: &mut Vec<Element<'t>>,
+    valid: &BTreeSet<usize>,
+    ordinal: &mut usize,
+    active: &mut ActiveScopes<'t>,
+    bib: &mut Option<BibliographyLowering<'_, 't>>,
+    preserve_foster_residual_newline: bool,
+) {
     let start = *ordinal;
     let mut cell_active = ActiveScopes {
         close_pairs: active.close_pairs.clone(),
@@ -5844,7 +5895,11 @@ fn lower_cell_like<'t>(
         false,
         bib,
     );
-    strip_trailing_space_from_vec(elements);
+    if preserve_foster_residual_newline {
+        strip_trailing_space_from_vec_preserving_residual_newline(elements);
+    } else {
+        strip_trailing_space_from_vec(elements);
+    }
     let end = *ordinal;
     let retire: Vec<usize> = active
         .close_pairs
@@ -5945,7 +6000,7 @@ fn lower_children<'t>(
     }
 
     if let Element::Partial(PartialElement::WikidotFoster(tail)) = element {
-        lower_cell_like(tail, valid, ordinal, active, bib);
+        lower_foster(tail, valid, ordinal, active, bib);
         return true;
     }
 
@@ -6792,7 +6847,10 @@ impl<'t> WikidotFrameAssembly<'t> {
         }
     }
 
-    fn wrap_note_frame_children(attributes: &AttributeMap<'_>, children: &mut Vec<Element<'_>>) {
+    fn wrap_note_frame_children(
+        attributes: &AttributeMap<'_>,
+        children: &mut Vec<Element<'_>>,
+    ) {
         let is_note = attributes
             .get()
             .get("class")
@@ -6871,9 +6929,9 @@ impl<'t> WikidotFrameAssembly<'t> {
         if !self.row_suffix || !frame_ejects_row_suffix(&frame.attributes) {
             return Vec::new();
         }
-        let Some(index) = frame.children.iter().rposition(|element| {
-            matches!(element, Element::Text(text) if text.as_ref() == "||")
-        }) else {
+        let Some(index) = frame.children.iter().rposition(
+            |element| matches!(element, Element::Text(text) if text.as_ref() == "||"),
+        ) else {
             return Vec::new();
         };
         if index + 1 != frame.children.len() {
