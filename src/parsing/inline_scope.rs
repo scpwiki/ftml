@@ -2348,6 +2348,10 @@ fn lower_root_sequence<'t>(
             pending.push(element);
             continue;
         }
+        if !is_paragraph && element.paragraph_safe() {
+            pending.push(element);
+            continue;
+        }
         if flush_root_pending(
             &mut output,
             &mut paragraph_group,
@@ -2824,15 +2828,38 @@ fn flush_root_pending<'t>(
     active: &mut ActiveScopes<'t>,
     trim_next_break: &mut bool,
     bib: &mut Option<BibliographyLowering<'_, 't>>,
+    // The element that ended the pending run (an explicit list boundary,
+    // or another root boundary; `None` at the end of the document). The
+    // stopped-segment family re-wraps into a paragraph only at an
+    // explicit-list boundary with no inline scope open (AP60 (B)); the
+    // crossed rejected pair family decides on the item shapes instead
+    // (62(b), `crossed_pre_list_head_should_wrap`).
     next: Option<&Element<'t>>,
 ) -> bool {
     if pending.is_empty() {
         return false;
     }
+    let group_flushed = paragraph_group.is_some();
+    let pending_has_format = sequence_contains_format_container(pending);
     flush_paragraph_group(output, paragraph_group);
     active.sync_chain_to_istack();
     let scope_before = active.outer_active_position();
     let scope_open_at_start = active.has_active_scope();
+    // The generic explicit-list predicate for the stopped-segment family;
+    // the crossed rejected pair family decides on item shapes instead
+    // (62(b)). Both gates apply only at explicit-list boundaries and are
+    // mutually exclusive by construction: 62(b) requires the pending run
+    // to start with a bare format-open marker and hold no format container;
+    // AP60 (B) requires the pending run to contain one.
+    let at_explicit_list = next.is_some_and(|next| {
+        matches!(
+            next,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        )
+    });
     // A crossed rejected format pair leaves its pre-list run as bare
     // marker text and scope segments (the markers were lifted out of the
     // format container at flatten time). Live wraps that run in a paragraph
@@ -2881,6 +2908,40 @@ fn flush_root_pending<'t>(
             ))];
         }
     }
+    // A plain (scope-free) inline chunk separated from its paragraph by a
+    // block boundary re-joins a just-flushed paragraph on live, and a chunk
+    // with no preceding paragraph becomes a fresh paragraph: live renders
+    // the pre-list segment of a stopped format pair as
+    // `<p><span underline>a<br></span></p><ul>…` even with no inline scope
+    // open (and as `<p>x<br><span underline>a<br></span></p>` when the chunk
+    // continues an open paragraph cut by the list). Gated to the
+    // segmentation shape (an inline-format segment in the pending run) at an
+    // explicit list boundary; a chunk flushed after a non-paragraph block
+    // (post-list content) stays bare, as does any chunk with an open inline
+    // scope (the scope-continuation merges in `append_root_sequence` own
+    // those), and ordinary inline content parked at a root boundary keeps
+    // the bare-append behaviour.
+    if !scope_open_at_start
+        && at_explicit_list
+        && pending_has_format
+        && sequence_has_inline_content(&sequence)
+        && sequence.iter().all(Element::paragraph_safe)
+    {
+        if group_flushed
+            && let Some(Element::Container(paragraph)) = output.last_mut()
+            && paragraph.ctype() == ContainerType::Paragraph
+        {
+            paragraph.elements_mut().append(&mut sequence);
+            return true;
+        }
+        if output.is_empty() {
+            sequence = vec![Element::Container(Container::new(
+                ContainerType::Paragraph,
+                sequence,
+                AttributeMap::new(),
+            ))];
+        }
+    }
     let scope_continues =
         scope_before.is_some() && scope_before == active.outer_active_position();
     append_root_sequence(output, &mut sequence, scope_continues);
@@ -2911,6 +2972,39 @@ fn sequence_has_content(elements: &[Element<'_>]) -> bool {
     })
 }
 
+/// Whether the pending sequence contains an inline-format segment produced
+/// by segmentation (a format-kind container: bold/italics/underline/
+/// superscript/subscript/strikethrough/monospace). That is the shape every
+/// segmentation-produced inline chunk has in pending: live re-wraps it in a
+/// paragraph when the containing chunk was cut by an explicit list (the
+/// frozen pre-list segment family), while ordinary inline content parked at
+/// a root boundary (an image, bare text/link before a block) stays bare.
+fn sequence_contains_format_container(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| match element {
+        Element::Container(container) => {
+            format_kind_of(container.ctype()).is_some()
+                || sequence_contains_format_container(container.elements())
+        }
+        Element::Color { elements, .. } => sequence_contains_format_container(elements),
+        Element::Anchor { elements, .. } => sequence_contains_format_container(elements),
+        _ => false,
+    })
+}
+
+/// Whether the pending sequence carries renderable inline content: anything but a
+/// break or a bare partial (inline partials alone are sequencing artefacts,
+/// not content an appended or merged chunk would render).
+fn sequence_has_inline_content(elements: &[Element<'_>]) -> bool {
+    elements.iter().any(|element| match element {
+        Element::LineBreak | Element::LineBreaks(_) | Element::Partial(_) => false,
+        Element::Container(container) => {
+            sequence_has_inline_content(container.elements())
+        }
+        Element::Color { elements, .. } => sequence_has_inline_content(elements),
+        _ => true,
+    })
+}
+
 fn append_root_sequence<'t>(
     output: &mut Vec<Element<'t>>,
     sequence: &mut Vec<Element<'t>>,
@@ -2921,11 +3015,14 @@ fn append_root_sequence<'t>(
             (output.last(), sequence.first()),
             (Some(previous), Some(next)) if same_scope_wrapper(previous, next)
         );
-    // A paragraph-wrapped break-only span segment and the scope
-    // continuation that follows are one span segment on live; when the
-    // next lowered sequence starts with a bare container with the same
-    // wrapper as the paragraph tail's container, merge into the tail (l2
-    // break ownership).
+    // A paragraph-wrapped break-only span or anchor/color segment and the
+    // scope continuation that follows are one segment on live; when the
+    // next lowered sequence starts with a bare wrapper with the same scope
+    // wrapper as the paragraph tail, merge into the tail (l2 break
+    // ownership). Anchor and color tails count like container tails: live
+    // keeps a stopped pair's pre segment inside the anchor's first
+    // paragraph (`<p><a><br><span underline>a<br></span></a></p>`), and the
+    // anchor wrapper is `Element::Anchor`, not a container.
     let paragraph_tail_merge = scope_continues
         && matches!(
             output.last(),
@@ -2939,10 +3036,13 @@ fn append_root_sequence<'t>(
                 // A content-bearing tail ends its chunk on live (heading
                 // wrapper copies stay separate); only a break-only segment
                 // is a piece of the continuing scope.
-                let Element::Container(tail_container) = tail else {
-                    return false;
+                let tail_elements: &[Element<'t>] = match tail {
+                    Element::Container(tail_container) => tail_container.elements(),
+                    Element::Anchor { elements, .. } => elements,
+                    Element::Color { elements, .. } => elements,
+                    _ => return false,
                 };
-                if !tail_container.elements().iter().all(|element| {
+                if !tail_elements.iter().all(|element| {
                     matches!(element, Element::LineBreak | Element::LineBreaks(_))
                 }) {
                     return false;
