@@ -244,6 +244,17 @@ impl<'t> Arguments<'t> {
         })
     }
 
+    /// Remove `key` entirely, so it reads as absent everywhere downstream
+    /// (not merely taken for a label): a no-op (returns `false`) for a key
+    /// that is not present.
+    pub fn remove(&mut self, key: &'t str) -> bool {
+        let argument_key = self.key(key);
+        self.bare.remove(&argument_key);
+        self.explicit_empty.remove(&argument_key);
+        self.whitespace_empty.remove(&argument_key);
+        self.inner.remove(&argument_key).is_some()
+    }
+
     #[must_use = "the normalized Wikidot class value must be used"]
     pub(crate) fn take_normalized_wikidot_class(&mut self) -> Option<Cow<'t, str>> {
         let key = ArgumentKey {
