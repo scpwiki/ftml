@@ -1897,6 +1897,58 @@ pub(crate) fn post_list_subtree_has_content(elements: &[Element<'_>]) -> bool {
     false
 }
 
+/// Whether an explicit list's items carry an inline span/size scope close
+/// partial: a scope that opened before the list closed inside it (the
+/// rejected-pair / inverse-tail family, item 84(e)). The rejected pair's
+/// tail chunk after such a list drops the separator break; unrelated
+/// post-list followers keep theirs.
+fn list_items_close_inline_scope(element: &Element<'_>) -> bool {
+    fn walk(element: &Element<'_>) -> bool {
+        if matches!(
+            element,
+            Element::Partial(
+                PartialElement::InlineSpanClose(_) | PartialElement::InlineSizeClose(_)
+            )
+        ) {
+            return true;
+        }
+        let mut found = false;
+        visit_children(element, &mut |children| {
+            for child in children {
+                if !found && walk(child) {
+                    found = true;
+                }
+            }
+        });
+        found
+    }
+    let Element::List { items, .. } = element else {
+        return false;
+    };
+    items.iter().any(|item| match item {
+        ListItem::Elements { elements, .. } => elements.iter().any(walk),
+        ListItem::SubList { element } => walk(element),
+    })
+}
+
+/// Whether the subtree contains a Table element at any depth. A table
+/// foster (an unclosed table whose cell content leaks out) keeps live's
+/// inline flow alive for the chunk that follows it (item 84(b)).
+fn subtree_contains_table(element: &Element<'_>) -> bool {
+    if matches!(element, Element::Table(_)) {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        for child in children {
+            if !found && subtree_contains_table(child) {
+                found = true;
+            }
+        }
+    });
+    found
+}
+
 /// Whether the subtree contains a flow block: a div/note/align container,
 /// collapsible, tabview, wikidot block frame or block open/close partial
 /// (see `is_wikidot_flow_block`), or a table/math block. `Element::Code`
@@ -2786,6 +2838,12 @@ fn lower_root_sequence<'t>(
     // beyond the explicit list just processed (inverse strong-x shape);
     // consumed by the next root paragraph like the tails above.
     let mut label_list_close_tail: Option<SpanListCloseTail> = None;
+    // Whether the explicit list just appended to `output` carries an
+    // inline span/size scope close inside its items (item 84(e)); the
+    // pending tail of a rejected pair drops its separator break only then.
+    // Recorded from the raw (pre-lowering) element: lowering resolves the
+    // close partial into a scope container.
+    let mut scope_closed_in_last_list = false;
 
     for mut element in mem::take(elements) {
         let is_paragraph = matches!(
@@ -2811,12 +2869,14 @@ fn lower_root_sequence<'t>(
             trim_next_break,
             bib,
             Some(&element),
+            scope_closed_in_last_list,
         ) {
             previous_scored_close = false;
         }
         if let Element::Container(container) = &mut element
             && container.ctype() == ContainerType::Paragraph
         {
+            scope_closed_in_last_list = false;
             if paragraph_group.is_none() || !previous_scored_close {
                 active.sync_chain_to_istack();
             }
@@ -3041,11 +3101,13 @@ fn lower_root_sequence<'t>(
                 strip_span_list_close_tail_markers(attributes);
                 strip_understrike_list_close_tail_markers(attributes);
                 strip_format_label_list_close_tail_markers(attributes);
+                scope_closed_in_last_list = list_items_close_inline_scope(&element);
             }
             _ => {
                 list_close_tail = None;
                 understrike_list_close_tail = None;
                 label_list_close_tail = None;
+                scope_closed_in_last_list = false;
             }
         }
         let mut sequence = vec![element];
@@ -3080,6 +3142,7 @@ fn lower_root_sequence<'t>(
         trim_next_break,
         bib,
         None,
+        scope_closed_in_last_list,
     );
     flush_paragraph_group(&mut output, &mut paragraph_group);
     *elements = output;
@@ -3286,6 +3349,9 @@ fn flush_root_pending<'t>(
     // crossed rejected pair family decides on the item shapes instead
     // (62(b), `crossed_pre_list_head_should_wrap`).
     next: Option<&Element<'t>>,
+    // The block just appended to `output` closed an inline span/size scope
+    // inside an explicit list's items (item 84(e)).
+    scope_closed_in_last_list: bool,
 ) -> bool {
     if pending.is_empty() {
         return false;
@@ -3321,6 +3387,25 @@ fn flush_root_pending<'t>(
         crossed_pre_list_head_should_wrap(next) && !subtree_contains_native_list(next)
     }) && pending_starts_with_format_marker(pending);
     let mut sequence = mem::take(pending);
+    // Table-fostered span tail at root (item 84(b)) and the note-nested
+    // companion (84(c), note/collapsible/tab nestings probed at page root):
+    // a pending run right after a block whose subtree contains a Table
+    // stays in live's inline flow (the seam space survives), because an
+    // unclosed table's fostered cell content keeps the flow alive. The
+    // fostered paragraph(s) following the table element are transparent to
+    // this check. Div/note/collapsible fosters without a table suppress
+    // the space, as before.
+    let table_foster_precedes = output
+        .iter()
+        .rev()
+        .find(|element| {
+            !matches!(
+                element,
+                Element::Container(container)
+                    if container.ctype() == ContainerType::Paragraph
+            )
+        })
+        .is_some_and(subtree_contains_table);
     lower_sequence(
         &mut sequence,
         valid,
@@ -3330,9 +3415,20 @@ fn flush_root_pending<'t>(
         false,
         true,
         bib,
-        true,
+        !table_foster_precedes,
     );
     drop_segment_trailing_space(&mut sequence);
+    // Post-list inverse-tail break (item 84(e)): the rejected crossing
+    // pair's closer chunk follows an explicit list with a bare leading
+    // break (the inter-block newline materialised as an element); live
+    // renders no break before it. Spread live across all probed variants
+    // (span/size scopes, div/note vehicles, text and marker tails).
+    if scope_closed_in_last_list
+        && matches!(sequence.first(), Some(Element::LineBreak))
+        && sequence_has_content(&sequence[1..])
+    {
+        sequence.remove(0);
+    }
     if wrap_crossed_head && !sequence.is_empty() {
         // Live: the pre-list run closes into a fresh paragraph before the
         // explicit list (`<p>**<span><br></span></p><ul>…`). The run can
