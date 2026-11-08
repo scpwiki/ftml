@@ -1261,6 +1261,27 @@ fn parse_list_item<'r, 't>(
                 elements = inner;
             }
         }
+        // lihoist p23-early (LT46): an explicit-list body item that is a
+        // depth-2+ marker line (a `(none)`-styled literal item starting at
+        // the deep line) escapes the single-list body into paragraph
+        // segments in live: the deep line becomes its own paragraph, the
+        // remaining item lines reassemble into native lists, dissolving
+        // single-list wrappers (the run's fuse/promote semantics).
+        // Starred or unstarred closers behave the same (p23-early/e3/e4
+        // probes); the rule keys on the literal item, not the closer.
+        let mixed_deep = elements.len() == 1
+            && matches!(elements.first(), Some(Element::List { ltype: ListType::Bullet, items, .. })
+                    if items.iter().any(|item| {
+                        matches!(item, ListItem::Elements { attributes, elements }
+                            if attributes.get().get("style").is_some_and(|style| style == "list-style: none")
+                                && elements.first().is_some_and(deep_marker_head))
+                    }));
+        if mixed_deep {
+            let single = elements.first().cloned().expect("checked single element above");
+            if let Some(segments) = split_mixed_deep_marker_list(single) {
+                elements = segments;
+            }
+        }
         // Live ends a run formation inside an explicit [[li]] body at the
         // completing pair's closer: run items after the closer escape to
         // the enclosing list as its items instead of re-forming a second
@@ -1526,6 +1547,106 @@ fn segment_has_block_marker(segment: &[Element]) -> bool {
 
 fn deep_marker_head(element: &Element) -> bool {
     matches!(element, Element::Text(text) if text.starts_with("**") || text.starts_with("##"))
+}
+
+/// lihoist p23-early (LT46): splits one list whose items mix deep-marker
+/// literal lines with other item lines into li-body segments: each deep
+/// line becomes its own paragraph, the remaining items regroup into
+/// native lists (run fuse/promote semantics, so single-list wrappers
+/// dissolve). Returns None (keep the body as-is) for line interiors the
+/// saved-page probes did not cover, e.g. text after a nested list or a
+/// non-inline block inside a deep line's item.
+fn split_mixed_deep_marker_list<'t>(list: Element<'t>) -> Option<Vec<Element<'t>>> {
+    let Element::List {
+        ltype, items, attributes, ..
+    } = list
+    else {
+        unreachable!("checked bullet list above")
+    };
+    let mut segments: Vec<Element<'t>> = Vec::new();
+    let mut group: Vec<ListItem<'t>> = Vec::new();
+    let mut flush_group = |group: &mut Vec<ListItem<'t>>, segments: &mut Vec<Element<'t>>| {
+        if !group.is_empty() {
+            segments.push(Element::List {
+                ltype,
+                items: std::mem::take(group),
+                attributes: attributes.clone(),
+                wikidot_explicit_block: false,
+                wikidot_unclosed: false,
+            });
+        }
+    };
+    for item in items {
+        let is_deep = matches!(&item, ListItem::Elements { attributes, elements }
+            if attributes.get().get("style").is_some_and(|style| style == "list-style: none")
+                && elements.first().is_some_and(deep_marker_head));
+        if !is_deep {
+            group.extend(crate::parsing::rule::impls::list::fuse_wikidot_run_item(item));
+            continue;
+        }
+        let ListItem::Elements { elements, .. } = item else {
+            unreachable!("checked deep item above")
+        };
+        let mut paragraph: Vec<Element<'t>> = Vec::new();
+        let mut seen_nested_list = false;
+        let mut valid = true;
+        for element in elements {
+            match element {
+                Element::List { items: inner_items, .. } => {
+                    if !paragraph.is_empty() {
+                        let mut para = std::mem::take(&mut paragraph);
+                        while matches!(para.last(), Some(Element::LineBreak)) {
+                            para.pop();
+                        }
+                        if !para.is_empty() {
+                            flush_group(&mut group, &mut segments);
+                            segments.push(Element::Container(Container::new(
+                                ContainerType::Paragraph,
+                                para,
+                                AttributeMap::new(),
+                            )));
+                        }
+                    }
+                    for inner in inner_items {
+                        group.extend(
+                            crate::parsing::rule::impls::list::fuse_wikidot_run_item(inner),
+                        );
+                    }
+                    seen_nested_list = true;
+                }
+                element if element.paragraph_safe() => {
+                    if seen_nested_list {
+                        valid = false;
+                        break;
+                    }
+                    paragraph.push(element);
+                }
+                _ => {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if !valid {
+            return None;
+        }
+        if !paragraph.is_empty() {
+            let mut para = paragraph;
+            while matches!(para.last(), Some(Element::LineBreak)) {
+                para.pop();
+            }
+            if !para.is_empty() {
+                flush_group(&mut group, &mut segments);
+                segments.push(Element::Container(Container::new(
+                    ContainerType::Paragraph,
+                    para,
+                    AttributeMap::new(),
+                )));
+            }
+        }
+    }
+    flush_group(&mut group, &mut segments);
+    (!segments.is_empty()).then_some(segments)
 }
 
 /// lihoist p23: a depth-2+ marker line (e.g. `** deep`) becomes its own

@@ -1512,7 +1512,7 @@ fn hoist_fuse_wikidot_run_items<'t>(list: Element<'t>) -> Element<'t> {
     }
 }
 
-fn fuse_wikidot_run_item<'t>(item: ListItem<'t>) -> Vec<ListItem<'t>> {
+pub(crate) fn fuse_wikidot_run_item<'t>(item: ListItem<'t>) -> Vec<ListItem<'t>> {
     if let ListItem::SubList { element } = &item
         && let Element::List {
             items,

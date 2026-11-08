@@ -1,0 +1,109 @@
+{
+  "elements": [
+    {
+      "element": "list",
+      "data": {
+        "type": "bullet",
+        "attributes": {},
+        "items": [
+          {
+            "item-type": "elements",
+            "attributes": {},
+            "elements": [
+              {
+                "element": "list",
+                "data": {
+                  "type": "bullet",
+                  "attributes": {},
+                  "items": [
+                    {
+                      "item-type": "elements",
+                      "attributes": {},
+                      "elements": [
+                        {
+                          "element": "list",
+                          "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                              {
+                                "item-type": "elements",
+                                "attributes": {
+                                  "style": "list-style: none"
+                                },
+                                "elements": [
+                                  {
+                                    "element": "text",
+                                    "data": "**"
+                                  },
+                                  {
+                                    "element": "text",
+                                    "data": " "
+                                  },
+                                  {
+                                    "element": "text",
+                                    "data": "deep"
+                                  }
+                                ]
+                              },
+                              {
+                                "item-type": "sub-list",
+                                "element": "list",
+                                "data": {
+                                  "type": "bullet",
+                                  "attributes": {},
+                                  "items": [
+                                    {
+                                      "item-type": "elements",
+                                      "attributes": {},
+                                      "elements": [
+                                        {
+                                          "element": "partial",
+                                          "data": {
+                                            "ListItem": {
+                                              "item-type": "elements",
+                                              "attributes": {},
+                                              "elements": [
+                                                {
+                                                  "element": "list",
+                                                  "data": {
+                                                    "type": "bullet",
+                                                    "attributes": {},
+                                                    "items": [
+                                                      {
+                                                        "item-type": "elements",
+                                                        "attributes": {},
+                                                        "elements": [
+                                                          {
+                                                            "element": "text",
+                                                            "data": "x"
+                                                          }
+                                                        ]
+                                                      }
+                                                    ]
+                                                  }
+                                                }
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
