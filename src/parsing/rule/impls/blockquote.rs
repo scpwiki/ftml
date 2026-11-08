@@ -1650,7 +1650,7 @@ fn build_blockquote_element(
             DepthItem::Item(row) => {
                 keep_trailing_break = row.keep_trailing_break;
                 marker_final = row.marker_final;
-                residual_chunk |= row.residual_block || row_has_residual_div(&row);
+                residual_chunk |= row.residual_block || row_has_residual_div(&row) || row_has_residual_list(&row);
                 push_native_quote_row(&mut stack, row, wikidot);
             }
             DepthItem::List(_, list) => {
@@ -1744,6 +1744,33 @@ fn row_has_residual_div(row: &NativeQuoteRow<'_>) -> bool {
                 && row.elements[..position]
                     .iter()
                     .any(|element| quote_residue_text(element, false))
+        }
+        _ => false,
+    }
+}
+
+fn row_has_residual_list(row: &NativeQuoteRow<'_>) -> bool {
+    match row.elements.iter().position(|element| {
+        matches!(element, Element::List { .. })
+    }) {
+        // A list that closed at this row's own depth (its end break kept on
+        // the row) leaves quote residue behind at the outer depth; a list
+        // closed deeper (all rows at the deeper depth) keeps the residue
+        // wrapped in a paragraph.
+        Some(position) if position > 0 => {
+            row.elements[..position]
+                .iter()
+                .all(|element| matches!(element, Element::Text(_)))
+                && row.elements[..position]
+                    .iter()
+                    .any(|element| quote_residue_text(element, false))
+                && matches!(
+                    row.elements.get(position + 1),
+                    Some(
+                        Element::LineBreak
+                            | Element::LineBreaks(_),
+                    )
+                )
         }
         _ => false,
     }
