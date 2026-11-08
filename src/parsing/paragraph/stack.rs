@@ -97,6 +97,7 @@ pub struct ParagraphStack<'t> {
     /// wrapped paragraph start with `<br />` before the following text.
     wikidot_math_next_paragraph_leads_with_br: bool,
     wikidot_toc_next_paragraph_leads_with_br: bool,
+    wikidot_quote_boundary_next_paragraph_leads_with_br: bool,
     wikidot_row_suffix_break: bool,
 
     finished: Vec<Element<'t>>,
@@ -704,6 +705,14 @@ impl<'t> ParagraphStack<'t> {
     }
 
     #[inline]
+    pub(crate) fn set_wikidot_quote_boundary_next_paragraph_leads_with_br(
+        &mut self,
+        value: bool,
+    ) {
+        self.wikidot_quote_boundary_next_paragraph_leads_with_br = value;
+    }
+
+    #[inline]
     pub(crate) fn record_next_element_line_start(&mut self, start_of_line: bool) {
         self.next_element_started_line = start_of_line;
     }
@@ -888,6 +897,12 @@ impl<'t> ParagraphStack<'t> {
         }
         if elements.is_empty() {
             return;
+        }
+        if self.wikidot && self.wikidot_quote_boundary_next_paragraph_leads_with_br {
+            self.wikidot_quote_boundary_next_paragraph_leads_with_br = false;
+            if !matches!(elements.first(), Some(Element::LineBreak)) {
+                elements.insert(0, Element::LineBreak);
+            }
         }
         let paragraph = Element::Container(Container::new(
             ContainerType::Paragraph,
@@ -1967,6 +1982,12 @@ impl<'t> ParagraphStack<'t> {
         }
         if self.wikidot && self.wikidot_toc_next_paragraph_leads_with_br {
             self.wikidot_toc_next_paragraph_leads_with_br = false;
+            if !matches!(self.current.first(), Some(Element::LineBreak)) {
+                self.current.insert(0, Element::LineBreak);
+            }
+        }
+        if self.wikidot && self.wikidot_quote_boundary_next_paragraph_leads_with_br {
+            self.wikidot_quote_boundary_next_paragraph_leads_with_br = false;
             if !matches!(self.current.first(), Some(Element::LineBreak)) {
                 self.current.insert(0, Element::LineBreak);
             }

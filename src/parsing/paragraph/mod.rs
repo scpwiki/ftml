@@ -400,6 +400,8 @@ where
                 parser.take_wikidot_mixed_paragraph_ownership();
             let div_literal_recovered = parser.take_wikidot_div_literal_recovered();
             let colon_line_vanished = parser.take_wikidot_colon_line_vanished();
+            let quote_boundary_break_leads_paragraph =
+                parser.take_wikidot_quote_boundary_break_leads_paragraph();
             let mut consumed = consumed;
             let paragraph_split = consumed.paragraph_split.take();
             let (elements, mut errors, paragraph_safe) = consumed.into();
@@ -587,6 +589,9 @@ where
                         stack.set_wikidot_toc_next_paragraph_leads_with_br(true);
                     }
                 }
+            }
+            if quote_boundary_break_leads_paragraph {
+                stack.set_wikidot_quote_boundary_next_paragraph_leads_with_br(true);
             }
             if parser.take_crossed_collapsible_tail() {
                 stack.mark_crossed_collapsible_tail();
