@@ -1177,6 +1177,7 @@ fn parse_list_item<'r, 't>(
             parser.in_wikidot_bibliography_body(),
             parser.pending_note_list_closer(),
             terminated_at_cross_close,
+            parser.in_wikidot_advanced_table_cell_body(),
         );
         if parser.wikidot_li_closed_at_shallower_quote_line()
             && matches!(elements.last(), Some(Element::LineBreak))
@@ -1505,7 +1506,7 @@ fn deep_marker_head(element: &Element) -> bool {
 /// paragraph segment when a list follows it in the segment or a starred
 /// list pair formation closes inside the body; otherwise it stays a bare
 /// continuation (g2-style).
-fn wrap_inline_line_after_list(segment: &mut Vec<Element>, formation_present: bool) {
+fn wrap_inline_line_after_list(segment: &mut Vec<Element>, formation_present: bool, in_cell: bool) {
     let mut index = 0;
     while index < segment.len() {
         if !matches!(
@@ -1540,7 +1541,7 @@ fn wrap_inline_line_after_list(segment: &mut Vec<Element>, formation_present: bo
                     })
                 ));
         if !deep_paragraph
-            && (!segment_has_block_marker(&run)
+            && ((!in_cell && !segment_has_block_marker(&run))
                 || !run.iter().any(
                     |element| matches!(element, Element::Text(text) if !text.trim().is_empty()),
                 ))
@@ -1556,9 +1557,11 @@ fn wrap_inline_line_after_list(segment: &mut Vec<Element>, formation_present: bo
                 run.pop();
             }
         }
-        // Only an inline run carrying a literal block marker (e.g. a lone
-        // `[[/hidden]]` line after a list) is paragraph-wrapped; a plain
-        // continuation line stays bare beside the list.
+        // Outside a table cell, only an inline run carrying a literal block
+        // marker (e.g. a lone `[[/hidden]]` line after a list) is
+        // paragraph-wrapped; a plain continuation line stays bare beside
+        // the list. Inside an advanced table cell, live paragraph-wraps
+        // every post-list text run (LP42: tail/zzz/pre**/midlexer shapes).
         segment.insert(
             start,
             Element::Container(Container::new(
@@ -1614,6 +1617,7 @@ fn assemble_wikidot_li_segments<'t>(
     in_bibliography_body: bool,
     note_yielded_list_closer: bool,
     terminated_at_cross_close: bool,
+    in_cell: bool,
 ) -> Vec<Element<'t>> {
     let mut had_trailing_empty = false;
     while segments
@@ -1660,6 +1664,7 @@ fn assemble_wikidot_li_segments<'t>(
         wrap_inline_line_after_list(
             segment,
             crate::parsing::rule::impls::line_owner::starred_list_closer_in_source(source),
+            in_cell,
         );
     }
     if let Some(first) = segments.first_mut() {
@@ -1888,6 +1893,7 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             parser.in_wikidot_bibliography_body(),
             parser.pending_note_list_closer(),
             terminated_at_cross_close,
+            parser.in_wikidot_advanced_table_cell_body(),
         );
         if parser.wikidot_li_closed_at_shallower_quote_line()
             && matches!(elements.last(), Some(Element::LineBreak))
