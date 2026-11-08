@@ -98,6 +98,11 @@ pub enum WikidotBlockShell<'t> {
         head: usize,
         attributes: AttributeMap<'t>,
         scored: bool,
+        /// The flat pair's scan closer sits on a heading line, where the
+        /// heading barrier consumes it before any block close can be
+        /// emitted: the frame will never close mid-parse, so the root
+        /// frame assembly must close it instead of flushing it unclosed.
+        outer_close_eof: bool,
     },
     Collapsible {
         head: usize,
@@ -107,9 +112,13 @@ pub enum WikidotBlockShell<'t> {
         show_top: bool,
         show_bottom: bool,
         reopen_heading: Option<HeadingReopen<'t>>,
+        /// See `Div::outer_close_eof`.
+        outer_close_eof: bool,
     },
     Note {
         head: usize,
+        /// See `Div::outer_close_eof`.
+        outer_close_eof: bool,
     },
     Align {
         head: usize,
@@ -122,7 +131,7 @@ impl<'t> WikidotBlockShell<'t> {
         match self {
             WikidotBlockShell::Div { head, .. }
             | WikidotBlockShell::Collapsible { head, .. }
-            | WikidotBlockShell::Note { head }
+            | WikidotBlockShell::Note { head, .. }
             | WikidotBlockShell::Align { head, .. } => *head,
         }
     }
@@ -133,10 +142,12 @@ impl<'t> WikidotBlockShell<'t> {
                 head,
                 attributes,
                 scored,
+                outer_close_eof,
             } => WikidotBlockShell::Div {
                 head: *head,
                 attributes: attributes.to_owned(),
                 scored: *scored,
+                outer_close_eof: *outer_close_eof,
             },
             WikidotBlockShell::Collapsible {
                 head,
@@ -146,6 +157,7 @@ impl<'t> WikidotBlockShell<'t> {
                 show_top,
                 show_bottom,
                 reopen_heading,
+                outer_close_eof,
             } => WikidotBlockShell::Collapsible {
                 head: *head,
                 start_open: *start_open,
@@ -154,8 +166,15 @@ impl<'t> WikidotBlockShell<'t> {
                 show_top: *show_top,
                 show_bottom: *show_bottom,
                 reopen_heading: reopen_heading.as_ref().map(HeadingReopen::to_owned),
+                outer_close_eof: *outer_close_eof,
             },
-            WikidotBlockShell::Note { head } => WikidotBlockShell::Note { head: *head },
+            WikidotBlockShell::Note {
+                head,
+                outer_close_eof,
+            } => WikidotBlockShell::Note {
+                head: *head,
+                outer_close_eof: *outer_close_eof,
+            },
             WikidotBlockShell::Align { head, alignment } => WikidotBlockShell::Align {
                 head: *head,
                 alignment: *alignment,

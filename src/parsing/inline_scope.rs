@@ -6307,6 +6307,10 @@ struct WikidotFrameBuild<'t> {
     /// Head byte of a note frame, so a crossed close that pops the
     /// frame early retires that head from `note_opens`.
     note_head: Option<usize>,
+    /// The shell's scan closer was on a heading line (the heading barrier
+    /// consumed it): at the root flush this frame must close, not flush
+    /// unclosed.
+    outer_close_eof: bool,
 }
 
 struct WikidotHeadingFrame<'t> {
@@ -6475,7 +6479,10 @@ impl<'t> WikidotFrameAssembly<'t> {
     fn open_shell(&mut self, shell: WikidotBlockShell<'t>) {
         match shell {
             WikidotBlockShell::Div {
-                attributes, scored, ..
+                attributes,
+                scored,
+                outer_close_eof,
+                ..
             } => {
                 self.stack.push(WikidotFrameBuild {
                     attributes,
@@ -6483,9 +6490,13 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: scored,
                     link: None,
                     note_head: None,
+                    outer_close_eof,
                 });
             }
-            WikidotBlockShell::Note { head } => {
+            WikidotBlockShell::Note {
+                head,
+                outer_close_eof,
+            } => {
                 self.note_opens.insert(head);
                 self.stack.push(WikidotFrameBuild {
                     attributes: wikidot_frame_attributes(&[("class", "wiki-note")]),
@@ -6493,6 +6504,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: false,
                     link: None,
                     note_head: Some(head),
+                    outer_close_eof,
                 });
             }
             WikidotBlockShell::Align { alignment, .. } => {
@@ -6505,6 +6517,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: false,
                     link: None,
                     note_head: None,
+                    outer_close_eof: false,
                 });
             }
             WikidotBlockShell::Collapsible {
@@ -6515,6 +6528,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                 show_top,
                 show_bottom,
                 reopen_heading,
+                outer_close_eof,
             } => {
                 self.collapsible_closes.insert(
                     head,
@@ -6533,6 +6547,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: false,
                     link: None,
                     note_head: None,
+                    outer_close_eof,
                 });
                 if let Some(heading) = &reopen_heading
                     && !heading.label_empty
@@ -6560,6 +6575,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                             heading: reopen_heading.clone(),
                         }),
                         note_head: None,
+                        outer_close_eof,
                     });
                 } else {
                     self.push_shell_link(
@@ -6580,6 +6596,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: false,
                     link: None,
                     note_head: None,
+                    outer_close_eof,
                 });
                 if show_top {
                     if reopen_heading.is_some() {
@@ -6597,6 +6614,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                                 heading: reopen_heading.clone(),
                             }),
                             note_head: None,
+                            outer_close_eof,
                         });
                     } else {
                         self.push_shell_link(
@@ -6616,6 +6634,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: false,
                     link: None,
                     note_head: None,
+                    outer_close_eof,
                 });
                 if let Some(heading) = reopen_heading {
                     let mut attributes = AttributeMap::new();
@@ -6940,7 +6959,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     frame.children.pop();
                 }
             }
-            let omit_close = self.at_root;
+            let omit_close = self.at_root && !frame.outer_close_eof;
             Self::wrap_note_frame_children(&frame.attributes, &mut frame.children);
             let suffix = self.take_row_suffix(&mut frame);
             if frame.link.is_none() {

@@ -1085,6 +1085,7 @@ fn parse_fn<'r, 't>(
             head: opener_start,
             attributes,
             scored: flag_score,
+            outer_close_eof: parser.wikidot_pair_closer_on_heading_line(&pair),
         };
         return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
     }

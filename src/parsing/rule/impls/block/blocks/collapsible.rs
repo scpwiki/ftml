@@ -376,6 +376,7 @@ fn parse_fn<'r, 't>(
             show_top: head.show_top,
             show_bottom: head.show_bottom,
             reopen_heading: Some(reopen_heading),
+            outer_close_eof: false,
         };
         let mut elements =
             vec![Element::Partial(PartialElement::WikidotBlockOpen(shell))];
@@ -490,6 +491,7 @@ fn parse_fn<'r, 't>(
             show_top: head.show_top,
             show_bottom: head.show_bottom,
             reopen_heading: None,
+            outer_close_eof: parser.wikidot_pair_closer_on_heading_line(&pair),
         };
         return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
     }

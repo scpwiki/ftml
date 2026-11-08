@@ -90,7 +90,10 @@ fn parse_note_block<'r, 't>(
         && pair.kind == WikidotBlockKind::Note
     {
         consume_wikidot_flat_head_break(parser, false)?;
-        let shell = WikidotBlockShell::Note { head: opener_start };
+        let shell = WikidotBlockShell::Note {
+            head: opener_start,
+            outer_close_eof: parser.wikidot_pair_closer_on_heading_line(&pair),
+        };
         return ok!(Element::Partial(PartialElement::WikidotBlockOpen(shell)));
     }
 
