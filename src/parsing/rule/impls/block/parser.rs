@@ -4943,7 +4943,22 @@ where
             && literal_residual_quotes
             && block_rule.name.starts_with("block-list-")
             && self.has_shallower_quote_list_close(block_rule, required_depth);
-        if !has_close && !has_later_close && !has_surplus_list_close && !has_shallower_close {
+        let has_shallower_li_close = !has_close
+            && !has_later_close
+            && !has_surplus_list_close
+            && !has_shallower_close
+            && literal_residual_quotes
+            && matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            )
+            && self.has_shallower_quote_li_close(required_depth);
+        if !has_close
+            && !has_later_close
+            && !has_surplus_list_close
+            && !has_shallower_close
+            && !has_shallower_li_close
+        {
             if block_rule.name == "block-note" {
                 return self.get_body_elements(block_rule, as_paragraphs);
             }
@@ -4951,6 +4966,10 @@ where
         }
 
         let previous_cursor = self.quote_body_cursor();
+        let previous_shallower_li = self.take_wikidot_quote_boundary_shallower_li();
+        if has_shallower_li_close {
+            self.set_wikidot_quote_boundary_shallower_li();
+        }
         if literal_residual_quotes {
             self.install_quote_body_cursor_with_literal_residuals(required_depth);
         } else {
@@ -4975,6 +4994,10 @@ where
         }
         self.set_quote_boundary_closes_body(previous_boundary_policy);
         self.set_quote_body_cursor(previous_cursor);
+        let _ = self.take_wikidot_quote_boundary_shallower_li();
+        if previous_shallower_li {
+            self.set_wikidot_quote_boundary_shallower_li();
+        }
 
         match result {
             Ok(success) => {
@@ -6175,6 +6198,34 @@ where
         let mut first = true;
 
         loop {
+            // BRIEF-QR45 part (a): a UL/OL whose body contains a shallower
+            // bare `[[/li]]` auto-closes before its quoted `[[ /ul]]`/`[[ /ol]]`
+            // row. Soft-end here without consuming that row; blockquote ends
+            // its run and the fresh run renders the paired close as break/bare.
+            // Only a quoted close at the required depth matches (shallower
+            // quoted closes, e.g. v6, are Boundary lines handled below), so
+            // v6 keeps its single-quote close. Once an LI just closed at the
+            // shallower line (v2m), the UL also ends at the next line
+            // boundary so `> [[li]]b` starts a fresh run instead of merging.
+            if restrict_quote_close
+                && !first
+                && !self.discarding_hidden_body()
+                && self.settings().layout.legacy()
+                && matches!(
+                    block_rule.name,
+                    "block-list-unordered" | "block-list-ordered"
+                )
+                && self.wikidot_quote_boundary_shallower_li()
+                && (self.shallower_li_quoted_list_close_ahead(block_rule)
+                    || (matches!(
+                        self.current().token,
+                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                    ) && self.wikidot_li_closed_at_shallower_quote_line()))
+            {
+                self.set_wikidot_quote_boundary_li_auto_close();
+                self.set_wikidot_pending_paired_list_close();
+                return Ok(());
+            }
             if block_rule.name.starts_with("block-list-")
                 && self.quotes_then_block_end(block_rule)
             {
@@ -7109,6 +7160,49 @@ where
         }
     }
 
+    /// Whether the UL/OL body contains a shallower bare `[[ /li]]` close line
+    /// (BRIEF-QR45 part (a)) — the UL auto-closes there and the following
+    /// quoted run is parsed fresh. Specific to the shallower `[[/li]]` CLOSE
+    /// line only: a shallower text line (v2txt) must keep not pairing.
+    pub(crate) fn has_shallower_quote_li_close(&self, required_depth: usize) -> bool {
+        let mut parser = self.clone();
+        loop {
+            let mut depth = 0usize;
+            let mut probe = parser.clone();
+            while probe.current().token == Token::Quote {
+                depth += probe.current().slice.len();
+                if probe.step().is_err() || probe.get_optional_space().is_err() {
+                    return false;
+                }
+            }
+            if depth < required_depth {
+                let mut end = probe.clone();
+                let is_li_close = end.get_end_block().is_ok_and(|name| {
+                    name.strip_suffix('_')
+                        .unwrap_or(&name)
+                        .eq_ignore_ascii_case("li")
+                });
+                if is_li_close {
+                    let _ = end.get_optional_space();
+                    if token_is_body_boundary(end.current().token) {
+                        return true;
+                    }
+                }
+            }
+            while !token_is_body_boundary(parser.current().token) {
+                if parser.step().is_err() {
+                    return false;
+                }
+            }
+            if parser.current().token != Token::LineBreak {
+                return false;
+            }
+            if parser.step().is_err() {
+                return false;
+            }
+        }
+    }
+
     pub(crate) fn consume_quote_boundary_body_end(
         &mut self,
         block_rule: &BlockRule,
@@ -7126,6 +7220,74 @@ where
         self.get_end_block()?;
         self.get_optional_space()?;
         Ok(())
+    }
+
+    /// Whether the next physical line is a quoted `[[ /ul]]`/`[[ /ol]]` close
+    /// at the cursor's required depth (BRIEF-QR45 part (a) soft-end probe).
+    /// Peeks without consuming the `>` prefix, so the fresh quote run can
+    /// start at that line.
+    pub(crate) fn shallower_li_quoted_list_close_ahead(
+        &self,
+        block_rule: &BlockRule,
+    ) -> bool {
+        if self.quote_body_literal_residuals() != Some(true)
+            || !matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            )
+        {
+            return false;
+        }
+        let required = match self.quote_body_required_depth() {
+            Some(depth) if depth > 0 => depth,
+            _ => return false,
+        };
+        let mut probe = self.clone();
+        if probe.current().token == Token::LineBreak && probe.step().is_err() {
+            return false;
+        }
+        // The cursor may already have prepared the next line (its `>` consumed
+        // and current at the close itself). Allow that position too.
+        if probe.current().token == Token::LeftBlockEnd {
+            if probe.quote_body_close_allowed_here() {
+                let mut end = probe.clone();
+                let matching_close = end.get_end_block().is_ok_and(|name| {
+                    block_rule_accepts_end_name(
+                        block_rule,
+                        name.strip_suffix('_').unwrap_or(&name),
+                        self.settings().layout.legacy(),
+                    )
+                });
+                if !matching_close {
+                    return false;
+                }
+                let _ = end.get_optional_space();
+                return token_is_body_boundary(end.current().token);
+            }
+            return false;
+        }
+        let mut depth = 0usize;
+        while probe.current().token == Token::Quote {
+            depth += probe.current().slice.len();
+            if probe.step().is_err() || probe.get_optional_space().is_err() {
+                return false;
+            }
+        }
+        if depth != required {
+            return false;
+        }
+        let matching_close = probe.get_end_block().is_ok_and(|name| {
+            block_rule_accepts_end_name(
+                block_rule,
+                name.strip_suffix('_').unwrap_or(&name),
+                self.settings().layout.legacy(),
+            )
+        });
+        if !matching_close {
+            return false;
+        }
+        let _ = probe.get_optional_space();
+        token_is_body_boundary(probe.current().token)
     }
 
     pub(crate) fn quote_boundary_starts_body_end(

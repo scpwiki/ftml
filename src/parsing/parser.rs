@@ -189,6 +189,17 @@ pub(super) struct BlockScanCache<'t> {
     wikidot_li_body_boundaries: Vec<usize>,
     wikidot_table_cut_boundary: Cell<bool>,
     wikidot_quote_boundary_list_close: Cell<bool>,
+    /// UL/OL body is in shallower-`[[/li]]` auto-close mode: the UL must
+    /// soft-end before its quoted `[[ /ul]]`/`[[ /ol]]` row instead of
+    /// consuming that row as its own close (BRIEF-QR45 part (a)).
+    wikidot_quote_boundary_shallower_li: Cell<bool>,
+    /// UL/OL soft-ended at the shallower-`[[/li]]` boundary without
+    /// consuming the quoted close: blockquote ends its run here and the
+    /// fresh run renders the paired close as break/bare (BRIEF-QR45).
+    wikidot_quote_boundary_li_auto_close: Cell<bool>,
+    /// A paired quoted `[[ /ul]]`/`[[ /ol]]` awaits in the next quote run:
+    /// its row renders as an empty-list-style break (BRIEF-QR45 part (b)).
+    wikidot_pending_paired_list_close: Cell<bool>,
     wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
     wikidot_heading_barrier: Option<usize>,
     wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
@@ -1227,6 +1238,62 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_quote_boundary_list_close
             .take()
+    }
+
+    pub(crate) fn set_wikidot_quote_boundary_shallower_li(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_shallower_li
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_shallower_li(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_shallower_li
+            .take()
+    }
+
+    pub(crate) fn wikidot_quote_boundary_shallower_li(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_shallower_li
+            .get()
+    }
+
+    pub(crate) fn set_wikidot_quote_boundary_li_auto_close(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_li_auto_close
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_li_auto_close(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_li_auto_close
+            .take()
+    }
+
+    pub(crate) fn set_wikidot_pending_paired_list_close(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_pending_paired_list_close
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_pending_paired_list_close(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_pending_paired_list_close
+            .take()
+    }
+
+    pub(crate) fn wikidot_pending_paired_list_close(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_pending_paired_list_close
+            .get()
     }
 
     pub(crate) fn wikidot_flat_close_splits_quote_run(&self, head_byte: usize) -> bool {

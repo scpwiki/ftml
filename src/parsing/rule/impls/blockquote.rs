@@ -947,6 +947,7 @@ fn try_consume_fn<'r, 't>(
         }
 
         parser.clear_wikidot_quote_boundary_list_close();
+        let _ = parser.take_wikidot_quote_boundary_li_auto_close();
         parser.set_native_blockquote_depth(Some(absolute_depth));
         let result = collect_native_blockquote_line(parser, close);
         parser.set_native_blockquote_depth(original_depth);
@@ -959,6 +960,26 @@ fn try_consume_fn<'r, 't>(
         } = result?;
         errors.extend(line_errors);
         paragraph_safe &= line_safe;
+        // BRIEF-QR45 part (b): the fresh run's paired `[[ /ul]]`/`[[ /ol]]`
+        // row renders as an empty-list-style break, not literal text. The
+        // pending flag survives across non-close rows (v2m `> [[li]]b` first)
+        // and is consumed by the first matching close row.
+        let row_source = parser
+            .full_text()
+            .inner()
+            .get(content_start..line_text_end)
+            .unwrap_or("");
+        let is_paired_close_row = parser.settings().layout.legacy()
+            && parser.wikidot_pending_paired_list_close()
+            && {
+                let trimmed = row_source.trim();
+                trimmed.eq_ignore_ascii_case("[[/ul]]")
+                    || trimmed.eq_ignore_ascii_case("[[/ol]]")
+            };
+        if is_paired_close_row {
+            errors.truncate(errors_before);
+            let _ = parser.take_wikidot_pending_paired_list_close();
+        }
         for unit in line
             .escaped_units
             .into_iter()
@@ -974,6 +995,21 @@ fn try_consume_fn<'r, 't>(
             }
         }
         let mut elements = line.elements;
+        if is_paired_close_row {
+            // v2m: when the previous row of this fresh run already ends with
+            // a break (`> [[li]]b` + break), drop that break and keep only the
+            // paired close's empty-list break (single break, bare).
+            if let Some((_, _, prev_row)) = depths.last_mut()
+                && matches!(
+                    prev_row.elements.last(),
+                    Some(Element::LineBreak | Element::LineBreaks(_))
+                )
+            {
+                prev_row.elements.pop();
+            }
+            elements = vec![Element::LineBreak];
+            paragraph_safe = false;
+        }
         let marker_row = parser.settings().layout.legacy()
             && quote_row_line_ends_with_marker(
                 parser.full_text().inner(),
@@ -983,6 +1019,9 @@ fn try_consume_fn<'r, 't>(
         let marker_next_is_quote = parser.current().token == Token::Quote;
         let marker_final = marker_row && !marker_next_is_quote;
         let mut paragraph_split = line.paragraph_split;
+        if is_paired_close_row {
+            paragraph_split = None;
+        }
         if leave_indented_whitespace
             && elements.len() > 1
             && matches!(elements.first(), Some(Element::Text(text)) if text.chars().all(|c| c.is_whitespace()))
@@ -1179,6 +1218,7 @@ fn try_consume_fn<'r, 't>(
                 })
             );
         let boundary_list_close = parser.take_wikidot_quote_boundary_list_close();
+        let li_auto_close = parser.take_wikidot_quote_boundary_li_auto_close();
         let quote_end_list_break = quote_end_list_row && !boundary_list_close;
         if quote_end_list_row && boundary_list_close {
             append_unquoted_close_break = true;
@@ -1214,6 +1254,25 @@ fn try_consume_fn<'r, 't>(
                     ..
                 })
             );
+            quote_run_active = false;
+        }
+        // BRIEF-QR45: a UL/OL that soft-ended at a shallower `[[/li]]`
+        // boundary also ends the run here, but with no break between the
+        // blockquotes — the paired quoted close renders inside the fresh
+        // run instead (break or nothing, per part (b)).
+        let li_auto_list_row = parser.settings().layout.legacy()
+            && li_auto_close
+            && parser.current().token == Token::Quote
+            && matches!(
+                elements.iter().rev().find(|element| {
+                    !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                }),
+                Some(Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                })
+            );
+        if li_auto_list_row {
             quote_run_active = false;
         }
         if quote_end_list_break
