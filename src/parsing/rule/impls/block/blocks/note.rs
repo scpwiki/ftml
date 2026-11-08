@@ -21,7 +21,7 @@
 use super::prelude::*;
 use super::{
     consume_wikidot_flat_head_break, drop_wikidot_trailing_vanish_breaks,
-    trim_wikidot_trailing_explicit_list_break,
+    restore_crossed_li_terminated_body_break, trim_wikidot_trailing_explicit_list_break,
     unwrap_wikidot_paragraph_after_explicit_list,
     wikidot_eject_after_lost_owner_collapsible, wikidot_flat_pair_for_head,
 };
@@ -136,6 +136,7 @@ fn parse_note_block<'r, 't>(
     let body_end_byte = parser.current().span.start;
     let mut ejected = Vec::new();
     if legacy {
+        restore_crossed_li_terminated_body_break(parser, body_start_byte, &mut elements);
         trim_wikidot_trailing_explicit_list_break(&mut elements);
         drop_wikidot_trailing_vanish_breaks(&mut elements);
         unwrap_wikidot_paragraph_after_explicit_list(&mut elements);

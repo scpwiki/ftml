@@ -753,6 +753,7 @@ where
         {
             parser.update(&close);
             parser.set_pending_note_list_closer(false);
+            parser.take_wikidot_cross_list_terminated_body();
             parser.set_suppress_footnote_list_break(true);
             if parser.current().token == Token::LineBreak {
                 let _ = parser.step();
@@ -773,6 +774,7 @@ where
         {
             parser.update(&close);
             parser.set_pending_wikidot_collapsible_closer(false);
+            parser.take_wikidot_cross_list_terminated_body();
             return Ok(Some(if unquoted_close {
                 Element::LineBreak.into()
             } else {
@@ -793,6 +795,7 @@ where
         {
             parser.update(&close);
             parser.set_pending_wikidot_div_closer(false);
+            parser.take_wikidot_cross_list_terminated_body();
             return Ok(Some(if unquoted_close {
                 Element::LineBreak.into()
             } else {
@@ -814,6 +817,7 @@ where
                 wikidot_own_line_prefix(parser.full_text().inner(), close_pos);
             if parser.take_wikidot_crossed_close(name) {
                 parser.update(&close);
+                parser.take_wikidot_cross_list_terminated_body();
                 // L85: a silently taken crossed close that starts its own line
                 // absorbs that line's break (closeout keeps a single break
                 // around `[[/div]]`, q-close-in-quote drops it). A closer that
