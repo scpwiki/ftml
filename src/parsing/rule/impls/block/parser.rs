@@ -3546,7 +3546,23 @@ where
                     ));
                 }
             } else if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
-                if self.quote_boundary_starts_body_end(block_rule) {
+                // BRIEF-BL57c: a blank physical line does not end an LI
+                // body whose pairing close still comes before the
+                // enclosing list's close (live renders `<li>u</li>`).
+                // The quote cursor reads the blank as a boundary, so
+                // fall through to the ordinary blank-line handling below
+                // instead of erroring.
+                if self.current().token == Token::ParagraphBreak
+                    && self.quote_body_literal_residuals() == Some(true)
+                    && !self.discarding_hidden_body()
+                    && !self.in_wikidot_literal_alias_body()
+                    && !self.in_wikidot_anchor_body()
+                    && self.has_li_close_before_list_close(
+                        self.quote_body_required_depth().unwrap_or(0),
+                    )
+                {
+                    self.set_wikidot_quote_boundary_blank_in_li_body();
+                } else if self.quote_boundary_starts_body_end(block_rule) {
                     if block_rule.name == "block-list-item"
                         && self.boundary_is_unquoted_list_close()
                     {
@@ -3570,20 +3586,19 @@ where
                         all_errors,
                         paragraph_safe,
                     ));
-                }
-                if self.hoist_unquoted_close_shallow_text(block_rule)? {
+                } else if self.hoist_unquoted_close_shallow_text(block_rule)? {
                     // BRIEF-UQ57d: shallow text was hoisted bare and any
                     // blanks absorbed; the unquoted closer is next.
                     continue;
-                }
-                if self.quote_body_literal_residuals() == Some(true)
+                } else if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
                     && !self.wikidot_quote_boundary_shallower_text()
                 {
                     self.step()?;
                     continue;
+                } else {
+                    return Err(self.make_err(ParseErrorKind::EndOfInput));
                 }
-                return Err(self.make_err(ParseErrorKind::EndOfInput));
             }
 
             if self.current().token == Token::ParagraphBreak
@@ -5022,12 +5037,31 @@ where
                 "block-list-unordered" | "block-list-ordered"
             )
             && self.has_shallower_quote_li_close(required_depth);
+        // BRIEF-BL57c: a UL/OL whose items' `[[/li]]` closes all come after
+        // a blank line still has to run the literal quote body (the blank
+        // otherwise routes it to the plain body, where the `>`-prefixed row
+        // re-parses as a nested blockquote). The paired close is what live
+        // rewards; an `[[li]]` head plus a bare `[[/li]]` close before the
+        // list close is the signal.
+        let has_blank_in_li_close = !has_close
+            && !has_later_close
+            && !has_surplus_list_close
+            && !has_shallower_close
+            && !has_shallower_li_close
+            && !has_shallower_text_line
+            && literal_residual_quotes
+            && matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            )
+            && self.has_li_close_before_list_close(required_depth);
         if !has_close
             && !has_later_close
             && !has_surplus_list_close
             && !has_shallower_close
             && !has_shallower_li_close
             && !has_shallower_text_line
+            && !has_blank_in_li_close
         {
             if block_rule.name == "block-note" {
                 return self.get_body_elements(block_rule, as_paragraphs);
@@ -5038,6 +5072,8 @@ where
         let previous_cursor = self.quote_body_cursor();
         let previous_shallower_li = self.take_wikidot_quote_boundary_shallower_li();
         let previous_shallower_text = self.take_wikidot_quote_boundary_shallower_text();
+        let previous_blank_in_li_body =
+            self.take_wikidot_quote_boundary_blank_in_li_body();
         if has_shallower_li_close {
             self.set_wikidot_quote_boundary_shallower_li();
         }
@@ -5075,6 +5111,10 @@ where
         let _ = self.take_wikidot_quote_boundary_shallower_text();
         if previous_shallower_text {
             self.set_wikidot_quote_boundary_shallower_text();
+        }
+        let _ = self.take_wikidot_quote_boundary_blank_in_li_body();
+        if previous_blank_in_li_body {
+            self.set_wikidot_quote_boundary_blank_in_li_body();
         }
 
         match result {
@@ -6285,6 +6325,9 @@ where
             // v6 keeps its single-quote close. Once an LI just closed at the
             // shallower line (v2m), the UL also ends at the next line
             // boundary so `> [[li]]b` starts a fresh run instead of merging.
+            // BRIEF-BL57c: the same split applies when an LI just closed at
+            // the required depth and its body tolerated a blank line (blc-y:
+            // the follower renders in a fresh blockquote).
             if restrict_quote_close
                 && !first
                 && !self.discarding_hidden_body()
@@ -6293,12 +6336,20 @@ where
                     block_rule.name,
                     "block-list-unordered" | "block-list-ordered"
                 )
-                && self.wikidot_quote_boundary_shallower_li()
-                && (self.shallower_li_quoted_list_close_ahead(block_rule)
-                    || (matches!(
-                        self.current().token,
-                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
-                    ) && self.wikidot_li_closed_at_shallower_quote_line()))
+                && ((self.wikidot_quote_boundary_shallower_li()
+                    && (self.shallower_li_quoted_list_close_ahead(block_rule)
+                        || (matches!(
+                            self.current().token,
+                            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                        ) && self.wikidot_li_closed_at_shallower_quote_line())))
+                    // BRIEF-BL57c: an LI just closed at the required depth
+                    // after its body tolerated a blank line; live splits
+                    // the quote run at the boundary right after the close.
+                    || (self.wikidot_quote_boundary_blank_in_li_body()
+                        && matches!(
+                            self.current().token,
+                            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                        )))
             {
                 self.set_wikidot_quote_boundary_li_auto_close();
                 self.set_wikidot_pending_paired_list_close();
@@ -7755,6 +7806,86 @@ where
                 .unwrap_or(&name)
                 .eq_ignore_ascii_case("li")
         })
+    }
+
+    /// Bare `[[ /ul]]`/`[[ /ol]]` close as the first content of the line
+    /// at the cursor (any depth). Sibling of `bare_line_is_list_close` for
+    /// callers that need the name match without a `BlockRule` (the
+    /// LI-body pairing region scan).
+    fn bare_line_is_plain_list_close(probe: &Parser<'r, 't>) -> bool {
+        let mut end = probe.clone();
+        let is_list_close = end.get_end_block().is_ok_and(|name| {
+            let name = name.strip_suffix('_').unwrap_or(&name);
+            name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+        });
+        if !is_list_close {
+            return false;
+        }
+        let _ = end.get_optional_space();
+        token_is_body_boundary(end.current().token)
+    }
+
+    /// Whether a bare `[[ /li]]` close line comes before the next bare
+    /// `[[ /ul]]`/`[[ /ol]]` close at depth `<= required_depth`
+    /// (BRIEF-BL57c). Lines with depth `>= required_depth` are skipped;
+    /// a shallower line carrying content disqualifies the shape (the
+    /// shallower-text family of BRIEF-QT52, e.g. `v2txt`, pairs neither
+    /// in live nor here — those shapes keep baseline rendering); a
+    /// shallower blank line is skipped; a list close at depth
+    /// `<= required_depth` ends the pairing region; a deeper one closes
+    /// an inner list and is skipped.
+    pub(crate) fn has_li_close_before_list_close(&self, required_depth: usize) -> bool {
+        if required_depth == 0 {
+            return false;
+        }
+        let mut parser = self.clone();
+        loop {
+            match parser.current().token {
+                Token::InputEnd => return false,
+                Token::LineBreak | Token::ParagraphBreak => {
+                    if parser.step().is_err() {
+                        return false;
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+            let mut depth = 0usize;
+            let mut content = parser.clone();
+            while content.current().token == Token::Quote {
+                depth += content.current().slice.len();
+                if content.step().is_err() || content.get_optional_space().is_err() {
+                    return false;
+                }
+            }
+            if Self::bare_line_is_li_close_after_quotes(&content) {
+                return true;
+            }
+            if depth <= required_depth && Self::bare_line_is_plain_list_close(&content) {
+                return false;
+            }
+            if depth < required_depth
+                && !matches!(
+                    content.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                )
+            {
+                // A shallower line with content: the shallower-text family.
+                return false;
+            }
+            while !token_is_body_boundary(parser.current().token) {
+                if parser.step().is_err() {
+                    return false;
+                }
+            }
+            if matches!(
+                parser.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            ) && parser.step().is_err()
+            {
+                return false;
+            }
+        }
     }
 
     pub(crate) fn consume_quote_boundary_body_end(
