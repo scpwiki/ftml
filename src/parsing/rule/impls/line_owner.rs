@@ -615,7 +615,13 @@ fn collect_hoisted_chunk_item<'t>(
                     *armed = true;
                 }
                 for sub in items {
+                    let frame = hoisted_item_contains_frame(&sub);
                     collect_hoisted_chunk_item(sub, parts, current, armed);
+                    if frame {
+                        // A frame opener in a list item ends the live run:
+                        // its following sibling items start a new list.
+                        start_new_hoisted_chunk(parts, current);
+                    }
                 }
             }
             // An explicit nested list (or any non-list content) keeps
@@ -672,9 +678,13 @@ fn collect_hoisted_chunk_item<'t>(
                                     *armed = true;
                                 }
                                 for sub in items {
+                                    let frame = hoisted_item_contains_frame(&sub);
                                     collect_hoisted_chunk_item(
                                         sub, parts, current, armed,
                                     );
+                                    if frame {
+                                        start_new_hoisted_chunk(parts, current);
+                                    }
                                 }
                             }
                             Element::List { items, .. } => {
@@ -697,6 +707,33 @@ fn collect_hoisted_chunk_item<'t>(
             }
             seal_hoisted_bare(parts, current, &mut rest_run);
         }
+    }
+}
+
+fn hoisted_item_contains_frame(item: &ListItem<'_>) -> bool {
+    match item {
+        ListItem::Elements { elements, .. } => {
+            elements.iter().any(hoisted_element_contains_frame)
+        }
+        ListItem::SubList { element } => match &**element {
+            Element::List { items, .. } => items.iter().any(hoisted_item_contains_frame),
+            other => hoisted_element_contains_frame(other),
+        },
+    }
+}
+
+fn hoisted_element_contains_frame(element: &Element<'_>) -> bool {
+    match element {
+        Element::Partial(PartialElement::WikidotBlockOpen(_)) => true,
+        Element::Partial(PartialElement::ListItem(item)) => {
+            hoisted_item_contains_frame(item)
+        }
+        Element::List { items, .. } => items.iter().any(hoisted_item_contains_frame),
+        Element::Container(container) => container
+            .elements()
+            .iter()
+            .any(hoisted_element_contains_frame),
+        _ => false,
     }
 }
 
