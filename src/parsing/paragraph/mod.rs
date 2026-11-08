@@ -75,6 +75,24 @@ where
     let mut absorb_stray_break_neutralized = false;
     let mut line_prefix_whitespace_only = true;
     while !finished {
+        // BRIEF-BH57a: when an earlier list body hoisted shallow text before
+        // its unquoted `[[/li]]` close and the next reachable row is
+        // unquoted text, the hoisted run merges into one paragraph with it;
+        // blank lines between the vanished close and that row are
+        // transparent. Any other row ends the merge region.
+        if parser.settings().layout.legacy()
+            && close_condition_fn.is_none()
+            && parser.wikidot_merge_follow()
+        {
+            if parser.current().token == Token::ParagraphBreak {
+                if parser.step().is_err() {
+                    return Err(parser.make_err(ParseErrorKind::EndOfInput));
+                }
+                line_prefix_whitespace_only = true;
+                continue;
+            }
+            parser.clear_wikidot_merge_follow();
+        }
         let quote_line_status = parser.prepare_quote_body_line()?;
         if quote_line_status == QuoteBodyLineStatus::Boundary {
             if parser.quote_boundary_closes_body() {
@@ -700,6 +718,7 @@ where
         }
     }
 
+    parser.clear_wikidot_merge_follow();
     stack.into_result()
 }
 
