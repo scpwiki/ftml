@@ -145,14 +145,19 @@ fn a2_div_crossing_list_closers() {
         "after\n",
     ));
     assert_no_literals(&html, A2_MARKERS);
-    // Live (saved-page probe muse-probe-adj1108-a2-div-cross, sandbox-for-codex,
-    // adjudicated muse-bhl/closeout-verify/adjudge-1108/probe.json): div body
-    // terminated by [[/li]] renders with PR #1242's trailing break as
-    // `<p>inner<br /></p>` (FTML: `<p>inner<br>`). Assertion narrowed to that live
-    // shape; remaining structural differences (list-close boundary / bare-vs-wrapped
-    // trailing text) are separate recorded items.
+    // Item 78 / probe muse-probe-adj1108-a2-div-cross
+    // (closeout-verify/adjudge-1108/probe.json): div body cross-terminated by
+    // [[/li]] keeps PR #1242's trailing break (`inner<br`), the list closes
+    // before the follower, and the immediate text follower is bare with a
+    // leading `<br />` (not wrapped in `<p>`). Internal whitespace/`<br />`
+    // style may differ from live's raw formatting.
     assert!(html.contains("<div><p>inner<br"), "html: {html}");
     assert_list_closed_before(&html, "</ul>", "after");
+    let ul_end = html.find("</ul>").expect("ul close");
+    let after_at = html.find("after").expect("after");
+    let between = &html[ul_end..after_at];
+    assert!(between.contains("<br"), "expected <br before bare after: {html}");
+    assert!(!html.contains("<p>after</p>"), "follower must stay bare: {html}");
 }
 
 #[test]
@@ -172,6 +177,13 @@ fn a2_collapsible_crossing_list_closers() {
     assert!(html.contains("collapsible-block-content"), "html: {html}");
     assert!(html.contains("inner"), "html: {html}");
     assert_list_closed_before(&html, "</ul>", "after");
+    let ul_end = html.find("</ul>").expect("ul close");
+    let after_at = html.find("after").expect("after");
+    assert!(
+        html[ul_end..after_at].contains("<br"),
+        "expected <br before bare after: {html}"
+    );
+    assert!(!html.contains("<p>after</p>"), "follower must stay bare: {html}");
 }
 
 #[test]
@@ -189,6 +201,13 @@ fn a2_div_crossing_ordered_list_closers() {
     ));
     assert_no_literals(&html, A2_MARKERS);
     assert_list_closed_before(&html, "</ol>", "after");
+    let ol_end = html.find("</ol>").expect("ol close");
+    let after_at = html.find("after").expect("after");
+    assert!(
+        html[ol_end..after_at].contains("<br"),
+        "expected <br before bare after: {html}"
+    );
+    assert!(!html.contains("<p>after</p>"), "follower must stay bare: {html}");
 }
 
 #[test]

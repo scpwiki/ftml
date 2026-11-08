@@ -313,3 +313,13 @@ corpus-test/table/cell-bold-splice-outside-any-list-line/input.ftml	Cell@18..54 
 corpus-test/list/wikidot-li-note-cross-li-trailing-break/input.ftml	Note@14..50 scan-only
 corpus-test/list/wikidot-li-note-cross-li-trailing-break/input.ftml	Note@14..25 descent-only
 corpus-test/list/swallowed-div-pair-keeps-item-break/input.ftml	Div@16..34 scan-only
+corpus-test/list/wikidot-a2-cross-div-follower-blank/input.ftml	Div@20..58 scan-only
+corpus-test/list/wikidot-a2-cross-div-follower-blank/input.ftml	Div@20..34 descent-only
+corpus-test/list/wikidot-a2-cross-div-no-follower/input.ftml	Div@20..58 scan-only
+corpus-test/list/wikidot-a2-cross-div-no-follower/input.ftml	Div@20..34 descent-only
+corpus-test/list/wikidot-a2-cross-collapsible-follower-bare/input.ftml	Collapsible@20..83 scan-only
+corpus-test/list/wikidot-a2-cross-collapsible-follower-bare/input.ftml	Collapsible@20..51 descent-only
+corpus-test/list/wikidot-a2-cross-div-follower-bare/input.ftml	Div@20..58 scan-only
+corpus-test/list/wikidot-a2-cross-div-follower-bare/input.ftml	Div@20..34 descent-only
+corpus-test/list/wikidot-a2-cross-div-ordered-follower-bare/input.ftml	Div@20..58 scan-only
+corpus-test/list/wikidot-a2-cross-div-ordered-follower-bare/input.ftml	Div@20..34 descent-only
