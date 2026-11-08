@@ -194,6 +194,82 @@ fn first_matching_close_is_unprefixed(
     false
 }
 
+/// Whether a source line is a deep marker line (`** x`, `## x`, `*** x` …),
+/// used by the lihoist p6 formation-vs-literal discriminator. Counts leading
+/// list markers the way the run parser does: a run of one marker character
+/// (`*` or `#`) followed by whitespace is one level of depth; a neighbour
+/// run of two or more is a deep marker.
+fn is_deep_marker_line(line: &str) -> bool {
+    let mut depth = 0usize;
+    let mut rest = line.trim_start_matches([' ', '\t']);
+    loop {
+        let first = match rest.bytes().next() {
+            Some(byte) => byte,
+            None => break,
+        };
+        if first != b'*' && first != b'#' {
+            break;
+        }
+        let run = rest.bytes().take_while(|byte| *byte == first).count();
+        // The run counts only when followed by whitespace or end-of-line.
+        let after = &rest[run..];
+        if !(after.is_empty() || after.starts_with(char::is_whitespace)) {
+            break;
+        }
+        depth += run;
+        rest = after.trim_start_matches([' ', '\t']);
+        if rest.is_empty() {
+            break;
+        }
+    }
+    depth >= 2
+}
+
+/// Whether any line in `source[from_byte..to_byte]` is a deep marker line.
+pub(crate) fn body_has_deep_marker(source: &str, from_byte: usize, to_byte: usize) -> bool {
+    let from = from_byte.min(source.len());
+    let to = to_byte.min(source.len());
+    if from >= to {
+        return false;
+    }
+    let mut pos = source[..from].rfind('\n').map_or(0, |offset| offset + 1);
+    while let Some(rel_end) = source[pos..to].find('\n') {
+        let line = &source[pos..pos + rel_end];
+        if is_deep_marker_line(line.trim()) {
+            return true;
+        }
+        pos += rel_end + 1;
+    }
+    is_deep_marker_line(source[pos..to].trim())
+}
+
+/// The byte of the first `[[/li]]` closer that stands alone on its line
+/// (case-insensitive, surrounding whitespace allowed) at or after `from_byte`.
+/// Item-line closers (`* [[/li]]`) do not qualify: live allocates an
+/// explicit item's body to the first own-line close (or to nothing), never
+/// to an item-line close, so the lihoist p6 formation-vs-literal gate must
+/// use the same bound. A closer later on a lead line (e.g. `[[/li]] zzzz`)
+/// also does not qualify.
+pub(crate) fn own_line_li_close_after(source: &str, from_byte: usize) -> Option<usize> {
+    let from_byte = from_byte.min(source.len());
+    let mut line_start = source[..from_byte].rfind('\n').map_or(0, |offset| offset + 1);
+    let mut pos = from_byte;
+    while pos < source.len() {
+        let line_end = source[pos..]
+            .find('\n')
+            .map_or(source.len(), |offset| pos + offset);
+        let raw = &source[line_start..line_end];
+        let trimmed = raw.trim_matches([' ', '\t']);
+        if trimmed.eq_ignore_ascii_case("[[/li]]") {
+            let lead = raw.len() - raw.trim_start_matches([' ', '\t']).len();
+            return Some(line_start + lead);
+        }
+        pos = line_end + 1;
+        line_start = pos;
+    }
+    None
+}
+
 fn line_matches_close(line: &str, close_name: &str) -> bool {
     line.strip_prefix("[[/")
         .and_then(|inner| inner.strip_suffix("]]"))
@@ -215,18 +291,36 @@ where
     }
 
     let view = name.strip_suffix('_').unwrap_or(&name);
-    // lihoist p6: inside an explicit `[[li]]` body, an explicit-list head
-    // with no closer inside that body (its pair closer is allocated to the
-    // outer pair) stays a literal run item in live instead of hoisting a
-    // formation. Bail out of the lost-owner path so the run parser keeps
-    // the head as text.
+    // lihoist p6 (discriminated per LT46 and MF65b probes): a list head on
+    // an item line stays literal in live only when the enclosing explicit
+    // list is UNORDERED, the head is not an `ol`, and the body has no deep
+    // marker line; otherwise the head opens a lost-owner formation.
     if matches!(owner, LineOwner::List { .. })
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
-        && let Some(li_head) = entry_parser.wikidot_li_collect_head()
-        && let Some(body_end) = entry_parser.wikidot_li_body_end_by_head(li_head)
-        && !closer_for_block_in_range(&entry_parser, head_byte, body_end, view)
+        && !parser.wikidot_enclosing_list_numbered()
+        && !view.eq_ignore_ascii_case("ol")
     {
-        return Ok(None);
+        let li_head = entry_parser.wikidot_li_collect_head();
+        let li_end = li_head.and_then(|head| {
+            own_line_li_close_after(entry_parser.full_text().inner(), head)
+                .or_else(|| entry_parser.wikidot_li_body_end_by_head(head))
+        });
+        let has_deep = li_end.is_some_and(|end| {
+            body_has_deep_marker(entry_parser.full_text().inner(), head_byte, end)
+        });
+        let head_in_body = li_head.is_none()
+            || li_end.map_or(true, |end| head_byte < end);
+        if !has_deep
+            && head_in_body
+            && !closer_for_block_in_range(
+                &entry_parser,
+                head_byte,
+                li_end.unwrap_or(entry_parser.full_text().inner().len()),
+                view,
+            )
+        {
+            return Ok(None);
+        }
     }
     if matches!(owner, LineOwner::Quote { .. } | LineOwner::List { .. })
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
@@ -271,6 +365,10 @@ where
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
         && lost_owner_list_body_is_sibling_items(&entry_parser, ltype)
     {
+        parser.note_wikidot_run_formation(
+            parser.wikidot_li_pairing_depth(),
+            view.eq_ignore_ascii_case("ol"),
+        );
         return parse_lost_owner_list_block(entry_parser, parser, Some(ltype));
     }
 

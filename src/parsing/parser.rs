@@ -313,6 +313,22 @@ pub(super) struct BlockScanCache<'t> {
     /// own depth's anchors. Keeps the anchor out of the decompose
     /// discarded on the floor.
     wikidot_list_anchor_chromes: Vec<(usize, Element<'t>)>,
+    /// Set when a numbered lost-owner formation closes its enclosing
+    /// numbered explicit list (the multi-formation escape). Own-line stray
+    /// closers in the following region render nothing in live; the closing
+    /// list's anchor chrome stays in `wikidot_pending_tail_chromes` until
+    /// the region has rendered (input end).
+    wikidot_tail_mode_start: Option<usize>,
+    /// Keeps the closing list's anchor chrome until the escaped region has
+    /// rendered (emitted at input end).
+    wikidot_pending_tail_chromes: Vec<Element<'t>>,
+    /// Enclosing-list numbered-ness stack for the escape decision.
+    wikidot_enclosing_list_numbered: Vec<bool>,
+    /// Log of sibling-hoisted list formations parsed at each depth, in
+    /// source order: (depth, numbered_head). The escape applies only when
+    /// the first formation at the list's depth is a numbered lost-owner
+    /// formation.
+    wikidot_run_formations: Vec<(usize, bool)>,
     /// Ordinal of the next tab parsed inside the current quoted tabview.
     wikidot_tabview_tab_ordinal: Cell<usize>,
     /// Ordinals of tabs whose panels render outside the navset (bare panel in
@@ -2692,6 +2708,89 @@ impl<'r, 't> Parser<'r, 't> {
     /// Drops anchors stamped for deeper (or equal) lists before the
     /// owning list's gather runs; entries of still-open outer lists are
     /// shallower and survive.
+    pub(crate) fn set_wikidot_tail_mode(&self, start: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_tail_mode_start = Some(start);
+    }
+
+    pub(crate) fn wikidot_tail_active(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_tail_mode_start
+            .is_some()
+    }
+
+    /// Number of anchor chromes stashed at `depth`.
+    pub(crate) fn wikidot_list_anchor_chromes_len_at(&self, depth: usize) -> usize {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_list_anchor_chromes
+            .iter()
+            .filter(|(d, _)| *d == depth)
+            .count()
+    }
+
+    pub(crate) fn stash_pending_tail_chromes(&self, elements: Vec<Element<'t>>) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_pending_tail_chromes
+            .extend(elements);
+    }
+
+    pub(crate) fn take_pending_tail_chromes(&self) -> Vec<Element<'t>> {
+        std::mem::take(&mut self.block_end_scan_cache.borrow_mut().wikidot_pending_tail_chromes)
+    }
+
+    pub(crate) fn push_enclosing_list_numbered(&self, numbered: bool) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_enclosing_list_numbered
+            .push(numbered);
+    }
+
+    pub(crate) fn pop_enclosing_list_numbered(&self) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_enclosing_list_numbered
+            .pop();
+    }
+
+    /// Whether the innermost enclosing list is numbered.
+    pub(crate) fn wikidot_enclosing_list_numbered(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_enclosing_list_numbered
+            .last()
+            .copied()
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn note_wikidot_run_formation(&self, depth: usize, numbered_head: bool) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_run_formations
+            .push((depth, numbered_head));
+    }
+
+    pub(crate) fn drop_wikidot_run_formations_at(&self, depth: usize) {
+        self.block_end_scan_cache
+            .borrow_mut()
+            .wikidot_run_formations
+            .retain(|(entry_depth, _)| *entry_depth != depth);
+    }
+
+    /// The kind (numbered/bullet head) of the first sibling-hoisted list
+    /// formation at `depth`, if any.
+    pub(crate) fn wikidot_first_formation_numbered_at(&self, depth: usize) -> Option<bool> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_run_formations
+            .iter()
+            .find(|(entry_depth, _)| *entry_depth == depth)
+            .map(|(_, numbered)| *numbered)
+    }
+
     pub(crate) fn drop_wikidot_list_anchor_chromes_at(&self, depth: usize) {
         self.block_end_scan_cache
             .borrow_mut()

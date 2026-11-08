@@ -110,6 +110,9 @@ fn parse_list_block<'r, 't>(
     let track_collect = parser.settings().layout.legacy();
     if track_collect {
         parser.push_wikidot_li_collect(None);
+        // BRIEF-MF65b: enclosing-list kind for the multi-formation
+        // escape decision (nested lists push/pop their own kind).
+        parser.push_enclosing_list_numbered(list_type == ListType::Numbered);
     }
     let result = parse_list_block_impl(
         (block_rule, list_type),
@@ -122,6 +125,7 @@ fn parse_list_block<'r, 't>(
     );
     if track_collect {
         parser.pop_wikidot_li_collect();
+        parser.pop_enclosing_list_numbered();
     }
     if result.is_err() && depth == 0 {
         parser.wikidot_li_cross_clear();
@@ -156,25 +160,45 @@ fn parse_list_block_impl<'r, 't>(
     // entries of still-open outer lists are shallower and survive.
     if wikidot {
         parser.drop_wikidot_list_anchor_chromes_at(parser.wikidot_li_pairing_depth());
+        parser.drop_wikidot_run_formations_at(parser.wikidot_li_pairing_depth());
     }
 
     let arguments = parser.get_head_map_wikidot(block_rule, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
-    // lihoist p6: an explicit-list head on a list-item line inside an
-    // explicit `[[li]]` body whose pair closer is allocated outside that
-    // body stays literal text in live instead of forming a nested list.
+    // lihoist p6 (discriminated per LT46 and MF65b probes): a list head on
+    // an item line stays literal in live only when the enclosing explicit
+    // list is UNORDERED, the head is not an `ol`, and the body has no deep
+    // marker line; otherwise the head opens a lost-owner formation.
+    let head_name = block_rule.accepts_names[0];
+    let li_head_for_gate = parser.wikidot_li_collect_head();
+    let gate_body_end = li_head_for_gate.and_then(|head| {
+        crate::parsing::rule::impls::line_owner::own_line_li_close_after(
+            parser.full_text().inner(),
+            head,
+        )
+        .or_else(|| parser.wikidot_li_body_end_by_head(head))
+    });
+    let gate_has_deep = gate_body_end.is_some_and(|end| {
+        crate::parsing::rule::impls::line_owner::body_has_deep_marker(
+            parser.full_text().inner(),
+            opener_start,
+            end,
+        )
+    });
     if wikidot
+        && !parser.wikidot_enclosing_list_numbered()
+        && !head_name.eq_ignore_ascii_case("ol")
         && crate::parsing::rule::impls::line_owner::head_on_list_item_line(
             parser.full_text().inner(),
             opener_start,
         )
-        && let Some(li_head) = parser.wikidot_li_collect_head()
-        && let Some(body_end) = parser.wikidot_li_body_end_by_head(li_head)
+        && li_head_for_gate.is_some()
+        && !gate_has_deep
         && !crate::parsing::rule::impls::line_owner::closer_for_block_in_range(
             parser,
             opener_start,
-            body_end,
-            block_rule.accepts_names[0],
+            gate_body_end.unwrap_or(parser.full_text().inner().len()),
+            head_name,
         )
     {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
@@ -286,6 +310,14 @@ fn parse_list_block_impl<'r, 't>(
         return ok!(false; elements, errors);
     }
 
+    // BRIEF-MF65b: anchor chromes stamped at this list's depth by numbered
+    // lost-owner formations closing in its body; counted before the take,
+    // because the escaped case moves them to the pending slot.
+    let hoist_count = if wikidot {
+        parser.wikidot_list_anchor_chromes_len_at(parser.wikidot_li_pairing_depth())
+    } else {
+        0
+    };
     // Anchor lists for decomposed numbered lost-owner formations inside
     // this list's body (LT46 p23-ord): re-emitted after this list's
     // close when it is numbered (the L85 slot below), dropped otherwise.
@@ -540,6 +572,21 @@ fn parse_list_block_impl<'r, 't>(
         }
     }
 
+    // BRIEF-MF65b: the multi-formation escape — live closes the outer
+    // numbered list at the first numbered lost-owner formation's consumed
+    // starred close; the remaining items and elements render at top level.
+    let mut escape_tail: Option<Vec<Element<'t>>> = None;
+    if wikidot
+        && !flag_score
+        && list_type == ListType::Numbered
+        && b5_escaped.is_none()
+    {
+        escape_tail = multi_formation_escape(parser, &mut items, hoist_count);
+        if escape_tail.is_some() {
+            parser.set_wikidot_tail_mode(0);
+        }
+    }
+
     if items.is_empty() {
         if let Some(escaped) = b5_escaped {
             let count = escaped.len();
@@ -600,6 +647,23 @@ fn parse_list_block_impl<'r, 't>(
     // does content inside a kept iftags gate body (kept-gate pin: boundary
     // or still-pending designated end).
     record_wikidot_explicit_list_end(parser);
+    // The escaped tail renders right after the list's close element.
+    if let Some(escape_tail) = escape_tail {
+        // BRIEF-MF65b: the closing list's anchor chrome — the first
+        // formation's — renders after the escaped region in live (input
+        // end). Anchors of escaped formations render nothing in live.
+        if list_type == ListType::Numbered && !anchor_chromes.is_empty() {
+            let mut chromes = anchor_chromes;
+            let first = chromes.remove(0);
+            parser.stash_pending_tail_chromes(vec![first]);
+        }
+        let mut output = vec![element];
+        if fused_close {
+            output.push(text!("]"));
+        }
+        output.extend(escape_tail);
+        return ok!(false; output, errors);
+    }
     // pw65a: a marker-line closer or a stashed numbered lost-owner anchor
     // chrome marks this list as re-attaching to its follower as a paragraph
     // in live — even across blank lines (probe rounds pw65a-1/2/3, o5/r3c/
@@ -2865,4 +2929,151 @@ Alpha
             ));
         });
     }
+}
+/// BRIEF-MF65b: performs the multi-formation escape restructure.
+/// Returns the elements that render at top level after this list's close,
+/// or `None` when the restructure does not apply (no numbered lost-owner
+/// hoist, or nothing follows the first one).
+fn multi_formation_escape<'t>(
+    parser: &Parser<'_, 't>,
+    items: &mut Vec<ListItem<'t>>,
+    hoists: usize,
+) -> Option<Vec<Element<'t>>> {
+    if hoists == 0 {
+        return None;
+    }
+    // The escape fires only when the FIRST list formation in this body is a
+    // numbered lost-owner formation (live closes the enclosing numbered
+    // list there). A leading bullet formation or explicit list keeps the
+    // choreography nested.
+    if parser.wikidot_first_formation_numbered_at(parser.wikidot_li_pairing_depth()) != Some(true)
+    {
+        return None;
+    }
+    // The first numbered lost-owner formation sits inside the first item;
+    // its flipped list is the item's first non-explicit list.
+    let first_list = match items.first() {
+        Some(ListItem::Elements { elements, .. }) => elements.iter().position(|element| {
+            matches!(
+                element,
+                Element::List {
+                    wikidot_explicit_block: false,
+                    ..
+                }
+            )
+        }),
+        _ => return None,
+    };
+    let Some(first_list) = first_list else {
+        return None;
+    };
+    let split = first_list + 1;
+    let kept_len = match &items[0] {
+        ListItem::Elements { elements, .. } => elements.len(),
+        _ => return None,
+    };
+    if kept_len == split && items.len() == 1 {
+        // Nothing follows the first formation.
+        return None;
+    }
+    let (elements, attributes) = match std::mem::replace(
+        &mut items[0],
+        ListItem::Elements {
+            elements: Vec::new(),
+            attributes: AttributeMap::new(),
+        },
+    ) {
+        ListItem::Elements {
+            elements,
+            attributes,
+        } => (elements, attributes),
+        _ => unreachable!("the split requires elements items"),
+    };
+    let mut elements = elements;
+    let rest_elements = elements.split_off(split);
+    items[0] = ListItem::Elements {
+        elements,
+        attributes,
+    };
+    let rest_items = items.split_off(1);
+    Some(multi_formation_escaped_tail(
+        rest_elements,
+        rest_items,
+        hoists - 1,
+    ))
+}
+
+/// BRIEF-MF65b: regroups the escaped tail into renderable elements.
+/// Nested flipped formation lists render as numbered lists unless a plain
+/// text-like element has already appeared in the tail (then the bullet run
+/// wins, matching live) or every numbered hoist is consumed. Items fused
+/// into the would-be outer list regroup into one escaped list per hoist.
+fn multi_formation_escaped_tail<'t>(
+    rest_elements: Vec<Element<'t>>,
+    rest_items: Vec<ListItem<'t>>,
+    mut hoists: usize,
+) -> Vec<Element<'t>> {
+    let mut out: Vec<Element<'t>> = Vec::new();
+    let mut pending: Vec<ListItem<'t>> = Vec::new();
+    let mut text_seen = false;
+
+    fn flush<'t>(
+        pending: &mut Vec<ListItem<'t>>,
+        hoists: &mut usize,
+        text_seen: bool,
+        out: &mut Vec<Element<'t>>,
+    ) {
+        if pending.is_empty() {
+            return;
+        }
+        let ltype = if *hoists > 0 && !text_seen {
+            *hoists -= 1;
+            ListType::Numbered
+        } else {
+            ListType::Bullet
+        };
+        out.push(Element::List {
+            ltype,
+            items: std::mem::take(pending),
+            attributes: AttributeMap::new(),
+            wikidot_explicit_block: false,
+            wikidot_unclosed: false,
+        });
+    }
+
+    for element in rest_elements {
+        match element {
+            Element::List {
+                ltype,
+                items,
+                attributes,
+                wikidot_explicit_block,
+                wikidot_unclosed,
+            } => {
+                flush(&mut pending, &mut hoists, text_seen, &mut out);
+                let ltype = if hoists > 0 && !text_seen {
+                    hoists -= 1;
+                    ListType::Numbered
+                } else {
+                    ltype
+                };
+                out.push(Element::List {
+                    ltype,
+                    items,
+                    attributes,
+                    wikidot_explicit_block,
+                    wikidot_unclosed,
+                });
+            }
+            other => {
+                text_seen = true;
+                out.push(other);
+            }
+        }
+    }
+    for item in rest_items {
+        pending.push(item);
+    }
+    flush(&mut pending, &mut hoists, text_seen, &mut out);
+    out
 }
