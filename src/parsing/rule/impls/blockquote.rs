@@ -698,7 +698,9 @@ enum BlankFollowerLead {
 }
 
 /// See the `BlankFollowerLead` documentation for the evidence.
-fn migrated_break_follower_after_blank_line(parser: &Parser<'_, '_>) -> BlankFollowerLead {
+fn migrated_break_follower_after_blank_line(
+    parser: &Parser<'_, '_>,
+) -> BlankFollowerLead {
     if !matches!(
         parser.current().token,
         Token::LineBreak | Token::ParagraphBreak
