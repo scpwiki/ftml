@@ -472,17 +472,25 @@ fn absorb_post_close_lazy_lines<'r, 't>(
 /// line it is on carries only quote markers, list markers, and whitespace
 /// before it.
 pub(crate) fn head_on_list_item_line(source: &str, head_byte: usize) -> bool {
+    list_item_line_marker(source, head_byte).is_some()
+}
+
+/// The list marker (`*` or `#`) when the `[[...]]` head at `head_byte`
+/// begins a list-item line: the line it is on carries only quote markers,
+/// one list marker, and whitespace before it.
+pub(crate) fn list_item_line_marker(source: &str, head_byte: usize) -> Option<char> {
     let from = head_byte.min(source.len());
     let line_start = source[..from].rfind('\n').map_or(0, |index| index + 1);
     let prefix = &source[line_start..from];
     let trimmed = prefix.trim_start_matches([' ', '\t', '>', '\r']);
-    let Some(rest) = trimmed
-        .strip_prefix('*')
-        .or_else(|| trimmed.strip_prefix('#'))
-    else {
-        return false;
+    let (marker, rest) = if let Some(rest) = trimmed.strip_prefix('*') {
+        ('*', rest)
+    } else if let Some(rest) = trimmed.strip_prefix('#') {
+        ('#', rest)
+    } else {
+        return None;
     };
-    rest.chars().all(char::is_whitespace)
+    rest.chars().all(char::is_whitespace).then_some(marker)
 }
 
 /// Whether the body source contains a starred `[[ul]]`/`[[ol]]` closer
@@ -538,6 +546,38 @@ pub(crate) fn closer_for_block_in_range(
         pos = at + needle.len();
     }
     false
+}
+
+/// The list marker (`*` or `#`) when the `[[name]]` closer consumed ending
+/// at `to` sits on a list-item line (LT46: a closer on a list-item line
+/// changes the post-list break: bullet drops it, numbered anchors).
+pub(crate) fn consumed_closer_line_marker(
+    parser: &Parser<'_, '_>,
+    to: usize,
+    name: &str,
+) -> Option<char> {
+    let source = parser.full_text().inner();
+    let to = to.min(source.len());
+    let range = &source[..to];
+    let lowered = range.to_ascii_lowercase();
+    let needle = format!("[[/{}", name.to_ascii_lowercase());
+    let mut pos = 0;
+    let mut closer_head = None;
+    while let Some(rel) = lowered[pos..].find(&needle) {
+        let at = pos + rel;
+        let after = range.get(at + needle.len()..);
+        if after.is_some_and(|rest| {
+            rest.starts_with("]]")
+                || rest.starts_with(' ')
+                || rest.starts_with('\t')
+                || rest.starts_with('_')
+                || rest.starts_with('\n')
+        }) {
+            closer_head = Some(at);
+        }
+        pos = at + needle.len();
+    }
+    closer_head.and_then(|head_byte| list_item_line_marker(source, head_byte))
 }
 
 fn lost_owner_list_body_is_unowned(parser: &Parser<'_, '_>) -> bool {
@@ -998,6 +1038,38 @@ where
         }
     }
     parser.update(&candidate);
+    // The flipped list carries a synthetic break item; when this list's
+    // decomposition (via the sibling-items branch below) drops both it
+    // and the unclosed flag, the anchor is live's remaining "anchor
+    // list tail": stash it for the enclosing list's return to re-emit
+    // when the enclosing list is numbered (LT46 p23-ord).
+    if let Some(Element::List { attributes, .. }) = elements.first()
+        && decompose_siblings.is_some()
+        && elements.first().is_some_and(|element| matches!(
+            element,
+            Element::List {
+                ltype: ListType::Bullet,
+                wikidot_unclosed: true,
+                ..
+            }
+        ))
+    {
+        let anchor = Element::List {
+            ltype: ListType::Bullet,
+            items: vec![ListItem::Elements {
+                elements: vec![Element::LineBreak],
+                attributes: {
+                    let mut item_attributes = AttributeMap::new();
+                    item_attributes.insert("style", cow!("list-style: none"));
+                    item_attributes
+                },
+            }],
+            attributes: attributes.clone(),
+            wikidot_explicit_block: true,
+            wikidot_unclosed: true,
+        };
+        parser.stash_wikidot_list_anchor_chrome(parser.wikidot_li_pairing_depth(), anchor);
+    }
     let body = if let Some(sibling_ltype) = decompose_siblings {
         let mut elements = elements.into_iter();
         match elements.next() {
