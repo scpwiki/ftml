@@ -78,6 +78,14 @@ pub(crate) enum WikidotLiCloseDisposition {
     Literal,
 }
 
+/// How the unquoted-close hoist region terminated (BRIEF-UQ67).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UnquotedCloseTerminator {
+    LiClose,
+    UlListClose,
+    OlListClose,
+}
+
 /// Token window the `[[iftags]]` pairing scan may look at, matching the
 /// window the previous pairing dynamic program was built over.
 const IFTAGS_PAIRING_WINDOW: usize = 8192;
@@ -7694,31 +7702,35 @@ where
     /// hoisted shallow run then renders as one paragraph with that row
     /// instead of bare. `scan` is expected positioned at the terminal
     /// closer line's content start.
-    fn unquoted_merge_follow_decision(scan: &Parser<'r, 't>) -> bool {
+    fn unquoted_merge_follow_decision(scan: &Parser<'r, 't>) -> (bool, bool) {
         let mut probe = scan.clone();
         while !matches!(
             probe.current().token,
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
         ) {
             if probe.step().is_err() {
-                return false;
+                return (false, false);
             }
         }
         if probe.current().token == Token::InputEnd {
-            return false;
+            return (false, false);
         }
+        // A ParagraphBreak at the closer's line end means the close is
+        // immediately followed by a blank line — that blank is crossed.
+        let mut crossed_blank = probe.current().token == Token::ParagraphBreak;
         if probe.step().is_err() {
-            return false;
+            return (false, crossed_blank);
         }
         loop {
             match probe.current().token {
                 Token::LineBreak | Token::ParagraphBreak => {
+                    crossed_blank = true;
                     if probe.step().is_err() {
-                        return false;
+                        return (false, crossed_blank);
                     }
                     continue;
                 }
-                Token::InputEnd => return false,
+                Token::InputEnd => return (false, crossed_blank),
                 _ => {}
             }
             let mut depth = 0usize;
@@ -7726,27 +7738,27 @@ where
             while row.current().token == Token::Quote {
                 depth += row.current().slice.len();
                 if row.step().is_err() || row.get_optional_space().is_err() {
-                    return false;
+                    return (false, crossed_blank);
                 }
             }
             // A quoted row never merges backwards into the hoisted run.
             if depth > 0 {
-                return false;
+                return (false, crossed_blank);
             }
             let mut line = row.clone();
             loop {
                 match line.current().token {
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
-                        return true;
+                        return (true, crossed_blank);
                     }
                     Token::LeftBlock
                     | Token::LeftBlockStar
                     | Token::LeftBlockEnd
                     | Token::BulletItem
-                    | Token::NumberedItem => return false,
+                    | Token::NumberedItem => return (false, crossed_blank),
                     _ => {
                         if line.step().is_err() {
-                            return false;
+                            return (false, crossed_blank);
                         }
                     }
                 }
@@ -7763,12 +7775,13 @@ where
     /// Returns the absorbed lines `(content_start, content_end)` when the
     /// region ends at an unquoted closer line (bare `[[/ul]]`/`[[/ol]]`, or a
     /// bare `[[/li]]` for an item body), or `None` otherwise with the parser
-    /// untouched. The boolean is whether the hoisted lines merge into one
-    /// paragraph with the next reachable unquoted text row (BRIEF-BH57a).
+    /// untouched. The booleans are `(merge, crossed_blank)` for the follower
+    /// (BRIEF-BH57a, BRIEF-UQ67). The terminator records which closer ended
+    /// the region (BRIEF-UQ67).
     fn scan_unquoted_close_shallow_lines(
         parser: &Parser<'r, 't>,
         list_body: bool,
-    ) -> Option<(Vec<(usize, usize)>, bool)> {
+    ) -> Option<(Vec<(usize, usize)>, bool, UnquotedCloseTerminator, bool)> {
         let item_body = !list_body;
         let mut scan = parser.clone();
         let mut lines: Vec<(usize, usize)> = Vec::new();
@@ -7802,16 +7815,29 @@ where
                         .eq_ignore_ascii_case("li")
                 });
                 if is_item_close {
-                    let merge = Self::unquoted_merge_follow_decision(&scan);
-                    return item_body.then_some((lines, merge));
+                    let (merge, crossed_blank) =
+                        Self::unquoted_merge_follow_decision(&scan);
+                    return item_body.then_some((
+                        lines,
+                        merge,
+                        UnquotedCloseTerminator::LiClose,
+                        crossed_blank,
+                    ));
                 }
-                let is_list_close = probe.clone().get_end_block().is_ok_and(|name| {
+                let list_close_kind = probe.clone().get_end_block().ok().and_then(|name| {
                     let name = name.strip_suffix('_').unwrap_or(&name);
-                    name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+                    if name.eq_ignore_ascii_case("ol") {
+                        Some(UnquotedCloseTerminator::OlListClose)
+                    } else if name.eq_ignore_ascii_case("ul") {
+                        Some(UnquotedCloseTerminator::UlListClose)
+                    } else {
+                        None
+                    }
                 });
-                if is_list_close {
-                    let merge = Self::unquoted_merge_follow_decision(&scan);
-                    return Some((lines, merge));
+                if let Some(kind) = list_close_kind {
+                    let (merge, crossed_blank) =
+                        Self::unquoted_merge_follow_decision(&scan);
+                    return Some((lines, merge, kind, crossed_blank));
                 }
                 // Any other depth-0 closer: out of this lane.
                 if probe.get_end_block().is_ok() {
@@ -7820,13 +7846,16 @@ where
             } else {
                 // Any deeper-quoted closer line (bare end-block) is the
                 // paired/crossed-close family, not this lane's: bail so the
-                // quoted-close paths keep their shape. A deeper-quoted line
-                // without a closer (`>> x`, `> [[li]]v`) stays region
-                // content: skip it, it parses as the body's own rows.
+                // quoted-close paths keep their shape.
                 let mut end = probe.clone();
                 if end.get_end_block().is_ok() {
                     return None;
                 }
+                // A deeper-quoted line without a closer (`>> x`,
+                // `> [[li]]v`) stays region content: skip it, it parses as
+                // the body's own rows. (`> [[li]]` heads are also skipped;
+                // the unquoted-close two-items family where this causes
+                // mis-attribution is a known residual — BRIEF-UQ67 item (a).)
                 while !matches!(
                     scan.current().token,
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
@@ -7922,7 +7951,7 @@ where
             return Ok(false);
         }
         let list_body = block_rule.name != "block-list-item";
-        let Some((lines, merge)) =
+        let Some((lines, merge, terminator, crossed_blank)) =
             Self::scan_unquoted_close_shallow_lines(self, list_body)
         else {
             return Ok(false);
@@ -7949,7 +7978,13 @@ where
             let Some((content_start, content_end)) = pending.next() else {
                 break;
             };
-            debug_assert_eq!(self.current().span.start, content_start);
+            // BRIEF-UQ67 (a): the scan may skip a deeper-quoted list head
+            // between collected shallow lines (non-contiguous). The simple
+            // hoist cannot absorb that shape; bail out to keep the partial
+            // hoist consistent rather than panicking on the gap.
+            if self.current().span.start != content_start {
+                break;
+            }
             let content = &self.full_text().inner()[content_start..content_end];
             combined.push(text!(content));
             combined.push(Element::LineBreaks(std::num::NonZeroU32::new(1).unwrap()));
@@ -7976,6 +8011,41 @@ where
             }
         }
         if hoisted {
+            // BRIEF-UQ67 (b)/(c): trailing break of the hoisted run depends on
+            // the terminator and whether the run merges with an unquoted text
+            // follower. A li-close merge (BH57) keeps the break. An ordered
+            // UNPAIRED run (Ol list close, no li close) drops the final break
+            // when there is no merge follower, and space-joins when merging
+            // directly across the vanished list close (live: `<p>x y</p>`,
+            // `<p>x<br />y z</p>`). An unordered unpaired merge directly
+            // across the vanished list close also space-joins (live:
+            // `<p>x y</p>`). A merge that crosses a blank keeps the break
+            // (the blank renders as the break, live: `<p>x<br />y</p>`).
+            let is_list_close_term = matches!(
+                terminator,
+                UnquotedCloseTerminator::UlListClose | UnquotedCloseTerminator::OlListClose
+            );
+            if terminator == UnquotedCloseTerminator::OlListClose && !merge {
+                // Ordered unpaired, no merge: drop the extra `<br>` but keep
+                // the line separation before the unclosed shell (live: `x\n<ul>`).
+                if matches!(
+                    combined.last(),
+                    Some(Element::LineBreak | Element::LineBreaks(_))
+                ) {
+                    combined.pop();
+                }
+                combined.push(text!("\n"));
+            } else if is_list_close_term && merge && !crossed_blank {
+                // Replace the trailing break with a space so the paragraph
+                // merge produces `x y` rather than `xy` or `x<br>y`.
+                if matches!(
+                    combined.last(),
+                    Some(Element::LineBreak | Element::LineBreaks(_))
+                ) {
+                    combined.pop();
+                }
+                combined.push(text!(" "));
+            }
             self.push_quote_escaped_unit(QuoteEscapedUnit::Elements(combined, merge));
         }
         if hoisted {
