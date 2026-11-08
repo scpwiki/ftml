@@ -3206,10 +3206,15 @@ where
         if !self.wikidot_ancestor_boundary_accepts(kind.boundary_name()) {
             // d4-46 (b): a flat [[note]] head leaves no body boundary, so an
             // outer first-fit close inside the item still stops it when its
-            // scan head lies before the list region.
-            if kind.boundary_name() == "note"
-                && let Some(pair) = self.wikidot_block_pair_at_closer_byte(pos)
+            // scan head lies before the list region. d446-neighbors: a
+            // scan-flat div/collapsible shell (a heading inside the item
+            // makes the outer pair flat) has no body boundary either, so its
+            // crossed close stops the item too; non-flat cross pairs keep the
+            // recursive path.
+            if let Some(pair) = self.wikidot_block_pair_at_closer_byte(pos)
                 && !self.wikidot_li_cross_head_in_region(pair.head_byte)
+                && (kind.boundary_name() == "note"
+                    || (pair.flat && self.wikidot_li_cross_pair_crossed(pos)))
             {
                 return true;
             }
