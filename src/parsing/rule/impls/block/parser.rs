@@ -3494,6 +3494,26 @@ where
         let span_depth_at_start = self.wikidot_span_body_depth();
 
         loop {
+            // h14/v1 (j6): a heading deleted this item's `[[/li]]`; the
+            // next `[[li]]` opens a sibling item instead of literalizing.
+            // (State is cleared at assembly, so the check here only reads.)
+            if block_rule.name == "block-list-item"
+                && self.current().token == Token::LeftBlock
+                && self
+                    .wikidot_consumed_li_close()
+                    .is_some_and(|byte| byte <= self.current().span.start)
+            {
+                let mut probe = self.clone();
+                if let Ok((name, _, _)) = probe.get_block_name(false)
+                    && name.eq_ignore_ascii_case("li")
+                {
+                    return Ok(crate::parsing::ParseSuccess::new(
+                        segments,
+                        all_errors,
+                        paragraph_safe,
+                    ));
+                }
+            }
             if self.quotes_then_block_end(block_rule) {
                 let prefix = self.take_quoted_closer_marks()?;
                 segments

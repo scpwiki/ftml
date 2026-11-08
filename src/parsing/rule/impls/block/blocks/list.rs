@@ -1175,10 +1175,12 @@ fn parse_list_item<'r, 't>(
             parser.record_wikidot_cell_div_li_opener(opener_start);
         }
         let source = &parser.full_text().inner()[body_start..source_end];
-        let terminated_at_cross_close = parser.current().token == Token::LeftBlockEnd
+        let consumed = parser.wikidot_consumed_li_close();
+        let terminated_at_cross_close = (parser.current().token == Token::LeftBlockEnd
             && parser
                 .wikidot_li_cross_pair_at(parser.current().span.start)
-                .is_some_and(|(_, crossed)| crossed);
+                .is_some_and(|(_, crossed)| crossed))
+            || consumed.is_some();
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
@@ -1187,6 +1189,9 @@ fn parse_list_item<'r, 't>(
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
         );
+        if consumed.is_some() {
+            parser.clear_wikidot_consumed_li_close();
+        }
         if parser.wikidot_li_closed_at_shallower_quote_line()
             && matches!(elements.last(), Some(Element::LineBreak))
         {
@@ -1905,10 +1910,12 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
         let (segments, segment_errors, _) = body.into();
         errors.extend(segment_errors);
         let source = &parser.full_text().inner()[body_start..source_end];
-        let terminated_at_cross_close = parser.current().token == Token::LeftBlockEnd
+        let consumed = parser.wikidot_consumed_li_close();
+        let terminated_at_cross_close = (parser.current().token == Token::LeftBlockEnd
             && parser
                 .wikidot_li_cross_pair_at(parser.current().span.start)
-                .is_some_and(|(_, crossed)| crossed);
+                .is_some_and(|(_, crossed)| crossed))
+            || consumed.is_some();
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
@@ -1917,6 +1924,9 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
         );
+        if consumed.is_some() {
+            parser.clear_wikidot_consumed_li_close();
+        }
         if parser.wikidot_li_closed_at_shallower_quote_line()
             && matches!(elements.last(), Some(Element::LineBreak))
         {
