@@ -261,7 +261,7 @@ fn parse_list_block_impl<'r, 't>(
             || (matches!(
                 block_rule.name,
                 "block-list-unordered" | "block-list-ordered"
-            ) && parser.has_li_close_before_list_close(depth)))
+            ) && parser.has_li_close_before_list_close(depth).is_some()))
     {
         parser.get_body_elements_with_literal_quote_context(
             block_rule,
@@ -576,11 +576,7 @@ fn parse_list_block_impl<'r, 't>(
     // numbered list at the first numbered lost-owner formation's consumed
     // starred close; the remaining items and elements render at top level.
     let mut escape_tail: Option<Vec<Element<'t>>> = None;
-    if wikidot
-        && !flag_score
-        && list_type == ListType::Numbered
-        && b5_escaped.is_none()
-    {
+    if wikidot && !flag_score && list_type == ListType::Numbered && b5_escaped.is_none() {
         escape_tail = multi_formation_escape(parser, &mut items, hoist_count);
         if escape_tail.is_some() {
             parser.set_wikidot_tail_mode(0);
@@ -1635,20 +1631,18 @@ fn parse_list_item<'r, 't>(
         // content into this explicit li. Unwrap the dissolved run list so
         // its items become this li's content / split into sibling items.
         if parser.take_wikidot_li_unowned_dissolve_at(body_start, source_end) {
-            if let Some(mut output) =
-                unowned_dissolve_unwrap(&mut elements, &attributes)
+            if let Some(mut output) = unowned_dissolve_unwrap(&mut elements, &attributes)
             {
                 // output[0] replaces this li's elements; rest are sibling partials
                 if output.len() == 1 {
                     elements = output.pop().unwrap();
                 } else {
                     let first = output.remove(0);
-                    let element = Element::Partial(PartialElement::ListItem(
-                        ListItem::Elements {
+                    let element =
+                        Element::Partial(PartialElement::ListItem(ListItem::Elements {
                             elements: first,
                             attributes: attributes.clone(),
-                        },
-                    ));
+                        }));
                     let mut result = vec![element];
                     for elems in output {
                         result.push(Element::Partial(PartialElement::ListItem(
@@ -2232,12 +2226,35 @@ fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
     }
 }
 
+/// L85: live emits no break after a trailing block in an item body
 /// L85: live emits no break after a trailing math block in an item body
-/// (saved-page probes muse-probe-mi6x2-item-math). The other formed
-/// blocks keep their trailing break; the math rule consumed the closer
-/// line's newline.
+/// (saved-page probes muse-probe-mi6x2-item-math). Formed blocks drop
+/// the trailing break with a trailing blank before [[/li]] (divblank/noteblank/codeblank/collblank/alignblank; probes muse-probe-mi74-*),
+/// and [[toc]] drops it in both cases (item-toc/tocblank; probes muse-probe-mi74-toc-*).
 fn wikidot_li_trailing_break_dropped_after_math(element: &Element) -> bool {
     matches!(element, Element::Math { .. })
+}
+
+fn wikidot_li_trailing_break_dropped_after_block_blank(element: &Element) -> bool {
+    match element {
+        Element::Math { .. } => true,
+        Element::Collapsible { .. } | Element::Code { .. } => true,
+        Element::TableOfContents { .. } => true,
+        Element::Container(container) => matches!(
+            container.ctype(),
+            ContainerType::Div | ContainerType::Align(_) | ContainerType::Note
+        ),
+        _ => false,
+    }
+}
+
+/// Drop trailing break in normal case (no trailing blank)
+fn wikidot_li_trailing_break_dropped_after_block_always(element: &Element) -> bool {
+    match element {
+        Element::Math { .. } => true,
+        Element::TableOfContents { .. } => true,
+        _ => false,
+    }
 }
 
 fn assemble_wikidot_li_segments<'t>(
@@ -2428,12 +2445,13 @@ fn assemble_wikidot_li_segments<'t>(
         Some(Element::Container(container))
             if container.ctype() == ContainerType::Blockquote
     );
-    // Live drops the trailing break after a trailing math block in an item
-    // body, with or without a trailing blank line (saved-page probes
-    // muse-probe-mi6x2-item-math, muse-probe-mi6x3-mathblank).
-    let trailing_math_block = elements
+    // Live drops the trailing break after trailing blocks in an item body
+    let trailing_block_drops_break_blank = elements
         .last()
-        .is_some_and(wikidot_li_trailing_break_dropped_after_math);
+        .is_some_and(wikidot_li_trailing_break_dropped_after_block_blank);
+    let trailing_block_drops_break_always = elements
+        .last()
+        .is_some_and(wikidot_li_trailing_break_dropped_after_block_always);
     // d446-neighbors: after a heading, rule, or separator at item top level
     // live puts the trailing break after the whole list, not inside the item
     // (a4/a16/a17, h3/h4/h10); [[...]]-formed blocks and quote/table keep it
@@ -2455,7 +2473,8 @@ fn assemble_wikidot_li_segments<'t>(
             .is_some_and(|element| !element.paragraph_safe())
         && !trailing_nested_list
         && !trailing_line_block
-        && !trailing_math_block
+        && !trailing_table
+        && !trailing_block_drops_break_blank
     {
         elements.push(Element::LineBreak);
     } else if !had_trailing_empty && !terminated_at_cross_close {
@@ -2483,7 +2502,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !trailing_table
             && !trailing_blockquote
             && !trailing_line_block
-            && !trailing_math_block
+            && !trailing_block_drops_break_always
             && !note_yielded_list_closer
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)
@@ -3313,22 +3332,25 @@ fn multi_formation_escape<'t>(
     // numbered lost-owner formation (live closes the enclosing numbered
     // list there). A leading bullet formation or explicit list keeps the
     // choreography nested.
-    if parser.wikidot_first_formation_numbered_at(parser.wikidot_li_pairing_depth()) != Some(true)
+    if parser.wikidot_first_formation_numbered_at(parser.wikidot_li_pairing_depth())
+        != Some(true)
     {
         return None;
     }
     // The first numbered lost-owner formation sits inside the first item;
     // its flipped list is the item's first non-explicit list.
     let first_list = match items.first() {
-        Some(ListItem::Elements { elements, .. }) => elements.iter().position(|element| {
-            matches!(
-                element,
-                Element::List {
-                    wikidot_explicit_block: false,
-                    ..
-                }
-            )
-        }),
+        Some(ListItem::Elements { elements, .. }) => {
+            elements.iter().position(|element| {
+                matches!(
+                    element,
+                    Element::List {
+                        wikidot_explicit_block: false,
+                        ..
+                    }
+                )
+            })
+        }
         _ => return None,
     };
     let Some(first_list) = first_list else {

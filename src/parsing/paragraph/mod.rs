@@ -464,6 +464,13 @@ where
                 }
             }
             absorb_stray_break_neutralized = false;
+            let a2_crossed = parser.take_wikidot_a2_crossed_follower_bare();
+            if a2_crossed != 0 {
+                if a2_crossed == 2 {
+                    stack.push_element(Element::LineBreak, true);
+                }
+                stack.mark_next_unwrapped_after_block();
+            }
             let literal_list_item = stack.wikidot_list_break_follows_list()
                 && errors
                     .iter()

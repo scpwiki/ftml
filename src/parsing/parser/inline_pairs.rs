@@ -228,6 +228,20 @@ fn clean_list_barrier(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
     if !list_name_at(tokens, index) {
         return false;
     }
+    // Non-list blocks inside the list make the barrier "unclean" (the
+    // lone-bold pre-pass must not save a pair across them, because the bold
+    // rule cannot always reject the nested cases). Two exceptions, both
+    // governed by the bold rule's own checks rather than this pre-pass:
+    //   - `[[code]]`: code-first items are fine (live forms the pair and
+    //     segments around the block); text-before-code is rejected by
+    //     `legacy_format_body_code_preceded_by_content`.
+    //   - `[[blockquote]]`: live forms the pair across blockquotes even
+    //     mid-item (the tags render literal inside the strong).
+    // Item 85 / 84a (harvest-markwrap).
+    let transparent = |j: usize| {
+        block_name(tokens, j)
+            .is_some_and(|n| n.eq_ignore_ascii_case("code") || n.eq_ignore_ascii_case("blockquote"))
+    };
     match tokens[index].token {
         Token::LeftBlock | Token::LeftBlockStar => {
             let mut depth = 0usize;
@@ -236,7 +250,7 @@ fn clean_list_barrier(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
                     Token::LeftBlock | Token::LeftBlockStar => {
                         if list_name_at(tokens, j) {
                             depth += 1;
-                        } else if depth > 0 {
+                        } else if depth > 0 && !transparent(j) {
                             return false;
                         }
                     }
@@ -246,7 +260,7 @@ fn clean_list_barrier(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
                             if depth == 0 {
                                 return true;
                             }
-                        } else if depth > 0 {
+                        } else if depth > 0 && !transparent(j) {
                             return false;
                         }
                     }
@@ -262,7 +276,7 @@ fn clean_list_barrier(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
                     Token::LeftBlockEnd => {
                         if list_name_at(tokens, j) {
                             depth += 1;
-                        } else if depth > 0 {
+                        } else if depth > 0 && !transparent(j) {
                             return false;
                         }
                     }
@@ -272,7 +286,7 @@ fn clean_list_barrier(tokens: &[ExtractedToken<'_>], index: usize) -> bool {
                             if depth == 0 {
                                 return true;
                             }
-                        } else if depth > 0 {
+                        } else if depth > 0 && !transparent(j) {
                             return false;
                         }
                     }
@@ -425,6 +439,13 @@ fn scan_chunk(
         if marker_positions.len() == 1 && tokens[marker_positions[0]].token == Token::Bold
         {
             let lone = marker_positions[0];
+            // A lone `**` beside a clean-list barrier with a partner elsewhere:
+            // let the bold rule form the pair (rule-level checks reject the
+            // cases live rejects). The "clean" test treats code/blockquote
+            // inside the list as transparent (item 85 / 84a, harvest-markwrap):
+            // live forms across code-first items and blockquotes, and the bold
+            // rule rejects text-before-code-in-item and true flow-block
+            // crossings.
             let partner_elsewhere = list_clean
                 && tokens
                     .iter()
@@ -820,5 +841,5 @@ mod tests {
             bold_bytes[0],
             markers.role_at_byte(bold_bytes[0])
         );
-    }
+}
 }

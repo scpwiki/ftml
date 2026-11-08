@@ -342,6 +342,7 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             children,
             collapsible_link,
             omit_close,
+            ..
         } => render_block_frame(
             ctx,
             BlockFrame {

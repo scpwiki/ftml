@@ -1,0 +1,24 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "italics",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "div",
+                            "attributes": {},
+                            "elements": []
+                        }
+                    },
+                    {
+                        "element": "line-break"
+                    }
+                ]
+            }
+        }
+    ]
+}

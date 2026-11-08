@@ -3595,16 +3595,20 @@ where
                 // The quote cursor reads the blank as a boundary, so
                 // fall through to the ordinary blank-line handling below
                 // instead of erroring.
-                if self.current().token == Token::ParagraphBreak
+                let blank_li_close = if self.current().token == Token::ParagraphBreak
                     && self.quote_body_literal_residuals() == Some(true)
                     && !self.discarding_hidden_body()
                     && !self.in_wikidot_literal_alias_body()
                     && !self.in_wikidot_anchor_body()
-                    && self.has_li_close_before_list_close(
+                {
+                    self.has_li_close_before_list_close(
                         self.quote_body_required_depth().unwrap_or(0),
                     )
-                {
-                    self.set_wikidot_quote_boundary_blank_in_li_body();
+                } else {
+                    None
+                };
+                if let Some(quoted_close) = blank_li_close {
+                    self.set_wikidot_quote_boundary_blank_in_li_body(quoted_close);
                 } else if self.quote_boundary_starts_body_end(block_rule) {
                     if block_rule.name == "block-list-item"
                         && self.boundary_is_unquoted_list_close()
@@ -5108,7 +5112,9 @@ where
                 block_rule.name,
                 "block-list-unordered" | "block-list-ordered"
             )
-            && self.has_li_close_before_list_close(required_depth);
+            && self
+                .has_li_close_before_list_close(required_depth)
+                .is_some();
         if !has_close
             && !has_later_close
             && !has_surplus_list_close
@@ -5127,7 +5133,7 @@ where
         let previous_cursor = self.quote_body_cursor();
         let previous_shallower_li = self.take_wikidot_quote_boundary_shallower_li();
         let previous_shallower_text = self.take_wikidot_quote_boundary_shallower_text();
-        let previous_blank_in_li_body =
+        let (previous_blank_in_li_body, previous_blank_in_li_body_quoted) =
             self.take_wikidot_quote_boundary_blank_in_li_body();
         let previous_evaporation = self.take_wikidot_quote_boundary_evaporation();
         if has_shallower_li_close {
@@ -5173,7 +5179,9 @@ where
         }
         let _ = self.take_wikidot_quote_boundary_blank_in_li_body();
         if previous_blank_in_li_body {
-            self.set_wikidot_quote_boundary_blank_in_li_body();
+            self.set_wikidot_quote_boundary_blank_in_li_body(
+                previous_blank_in_li_body_quoted,
+            );
         }
         let _ = self.take_wikidot_quote_boundary_evaporation();
         if previous_evaporation {
@@ -6415,7 +6423,17 @@ where
                         )))
             {
                 self.set_wikidot_quote_boundary_li_auto_close();
-                self.set_wikidot_pending_paired_list_close();
+                if self.wikidot_quote_boundary_blank_in_li_body()
+                    && matches!(
+                        self.current().token,
+                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                    )
+                    && self.wikidot_quote_boundary_blank_in_li_body_quoted_close()
+                {
+                    self.set_wikidot_pending_paired_list_close_quoted_follower();
+                } else {
+                    self.set_wikidot_pending_paired_list_close();
+                }
                 return Ok(());
             }
             if block_rule.name.starts_with("block-list-")
@@ -7253,7 +7271,9 @@ where
     }
 
     fn quotes_then_block_end(&self, block_rule: &BlockRule) -> bool {
-        if self.quote_body_literal_residuals() != Some(true) || self.current().token != Token::Quote {
+        if self.quote_body_literal_residuals() != Some(true)
+            || self.current().token != Token::Quote
+        {
             return false;
         }
         let required = self.native_blockquote_depth().unwrap_or(0);
@@ -7824,16 +7844,17 @@ where
                         crossed_blank,
                     ));
                 }
-                let list_close_kind = probe.clone().get_end_block().ok().and_then(|name| {
-                    let name = name.strip_suffix('_').unwrap_or(&name);
-                    if name.eq_ignore_ascii_case("ol") {
-                        Some(UnquotedCloseTerminator::OlListClose)
-                    } else if name.eq_ignore_ascii_case("ul") {
-                        Some(UnquotedCloseTerminator::UlListClose)
-                    } else {
-                        None
-                    }
-                });
+                let list_close_kind =
+                    probe.clone().get_end_block().ok().and_then(|name| {
+                        let name = name.strip_suffix('_').unwrap_or(&name);
+                        if name.eq_ignore_ascii_case("ol") {
+                            Some(UnquotedCloseTerminator::OlListClose)
+                        } else if name.eq_ignore_ascii_case("ul") {
+                            Some(UnquotedCloseTerminator::UlListClose)
+                        } else {
+                            None
+                        }
+                    });
                 if let Some(kind) = list_close_kind {
                     let (merge, crossed_blank) =
                         Self::unquoted_merge_follow_decision(&scan);
@@ -8023,7 +8044,8 @@ where
             // (the blank renders as the break, live: `<p>x<br />y</p>`).
             let is_list_close_term = matches!(
                 terminator,
-                UnquotedCloseTerminator::UlListClose | UnquotedCloseTerminator::OlListClose
+                UnquotedCloseTerminator::UlListClose
+                    | UnquotedCloseTerminator::OlListClose
             );
             if terminator == UnquotedCloseTerminator::OlListClose && !merge {
                 // Ordered unpaired, no merge: drop the extra `<br>` but keep
@@ -8106,24 +8128,30 @@ where
 
     /// Whether a bare `[[ /li]]` close line comes before the next bare
     /// `[[ /ul]]`/`[[ /ol]]` close at depth `<= required_depth`
-    /// (BRIEF-BL57c). Lines with depth `>= required_depth` are skipped;
-    /// a shallower line carrying content disqualifies the shape (the
-    /// shallower-text family of BRIEF-QT52, e.g. `v2txt`, pairs neither
-    /// in live nor here — those shapes keep baseline rendering); a
-    /// shallower blank line is skipped; a list close at depth
-    /// `<= required_depth` ends the pairing region; a deeper one closes
-    /// an inner list and is skipped.
-    pub(crate) fn has_li_close_before_list_close(&self, required_depth: usize) -> bool {
+    /// (BRIEF-BL57c). Returns `Some(quoted)` when found: `quoted` is true
+    /// when the `[[/li]]` line is at `depth >= required_depth` (a quoted
+    /// close, ulclose-y paragraph follower), false when shallower
+    /// (unquoted close, bare follower). `None` when no such close exists.
+    /// Lines with depth `>= required_depth` are skipped; a shallower line
+    /// carrying content disqualifies the shape (the shallower-text family
+    /// of BRIEF-QT52, e.g. `v2txt`, pairs neither in live nor here — those
+    /// shapes keep baseline rendering); a shallower blank line is skipped;
+    /// a list close at depth `<= required_depth` ends the pairing region;
+    /// a deeper one closes an inner list and is skipped.
+    pub(crate) fn has_li_close_before_list_close(
+        &self,
+        required_depth: usize,
+    ) -> Option<bool> {
         if required_depth == 0 {
-            return false;
+            return None;
         }
         let mut parser = self.clone();
         loop {
             match parser.current().token {
-                Token::InputEnd => return false,
+                Token::InputEnd => return None,
                 Token::LineBreak | Token::ParagraphBreak => {
                     if parser.step().is_err() {
-                        return false;
+                        return None;
                     }
                     continue;
                 }
@@ -8134,14 +8162,14 @@ where
             while content.current().token == Token::Quote {
                 depth += content.current().slice.len();
                 if content.step().is_err() || content.get_optional_space().is_err() {
-                    return false;
+                    return None;
                 }
             }
             if Self::bare_line_is_li_close_after_quotes(&content) {
-                return true;
+                return Some(depth >= required_depth);
             }
             if depth <= required_depth && Self::bare_line_is_plain_list_close(&content) {
-                return false;
+                return None;
             }
             if depth < required_depth
                 && !matches!(
@@ -8150,11 +8178,11 @@ where
                 )
             {
                 // A shallower line with content: the shallower-text family.
-                return false;
+                return None;
             }
             while !token_is_body_boundary(parser.current().token) {
                 if parser.step().is_err() {
-                    return false;
+                    return None;
                 }
             }
             if matches!(
@@ -8162,7 +8190,7 @@ where
                 Token::LineBreak | Token::ParagraphBreak
             ) && parser.step().is_err()
             {
-                return false;
+                return None;
             }
         }
     }
@@ -8254,10 +8282,7 @@ where
         token_is_body_boundary(probe.current().token)
     }
 
-    pub(crate) fn quote_boundary_starts_body_end(
-        &self,
-        block_rule: &BlockRule,
-    ) -> bool {
+    pub(crate) fn quote_boundary_starts_body_end(&self, block_rule: &BlockRule) -> bool {
         if self.quote_body_literal_residuals() != Some(true)
             || !block_rule.name.starts_with("block-list-")
         {
