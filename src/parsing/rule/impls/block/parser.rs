@@ -3521,6 +3521,7 @@ where
                 }
                 if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
+                    && !self.wikidot_quote_boundary_shallower_text()
                 {
                     self.step()?;
                     continue;
@@ -4943,10 +4944,21 @@ where
             && literal_residual_quotes
             && block_rule.name.starts_with("block-list-")
             && self.has_shallower_quote_list_close(block_rule, required_depth);
+        let has_shallower_text_line = !has_close
+            && !has_later_close
+            && !has_surplus_list_close
+            && !has_shallower_close
+            && literal_residual_quotes
+            && matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            )
+            && self.has_shallower_quote_text_line(block_rule, required_depth);
         let has_shallower_li_close = !has_close
             && !has_later_close
             && !has_surplus_list_close
             && !has_shallower_close
+            && !has_shallower_text_line
             && literal_residual_quotes
             && matches!(
                 block_rule.name,
@@ -4958,6 +4970,7 @@ where
             && !has_surplus_list_close
             && !has_shallower_close
             && !has_shallower_li_close
+            && !has_shallower_text_line
         {
             if block_rule.name == "block-note" {
                 return self.get_body_elements(block_rule, as_paragraphs);
@@ -4967,8 +4980,12 @@ where
 
         let previous_cursor = self.quote_body_cursor();
         let previous_shallower_li = self.take_wikidot_quote_boundary_shallower_li();
+        let previous_shallower_text = self.take_wikidot_quote_boundary_shallower_text();
         if has_shallower_li_close {
             self.set_wikidot_quote_boundary_shallower_li();
+        }
+        if has_shallower_text_line {
+            self.set_wikidot_quote_boundary_shallower_text();
         }
         if literal_residual_quotes {
             self.install_quote_body_cursor_with_literal_residuals(required_depth);
@@ -4997,6 +5014,10 @@ where
         let _ = self.take_wikidot_quote_boundary_shallower_li();
         if previous_shallower_li {
             self.set_wikidot_quote_boundary_shallower_li();
+        }
+        let _ = self.take_wikidot_quote_boundary_shallower_text();
+        if previous_shallower_text {
+            self.set_wikidot_quote_boundary_shallower_text();
         }
 
         match result {
@@ -6243,6 +6264,21 @@ where
                 if self.quote_boundary_starts_body_end(block_rule) {
                     return self.consume_quote_boundary_body_end(block_rule);
                 }
+                // BRIEF-QT52: a UL/OL in shallower-text mode soft-ends at
+                // the first shallower line (text, blank, or block markup)
+                // when a bare list close quoted at the required depth is
+                // still ahead. The LI outcome between here and that close
+                // stays the ordinary LI pairing (no `[[/li]]` by the gate),
+                // so the soft-end yields the degraded none-item shape.
+                // The attempted lines stay unconsumed: blockquote ends its
+                // run and the fresh run renders the paired close as break.
+                if self.wikidot_quote_boundary_shallower_text()
+                    && self.shallower_text_list_close_ahead(block_rule)
+                {
+                    self.set_wikidot_quote_boundary_li_auto_close();
+                    self.set_wikidot_pending_paired_list_close();
+                    return Ok(());
+                }
                 if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
                     && block_rule.name.starts_with("block-list-")
@@ -7201,6 +7237,218 @@ where
                 return false;
             }
         }
+    }
+
+    /// Whether the cursor's line carries a bare `[[ /li]]` close as its first
+    /// content (callers position the cursor at the line's content start).
+    fn bare_line_is_li_close_after_quotes(probe: &Parser<'r, 't>) -> bool {
+        let mut end = probe.clone();
+        let is_li_close = end.get_end_block().is_ok_and(|name| {
+            name.strip_suffix('_')
+                .unwrap_or(&name)
+                .eq_ignore_ascii_case("li")
+        });
+        if !is_li_close {
+            return false;
+        }
+        let _ = end.get_optional_space();
+        token_is_body_boundary(end.current().token)
+    }
+
+    /// Whether the cursor's line carries a bare `[[ /ul]]`/`[[ /ol]]` close
+    /// for `block_rule` as its first content at the cursor position.
+    fn bare_line_is_list_close(probe: &Parser<'r, 't>, block_rule: &BlockRule) -> bool {
+        let mut end = probe.clone();
+        let matching_close = end.get_end_block().is_ok_and(|name| {
+            block_rule_accepts_end_name(
+                block_rule,
+                name.strip_suffix('_').unwrap_or(&name),
+                probe.settings().layout.legacy(),
+            )
+        });
+        if !matching_close {
+            return false;
+        }
+        let _ = end.get_optional_space();
+        token_is_body_boundary(end.current().token)
+    }
+
+    /// Whether the cursor's line contains an `[[li]]` head.
+    fn line_contains_li_head(probe: &Parser<'r, 't>) -> bool {
+        let mut scan = probe.clone();
+        while !token_is_body_boundary(scan.current().token) {
+            if scan.current().token == Token::LeftBlock {
+                let mut head = scan.clone();
+                if let Ok((name, _, _)) = head.get_block_name(false)
+                    && name
+                        .strip_suffix('_')
+                        .unwrap_or(&name)
+                        .eq_ignore_ascii_case("li")
+                {
+                    return true;
+                }
+            }
+            if scan.step().is_err() {
+                return false;
+            }
+        }
+        false
+    }
+
+    /// Region scan from a line-content position (BRIEF-QT52 guards G3/G4):
+    /// whether a bare list close quoted at the required depth comes next,
+    /// before any bare `[[/li]]` close line, any shallower list close, or
+    /// input end. Shallower lines, blanks, and deeper or non-close lines
+    /// are skipped.
+    fn shallower_text_region_has_quoted_list_close(
+        &self,
+        block_rule: &BlockRule,
+        required_depth: usize,
+        start: &Parser<'r, 't>,
+    ) -> bool {
+        let mut probe = start.clone();
+        loop {
+            if probe.current().token == Token::InputEnd {
+                return false;
+            }
+            if matches!(
+                probe.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            ) {
+                if probe.step().is_err() {
+                    return false;
+                }
+                continue;
+            }
+            let mut depth = 0usize;
+            let mut content = probe.clone();
+            while content.current().token == Token::Quote {
+                depth += content.current().slice.len();
+                if content.step().is_err() || content.get_optional_space().is_err() {
+                    return false;
+                }
+            }
+            if Self::bare_line_is_li_close_after_quotes(&content) {
+                return false;
+            }
+            if Self::bare_line_is_list_close(&content, block_rule) {
+                return depth == required_depth;
+            }
+            while !token_is_body_boundary(probe.current().token) {
+                if probe.step().is_err() {
+                    return false;
+                }
+            }
+        }
+    }
+
+    /// Whether the UL/OL body belongs to the shallower-text family
+    /// (BRIEF-QT52): some `[[li]]` head line is followed by a shallower
+    /// line that is not a bare `[[/li]]` close — text, blank, or block
+    /// markup — and from that line a bare list close quoted at the required
+    /// depth comes before any bare `[[/li]]` close line (the `[[/li]]`
+    /// close is the PR #1227 boundary path's own territory). A shallower
+    /// line before the first `[[li]]` head dissolves the UL in live (the
+    /// x-first shape), so it never qualifies.
+    pub(crate) fn has_shallower_quote_text_line(
+        &self,
+        block_rule: &BlockRule,
+        required_depth: usize,
+    ) -> bool {
+        if required_depth == 0 {
+            return false;
+        }
+        let mut parser = self.clone();
+        let mut saw_li_head = false;
+        loop {
+            if parser.current().token == Token::InputEnd {
+                return false;
+            }
+            // A `ParagraphBreak` reaching a line start is a blank physical
+            // line: a shallow line for the family (depth 0). Do not skip
+            // it; decide on it like any other shallow line.
+            if parser.current().token == Token::ParagraphBreak {
+                if !saw_li_head {
+                    return false;
+                }
+                return self.shallower_text_region_has_quoted_list_close(
+                    block_rule,
+                    required_depth,
+                    &parser.clone(),
+                );
+            }
+            let mut depth = 0usize;
+            let mut probe = parser.clone();
+            while probe.current().token == Token::Quote {
+                depth += probe.current().slice.len();
+                if probe.step().is_err() || probe.get_optional_space().is_err() {
+                    return false;
+                }
+            }
+            if depth >= required_depth && Self::line_contains_li_head(&probe) {
+                saw_li_head = true;
+            }
+            if depth < required_depth {
+                if !saw_li_head {
+                    return false;
+                }
+                if !Self::bare_line_is_li_close_after_quotes(&probe) {
+                    return self.shallower_text_region_has_quoted_list_close(
+                        block_rule,
+                        required_depth,
+                        &probe,
+                    );
+                }
+            }
+            while !token_is_body_boundary(parser.current().token) {
+                if parser.step().is_err() {
+                    return false;
+                }
+            }
+            if parser.current().token == Token::LineBreak {
+                if parser.step().is_err() {
+                    return false;
+                }
+            } else if parser.current().token != Token::ParagraphBreak {
+                return false;
+            }
+            // A `ParagraphBreak` terminator is left for the next loop
+            // iteration: it marks the blank line following this one.
+        }
+    }
+
+    /// Whether the fresh quote run's quoted `[[ /ul]]`/`[[ /ol]]` close is
+    /// still ahead from a boundary cursor (BRIEF-QT52 soft-end probe).
+    /// Skips shallow lines and blanks like the gate's region scan. Peeks
+    /// only; the soft-end leaves the attempted lines unconsumed.
+    pub(crate) fn shallower_text_list_close_ahead(&self, block_rule: &BlockRule) -> bool {
+        if self.quote_body_literal_residuals() != Some(true)
+            || !matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            )
+        {
+            return false;
+        }
+        let required = match self.quote_body_required_depth() {
+            Some(depth) if depth > 0 => depth,
+            _ => return false,
+        };
+        let mut probe = self.clone();
+        // `probe` may sit on the break before a line, the break before the
+        // shallow line, or on shallow-line content. Advance to the next
+        // line's content position, then run the gate's region scan.
+        if matches!(
+            probe.current().token,
+            Token::LineBreak | Token::ParagraphBreak
+        ) && probe.step().is_err()
+        {
+            return false;
+        }
+        // The first line after this break may itself be the shallow line;
+        // if it is at required depth already, the region scan handles it.
+        // Otherwise scan onward for the quoted close.
+        self.shallower_text_region_has_quoted_list_close(block_rule, required, &probe)
     }
 
     pub(crate) fn consume_quote_boundary_body_end(
