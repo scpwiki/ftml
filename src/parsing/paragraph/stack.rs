@@ -97,6 +97,7 @@ pub struct ParagraphStack<'t> {
     /// wrapped paragraph start with `<br />` before the following text.
     wikidot_math_next_paragraph_leads_with_br: bool,
     wikidot_toc_next_paragraph_leads_with_br: bool,
+    wikidot_quote_boundary_next_paragraph_leads_with_br: bool,
     wikidot_row_suffix_break: bool,
 
     finished: Vec<Element<'t>>,
@@ -701,6 +702,14 @@ impl<'t> ParagraphStack<'t> {
     #[inline]
     pub(crate) fn set_wikidot_toc_next_paragraph_leads_with_br(&mut self, value: bool) {
         self.wikidot_toc_next_paragraph_leads_with_br = value;
+    }
+
+    #[inline]
+    pub(crate) fn set_wikidot_quote_boundary_next_paragraph_leads_with_br(
+        &mut self,
+        value: bool,
+    ) {
+        self.wikidot_quote_boundary_next_paragraph_leads_with_br = value;
     }
 
     #[inline]
@@ -1967,6 +1976,12 @@ impl<'t> ParagraphStack<'t> {
         }
         if self.wikidot && self.wikidot_toc_next_paragraph_leads_with_br {
             self.wikidot_toc_next_paragraph_leads_with_br = false;
+            if !matches!(self.current.first(), Some(Element::LineBreak)) {
+                self.current.insert(0, Element::LineBreak);
+            }
+        }
+        if self.wikidot && self.wikidot_quote_boundary_next_paragraph_leads_with_br {
+            self.wikidot_quote_boundary_next_paragraph_leads_with_br = false;
             if !matches!(self.current.first(), Some(Element::LineBreak)) {
                 self.current.insert(0, Element::LineBreak);
             }

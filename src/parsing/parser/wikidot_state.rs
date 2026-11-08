@@ -39,6 +39,7 @@ const ADVANCED_CELL_PARAGRAPH: u16 = 1 << 8;
 const ROW_ABSORB_DIV_CLOSE: u16 = 1 << 9;
 const PENDING_DIV_CLOSER: u16 = 1 << 10;
 const ROW_ABSORB_DIV_CLOSE_SEEN: u16 = 1 << 11;
+const QUOTE_BOUNDARY_BREAK_LEADS_PARAGRAPH: u16 = 1 << 12;
 
 /// Div keeps a 2-bit count (max 3). The other three kinds are one bit each.
 /// Slots stay inside `crossed_closes` and do not overlap.
@@ -639,6 +640,25 @@ impl Parser<'_, '_> {
     pub(crate) fn take_wikidot_div_literal_recovered(&mut self) -> bool {
         let marked = self.wikidot.flags & DIV_LITERAL_RECOVERED != 0;
         set_flag(&mut self.wikidot.flags, DIV_LITERAL_RECOVERED, false);
+        marked
+    }
+
+    pub(crate) fn mark_wikidot_quote_boundary_break_leads_paragraph(&mut self) {
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            QUOTE_BOUNDARY_BREAK_LEADS_PARAGRAPH,
+            true,
+        );
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_break_leads_paragraph(&mut self) -> bool {
+        let marked =
+            self.wikidot.crossed_closes & QUOTE_BOUNDARY_BREAK_LEADS_PARAGRAPH != 0;
+        set_flag(
+            &mut self.wikidot.crossed_closes,
+            QUOTE_BOUNDARY_BREAK_LEADS_PARAGRAPH,
+            false,
+        );
         marked
     }
 

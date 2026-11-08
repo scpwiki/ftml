@@ -680,6 +680,29 @@ fn migrated_break_dropped_before_following_line(parser: &Parser<'_, '_>) -> bool
     )
 }
 
+fn migrated_break_leads_blank_follower_paragraph(parser: &Parser<'_, '_>) -> bool {
+    if !matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak
+    ) {
+        return false;
+    }
+    for token in parser.remaining() {
+        match token.token {
+            Token::Whitespace | Token::LineBreak | Token::ParagraphBreak => {}
+            Token::InputEnd
+            | Token::Quote
+            | Token::LeftBlock
+            | Token::LeftBlockStar
+            | Token::LeftBlockEnd
+            | Token::BulletItem
+            | Token::NumberedItem => return false,
+            _ => return true,
+        }
+    }
+    false
+}
+
 /// The degraded trailing shell an ordered list closed at a shallower quote
 /// depth leaves behind live: a bullet list holding only one
 /// list-style-none item with a break (the a5e3e034c degraded form). At the
@@ -1493,7 +1516,11 @@ fn try_consume_fn<'r, 't>(
             && !(append_from_list_boundary
                 && migrated_break_dropped_before_following_line(parser))
         {
-            if append_from_ordered_list_boundary {
+            if append_from_list_boundary
+                && migrated_break_leads_blank_follower_paragraph(parser)
+            {
+                parser.mark_wikidot_quote_boundary_break_leads_paragraph();
+            } else if append_from_ordered_list_boundary {
                 elements.push(ordered_boundary_close_shell(
                     parser.current().token == Token::Quote,
                 ));
@@ -1514,15 +1541,21 @@ fn try_consume_fn<'r, 't>(
         && !(append_from_list_boundary
             && migrated_break_dropped_before_following_line(parser))
     {
-        if append_from_ordered_list_boundary {
-            elements.push(ordered_boundary_close_shell(
-                parser.current().token == Token::Quote,
-            ));
+        if append_from_list_boundary
+            && migrated_break_leads_blank_follower_paragraph(parser)
+        {
+            parser.mark_wikidot_quote_boundary_break_leads_paragraph();
         } else {
-            elements.push(Element::LineBreak);
-        }
-        if let Some(last) = split_counts.last_mut() {
-            last.0 += 1;
+            if append_from_ordered_list_boundary {
+                elements.push(ordered_boundary_close_shell(
+                    parser.current().token == Token::Quote,
+                ));
+            } else {
+                elements.push(Element::LineBreak);
+            }
+            if let Some(last) = split_counts.last_mut() {
+                last.0 += 1;
+            }
         }
     }
     let mut result = ok!(false; elements, errors);
