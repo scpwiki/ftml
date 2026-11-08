@@ -232,6 +232,19 @@ fn parse_list_block_impl<'r, 't>(
         parser.current().token,
         Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
     );
+    // A closer on a list-item line (`* [[/ul]]`, `# [[/ul]]`) leaves no
+    // post-list break in live: with a bullet marker the break is dropped,
+    // with a numbered marker an empty unclosed anchor list takes its
+    // place (LT46 s-family probes).
+    let closer_line_marker = if wikidot && !fused_close {
+        crate::parsing::rule::impls::line_owner::consumed_closer_line_marker(
+            parser,
+            list_end,
+            block_rule.accepts_names[0],
+        )
+    } else {
+        None
+    };
     let (mut elements, errors, _) = body.into();
 
     if wikidot && name != block_rule.accepts_names[0] {
@@ -571,7 +584,20 @@ fn parse_list_block_impl<'r, 't>(
                 output.push(Element::LineBreak);
             }
         } else {
-            output.push(Element::LineBreak);
+            match closer_line_marker {
+                // Closer on a bullet list-item line: live drops the break.
+                Some('*') => {}
+                // Closer on a numbered list-item line: live leaves an
+                // empty unclosed anchor list in the break's place.
+                Some('#') => output.push(Element::List {
+                    ltype: ListType::Bullet,
+                    items: Vec::new(),
+                    attributes: AttributeMap::new(),
+                    wikidot_explicit_block: true,
+                    wikidot_unclosed: true,
+                }),
+                _ => output.push(Element::LineBreak),
+            }
         }
         ok!(false; output, errors)
     } else if fused_close {

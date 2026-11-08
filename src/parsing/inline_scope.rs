@@ -3886,7 +3886,13 @@ fn vanished_block(element: &Element) -> bool {
             ) && container.attributes().get().is_empty()
                 && all_whitespace_text(container.elements())
         }
-        Element::List { items, .. } => items.is_empty(),
+        // An unclosed list renders live's intentionally truncated output
+        // (an empty open `<ul>`), not a vanished block (LT46 s-family).
+        Element::List {
+            items,
+            wikidot_unclosed,
+            ..
+        } => items.is_empty() && !wikidot_unclosed,
         _ => false,
     }
 }
