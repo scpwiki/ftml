@@ -367,6 +367,10 @@ fn extract_table_cells<'r, 't>(
     let mut foster = Vec::new();
     let mut straddle_tail: Vec<Element<'t>> = Vec::new();
     let mut pending_break = false;
+    // Post-yield row-tail items (li-Foster) swallow the close lines' line
+    // breaks: each item-close and kept list closer line's newline belongs
+    // to its structural closer, not to the foster.
+    let mut absorb_item_close_breaks = false;
     let mut yield_foster_len = 0usize;
     for eject in cross_li_eject {
         foster.push(Element::Partial(PartialElement::WikidotFoster(vec![eject])));
@@ -379,6 +383,8 @@ fn extract_table_cells<'r, 't>(
         match element {
             Element::Partial(PartialElement::TableCell(cell)) if residuals.is_empty() => {
                 cells.push(cell);
+                // A fresh cell starts fresh foster territory with it.
+                absorb_item_close_breaks = false;
             }
 
             // A bullet `[[/row]]` stays a list item. It is inside the row
@@ -455,6 +461,10 @@ fn extract_table_cells<'r, 't>(
 
             Element::Partial(PartialElement::WikidotFoster(_)) => {
                 foster.push(element);
+                if li_yield_tail {
+                    absorb_item_close_breaks = true;
+                    pending_break = false;
+                }
             }
 
             Element::Partial(
@@ -485,8 +495,14 @@ fn extract_table_cells<'r, 't>(
                 straddle_tail.push(element);
             }
 
+            // A post-yield item may close a kept list without a parse-time
+            // absorb: the close line's break is structural for every break
+            // in the run, so the run is absorbed wholesale and its pending
+            // never registers.
             Element::LineBreak if !cells.is_empty() && !foster.is_empty() => {
-                pending_break = true;
+                if !absorb_item_close_breaks {
+                    pending_break = true;
+                }
             }
 
             Element::Container(ref container)
