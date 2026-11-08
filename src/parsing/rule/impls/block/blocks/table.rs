@@ -1450,9 +1450,19 @@ fn parse_cell<'r, 't>(
     legacy: bool,
     foster: Vec<Element<'t>>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
+    let dissolved_pre =
+        wikidot_paragraphs && legacy && cell_starts_with_dissolved_pre(&elements);
+    let dissolved_leading =
+        wikidot_paragraphs && legacy && cell_starts_with_dissolved_leading(&elements);
     trim_cell_whitespace(&mut elements);
     if wikidot_paragraphs {
         strip_cell_paragraph_boundaries(&mut elements);
+        if dissolved_pre {
+            unwrap_cell_paragraph_before_dissolved_break(&mut elements);
+        }
+        if dissolved_leading {
+            elements.insert(0, Element::LineBreak);
+        }
         if !preserve_single_paragraph {
             unwrap_single_cell_paragraph(&mut elements);
         }
@@ -1651,6 +1661,62 @@ fn unwrap_single_cell_paragraph(elements: &mut Vec<Element<'_>>) {
         unreachable!("matched one paragraph container");
     };
     *elements = paragraph.into();
+}
+
+/// Whether the pre-trim cell body starts with a paragraph ending in a line
+/// break that a dissolved (all-empty) explicit list directly follows: the
+/// stack kept that paragraph wrapped (body gathers suppress the toplevel
+/// dissolved pre-candidate) and the dissolve break sits beside it. A
+/// blank-line separation leaves the paragraph ending without the break,
+/// which stays wrapped to match live.
+fn cell_starts_with_dissolved_pre(elements: &[Element<'_>]) -> bool {
+    let Some(Element::Container(paragraph)) = elements.first() else {
+        return false;
+    };
+    if paragraph.ctype() != ContainerType::Paragraph {
+        return false;
+    }
+    let ends_with_break = paragraph
+        .elements()
+        .iter()
+        .rev()
+        .find(|element| {
+            !matches!(element, Element::Delayed(delayed) if delayed.is_suppression_seam())
+        })
+        .is_some_and(|element| *element == Element::LineBreak);
+    ends_with_break
+        && matches!(
+            elements.get(1),
+            Some(Element::LineBreak) | Some(Element::Text(_))
+        )
+}
+
+/// Whether the pre-trim cell body starts with the break an all-empty
+/// explicit list dissolved to, followed by content (live keeps it in a
+/// cell; the cell trims would otherwise drop it).
+fn cell_starts_with_dissolved_leading(elements: &[Element<'_>]) -> bool {
+    elements.first() == Some(&Element::LineBreak)
+        && matches!(elements.get(1), Some(Element::Text(_)))
+}
+
+/// Live keeps the text before a dissolved explicit list in an advanced
+/// cell bare like the text before a formed list (`x<br>`, or `x<br>y`
+/// when content follows). The stack leaves it wrapped, so unwrap the
+/// head paragraph and restore the single break the dissolve stands for.
+fn unwrap_cell_paragraph_before_dissolved_break(elements: &mut Vec<Element<'_>>) {
+    let Some(Element::Container(paragraph)) = elements.first() else {
+        return;
+    };
+    if paragraph.ctype() != ContainerType::Paragraph {
+        return;
+    }
+    let Element::Container(paragraph) = elements.remove(0) else {
+        unreachable!("matched paragraph container");
+    };
+    let contents: Vec<Element<'_>> = paragraph.into();
+    let at = contents.len();
+    elements.splice(0..0, contents);
+    elements.insert(at, Element::LineBreak);
 }
 
 #[cfg(test)]
