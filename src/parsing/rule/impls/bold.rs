@@ -26,7 +26,7 @@ use super::inline_delimiter::{
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
-use crate::tree::{PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
+use crate::tree::{Container, PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
 use std::borrow::Cow;
 
 pub const RULE_BOLD: Rule = Rule {
@@ -447,7 +447,7 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     {
         return elements;
     }
-    let Elements::Single(Element::Container(container)) = &elements else {
+    let Some(container) = find_stop_at_list_container(&elements) else {
         return elements;
     };
     // Bold/italics pairs do not carry their styling across an explicit
@@ -508,8 +508,8 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     } else {
         stopped_tail_marker(current, rest)
     };
-    let Elements::Single(Element::Container(container)) = &mut elements else {
-        unreachable!("single underline element checked above")
+    let Some(container) = find_stop_at_list_container_mut(&mut elements) else {
+        unreachable!("stop-at-list candidate checked above")
     };
     container.attributes_mut().insert(
         crate::tree::WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER,
@@ -519,6 +519,56 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
         container.attributes_mut().insert(marker, Cow::Borrowed(""));
     }
     elements
+}
+
+/// The format container a stop-at-list verdict applies to, whether it came
+/// back from the collector as a single element or in a Multiple alongside
+/// line-close artefacts (line-start `**` split-close leftovers). Only the
+/// format kinds eligible for the stop are considered.
+fn find_stop_at_list_container<'e, 't>(
+    elements: &'e Elements<'t>,
+) -> Option<&'e Container<'t>> {
+    fn candidate<'c, 't>(element: &'c Element<'t>) -> Option<&'c Container<'t>> {
+        let Element::Container(container) = element else {
+            return None;
+        };
+        matches!(
+            container.ctype(),
+            ContainerType::Underline
+                | ContainerType::Strikethrough
+                | ContainerType::Bold
+                | ContainerType::Italics
+        )
+        .then_some(container)
+    }
+    match elements {
+        Elements::Single(element) => candidate(element),
+        Elements::Multiple(vec) => vec.iter().find_map(candidate),
+        Elements::None => None,
+    }
+}
+
+fn find_stop_at_list_container_mut<'e, 't>(
+    elements: &'e mut Elements<'t>,
+) -> Option<&'e mut Container<'t>> {
+    fn candidate_mut<'c, 't>(element: &'c mut Element<'t>) -> Option<&'c mut Container<'t>> {
+        let Element::Container(container) = element else {
+            return None;
+        };
+        matches!(
+            container.ctype(),
+            ContainerType::Underline
+                | ContainerType::Strikethrough
+                | ContainerType::Bold
+                | ContainerType::Italics
+        )
+        .then_some(container)
+    }
+    match elements {
+        Elements::Single(element) => candidate_mut(element),
+        Elements::Multiple(vec) => vec.iter_mut().find_map(candidate_mut),
+        Elements::None => None,
+    }
 }
 
 #[cfg(test)]
