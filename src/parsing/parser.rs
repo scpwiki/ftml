@@ -1074,6 +1074,19 @@ impl<'r, 't> Parser<'r, 't> {
         })
     }
 
+    pub(crate) fn wikidot_explicit_list_ends_between(
+        &self,
+        from_byte: usize,
+        to_byte: usize,
+    ) -> Vec<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_explicit_list_ends
+            .range(from_byte..=to_byte)
+            .copied()
+            .collect()
+    }
+
     pub(crate) fn wikidot_li_pairing_depth(&self) -> usize {
         self.block_end_scan_cache
             .borrow()

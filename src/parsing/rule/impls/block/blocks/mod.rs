@@ -528,6 +528,44 @@ fn element_source_offset<'t>(source_ptr: usize, element: &Element<'t>) -> Option
     result
 }
 
+fn wikidot_list_item_source_offset<'t>(
+    source_ptr: usize,
+    item: &ListItem<'t>,
+) -> Option<usize> {
+    let mut result = None;
+    scan_list_item_source_offset(source_ptr, item, &mut result);
+    result
+}
+
+/// The split index within one native list's items where the items stop
+/// straddling a recorded explicit-list end: items whose borrowed-text source
+/// offsets follow the end escape, the rest stay. Returns the first recorded
+/// end inside the body that leaves items on both sides, or `None` when no
+/// end straddles the items (including when any item's offset is unknown).
+/// This is the item-level analogue of the whole-tail closer escape in
+/// `list.rs`: live ends a run formation at the completing pair's closer and
+/// the items after it belong to the enclosing list.
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn wikidot_straddle_split_at_explicit_list_end<'t>(
+    parser: &Parser<'_, '_>,
+    items: &[ListItem<'t>],
+    body_start_byte: usize,
+    body_end_byte: usize,
+) -> Option<usize> {
+    let source_ptr = parser.full_text().inner().as_ptr() as usize;
+    let offsets: Vec<usize> = items
+        .iter()
+        .map(|item| wikidot_list_item_source_offset(source_ptr, item))
+        .collect::<Option<Vec<_>>>()?;
+    parser
+        .wikidot_explicit_list_ends_between(body_start_byte, body_end_byte)
+        .into_iter()
+        .find_map(|end| {
+            let split = offsets.iter().position(|offset| *offset > end)?;
+            (split > 0).then_some(split)
+        })
+}
+
 fn consider_source_ptr(source_ptr: usize, result: &mut Option<usize>, ptr: usize) {
     if ptr >= source_ptr {
         let offset = ptr - source_ptr;
