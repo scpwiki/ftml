@@ -2528,18 +2528,32 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
         // reaches the splice: any real content outside a native list
         // between the opener and the end of the cell (a plain non-list
         // line such as `zzz` after the nested list) ends the native
-        // list's chunk, and its fostered closer never joins it.
-        let flow_broken = projection[*open + 1..foster_start].iter().enumerate().any(
-            |(offset, item)| {
-                let index_in_stream = *open + 1 + offset;
-                flags[index_in_stream].list_scope == 0
-                    && matches!(
-                        item,
-                        ProjItem::Text(value) if !value.trim().is_empty()
-                    )
-            },
-        );
-        if opener_in_cell_list_context && !flow_broken {
+        // list's chunk, and its fostered closer never joins it. This
+        // barrier governs openers that sit inside a native-list chunk:
+        // an opener outside every native list (an explicit item with
+        // no native list at all) has no native chunk to end, so text
+        // after it inside its own item (the `x` of splicenolist) flows
+        // with it and never breaks.
+        let flow_broken = flag.list_scope != 0
+            && projection[*open + 1..foster_start].iter().enumerate().any(
+                |(offset, item)| {
+                    let index_in_stream = *open + 1 + offset;
+                    flags[index_in_stream].list_scope == 0
+                        && matches!(
+                            item,
+                            ProjItem::Text(value) if !value.trim().is_empty()
+                        )
+                },
+            );
+        // And no pair opens outside a native list into a closer that
+        // sits inside one (#1219's barrier for foster-crossing pairs):
+        // the spliced bare-tail shapes whose closer is a single line
+        // inside a fostered real list (splice-bare-close-list's
+        // `* **` line) deploy their marker inside the fostered list
+        // block, which live never pairs across.
+        let closer_in_native_list =
+            flags[*close].in_native_list && !flags[*open].in_native_list;
+        if opener_in_cell_list_context && !flow_broken && !closer_in_native_list {
             roles[*close] = Some(PairRole::Drop);
             spliced_closes.push((*kind, *open));
         } else {
@@ -2558,6 +2572,10 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
             .position(|(start, end)| open >= *start && open < *end)
             .expect("pair open index is inside a segment range");
         trim_list_end_space(segments[segment_index]);
+        // The break after the spliced item's last line is the splice's
+        // structural item-close break (live splicenolist `<strong>x</strong>`);
+        // it belongs to the spliced li, not to the scope it wraps.
+        trim_item_close_break(segments[segment_index]);
         segments[segment_index]
             .push(Element::Partial(PartialElement::InlineFormatClose(kind)));
     }
@@ -2590,6 +2608,32 @@ fn trim_list_end_space_items(items: &mut [ListItem<'_>]) {
         Some(ListItem::SubList { element }) => {
             if let Element::List { items, .. } = &mut **element {
                 trim_list_end_space_items(items);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Pop one trailing item-close line break at the end of the final item
+/// path, mirroring `trim_list_end_space`'s walk: live splicenolist
+/// shows the break after the spliced item's last line belongs to the
+/// splice, not to the scope it wraps (`<strong>x</strong>`).
+fn trim_item_close_break(elements: &mut Vec<Element<'_>>) {
+    match elements.last_mut() {
+        Some(Element::LineBreak) => {
+            elements.pop();
+        }
+        Some(Element::List { items, .. }) => trim_item_close_break_items(items),
+        _ => {}
+    }
+}
+
+fn trim_item_close_break_items(items: &mut [ListItem<'_>]) {
+    match items.last_mut() {
+        Some(ListItem::Elements { elements, .. }) => trim_item_close_break(elements),
+        Some(ListItem::SubList { element }) => {
+            if let Element::List { items, .. } = &mut **element {
+                trim_item_close_break_items(items);
             }
         }
         _ => {}

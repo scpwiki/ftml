@@ -362,12 +362,59 @@ fn cross_li_wrap_outer<'t>(
     }]
 }
 
+/// Pop one trailing break from the spliced li's last content item
+/// path: the break terminating the spliced li's own last line belongs
+/// to the splice (live eats it in every li-yield-tail splice shape).
+fn trim_spliced_li_close_break(elements: &mut Vec<Element<'_>>) {
+    match elements.last_mut() {
+        Some(Element::LineBreak) => {
+            elements.pop();
+        }
+        Some(Element::List { items, .. }) => trim_spliced_li_close_break_items(items),
+        _ => {}
+    }
+}
+
+fn trim_spliced_li_close_break_items(items: &mut [crate::tree::ListItem<'_>]) {
+    match items.last_mut() {
+        Some(crate::tree::ListItem::Elements { elements, .. }) => {
+            trim_spliced_li_close_break(elements)
+        }
+        Some(crate::tree::ListItem::SubList { element }) => {
+            if let Element::List { items, .. } = &mut **element {
+                trim_spliced_li_close_break_items(items);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// One spliced list item's elements in source order (an item's own
 /// elements inline; a sublist stays one whole element).
 fn flatten_list_item<'t>(item: crate::tree::ListItem<'t>) -> Vec<Element<'t>> {
     match item {
         crate::tree::ListItem::Elements { elements, .. } => elements,
         crate::tree::ListItem::SubList { element } => vec![*element],
+    }
+}
+
+/// Whether the list carries splice-residue close tokens (`[[row]]` etc.),
+/// i.e. whether it is a spliced-items list whose contents were cut (the
+/// flatten-and-foster shapes, e.g. bold-control's `* * [[/row]]` items)
+/// rather than a fresh tail list block (a list line issued after the
+/// splice point, e.g. splice-bare-close-list's `* **` line, which live
+/// keeps as a real `<ul>`).
+fn list_carries_splice_tokens(element: &Element<'_>) -> bool {
+    match element {
+        Element::List { items, .. } => items.iter().any(|item| match item {
+            crate::tree::ListItem::Elements { elements, .. } => elements
+                .iter()
+                .any(|e| matches!(e, Element::Text(text) if text.contains("[["))),
+            crate::tree::ListItem::SubList { element } => {
+                list_carries_splice_tokens(element)
+            }
+        }),
+        _ => false,
     }
 }
 
@@ -470,69 +517,88 @@ fn extract_table_cells<'r, 't>(
                     yield_foster_len = foster.len();
                 } else if straddle_list_pending || li_yield_tail {
                     straddle_list_pending = false;
-                    let Element::List { items, .. } = element else {
-                        unreachable!()
-                    };
-                    let mut items = items;
-                    let mut bare = Vec::new();
-                    let div_head = items.iter().position(|item| {
-                        matches!(
-                            item,
-                            crate::tree::ListItem::Elements { elements, .. }
-                                if elements.iter().any(|e| matches!(
-                                    e,
-                                    Element::Partial(
-                                        PartialElement::WikidotBlockOpen(_)
-                                    )
-                                ))
-                        )
-                    });
-                    if let Some(div_at) = div_head {
-                        // Split the spliced list at the div head: the
-                        // prefix and the head line's own text before
-                        // the marker flatten as before; from the
-                        // marker on, the line items gather into one
-                        // region so the frame builder can pair the
-                        // div around the list.
-                        let mut rest = items.split_off(div_at);
-                        let head_item = rest.remove(0);
-                        let crate::tree::ListItem::Elements { elements, .. } = head_item
-                        else {
+                    if !list_carries_splice_tokens(&element) {
+                        // A fresh tail list block (a list line issued
+                        // after the splice point, no cut tokens inside,
+                        // e.g. splice-bare-close-list's `* **` line):
+                        // live keeps it as a real `<ul>` in the foster
+                        // and never pairs the marker inside it.
+                        foster.push(Element::Partial(PartialElement::WikidotFoster(
+                            vec![element],
+                        )));
+                        if li_yield_tail {
+                            yield_foster_len = foster.len();
+                        }
+                    } else {
+                        let Element::List { items, .. } = element else {
                             unreachable!()
                         };
-                        let mut elements = elements;
-                        let open_at = elements
-                            .iter()
-                            .position(|e| {
-                                matches!(
-                                    e,
-                                    Element::Partial(PartialElement::WikidotBlockOpen(_))
-                                )
-                            })
-                            .expect("div head position is present");
-                        bare.extend(
-                            items
-                                .into_iter()
-                                .flat_map(|item| flatten_list_item(item).into_iter()),
-                        );
-                        bare.extend(elements.drain(..open_at));
-                        let mut region = vec![elements.remove(0)];
-                        region.extend(elements);
-                        for item in rest {
-                            region.extend(flatten_list_item(item));
+                        let mut items = items;
+                        let mut bare = Vec::new();
+                        let div_head = items.iter().position(|item| {
+                            matches!(
+                                item,
+                                crate::tree::ListItem::Elements { elements, .. }
+                                    if elements.iter().any(|e| matches!(
+                                        e,
+                                        Element::Partial(
+                                            PartialElement::WikidotBlockOpen(_)
+                                        )
+                                    ))
+                            )
+                        });
+                        if let Some(div_at) = div_head {
+                            // Split the spliced list at the div head: the
+                            // prefix and the head line's own text before
+                            // the marker flatten as before; from the
+                            // marker on, the line items gather into one
+                            // region so the frame builder can pair the
+                            // div around the list.
+                            let mut rest = items.split_off(div_at);
+                            let head_item = rest.remove(0);
+                            let crate::tree::ListItem::Elements { elements, .. } =
+                                head_item
+                            else {
+                                unreachable!()
+                            };
+                            let mut elements = elements;
+                            let open_at = elements
+                                .iter()
+                                .position(|e| {
+                                    matches!(
+                                        e,
+                                        Element::Partial(
+                                            PartialElement::WikidotBlockOpen(_)
+                                        )
+                                    )
+                                })
+                                .expect("div head position is present");
+                            bare.extend(
+                                items
+                                    .into_iter()
+                                    .flat_map(|item| flatten_list_item(item).into_iter()),
+                            );
+                            bare.extend(elements.drain(..open_at));
+                            let mut region = vec![elements.remove(0)];
+                            region.extend(elements);
+                            for item in rest {
+                                region.extend(flatten_list_item(item));
+                            }
+                            foster.push(Element::Partial(PartialElement::WikidotFoster(
+                                bare,
+                            )));
+                            open_div = Some((region, 1));
+                        } else {
+                            for item in items {
+                                bare.extend(flatten_list_item(item));
+                            }
+                            foster.push(Element::Partial(PartialElement::WikidotFoster(
+                                bare,
+                            )));
                         }
-                        foster
-                            .push(Element::Partial(PartialElement::WikidotFoster(bare)));
-                        open_div = Some((region, 1));
-                    } else {
-                        for item in items {
-                            bare.extend(flatten_list_item(item));
+                        if li_yield_tail {
+                            yield_foster_len = foster.len();
                         }
-                        foster
-                            .push(Element::Partial(PartialElement::WikidotFoster(bare)));
-                    }
-                    if li_yield_tail {
-                        yield_foster_len = foster.len();
                     }
                 } else {
                     foster.push(Element::Partial(PartialElement::WikidotFoster(vec![
@@ -579,6 +645,11 @@ fn extract_table_cells<'r, 't>(
                         let (finished, _) = open_div.take().expect("open div region");
                         foster.push(Element::Partial(PartialElement::WikidotFoster(
                             finished,
+                        )));
+                        // Live puts one line break after the div and
+                        // before the `[[cell]]` residual (`</div><br/>`).
+                        foster.push(Element::Partial(PartialElement::WikidotFoster(
+                            vec![Element::LineBreak],
                         )));
                         if li_yield_tail {
                             absorb_item_close_breaks = true;
@@ -658,12 +729,36 @@ fn extract_table_cells<'r, 't>(
                 // splice's residue: live fosters it as-is (a bare
                 // closer like `**` is the fostered tail's inline
                 // closer, so it must survive to the marker pass)
-                // instead of rejecting the whole row.
-                foster.push(Element::Partial(PartialElement::WikidotFoster(tail)));
+                // instead of rejecting the whole row. Its item-close
+                // line breaks are structural (each closers line's
+                // newline belongs to its structural closer): live
+                // keeps only one line break after the tail's last
+                // content line (`**` line, `y` line, one `<br/>` sum).
+                let mut collapsed: Vec<Element<'t>> = Vec::with_capacity(tail.len());
+                for element in tail {
+                    if matches!(element, Element::LineBreak)
+                        && matches!(collapsed.last(), Some(Element::LineBreak))
+                    {
+                        continue;
+                    }
+                    collapsed.push(element);
+                }
+                foster.push(Element::Partial(PartialElement::WikidotFoster(collapsed)));
             }
             Err(_) => {
                 return Err(parser.make_err(ParseErrorKind::TableRowContainsNonCell));
             }
+        }
+    }
+
+    if li_yield_tail {
+        // The spliced li's last content line's own terminator belongs
+        // to the splice, not to the value inside the cell: live eats
+        // it (splicenolist `<li><strong>x</strong></li>`, splice-bare-
+        // close-list `<li>**x<br>` → `<li>**x</li>`, splice-bare-tail-y
+        // `<li>x</li>`).
+        if let Some(cell) = cells.last_mut() {
+            trim_spliced_li_close_break(&mut cell.elements);
         }
     }
 
