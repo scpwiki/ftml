@@ -667,6 +667,19 @@ fn innermost_blockquote_elements<'a, 't>(
     Some(nested)
 }
 
+/// Whether the migrated list-end break of a quote whose explicit list closed
+/// at a shallower quote depth should be dropped before a following line.
+/// Live keeps the break at the end of input, before a blank line and before
+/// a following quote line, but drops it when the next line carries content:
+/// the content then starts a fresh paragraph (or forms its own block)
+/// instead of continuing bare after the break.
+fn migrated_break_dropped_before_following_line(parser: &Parser<'_, '_>) -> bool {
+    !matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd | Token::Quote
+    )
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -690,6 +703,7 @@ fn try_consume_fn<'r, 't>(
     let mut fold_following_into_tab_segment = false;
     let mut flatten_following_rows = false;
     let mut append_unquoted_close_break = false;
+    let mut append_from_list_boundary = false;
     let mut flat_split: Option<QuoteFlatSplit<'t>> = None;
     let mut first_row_depth: Option<usize> = None;
 
@@ -1136,6 +1150,7 @@ fn try_consume_fn<'r, 't>(
         let quote_end_list_break = quote_end_list_row && !boundary_list_close;
         if quote_end_list_row && boundary_list_close {
             append_unquoted_close_break = true;
+            append_from_list_boundary = true;
         }
         if quote_end_list_break
             && !matches!(elements.last(), Some(Element::LineBreak))
@@ -1351,7 +1366,10 @@ fn try_consume_fn<'r, 't>(
         }
     }
     if escaped_segments.is_empty() {
-        if append_unquoted_close_break {
+        if append_unquoted_close_break
+            && !(append_from_list_boundary
+                && migrated_break_dropped_before_following_line(parser))
+        {
             elements.push(Element::LineBreak);
         }
         return ok!(false; elements, errors);
@@ -1363,7 +1381,10 @@ fn try_consume_fn<'r, 't>(
         elements.extend(segment);
     }
 
-    if append_unquoted_close_break {
+    if append_unquoted_close_break
+        && !(append_from_list_boundary
+            && migrated_break_dropped_before_following_line(parser))
+    {
         elements.push(Element::LineBreak);
         if let Some(last) = split_counts.last_mut() {
             last.0 += 1;
