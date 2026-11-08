@@ -1346,6 +1346,28 @@ where
     tab_title_scoped_block_unit(parser, rule.name)
 }
 
+/// Bounded direct equivalent of `tab_title_token_block_name(&tokens, 0, …)`
+/// where `tokens` would be `once(parser.current()).chain(parser.remaining())`:
+/// the virtual index `i ≥ 1` is `parser.remaining()[i - 1]`. Reads at most the
+/// first three tokens and so avoids materializing the whole remaining stream
+/// just to inspect the head name.
+fn tab_title_head_block_name<'r, 't>(
+    parser: &Parser<'r, 't>,
+    layout: crate::layout::Layout,
+) -> Option<&'static str>
+where
+    'r: 't,
+{
+    let remaining = parser.remaining();
+    let mut cursor = 1_usize;
+    if remaining.first().map(|token| token.token) == Some(Token::Whitespace) {
+        cursor += 1;
+    }
+    let raw = remaining.get(cursor - 1)?.slice;
+    let name = raw.strip_suffix('_').unwrap_or(raw);
+    get_block_rule_with_name_for_layout(name, layout).map(|rule| rule.name)
+}
+
 fn tab_title_token_block_name(
     tokens: &[&crate::parsing::ExtractedToken],
     index: usize,
@@ -1368,6 +1390,9 @@ where
     'r: 't,
 {
     let layout = parser.settings().layout;
+    if tab_title_head_block_name(parser, layout) != Some(rule_name) {
+        return None;
+    }
     let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
         std::iter::once(parser.current())
             .chain(parser.remaining())
@@ -1460,15 +1485,11 @@ where
     'r: 't,
 {
     let start = parser.current().span.start;
-    let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
-        std::iter::once(parser.current())
-            .chain(parser.remaining())
-            .collect();
     let mut close = None;
-    for token in &tokens {
+    for token in std::iter::once(parser.current()).chain(parser.remaining()) {
         match token.token {
             Token::RightBlock | Token::RightLink => {
-                close = Some(*token);
+                close = Some(token);
                 break;
             }
             Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
@@ -1548,6 +1569,12 @@ where
     'r: 't,
 {
     let layout = parser.settings().layout;
+    // Bounded head check first: only footnote-headed titles need the full
+    // remaining-stream snapshot the depth scans below read from.
+    match tab_title_head_block_name(parser, layout) {
+        Some("block-footnote" | "block-footnote-block") => {}
+        _ => return TabTitleFootnote::NotFootnote,
+    }
     let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
         std::iter::once(parser.current())
             .chain(parser.remaining())
@@ -1952,11 +1979,12 @@ fn finish_tab_label_at_construct<'r, 't>(
     copied_until: usize,
     saw_unit: bool,
 ) -> Result<(std::borrow::Cow<'t, str>, Option<&'t str>, bool), ParseError> {
-    let tokens: Vec<&crate::parsing::ExtractedToken<'t>> =
-        std::iter::once(parser.current())
-            .chain(parser.remaining())
-            .collect();
-    for token in &tokens {
+    // Copied `'r` references: iterating them while stepping `parser` below is
+    // equivalent to iterating the former whole-stream snapshot — the parser
+    // only moves its own field pointers; the tokenization is untouched.
+    let cur = parser.current();
+    let rem = parser.remaining();
+    for token in std::iter::once(cur).chain(rem) {
         match token.token {
             Token::RightBlock => {
                 let text = tab_label_finish(
