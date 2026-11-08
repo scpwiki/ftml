@@ -227,6 +227,7 @@ pub(crate) enum WikidotLiCrossKind {
     Div,
     Collapsible,
     Note,
+    Align,
 }
 
 impl WikidotLiCrossKind {
@@ -235,7 +236,14 @@ impl WikidotLiCrossKind {
             WikidotLiCrossKind::Div => "div",
             WikidotLiCrossKind::Collapsible => "collapsible",
             WikidotLiCrossKind::Note => "note",
+            // Align blocks accept =, >, <, ==; callers needing ancestor
+            // boundary acceptance must check all align names.
+            WikidotLiCrossKind::Align => "=",
         }
+    }
+
+    pub(crate) fn is_note(self) -> bool {
+        matches!(self, WikidotLiCrossKind::Note)
     }
 }
 

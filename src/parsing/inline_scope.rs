@@ -6964,7 +6964,11 @@ impl<'t> WikidotFrameAssembly<'t> {
                     outer_close_eof,
                 });
             }
-            WikidotBlockShell::Align { alignment, .. } => {
+            WikidotBlockShell::Align {
+                alignment,
+                outer_close_eof,
+                ..
+            } => {
                 self.stack.push(WikidotFrameBuild {
                     attributes: wikidot_frame_attributes(&[(
                         "style",
@@ -6974,7 +6978,7 @@ impl<'t> WikidotFrameAssembly<'t> {
                     scored_div: false,
                     link: None,
                     note_head: None,
-                    outer_close_eof: false,
+                    outer_close_eof,
                 });
             }
             WikidotBlockShell::Collapsible {

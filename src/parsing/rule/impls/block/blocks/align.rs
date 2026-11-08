@@ -170,6 +170,7 @@ pub fn parse_alignment_block<'r, 't>(
         let shell = WikidotBlockShell::Align {
             head: opener_start,
             alignment,
+            outer_close_eof: parser.wikidot_pair_closer_on_heading_line(&pair),
         };
         let open = Element::Partial(PartialElement::WikidotBlockOpen(shell));
         if span_keeps_head_breaks {

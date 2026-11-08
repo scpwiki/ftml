@@ -2854,6 +2854,7 @@ where
             Div,
             Coll,
             Note,
+            Align,
         }
 
         let mut scan = self.clone();
@@ -2955,6 +2956,14 @@ where
                             {
                                 stack.push((CrossFrame::Note, start, false));
                             }
+                        } else if (name == "="
+                            || name == ">"
+                            || name == "<"
+                            || name == "==")
+                            && !opaque
+                            && self.wikidot_block_pair_at_head_byte(start).is_some()
+                        {
+                            stack.push((CrossFrame::Align, start, false));
                         }
                     }
                     if scan.step().is_err() {
@@ -3051,8 +3060,14 @@ where
                     } else if name.eq_ignore_ascii_case("div")
                         || name.eq_ignore_ascii_case("collapsible")
                         || name.eq_ignore_ascii_case("note")
+                        || name == "="
+                        || name == ">"
+                        || name == "<"
+                        || name == "=="
                     {
-                        // d4-46 (b): only scan-paired note closers breach;
+                        let is_align =
+                            name == "=" || name == ">" || name == "<" || name == "==";
+                        // d4-46 (b): only scan-paired note/align closers breach;
                         // orphans stay literal and must not stop the item.
                         if !opaque
                             && (name.eq_ignore_ascii_case("div")
@@ -3065,6 +3080,8 @@ where
                                 (CrossFrame::Div, WikidotLiCrossKind::Div)
                             } else if name.eq_ignore_ascii_case("collapsible") {
                                 (CrossFrame::Coll, WikidotLiCrossKind::Collapsible)
+                            } else if is_align {
+                                (CrossFrame::Align, WikidotLiCrossKind::Align)
                             } else {
                                 (CrossFrame::Note, WikidotLiCrossKind::Note)
                             };
@@ -3287,17 +3304,27 @@ where
         let Some((kind, _)) = self.wikidot_li_cross_pair_at(pos) else {
             return false;
         };
-        if !self.wikidot_ancestor_boundary_accepts(kind.boundary_name()) {
+        let ancestor_accepts = if matches!(
+            kind,
+            crate::parsing::parser::block_pairs::WikidotLiCrossKind::Align
+        ) {
+            ["=", ">", "<", "=="]
+                .iter()
+                .any(|name| self.wikidot_ancestor_boundary_accepts(name))
+        } else {
+            self.wikidot_ancestor_boundary_accepts(kind.boundary_name())
+        };
+        if !ancestor_accepts {
             // d4-46 (b): a flat [[note]] head leaves no body boundary, so an
             // outer first-fit close inside the item still stops it when its
             // scan head lies before the list region. d446-neighbors: a
-            // scan-flat div/collapsible shell (a heading inside the item
+            // scan-flat div/collapsible/align shell (a heading inside the item
             // makes the outer pair flat) has no body boundary either, so its
             // crossed close stops the item too; non-flat cross pairs keep the
             // recursive path.
             if let Some(pair) = self.wikidot_block_pair_at_closer_byte(pos)
                 && !self.wikidot_li_cross_head_in_region(pair.head_byte)
-                && (kind.boundary_name() == "note"
+                && (kind.is_note()
                     || (pair.flat && self.wikidot_li_cross_pair_crossed(pos)))
             {
                 return true;
