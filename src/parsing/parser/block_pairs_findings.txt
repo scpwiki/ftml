@@ -312,3 +312,4 @@ corpus-test/table/cell-bold-splice-outside-any-list-line/input.ftml	Row@10..92 d
 corpus-test/table/cell-bold-splice-outside-any-list-line/input.ftml	Cell@18..54 descent-only
 corpus-test/list/wikidot-li-note-cross-li-trailing-break/input.ftml	Note@14..50 scan-only
 corpus-test/list/wikidot-li-note-cross-li-trailing-break/input.ftml	Note@14..25 descent-only
+corpus-test/list/swallowed-div-pair-keeps-item-break/input.ftml	Div@16..34 scan-only

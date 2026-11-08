@@ -1265,6 +1265,18 @@ fn parse_list_item<'r, 't>(
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
         );
+        // A lost-owner block that swallows an entire item body (e.g. a
+        // matched `[[div]]`...`[[/div]]` pair written as native list lines)
+        // assembles to no elements at all. Live keeps the explicit list
+        // alive with a bare break in place of the swallowed body, so keep
+        // the item the same way (the swallow notes itself on the scan
+        // cache; whitespace-only bodies still dissolve).
+        if elements.is_empty()
+            && !post_yield_scope
+            && parser.take_wikidot_li_swallowed_block_at(body_start, source_end)
+        {
+            elements.push(Element::LineBreak);
+        }
         if consumed.is_some() {
             parser.clear_wikidot_consumed_li_close();
         }
@@ -1350,7 +1362,11 @@ fn parse_list_item<'r, 't>(
         // the enclosing list as its items instead of re-forming a second
         // list inside this item (lihoist p12/p15/d6-24.3). When the
         // assembled body is exactly [formation list, native tail list],
-        // split the tail list's items out as sibling items.
+        // split the tail list's items out as sibling items. The escape
+        // requires a recorded explicit-list end inside this body (the
+        // completing pair's closer); without one the tail list is a
+        // re-typed continuation of the run (e.g. `* a` then `# b`) and live
+        // keeps both lists nested inside the item.
         let core_end = elements
             .iter()
             .rposition(|element| !element.is_whitespace())
@@ -1384,6 +1400,12 @@ fn parse_list_item<'r, 't>(
             }
             _ => None,
         };
+        // The escape requires a recorded explicit-list end inside this body
+        // (the completing pair's closer); see the comment above.
+        let completing_pair_in_body = !parser
+            .wikidot_explicit_list_ends_between(body_start, source_end)
+            .is_empty();
+        let escaped_items = escaped_items.filter(|_| completing_pair_in_body);
         if let Some(tail_items) = escaped_items {
             elements.truncate(core_end - 1);
             // The removed tail list's leading line break joins the escaped
