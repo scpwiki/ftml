@@ -67,6 +67,25 @@ fn parse_note_block<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    // lihoist p6: a note head on a list-item line with no closer inside the
+    // enclosing explicit `[[li]]` body (its pair closer is allocated
+    // outside the body, or it is unclosed) stays literal text in live.
+    if parser.settings().layout.legacy()
+        && crate::parsing::rule::impls::line_owner::head_on_list_item_line(
+            parser.full_text().inner(),
+            opener_start,
+        )
+        && let Some(li_head) = parser.wikidot_li_collect_head()
+        && let Some(body_end) = parser.wikidot_li_body_end_by_head(li_head)
+        && !crate::parsing::rule::impls::line_owner::closer_for_block_in_range(
+            parser,
+            opener_start,
+            body_end,
+            "note",
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if let Some(pair) = wikidot_flat_pair_for_head(parser, opener_start)
         && pair.kind == WikidotBlockKind::Note
     {

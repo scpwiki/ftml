@@ -215,6 +215,19 @@ where
     }
 
     let view = name.strip_suffix('_').unwrap_or(&name);
+    // lihoist p6: inside an explicit `[[li]]` body, an explicit-list head
+    // with no closer inside that body (its pair closer is allocated to the
+    // outer pair) stays a literal run item in live instead of hoisting a
+    // formation. Bail out of the lost-owner path so the run parser keeps
+    // the head as text.
+    if matches!(owner, LineOwner::List { .. })
+        && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
+        && let Some(li_head) = entry_parser.wikidot_li_collect_head()
+        && let Some(body_end) = entry_parser.wikidot_li_body_end_by_head(li_head)
+        && !closer_for_block_in_range(&entry_parser, head_byte, body_end, view)
+    {
+        return Ok(None);
+    }
     if matches!(owner, LineOwner::Quote { .. } | LineOwner::List { .. })
         && (view.eq_ignore_ascii_case("ul") || view.eq_ignore_ascii_case("ol"))
         && lost_owner_list_body_is_unowned(&entry_parser)
@@ -455,6 +468,60 @@ fn absorb_post_close_lazy_lines<'r, 't>(
 /// Live hoists the list out of the line container only when the body lines are
 /// not themselves owned by it; a fully owned body (every line carries the same
 /// quote or list prefix) keeps the list inside the container.
+/// Whether the `[[...]]` head at `head_byte` begins a list-item line: the
+/// line it is on carries only quote markers, list markers, and whitespace
+/// before it.
+pub(crate) fn head_on_list_item_line(source: &str, head_byte: usize) -> bool {
+    let from = head_byte.min(source.len());
+    let line_start = source[..from].rfind('\n').map_or(0, |index| index + 1);
+    let prefix = &source[line_start..from];
+    let trimmed = prefix.trim_start_matches([' ', '\t', '>', '\r']);
+    let Some(rest) = trimmed
+        .strip_prefix('*')
+        .or_else(|| trimmed.strip_prefix('#'))
+    else {
+        return false;
+    };
+    rest.chars().all(char::is_whitespace)
+}
+
+/// Whether a `[[name]]` closer line (starred or unstarred) exists strictly
+/// between `from` and the `[[li]]` body end byte.
+pub(crate) fn closer_for_block_in_range(
+    parser: &Parser<'_, '_>,
+    from: usize,
+    to: usize,
+    name: &str,
+) -> bool {
+    let source = parser.full_text().inner();
+    let from = from.min(source.len());
+    let to = to.min(source.len());
+    if to <= from {
+        return false;
+    }
+    let range = &source[from..to];
+    let lowered = range.to_ascii_lowercase();
+    let needle = format!("[[/{name}");
+    let name = name.to_ascii_lowercase();
+    let _ = name;
+    let mut pos = 0;
+    while let Some(rel) = lowered[pos..].find(&needle) {
+        let at = pos + rel;
+        let after = range.get(at + needle.len()..);
+        if after.is_some_and(|rest| {
+            rest.starts_with("]]")
+                || rest.starts_with(' ')
+                || rest.starts_with('\t')
+                || rest.starts_with('_')
+                || rest.starts_with('\n')
+        }) {
+            return true;
+        }
+        pos = at + needle.len();
+    }
+    false
+}
+
 fn lost_owner_list_body_is_unowned(parser: &Parser<'_, '_>) -> bool {
     let source = parser.full_text().inner();
     let start = parser.current().span.start.min(source.len());

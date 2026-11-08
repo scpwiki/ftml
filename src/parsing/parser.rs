@@ -1390,6 +1390,17 @@ impl<'r, 't> Parser<'r, 't> {
             .map(|index| cache.wikidot_li_closes[index])
     }
 
+    /// The byte position of the closer the li pairing scan allocated to the
+    /// `[[li]]` head at `li_head` (the head's body end), if any.
+    pub(crate) fn wikidot_li_body_end_by_head(&self, li_head: usize) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_closes
+            .iter()
+            .find(|close| close.paired == Some(li_head))
+            .map(|close| close.pos)
+    }
+
     pub(crate) fn wikidot_li_head_depth(&self, position: usize) -> Option<usize> {
         let cache = self.block_end_scan_cache.borrow();
         cache
@@ -1458,6 +1469,16 @@ impl<'r, 't> Parser<'r, 't> {
             .wikidot_li_collect_stack
             .last()
             .copied()
+    }
+
+    /// The innermost enclosing `[[li]]` head on the collect stack, if any.
+    pub(crate) fn wikidot_li_collect_head(&self) -> Option<usize> {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_li_collect_stack
+            .iter()
+            .rev()
+            .find_map(|head| *head)
     }
 
     pub(crate) fn fused_name_residual(&self) -> Option<usize> {

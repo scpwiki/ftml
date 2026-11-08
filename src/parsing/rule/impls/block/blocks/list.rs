@@ -154,6 +154,25 @@ fn parse_list_block_impl<'r, 't>(
 
     let arguments = parser.get_head_map_wikidot(block_rule, in_head)?;
     let attributes = arguments.to_attribute_map(parser.settings());
+    // lihoist p6: an explicit-list head on a list-item line inside an
+    // explicit `[[li]]` body whose pair closer is allocated outside that
+    // body stays literal text in live instead of forming a nested list.
+    if wikidot
+        && crate::parsing::rule::impls::line_owner::head_on_list_item_line(
+            parser.full_text().inner(),
+            opener_start,
+        )
+        && let Some(li_head) = parser.wikidot_li_collect_head()
+        && let Some(body_end) = parser.wikidot_li_body_end_by_head(li_head)
+        && !crate::parsing::rule::impls::line_owner::closer_for_block_in_range(
+            parser,
+            opener_start,
+            body_end,
+            block_rule.accepts_names[0],
+        )
+    {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
     if wikidot && parser.wikidot_li_pairing_depth() == 1 {
         parser.compute_wikidot_li_pairing();
         parser.compute_wikidot_li_cross_scan();
