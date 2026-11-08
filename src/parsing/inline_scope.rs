@@ -1006,6 +1006,7 @@ pub(crate) fn lower_wikidot_inline_size_scopes_inline<'t>(
         false,
         false,
         &mut None,
+        false,
     );
     eject_segment_trailing_space(elements);
     drop_empty_inline_scopes(elements);
@@ -1046,6 +1047,7 @@ pub(crate) fn lower_wikidot_bibliography_scopes<'t>(bibliography: &mut Bibliogra
             false,
             false,
             &mut None,
+            false,
         );
         eject_segment_trailing_space(elements);
         drop_empty_inline_scopes(elements);
@@ -2693,6 +2695,7 @@ fn lower_root_sequence<'t>(
                 false,
                 true,
                 bib,
+                false,
             );
             if !effects.scored_span_opened_unwrapped_at_start {
                 active.pend_all();
@@ -2778,6 +2781,7 @@ fn lower_root_sequence<'t>(
             true,
             true,
             bib,
+            true,
         );
         if is_explicit_block_list {
             fold_scope_break_unit(&mut output, &mut sequence);
@@ -3049,6 +3053,7 @@ fn flush_root_pending<'t>(
         false,
         true,
         bib,
+        true,
     );
     drop_segment_trailing_space(&mut sequence);
     if wrap_crossed_head && !sequence.is_empty() {
@@ -3394,10 +3399,20 @@ fn lower_sequence<'t>(
     root_structural_boundary: bool,
     segment: bool,
     bib: &mut Option<BibliographyLowering<'_, 't>>,
+    // The sequence will be appended raw at block root (live renders no
+    // inline seam space there); all other call sites stay `false`.
+    bare_root: bool,
 ) -> SequenceEffects {
     let mut output = Vec::with_capacity(elements.len());
     let mut run = Vec::new();
     let mut run_has_content = false;
+    // A block-boundary element passed through this call: everything
+    // after it is a fresh block-level chunk, not inline flow. Live
+    // renders no seam space in that chunk. A table instead continues
+    // inline flow after its fostered cell content (live keeps the
+    // seam space).
+    let mut saw_table_block = false;
+    let mut saw_block = bare_root;
     let mut effects = SequenceEffects::default();
     let mut last_run_outer_scope = RunMergeState::default();
     let mut preserve_space_before_footnote = false;
@@ -3775,6 +3790,7 @@ fn lower_sequence<'t>(
                 && !empty
                 && !scored
                 && source.peek().is_some()
+                && (!saw_block || saw_table_block)
             {
                 output.push(text!(" "));
             }
@@ -4176,6 +4192,10 @@ fn lower_sequence<'t>(
                 Element::Code(_) | Element::Math { .. } | Element::TableOfContents { .. }
             )
         {
+            if matches!(element, Element::Table(_)) {
+                saw_table_block = true;
+            }
+            saw_block = true;
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
                 if let Element::List { attributes, .. } = &mut element {
@@ -4382,6 +4402,7 @@ fn lower_sequence<'t>(
             run_has_content = true;
         } else {
             flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
+            saw_block = true;
             if !is_vanished_empty_div(&element) {
                 output.push(element);
             }
@@ -4422,6 +4443,7 @@ fn lower_bibliography_block<'t>(
             false,
             false,
             &mut None,
+            false,
         );
         eject_segment_trailing_space(elements);
         drop_empty_inline_scopes(elements);
@@ -5843,6 +5865,7 @@ fn lower_cell_like<'t>(
         false,
         false,
         bib,
+        false,
     );
     strip_trailing_space_from_vec(elements);
     let end = *ordinal;
@@ -5895,6 +5918,7 @@ fn lower_wikidot_heading_barrier<'t>(
         false,
         segment,
         bib,
+        false,
     );
     active.pend_all();
     active.suppress_scope_wrap = true;
@@ -5907,6 +5931,7 @@ fn lower_wikidot_heading_barrier<'t>(
         false,
         segment,
         bib,
+        false,
     );
     active.suppress_scope_wrap = false;
     let mut kill = Vec::new();
@@ -5968,6 +5993,7 @@ fn lower_children<'t>(
                 false,
                 segment,
                 bib,
+                false,
             );
             active.suppress_scope_wrap = suppress;
             return true;
@@ -5999,6 +6025,7 @@ fn lower_children<'t>(
             false,
             segment,
             bib,
+            false,
         );
         if segment {
             active.pend_all();
@@ -6066,6 +6093,7 @@ fn lower_children<'t>(
             false,
             segment,
             bib,
+            false,
         );
         if segment {
             active.pend_all();

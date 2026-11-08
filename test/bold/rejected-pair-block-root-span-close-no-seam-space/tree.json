@@ -1,0 +1,33 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "bold",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "container",
+                                    "data": {
+                                        "type": "div",
+                                        "attributes": {},
+                                        "elements": []
+                                    }
+                                },
+                                {
+                                    "element": "line-break"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
