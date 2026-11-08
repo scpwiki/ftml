@@ -283,13 +283,21 @@ fn finish_collected<'r, 't>(
 /// after the list) or adjacent content text (the after-list paragraph is
 /// bare with no inserted leading break). At this point the parser sits on
 /// the first token after the bold close.
+///
+/// The inverse shape (strong-x family) stamps the same markers: a span or
+/// size scope inside the format pair closes beyond the explicit list (its
+/// close sits in the pair's tail segment), so the paragraph after the list
+/// is likewise bare — with a leading break when the close is followed by a
+/// newline (`<br>[[/hidden]]`), and no leading break when content follows
+/// the pair close directly (`tail<br>...`).
 pub(super) fn mark_span_list_close_tail<'r, 't>(
     parser: &Parser<'r, 't>,
     mut elements: Elements<'t>,
 ) -> Elements<'t> {
-    if !parser.settings().layout.legacy() || !parser.in_wikidot_span_body() {
+    if !parser.settings().layout.legacy() {
         return elements;
     }
+    let in_span_body = parser.in_wikidot_span_body();
     let Elements::Single(Element::Container(container)) = &elements else {
         return elements;
     };
@@ -320,7 +328,7 @@ pub(super) fn mark_span_list_close_tail<'r, 't>(
     }
     let current = parser.current();
     let rest = parser.remaining();
-    let marker =
+    let marker = if in_span_body {
         if current.token == Token::LineBreak && block_head_is(rest, 0, "span", true) {
             crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER
         } else if matches!(current.token, Token::RuntimeText | Token::Identifier)
@@ -329,7 +337,29 @@ pub(super) fn mark_span_list_close_tail<'r, 't>(
             crate::tree::WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER
         } else {
             return elements;
-        };
+        }
+    } else {
+        if !crate::parsing::inline_scope::label_scope_straddles_list(container.elements())
+        {
+            return elements;
+        }
+        if current.token == Token::LineBreak {
+            crate::tree::WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER
+        } else if matches!(current.token, Token::RuntimeText | Token::Identifier)
+            && !current.slice.trim().is_empty()
+        {
+            crate::tree::WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER
+        } else if current.token == Token::Whitespace
+            && rest.first().is_some_and(|next| {
+                matches!(next.token, Token::RuntimeText | Token::Identifier)
+                    && !next.slice.trim().is_empty()
+            })
+        {
+            crate::tree::WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER
+        } else {
+            return elements;
+        }
+    };
     let Elements::Single(Element::Container(container)) = &mut elements else {
         unreachable!("single bold element checked above")
     };
