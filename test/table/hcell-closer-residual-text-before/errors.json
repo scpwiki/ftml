@@ -1,0 +1,155 @@
+[
+    {
+        "token": "input-end",
+        "rule": "block-table",
+        "span": [
+            76,
+            76
+        ],
+        "kind": "table-contains-non-row"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            0,
+            2
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            7,
+            9
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "line-break",
+        "rule": "block-table-row",
+        "span": [
+            65,
+            66
+        ],
+        "kind": "table-row-contains-non-cell"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            10,
+            12
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            15,
+            17
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block",
+        "rule": "page",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "table-cell-outside-table"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            18,
+            20
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            25,
+            27
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            28,
+            31
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            36,
+            38
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            46,
+            49
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            54,
+            56
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            57,
+            60
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            63,
+            65
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            66,
+            69
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            74,
+            76
+        ],
+        "kind": "no-rules-match"
+    }
+]

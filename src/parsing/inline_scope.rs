@@ -5415,6 +5415,14 @@ fn is_cell_closer_residual_text(text: &str) -> bool {
     let trimmed = text.trim_end_matches(['\n', '\r']);
     trimmed.eq_ignore_ascii_case("[[/cell]]")
         || trimmed.eq_ignore_ascii_case("[[/hcell]]")
+        || ends_with_ignore_ascii_case(trimmed, "[[/cell]]")
+        || ends_with_ignore_ascii_case(trimmed, "[[/hcell]]")
+}
+
+fn ends_with_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    h.len() >= n.len() && h[h.len() - n.len()..].eq_ignore_ascii_case(n)
 }
 
 fn strip_trailing_space_from_vec_preserving_residual_newline(
