@@ -1804,6 +1804,14 @@ fn wikidot_li_break_kept_after_block(element: &Element) -> bool {
     }
 }
 
+/// L85: live emits no break after a trailing math block in an item body
+/// (saved-page probes muse-probe-mi6x2-item-math). The other formed
+/// blocks keep their trailing break; the math rule consumed the closer
+/// line's newline.
+fn wikidot_li_trailing_break_dropped_after_math(element: &Element) -> bool {
+    matches!(element, Element::Math { .. })
+}
+
 fn assemble_wikidot_li_segments<'t>(
     mut segments: Vec<Vec<Element<'t>>>,
     source: &str,
@@ -1866,6 +1874,11 @@ fn assemble_wikidot_li_segments<'t>(
         }
     }
     let mut kept: Vec<Vec<Element<'t>>> = Vec::with_capacity(segments.len());
+    // A segment boundary in this path is always a swallowed blank line (the
+    // li body consumer splits segments only at ParagraphBreak). Live emits no
+    // break across the boundary for paragraph-unsafe formed blocks (probes
+    // muse-probe-mi6x4/5-*: div/note/code/coll/align/math, blank, then text),
+    // but keeps one after an inner list (test/list/item-blank-after-block-break).
     let last_index = segments.len().saturating_sub(1);
     for (index, segment) in segments.into_iter().enumerate() {
         if index > 0 && index < last_index && wikidot_li_segment_is_blank(&segment) {
@@ -1875,9 +1888,10 @@ fn assemble_wikidot_li_segments<'t>(
     }
     let mut joins: Vec<bool> = Vec::new();
     for pair in kept.windows(2) {
-        let boundary = pair[0]
-            .last()
-            .is_some_and(|element| !element.paragraph_safe())
+        // Only an inner list keeps the break across a swallowed blank line
+        // (test/list/item-blank-after-block-break); formed blocks and math
+        // join with nothing (probes muse-probe-mi6x4/5-*).
+        let boundary = matches!(pair[0].last(), Some(Element::List { .. }))
             && pair[1].first().is_some_and(Element::paragraph_safe);
         joins.push(boundary);
     }
@@ -1955,6 +1969,12 @@ fn assemble_wikidot_li_segments<'t>(
         Some(Element::Container(container))
             if container.ctype() == ContainerType::Blockquote
     );
+    // Live drops the trailing break after a trailing math block in an item
+    // body, with or without a trailing blank line (saved-page probes
+    // muse-probe-mi6x2-item-math, muse-probe-mi6x3-mathblank).
+    let trailing_math_block = elements
+        .last()
+        .is_some_and(wikidot_li_trailing_break_dropped_after_math);
     // d446-neighbors: after a heading, rule, or separator at item top level
     // live puts the trailing break after the whole list, not inside the item
     // (a4/a16/a17, h3/h4/h10); [[...]]-formed blocks and quote/table keep it
@@ -1977,6 +1997,7 @@ fn assemble_wikidot_li_segments<'t>(
             .is_some_and(|element| !element.paragraph_safe())
         && !trailing_nested_list
         && !trailing_line_block
+        && !trailing_math_block
     {
         elements.push(Element::LineBreak);
     } else if !had_trailing_empty && !terminated_at_cross_close {
@@ -2006,6 +2027,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !trailing_table
             && !trailing_blockquote
             && !trailing_line_block
+            && !trailing_math_block
             && !note_yielded_list_closer
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)

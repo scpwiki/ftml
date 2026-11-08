@@ -1,0 +1,47 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "bold",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "span",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "list",
+                                    "data": {
+                                        "type": "bullet",
+                                        "attributes": {},
+                                        "items": [
+                                            {
+                                                "item-type": "elements",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "math",
+                                                        "data": {
+                                                            "name": null,
+                                                            "latex-source": "m"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "element": "line-break"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
