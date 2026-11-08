@@ -235,7 +235,6 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
                 wikidot_closer_line_br_prefix: false,
                 wikidot_block_open_elements: Vec::new(),
                 wikidot_label_spans: Vec::new(),
-                wikidot_code_format_wrappers: Vec::new(),
             },
             Element::Footnote(1.into()),
             Element::Footnote(2.into()),
@@ -265,6 +264,7 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
                 color: Cow::Borrowed("rebeccapurple"),
                 background: false,
                 elements: vec![Element::Text(Cow::Borrowed("colored"))],
+                attributes: Default::default(),
             },
             Element::Image {
                 source: ImageSource::Direct(FileSource::File1 {
@@ -311,7 +311,6 @@ fn public_api_html_render_covers_fallback_branches_from_ast() {
                 label: Cow::Borrowed("Detached"),
                 elements: vec![Element::Text(Cow::Borrowed("partial body"))],
                 wikidot_label_spans: Vec::new(),
-                wikidot_code_format_wrappers: Vec::new(),
             })),
             Element::Partial(PartialElement::RubyText(RubyText {
                 attributes: AttributeMap::new(),

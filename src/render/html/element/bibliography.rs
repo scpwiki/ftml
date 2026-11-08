@@ -378,6 +378,7 @@ fn bibliography_build_wrapper<'t>(
             color: color.clone(),
             background: *background,
             elements: children,
+            attributes: Default::default(),
         },
     }
 }

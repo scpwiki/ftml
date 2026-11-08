@@ -118,6 +118,7 @@ impl<'t> FormatShell<'t> {
                 color: color.clone(),
                 background: *background,
                 elements,
+                attributes: Default::default(),
             },
         }
     }
@@ -162,6 +163,7 @@ impl<'t> FormatShell<'t> {
                 color,
                 background,
                 elements,
+                ..
             } => Some((FormatShell::Color { color, background }, elements)),
             _ => None,
         }
