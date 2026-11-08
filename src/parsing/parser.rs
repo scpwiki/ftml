@@ -260,6 +260,11 @@ pub(super) struct BlockScanCache<'t> {
     /// body's byte range. `Cell` because scan-cache clones and set probes
     /// share the Rc'd cache.
     wikidot_li_swallowed_block: Cell<Option<usize>>,
+    /// NL81 (E): a shadowed bare div region in an explicit li body —
+    /// the div's markers were consumed (control None) but its body may
+    /// have produced content. Records the head byte; the region-end
+    /// break is positioned by assembly.
+    wikidot_li_shadowed_div_region: Cell<Option<usize>>,
     /// Item 65(c): an unowned lost-owner list formation dissolved inside an
     /// explicit `[[li]]` body. Records the formation head byte so the owning
     /// li body can unwrap the dissolved run list into the enclosing item.
@@ -1858,6 +1863,30 @@ impl<'r, 't> Parser<'r, 't> {
         match cache.wikidot_li_swallowed_block.get() {
             Some(pos) if pos >= start && pos < end => {
                 cache.wikidot_li_swallowed_block.set(None);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// NL81 (E): record a shadowed bare div region in an li body.
+    pub(crate) fn note_wikidot_li_shadowed_div_region(&self, head_byte: usize) {
+        let cache = self.block_end_scan_cache.borrow();
+        if cache.wikidot_li_shadowed_div_region.get().is_none() {
+            cache.wikidot_li_shadowed_div_region.set(Some(head_byte));
+        }
+    }
+
+    /// NL81 (E): take a shadowed bare div region whose head falls in range.
+    pub(crate) fn take_wikidot_li_shadowed_div_region_at(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        match cache.wikidot_li_shadowed_div_region.get() {
+            Some(pos) if pos >= start && pos < end => {
+                cache.wikidot_li_shadowed_div_region.set(None);
                 true
             }
             _ => false,

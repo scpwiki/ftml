@@ -546,14 +546,19 @@ where
     if matches!(owner, LineOwner::List { .. })
         && lost_div
         && control.is_none()
-        && body
-            .iter()
-            .all(|element| matches!(element, Element::LineBreak))
         && parser.wikidot_li_collect_top().is_some()
     {
-        // The bare div vanished without a trace; live keeps the enclosing
-        // explicit item as a bare break instead of dissolving the list.
-        parser.note_wikidot_li_swallowed_block(head_byte);
+        // NL81 (E): a shadowed bare div region — markers consumed. Note
+        // for region-end break positioning (content-inside and after cases).
+        parser.note_wikidot_li_shadowed_div_region(head_byte);
+        if body
+            .iter()
+            .all(|element| matches!(element, Element::LineBreak))
+        {
+            // The bare div vanished without a trace; live keeps the enclosing
+            // explicit item as a bare break instead of dissolving the list.
+            parser.note_wikidot_li_swallowed_block(head_byte);
+        }
     }
     Ok(Some(LostOwnerBlock {
         control,
