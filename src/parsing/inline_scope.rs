@@ -1481,20 +1481,17 @@ fn strip_format_label_list_close_tail_markers(attributes: &mut AttributeMap<'_>)
     attributes.remove(WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER);
 }
 
-/// Whether `element` is a styled pre-list segment of a stopped
-/// underline/strikethrough pair. Its lowering must not pop the enclosing
-/// scope's `Span` stack entry (the scope survives into the list items on
-/// live). The marker is consumed here; `data-ftml-*` keys never render.
+/// Whether `element` is a styled pre-list segment of a stopped format pair
+/// (underline/strikethrough in a span/size/anchor body, bold/italics in an
+/// anchor body). Its lowering must not pop the enclosing scope's istack
+/// entry: the scope survives into the list items on live for span/size
+/// bodies (unlike an ordinary segment, which ends the scope). The marker is
+/// the decision record — the format kinds carrying it are exactly the
+/// stopped shapes `mark_format_stop_at_list` stamps, never rendered.
 fn stopped_pre_segment(element: &Element<'_>) -> bool {
     let Element::Container(container) = element else {
         return false;
     };
-    if !matches!(
-        container.ctype(),
-        ContainerType::Underline | ContainerType::Strikethrough
-    ) {
-        return false;
-    }
     container
         .attributes()
         .get()

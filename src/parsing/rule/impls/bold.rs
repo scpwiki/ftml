@@ -317,6 +317,7 @@ fn finish_collected<'r, 't>(
         Some(leftover) => append_split_close_leftover(elements, leftover),
         None => elements,
     };
+    let elements = super::bold::mark_format_stop_at_list(parser, elements);
     let elements = mark_span_list_close_tail(parser, elements);
     ok!(paragraph_safe; elements, errors)
 }
@@ -449,10 +450,20 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     let Elements::Single(Element::Container(container)) = &elements else {
         return elements;
     };
-    if !matches!(
-        container.ctype(),
-        ContainerType::Underline | ContainerType::Strikethrough
-    ) {
+    // Bold/italics pairs do not carry their styling across an explicit
+    // list inside an anchor body on live (li items and the post segment
+    // render unstyled; the pre segment keeps styling): the pair forms a
+    // stopped pair there, unlike in span/size/free scopes where it crosses
+    // normally. Probed live (frozen ci2-anchor-pre-b; fresh
+    // muse-probe-anchorpre-boldanchorattr-v2/italicsspan-verified twins).
+    // Superscript/subscript/monospace remain unprobed for anchor bodies
+    // and keep the crossing behaviour.
+    let in_anchor = parser.in_wikidot_anchor_body();
+    if !match container.ctype() {
+        ContainerType::Underline | ContainerType::Strikethrough => true,
+        ContainerType::Bold | ContainerType::Italics => in_anchor,
+        _ => false,
+    } {
         return elements;
     }
     // A list nested inside an inner format pair (the nested stopped-pair
