@@ -810,6 +810,95 @@ enum WikidotHeadScan {
     QuotedLinksPass,
 }
 
+/// A footnote consumed inside a collapsible head shadows the first head
+/// attribute that follows it: live's footnote pre-pass replaces the footnote
+/// with a marker, and the following `key="value"` survives as live text but
+/// is skipped by the collapsible's per-attribute extraction, while every
+/// other attribute in the head is taken normally. Drop that attribute from
+/// the parsed head arguments (once per footnote elision) so the element
+/// renders with it absent, as live does.
+fn wikidot_collapsible_drop_head_footnote_shadowed_attributes<'t>(
+    head: &CommentElidedText<'t>,
+    footnote_elisions: &[std::ops::Range<usize>],
+    arguments: &mut Arguments<'t>,
+) {
+    if footnote_elisions.is_empty() {
+        return;
+    }
+    let source = head.full_source();
+    let span = head.span();
+    let text = source[span.clone()].as_bytes();
+    let mut masked = vec![false; text.len()];
+    for range in head
+        .comment_ranges()
+        .iter()
+        .chain(head.segment_ranges().iter())
+    {
+        let start = range.start.saturating_sub(span.start).min(text.len());
+        let end = range.end.saturating_sub(span.start).min(text.len());
+        if start < end {
+            masked[start..end].fill(true);
+        }
+    }
+    let rel = |range: &std::ops::Range<usize>| {
+        (
+            range.start.saturating_sub(span.start),
+            range.end.saturating_sub(span.start),
+        )
+    };
+    let footnotes: Vec<(usize, usize)> = footnote_elisions
+        .iter()
+        .map(rel)
+        .filter(|(start, end)| *end <= text.len() && start < end)
+        .collect();
+    if footnotes.is_empty() {
+        return;
+    }
+    // One `key="value"` candidate per `=` + `"` delimiter outside any
+    // comment/segment: the key is the `[A-Za-z0-9_-]` run backwards from the
+    // `=`, skipping spaces (`spaced equals`, e.g. `key = "v"`).
+    let mut candidates: Vec<(usize, &str)> = Vec::new();
+    let mut i = 0usize;
+    while i + 1 < text.len() {
+        if text[i] == b'=' && text[i + 1] == b'"' && !masked[i] && !masked[i + 1] {
+            let mut key_end = i;
+            while key_end > 0 && matches!(text[key_end - 1], b' ' | b'\t' | b'\n' | b'\r')
+            {
+                key_end -= 1;
+            }
+            let mut key_start = key_end;
+            while key_start > 0 {
+                let byte = text[key_start - 1];
+                if byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_' {
+                    key_start -= 1;
+                } else {
+                    break;
+                }
+            }
+            if key_end > key_start
+                && let Ok(key) = std::str::from_utf8(&text[key_start..key_end])
+            {
+                candidates.push((key_start, key));
+            }
+        }
+        i += 1;
+    }
+    let mut dropped_delimiters = Vec::new();
+    for (_footnote_start, footnote_end) in &footnotes {
+        if let Some((index, (_, key))) =
+            candidates
+                .iter()
+                .enumerate()
+                .find(|(index, (key_start, _))| {
+                    *key_start >= *footnote_end && !dropped_delimiters.contains(index)
+                })
+        {
+            dropped_delimiters.push(index);
+            arguments.remove(key);
+        }
+    }
+}
+
 fn wikidot_head_scan(block_rule: &BlockRule) -> WikidotHeadScan {
     match block_rule.name() {
         "block-div" => WikidotHeadScan::LineEndGreedy,
@@ -7456,6 +7545,7 @@ where
                 };
                 let mut comments = Vec::new();
                 let mut elisions = Vec::new();
+                let mut footnote_elisions = Vec::new();
                 let raw_head = block_rule.name == "block-code";
                 let scan = wikidot_head_scan(block_rule);
                 let scan = if !same_line
@@ -7546,7 +7636,8 @@ where
                             && let Some((range, head_closed)) =
                                 self.try_consume_collapsible_head_footnote()?
                         {
-                            elisions.push(range);
+                            elisions.push(range.clone());
+                            footnote_elisions.push(range);
                             if head_closed {
                                 head_terminated = true;
                                 break;
@@ -7585,7 +7676,8 @@ where
                         && let Some((range, head_closed)) =
                             self.try_consume_collapsible_head_footnote()?
                     {
-                        elisions.push(range);
+                        elisions.push(range.clone());
+                        footnote_elisions.push(range);
                         if head_closed {
                             head_terminated = true;
                             break;
@@ -7660,7 +7752,15 @@ where
                     self.note_fused_name_residual(self.current().span.end);
                     self.step()?;
                 }
-                (parse_arguments(&head), fused_close)
+                let mut arguments = parse_arguments(&head);
+                if block_rule.name == "block-collapsible" {
+                    wikidot_collapsible_drop_head_footnote_shadowed_attributes(
+                        &head,
+                        &footnote_elisions,
+                        &mut arguments,
+                    );
+                }
+                (arguments, fused_close)
             }
         } else {
             (Arguments::new_case_sensitive(), false)
