@@ -206,6 +206,15 @@ pub(super) struct BlockScanCache<'t> {
     /// that boundary instead of joining the next row. The LI outcome
     /// (degraded vs paired) still comes from the ordinary LI pairing.
     wikidot_quote_boundary_shallower_text: Cell<bool>,
+    /// A shallow text line was hoisted bare out of this explicit list's
+    /// body (or an item body in it) before its UNQUOTED list close
+    /// (BRIEF-UQ57d): the unquoted closer keeps its row but emits no
+    /// trailing break after the block; every text line carries its own.
+    wikidot_quote_boundary_unquoted_close_text: Cell<bool>,
+    /// An item body ended at a bare `[[/li]]` close in this row's list
+    /// attempt (BRIEF-UQ57d): the item paired, so the unquoted list close
+    /// keeps the trailing `<br />` live emits for the paired family.
+    wikidot_quote_boundary_li_closed: Cell<bool>,
     wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
     wikidot_heading_barrier: Option<usize>,
     wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
@@ -1321,6 +1330,34 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_quote_boundary_shallower_text
             .get()
+    }
+
+    pub(crate) fn set_wikidot_quote_boundary_unquoted_close_text(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_unquoted_close_text
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_unquoted_close_text(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_unquoted_close_text
+            .take()
+    }
+
+    pub(crate) fn set_wikidot_quote_boundary_li_closed(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_li_closed
+            .set(true);
+    }
+
+    pub(crate) fn take_wikidot_quote_boundary_li_closed(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_quote_boundary_li_closed
+            .take()
     }
 
     pub(crate) fn wikidot_flat_close_splits_quote_run(&self, head_byte: usize) -> bool {
