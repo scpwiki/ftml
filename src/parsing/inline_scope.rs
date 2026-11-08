@@ -3328,13 +3328,21 @@ fn flush_root_pending<'t>(
             Some(Element::Table(_) | Element::BibliographyBlock { .. })
         )
     {
-        strip_leading_line_break(&mut sequence);
-        if sequence_has_content(&sequence) {
-            sequence = vec![Element::Container(Container::new(
-                ContainerType::Paragraph,
-                sequence,
-                AttributeMap::new(),
-            ))];
+        if wrap_crossed_head {
+            // PR #1256's crossed-head wrap (above) already produced the
+            // paragraph; strip a leading break inside it but do not
+            // re-wrap (item 80: the combination is live-verified — live
+            // emits a single <p>).
+            strip_leading_line_break(&mut sequence);
+        } else {
+            strip_leading_line_break(&mut sequence);
+            if sequence_has_content(&sequence) {
+                sequence = vec![Element::Container(Container::new(
+                    ContainerType::Paragraph,
+                    sequence,
+                    AttributeMap::new(),
+                ))];
+            }
         }
     }
     // A plain (scope-free) inline chunk separated from its paragraph by a
