@@ -1,0 +1,82 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "blockquote",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "list",
+                                    "data": {
+                                        "type": "bullet",
+                                        "attributes": {},
+                                        "items": [
+                                            {
+                                                "item-type": "elements",
+                                                "attributes": {
+                                                    "style": "list-style: none"
+                                                },
+                                                "elements": [
+                                                    {
+                                                        "element": "container",
+                                                        "data": {
+                                                            "type": "blockquote",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "container",
+                                                                    "data": {
+                                                                        "type": "blockquote",
+                                                                        "attributes": {},
+                                                                        "elements": [
+                                                                            {
+                                                                                "element": "container",
+                                                                                "data": {
+                                                                                    "type": "paragraph",
+                                                                                    "attributes": {},
+                                                                                    "elements": [
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "[["
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "li"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "]]"
+                                                                                        },
+                                                                                        {
+                                                                                            "element": "text",
+                                                                                            "data": "u"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
