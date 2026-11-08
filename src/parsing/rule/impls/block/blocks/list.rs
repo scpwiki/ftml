@@ -1107,11 +1107,16 @@ fn parse_list_item<'r, 't>(
             parser.record_wikidot_cell_div_li_opener(opener_start);
         }
         let source = &parser.full_text().inner()[body_start..source_end];
+        let terminated_at_cross_close = parser.current().token == Token::LeftBlockEnd
+            && parser
+                .wikidot_li_cross_pair_at(parser.current().span.start)
+                .is_some_and(|(_, crossed)| crossed);
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
             parser.in_wikidot_bibliography_body(),
             parser.pending_note_list_closer(),
+            terminated_at_cross_close,
         );
         if parser.wikidot_li_closed_at_shallower_quote_line()
             && matches!(elements.last(), Some(Element::LineBreak))
@@ -1292,6 +1297,7 @@ fn assemble_wikidot_li_segments<'t>(
     source: &str,
     in_bibliography_body: bool,
     note_yielded_list_closer: bool,
+    terminated_at_cross_close: bool,
 ) -> Vec<Element<'t>> {
     let mut had_trailing_empty = false;
     while segments
@@ -1413,14 +1419,18 @@ fn assemble_wikidot_li_segments<'t>(
         Some(Element::Container(container))
             if container.ctype() == ContainerType::Blockquote
     );
-    if had_trailing_empty
+    // d4-46 (b): an item that stopped at a breached outer closer keeps the
+    // breaks the consume-time rule left (0 without span, 2 with one); the
+    // closer line's newline must not re-add a trailing break here.
+    if !terminated_at_cross_close
+        && had_trailing_empty
         && elements
             .last()
             .is_some_and(|element| !element.paragraph_safe())
         && !trailing_nested_list
     {
         elements.push(Element::LineBreak);
-    } else if !had_trailing_empty {
+    } else if !had_trailing_empty && !terminated_at_cross_close {
         let body = source
             .to_ascii_lowercase()
             .rfind("[[/li")
@@ -1516,11 +1526,16 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
         let (segments, segment_errors, _) = body.into();
         errors.extend(segment_errors);
         let source = &parser.full_text().inner()[body_start..source_end];
+        let terminated_at_cross_close = parser.current().token == Token::LeftBlockEnd
+            && parser
+                .wikidot_li_cross_pair_at(parser.current().span.start)
+                .is_some_and(|(_, crossed)| crossed);
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
             parser.in_wikidot_bibliography_body(),
             parser.pending_note_list_closer(),
+            terminated_at_cross_close,
         );
         if parser.wikidot_li_closed_at_shallower_quote_line()
             && matches!(elements.last(), Some(Element::LineBreak))

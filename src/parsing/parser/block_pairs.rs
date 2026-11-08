@@ -226,6 +226,7 @@ impl WikidotBlockPairs {
 pub(crate) enum WikidotLiCrossKind {
     Div,
     Collapsible,
+    Note,
 }
 
 impl WikidotLiCrossKind {
@@ -233,6 +234,7 @@ impl WikidotLiCrossKind {
         match self {
             WikidotLiCrossKind::Div => "div",
             WikidotLiCrossKind::Collapsible => "collapsible",
+            WikidotLiCrossKind::Note => "note",
         }
     }
 }

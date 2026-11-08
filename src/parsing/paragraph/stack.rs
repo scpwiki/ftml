@@ -333,6 +333,19 @@ impl<'t> ParagraphStack<'t> {
     }
 
     fn wikidot_explicit_pre_dissolver(element: &Element<'_>, attached: bool) -> bool {
+        // d4-46 (b): frame boundaries (note close) do not dissolve the
+        // pre-list paragraph; the close only ends the frame.
+        if matches!(
+            element,
+            Element::Partial(
+                PartialElement::WikidotBlockOpen(_)
+                    | PartialElement::WikidotBlockClose(_)
+                    | PartialElement::WikidotCollapsibleTail(_)
+                    | PartialElement::WikidotCollapsibleHeadingEnd
+            )
+        ) {
+            return false;
+        }
         if !attached {
             return match element {
                 Element::List {
