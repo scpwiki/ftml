@@ -667,6 +667,38 @@ fn innermost_blockquote_elements<'a, 't>(
     Some(nested)
 }
 
+/// Whether the migrated list-end break of a quote whose explicit list closed
+/// at a shallower quote depth should be dropped before a following line.
+/// Live keeps the break at the end of input, before a blank line and before
+/// a following quote line, but drops it when the next line carries content:
+/// the content then starts a fresh paragraph (or forms its own block)
+/// instead of continuing bare after the break.
+fn migrated_break_dropped_before_following_line(parser: &Parser<'_, '_>) -> bool {
+    !matches!(
+        parser.current().token,
+        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd | Token::Quote
+    )
+}
+
+/// The degraded trailing shell an ordered list closed at a shallower quote
+/// depth leaves behind live: a bullet list holding only one
+/// list-style-none item with a break and no closing tags (the a5e3e034c
+/// degraded form). An unordered list leaves a plain break instead.
+fn ordered_boundary_close_shell() -> Element<'static> {
+    let mut item_attributes = AttributeMap::new();
+    item_attributes.insert("style", cow!("list-style: none"));
+    Element::List {
+        ltype: ListType::Bullet,
+        items: vec![ListItem::Elements {
+            elements: vec![Element::LineBreak],
+            attributes: item_attributes,
+        }],
+        attributes: AttributeMap::new(),
+        wikidot_explicit_block: false,
+        wikidot_unclosed: true,
+    }
+}
+
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
@@ -690,6 +722,8 @@ fn try_consume_fn<'r, 't>(
     let mut fold_following_into_tab_segment = false;
     let mut flatten_following_rows = false;
     let mut append_unquoted_close_break = false;
+    let mut append_from_list_boundary = false;
+    let mut append_from_ordered_list_boundary = false;
     let mut flat_split: Option<QuoteFlatSplit<'t>> = None;
     let mut first_row_depth: Option<usize> = None;
 
@@ -1132,10 +1166,22 @@ fn try_consume_fn<'r, 't>(
                 }),
                 Some(Element::List { wikidot_explicit_block: true, .. })
             );
+        let quote_end_ordered_list_row = quote_end_list_row
+            && matches!(
+                elements.iter().rev().find(|element| {
+                    !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                }),
+                Some(Element::List {
+                    ltype: ListType::Numbered,
+                    ..
+                })
+            );
         let boundary_list_close = parser.take_wikidot_quote_boundary_list_close();
         let quote_end_list_break = quote_end_list_row && !boundary_list_close;
         if quote_end_list_row && boundary_list_close {
             append_unquoted_close_break = true;
+            append_from_list_boundary = true;
+            append_from_ordered_list_boundary = quote_end_ordered_list_row;
         }
         if quote_end_list_break
             && !matches!(elements.last(), Some(Element::LineBreak))
@@ -1351,8 +1397,15 @@ fn try_consume_fn<'r, 't>(
         }
     }
     if escaped_segments.is_empty() {
-        if append_unquoted_close_break {
-            elements.push(Element::LineBreak);
+        if append_unquoted_close_break
+            && !(append_from_list_boundary
+                && migrated_break_dropped_before_following_line(parser))
+        {
+            if append_from_ordered_list_boundary {
+                elements.push(ordered_boundary_close_shell());
+            } else {
+                elements.push(Element::LineBreak);
+            }
         }
         return ok!(false; elements, errors);
     }
@@ -1363,8 +1416,15 @@ fn try_consume_fn<'r, 't>(
         elements.extend(segment);
     }
 
-    if append_unquoted_close_break {
-        elements.push(Element::LineBreak);
+    if append_unquoted_close_break
+        && !(append_from_list_boundary
+            && migrated_break_dropped_before_following_line(parser))
+    {
+        if append_from_ordered_list_boundary {
+            elements.push(ordered_boundary_close_shell());
+        } else {
+            elements.push(Element::LineBreak);
+        }
         if let Some(last) = split_counts.last_mut() {
             last.0 += 1;
         }
@@ -1629,7 +1689,7 @@ fn build_blockquote_element(
             DepthItem::Item(row) => {
                 keep_trailing_break = row.keep_trailing_break;
                 marker_final = row.marker_final;
-                residual_chunk |= row.residual_block || row_has_residual_div(&row);
+                residual_chunk |= row.residual_block || row_has_residual_div(&row) || row_has_residual_list(&row);
                 push_native_quote_row(&mut stack, row, wikidot);
             }
             DepthItem::List(_, list) => {
@@ -1723,6 +1783,33 @@ fn row_has_residual_div(row: &NativeQuoteRow<'_>) -> bool {
                 && row.elements[..position]
                     .iter()
                     .any(|element| quote_residue_text(element, false))
+        }
+        _ => false,
+    }
+}
+
+fn row_has_residual_list(row: &NativeQuoteRow<'_>) -> bool {
+    match row.elements.iter().position(|element| {
+        matches!(element, Element::List { .. })
+    }) {
+        // A list that closed at this row's own depth (its end break kept on
+        // the row) leaves quote residue behind at the outer depth; a list
+        // closed deeper (all rows at the deeper depth) keeps the residue
+        // wrapped in a paragraph.
+        Some(position) if position > 0 => {
+            row.elements[..position]
+                .iter()
+                .all(|element| matches!(element, Element::Text(_)))
+                && row.elements[..position]
+                    .iter()
+                    .any(|element| quote_residue_text(element, false))
+                && matches!(
+                    row.elements.get(position + 1),
+                    Some(
+                        Element::LineBreak
+                            | Element::LineBreaks(_),
+                    )
+                )
         }
         _ => false,
     }

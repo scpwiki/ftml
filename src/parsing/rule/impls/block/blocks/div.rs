@@ -22,7 +22,8 @@ use super::BLOCK_ANCHOR;
 use super::BLOCK_SPAN;
 use super::prelude::*;
 use super::{
-    consume_wikidot_flat_head_break, unwrap_wikidot_paragraph_after_explicit_list,
+    consume_wikidot_flat_head_break, merge_adjacent_native_lists,
+    unwrap_wikidot_paragraph_after_explicit_list,
     wikidot_eject_after_lost_owner_collapsible, wikidot_flat_pair_for_head,
     wikidot_scan_pairs_head,
 };
@@ -1264,6 +1265,7 @@ fn parse_fn<'r, 't>(
         None
     };
     let body_start_byte = parser.current().span.start;
+    let in_quote_rows = parser.in_native_blockquote_line();
     let parse_as_paragraphs =
         wrap_paragraphs || parser.settings().layout.legacy() && flag_score;
     let absorb_before_body = parser.wikidot_row_absorb_div_close();
@@ -1361,6 +1363,9 @@ fn parse_fn<'r, 't>(
             }
             None => hoisted = Some(ejected),
         }
+    }
+    if parser.settings().layout.legacy() && in_quote_rows {
+        merge_adjacent_native_lists(&mut elements);
     }
     let mut row_suffix =
         crate::parsing::rule::impls::eject_wikidot_row_suffix(parser, &mut elements);

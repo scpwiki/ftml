@@ -1,0 +1,70 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "text",
+                        "data": ">"
+                    },
+                    {
+                        "element": "text",
+                        "data": " "
+                    },
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {
+                                        "style": "list-style: none"
+                                    },
+                                    "elements": [
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "blockquote",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "text",
+                                                        "data": ">"
+                                                    },
+                                                    {
+                                                        "element": "text",
+                                                        "data": " "
+                                                    },
+                                                    {
+                                                        "element": "partial",
+                                                        "data": {
+                                                            "ListItem": {
+                                                                "item-type": "elements",
+                                                                "attributes": {},
+                                                                "elements": [
+                                                                    {
+                                                                        "element": "text",
+                                                                        "data": "u"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
