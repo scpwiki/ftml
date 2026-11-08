@@ -1,0 +1,187 @@
+{
+    "elements": [
+        {
+            "element": "tab-view",
+            "data": [
+                {
+                    "label": "Outer",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "outer"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": " "
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "text"
+                                    },
+                                    {
+                                        "element": "line-break"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[["
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "tabview"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "element": "partial",
+                            "data": {
+                                "Tab": {
+                                    "label": "In1",
+                                    "elements": [
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "paragraph",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "text",
+                                                        "data": "body"
+                                                    },
+                                                    {
+                                                        "element": "text",
+                                                        "data": " "
+                                                    },
+                                                    {
+                                                        "element": "text",
+                                                        "data": "1"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "prose"
+                                    },
+                                    {
+                                        "element": "line-break"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "tabview"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "element": "partial",
+                            "data": {
+                                "Tab": {
+                                    "label": "In2",
+                                    "elements": [
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "paragraph",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "text",
+                                                        "data": "body"
+                                                    },
+                                                    {
+                                                        "element": "text",
+                                                        "data": " "
+                                                    },
+                                                    {
+                                                        "element": "text",
+                                                        "data": "2"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "[[/"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "tabview"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "]]"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "label": "Second",
+                    "elements": [
+                        {
+                            "element": "container",
+                            "data": {
+                                "type": "paragraph",
+                                "attributes": {},
+                                "elements": [
+                                    {
+                                        "element": "text",
+                                        "data": "second"
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": " "
+                                    },
+                                    {
+                                        "element": "text",
+                                        "data": "body"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

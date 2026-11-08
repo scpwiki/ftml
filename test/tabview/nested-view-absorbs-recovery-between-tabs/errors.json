@@ -1,0 +1,65 @@
+[
+    {
+        "token": "line-break",
+        "rule": "block-tabview",
+        "span": [
+            95,
+            96
+        ],
+        "kind": "tab-view-contains-non-tab"
+    },
+    {
+        "token": "left-block",
+        "rule": "fallback",
+        "span": [
+            37,
+            39
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            46,
+            48
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            83,
+            86
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            93,
+            95
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "left-block-end",
+        "rule": "fallback",
+        "span": [
+            124,
+            127
+        ],
+        "kind": "no-rules-match"
+    },
+    {
+        "token": "right-block",
+        "rule": "fallback",
+        "span": [
+            134,
+            136
+        ],
+        "kind": "no-rules-match"
+    }
+]

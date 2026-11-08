@@ -1,0 +1,21 @@
+Outer
+
+outer text
+[[tabview]]
+In1
+
+body 1
+
+
+prose
+[[/tabview]]
+In2
+
+body 2
+
+
+[[/tabview]]
+
+Second
+
+second body

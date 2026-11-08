@@ -140,10 +140,15 @@ enum NavMarker {
 /// (verified against saved-page probes `muse-probe-tvp-o3-*`); the renderer
 /// then emits panels hierarchically and navs from the simulation.
 ///
-/// Only clean subtrees participate: every descendant view must consist of
-/// `Tab` items only (no `Remote` split tabs and no substantive `Content`
-/// runs), and every view must match. Anything else keeps the hierarchical
-/// navs, preserving the stray/failed pins.
+/// Only tab-clean subtrees participate: every descendant view must consist of
+/// `Tab` items only (no `Remote` split tabs), and every view must match.
+/// `Content` runs (stray/detached closers, prose, literal marker text)
+/// inside the subtree are ignored when building markers, exactly as the
+/// saved-page recovery shapes (`muse-probe-tfp-w1/w8/w9/w10` and
+/// `muse-probe-tfa-v*`) absorb with the permutation applied to the
+/// post-recovery tab set; live does not let such runs stop the flat match.
+/// Anything else keeps the hierarchical navs, preserving the stray/failed
+/// pins.
 pub(crate) fn preregister_wikidot_tabview_navs<'t>(
     ctx: &mut HtmlContext<'_, '_, '_, 't>,
     tree: &SyntaxTree<'t>,
@@ -357,10 +362,6 @@ fn tabview_subtree_has_nested_tabview(tabs: &[TabViewItem<'_>]) -> bool {
         .any(|item| elements_have_nested(item.elements()))
 }
 
-fn content_is_only_whitespace(elements: &[Element<'_>]) -> bool {
-    elements.iter().all(|element| element.is_whitespace())
-}
-
 fn collect_tabview_items<'t>(
     ctx: &HtmlContext<'_, '_, '_, 't>,
     items: &[TabViewItem<'t>],
@@ -394,11 +395,10 @@ fn collect_tabview_items<'t>(
                 events.push(NavMarker::TabClose);
             }
             TabViewItem::Remote(_) => return false,
-            TabViewItem::Content(elements) => {
-                if !content_is_only_whitespace(elements) {
-                    return false;
-                }
-            }
+            // Content runs carry no tab markers: live's flat match scans
+            // straight past stray/prose text between (or after) the tabs
+            // it collects (verified against the recovery saved pages).
+            TabViewItem::Content(_) => {}
         }
     }
     true
