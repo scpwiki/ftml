@@ -462,6 +462,7 @@ fn dissolve_footnote_block_containers<'t>(
                         color,
                         background,
                         elements: children,
+                        ..
                     } => {
                         let open = if background {
                             format!("##|{color}|")

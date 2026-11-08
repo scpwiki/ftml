@@ -264,7 +264,8 @@ fn try_consume_fn<'r, 't>(
         output.push(text!("##"));
     }
 
-    ok!(paragraph_safe; Elements::Multiple(output), errors)
+    let elements = super::bold::mark_format_stop_at_list(parser, Elements::Multiple(output));
+    ok!(paragraph_safe; elements, errors)
 }
 
 fn wikidot_flow_block_element(element: &Element<'_>) -> bool {
@@ -520,6 +521,7 @@ fn color_element<'t>(spec: ColorSpec<'t>, elements: Vec<Element<'t>>) -> Element
         color: spec.color,
         background: spec.background,
         elements,
+        attributes: Default::default(),
     }
 }
 
@@ -792,5 +794,16 @@ mod tests {
 
         assert!(errors.is_empty(), "{errors:#?}");
         assert_eq!(html, "<p><span style=\"color:\">gold|A</span></p>");
+    }
+
+    #[test]
+    fn wikidot_color_stop_at_list_in_span() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("[[span]]##red|a\n[[ul]]\n[[li]]b[[/li]]\n[[/ul]]\nc##[[/span]]");
+        let (tree, errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        assert!(errors.is_empty(), "{errors:#?}");
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        assert!(html.contains("color: red"));
     }
 }

@@ -88,6 +88,7 @@ impl<'t> ScopeWrapper<'t> {
                 color: color.clone(),
                 background: *background,
                 elements,
+                attributes: AttributeMap::new(),
             },
             ScopeWrapper::Anchor { attributes, target } => Element::Anchor {
                 target: *target,
@@ -1445,6 +1446,7 @@ fn flatten_crossing_inline_containers<'t>(elements: &mut Vec<Element<'t>>) {
                 color,
                 background,
                 elements: children,
+                ..
             } => {
                 output.push(Element::Partial(PartialElement::InlineColorOpen(
                     color.clone(),
@@ -1499,6 +1501,7 @@ fn flatten_anchor_container_items<'t>(elements: &mut Vec<Element<'t>>, in_anchor
                 color,
                 background,
                 elements: children,
+                ..
             } = &mut element
         {
             let mut children = mem::take(children);
@@ -1627,20 +1630,29 @@ fn strip_format_label_list_close_tail_markers(attributes: &mut AttributeMap<'_>)
 /// the decision record — the format kinds carrying it are exactly the
 /// stopped shapes `mark_format_stop_at_list` stamps, never rendered.
 fn stopped_pre_segment(element: &Element<'_>) -> bool {
-    let Element::Container(container) = element else {
-        return false;
-    };
-    container
-        .attributes()
-        .get()
-        .contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER)
+    match element {
+        Element::Container(container) => container
+            .attributes()
+            .get()
+            .contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER),
+        Element::Color { attributes, .. } => attributes
+            .get()
+            .contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER),
+        _ => false,
+    }
 }
 
 fn clear_stop_marker(element: &mut Element<'_>) {
-    if let Element::Container(container) = element {
-        container
-            .attributes_mut()
-            .remove(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
+    match element {
+        Element::Container(container) => {
+            container
+                .attributes_mut()
+                .remove(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
+        }
+        Element::Color { attributes, .. } => {
+            attributes.remove(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
+        }
+        _ => {}
     }
 }
 
@@ -2408,6 +2420,117 @@ pub(crate) fn literalises_around_explicit_list(element: &Element<'_>) -> bool {
 fn format_explicit_list_segments<'t>(
     element: &mut Element<'t>,
 ) -> Option<Vec<Element<'t>>> {
+    // Handle Color elements
+    if matches!(element, Element::Color { .. }) {
+        let poisoned_check = subtree_contains_native_list(element);
+        let crosses_list = match element {
+            Element::Color { elements, .. } => elements.iter().any(|child| {
+                matches!(
+                    child,
+                    Element::List {
+                        wikidot_explicit_block: true,
+                        ..
+                    }
+                )
+            }),
+            _ => false,
+        };
+        let has_flow = match element {
+            Element::Color { elements, .. } => elements.iter().any(is_wikidot_flow_block),
+            _ => false,
+        };
+        if !crosses_list || has_flow {
+            if let Element::Color { attributes, .. } = element {
+                strip_span_list_close_tail_markers(attributes);
+                strip_understrike_list_close_tail_markers(attributes);
+                strip_format_label_list_close_tail_markers(attributes);
+            }
+            return None;
+        }
+        if poisoned_check {
+            return None;
+        }
+        // Extract needed data
+        let (color_clone, bg_clone, understrike_tail_mark, stops_at_list) = match element {
+            Element::Color { color, background, attributes, .. } => {
+                (
+                    color.clone(),
+                    *background,
+                    understrike_list_close_tail_of(attributes),
+                    attributes.get().contains_key(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER),
+                )
+            }
+            _ => return None,
+        };
+        if let Element::Color { elements, .. } = element {
+            let children = std::mem::take(elements);
+            let mut segmented: Vec<Element<'t>> = Vec::new();
+            let mut current_run: Vec<Element<'t>> = Vec::new();
+            let mut seen_list = false;
+            for child in children {
+                match &child {
+                    Element::List {
+                        wikidot_explicit_block: true,
+                        ..
+                    } => {
+                        if !current_run.is_empty() {
+                            let mut seg_attrs = AttributeMap::new();
+                            if stops_at_list && !seen_list {
+                                seg_attrs.insert(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, Cow::Borrowed(""));
+                            }
+                            if stops_at_list && seen_list {
+                                // Post-list segment in stopped case - don't re-wrap in color
+                                segmented.append(&mut current_run);
+                            } else {
+                                segmented.push(Element::Color {
+                                    color: color_clone.clone(),
+                                    background: bg_clone,
+                                    elements: std::mem::take(&mut current_run),
+                                    attributes: seg_attrs,
+                                });
+                                current_run.clear();
+                            }
+                            if !(stops_at_list && seen_list) {
+                                current_run.clear();
+                            }
+                        }
+                        segmented.push(child);
+                        seen_list = true;
+                    }
+                    _ => {
+                        current_run.push(child);
+                    }
+                }
+            }
+            if !current_run.is_empty() {
+                if stops_at_list && seen_list {
+                    segmented.append(&mut current_run);
+                } else {
+                    segmented.push(Element::Color {
+                        color: color_clone.clone(),
+                        background: bg_clone,
+                        elements: current_run,
+                        attributes: AttributeMap::new(),
+                    });
+                }
+            }
+            if let Some(tail_mark) = understrike_tail_mark && stops_at_list {
+                let marker = match tail_mark {
+                    SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
+                    SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+                    SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
+                };
+                for elem in segmented.iter_mut() {
+                    if let Element::List { attributes, .. } = elem {
+                        attributes.insert(marker, Cow::Borrowed(""));
+                    }
+                }
+            }
+            return Some(segmented);
+        }
+        return None;
+    }
+
     let Element::Container(container) = &element else {
         return None;
     };
@@ -4852,13 +4975,15 @@ fn scope_sibling_merge<'t>(previous: &mut Element<'t>, next: Element<'t>) -> boo
                 color: previous_color,
                 background: previous_background,
                 elements: previous_elements,
+                attributes: previous_attributes,
             },
             Element::Color {
                 color: next_color,
                 background: next_background,
                 elements: next_elements,
+                attributes: next_attributes,
             },
-        ) if previous_color == &next_color && previous_background == &next_background => {
+        ) if previous_color == &next_color && previous_background == &next_background && previous_attributes == &next_attributes => {
             previous_elements.extend(next_elements);
             true
         }

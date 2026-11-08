@@ -224,4 +224,24 @@ mod tests {
             ),
         );
     }
+
+    #[test]
+    fn wikidot_underline_stop_at_list_in_span() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("[[span]]__a\n* b\nc__[[/span]]");
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        println!("{}", html);
+    }
+
+    #[test]
+    fn wikidot_underline_stop_at_list_in_span_explicit() {
+        let page_info = PageInfo::dummy();
+        let settings = WikitextSettings::from_mode(WikitextMode::Page, Layout::Wikidot);
+        let tokenization = crate::tokenize("[[span]]__a\n[[ul]]\n[[li]]b[[/li]]\n[[/ul]]\nc__[[/span]]");
+        let (tree, _errors) = crate::parse(&tokenization, &page_info, &settings).into();
+        let html = HtmlRender.render(&tree, &page_info, &settings).body;
+        println!("{}", html);
+    }
 }

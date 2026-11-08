@@ -316,6 +316,8 @@ pub enum Element<'t> {
         color: Cow<'t, str>,
         background: bool,
         elements: Vec<Element<'t>>,
+        #[serde(default)]
+        attributes: AttributeMap<'t>,
     },
 
     Code(CodeBlock<'t>),
@@ -857,10 +859,12 @@ impl Element<'_> {
                 color,
                 background,
                 elements,
+                attributes,
             } => Element::Color {
                 color: string_to_owned(color),
                 background: *background,
                 elements: elements_to_owned(elements),
+                attributes: attributes.to_owned(),
             },
             Element::Code(code_block) => Element::Code(code_block.to_owned()),
             Element::Math {

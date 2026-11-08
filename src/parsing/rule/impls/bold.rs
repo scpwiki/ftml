@@ -26,7 +26,7 @@ use super::inline_delimiter::{
 use super::prelude::*;
 use crate::parsing::ParseSuccess;
 use crate::parsing::collect::{SegmentCtx, TokenWindow, split_delimiter_end};
-use crate::tree::{Container, PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
+use crate::tree::{AttributeMap, Container, Element, PartialElement, WikidotBlockCloseKind, WikidotBlockShell};
 use std::borrow::Cow;
 
 pub const RULE_BOLD: Rule = Rule {
@@ -452,9 +452,51 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     {
         return elements;
     }
+    let in_anchor = parser.in_wikidot_anchor_body();
+
+    // Check for Element::Color
+    if let Some(color_info) = find_color_stop_at_list_info(&elements, in_anchor) {
+        let crosses_list = color_info
+            .elements_ref()
+            .iter()
+            .any(crate::parsing::inline_scope::subtree_contains_explicit_list);
+        if !crosses_list
+            || color_info.elements_ref().iter().any(|child| {
+                crate::parsing::inline_scope::subtree_contains_flow_block(child)
+                    || crate::parsing::inline_scope::subtree_contains_native_list(child)
+            })
+        {
+            return elements;
+        }
+        let post_has_content =
+            crate::parsing::inline_scope::post_list_subtree_has_content(color_info.elements_ref());
+        let current = parser.current();
+        let rest = parser.remaining();
+        let tail_marker = if post_has_content {
+            match stopped_tail_marker(current, rest) {
+                Some(marker) => Some(marker),
+                None => Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER),
+            }
+        } else {
+            stopped_tail_marker(current, rest)
+        };
+        if let Some(attrs) = find_color_stop_at_list_attrs_mut(&mut elements) {
+            attrs.insert(
+                crate::tree::WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER,
+                Cow::Borrowed(""),
+            );
+            if let Some(marker) = tail_marker {
+                attrs.insert(marker, Cow::Borrowed(""));
+            }
+        }
+        return elements;
+    }
+
     let Some(container) = find_stop_at_list_container(&elements) else {
+        eprintln!("DEBUG_CONT: no container found");
         return elements;
     };
+    eprintln!("DEBUG_CONT: found container type {:?}, in_span={}, crosses_checking...", container.ctype(), parser.in_wikidot_span_body());
     // Bold/italics pairs do not carry their styling across an explicit
     // list inside an anchor body on live (li items and the post segment
     // render unstyled; the pre segment keeps styling): the pair forms a
@@ -463,7 +505,6 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     // muse-probe-anchorpre-boldanchorattr-v2/italicsspan-verified twins).
     // Superscript/subscript/monospace remain unprobed for anchor bodies
     // and keep the crossing behaviour.
-    let in_anchor = parser.in_wikidot_anchor_body();
     if !match container.ctype() {
         ContainerType::Underline | ContainerType::Strikethrough => true,
         ContainerType::Bold | ContainerType::Italics => in_anchor,
@@ -524,6 +565,51 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
         container.attributes_mut().insert(marker, Cow::Borrowed(""));
     }
     elements
+}
+
+struct ColorStopInfo<'e, 't> {
+    elements: &'e [Element<'t>],
+}
+
+impl<'e, 't> ColorStopInfo<'e, 't> {
+    fn elements_ref(&self) -> &'e [Element<'t>] {
+        self.elements
+    }
+}
+
+fn find_color_stop_at_list_info<'e, 't>(
+    elements: &'e Elements<'t>,
+    _in_anchor: bool,
+) -> Option<ColorStopInfo<'e, 't>> {
+    fn candidate<'c, 't>(element: &'c Element<'t>) -> Option<ColorStopInfo<'c, 't>> {
+        let Element::Color { elements, .. } = element else {
+            return None;
+        };
+        Some(ColorStopInfo { elements })
+    }
+    match elements {
+        Elements::Single(element) => candidate(element),
+        Elements::Multiple(vec) => vec.iter().find_map(candidate),
+        Elements::None => None,
+    }
+}
+
+fn find_color_stop_at_list_attrs_mut<'e, 't>(
+    elements: &'e mut Elements<'t>,
+) -> Option<&'e mut AttributeMap<'t>> {
+    fn candidate_mut<'c, 't>(
+        element: &'c mut Element<'t>,
+    ) -> Option<&'c mut AttributeMap<'t>> {
+        let Element::Color { attributes, .. } = element else {
+            return None;
+        };
+        Some(attributes)
+    }
+    match elements {
+        Elements::Single(element) => candidate_mut(element),
+        Elements::Multiple(vec) => vec.iter_mut().find_map(candidate_mut),
+        Elements::None => None,
+    }
 }
 
 /// The format container a stop-at-list verdict applies to, whether it came

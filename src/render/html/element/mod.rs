@@ -399,6 +399,7 @@ pub fn render_element(ctx: &mut HtmlContext, element: &Element) {
             color,
             background,
             elements,
+            ..
         } => render_color(ctx, color, *background, elements),
         Element::Code(CodeBlock {
             contents,
