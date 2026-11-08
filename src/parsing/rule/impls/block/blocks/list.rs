@@ -1240,6 +1240,7 @@ fn parse_list_item<'r, 't>(
                 .wikidot_li_cross_pair_at(parser.current().span.start)
                 .is_some_and(|(_, crossed)| crossed))
             || consumed.is_some();
+        let enclosing_block = parser.wikidot_flat_pair_open_at(body_start);
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
@@ -1247,6 +1248,7 @@ fn parse_list_item<'r, 't>(
             parser.pending_note_list_closer() || parser.wikidot_cross_list_terminated_body(),
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
+            enclosing_block,
         );
         if consumed.is_some() {
             parser.clear_wikidot_consumed_li_close();
@@ -1819,6 +1821,7 @@ fn assemble_wikidot_li_segments<'t>(
     note_yielded_list_closer: bool,
     terminated_at_cross_close: bool,
     in_cell: bool,
+    enclosing_block: bool,
 ) -> Vec<Element<'t>> {
     let mut had_trailing_empty = false;
     while segments
@@ -1919,6 +1922,11 @@ fn assemble_wikidot_li_segments<'t>(
     for (index, segment) in kept.into_iter().enumerate() {
         if index > 0 && joins[index - 1] {
             elements.push(Element::LineBreak);
+        } else if index > 0 {
+            // Blank-line segment boundaries inside a flat-shell body are
+            // paragraph boundaries for the post-heading wrap below; the
+            // empty-text marker is consumed there and never renders.
+            elements.push(Element::Text(std::borrow::Cow::Borrowed("")));
         }
         // A blank line between two plain inline runs, with the closer on the
         // next line, is a paragraph. A run on the closer's own line stays put,
@@ -2047,7 +2055,169 @@ fn assemble_wikidot_li_segments<'t>(
     while matches!(elements.last(), Some(Element::Text(text)) if text == " ") {
         elements.pop();
     }
+    wrap_post_heading_segments(&mut elements, enclosing_block);
     elements
+}
+
+/// BRIEF-F7W63 (ledger item 63): live wraps the inline runs that follow a
+/// heading inside a list item in `<p>`s when the item sits inside a block
+/// body (note/div/collapsible/align; crossed or contained), matching the
+/// top-level block-body rule (probe n4-n7/k1/u1). The gate, per live
+/// saved-page evidence (probe-f7w63.json):
+///
+/// - `soft`: a chunk terminated by a block that can open a paragraph after
+///   itself is wrapped even without an enclosing block frame (hr, separator,
+///   math, quote, note/div formed in the item, or another heading).
+/// - `enclosing_block`: without a following block, a trailing chunk is
+///   wrapped only when an enclosing block frame is open across the item
+///   (`wikidot_flat_pair_open_at`); a table line directly after a chunk
+///   keeps it bare in both cases, and a code/align block suppresses the
+///   wrap for the rest of the item.
+///
+/// Empty-text markers (`Text("")`) left by the segment merge are blank-line
+/// paragraph boundaries consumed here; no marker survives this pass.
+fn wrap_post_heading_segments<'t>(
+    elements: &mut Vec<Element<'t>>,
+    enclosing_block: bool,
+) {
+    fn has_content(chunk: &[Element<'_>]) -> bool {
+        chunk.iter().any(|element| {
+            !matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                && !matches!(element, Element::Text(text) if text.trim().is_empty())
+        })
+    }
+
+    enum Flush {
+        /// A block that can resume paragraph flow (hr, separator, math, quote,
+        /// note/div/collapsible formed in the item, or another heading).
+        Soft,
+        /// A table line: the chunk directly before it stays bare.
+        BeforeTable,
+        /// A blank-line segment boundary: wrapped only under a frame.
+        SegmentGap,
+        /// A code or align block: wraps the chunk before it, then latches.
+        CodeOrAlign,
+        /// End of the item body.
+        End,
+    }
+
+    let mut out: Vec<Element<'t>> = Vec::with_capacity(elements.len() + 4);
+    let mut chunk: Vec<Element<'t>> = Vec::new();
+    let mut after_heading = false;
+    let mut latched = false;
+    let flush = |chunk: &mut Vec<Element<'t>>,
+                 out: &mut Vec<Element<'t>>,
+                 after_heading: bool,
+                 latched: bool,
+                 enclosing_block: bool,
+                 kind: Flush| {
+        if chunk.is_empty() {
+            return;
+        }
+        let wrap = after_heading
+            && !latched
+            && has_content(chunk)
+            && match kind {
+                Flush::BeforeTable => false,
+                Flush::SegmentGap | Flush::End => enclosing_block,
+                Flush::Soft | Flush::CodeOrAlign => true,
+            };
+        if wrap {
+            out.push(Element::Container(Container::new(
+                ContainerType::Paragraph,
+                std::mem::take(chunk),
+                AttributeMap::new(),
+            )));
+        } else {
+            out.append(chunk);
+        }
+    };
+    for element in std::mem::take(elements) {
+        let is_boundary_marker =
+            matches!(&element, Element::Text(text) if text.is_empty());
+        let is_heading = matches!(
+            &element,
+            Element::Container(container) if matches!(container.ctype(), ContainerType::Header(_))
+        );
+        let is_table = matches!(&element, Element::Table(_));
+        let is_code_or_align = matches!(&element, Element::Code(_))
+            || matches!(
+                &element,
+                Element::Container(container)
+                    if matches!(container.ctype(), ContainerType::Align(_))
+            );
+        if is_boundary_marker {
+            flush(
+                &mut chunk,
+                &mut out,
+                after_heading,
+                latched,
+                enclosing_block,
+                Flush::SegmentGap,
+            );
+            continue;
+        }
+        if is_heading {
+            flush(
+                &mut chunk,
+                &mut out,
+                after_heading,
+                latched,
+                enclosing_block,
+                Flush::Soft,
+            );
+            out.push(element);
+            after_heading = true;
+            continue;
+        }
+        if is_table {
+            flush(
+                &mut chunk,
+                &mut out,
+                after_heading,
+                latched,
+                enclosing_block,
+                Flush::BeforeTable,
+            );
+            out.push(element);
+            continue;
+        }
+        if is_code_or_align {
+            flush(
+                &mut chunk,
+                &mut out,
+                after_heading,
+                latched,
+                enclosing_block,
+                Flush::CodeOrAlign,
+            );
+            out.push(element);
+            latched = true;
+            continue;
+        }
+        if !element.paragraph_safe() {
+            flush(
+                &mut chunk,
+                &mut out,
+                after_heading,
+                latched,
+                enclosing_block,
+                Flush::Soft,
+            );
+            out.push(element);
+            continue;
+        }
+        chunk.push(element);
+    }
+    flush(
+        &mut chunk,
+        &mut out,
+        after_heading,
+        latched,
+        enclosing_block,
+        Flush::End,
+    );
+    *elements = out;
 }
 
 fn trim_wikidot_block_gaps(elements: &mut Vec<Element<'_>>) {
@@ -2118,6 +2288,7 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
                 .wikidot_li_cross_pair_at(parser.current().span.start)
                 .is_some_and(|(_, crossed)| crossed))
             || consumed.is_some();
+        let enclosing_block = parser.wikidot_flat_pair_open_at(body_start);
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
@@ -2125,6 +2296,7 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             parser.pending_note_list_closer() || parser.wikidot_cross_list_terminated_body(),
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
+            enclosing_block,
         );
         if consumed.is_some() {
             parser.clear_wikidot_consumed_li_close();
