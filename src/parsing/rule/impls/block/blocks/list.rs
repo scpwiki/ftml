@@ -803,11 +803,13 @@ fn parse_list_block_impl<'r, 't>(
             // s7 (65d): a type-matching closer (`*` on ul, `#` on ol) drops
             // the break and enables rejoin; a `#` closer on a ul keeps the
             // anchor (s6). An unmatched `*` on ol drops the break without
-            // rejoin/anchor.
+            // rejoin/anchor. BL79 (e): live drops the closer-line anchor
+            // before a following block (code, div, table, …); keep it only
+            // when no block follows (EOF / heading takes the content path).
             let closer_anchor = matches!(
                 (closer_line_marker, list_type),
                 (Some('#'), ListType::Bullet)
-            );
+            ) && !parser.wikidot_next_skipping_blanks_is_block();
             let closer_drops_break = closer_line_marker.is_some() && !closer_anchor;
             if closer_anchor {
                 output.push(Element::List {

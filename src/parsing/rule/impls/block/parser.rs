@@ -3237,6 +3237,32 @@ where
         false
     }
 
+    /// BL79 (e): whether the next non-blank line after the current break
+    /// is led by a block head/closer. Live drops the closer-line anchor
+    /// before a following block (code, div, table, …); EOF and headings
+    /// keep or take different paths.
+    pub(crate) fn wikidot_next_skipping_blanks_is_block(&self) -> bool {
+        let at_break = matches!(
+            self.current().token,
+            Token::LineBreak | Token::ParagraphBreak
+        );
+        let tokens = self.remaining();
+        let mut seen_break = at_break;
+        for extracted in tokens {
+            match extracted.token {
+                Token::Whitespace => {}
+                Token::LineBreak | Token::ParagraphBreak => {
+                    seen_break = true;
+                }
+                Token::LeftBlock | Token::LeftBlockStar | Token::LeftBlockEnd => {
+                    return seen_break;
+                }
+                _ => return false,
+            }
+        }
+        false
+    }
+
     /// L85: stop a list body at a scan-paired div/collapsible closer whose
     /// opener is genuinely outside (closein shapes). d4-46 (b): note closers
     /// too, including flat outer heads that leave no body boundary.
