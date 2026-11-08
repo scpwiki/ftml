@@ -229,7 +229,15 @@ fn parse_list_block_impl<'r, 't>(
             || (matches!(
                 block_rule.name,
                 "block-list-unordered" | "block-list-ordered"
-            ) && parser.has_shallower_quote_text_line(block_rule, depth)))
+            ) && parser.has_shallower_quote_text_line(block_rule, depth))
+            // BRIEF-BL57c: an `[[li]]` head with a bare `[[/li]]` close
+            // before the list close takes the literal quote body even
+            // though a blank line hides the paired close from the strict
+            // scan.
+            || (matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            ) && parser.has_li_close_before_list_close(depth)))
     {
         parser.get_body_elements_with_literal_quote_context(
             block_rule,

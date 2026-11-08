@@ -1,0 +1,76 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "numbered",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {
+                                        "style": "list-style: none"
+                                    },
+                                    "elements": [
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "blockquote",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "partial",
+                                                        "data": {
+                                                            "ListItem": {
+                                                                "item-type": "elements",
+                                                                "attributes": {},
+                                                                "elements": [
+                                                                    {
+                                                                        "element": "text",
+                                                                        "data": "u"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        {
+                                            "element": "container",
+                                            "data": {
+                                                "type": "blockquote",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "container",
+                                                        "data": {
+                                                            "type": "paragraph",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "text",
+                                                                    "data": "y"
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
