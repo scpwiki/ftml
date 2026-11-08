@@ -213,7 +213,46 @@ fn is_format_event(element: &Element<'_>) -> bool {
     )
 }
 
+/// A literal opener may live inside the paragraph that ends at an
+/// explicit list (inline scope bodies such as `[[span]]`): the
+/// paragraph's elements join the list's segment group so the repair
+/// can pair the opener with a marker inside the items, exactly like
+/// the preceding paragraph-safe run already joins. Runs before child
+/// normalization, while a raw `--` still reads as a strike marker.
+fn join_paragraph_tail_with_next_explicit_list<'t>(elements: &mut Vec<Element<'t>>) {
+    for index in 0..elements.len() {
+        if !(matches!(
+            &elements[index],
+            Element::Container(paragraph)
+                if paragraph.ctype() == ContainerType::Paragraph
+        ) && matches!(
+            elements.get(index + 1),
+            Some(Element::List {
+                wikidot_explicit_block: true,
+                ..
+            })
+        )) {
+            continue;
+        }
+        let Element::Container(paragraph) = &elements[index] else {
+            continue;
+        };
+        if !stream_has_pairing_material(paragraph.elements()) {
+            continue;
+        }
+        let (head, tail) = elements.split_at_mut(index + 1);
+        let paragraph = &mut head[index];
+        let Element::Container(paragraph) = paragraph else {
+            continue;
+        };
+        let mut segments: Vec<&mut Vec<Element<'t>>> = vec![paragraph.elements_mut()];
+        segments.extend(segment_vecs_mut(&mut tail[0]));
+        normalize_segments(&mut segments, 0);
+    }
+}
+
 fn normalize_sequence_children<'t>(elements: &mut Vec<Element<'t>>) {
+    join_paragraph_tail_with_next_explicit_list(elements);
     let defer = foster_deferral_indices(elements);
     let mut normalized = Vec::with_capacity(elements.len());
     let mut index = 0;
