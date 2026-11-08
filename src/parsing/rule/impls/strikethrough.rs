@@ -88,6 +88,7 @@ fn try_consume_strikethrough<'r, 't>(
     if parser.settings().layout.legacy() && legacy_format_body_contains_table(&elements) {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
+    let elements = super::bold::mark_format_stop_at_list(parser, elements);
     let elements =
         append_wikidot_line_close_space(elements, parser.settings().layout.legacy());
     ok!(paragraph_safe; elements, errors)

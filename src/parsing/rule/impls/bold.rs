@@ -337,6 +337,104 @@ pub(super) fn mark_span_list_close_tail<'r, 't>(
     elements
 }
 
+/// An underline or strikethrough pair that closed beyond an explicit list
+/// inside a Wikidot inline scope (`[[span]]`, `[[size]]`, `[[a]]`) does not
+/// carry its styling across the list on live: only the segment before the
+/// list keeps its styling, the list and the post-list segment are unstyled,
+/// and both markers are consumed. (Bold, italics, superscript and subscript
+/// pair across the list there, and underline/strike pair across it outside
+/// an inline scope and inside `[[div]]`.) Stamp the collected container so
+/// inline-scope lowering segments it that way, plus its post-list tail
+/// shape. The tail is only stamped when the segment between the list and
+/// the close is empty (primary / continuation shapes); a content-bearing
+/// post-list segment (the fold shape) keeps the default tail. At this point
+/// the parser sits on the first token after the close.
+pub(super) fn mark_format_stop_at_list<'r, 't>(
+    parser: &Parser<'r, 't>,
+    mut elements: Elements<'t>,
+) -> Elements<'t> {
+    if !parser.settings().layout.legacy()
+        || !(parser.in_wikidot_span_body()
+            || parser.in_wikidot_size_body()
+            || parser.in_wikidot_anchor_body())
+    {
+        return elements;
+    }
+    let Elements::Single(Element::Container(container)) = &elements else {
+        return elements;
+    };
+    if !matches!(
+        container.ctype(),
+        ContainerType::Underline | ContainerType::Strikethrough
+    ) {
+        return elements;
+    }
+    let crosses_list = container.elements().iter().any(|child| {
+        matches!(
+            child,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        )
+    });
+    if !crosses_list
+        || container.elements().iter().any(|child| {
+            crate::parsing::inline_scope::is_wikidot_flow_block(child)
+                || crate::parsing::inline_scope::subtree_contains_native_list(child)
+        })
+    {
+        return elements;
+    }
+    // Only stamp a tail when nothing sits between the last explicit list
+    // and the close.
+    let last_list = container
+        .elements()
+        .iter()
+        .rposition(|child| {
+            matches!(
+                child,
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            )
+        })
+        .expect("crossing list checked above");
+    let post_has_content = container.elements()[last_list + 1..].iter().any(|child| {
+        !matches!(child, Element::LineBreak | Element::LineBreaks(_))
+            && !matches!(child, Element::Text(text) if text.trim().is_empty())
+    });
+    let current = parser.current();
+    let rest = parser.remaining();
+    let tail_marker = if post_has_content {
+        None
+    } else if current.token == Token::LineBreak
+        && (block_head_is(rest, 0, "span", true)
+            || block_head_is(rest, 0, "size", true)
+            || block_head_is(rest, 0, "a", true))
+    {
+        Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER)
+    } else if matches!(current.token, Token::RuntimeText | Token::Identifier)
+        && !current.slice.trim().is_empty()
+    {
+        Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER)
+    } else {
+        None
+    };
+    let Elements::Single(Element::Container(container)) = &mut elements else {
+        unreachable!("single underline element checked above")
+    };
+    container.attributes_mut().insert(
+        crate::tree::WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER,
+        Cow::Borrowed(""),
+    );
+    if let Some(marker) = tail_marker {
+        container.attributes_mut().insert(marker, Cow::Borrowed(""));
+    }
+    elements
+}
+
 #[cfg(test)]
 mod tests {
     use crate::data::PageInfo;
