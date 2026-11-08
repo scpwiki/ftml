@@ -176,6 +176,14 @@ pub(crate) const WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
     "data-ftml-format-label-list-close-tail-break";
 pub(crate) const WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER: &str =
     "data-ftml-format-label-list-close-tail-bare";
+/// Fold shape: the stopped pair's post-list segment **has content**, so the
+/// pair closed after content between the list and the close marker. Live
+/// closes the enclosing scope right after the post-list segment (the
+/// `__`/`--` marker position): the segment renders inside the scope, every-
+/// thing after it outside (`<span>b</span>c<br>`). Consumed by inline-scope
+/// lowering at the after-list paragraph; never rendered.
+pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER: &str =
+    "data-ftml-understrike-list-close-tail-fold";
 use std::borrow::Cow;
 use std::collections::HashSet;
 

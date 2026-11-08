@@ -375,10 +375,13 @@ pub(super) fn mark_span_list_close_tail<'r, 't>(
 /// pair across the list there, and underline/strike pair across it outside
 /// an inline scope and inside `[[div]]`.) Stamp the collected container so
 /// inline-scope lowering segments it that way, plus its post-list tail
-/// shape. The tail is only stamped when the segment between the list and
-/// the close is empty (primary / continuation shapes); a content-bearing
-/// post-list segment (the fold shape) keeps the default tail. At this point
-/// the parser sits on the first token after the close.
+/// shape. The tail classification is the same token-after-close rule for
+/// post-list segments with and without content (a content-bearing segment
+/// is the fold shape: live closes the enclosing scope right after the
+/// post-list segment); the FOLD arm is the fallback for a close marker
+/// followed by something other than a newline+scope-close or adjacent text
+/// (e.g. `b__[[/span]]` on one line). At this point the parser sits on
+/// the first token after the close.
 pub(super) fn mark_format_stop_at_list<'r, 't>(
     parser: &Parser<'r, 't>,
     mut elements: Elements<'t>,
@@ -417,7 +420,9 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
         return elements;
     }
     // Only stamp a tail when nothing sits between the last explicit list
-    // and the close.
+    // and the close; a content-bearing post-list segment (the fold shape)
+    // stamps the FOLD marker: live closes the enclosing scope right after
+    // that segment.
     let last_list = container
         .elements()
         .iter()
@@ -438,7 +443,22 @@ pub(super) fn mark_format_stop_at_list<'r, 't>(
     let current = parser.current();
     let rest = parser.remaining();
     let tail_marker = if post_has_content {
-        None
+        // Fold shape: the pair closed after content. The same token-after-
+        // close classification as for empty post segments, with the FOLD
+        // marker as the fallback (e.g. `b__[[/span]]` on one line).
+        if current.token == Token::LineBreak
+            && (block_head_is(rest, 0, "span", true)
+                || block_head_is(rest, 0, "size", true)
+                || block_head_is(rest, 0, "a", true))
+        {
+            Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER)
+        } else if matches!(current.token, Token::RuntimeText | Token::Identifier)
+            && !current.slice.trim().is_empty()
+        {
+            Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER)
+        } else {
+            Some(crate::tree::WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER)
+        }
     } else if current.token == Token::LineBreak
         && (block_head_is(rest, 0, "span", true)
             || block_head_is(rest, 0, "size", true)

@@ -8,7 +8,8 @@ use crate::tree::{
     WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, WIKIDOT_HEADING_REOPEN_MARKER,
     WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER, WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
     WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
-    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER, WIKIDOT_WS_MONO_VANISH_MARKER,
+    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
+    WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER, WIKIDOT_WS_MONO_VANISH_MARKER,
     WikidotBlockCloseKind, WikidotBlockShell, WikidotFrameLink,
 };
 use std::borrow::Cow;
@@ -1407,6 +1408,12 @@ enum SpanListCloseTail {
     /// Span-content text directly adjacent to the close: the after-list
     /// paragraph appends bare with no inserted leading break.
     Bare,
+    /// The stopped pair's post-list segment has content (the fold shape):
+    /// the after-list paragraph renders bare and the enclosing inline
+    /// scopes (span/size/anchor) are retired there, so the post segment
+    /// renders inside the scope and everything after it outside — live
+    /// closes the scope at the pair's close marker.
+    Fold,
 }
 
 fn span_list_close_tail_of(attributes: &AttributeMap<'_>) -> Option<SpanListCloseTail> {
@@ -1428,7 +1435,9 @@ fn strip_span_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
 /// The stopped underline/strikethrough sibling of the spanin tail: which
 /// bare post-list tail shape the following scope-content paragraph yields.
 /// `Break` materialises a bare `<br>`; `Bare` renders adjacent content
-/// bare with no scope tags.
+/// bare with no scope tags; `Fold` covers a content-bearing post-list
+/// segment: the segment renders inside the scope, the following paragraph
+/// renders bare with the enclosing scope retired.
 fn understrike_list_close_tail_of(
     attributes: &AttributeMap<'_>,
 ) -> Option<SpanListCloseTail> {
@@ -1437,6 +1446,8 @@ fn understrike_list_close_tail_of(
         Some(SpanListCloseTail::Break)
     } else if map.contains_key(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER) {
         Some(SpanListCloseTail::Bare)
+    } else if map.contains_key(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER) {
+        Some(SpanListCloseTail::Fold)
     } else {
         None
     }
@@ -1445,6 +1456,7 @@ fn understrike_list_close_tail_of(
 fn strip_understrike_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
     attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER);
     attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER);
+    attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER);
 }
 
 /// The inverse strong-x sibling of the spanin tail: a span/size scope
@@ -1578,6 +1590,9 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Fold => {
+                unreachable!("span tail family has no fold marker")
+            }
         };
         attributes.insert(marker, Cow::Borrowed(""));
     }
@@ -1587,6 +1602,7 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
         };
         attributes.insert(marker, Cow::Borrowed(""));
     }
@@ -1952,6 +1968,9 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Fold => {
+                unreachable!("span tail family has no fold marker")
+            }
         };
         for element in segmented.iter_mut() {
             if let Element::List { attributes, .. } = element {
@@ -1965,6 +1984,7 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
         };
         for element in segmented.iter_mut() {
             if let Element::List { attributes, .. } = element {
@@ -1981,6 +2001,7 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER,
+            SpanListCloseTail::Fold => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_FOLD_MARKER,
         };
         for element in segmented.iter_mut() {
             if let Element::List { attributes, .. } = element {
@@ -2137,8 +2158,6 @@ fn lower_root_sequence<'t>(
             {
                 active.kill_scope(wrapper);
             }
-            let starts_in_scored_span = active.has_scored_scope();
-            let starts_in_inline_scope = active.has_active_scope();
             // Spanin family: the paragraph right after an explicit list that
             // a format pair of the span content closed beyond carries the
             // pair's tail shape from the list element's marker.
@@ -2177,7 +2196,17 @@ fn lower_root_sequence<'t>(
             let understrike_bare =
                 matches!(understrike_tail, Some(SpanListCloseTail::Bare))
                     && !understrike_close_only_paragraph;
-            if understrike_break || understrike_bare {
+            // Fold shape: the stopped pair's post-list segment has content
+            // (live closes the scope at the pair's close marker, right after
+            // it). The pending post-list run is flushed into the still-open
+            // scope before this retirement runs, so the segment renders
+            // inside the scope; the after-list paragraph retires it and
+            // renders bare (no scope tags, no paragraph wrapper). Fires for
+            // close-only after-list paragraphs too — live closes the scope
+            // there as well.
+            let understrike_fold =
+                matches!(understrike_tail, Some(SpanListCloseTail::Fold));
+            if understrike_break || understrike_bare || understrike_fold {
                 active.retire_span_scopes();
                 active.retire_size_scopes();
                 active.drop_anchor_scopes();
@@ -2185,6 +2214,10 @@ fn lower_root_sequence<'t>(
                     container.elements_mut().insert(0, Element::LineBreak);
                 }
             }
+            // Recomputed after any tail retirement above: the group/wrap
+            // decisions below must see the post-retirement scope state.
+            let starts_in_scored_span = active.has_scored_scope();
+            let starts_in_inline_scope = active.has_active_scope();
             let previous_is_own_chunk_block = collapsible_heading_body
                 || previous_heading_collapsible_tail
                 || matches!(
@@ -2255,6 +2288,7 @@ fn lower_root_sequence<'t>(
                     && !label_bare
                     && !understrike_break
                     && !understrike_bare
+                    && !understrike_fold
                     && (follows_table
                         || reopens_paragraph_after_separator
                         || !effects.scored_span_opened_unwrapped_at_start
