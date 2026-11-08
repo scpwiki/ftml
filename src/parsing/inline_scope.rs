@@ -1634,6 +1634,28 @@ pub(crate) fn subtree_contains_native_list(element: &Element<'_>) -> bool {
     found
 }
 
+/// Whether the subtree contains a flow block: a div/note/align container,
+/// collapsible, tabview, wikidot block frame or block open/close partial
+/// (see `is_wikidot_flow_block`), or a table/math block. `Element::Code`
+/// is deliberately absent: live forms the format pair across an explicit
+/// list whose item holds a code block (it segments instead of rejecting).
+fn subtree_contains_flow_block(element: &Element<'_>) -> bool {
+    if matches!(element, Element::Math { .. } | Element::Table(_))
+        || is_wikidot_flow_block(element)
+    {
+        return true;
+    }
+    let mut found = false;
+    visit_children(element, &mut |children| {
+        for child in children {
+            if !found && subtree_contains_flow_block(child) {
+                found = true;
+            }
+        }
+    });
+    found
+}
+
 fn format_segment_has_content(elements: &[Element<'_>]) -> bool {
     elements.iter().any(|element| match element {
         Element::LineBreak | Element::LineBreaks(_) => false,
@@ -1815,7 +1837,9 @@ fn segment_format_list_items<'t>(
 /// Whether an inline format container will be re-emitted as literal markers
 /// around the explicit list it crosses: a format container with a direct
 /// explicit-list child, no flow block of its own, and a native list nested
-/// somewhere inside it (the poisoned path of `format_explicit_list_segments`).
+/// somewhere inside it (the poisoned path of `format_explicit_list_segments`)
+/// or a flow block inside the explicit list's subtree (the unquoted-div
+/// rejection path — same literalised output, same bare flanking runs).
 pub(crate) fn literalises_around_explicit_list(element: &Element<'_>) -> bool {
     let Element::Container(container) = element else {
         return false;
@@ -1838,6 +1862,15 @@ pub(crate) fn literalises_around_explicit_list(element: &Element<'_>) -> bool {
         return false;
     }
     subtree_contains_native_list(element)
+        || container.elements().iter().any(|child| {
+            matches!(
+                child,
+                Element::List {
+                    wikidot_explicit_block: true,
+                    ..
+                }
+            ) && subtree_contains_flow_block(child)
+        })
 }
 
 fn format_explicit_list_segments<'t>(
@@ -1868,7 +1901,22 @@ fn format_explicit_list_segments<'t>(
         strip_format_label_list_close_tail_markers(container.attributes_mut());
         return None;
     }
-    let poisoned = subtree_contains_native_list(element);
+    // A format pair that crosses an explicit list whose subtree holds a
+    // flow block (an unquoted `[[div]]`/`[[note]]`/`[[=]]`/collapsible/
+    // math block inside an item, at any nesting depth) is rejected by live:
+    // the markers stay literal and the list parses normally. Quoted flow
+    // lines inside the item either already literalise via the native-list
+    // poison below or vanish from the item before lowering.
+    let crosses_flow_list = container.elements().iter().any(|child| {
+        matches!(
+            child,
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            }
+        ) && subtree_contains_flow_block(child)
+    });
+    let poisoned = subtree_contains_native_list(element) || crosses_flow_list;
     let Element::Container(container) = element else {
         unreachable!()
     };
