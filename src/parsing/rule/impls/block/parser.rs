@@ -7566,6 +7566,71 @@ where
         self.shallower_text_region_has_quoted_list_close(block_rule, required, &probe)
     }
 
+    /// Whether the next non-blank row after the unquoted list close or
+    /// item close line is reachable unquoted text (BRIEF-BH57a): the
+    /// hoisted shallow run then renders as one paragraph with that row
+    /// instead of bare. `scan` is expected positioned at the terminal
+    /// closer line's content start.
+    fn unquoted_merge_follow_decision(scan: &Parser<'r, 't>) -> bool {
+        let mut probe = scan.clone();
+        while !matches!(
+            probe.current().token,
+            Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+        ) {
+            if probe.step().is_err() {
+                return false;
+            }
+        }
+        if probe.current().token == Token::InputEnd {
+            return false;
+        }
+        if probe.step().is_err() {
+            return false;
+        }
+        loop {
+            match probe.current().token {
+                Token::LineBreak | Token::ParagraphBreak => {
+                    if probe.step().is_err() {
+                        return false;
+                    }
+                    continue;
+                }
+                Token::InputEnd => return false,
+                _ => {}
+            }
+            let mut depth = 0usize;
+            let mut row = probe.clone();
+            while row.current().token == Token::Quote {
+                depth += row.current().slice.len();
+                if row.step().is_err() || row.get_optional_space().is_err() {
+                    return false;
+                }
+            }
+            // A quoted row never merges backwards into the hoisted run.
+            if depth > 0 {
+                return false;
+            }
+            let mut line = row.clone();
+            loop {
+                match line.current().token {
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                        return true;
+                    }
+                    Token::LeftBlock
+                    | Token::LeftBlockStar
+                    | Token::LeftBlockEnd
+                    | Token::BulletItem
+                    | Token::NumberedItem => return false,
+                    _ => {
+                        if line.step().is_err() {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Scan from the boundary without mutating: the first depth-0 closer line
     /// in the region decides. Blank lines and shallow plain-text lines are
     /// absorbed by the hoist; anything else (deeper-quoted content, block
@@ -7575,11 +7640,12 @@ where
     /// Returns the absorbed lines `(content_start, content_end)` when the
     /// region ends at an unquoted closer line (bare `[[/ul]]`/`[[/ol]]`, or a
     /// bare `[[/li]]` for an item body), or `None` otherwise with the parser
-    /// untouched.
+    /// untouched. The boolean is whether the hoisted lines merge into one
+    /// paragraph with the next reachable unquoted text row (BRIEF-BH57a).
     fn scan_unquoted_close_shallow_lines(
         parser: &Parser<'r, 't>,
         list_body: bool,
-    ) -> Option<Vec<(usize, usize)>> {
+    ) -> Option<(Vec<(usize, usize)>, bool)> {
         let item_body = !list_body;
         let mut scan = parser.clone();
         let mut lines: Vec<(usize, usize)> = Vec::new();
@@ -7613,14 +7679,16 @@ where
                         .eq_ignore_ascii_case("li")
                 });
                 if is_item_close {
-                    return item_body.then_some(lines);
+                    let merge = Self::unquoted_merge_follow_decision(&scan);
+                    return item_body.then_some((lines, merge));
                 }
                 let is_list_close = probe.clone().get_end_block().is_ok_and(|name| {
                     let name = name.strip_suffix('_').unwrap_or(&name);
                     name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
                 });
                 if is_list_close {
-                    return Some(lines);
+                    let merge = Self::unquoted_merge_follow_decision(&scan);
+                    return Some((lines, merge));
                 }
                 // Any other depth-0 closer: out of this lane.
                 if probe.get_end_block().is_ok() {
@@ -7731,33 +7799,37 @@ where
             return Ok(false);
         }
         let list_body = block_rule.name != "block-list-item";
-        let Some(lines) = Self::scan_unquoted_close_shallow_lines(self, list_body) else {
+        let Some((lines, merge)) =
+            Self::scan_unquoted_close_shallow_lines(self, list_body)
+        else {
             return Ok(false);
         };
         // Absorption phase: consume exactly the scanned lines. Blank lines
-        // between them are absorbed silently; text lines emit one bare
-        // (paragraph-unsafe) escaped unit each.
+        // between them are absorbed silently; the scanned lines emit one
+        // escaped unit carrying the whole run (paragraph-safe when the run
+        // merges into the paragraph of the next reachable unquoted text
+        // row, BRIEF-BH57a, so the split boundary machinery does not break
+        // the run up).
         let mut pending = lines.into_iter();
         let mut hoisted = false;
+        let mut combined: Vec<Element<'t>> = Vec::new();
+        while matches!(
+            self.current().token,
+            Token::LineBreak | Token::ParagraphBreak
+        ) {
+            self.step()?;
+        }
         loop {
-            match self.current().token {
-                Token::LineBreak | Token::ParagraphBreak => {
-                    self.step()?;
-                    continue;
-                }
-                Token::InputEnd => break,
-                _ => {}
+            if matches!(self.current().token, Token::InputEnd) {
+                break;
             }
             let Some((content_start, content_end)) = pending.next() else {
                 break;
             };
             debug_assert_eq!(self.current().span.start, content_start);
             let content = &self.full_text().inner()[content_start..content_end];
-            let elements = vec![
-                text!(content),
-                Element::LineBreaks(std::num::NonZeroU32::new(1).unwrap()),
-            ];
-            self.push_quote_escaped_unit(QuoteEscapedUnit::Elements(elements, false));
+            combined.push(text!(content));
+            combined.push(Element::LineBreaks(std::num::NonZeroU32::new(1).unwrap()));
             hoisted = true;
             while !matches!(
                 self.current().token,
@@ -7771,9 +7843,23 @@ where
             ) {
                 self.step()?;
             }
+            while matches!(
+                self.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            ) && matches!(self.current().token, Token::ParagraphBreak)
+            {
+                // blank lines between scanned lines: absorbed silently
+                self.step()?;
+            }
+        }
+        if hoisted {
+            self.push_quote_escaped_unit(QuoteEscapedUnit::Elements(combined, merge));
         }
         if hoisted {
             self.set_wikidot_quote_boundary_unquoted_close_text();
+            if merge {
+                self.set_wikidot_merge_follow();
+            }
         }
         Ok(true)
     }

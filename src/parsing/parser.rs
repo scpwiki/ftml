@@ -223,6 +223,12 @@ pub(super) struct BlockScanCache<'t> {
     /// and restored alongside the shallower flags in
     /// `get_body_elements_with_context_policy`.
     wikidot_quote_boundary_blank_in_li_body: Cell<bool>,
+    /// BRIEF-BH57a: shallow text was hoisted out of an explicit list body
+    /// before its unquoted `[[/li]]` close AND the next non-blank row after
+    /// that close is reachable unquoted text, so the hoisted run merges into
+    /// one paragraph with it instead of rendering bare. Blank lines between
+    /// the vanished close and that row are transparent until then.
+    wikidot_merge_follow: Cell<bool>,
     wikidot_inline_markers: inline_pairs::WikidotInlineMarkers,
     wikidot_heading_barrier: Option<usize>,
     wikidot_heading_reopen: Option<(usize, crate::tree::HeadingReopen<'t>)>,
@@ -1487,6 +1493,27 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow()
             .wikidot_quote_boundary_blank_in_li_body
             .get()
+    }
+
+    pub(crate) fn set_wikidot_merge_follow(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_merge_follow
+            .set(true);
+    }
+
+    pub(crate) fn wikidot_merge_follow(&self) -> bool {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_merge_follow
+            .get()
+    }
+
+    pub(crate) fn clear_wikidot_merge_follow(&self) {
+        self.block_end_scan_cache
+            .borrow()
+            .wikidot_merge_follow
+            .set(false);
     }
 
     pub(crate) fn wikidot_flat_close_splits_quote_run(&self, head_byte: usize) -> bool {
