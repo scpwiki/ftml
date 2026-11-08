@@ -303,7 +303,7 @@ fn normalize_segment_container_with_run<'t>(
     let mut run = preceding.split_off(run_start);
     let mut segments: Vec<&mut Vec<Element<'t>>> = vec![&mut run];
     segments.extend(segment_vecs_mut(container));
-    normalize_segments(&mut segments);
+    normalize_segments(&mut segments, 0);
     preceding.append(&mut run);
     true
 }
@@ -1714,12 +1714,24 @@ pub(crate) fn normalize_wikidot_bibliography<'t>(bibliography: &mut Bibliography
         .iter_mut()
         .map(|(_, elements)| elements)
         .collect();
-    normalize_segments(&mut segments);
+    normalize_segments(&mut segments, 0);
 }
 
 fn normalize_segment_container<'t>(element: &mut Element<'t>) {
+    // Segments of a NATIVE list are that list's items: marker pairing
+    // treats them as INSIDE the list's top-level chunk (live pairs a
+    // marker from an item into the list's nested items), so the
+    // projection seeds them with the group's own family scope instead
+    // of the outside scope.
+    let seed_scope = match element {
+        Element::List {
+            wikidot_explicit_block: false,
+            ..
+        } => 1,
+        _ => 0,
+    };
     let mut segments = segment_vecs_mut(element);
-    normalize_segments(&mut segments);
+    normalize_segments(&mut segments, seed_scope);
 }
 
 /// When an advanced table's fostered tail (the text a cell splice ejects in
@@ -1787,27 +1799,28 @@ fn normalize_segment_container_with_foster<'t>(
     true
 }
 
-fn normalize_segments<'t>(segments: &mut [&mut Vec<Element<'t>>]) {
-    normalize_segments_inner(segments, None);
+fn normalize_segments<'t>(segments: &mut [&mut Vec<Element<'t>>], seed_scope: usize) {
+    normalize_segments_inner(segments, None, seed_scope);
 }
 
 fn normalize_segments_foster_join<'t>(
     segments: &mut [&mut Vec<Element<'t>>],
     cell_count: usize,
 ) {
-    normalize_segments_inner(segments, Some(cell_count));
+    normalize_segments_inner(segments, Some(cell_count), 0);
 }
 
 fn normalize_segments_inner<'t>(
     segments: &mut [&mut Vec<Element<'t>>],
     foster_first_segment: Option<usize>,
+    seed_scope: usize,
 ) {
     for _ in 0..MAX_NORMALIZATION_PASSES {
         let mut changed = match foster_first_segment {
-            Some(first) => {
-                repair_literal_marker_pairs_segments_with_foster(segments, false, first)
-            }
-            None => repair_literal_marker_pairs_segments(segments, false),
+            Some(first) => repair_literal_marker_pairs_segments_with_foster(
+                segments, false, first, seed_scope,
+            ),
+            None => repair_literal_marker_pairs_segments(segments, false, seed_scope),
         };
         changed |= repair_dash_runs_segments(segments);
         for segment in segments.iter_mut() {
@@ -1890,12 +1903,26 @@ struct ProjFlagCtx {
     /// Whether the current position sits inside an explicit-list item, and
     /// whether that (nearest) item contains a native list.
     explicit_item_has_native: Option<bool>,
+    /// Identity of the native-list chunk (0 = outside every native list).
+    /// A native list's chunk is its whole nesting family: nested lists
+    /// inside its items inherit the same scope (live pairs a marker from
+    /// an item into its own nested list's items), and only entering a
+    /// native list from outside starts a new chunk. Pairing across items
+    /// is only performed within ONE native-list chunk: markers outside a
+    /// native list do not pair with markers inside it. Explicit lists are
+    /// transparent to the chunk.
+    list_scope: usize,
+    /// Allocator for native-list chunk identities, threaded across the
+    /// segments of one segment group so distinct native lists get
+    /// distinct identities.
+    next_list_scope: usize,
 }
 
 #[derive(Clone, Copy)]
 struct ProjFlags {
     in_native_list: bool,
     explicit_item_has_native: Option<bool>,
+    list_scope: usize,
 }
 
 struct ProjSink<'b, 'el> {
@@ -1909,6 +1936,7 @@ impl<'b, 'el> ProjSink<'b, 'el> {
             flags.push(ProjFlags {
                 in_native_list: ctx.in_native_list,
                 explicit_item_has_native: ctx.explicit_item_has_native,
+                list_scope: ctx.list_scope,
             });
         }
         self.projection.push(item);
@@ -1927,6 +1955,16 @@ fn project_marker_stream<'a, 't>(
                 items,
                 ..
             } => {
+                let saved_scope = ctx.list_scope;
+                // The pairing chunk of a native list is its whole
+                // nesting family: nested lists inside its items inherit
+                // the same scope (live pairs a marker from an item into
+                // its own nested list's items), and only entering a
+                // native list from outside starts a new chunk.
+                if !*wikidot_explicit_block && ctx.list_scope == 0 {
+                    ctx.next_list_scope += 1;
+                    ctx.list_scope = ctx.next_list_scope;
+                }
                 for item in items {
                     match item {
                         ListItem::Elements { elements, .. } => {
@@ -1952,6 +1990,7 @@ fn project_marker_stream<'a, 't>(
                         }
                     }
                 }
+                ctx.list_scope = saved_scope;
             }
             _ => project_marker_sequence(std::slice::from_ref(element), sink, ctx),
         }
@@ -2278,6 +2317,7 @@ fn split_dash_joined<'t>(joined: Vec<Element<'t>>, segments: &mut [Vec<Element<'
 fn repair_literal_marker_pairs_segments<'t>(
     segments: &mut [&mut Vec<Element<'t>>],
     inside_monospace: bool,
+    seed_scope: usize,
 ) -> bool {
     if !segments
         .iter()
@@ -2295,13 +2335,20 @@ fn repair_literal_marker_pairs_segments<'t>(
         );
     }
     let mut projection = Vec::new();
+    let mut flags = Vec::new();
+    let mut next_scope = seed_scope;
     for original in &originals {
         let mut sink = ProjSink {
             projection: &mut projection,
-            flags: None,
+            flags: Some(&mut flags),
         };
-        let mut ctx = ProjFlagCtx::default();
+        let mut ctx = ProjFlagCtx {
+            next_list_scope: next_scope,
+            list_scope: seed_scope,
+            ..ProjFlagCtx::default()
+        };
         project_marker_stream(original, &mut sink, &mut ctx);
+        next_scope = ctx.next_list_scope;
     }
     let mut roles: Vec<Option<PairRole<'t>>> = Vec::new();
     roles.resize_with(projection.len(), || None);
@@ -2314,16 +2361,26 @@ fn repair_literal_marker_pairs_segments<'t>(
             kind == InlineFormatKind::Strikethrough,
             None,
             None,
+            Some(&flags),
         );
     }
     // Script formats cross items the same way (live pairs them across
     // nesting), but they are not EDGE_MARKERS: their containers are not
     // re-paired as marker edges.
     for kind in [InlineFormatKind::Subscript, InlineFormatKind::Superscript] {
-        found |= pair_symmetric_markers(&projection, &mut roles, kind, false, None, None);
+        found |= pair_symmetric_markers(
+            &projection,
+            &mut roles,
+            kind,
+            false,
+            None,
+            None,
+            Some(&flags),
+        );
     }
     if !inside_monospace {
-        found |= pair_monospace_markers(&projection, &mut roles, None);
+        found |=
+            pair_monospace_markers(&projection, &mut roles, None, Some(&flags), None);
     }
     found |= pair_color_markers(&projection, &mut roles);
     if !found {
@@ -2344,6 +2401,7 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
     segments: &mut [&mut Vec<Element<'t>>],
     inside_monospace: bool,
     foster_first_segment: usize,
+    seed_scope: usize,
 ) -> bool {
     if !segments
         .iter()
@@ -2363,6 +2421,7 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
     let mut projection = Vec::new();
     let mut flags = Vec::new();
     let mut ranges = Vec::with_capacity(originals.len());
+    let mut next_scope = seed_scope;
     for original in &originals {
         let start = projection.len();
         {
@@ -2370,8 +2429,13 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
                 projection: &mut projection,
                 flags: Some(&mut flags),
             };
-            let mut ctx = ProjFlagCtx::default();
+            let mut ctx = ProjFlagCtx {
+                next_list_scope: next_scope,
+                list_scope: seed_scope,
+                ..ProjFlagCtx::default()
+            };
             project_marker_stream(original, &mut sink, &mut ctx);
+            next_scope = ctx.next_list_scope;
         }
         ranges.push((start, projection.len()));
     }
@@ -2390,6 +2454,7 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
             kind == InlineFormatKind::Strikethrough,
             Some(&mut pairs),
             Some(foster_start),
+            Some(&flags),
         );
     }
     // Script formats cross items and the splice the same way (live
@@ -2402,10 +2467,17 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
             false,
             Some(&mut pairs),
             Some(foster_start),
+            Some(&flags),
         );
     }
     if !inside_monospace {
-        found |= pair_monospace_markers(&projection, &mut roles, Some(&mut pairs));
+        found |= pair_monospace_markers(
+            &projection,
+            &mut roles,
+            Some(&mut pairs),
+            Some(&flags),
+            Some(foster_start),
+        );
     }
     found |= pair_color_markers(&projection, &mut roles);
     if !found {
@@ -2443,7 +2515,22 @@ fn repair_literal_marker_pairs_segments_with_foster<'t>(
         // opener has no explicit context and stays literal.
         let opener_in_cell_list_context = flag.explicit_item_has_native.is_some()
             && (flag.in_native_list || flag.explicit_item_has_native == Some(false));
-        if opener_in_cell_list_context {
+        // The fostered scope only flows when the opener's native list
+        // reaches the splice: any real content outside a native list
+        // between the opener and the end of the cell (a plain non-list
+        // line such as `zzz` after the nested list) ends the native
+        // list's chunk, and its fostered closer never joins it.
+        let flow_broken = projection[*open + 1..foster_start].iter().enumerate().any(
+            |(offset, item)| {
+                let index_in_stream = *open + 1 + offset;
+                flags[index_in_stream].list_scope == 0
+                    && matches!(
+                        item,
+                        ProjItem::Text(value) if !value.trim().is_empty()
+                    )
+            },
+        );
+        if opener_in_cell_list_context && !flow_broken {
             roles[*close] = Some(PairRole::Drop);
             spliced_closes.push((*kind, *open));
         } else {
@@ -2529,10 +2616,11 @@ fn repair_literal_marker_pairs_pass<'t>(
             kind == InlineFormatKind::Strikethrough,
             None,
             None,
+            None,
         );
     }
     if !inside_monospace {
-        found |= pair_monospace_markers(&projection, &mut roles, None);
+        found |= pair_monospace_markers(&projection, &mut roles, None, None, None);
     }
     found |= pair_color_markers(&projection, &mut roles);
     if !found {
@@ -2871,7 +2959,19 @@ fn pair_symmetric_markers<'t>(
     edges_required: bool,
     mut pairs: Option<&mut Vec<(usize, usize, InlineFormatKind)>>,
     foster_start: Option<usize>,
+    scopes: Option<&[ProjFlags]>,
 ) -> bool {
+    // A marker pair may only cross items of the SAME native list (live
+    // treats each native list as its own pairing chunk; markers outside
+    // a native list never pair with markers inside it). A pair whose
+    // closer is in the fostered tail is exempt from the scope rule: the
+    // caller's splice-context filter governs those pairs.
+    let is_foster_cross = |open_index: usize, index: usize| -> bool {
+        foster_start.is_some_and(|start| open_index < start && index >= start)
+    };
+    let same_scope = |open_index: usize, index: usize| -> bool {
+        scopes.is_none_or(|flags| flags[open_index].list_scope == flags[index].list_scope)
+    };
     let marker = kind.open_marker();
     let mut siblings: Vec<Option<usize>> = vec![None; projection.len()];
     let mut edge_stack: Vec<usize> = Vec::new();
@@ -2944,6 +3044,13 @@ fn pair_symmetric_markers<'t>(
                 }
             }
             Some(open_index) => {
+                // The native-list scope barrier: a closer in another
+                // chunk than the opener was left for cannot close it,
+                // exactly as when an explicit barrier intervenes.
+                if !same_scope(open_index, index) && !is_foster_cross(open_index, index) {
+                    open = None;
+                    continue;
+                }
                 let pairs_edges = matches!(
                     projection[open_index],
                     ProjItem::EdgeOpen(_) | ProjItem::EdgeClose(_)
@@ -3016,6 +3123,8 @@ fn pair_monospace_markers<'t>(
     projection: &[ProjItem<'_>],
     roles: &mut [Option<PairRole<'t>>],
     mut pairs: Option<&mut Vec<(usize, usize, InlineFormatKind)>>,
+    scopes: Option<&[ProjFlags]>,
+    foster_start: Option<usize>,
 ) -> bool {
     let mut found = false;
     let mut open: Option<usize> = None;
@@ -3046,6 +3155,15 @@ fn pair_monospace_markers<'t>(
                 }
             }
             Some(open_index) => {
+                // Same native-list scope barrier as `pair_symmetric_markers`.
+                if scopes.is_some_and(|flags| {
+                    flags[open_index].list_scope != flags[index].list_scope
+                }) && !foster_start
+                    .is_some_and(|start| open_index < start && index >= start)
+                {
+                    open = None;
+                    continue;
+                }
                 if matches!(item, ProjItem::Text(value) if *value == "}}")
                     && projection_has_content(&projection[open_index + 1..index])
                 {
