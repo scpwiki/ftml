@@ -215,7 +215,11 @@ fn parse_list_block_impl<'r, 't>(
         && let Some(depth) = parser.native_blockquote_depth()
         && (parser.has_native_blockquote_body_end(block_rule, depth)
             || parser.has_surplus_quote_list_close(block_rule, depth)
-            || parser.has_shallower_quote_list_close(block_rule, depth))
+            || parser.has_shallower_quote_list_close(block_rule, depth)
+            || (matches!(
+                block_rule.name,
+                "block-list-unordered" | "block-list-ordered"
+            ) && parser.has_shallower_quote_li_close(depth)))
     {
         parser.get_body_elements_with_literal_quote_context(
             block_rule,
