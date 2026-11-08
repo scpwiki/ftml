@@ -1234,6 +1234,67 @@ fn parse_list_item<'r, 't>(
                 errors,
             );
         }
+        // Item-level closer escape (d6-24.3): the completing explicit-list
+        // pair can end a run formation in the middle of the tail list, with
+        // the items after its closer belonging to the enclosing list while
+        // the items before it stay in this item. Unlike the whole-tail
+        // escape above, the head list may carry a block frame (the d6-24
+        // note), so only the tail is required to be plain; the split itself
+        // is purely positional — the first recorded explicit-list end inside
+        // this body that straddles the tail items' borrowed-text offsets.
+        // No end (a lone closer, lihoist p19) or no straddle (the note-split
+        // pin) means no escape.
+        let partial_escape: Option<(usize, Vec<ListItem<'t>>)> = match &elements[..core_end] {
+            [
+                Element::List {
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                Element::List {
+                    items: tail_items,
+                    wikidot_explicit_block: false,
+                    ..
+                },
+                rest @ ..,
+            ] if plain_native(tail_items)
+                && rest.iter().all(|element| {
+                    element.is_whitespace()
+                        || matches!(
+                            element,
+                            Element::Partial(PartialElement::WikidotBlockClose(_))
+                        )
+                }) =>
+            {
+                super::wikidot_straddle_split_at_explicit_list_end(
+                    parser,
+                    tail_items,
+                    body_start,
+                    source_end,
+                )
+                .map(|split| (split, tail_items[split..].to_vec()))
+            }
+            _ => None,
+        };
+        if let Some((split, escaped_items)) = partial_escape {
+            if let Some(Element::List { items, .. }) = elements.get_mut(1) {
+                items.truncate(split);
+            }
+            let element = Element::Partial(PartialElement::ListItem(ListItem::Elements {
+                elements,
+                attributes,
+            }));
+            let mut output = vec![element];
+            output.extend(
+                escaped_items
+                    .into_iter()
+                    .map(|item| Element::Partial(PartialElement::ListItem(item))),
+            );
+            return success_elements_with_paragraph_safety(
+                false,
+                Elements::Multiple(output),
+                errors,
+            );
+        }
         // A run formation that never fused (no complete explicit list pair)
         // leaves its lone list-closer line as an escaped paragraph; live
         // keeps the closer as an item of the run list instead (lihoist
