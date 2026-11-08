@@ -323,3 +323,7 @@ corpus-test/list/wikidot-a2-cross-div-follower-bare/input.ftml	Div@20..58 scan-o
 corpus-test/list/wikidot-a2-cross-div-follower-bare/input.ftml	Div@20..34 descent-only
 corpus-test/list/wikidot-a2-cross-div-ordered-follower-bare/input.ftml	Div@20..58 scan-only
 corpus-test/list/wikidot-a2-cross-div-ordered-follower-bare/input.ftml	Div@20..34 descent-only
+corpus-test/list/wikidot-li-nl81-e-div-pair-text/input.ftml	Div@16..34 scan-only
+corpus-test/list/wikidot-li-nl81-e-div-mid-text/input.ftml	Div@16..41 scan-only
+corpus-test/list/wikidot-li-nl81-e-div-pair-text-ol/input.ftml	Div@16..34 scan-only
+corpus-test/list/wikidot-li-nl81-e-swallow-plain/input.ftml	Div@16..38 scan-only
