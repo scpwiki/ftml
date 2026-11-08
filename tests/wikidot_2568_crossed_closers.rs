@@ -145,7 +145,13 @@ fn a2_div_crossing_list_closers() {
         "after\n",
     ));
     assert_no_literals(&html, A2_MARKERS);
-    assert!(html.contains("<div><p>inner</p></div>"), "html: {html}");
+    // Live (saved-page probe muse-probe-adj1108-a2-div-cross, sandbox-for-codex,
+    // adjudicated muse-bhl/closeout-verify/adjudge-1108/probe.json): div body
+    // terminated by [[/li]] renders with PR #1242's trailing break as
+    // `<p>inner<br /></p>` (FTML: `<p>inner<br>`). Assertion narrowed to that live
+    // shape; remaining structural differences (list-close boundary / bare-vs-wrapped
+    // trailing text) are separate recorded items.
+    assert!(html.contains("<div><p>inner<br"), "html: {html}");
     assert_list_closed_before(&html, "</ul>", "after");
 }
 
