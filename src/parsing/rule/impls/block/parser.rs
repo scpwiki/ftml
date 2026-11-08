@@ -30,8 +30,8 @@ use crate::parsing::collect::{
 use crate::parsing::condition::ParseCondition;
 use crate::parsing::consume::consume;
 use crate::parsing::parser::{
-    QuoteBodyLineStatus, QuoteScanOutcome, WikidotLiClose, WikidotLiHead,
-    wikidot_first_block_close_after_from_heads,
+    QuoteBodyLineStatus, QuoteEscapedUnit, QuoteScanOutcome, WikidotLiClose,
+    WikidotLiHead, wikidot_first_block_close_after_from_heads,
 };
 use crate::parsing::{
     ExtractedToken, ParagraphSplitEntry, ParagraphSplitKind, ParseError, ParseErrorKind,
@@ -3547,12 +3547,34 @@ where
                 }
             } else if self.prepare_quote_body_line()? == QuoteBodyLineStatus::Boundary {
                 if self.quote_boundary_starts_body_end(block_rule) {
+                    if block_rule.name == "block-list-item"
+                        && self.boundary_is_unquoted_list_close()
+                    {
+                        // BRIEF-UQ57d: an unquoted `[[/ul]]`/`[[/ol]]`
+                        // closes the enclosing LIST, not this item body;
+                        // soft-end without consuming so the UL consumes it
+                        // as its own close (the no-shallow-text path).
+                        return Ok(crate::parsing::ParseSuccess::new(
+                            segments,
+                            all_errors,
+                            paragraph_safe,
+                        ));
+                    }
+                    if block_rule.name == "block-list-item" && self.boundary_is_li_close()
+                    {
+                        self.set_wikidot_quote_boundary_li_closed();
+                    }
                     self.consume_quote_boundary_body_end(block_rule)?;
                     return Ok(crate::parsing::ParseSuccess::new(
                         segments,
                         all_errors,
                         paragraph_safe,
                     ));
+                }
+                if self.hoist_unquoted_close_shallow_text(block_rule)? {
+                    // BRIEF-UQ57d: shallow text was hoisted bare and any
+                    // blanks absorbed; the unquoted closer is next.
+                    continue;
                 }
                 if self.quote_body_literal_residuals() == Some(true)
                     && self.current().token == Token::LineBreak
@@ -6299,6 +6321,13 @@ where
                 if self.quote_boundary_starts_body_end(block_rule) {
                     return self.consume_quote_boundary_body_end(block_rule);
                 }
+                // The unquoted closer (or the next boundary line) follows
+                // from here; the attempted lines stay unconsumed.
+                if self.hoist_unquoted_close_shallow_text(block_rule)? {
+                    // BRIEF-UQ57d: shallow text was hoisted bare and any
+                    // blanks absorbed; the closer line is next.
+                    continue;
+                }
                 // BRIEF-QT52: a UL/OL in shallower-text mode soft-ends at
                 // the first shallower line (text, blank, or block markup)
                 // when a bare list close quoted at the required depth is
@@ -7484,6 +7513,248 @@ where
         // if it is at required depth already, the region scan handles it.
         // Otherwise scan onward for the quoted close.
         self.shallower_text_region_has_quoted_list_close(block_rule, required, &probe)
+    }
+
+    /// Scan from the boundary without mutating: the first depth-0 closer line
+    /// in the region decides. Blank lines and shallow plain-text lines are
+    /// absorbed by the hoist; anything else (deeper-quoted content, block
+    /// markup, tokens other than plain text) stops the hoist, so the shape
+    /// keeps the previous behavior.
+    ///
+    /// Returns the absorbed lines `(content_start, content_end)` when the
+    /// region ends at an unquoted closer line (bare `[[/ul]]`/`[[/ol]]`, or a
+    /// bare `[[/li]]` for an item body), or `None` otherwise with the parser
+    /// untouched.
+    fn scan_unquoted_close_shallow_lines(
+        parser: &Parser<'r, 't>,
+        list_body: bool,
+    ) -> Option<Vec<(usize, usize)>> {
+        let item_body = !list_body;
+        let mut scan = parser.clone();
+        let mut lines: Vec<(usize, usize)> = Vec::new();
+        loop {
+            if matches!(
+                scan.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            ) {
+                // Blank region: absorbable, not hoistable.
+                if scan.step().is_err() {
+                    return None;
+                }
+                continue;
+            }
+            if scan.current().token == Token::InputEnd {
+                return None;
+            }
+            let line_start = scan.current().span.start;
+            let mut depth = 0usize;
+            let mut probe = scan.clone();
+            while probe.current().token == Token::Quote {
+                depth += probe.current().slice.len();
+                if probe.step().is_err() || probe.get_optional_space().is_err() {
+                    return None;
+                }
+            }
+            if depth == 0 {
+                let is_item_close = probe.clone().get_end_block().is_ok_and(|name| {
+                    name.strip_suffix('_')
+                        .unwrap_or(&name)
+                        .eq_ignore_ascii_case("li")
+                });
+                if is_item_close {
+                    return item_body.then_some(lines);
+                }
+                let is_list_close = probe.clone().get_end_block().is_ok_and(|name| {
+                    let name = name.strip_suffix('_').unwrap_or(&name);
+                    name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+                });
+                if is_list_close {
+                    return Some(lines);
+                }
+                // Any other depth-0 closer: out of this lane.
+                if probe.get_end_block().is_ok() {
+                    return None;
+                }
+            } else {
+                // Any deeper-quoted closer line (bare end-block) is the
+                // paired/crossed-close family, not this lane's: bail so the
+                // quoted-close paths keep their shape. A deeper-quoted line
+                // without a closer (`>> x`, `> [[li]]v`) stays region
+                // content: skip it, it parses as the body's own rows.
+                let mut end = probe.clone();
+                if end.get_end_block().is_ok() {
+                    return None;
+                }
+                while !matches!(
+                    scan.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                ) {
+                    if scan.step().is_err() {
+                        return None;
+                    }
+                }
+                if scan.step().is_err() {
+                    return None;
+                }
+                continue;
+            }
+            // A depth-0 shallow line candidate: decide whether it is plain
+            // text (no block markers). Blank lines are absorbed silently.
+            let mut plain_text = true;
+            let mut line_end = None;
+            let mut scan_line = scan.clone();
+            loop {
+                match scan_line.current().token {
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd => {
+                        line_end = Some(scan_line.current().span.start);
+                        break;
+                    }
+                    Token::LeftBlock | Token::LeftBlockStar | Token::LeftBlockEnd => {
+                        plain_text = false;
+                        break;
+                    }
+                    _ => {
+                        if scan_line.step().is_err() {
+                            return None;
+                        }
+                    }
+                }
+            }
+            if !plain_text {
+                return None;
+            }
+            let line_end = line_end?;
+            let content = &scan.full_text().inner()[line_start..line_end];
+            if content.trim().is_empty() {
+                // whitespace-only line: absorbable blank
+                while !matches!(
+                    scan.current().token,
+                    Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+                ) {
+                    if scan.step().is_err() {
+                        return None;
+                    }
+                }
+                if scan.step().is_err() {
+                    return None;
+                }
+                continue;
+            }
+            lines.push((line_start, line_end));
+            // Advance to the next line.
+            while !matches!(
+                scan.current().token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            ) {
+                if scan.step().is_err() {
+                    return None;
+                }
+            }
+            if scan.step().is_err() {
+                return None;
+            }
+        }
+    }
+
+    /// BRIEF-UQ57d: hoist shallow plain-text lines out of an explicit list
+    /// body (or an item body in it) when the next bare closer is the body's
+    /// UNQUOTED list close (depth 0). Live renders every shallow line bare
+    /// at the top level and consumes the unquoted closer as the list's
+    /// paired close; blank lines vanish.
+    ///
+    /// Returns `true` when the region was absorbed (nothing else for the
+    /// caller to do but fall through to the closing logic); `false` when
+    /// the region does not end at an unquoted closer, with the parser
+    /// untouched.
+    pub(crate) fn hoist_unquoted_close_shallow_text(
+        &mut self,
+        block_rule: &BlockRule,
+    ) -> Result<bool, ParseError> {
+        if !self.settings().layout.legacy() || self.discarding_hidden_body() {
+            return Ok(false);
+        }
+        if !matches!(
+            block_rule.name,
+            "block-list-item" | "block-list-unordered" | "block-list-ordered"
+        ) {
+            return Ok(false);
+        }
+        let list_body = block_rule.name != "block-list-item";
+        let Some(lines) = Self::scan_unquoted_close_shallow_lines(self, list_body) else {
+            return Ok(false);
+        };
+        // Absorption phase: consume exactly the scanned lines. Blank lines
+        // between them are absorbed silently; text lines emit one bare
+        // (paragraph-unsafe) escaped unit each.
+        let mut pending = lines.into_iter();
+        let mut hoisted = false;
+        loop {
+            match self.current().token {
+                Token::LineBreak | Token::ParagraphBreak => {
+                    self.step()?;
+                    continue;
+                }
+                Token::InputEnd => break,
+                _ => {}
+            }
+            let Some((content_start, content_end)) = pending.next() else {
+                break;
+            };
+            debug_assert_eq!(self.current().span.start, content_start);
+            let content = &self.full_text().inner()[content_start..content_end];
+            let elements = vec![
+                text!(content),
+                Element::LineBreaks(std::num::NonZeroU32::new(1).unwrap()),
+            ];
+            self.push_quote_escaped_unit(QuoteEscapedUnit::Elements(elements, false));
+            hoisted = true;
+            while !matches!(
+                self.current().token,
+                Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
+            ) {
+                self.step()?;
+            }
+            if matches!(
+                self.current().token,
+                Token::LineBreak | Token::ParagraphBreak
+            ) {
+                self.step()?;
+            }
+        }
+        if hoisted {
+            self.set_wikidot_quote_boundary_unquoted_close_text();
+        }
+        Ok(true)
+    }
+
+    /// Whether the line at the boundary position is an UNQUOTED
+    /// `[[/ul]]`/`[[/ol]]` (left-block-end at line start). A quoted close
+    /// line starts with `Token::Quote` and fails the `get_end_block` probe.
+    pub(crate) fn boundary_is_unquoted_list_close(&self) -> bool {
+        let mut probe = self.clone();
+        if probe.current().token == Token::LineBreak && probe.step().is_err() {
+            return false;
+        }
+        probe.get_end_block().is_ok_and(|name| {
+            let name = name.strip_suffix('_').unwrap_or(&name);
+            name.eq_ignore_ascii_case("ul") || name.eq_ignore_ascii_case("ol")
+        })
+    }
+
+    /// Whether the line at the boundary position is a `[[/li]]` close.
+    /// Depth-agnostic on purpose: any consumed item close ends the item,
+    /// which is the paired outcome the unquoted-close family keeps its
+    /// trailing break for (BRIEF-UQ57d).
+    pub(crate) fn boundary_is_li_close(&self) -> bool {
+        let mut probe = self.clone();
+        if probe.current().token == Token::LineBreak && probe.step().is_err() {
+            return false;
+        }
+        probe.get_end_block().is_ok_and(|name| {
+            name.strip_suffix('_')
+                .unwrap_or(&name)
+                .eq_ignore_ascii_case("li")
+        })
     }
 
     pub(crate) fn consume_quote_boundary_body_end(

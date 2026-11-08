@@ -858,6 +858,7 @@ fn try_consume_fn<'r, 't>(
     let mut append_unquoted_close_break = false;
     let mut append_from_list_boundary = false;
     let mut append_from_ordered_list_boundary = false;
+    let mut absorb_unquoted_close_break = false;
     let mut flat_split: Option<QuoteFlatSplit<'t>> = None;
     let mut first_row_depth: Option<usize> = None;
 
@@ -1351,6 +1352,12 @@ fn try_consume_fn<'r, 't>(
             );
         let boundary_list_close = parser.take_wikidot_quote_boundary_list_close();
         let li_auto_close = parser.take_wikidot_quote_boundary_li_auto_close();
+        let text_hoist = parser.take_wikidot_quote_boundary_unquoted_close_text();
+        let li_closed = parser.take_wikidot_quote_boundary_li_closed();
+        // A hoisted shallow text line carries its own break; the unquoted
+        // closer of a DEGRADED item absorbs its row's break (live renders
+        // none). The paired (LI closed) family keeps it (BRIEF-UQ57d).
+        absorb_unquoted_close_break |= text_hoist && !li_closed;
         let quote_end_list_break =
             quote_end_list_row && !boundary_list_close && !li_auto_close;
         if quote_end_list_row && boundary_list_close {
@@ -1639,7 +1646,9 @@ fn try_consume_fn<'r, 't>(
                     ));
                 }
                 _ => {
-                    elements.push(Element::LineBreak);
+                    if !absorb_unquoted_close_break {
+                        elements.push(Element::LineBreak);
+                    }
                 }
             }
         }
@@ -1652,6 +1661,10 @@ fn try_consume_fn<'r, 't>(
         elements.extend(segment);
     }
 
+    // A hoisted shallow text line carries its own break (BRIEF-UQ57d): an
+    // unordered list whose item did NOT pair absorbs the boundary break; a
+    // paired item keeps it. An ordered list keeps its degraded shell either
+    // way; the absorbing break rides inside it.
     if append_unquoted_close_break
         && !(append_from_list_boundary
             && migrated_break_dropped_before_following_line(parser))
@@ -1668,11 +1681,14 @@ fn try_consume_fn<'r, 't>(
                     elements.push(ordered_boundary_close_shell(
                         parser.current().token == Token::Quote,
                     ));
-                } else {
+                    if let Some(last) = split_counts.last_mut() {
+                        last.0 += 1;
+                    }
+                } else if !absorb_unquoted_close_break {
                     elements.push(Element::LineBreak);
-                }
-                if let Some(last) = split_counts.last_mut() {
-                    last.0 += 1;
+                    if let Some(last) = split_counts.last_mut() {
+                        last.0 += 1;
+                    }
                 }
             }
         }
