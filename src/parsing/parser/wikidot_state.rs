@@ -507,6 +507,26 @@ impl Parser<'_, '_> {
 
     pub(crate) fn set_in_wikidot_advanced_table_cell_body(&mut self, value: bool) {
         set_flag(&mut self.wikidot.flags, ADVANCED_TABLE_CELL_BODY, value);
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        if value {
+            cache
+                .advanced_cell_span_depths
+                .push(self.wikidot_span_body_depth());
+        } else {
+            cache.advanced_cell_span_depths.pop();
+        }
+    }
+
+    /// Whether the innermost open span body opened after the innermost
+    /// advanced-table-cell body entry (i.e. the span is inside the cell,
+    /// not enclosing it). Live: an align inside a cell keeps its span head
+    /// breaks only in this case; a span enclosing the cell absorbs them.
+    pub(crate) fn wikidot_span_opened_inside_cell(&self) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        cache
+            .advanced_cell_span_depths
+            .last()
+            .is_some_and(|depth| self.wikidot_span_body_depth() > *depth)
     }
 
     pub(crate) fn arm_wikidot_advanced_cell_paragraph(&mut self) {

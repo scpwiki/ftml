@@ -276,6 +276,12 @@ pub(super) struct BlockScanCache<'t> {
     bare_div_literal: Cell<bool>,
     inline_container_body_names: Vec<&'static str>,
     pub(super) body_end_boundaries: Vec<BodyEndBoundary>,
+    /// `span_body_depth` snapshot taken at each advanced-table-cell body
+    /// entry. A span opened after the innermost cell entry is inside the
+    /// cell; one already open there predates the cell (align head-break
+    /// absorption depends on this, rescued from lost mutable state into
+    /// the shared cache like `pending_iftags_end_swallows`).
+    advanced_cell_span_depths: Vec<u16>,
     quote_escaped_units: Vec<QuoteEscapedUnit<'t>>,
     pub(super) unmatched_close_scan: super::unmatched_close_scan::UnmatchedCloseScanCache,
     /// Monotone scan slot for the Wikidot anchor-label walk's termination
