@@ -600,9 +600,20 @@ fn parse_list_block_impl<'r, 't>(
     // does content inside a kept iftags gate body (kept-gate pin: boundary
     // or still-pending designated end).
     record_wikidot_explicit_list_end(parser);
-    let content_after_list = parser.wikidot_next_line_has_content()
+    // pw65a: a marker-line closer or a stashed numbered lost-owner anchor
+    // chrome marks this list as re-attaching to its follower as a paragraph
+    // in live — even across blank lines (probe rounds pw65a-1/2/3, o5/r3c/
+    // r3e with blank-separated prose). The blank-tolerant peek applies only
+    // to those shapes; plain/degraded lists keep the untolerant check.
+    let stash_formed = !anchor_chromes.is_empty();
+    let follower_wrap = closer_line_marker.is_some() || stash_formed;
+    let content_after_list = (parser.wikidot_next_line_has_content()
+        || (follower_wrap && parser.wikidot_next_line_has_content_skipping_blanks()))
         && !parser.body_end_boundary_accepts("iftags")
         && !parser.has_pending_iftags_end_ahead();
+    if wikidot && !nested && follower_wrap {
+        parser.record_wikidot_post_list_follower_wrap(stash_formed);
+    }
     if parser.settings().layout.legacy()
         && !nested
         && !flag_score
