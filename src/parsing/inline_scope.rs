@@ -1917,7 +1917,10 @@ fn amend_scope_tail<'t>(
         }) {
             return false;
         }
-        if !matches!(elements.last(), Some(Element::LineBreak)) {
+        // The amended tail already ends with a break when the last element
+        // is itself a scope container ending in one (l2: a reopened
+        // strong segment already carries the newline that follows it).
+        if !scope_tail_ends_with_break(elements) {
             elements.push(Element::LineBreak);
         }
         return true;
@@ -2046,12 +2049,60 @@ fn append_root_sequence<'t>(
             (output.last(), sequence.first()),
             (Some(previous), Some(next)) if same_scope_wrapper(previous, next)
         );
+    // A paragraph-wrapped break-only span segment and the scope
+    // continuation that follows are one span segment on live; when the
+    // next lowered sequence starts with a bare container with the same
+    // wrapper as the paragraph tail's container, merge into the tail (l2
+    // break ownership).
+    let paragraph_tail_merge = scope_continues
+        && matches!(
+            output.last(),
+            Some(Element::Container(paragraph)) if paragraph.ctype() == ContainerType::Paragraph
+        )
+        && output.last().is_some_and(|previous| {
+            let Element::Container(paragraph) = previous else {
+                return false;
+            };
+            paragraph.elements().last().is_some_and(|tail| {
+                // A content-bearing tail ends its chunk on live (heading
+                // wrapper copies stay separate); only a break-only segment
+                // is a piece of the continuing scope.
+                let Element::Container(tail_container) = tail else {
+                    return false;
+                };
+                if !tail_container.elements().iter().all(|element| {
+                    matches!(element, Element::LineBreak | Element::LineBreaks(_))
+                }) {
+                    return false;
+                }
+                sequence
+                    .first()
+                    .is_some_and(|next| same_scope_wrapper(tail, next))
+            })
+        });
     if mergeable {
         let next = sequence.remove(0);
         let previous = output.last_mut().expect("mergeable checked above");
         scope_sibling_merge(previous, next);
+    } else if paragraph_tail_merge {
+        let next = sequence.remove(0);
+        let previous = output.last_mut().expect("paragraph tail checked above");
+        paragraph_tail_scope_sibling_merge(previous, next);
     }
     output.append(sequence);
+}
+
+fn paragraph_tail_scope_sibling_merge<'t>(
+    previous: &mut Element<'t>,
+    next: Element<'t>,
+) -> bool {
+    let Element::Container(paragraph) = previous else {
+        return false;
+    };
+    let Some(tail) = paragraph.elements_mut().last_mut() else {
+        return false;
+    };
+    scope_sibling_merge(tail, next)
 }
 
 fn flush_paragraph_group<'t>(
@@ -2089,6 +2140,18 @@ fn flush_paragraph_group<'t>(
             elements,
             attributes,
         )));
+    } else if output.last().is_some_and(|previous| {
+        elements
+            .first()
+            .is_some_and(|first| same_scope_wrapper(previous, first))
+    }) {
+        // The open span continued past a structural flush without its own
+        // paragraph: the closing break-only segment belongs inside the
+        // preceding segment of the same wrapper (l2 tail facet).
+        let first = elements.remove(0);
+        let previous = output.last_mut().expect("merge checked above");
+        scope_sibling_merge(previous, first);
+        output.extend(elements);
     } else {
         output.extend(elements);
     }
