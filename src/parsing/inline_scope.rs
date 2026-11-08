@@ -2,6 +2,9 @@ use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, Heading, HeadingReopen, InlineFormatKind,
     ListItem, PartialElement, TabViewItem, TableType,
+    WIKIDOT_FORMAT_LABEL_INSIDE_LIST_MARKER,
+    WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER,
+    WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER,
     WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER, WIKIDOT_HEADING_REOPEN_MARKER,
     WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER, WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
     WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
@@ -541,6 +544,22 @@ impl<'t> ActiveScopes<'t> {
     fn istack_push_inline(&mut self, tag: InlineTag, wrapper: ScopeWrapper<'t>) {
         if !self.istack.iter().any(|entry| entry.tag() == tag) {
             self.istack.push(IstEntry::Inline { tag, wrapper });
+        }
+    }
+
+    /// Retract the Inline istack entry for `tag` that
+    /// `istack_push_inline` added for a container whose children are being
+    /// lowered, without disturbing entries the children themselves pushed.
+    /// A plain `pop()` removes the last entry, which is a child scope in
+    /// cases like `**[[span]] ...` where a span opens inside the bold
+    /// segment and survives past the explicit list (strong-x family): the
+    /// lost stack entry made `sync_chain_to_istack` drop the span scope at
+    /// the list, breaking its reopening in the items.
+    fn istack_retract_inline(&mut self, tag: InlineTag) {
+        if let Some(index) = self.istack.iter().rposition(|entry| {
+            entry.tag() == tag && matches!(entry, IstEntry::Inline { .. })
+        }) {
+            self.istack.remove(index);
         }
     }
 
@@ -1428,6 +1447,28 @@ fn strip_understrike_list_close_tail_markers(attributes: &mut AttributeMap<'_>) 
     attributes.remove(WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER);
 }
 
+/// The inverse strong-x sibling of the spanin tail: a span/size scope
+/// inside a format pair closed beyond the list the pair crosses. `Break`
+/// renders the following paragraph bare with a leading break; `Bare`
+/// renders it bare with no inserted leading break.
+fn format_label_list_close_tail_of(
+    attributes: &AttributeMap<'_>,
+) -> Option<SpanListCloseTail> {
+    let map = attributes.get();
+    if map.contains_key(WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER) {
+        Some(SpanListCloseTail::Break)
+    } else if map.contains_key(WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER) {
+        Some(SpanListCloseTail::Bare)
+    } else {
+        None
+    }
+}
+
+fn strip_format_label_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
+    attributes.remove(WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER);
+    attributes.remove(WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER);
+}
+
 /// Whether `element` is a styled pre-list segment of a stopped
 /// underline/strikethrough pair. Its lowering must not pop the enclosing
 /// scope's `Span` stack entry (the scope survives into the list items on
@@ -1453,6 +1494,29 @@ fn clear_stop_marker(element: &mut Element<'_>) {
         container
             .attributes_mut()
             .remove(WIKIDOT_FORMAT_STOPS_AT_LIST_MARKER);
+    }
+}
+
+/// Whether `element` is a reopened format wrapper stamped at segmentation
+/// time because a span/size scope opened inside the format pair and closes
+/// beyond the list it wraps (see `label_scope_straddles_list`). Lowering
+/// must apply that continuing scope inside the wrapper.
+fn format_label_inside_segment(element: &Element<'_>) -> bool {
+    let Element::Container(container) = element else {
+        return false;
+    };
+    format_kind_of(container.ctype()).is_some()
+        && container
+            .attributes()
+            .get()
+            .contains_key(WIKIDOT_FORMAT_LABEL_INSIDE_LIST_MARKER)
+}
+
+fn clear_format_label_inside_marker(element: &mut Element<'_>) {
+    if let Element::Container(container) = element {
+        container
+            .attributes_mut()
+            .remove(WIKIDOT_FORMAT_LABEL_INSIDE_LIST_MARKER);
     }
 }
 
@@ -1578,12 +1642,55 @@ fn format_segment_has_content(elements: &[Element<'_>]) -> bool {
     })
 }
 
+/// Whether a span/size scope opens before an explicit list in `elements`
+/// and closes after it (the strong-x shape: the scope is a child of the
+/// format pair being segmented, so live nests it inside the format in the
+/// list items).
+pub(crate) fn label_scope_straddles_list(elements: &[Element<'_>]) -> bool {
+    let mut span_open = false;
+    let mut size_open = false;
+    let mut span_crossed_list = false;
+    let mut size_crossed_list = false;
+    for element in elements {
+        match element {
+            Element::Partial(PartialElement::InlineSpanOpen(..)) => span_open = true,
+            Element::Partial(PartialElement::InlineSpanClose(_)) => {
+                if span_crossed_list {
+                    return true;
+                }
+                span_open = false;
+            }
+            Element::Partial(PartialElement::InlineSizeOpen(..)) => size_open = true,
+            Element::Partial(PartialElement::InlineSizeClose(_)) => {
+                if size_crossed_list {
+                    return true;
+                }
+                size_open = false;
+            }
+            Element::List {
+                wikidot_explicit_block: true,
+                ..
+            } => {
+                if span_open {
+                    span_crossed_list = true;
+                }
+                if size_open {
+                    size_crossed_list = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 fn segment_format_run<'t>(
     elements: Vec<Element<'t>>,
     ctype: ContainerType,
     formed: &mut bool,
     stop_at_list: bool,
 ) -> Vec<Element<'t>> {
+    let label_inside = label_scope_straddles_list(&elements);
     let mut output = Vec::with_capacity(elements.len());
     let mut run: Vec<Element<'t>> = Vec::new();
     let mut seen_list = false;
@@ -1622,7 +1729,13 @@ fn segment_format_run<'t>(
                 run.clear();
             }
             let mut list = element;
-            segment_format_list_items(&mut list, ctype, formed, stop_at_list);
+            segment_format_list_items(
+                &mut list,
+                ctype,
+                formed,
+                stop_at_list,
+                label_inside,
+            );
             output.push(list);
             seen_list = true;
         } else {
@@ -1655,6 +1768,7 @@ fn segment_format_list_items<'t>(
     ctype: ContainerType,
     formed: &mut bool,
     stop_at_list: bool,
+    label_inside: bool,
 ) {
     let Element::List { items, .. } = list else {
         return;
@@ -1665,12 +1779,33 @@ fn segment_format_list_items<'t>(
                 if !stop_at_list {
                     let inner = mem::take(elements);
                     *elements = segment_format_run(inner, ctype, formed, stop_at_list);
+                    if label_inside {
+                        // Tag the reopened format wrapper(s) so lowering
+                        // applies the continuing span/size scope inside
+                        // them instead of wrapping them.
+                        for element in elements.iter_mut() {
+                            if let Element::Container(container) = element
+                                && container.ctype() == ctype
+                            {
+                                container.attributes_mut().insert(
+                                    WIKIDOT_FORMAT_LABEL_INSIDE_LIST_MARKER,
+                                    Cow::Borrowed(""),
+                                );
+                            }
+                        }
+                    }
                 }
                 // For a stopped pair the item content is left unstyled.
             }
             ListItem::SubList { element } => {
                 if !stop_at_list {
-                    segment_format_list_items(element, ctype, formed, stop_at_list);
+                    segment_format_list_items(
+                        element,
+                        ctype,
+                        formed,
+                        stop_at_list,
+                        label_inside,
+                    );
                 }
             }
         }
@@ -1730,6 +1865,7 @@ fn format_explicit_list_segments<'t>(
         };
         strip_span_list_close_tail_markers(container.attributes_mut());
         strip_understrike_list_close_tail_markers(container.attributes_mut());
+        strip_format_label_list_close_tail_markers(container.attributes_mut());
         return None;
     }
     let poisoned = subtree_contains_native_list(element);
@@ -1738,6 +1874,7 @@ fn format_explicit_list_segments<'t>(
     };
     let tail_mark = span_list_close_tail_of(container.attributes());
     let understrike_tail_mark = understrike_list_close_tail_of(container.attributes());
+    let label_tail_mark = format_label_list_close_tail_of(container.attributes());
     let stops_at_list = container
         .attributes()
         .get()
@@ -1780,6 +1917,22 @@ fn format_explicit_list_segments<'t>(
         let marker = match tail_mark {
             SpanListCloseTail::Break => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER,
             SpanListCloseTail::Bare => WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER,
+        };
+        for element in segmented.iter_mut() {
+            if let Element::List { attributes, .. } = element {
+                attributes.insert(marker, Cow::Borrowed(""));
+            }
+        }
+    }
+    if let Some(tail_mark) = label_tail_mark
+        && formed
+    {
+        // Inverse strong-x shape: the pair's tail segment closed a span/size
+        // scope beyond the list, so the paragraph after the list carries
+        // this tail shape instead of a paragraph wrapper.
+        let marker = match tail_mark {
+            SpanListCloseTail::Break => WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER,
+            SpanListCloseTail::Bare => WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER,
         };
         for element in segmented.iter_mut() {
             if let Element::List { attributes, .. } = element {
@@ -1866,6 +2019,10 @@ fn lower_root_sequence<'t>(
     // beyond the explicit list just processed; consumed by the next root
     // paragraph like the spanin tail above.
     let mut understrike_list_close_tail: Option<SpanListCloseTail> = None;
+    // Tail shape of a span/size scope inside a format pair that closed
+    // beyond the explicit list just processed (inverse strong-x shape);
+    // consumed by the next root paragraph like the tails above.
+    let mut label_list_close_tail: Option<SpanListCloseTail> = None;
 
     for mut element in mem::take(elements) {
         let is_paragraph = matches!(
@@ -1954,6 +2111,14 @@ fn lower_root_sequence<'t>(
                 && close_only_paragraph;
             let tail_bare = matches!(span_tail, Some(SpanListCloseTail::Bare))
                 && !close_only_paragraph;
+            // Inverse strong-x tail: the following paragraph renders bare
+            // (with a leading break for the `Break` shape; see the insert
+            // below). The spanin `Break` gate above keys on a close-only
+            // paragraph; this shape's paragraph is the text line that
+            // follows the pair close, so it is gated only on the marker.
+            let label_tail = label_list_close_tail.take();
+            let label_break = matches!(label_tail, Some(SpanListCloseTail::Break));
+            let label_bare = matches!(label_tail, Some(SpanListCloseTail::Bare));
             // Stopped underline/strikethrough tail: the after-list content
             // renders bare, outside the inline scope (live `b<br>` / `<br>`
             // after the list, with no scope tags).
@@ -1999,7 +2164,9 @@ fn lower_root_sequence<'t>(
                         | Element::List { .. }
                 )
             );
-            if starts_in_inline_scope
+            if label_break && !output.is_empty() && paragraph_group.is_none() {
+                container.elements_mut().insert(0, Element::LineBreak);
+            } else if starts_in_inline_scope
                 && !collapsible_heading_tail
                 && !reopens_paragraph_after_separator
                 && (!follows_table || tail_break)
@@ -2036,6 +2203,8 @@ fn lower_root_sequence<'t>(
                 wrapped: !collapsible_heading_tail
                     && !tail_break
                     && !tail_bare
+                    && !label_break
+                    && !label_bare
                     && !understrike_break
                     && !understrike_bare
                     && (follows_table
@@ -2083,12 +2252,15 @@ fn lower_root_sequence<'t>(
             Element::List { attributes, .. } => {
                 list_close_tail = span_list_close_tail_of(attributes);
                 understrike_list_close_tail = understrike_list_close_tail_of(attributes);
+                label_list_close_tail = format_label_list_close_tail_of(attributes);
                 strip_span_list_close_tail_markers(attributes);
                 strip_understrike_list_close_tail_markers(attributes);
+                strip_format_label_list_close_tail_markers(attributes);
             }
             _ => {
                 list_close_tail = None;
                 understrike_list_close_tail = None;
+                label_list_close_tail = None;
             }
         }
         let mut sequence = vec![element];
@@ -2142,6 +2314,40 @@ fn scope_tail_ends_with_break(elements: &[Element<'_>]) -> bool {
             }
             _ => return false,
         }
+    }
+}
+
+/// Whether `element`'s deep tail is exactly the scope break unit `chain`:
+/// the chain's wrappers wrap a trailing break, possibly nested inside
+/// other inline-scope wrappers (e.g. the head segment `Bold[Span[br]]`
+/// of a strong that opened its span before an explicit list carries the
+/// span break unit at its tail; the strong-x family).
+fn deep_tail_is_break_unit(
+    element: &Element<'_>,
+    chain: &[(ContainerType, AttributeMap<'_>)],
+) -> bool {
+    match element {
+        Element::LineBreak => chain.is_empty(),
+        Element::Container(container) if is_inline_scope_ctype(container.ctype()) => {
+            let nested = chain.first().is_some_and(|(ctype, attributes)| {
+                container.ctype() == *ctype && container.attributes() == attributes
+            });
+            if nested {
+                container
+                    .elements()
+                    .last()
+                    .is_some_and(|last| deep_tail_is_break_unit(last, &chain[1..]))
+            } else {
+                container
+                    .elements()
+                    .last()
+                    .is_some_and(|last| deep_tail_is_break_unit(last, chain))
+            }
+        }
+        Element::Color { elements, .. } | Element::Anchor { elements, .. } => elements
+            .last()
+            .is_some_and(|last| deep_tail_is_break_unit(last, chain)),
+        _ => false,
     }
 }
 
@@ -2231,6 +2437,36 @@ fn fold_scope_break_unit<'t>(
         && !scope_tail_ends_with_break(container.elements())
         && paragraph_group_has_content(container.elements())
     {
+        sequence.remove(0);
+        return;
+    }
+    // Formed-format head segment (strong-x family): the bare format
+    // container that carries the continuing span already ends with this
+    // break unit at its deep tail. On live that pre-list chunk is a
+    // paragraph (joining a preceding paragraph when there is one), so
+    // fold the unit away and place the chunk accordingly.
+    if output.len() >= 1
+        && output.last().is_some_and(|element| {
+            matches!(
+                element,
+                Element::Container(container)
+                    if format_kind_of(container.ctype()).is_some()
+            ) && deep_tail_is_break_unit(element, &chain)
+        })
+    {
+        let chunk = output.pop().expect("last element checked above");
+        if output.len() >= 1
+            && let Some(Element::Container(paragraph)) = output.last_mut()
+            && paragraph.ctype() == ContainerType::Paragraph
+        {
+            paragraph.elements_mut().push(chunk);
+        } else {
+            output.push(Element::Container(Container::new(
+                ContainerType::Paragraph,
+                vec![chunk],
+                AttributeMap::new(),
+            )));
+        }
         sequence.remove(0);
         return;
     }
@@ -3287,6 +3523,7 @@ fn lower_sequence<'t>(
         } else if !matches!(element, Element::Partial(_))
             && element.paragraph_safe()
             && !contains_inline_scope_control(&element)
+            && !format_label_inside_segment(&element)
         {
             if matches!(element, Element::LineBreak | Element::LineBreaks(_))
                 && matches!(run.last(), Some(Element::Text(text)) if text == " ")
@@ -3320,6 +3557,7 @@ fn lower_sequence<'t>(
                 if let Element::List { attributes, .. } = &mut element {
                     strip_span_list_close_tail_markers(attributes);
                     strip_understrike_list_close_tail_markers(attributes);
+                    strip_format_label_list_close_tail_markers(attributes);
                 }
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
                 if matches!(
@@ -3444,7 +3682,10 @@ fn lower_sequence<'t>(
                     None
                 };
                 let root_parts = inline_scope_parts(&element);
+                let mut pushed_inline = false;
                 if let Some((tag, wrapper)) = &root_parts {
+                    pushed_inline =
+                        !active.istack.iter().any(|entry| entry.tag() == *tag);
                     active.istack_push_inline(*tag, wrapper.clone());
                 }
                 lower_children(
@@ -3456,11 +3697,12 @@ fn lower_sequence<'t>(
                     segment,
                     bib,
                 );
-                if root_parts.is_some() {
+                clear_format_label_inside_marker(&mut element);
+                if let Some((tag, _)) = root_parts {
                     if stopped_pre_segment(&element) {
                         clear_stop_marker(&mut element);
-                    } else {
-                        active.istack.pop();
+                    } else if pushed_inline {
+                        active.istack_retract_inline(tag);
                     }
                 }
                 if let Some(watermark) = watermark {

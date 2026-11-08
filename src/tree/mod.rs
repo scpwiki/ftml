@@ -159,6 +159,23 @@ pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
     "data-ftml-understrike-list-close-tail-break";
 pub(crate) const WIKIDOT_UNDERSTRIKE_LIST_CLOSE_TAIL_BARE_MARKER: &str =
     "data-ftml-understrike-list-close-tail-bare";
+/// Marks a segmented format wrapper around explicit-list item content when
+/// a span/size scope opened INSIDE that format pair and closes beyond the
+/// list (strong-x family: `**[[span]]` over a list). Live nests that scope
+/// inside the reopened format in the items (`<strong><span>x`), so lowering
+/// applies the continuing scope inside the wrapper instead of wrapping the
+/// whole wrapper. Consumed by inline-scope lowering; never rendered.
+pub(crate) const WIKIDOT_FORMAT_LABEL_INSIDE_LIST_MARKER: &str =
+    "data-ftml-format-label-inside-list";
+/// Sibling marks for the inverse strong-x shape at the pair close: a
+/// newline after the close (the next paragraph renders bare with a leading
+/// break) or adjacent content text (the next paragraph renders bare with
+/// no inserted leading break). Consumed by inline-scope lowering; never
+/// rendered.
+pub(crate) const WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BREAK_MARKER: &str =
+    "data-ftml-format-label-list-close-tail-break";
+pub(crate) const WIKIDOT_FORMAT_LABEL_LIST_CLOSE_TAIL_BARE_MARKER: &str =
+    "data-ftml-format-label-list-close-tail-bare";
 use std::borrow::Cow;
 use std::collections::HashSet;
 
