@@ -1106,8 +1106,19 @@ fn parse_list_item<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
+    // Post-yield row-tail items: once an explicit list yields at the splice,
+    // the row-tail [[li]] heads after it are live-structural items whose
+    // content ejects to the foster as lists (wrapper- and div-independent;
+    // probes l1-plain/l2-nowrap/l4-li3 and the frozen laterli shape). They
+    // assemble like list items (li segment assembly, so trailing-break
+    // handling matches list membership) but return as foster content
+    // instead of a ListItem, which row extract does not accept.
+    let post_yield_scope = wikidot
+        && parser.wikidot_li_pairing_depth() == 0
+        && parser.wikidot_explicit_list_yield_tail_peek();
+
     if wikidot
-        && parser.wikidot_li_pairing_depth() > 0
+        && (parser.wikidot_li_pairing_depth() > 0 || post_yield_scope)
         && !parser.discarding_hidden_body()
     {
         parser.push_wikidot_li_collect(Some(opener_start));
@@ -1150,6 +1161,13 @@ fn parse_list_item<'r, 't>(
         }
         if fused_close {
             elements.push(text!("]"));
+        }
+        // Post-yield row-tail items eject as foster content (see the
+        // post_yield_scope decision above); keep placement before the
+        // run-formation splits, which are list-item specific.
+        if post_yield_scope {
+            let element = Element::Partial(PartialElement::WikidotFoster(elements));
+            return success_elements_with_paragraph_safety(false, element, errors);
         }
         // Live ends a run formation inside an explicit [[li]] body at the
         // completing pair's closer: run items after the closer escape to
