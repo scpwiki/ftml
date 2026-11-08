@@ -1305,6 +1305,96 @@ fn wikidot_li_body_ends_with_flat_block_close(source: &str) -> bool {
     !matches!(name, "ul" | "ol" | "li")
 }
 
+/// NL81 (D): an empty native marker line (`* ` / `# ` with no content)
+/// takes the item body's closing break with it on live.
+fn wikidot_li_body_ends_with_empty_native_marker(source: &str) -> bool {
+    let lowered = source.to_ascii_lowercase();
+    let body = lowered
+        .rfind("[[/li")
+        .map(|index| &source[..index])
+        .unwrap_or(source);
+    let Some(line) = body.lines().rev().find(|line| !line.trim().is_empty()) else {
+        return false;
+    };
+    let line = line.trim_end_matches('\r');
+    let trimmed_start = line.trim_start_matches([' ', '\t']);
+    // `* ` or `# ` (marker + at least one space) with no further content.
+    // `*` / `#` alone is NOT an empty marker line that takes the break.
+    let rest = if let Some(r) = trimmed_start.strip_prefix("* ") {
+        r
+    } else if let Some(r) = trimmed_start.strip_prefix("# ") {
+        r
+    } else {
+        return false;
+    };
+    rest.trim().is_empty()
+}
+
+fn wikidot_li_text_is_bare_block_marker(text: &str) -> bool {
+    let text = text.trim();
+    if !text.starts_with("[[") || !text.ends_with("]]") {
+        return false;
+    }
+    let inner = &text[2..text.len() - 2];
+    let inner = inner.strip_prefix('/').unwrap_or(inner);
+    let name = inner.split_whitespace().next().unwrap_or(inner);
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+fn wikidot_li_is_inline_marker_partial(element: &Element<'_>) -> bool {
+    matches!(
+        element,
+        Element::Partial(
+            PartialElement::InlineSizeOpen(..)
+                | PartialElement::InlineSizeClose(_)
+                | PartialElement::InlineSpanOpen(..)
+                | PartialElement::InlineSpanClose(_)
+                | PartialElement::InlineFormatOpen(_)
+                | PartialElement::InlineFormatClose(_)
+                | PartialElement::InlineColorOpen(..)
+                | PartialElement::InlineColorClose
+                | PartialElement::InlineAnchorOpen(..)
+                | PartialElement::InlineAnchorClose(_)
+        )
+    )
+}
+
+/// NL81 (C): marker-only nested native list at item end — every direct
+/// item is only a bare block marker (possibly split across text nodes or
+/// inline marker partials). Live drops the trailing break.
+fn wikidot_li_marker_only_nested_list(element: &Element<'_>) -> bool {
+    let Element::List { items, .. } = element else {
+        return false;
+    };
+    !items.is_empty()
+        && items.iter().all(|item| match item {
+            ListItem::Elements { elements, .. } => {
+                let mut joined = String::new();
+                let mut saw_marker_partial = false;
+                for e in elements {
+                    match e {
+                        Element::Text(t) => joined.push_str(t),
+                        Element::LineBreak => {}
+                        _ if wikidot_li_is_inline_marker_partial(e) => {
+                            saw_marker_partial = true;
+                        }
+                        _ => return false,
+                    }
+                }
+                let joined = joined.trim();
+                if joined.is_empty() {
+                    saw_marker_partial
+                } else {
+                    wikidot_li_text_is_bare_block_marker(joined)
+                }
+            }
+            ListItem::SubList { .. } => false,
+        })
+}
+
 fn trailing_wikidot_bibliography(elements: &[Element<'_>]) -> bool {
     matches!(
         elements.last(),
@@ -1506,6 +1596,11 @@ fn parse_list_item<'r, 't>(
                 .is_some_and(|(_, crossed)| crossed))
             || consumed.is_some();
         let enclosing_block = parser.wikidot_flat_pair_open_at(body_start);
+        // NL81 (E): take shadowed-div-region signal before assembly so the
+        // region-end break can be positioned. Clear swallowed-block's
+        // all-linebreaks flag state separately.
+        let shadowed_div_region = !post_yield_scope
+            && parser.take_wikidot_li_shadowed_div_region_at(body_start, source_end);
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
@@ -1515,18 +1610,43 @@ fn parse_list_item<'r, 't>(
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
             enclosing_block,
+            shadowed_div_region,
         );
-        // A lost-owner block that swallows an entire item body (e.g. a
-        // matched `[[div]]`...`[[/div]]` pair written as native list lines)
-        // assembles to no elements at all. Live keeps the explicit list
-        // alive with a bare break in place of the swallowed body, so keep
-        // the item the same way (the swallow notes itself on the scan
-        // cache; whitespace-only bodies still dissolve).
-        if elements.is_empty()
-            && !post_yield_scope
+        // NL81 (E, all-linebreaks-body): no content survived inside the
+        // shadowed region — the region-end break goes before any content
+        // that followed the region (or keeps the item alive when empty).
+        // Only prepend when the li does not already start with a formed
+        // block (a swallowed div nested inside other structures must not
+        // inject a break at the outer li's start).
+        if !post_yield_scope
             && parser.take_wikidot_li_swallowed_block_at(body_start, source_end)
         {
-            elements.push(Element::LineBreak);
+            let starts_with_formed_block = elements.first().is_some_and(|element| {
+                matches!(
+                    element,
+                    Element::Container(_)
+                        | Element::Collapsible { .. }
+                        | Element::Code { .. }
+                        | Element::Table(_)
+                        | Element::Module(_)
+                        | Element::HorizontalRule
+                        | Element::ContentSeparator
+                        | Element::Math { .. }
+                        | Element::TabView(_)
+                        | Element::List { .. }
+                        | Element::Html { .. }
+                        | Element::Iframe { .. }
+                        | Element::Include { .. }
+                        | Element::BibliographyBlock { .. }
+                        | Element::Partial(PartialElement::WikidotBlockOpen(_))
+                        | Element::Partial(PartialElement::WikidotFoster(_))
+                )
+            });
+            if elements.is_empty() {
+                elements.push(Element::LineBreak);
+            } else if !starts_with_formed_block {
+                elements.insert(0, Element::LineBreak);
+            }
         }
         if consumed.is_some() {
             parser.clear_wikidot_consumed_li_close();
@@ -2184,6 +2304,7 @@ fn assemble_wikidot_li_segments<'t>(
     terminated_at_cross_close: bool,
     in_cell: bool,
     enclosing_block: bool,
+    shadowed_div_region: bool,
 ) -> Vec<Element<'t>> {
     let mut had_trailing_empty = false;
     while segments
@@ -2213,11 +2334,27 @@ fn assemble_wikidot_li_segments<'t>(
                 && segment
                     .get(index + 1)
                     .is_some_and(|element| element.paragraph_safe());
-            if segment[index] == Element::LineBreak
+            // NL81 (E): a shadowed div region's end break (live puts <br>
+            // where the region ended, before text after the region).
+            let shadowed_region_end_break = shadowed_div_region
+                && matches!(segment[index - 1], Element::List { .. })
+                && segment
+                    .get(index + 1)
+                    .is_some_and(|element| element.paragraph_safe());
+            let shadowed_insert_break = shadowed_div_region
+                && matches!(segment[index - 1], Element::List { .. })
+                && segment[index] != Element::LineBreak
+                && segment[index].paragraph_safe();
+            if shadowed_insert_break {
+                segment.insert(index, Element::LineBreak);
+                frame_depth += wikidot_li_frame_depth_delta(&segment[index]);
+                index += 1;
+            } else if segment[index] == Element::LineBreak
                 && !segment[index - 1].paragraph_safe()
                 && !wikidot_li_break_kept_after_block(&segment[index - 1])
                 && !break_after_outermost_close
                 && !tabview_break_stays_in_open_span(segment, index)
+                && !shadowed_region_end_break
             {
                 segment.remove(index);
             } else {
@@ -2316,19 +2453,30 @@ fn assemble_wikidot_li_segments<'t>(
     // Exception: when the li body's last line closes a NON-list block (for
     // example a `* [[/div]]` line whose formation dissolved into the list),
     // live keeps the break after the list (lihoist p5).
-    let trailing_nested_list = {
-        // A trailing partial close (e.g. a note close that the frame
-        // resolution drops as orphaned) still leaves a nested list as the
-        // tail; live drops the newline after such a list like after a
-        // `* [[/ul]]` close (unlike a non-list block close, p5).
+    // NL81 (C): marker-only nested native list drops the trailing break.
+    let marker_only_trailing_nested_list = {
         let effective = elements.iter().rev().find(|element| {
             !matches!(
                 element,
                 Element::Partial(PartialElement::WikidotBlockClose(_))
             )
         });
-        matches!(effective, Some(Element::List { .. }))
-            && !wikidot_li_body_ends_with_flat_block_close(source)
+        effective.is_some_and(wikidot_li_marker_only_nested_list)
+    };
+    let trailing_nested_list = {
+        let effective = elements.iter().rev().find(|element| {
+            !matches!(
+                element,
+                Element::Partial(PartialElement::WikidotBlockClose(_))
+            )
+        });
+        match effective {
+            Some(Element::List { .. }) => {
+                marker_only_trailing_nested_list
+                    || !wikidot_li_body_ends_with_flat_block_close(source)
+            }
+            _ => false,
+        }
     };
     let trailing_table = matches!(elements.last(), Some(Element::Table(_)));
     let trailing_blockquote = matches!(
@@ -2355,9 +2503,8 @@ fn assemble_wikidot_li_segments<'t>(
         elements.last(),
         Some(Element::HorizontalRule | Element::ContentSeparator)
     );
-    // d4-46 (b): an item that stopped at a breached outer closer keeps the
-    // breaks the consume-time rule left (0 without span, 2 with one); the
-    // closer line's newline must not re-add a trailing break here.
+    let empty_marker_takes_break = !terminated_at_cross_close
+        && wikidot_li_body_ends_with_empty_native_marker(source);
     if !terminated_at_cross_close
         && had_trailing_empty
         && elements
@@ -2377,8 +2524,6 @@ fn assemble_wikidot_li_segments<'t>(
             .unwrap_or(source);
         let quote_prefix_saves_item = wikidot_li_closer_line_is_quote_prefix(body)
             && wikidot_li_break_saves_vanishing_item(&elements);
-        // lihoist p23: a trailing deep-marker paragraph keeps no break
-        // inside it (p23-after-item).
         let deep_trailing_paragraph = elements.last().is_some_and(|element| {
             matches!(
                 element,
@@ -2401,6 +2546,7 @@ fn assemble_wikidot_li_segments<'t>(
             && !in_bibliography_body
             && !trailing_wikidot_bibliography(&elements)
             && !deep_trailing_paragraph
+            && !empty_marker_takes_break
         {
             if let Some(Element::Container(container)) = elements.last_mut()
                 && container.ctype() == ContainerType::Paragraph
@@ -2412,6 +2558,15 @@ fn assemble_wikidot_li_segments<'t>(
                 elements.push(Element::LineBreak);
             }
         }
+    }
+    if empty_marker_takes_break && matches!(elements.last(), Some(Element::LineBreak)) {
+        elements.pop();
+    }
+    if marker_only_trailing_nested_list
+        && !terminated_at_cross_close
+        && matches!(elements.last(), Some(Element::LineBreak))
+    {
+        elements.pop();
     }
     while matches!(elements.last(), Some(Element::Text(text)) if text == " ") {
         elements.pop();
@@ -2650,6 +2805,7 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
                 .is_some_and(|(_, crossed)| crossed))
             || consumed.is_some();
         let enclosing_block = parser.wikidot_flat_pair_open_at(body_start);
+        let shadowed_div_region = parser.take_wikidot_li_shadowed_div_region_at(body_start, source_end);
         let mut elements = assemble_wikidot_li_segments(
             segments,
             source,
@@ -2659,7 +2815,15 @@ pub(crate) fn parse_wikidot_implicit_list_block<'r, 't>(
             terminated_at_cross_close,
             parser.in_wikidot_advanced_table_cell_body(),
             enclosing_block,
+            shadowed_div_region,
         );
+        if parser.take_wikidot_li_swallowed_block_at(body_start, source_end) {
+            if elements.is_empty() {
+                elements.push(Element::LineBreak);
+            } else {
+                elements.insert(0, Element::LineBreak);
+            }
+        }
         if consumed.is_some() {
             parser.clear_wikidot_consumed_li_close();
         }
@@ -3186,8 +3350,10 @@ Alpha
                 items.as_slice(),
                 [ListItem::Elements { .. }, ListItem::SubList { .. }]
             ));
+
         });
     }
+
 }
 /// BRIEF-MF65b: performs the multi-formation escape restructure.
 /// Returns the elements that render at top level after this list's close,
