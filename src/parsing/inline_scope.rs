@@ -2,6 +2,7 @@ use crate::tree::{
     AnchorTarget, AttributeMap, Bibliography, BibliographyList, BibliographyScopeWrapper,
     Container, ContainerType, Element, Heading, HeadingReopen, InlineFormatKind,
     ListItem, PartialElement, TabViewItem, TableType, WIKIDOT_HEADING_REOPEN_MARKER,
+    WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER, WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
     WIKIDOT_WS_MONO_VANISH_MARKER, WikidotBlockCloseKind, WikidotBlockShell,
     WikidotFrameLink,
 };
@@ -1350,7 +1351,7 @@ fn flatten_anchor_container_items<'t>(elements: &mut Vec<Element<'t>>, in_anchor
     *elements = output;
 }
 
-fn is_wikidot_flow_block(element: &Element<'_>) -> bool {
+pub(crate) fn is_wikidot_flow_block(element: &Element<'_>) -> bool {
     match element {
         Element::Container(container) => matches!(
             container.ctype(),
@@ -1364,6 +1365,34 @@ fn is_wikidot_flow_block(element: &Element<'_>) -> bool {
         ) => true,
         _ => false,
     }
+}
+
+/// A span-content format pair that closed beyond an explicit list (spanin
+/// family): which tail shape the following span-content paragraph yields.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SpanListCloseTail {
+    /// Single newline then `[[/span]]`: materialise a trailing bare
+    /// break-only span segment after the list.
+    Break,
+    /// Span-content text directly adjacent to the close: the after-list
+    /// paragraph appends bare with no inserted leading break.
+    Bare,
+}
+
+fn span_list_close_tail_of(attributes: &AttributeMap<'_>) -> Option<SpanListCloseTail> {
+    let map = attributes.get();
+    if map.contains_key(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER) {
+        Some(SpanListCloseTail::Break)
+    } else if map.contains_key(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER) {
+        Some(SpanListCloseTail::Bare)
+    } else {
+        None
+    }
+}
+
+fn strip_span_list_close_tail_markers(attributes: &mut AttributeMap<'_>) {
+    attributes.remove(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER);
+    attributes.remove(WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER);
 }
 
 /// An explicit list eats the newlines inside it before inline pairing, so the
@@ -1395,6 +1424,8 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
     let Element::Container(container) = element else {
         return false;
     };
+    // Same spanin tail hand-off as for segmented format pairs.
+    let tail_mark = span_list_close_tail_of(container.attributes());
     let children = mem::take(container.elements_mut());
     let mut list = children
         .into_iter()
@@ -1409,6 +1440,15 @@ fn foster_sole_explicit_list(element: &mut Element<'_>) -> bool {
         })
         .expect("explicit list");
     wrap_explicit_list_items(&mut list, ctype);
+    if let Some(tail_mark) = tail_mark
+        && let Element::List { attributes, .. } = &mut list
+    {
+        let marker = match tail_mark {
+            SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
+            SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+        };
+        attributes.insert(marker, Cow::Borrowed(""));
+    }
     *element = list;
     true
 }
@@ -1551,12 +1591,17 @@ fn format_explicit_list_segments<'t>(
         )
     });
     if !crosses_list || container.elements().iter().any(is_wikidot_flow_block) {
+        let Element::Container(container) = element else {
+            unreachable!()
+        };
+        strip_span_list_close_tail_markers(container.attributes_mut());
         return None;
     }
     let poisoned = subtree_contains_native_list(element);
     let Element::Container(container) = element else {
         unreachable!()
     };
+    let tail_mark = span_list_close_tail_of(container.attributes());
     let children = mem::take(container.elements_mut());
     let literalised = |children: Vec<Element<'t>>| {
         let mut output = Vec::with_capacity(children.len() + 2);
@@ -1569,7 +1614,23 @@ fn format_explicit_list_segments<'t>(
         return Some(literalised(children));
     }
     let mut formed = false;
-    let segmented = segment_format_run(children, ctype, &mut formed);
+    let mut segmented = segment_format_run(children, ctype, &mut formed);
+    if let Some(tail_mark) = tail_mark
+        && formed
+    {
+        // The closed format pair beyond this explicit list (spanin family)
+        // hands its post-list tail shape to the list, so root lowering can
+        // apply it to the span-content paragraph that follows the list.
+        let marker = match tail_mark {
+            SpanListCloseTail::Break => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BREAK_MARKER,
+            SpanListCloseTail::Bare => WIKIDOT_SPAN_LIST_CLOSE_TAIL_BARE_MARKER,
+        };
+        for element in segmented.iter_mut() {
+            if let Element::List { attributes, .. } = element {
+                attributes.insert(marker, Cow::Borrowed(""));
+            }
+        }
+    }
     if formed {
         Some(segmented)
     } else {
@@ -1641,6 +1702,10 @@ fn lower_root_sequence<'t>(
     let mut previous_scored_close = false;
     let mut previous_heading_collapsible_tail = false;
     let mut pending: Vec<Element<'t>> = Vec::new();
+    // Tail shape of a span-content format pair that closed beyond the
+    // explicit list just processed (spanin family); consumed by the next
+    // root paragraph.
+    let mut list_close_tail: Option<SpanListCloseTail> = None;
 
     for mut element in mem::take(elements) {
         let is_paragraph = matches!(
@@ -1709,6 +1774,18 @@ fn lower_root_sequence<'t>(
             }
             let starts_in_scored_span = active.has_scored_scope();
             let starts_in_inline_scope = active.has_active_scope();
+            // Spanin family: the paragraph right after an explicit list that
+            // a format pair of the span content closed beyond carries the
+            // pair's tail shape from the list element's marker.
+            let span_tail = list_close_tail.take();
+            let close_only_paragraph = matches!(
+                container.elements(),
+                [Element::Partial(PartialElement::InlineSpanClose(_))]
+            );
+            let tail_break = matches!(span_tail, Some(SpanListCloseTail::Break))
+                && close_only_paragraph;
+            let tail_bare = matches!(span_tail, Some(SpanListCloseTail::Bare))
+                && !close_only_paragraph;
             let previous_is_own_chunk_block = collapsible_heading_body
                 || previous_heading_collapsible_tail
                 || matches!(
@@ -1739,8 +1816,9 @@ fn lower_root_sequence<'t>(
             if starts_in_inline_scope
                 && !collapsible_heading_tail
                 && !reopens_paragraph_after_separator
-                && !follows_table
-                && !previous_is_own_chunk_block
+                && (!follows_table || tail_break)
+                && !tail_bare
+                && (!previous_is_own_chunk_block || tail_break)
                 && !output.is_empty()
                 && paragraph_group.is_none()
             {
@@ -1770,6 +1848,8 @@ fn lower_root_sequence<'t>(
             }
             let group = paragraph_group.get_or_insert_with(|| ParagraphGroup {
                 wrapped: !collapsible_heading_tail
+                    && !tail_break
+                    && !tail_bare
                     && (follows_table
                         || reopens_paragraph_after_separator
                         || !effects.scored_span_opened_unwrapped_at_start
@@ -1809,6 +1889,15 @@ fn lower_root_sequence<'t>(
                 ..
             }
         );
+        // Arm the spanin tail state from a list a span-content format pair
+        // closed beyond; any other root element clears it.
+        match &mut element {
+            Element::List { attributes, .. } => {
+                list_close_tail = span_list_close_tail_of(attributes);
+                strip_span_list_close_tail_markers(attributes);
+            }
+            _ => list_close_tail = None,
+        }
         let mut sequence = vec![element];
         lower_sequence(
             &mut sequence,
@@ -3031,6 +3120,9 @@ fn lower_sequence<'t>(
         {
             let list_legacy = matches!(element, Element::List { .. });
             if list_legacy {
+                if let Element::List { attributes, .. } = &mut element {
+                    strip_span_list_close_tail_markers(attributes);
+                }
                 flush_run(&mut output, &mut run, active, &mut last_run_outer_scope);
                 if matches!(
                     element,
