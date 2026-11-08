@@ -2341,6 +2341,18 @@ where
                 if !source.eq_ignore_ascii_case(&expected) {
                     return Ok(false);
                 }
+                // Item 88: live treats any list close as closing any list
+                // formation. An unowned-dissolve candidate probe opts into
+                // cross-type list close acceptance; the exact `[[name]]`
+                // spelling above already passed.
+                if parser.wikidot_li_cross_list_close()
+                    && matches!(
+                        block_rule.name(),
+                        "block-list-unordered" | "block-list-ordered"
+                    )
+                {
+                    return Ok(true);
+                }
             }
 
             if parser.settings().layout.legacy()
@@ -6981,6 +6993,14 @@ where
                     .then(|| self.block_end_scan_outcome(equivalent_key))
                     .flatten()
             });
+            // Item 88: a cached `false` may predate cross-type close
+            // acceptance (the scan kept looking for same-name close only);
+            // rescan when the flag is on.
+            let cached = if self.wikidot_li_cross_list_close() && cached == Some(false) {
+                None
+            } else {
+                cached
+            };
             if let Some(outcome) = cached {
                 let states = &traversed_token_states;
                 self.cache_block_end_scan_outcomes(block_rule.name, states, outcome);

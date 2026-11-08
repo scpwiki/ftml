@@ -275,6 +275,12 @@ pub(super) struct BlockScanCache<'t> {
     /// explicit `[[li]]` body. Records the formation head byte so the owning
     /// li body can unwrap the dissolved run list into the enclosing item.
     wikidot_li_unowned_dissolve: Cell<Option<usize>>,
+    /// Item 88: an unowned-dissolve candidate probe may accept either list
+    /// close (`[[/ul]]` or `[[/ol]]`) as its terminator (live treats any
+    /// list close as closing any list formation). Scoped to the
+    /// `parse_lost_owner_list_block` candidate parse; set and restored
+    /// around it.
+    wikidot_li_cross_list_close: Cell<bool>,
     /// The byte of an `[[/li]]` closer deleted from a heading line inside
     /// this item body (h14/v1): the item already ends conceptually there,
     /// so a following `[[li]]` opens a sibling item (j6/t1 probes).
@@ -1957,6 +1963,20 @@ impl<'r, 't> Parser<'r, 't> {
             }
             _ => false,
         }
+    }
+
+    /// Item 88: cross-type list close acceptance for an unowned-dissolve
+    /// candidate probe (live any-list-close behavior).
+    pub(crate) fn wikidot_li_cross_list_close(&self) -> bool {
+        self.block_end_scan_cache.borrow().wikidot_li_cross_list_close.get()
+    }
+
+    /// Set cross-type list close acceptance; returns the previous value.
+    pub(crate) fn set_wikidot_li_cross_list_close(&self, value: bool) -> bool {
+        let cache = self.block_end_scan_cache.borrow();
+        let prev = cache.wikidot_li_cross_list_close.get();
+        cache.wikidot_li_cross_list_close.set(value);
+        prev
     }
 
     /// The innermost enclosing `[[li]]` head on the collect stack, if any.
