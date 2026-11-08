@@ -275,6 +275,7 @@ where
                 if stack.wikidot_complete_raw_line_occupied() {
                     stack.clear_wikidot_complete_raw_line_occupancy();
                 }
+                stack.wikidot_note_stash_br_blank();
                 let demote_chain_end =
                     if parser.settings().layout.legacy() && !stack.current_empty() {
                         let window = TokenWindow::at(parser);
@@ -454,6 +455,7 @@ where
                     Token::LineBreak | Token::ParagraphBreak | Token::InputEnd
                 );
             let ends_with_explicit_list = elements_end_with_explicit_list(&elements);
+            let list_follower_wrap = parser.take_wikidot_post_list_follower_wrap();
             let embed_error_has_same_line_residual = embed_opener
                 && !paragraph_safe
                 && active_div
@@ -593,6 +595,12 @@ where
             if quote_boundary_break_leads_paragraph {
                 stack.set_wikidot_quote_boundary_next_paragraph_leads_with_br(true);
             }
+            // pw65a: arm after the pushed elements have flushed so the
+            // follower paragraph attaches with live's leading break (after
+            // blank lines). Block pushes happen above.
+            if list_follower_wrap == 2 {
+                stack.arm_wikidot_stash_br();
+            }
             if parser.take_crossed_collapsible_tail() {
                 stack.mark_crossed_collapsible_tail();
             }
@@ -614,6 +622,7 @@ where
                 && close_condition_fn.is_none()
                 && ends_with_explicit_list
                 && parser.wikidot_next_line_has_content()
+                && list_follower_wrap == 0
             {
                 stack.mark_next_unwrapped_after_block();
             }

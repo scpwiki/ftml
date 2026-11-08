@@ -310,6 +310,14 @@ pub(super) struct BlockScanCache<'t> {
     link_target_stop: [Option<(usize, Option<usize>)>; 2],
     raw_forbids_stop: Option<(usize, Option<usize>)>,
     last_virtual_gate_end: Cell<Option<usize>>,
+    /// The most recently closed explicit list consumed a marker-line
+    /// closer (`*`/`#` before it) or stashed a numbered lost-owner anchor
+    /// chrome (LT46/pw65a) — the shapes whose follower prose forms a
+    /// paragraph in live instead of a bare run. 0 none, 1 marker-only,
+    /// 2 stash (stash wins). Consumed by the paragraph gather's L85
+    /// mark site; only top-level lists record (nested parses stay
+    /// item-body-scoped).
+    wikidot_post_list_follower_wrap: u8,
     /// Monotone "no closer ahead" memos for forward closer scans in parser
     /// rules; see `parser/closer_scan.rs`.
     closer_scan: CloserScanCache,
@@ -2465,6 +2473,27 @@ impl<'r, 't> Parser<'r, 't> {
             .borrow_mut()
             .wikidot_list_anchor_chromes
             .push((depth, element));
+    }
+
+    /// Records that the just-closed explicit list carried a marker-line
+    /// closer or stashed a numbered lost-owner anchor chrome. Only the
+    /// outermost (`!nested`) list records, so this flag always describes
+    /// the just-closed top-level list.
+    pub(crate) fn record_wikidot_post_list_follower_wrap(&self, stash: bool) {
+        let mut cache = self.block_end_scan_cache.borrow_mut();
+        cache.wikidot_post_list_follower_wrap = if stash { 2 } else { 1 };
+    }
+
+    /// Takes the post-list follower-wrap signal, resetting it (0 = none,
+    /// 1 = marker-only, 2 = stash). Consumers reset unconditionally so a
+    /// stale signal can never leak into a later list's decision.
+    pub(crate) fn take_wikidot_post_list_follower_wrap(&self) -> u8 {
+        std::mem::take(
+            &mut self
+                .block_end_scan_cache
+                .borrow_mut()
+                .wikidot_post_list_follower_wrap,
+        )
     }
 
     /// Takes every anchor stamped for `depth`, dropping deeper strays

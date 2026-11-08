@@ -3194,6 +3194,41 @@ where
         false
     }
 
+    /// L85/pw65a: whether any content follows the current line break,
+    /// skipping blank lines. Block-led lines (incl. heading/quote heads)
+    /// remain structural boundaries; input end is not content. Used only
+    /// for marker-closer or stash-formed lists: live renders their prose
+    /// follower as a paragraph (and drops the anchor chrome) regardless of
+    /// how many blank lines precede it.
+    pub(crate) fn wikidot_next_line_has_content_skipping_blanks(&self) -> bool {
+        if !matches!(
+            self.current().token,
+            Token::LineBreak | Token::ParagraphBreak
+        ) {
+            return false;
+        }
+        for extracted in self.remaining() {
+            match extracted.token {
+                Token::Whitespace | Token::LineBreak | Token::ParagraphBreak => {}
+                Token::InputEnd => return false,
+                // A line led by a block head is a structural boundary, not
+                // prose content (live keeps the anchor before a following
+                // div: muse-probe-pw65a6/o5-ml-div).
+                Token::LeftBlock | Token::LeftBlockStar | Token::LeftBlockEnd => {
+                    return false;
+                }
+                // Live keeps the anchor before a following heading
+                // (muse-probe-pw65a7/o5-blank-heading); headings force this
+                // conservative split, code blocks would want a drop
+                // (muse-probe-pw65a7/o5-blank-codeblock) and stay divergent
+                // (recorded in the lane record).
+                Token::Heading | Token::Equals | Token::Quote => return false,
+                _ => return true,
+            }
+        }
+        false
+    }
+
     /// L85: stop a list body at a scan-paired div/collapsible closer whose
     /// opener is genuinely outside (closein shapes). d4-46 (b): note closers
     /// too, including flat outer heads that leave no body boundary.

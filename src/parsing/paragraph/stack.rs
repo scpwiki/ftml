@@ -89,6 +89,12 @@ pub struct ParagraphStack<'t> {
     wikidot_advanced_table_cell: bool,
     wikidot_reopen_for_footnote: bool,
     wikidot_bare_after_explicit_list: bool,
+    /// pw65a: armed when the just-closed explicit list stashed a numbered
+    /// lost-owner anchor chrome (live: follower prose paragraphs carry a
+    /// leading `<br />` after blank lines: `<p><br>zzzz</p>`). 0 unarmed,
+    /// 1 armed (no blank seen yet), 2 armed after a blank line. Consumed by
+    /// the next inline/block element push.
+    wikidot_stash_br: u8,
     wikidot_explicit_pre_candidate: bool,
     wikidot_suppress_explicit_pre_dissolve: bool,
     wikidot_dissolved_pre_candidate: bool,
@@ -518,6 +524,23 @@ impl<'t> ParagraphStack<'t> {
         self.wikidot_explicit_pre_candidate = false;
         self.wikidot_dissolved_pre_candidate = false;
         self.wikidot_post_empty_list_break = false;
+    }
+
+    /// pw65a: arms the stash-break state after a stash-formed explicit list
+    /// (numbered lost-owner formation decomposed in its body). The follower
+    /// paragraph takes a leading `<br />` in live after blank lines.
+    pub(crate) fn arm_wikidot_stash_br(&mut self) {
+        if self.wikidot {
+            self.wikidot_stash_br = 1;
+        }
+    }
+
+    /// pw65a: a blank line seen while the stash break is armed promotes it
+    /// to the leading-break state for the follower's paragraph.
+    pub(crate) fn wikidot_note_stash_br_blank(&mut self) {
+        if self.wikidot_stash_br == 1 {
+            self.wikidot_stash_br = 2;
+        }
     }
 
     fn wikidot_element_contains_unaligned_image(element: &Element<'_>) -> bool {
@@ -1022,6 +1045,48 @@ impl<'t> ParagraphStack<'t> {
 
     #[inline]
     pub fn push_element(&mut self, element: Element<'t>, paragraph_safe: bool) {
+        // pw65a: the first content element after a stash-formed explicit
+        // list (blank line seen) opens its paragraph with live's leading
+        // `<br />`; a same-line follower (no blank) attaches bare. Any
+        // intervening ParagraphBreak keeps the blank-armed state alive.
+        if self.wikidot_stash_br != 0 {
+            match element {
+                Element::Text(_) | Element::Raw(_) => {
+                    if self.wikidot_stash_br == 2 && self.current.is_empty() {
+                        self.current.push(Element::LineBreak);
+                    }
+                    self.wikidot_stash_br = 0;
+                }
+                Element::Partial(ref partial) => {
+                    let blockish = matches!(
+                        partial,
+                        PartialElement::WikidotBlockOpen(..)
+                            | PartialElement::WikidotBlockClose(..)
+                            | PartialElement::WikidotFoster(..)
+                            | PartialElement::WikidotCollapsibleTail(..)
+                            | PartialElement::WikidotCollapsibleHeadingEnd
+                            | PartialElement::ListItem(..)
+                            | PartialElement::TableRow(..)
+                            | PartialElement::TableCell(..)
+                            | PartialElement::Tab(..)
+                    );
+                    if !blockish {
+                        if self.wikidot_stash_br == 2 && self.current.is_empty() {
+                            self.current.push(Element::LineBreak);
+                        }
+                        self.wikidot_stash_br = 0;
+                    } else {
+                        self.wikidot_stash_br = 0;
+                    }
+                }
+                // A seam renders nothing; keep the armed state for the
+                // real content element.
+                Element::Delayed(_) => {}
+                _ => {
+                    self.wikidot_stash_br = 0;
+                }
+            }
+        }
         // L85: a lone leading break before an explicit list vanishes (live
         // keeps real breaks only with content: R1 keeps, para-start drops).
         // Except: a break after a break-kept block is content, not a para-start
