@@ -35,7 +35,7 @@ use crate::parsing::inline_scope::WIKIDOT_SCORE_SPAN_UNWRAPPED_ATTRIBUTE;
 use crate::parsing::parser::QuoteBodyLineStatus;
 use crate::parsing::rule::bibliography_order;
 use crate::settings::WikitextMode;
-use crate::tree::PartialElement;
+use crate::tree::{ContainerType, PartialElement};
 use std::borrow::Cow;
 
 pub const RULE_BLOCK: Rule = Rule {
@@ -132,7 +132,7 @@ where
 
 fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elements<'t>> {
     let span_doubles_leading_break = parser.settings().layout.legacy()
-        && parser.in_wikidot_span_body()
+        && (parser.in_wikidot_span_body() || parser.in_wikidot_size_body())
         && parser.current().token == Token::LineBreak;
     parser.step()?;
     let quote_body = parser.quote_body_cursor().is_some();
@@ -203,9 +203,12 @@ fn block_skip<'r, 't>(parser: &mut Parser<'r, 't>) -> ParseResult<'r, 't, Elemen
             return Err(parser.make_err(ParseErrorKind::RuleFailed));
         }
         // An open span in a list item keeps the newline this skip swallowed.
-        // A collapsible doubles it. A tabview keeps one.
+        // A collapsible doubles it. A tabview keeps one. d4-46 (a): a div
+        // doubles it too (a10/a20 saved-page probes).
         if span_doubles_leading_break && parser.wikidot_li_inside_item_body() {
-            let leading_breaks = if elements_open_collapsible(&success.item) {
+            let leading_breaks = if elements_open_collapsible(&success.item)
+                || elements_open_div(&success.item)
+            {
                 2
             } else if elements_open_tabview(&success.item) {
                 1
@@ -250,6 +253,21 @@ fn elements_open_collapsible(elements: &Elements<'_>) -> bool {
     match elements {
         Elements::Single(element) => is_collapsible(element),
         Elements::Multiple(elements) => elements.iter().any(is_collapsible),
+        Elements::None => false,
+    }
+}
+
+fn elements_open_div(elements: &Elements<'_>) -> bool {
+    let is_div = |element: &Element<'_>| match element {
+        Element::Container(container) => matches!(container.ctype(), ContainerType::Div),
+        Element::Partial(PartialElement::WikidotBlockOpen(shell)) => {
+            matches!(shell, crate::tree::WikidotBlockShell::Div { .. })
+        }
+        _ => false,
+    };
+    match elements {
+        Elements::Single(element) => is_div(element),
+        Elements::Multiple(elements) => elements.iter().any(is_div),
         Elements::None => false,
     }
 }

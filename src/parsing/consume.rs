@@ -1586,8 +1586,31 @@ where
         looks_skippable
     };
 
+    // d4-46 (a): inside a list item with an open [[span]]/[[size]] body, live
+    // keeps the skipped newline as two breaks before a heading, quote,
+    // equals or horizontal-rule line (blank lines already keep two via the
+    // li blank handling; lists/tables keep one via their exclusions above).
+    // Directly in the item only (top boundary is `[[li]]`): a footnote body
+    // nested in an item does not double.
+    let double_break_in_li_span = skip
+        && parser.settings().layout.legacy()
+        && !parser.discarding_hidden_body()
+        && parser.wikidot_top_boundary_is_li()
+        && (parser.in_wikidot_span_body() || parser.in_wikidot_size_body())
+        && matches!(
+            parser.look_ahead(next_offset).map(|token| token.token),
+            Some(Token::Heading | Token::Quote | Token::Equals | Token::TripleDash)
+        );
+
     parser.step()?;
     if skip {
+        if double_break_in_li_span {
+            return Ok(Some(ParseSuccess::new(
+                Elements::Multiple(vec![Element::LineBreak, Element::LineBreak]),
+                Vec::new(),
+                true,
+            )));
+        }
         Ok(Some(ParseSuccess::new(Elements::None, Vec::new(), true)))
     } else {
         Ok(Some(ParseSuccess::new(
