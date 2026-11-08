@@ -1,0 +1,14 @@
+Outer
+
+outer text
+[[tabview]]
+Inner2
+
+inner body
+
+
+x [[/tabview]]
+
+Second
+
+second body
