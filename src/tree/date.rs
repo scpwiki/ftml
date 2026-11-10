@@ -363,7 +363,7 @@ fn append_relative_time(
 /// create new instances here.
 fn relative_time_fmt_options(numeric: Numeric) -> RelativeTimeFormatterOptions {
     let mut options = RelativeTimeFormatterOptions::default();
-    options.numeric = numeric;
+    options.numeric = Some(numeric);
     options
 }
 
