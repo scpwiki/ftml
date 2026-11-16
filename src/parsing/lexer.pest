@@ -146,8 +146,8 @@ left_comment = @{ "[!--" }
 right_comment = @{ "--]" }
 
 left_bracket = @{ "[" }
-left_bracket_anchor = @{ "[#" }
-left_bracket_star = @{ "[*" }
+left_bracket_anchor = @{ "[#" ~ !"#" }
+left_bracket_star = @{ "[*" ~ !"*" }
 left_block = @{ "[[" }
 left_block_end = @{ "[[/" }
 left_block_anchor = @{ "[[#" }
