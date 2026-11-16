@@ -19,8 +19,7 @@
  */
 
 use super::prelude::*;
-use crate::parsing::paragraph::ParagraphStack;
-use crate::parsing::{DepthItem, DepthList, process_depths};
+use crate::parsing::paragraph::{NO_CLOSE_CONDITION, gather_paragraphs};
 use crate::tree::{AttributeMap, Container, ContainerType};
 
 const MAX_BLOCKQUOTE_DEPTH: usize = 30;
@@ -34,101 +33,42 @@ pub const RULE_BLOCKQUOTE: Rule = Rule {
 fn try_consume_fn<'r, 't>(
     parser: &mut Parser<'r, 't>,
 ) -> ParseResult<'r, 't, Elements<'t>> {
-    debug!("Parsing nested native blockquotes");
+    debug!("Parsing native blockquote");
 
-    // Context variables
-    let mut depths = Vec::new();
-    let mut errors = Vec::new();
-
-    // Produce a depth list with elements
-    loop {
-        let current = parser.current();
-        let depth = match current.token {
-            // 1 or more ">"s in one token. Return ASCII length.
-            Token::Quote => current.slice.len(),
-
-            // Invalid token, bail
-            _ => {
-                warn!("Didn't find blockquote token, ending list iteration");
-                break;
-            }
-        };
-        parser.step()?;
-        parser.get_optional_space()?; // allow whitespace after ">"
-
-        // Check that the depth isn't obscenely deep, to avoid DOS attacks via stack overflow.
-        if depth > MAX_BLOCKQUOTE_DEPTH {
-            debug!(
-                "Native blockquote has a depth ({depth}) greater than the maximum ({MAX_BLOCKQUOTE_DEPTH})! Failing"
-            );
-            return Err(parser.make_err(ParseErrorKind::BlockquoteDepthExceeded));
-        }
-
-        // Parse elements until we hit the end of the line
-        let mut paragraph_safe = true;
-        let mut elements = collect_consume(
-            parser,
-            RULE_BLOCKQUOTE,
-            &[
-                ParseCondition::current(Token::LineBreak),
-                ParseCondition::current(Token::ParagraphBreak),
-                ParseCondition::current(Token::InputEnd),
-            ],
-            &[],
-            None,
-        )?
-        .chain(&mut errors, &mut paragraph_safe);
-
-        // Add a line break for the end of the line
-        elements.push(Element::LineBreak);
-
-        // Append blockquote line
-        //
-        // Depth lists expect zero-based list depths, but tokens are one-based.
-        // So, we subtract one.
-        //
-        // This will not overflow because Token::Quote requires at least one ">".
-        depths.push((depth - 1, (), (elements, paragraph_safe)))
-    }
-
-    // This blockquote has no rows, so the rule fails
-    if depths.is_empty() {
+    // 1 or more ">"s in one token.
+    let current = parser.current();
+    if current.token != Token::Quote {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
 
-    let depth_lists = process_depths((), depths);
-    let elements: Vec<Element> = depth_lists
-        .into_iter()
-        .map(|(_, depth_list)| build_blockquote_element(depth_list))
-        .collect();
-
-    ok!(false; elements, errors)
-}
-
-fn build_blockquote_element(list: DepthList<(), (Vec<Element>, bool)>) -> Element {
-    let mut stack = ParagraphStack::new();
-
-    // Convert depth list into a list of elements
-    for item in list {
-        match item {
-            DepthItem::Item((elements, paragraph_safe)) => {
-                for element in elements {
-                    stack.push_element(element, paragraph_safe);
-                }
-            }
-            DepthItem::List(_, list) => {
-                let blockquote = build_blockquote_element(list);
-                stack.pop_line_break();
-                stack.push_element(blockquote, false);
-            }
-        }
+    // Check that the depth isn't obscenely deep, to avoid DOS attacks via stack overflow.
+    let depth = current.slice.len();
+    if depth > MAX_BLOCKQUOTE_DEPTH {
+        debug!(
+            "Native blockquote has a depth ({depth}) greater than the maximum ({MAX_BLOCKQUOTE_DEPTH})! Failing"
+        );
+        return Err(parser.make_err(ParseErrorKind::BlockquoteDepthExceeded));
     }
 
-    stack.pop_line_break();
+    // If we're already in a blockquote, then only a line prefix deeper than
+    // the current one starts a nested blockquote
+    if parser.quote_depth() > 0 && parser.quote_consumed() == 0 {
+        return Err(parser.make_err(ParseErrorKind::RuleFailed));
+    }
 
-    Element::Container(Container::new(
+    // Parse the contents as if they were their own document, with the ">"
+    // line prefixes removed.
+    let mut quote_parser = parser.quote_parser();
+    let (elements, errors, _) =
+        gather_paragraphs(&mut quote_parser, RULE_BLOCKQUOTE, NO_CLOSE_CONDITION)?.into();
+
+    parser.finish_quote_parser(&quote_parser)?;
+
+    let element = Element::Container(Container::new(
         ContainerType::Blockquote,
-        stack.into_elements(),
+        elements,
         AttributeMap::new(),
-    ))
+    ));
+
+    ok!(false; element, errors)
 }

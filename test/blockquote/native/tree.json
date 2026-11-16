@@ -15,20 +15,29 @@
                                 {
                                     "element": "text",
                                     "data": "Apple"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "Banana"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "Cherry"
@@ -156,13 +165,16 @@
                                 {
                                     "element": "text",
                                     "data": "spaces"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "blockquotes"
