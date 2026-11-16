@@ -53,6 +53,11 @@ fn try_consume_fn<'r, 't>(
         None,
     )?;
 
+    // Return error if the anchor name is not valid.
+    if !anchor_valid(url) {
+        return Err(parser.make_err(ParseErrorKind::InvalidUrl));
+    }
+
     // Determine if this is an anchor link or fake link
     let url = if url.is_empty() {
         Cow::Borrowed("javascript:;")
@@ -89,4 +94,14 @@ fn try_consume_fn<'r, 't>(
         label: LinkLabel::Text(cow!(label)),
         target: None,
     })
+}
+
+/// Whether this is a valid anchor name for a link.
+///
+/// Like Wikidot, only these characters are allowed in the name.
+/// Anything else means it is not an anchor link, and the
+/// contents are to be interpreted as something else.
+fn anchor_valid(name: &str) -> bool {
+    name.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':' | '.'))
 }
