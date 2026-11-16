@@ -1,0 +1,20 @@
+[
+    {
+        "token": "identifier",
+        "rule": "link-anchor",
+        "span": [
+            49,
+            54
+        ],
+        "kind": "invalid-url"
+    },
+    {
+        "token": "left-bracket-anchor",
+        "rule": "fallback",
+        "span": [
+            38,
+            40
+        ],
+        "kind": "no-rules-match"
+    }
+]
