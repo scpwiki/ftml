@@ -1,0 +1,5 @@
+[##green|BAD PLACE##]
+[**some text**]
+[#bad|name label]
+[#valid-name_1:2.3 label] [# fake]
+[*https://example.com/ **label**]
