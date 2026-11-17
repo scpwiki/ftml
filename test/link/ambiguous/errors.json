@@ -2,10 +2,7 @@
     {
         "token": "identifier",
         "rule": "link-anchor",
-        "span": [
-            49,
-            54
-        ],
+        "span": [49, 54],
         "kind": "invalid-url"
     },
     {
