@@ -8,10 +8,7 @@
     {
         "token": "left-bracket-anchor",
         "rule": "fallback",
-        "span": [
-            38,
-            40
-        ],
+        "span": [38, 40],
         "kind": "no-rules-match"
     }
 ]
