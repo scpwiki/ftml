@@ -2,10 +2,7 @@
     {
         "token": "paragraph-break",
         "rule": "block-div",
-        "span": [
-            15,
-            16
-        ],
+        "span": [15, 16],
         "kind": "block-malformed-arguments"
     },
     {
