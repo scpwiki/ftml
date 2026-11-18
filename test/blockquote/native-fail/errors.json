@@ -8,10 +8,7 @@
     {
         "token": "left-block",
         "rule": "fallback",
-        "span": [
-            2,
-            4
-        ],
+        "span": [2, 4],
         "kind": "no-rules-match"
     }
 ]
