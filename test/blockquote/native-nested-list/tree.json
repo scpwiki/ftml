@@ -1,0 +1,146 @@
+{
+    "elements": [
+        {
+            "element": "container",
+            "data": {
+                "type": "blockquote",
+                "attributes": {},
+                "elements": [
+                    {
+                        "element": "list",
+                        "data": {
+                            "type": "bullet",
+                            "attributes": {},
+                            "items": [
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "parent"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "item-type": "sub-list",
+                                    "element": "list",
+                                    "data": {
+                                        "type": "bullet",
+                                        "attributes": {},
+                                        "items": [
+                                            {
+                                                "item-type": "elements",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "text",
+                                                        "data": "child"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "item-type": "sub-list",
+                                                "element": "list",
+                                                "data": {
+                                                    "type": "bullet",
+                                                    "attributes": {},
+                                                    "items": [
+                                                        {
+                                                            "item-type": "elements",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "text",
+                                                                    "data": "grandchild"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "item-type": "elements",
+                                    "attributes": {},
+                                    "elements": [
+                                        {
+                                            "element": "text",
+                                            "data": "sibling"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "blockquote",
+                            "attributes": {},
+                            "elements": [
+                                {
+                                    "element": "list",
+                                    "data": {
+                                        "type": "bullet",
+                                        "attributes": {},
+                                        "items": [
+                                            {
+                                                "item-type": "elements",
+                                                "attributes": {},
+                                                "elements": [
+                                                    {
+                                                        "element": "text",
+                                                        "data": "deep"
+                                                    },
+                                                    {
+                                                        "element": "text",
+                                                        "data": " "
+                                                    },
+                                                    {
+                                                        "element": "text",
+                                                        "data": "parent"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "item-type": "sub-list",
+                                                "element": "list",
+                                                "data": {
+                                                    "type": "bullet",
+                                                    "attributes": {},
+                                                    "items": [
+                                                        {
+                                                            "item-type": "elements",
+                                                            "attributes": {},
+                                                            "elements": [
+                                                                {
+                                                                    "element": "text",
+                                                                    "data": "deep"
+                                                                },
+                                                                {
+                                                                    "element": "text",
+                                                                    "data": " "
+                                                                },
+                                                                {
+                                                                    "element": "text",
+                                                                    "data": "child"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

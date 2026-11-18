@@ -146,13 +146,16 @@
                                             }
                                         ]
                                     }
-                                },
-                                {
-                                    "element": "line-break"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "container",
                                     "data": {
@@ -240,13 +243,16 @@
                                 {
                                     "element": "text",
                                     "data": "."
-                                },
-                                {
-                                    "element": "line-break"
-                                },
-                                {
-                                    "element": "line-break"
-                                },
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "element": "container",
+                        "data": {
+                            "type": "paragraph",
+                            "attributes": {},
+                            "elements": [
                                 {
                                     "element": "text",
                                     "data": "##"

@@ -26,6 +26,8 @@ use crate::text::FullText;
 pub struct Tokenization<'t> {
     tokens: Vec<ExtractedToken<'t>>,
     full_text: FullText<'t>,
+    quote_paragraph_breaks: Vec<ExtractedToken<'t>>,
+    quote_indents: Vec<ExtractedToken<'t>>,
 }
 
 impl<'t> Tokenization<'t> {
@@ -38,6 +40,55 @@ impl<'t> Tokenization<'t> {
     pub(crate) fn full_text(&self) -> FullText<'t> {
         self.full_text
     }
+
+    #[inline]
+    pub(crate) fn quote_paragraph_breaks<'r>(&'r self) -> &'r [ExtractedToken<'t>] {
+        &self.quote_paragraph_breaks
+    }
+
+    #[inline]
+    pub(crate) fn quote_indents<'r>(&'r self) -> &'r [ExtractedToken<'t>] {
+        &self.quote_indents
+    }
+}
+
+fn build_quote_tokens<'t>(
+    tokens: &[ExtractedToken<'t>],
+) -> (Vec<ExtractedToken<'t>>, Vec<ExtractedToken<'t>>) {
+    let mut paragraph_breaks = Vec::new();
+    let mut indents = Vec::new();
+
+    for (index, quote) in tokens.iter().enumerate() {
+        if quote.token != Token::Quote || index == 0 {
+            continue;
+        }
+
+        // Only ">"s at the start of a line are prefixes
+        let previous = &tokens[index - 1];
+        match previous.token {
+            Token::LineBreak => paragraph_breaks.push(ExtractedToken {
+                token: Token::ParagraphBreak,
+                slice: previous.slice,
+                span: previous.span.clone(),
+            }),
+            Token::ParagraphBreak | Token::InputStart => (),
+            _ => continue,
+        }
+
+        // Whitespace is always ASCII, so slicing off one byte is fine
+        if let Some(space) = tokens.get(index + 1)
+            && space.token == Token::Whitespace
+            && space.slice.len() > 1
+        {
+            indents.push(ExtractedToken {
+                token: Token::Whitespace,
+                slice: &space.slice[1..],
+                span: space.span.start + 1..space.span.end,
+            });
+        }
+    }
+
+    (paragraph_breaks, indents)
 }
 
 impl<'t> From<Tokenization<'t>> for Vec<ExtractedToken<'t>> {
@@ -57,7 +108,14 @@ pub fn tokenize(text: &str) -> Tokenization<'_> {
     let tokens = Token::extract_all(text);
     let full_text = FullText::new(text);
 
-    Tokenization { tokens, full_text }
+    let (quote_paragraph_breaks, quote_indents) = build_quote_tokens(&tokens);
+
+    Tokenization {
+        tokens,
+        full_text,
+        quote_paragraph_breaks,
+        quote_indents,
+    }
 }
 
 #[cfg(test)]

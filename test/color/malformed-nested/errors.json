@@ -1,12 +1,12 @@
 [
     {
-        "token": "input-end",
+        "token": "paragraph-break",
         "rule": "color",
         "span": [
-            235,
-            235
+            81,
+            82
         ],
-        "kind": "end-of-input"
+        "kind": "rule-failed"
     },
     {
         "token": "color",
@@ -18,11 +18,11 @@
         "kind": "no-rules-match"
     },
     {
-        "token": "line-break",
+        "token": "paragraph-break",
         "rule": "color",
         "span": [
-            78,
-            79
+            81,
+            82
         ],
         "kind": "rule-failed"
     },

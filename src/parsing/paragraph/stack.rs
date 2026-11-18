@@ -75,22 +75,6 @@ impl<'t> ParagraphStack<'t> {
         self.errors.append(errors);
     }
 
-    /// Remove the trailing line break if one exists.
-    ///
-    /// Exclusively for native blockquote logic, since
-    /// it needs to build blockquotes but also strip
-    /// excess line breaks.
-    ///
-    /// This should only be between lines in the blockquote.
-    #[inline]
-    pub fn pop_line_break(&mut self) {
-        trace!("Popping last element if Element::LineBreak");
-
-        if let Some(Element::LineBreak) = self.current.last() {
-            self.current.pop();
-        }
-    }
-
     /// Creates a paragraph element out of this instance's current elements.
     pub fn build_paragraph(&mut self) -> Option<Element<'t>> {
         trace!(
@@ -148,26 +132,5 @@ impl<'t> ParagraphStack<'t> {
 
         // Return finished element list
         ok!(paragraph_safe; elements, errors)
-    }
-
-    /// Converts all paragraph context into a set of `Element`s.
-    ///
-    /// You should only use this if you know for sure there are no errors,
-    /// and either have an alternate means of determining paragraph safety, or
-    /// statically know what that value would be.
-    pub fn into_elements(mut self) -> Vec<Element<'t>> {
-        debug!("Converting paragraph parse stack into a Vec<Element>");
-
-        // Finish current paragraph, if any
-        self.end_paragraph();
-
-        // Check that there are no errors
-        debug_assert!(
-            self.errors.is_empty(),
-            "Exceptions found in ParagraphStack::into_elements()!",
-        );
-
-        // Deconstruct stack, return
-        self.finished
     }
 }

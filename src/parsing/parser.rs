@@ -91,6 +91,13 @@ pub struct Parser<'r, 't> {
     in_footnote: bool, // Whether we're currently inside [[footnote]] ... [[/footnote]].
     has_footnote_block: bool, // Whether a [[footnoteblock]] was created.
     start_of_line: bool,
+
+    quote_depth: usize, // How many levels of ">" are being hidden. Zero means no view.
+    quote_consumed: usize, // How many ">"s of the current Token::Quote are hidden.
+    quote_end: Option<&'r ExtractedToken<'t>>, // Token presented at the end of the view.
+    quote_paragraph_breaks: &'r [ExtractedToken<'t>], // See Tokenization.
+    quote_indents: &'r [ExtractedToken<'t>], // See Tokenization.
+    quote_resume: Option<(&'r ExtractedToken<'t>, &'r [ExtractedToken<'t>])>, // Where the view ended.
 }
 
 impl<'r, 't> Parser<'r, 't> {
@@ -127,6 +134,12 @@ impl<'r, 't> Parser<'r, 't> {
             in_footnote: false,
             has_footnote_block: false,
             start_of_line: true,
+            quote_depth: 0,
+            quote_consumed: 0,
+            quote_end: None,
+            quote_paragraph_breaks: tokenization.quote_paragraph_breaks(),
+            quote_indents: tokenization.quote_indents(),
+            quote_resume: None,
         }
     }
 
@@ -485,6 +498,10 @@ impl<'r, 't> Parser<'r, 't> {
         // Token pointers
         self.current = parser.current;
         self.remaining = parser.remaining;
+
+        // Blockquote view
+        self.quote_consumed = parser.quote_consumed;
+        self.quote_resume = parser.quote_resume;
     }
 
     #[inline]
@@ -511,12 +528,183 @@ impl<'r, 't> Parser<'r, 't> {
             Some((current, remaining)) => {
                 self.current = current;
                 self.remaining = remaining;
-                Ok(current)
+                self.quote_consumed = 0;
+
+                if self.quote_depth > 0 {
+                    self.apply_quote_view(true);
+                }
+
+                Ok(self.current)
             }
             None => {
                 warn!("Exhausted all tokens, yielding end of input error");
                 Err(self.make_err(ParseErrorKind::EndOfInput))
             }
+        }
+    }
+
+    /// How many levels of native blockquote this parser is inside of.
+    #[inline]
+    pub fn quote_depth(&self) -> usize {
+        self.quote_depth
+    }
+
+    /// How many `>` characters of the current `Token::Quote` are hidden.
+    ///
+    /// These belong to enclosing native blockquotes, so the depth of
+    /// the current token is its length minus this value.
+    #[inline]
+    pub fn quote_consumed(&self) -> usize {
+        self.quote_consumed
+    }
+
+    /// Creates a parser for the contents of the native blockquote starting here
+    pub fn quote_parser(&self) -> Self {
+        debug_assert_eq!(self.current.token, Token::Quote);
+
+        let mut parser = self.clone();
+        parser.quote_depth += 1;
+        parser.quote_resume = None;
+        parser.start_of_line = true;
+
+        if parser.quote_end.is_none() {
+            parser.quote_end = Some(self.remaining.last().unwrap_or(self.current));
+        }
+
+        parser.apply_quote_view(true);
+        parser
+    }
+
+    /// Moves this parser to where the given blockquote parser finished.
+    ///
+    /// The line break ending the blockquote, if any, is consumed.
+    pub fn finish_quote_parser(
+        &mut self,
+        parser: &Parser<'r, 't>,
+    ) -> Result<(), ParseError> {
+        let (current, remaining) = match parser.quote_resume {
+            Some(resume) => resume,
+            None => return Err(self.make_err(ParseErrorKind::EndOfInput)),
+        };
+
+        self.has_footnote_block = parser.has_footnote_block;
+        self.start_of_line = false;
+        self.current = current;
+        self.remaining = remaining;
+        self.quote_consumed = 0;
+
+        if self.quote_depth > 0 {
+            self.apply_quote_view(false);
+        }
+
+        if self.current.token == Token::LineBreak {
+            self.step()?;
+        }
+
+        Ok(())
+    }
+
+    /// Adjusts the token pointer after landing on a new token inside a blockquote view.
+    fn apply_quote_view(&mut self, strip_prefix: bool) {
+        let depth = self.quote_depth;
+
+        // Hide the line prefix
+        if strip_prefix && self.start_of_line && self.current.token == Token::Quote {
+            if self.current.slice.len() > depth {
+                // Deeper blockquote, only hide our part of the token
+                self.quote_consumed = depth;
+            } else {
+                // Skip the prefix
+                if let Some((current, remaining)) = self.remaining.split_first() {
+                    self.current = current;
+                    self.remaining = remaining;
+                }
+
+                // Skip the one space separating the prefix from the contents.
+                if self.current.token == Token::Whitespace
+                    && let Some((current, remaining)) = self.remaining.split_first()
+                {
+                    let end = self.current.span.end;
+                    let indent = self
+                        .quote_indents
+                        .binary_search_by_key(&end, |token| token.span.end)
+                        .ok()
+                        .map(|index| &self.quote_indents[index]);
+
+                    match indent {
+                        Some(indent) => self.current = indent,
+                        None => {
+                            self.current = current;
+                            self.remaining = remaining;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check if the blockquote ends here and collapse empty lines.
+        let mut current = self.current;
+        let mut remaining = self.remaining;
+        let mut empty_line = false;
+
+        let ended = loop {
+            match current.token {
+                Token::InputEnd => break true,
+                Token::LineBreak | Token::ParagraphBreak => (),
+                _ => break false,
+            }
+
+            // We're at a newline, see what the next line looks like
+            let Some((prefix, mut line)) = remaining.split_first() else {
+                break true;
+            };
+
+            if prefix.token != Token::Quote || prefix.slice.len() < depth {
+                // Not part of this blockquote
+                break true;
+            }
+
+            if prefix.slice.len() > depth {
+                // Nested blockquote
+                break false;
+            }
+
+            if let Some((first, rest)) = line.split_first()
+                && first.token == Token::Whitespace
+            {
+                line = rest;
+            }
+
+            match line.split_first() {
+                Some((first, rest))
+                    if matches!(
+                        first.token,
+                        Token::LineBreak | Token::ParagraphBreak | Token::InputEnd,
+                    ) =>
+                {
+                    // Empty line, skip over it
+                    empty_line = true;
+                    current = first;
+                    remaining = rest;
+                }
+                _ => break false,
+            }
+        };
+
+        if ended {
+            self.quote_resume = Some((current, remaining));
+            self.current = self.quote_end.unwrap_or(current);
+            self.remaining = &[];
+        } else if empty_line {
+            // Use the paragraph break version of this line break.
+            // This has the same position in the source text.
+            let start = current.span.start;
+            self.current = self
+                .quote_paragraph_breaks
+                .binary_search_by_key(&start, |token| token.span.start)
+                .ok()
+                .map_or(current, |index| &self.quote_paragraph_breaks[index]);
+            self.remaining = remaining;
         }
     }
 
@@ -538,7 +726,18 @@ impl<'r, 't> Parser<'r, 't> {
     #[inline]
     pub fn look_ahead(&self, offset: usize) -> Option<&'r ExtractedToken<'t>> {
         trace!("Looking ahead to a token (offset {offset})");
-        self.remaining.get(offset)
+
+        if self.quote_depth == 0 {
+            return self.remaining.get(offset);
+        }
+
+        // Inside a blockquote view the raw tokens include line prefixes,
+        // so we need to step through the view instead.
+        let mut parser = self.clone();
+        for _ in 0..=offset {
+            parser.step().ok()?;
+        }
+        Some(parser.current)
     }
 
     /// Like `look_ahead`, except returns an error if the token isn't found.
@@ -646,6 +845,7 @@ struct BlockFailureKey<'t> {
     in_footnote: bool,
     has_footnote_block: bool,
     start_of_line: bool,
+    quote_depth: usize,
     bibliography_index: usize,
     footnote_index: usize,
     html_block_index: usize,
@@ -687,6 +887,7 @@ impl<'r, 't> Parser<'r, 't> {
             in_footnote: self.in_footnote,
             has_footnote_block: self.has_footnote_block,
             start_of_line: self.start_of_line,
+            quote_depth: self.quote_depth,
             bibliography_index: mutable_state.bibliography_index,
             footnote_index: mutable_state.footnote_index,
             html_block_index: mutable_state.html_block_index,
