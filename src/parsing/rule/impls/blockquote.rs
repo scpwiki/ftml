@@ -50,8 +50,8 @@ fn try_consume_fn<'r, 't>(
         return Err(parser.make_err(ParseErrorKind::BlockquoteDepthExceeded));
     }
 
-    // If we're already in a blockquote, then only a line prefix deeper than
-    // the current one starts a nested blockquote
+    // Inside a blockquote, if no `>` was stripped from the current token,
+    // the line prefix was already skipped. This token is part of the content so it cannot start a nested blockquote
     if parser.quote_depth() > 0 && parser.quote_consumed() == 0 {
         return Err(parser.make_err(ParseErrorKind::RuleFailed));
     }
