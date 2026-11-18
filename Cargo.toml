@@ -60,6 +60,7 @@ built = { version = "0.8", features = ["chrono", "git2"] }
 clap = "4"
 proptest = "1"
 termcolor = "1"
+codespan-reporting = "0.13.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.4", features = ["wasm_js"] }
